@@ -1,5 +1,6 @@
 // src/navigation/CustomerNavigator.tsx
 import React from 'react';
+import { Text, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { CustomerTabParamList } from '../types';
 import { colors } from '../constants';
@@ -10,8 +11,6 @@ const Tab = createBottomTabNavigator<CustomerTabParamList>();
 // TODO: Create placeholder screens for other tabs
 
 function PlaceholderScreen() {
-  const React = require('react');
-  const { View, Text } = require('react-native');
   return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
       <Text style={{ color: '#64748B' }}>Coming soon</Text>

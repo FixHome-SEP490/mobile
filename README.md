@@ -77,7 +77,9 @@ LAN IP and keep both devices on the same network.
 
 ```bash
 npm run check:expo
+npm run lint
 npm run typecheck
+npm test
 ```
 
 ## Related Repositories
@@ -86,3 +88,9 @@ npm run typecheck
 - [Frontend](https://github.com/FixHome-SEP490/Frontend-FixHome)
 - [AI Service](https://github.com/FixHome-SEP490/AI-FixHome)
 - [Project Documentation](https://github.com/FixHome-SEP490/Docs-FixHome)
+
+## Engineering Governance
+
+Before any change, read [AGENTS.md](AGENTS.md) and the repository-specific
+[AI Technical Guide](docs/AI-TECHNICAL-GUIDE.md). The independent CI workflow uses Node 22.13+ and
+enforces Expo compatibility, lint, type checking, and Jest tests.
