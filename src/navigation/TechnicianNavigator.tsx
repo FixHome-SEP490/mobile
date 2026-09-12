@@ -5,18 +5,13 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { TechnicianTabParamList } from '../types';
 import { colors } from '../constants';
 import TechnicianHomeScreen from '../screens/technician/TechnicianHomeScreen';
+import TechnicianJobsScreen from '../screens/technician/TechnicianJobsScreen';
+import TechnicianNotificationsScreen from '../screens/technician/TechnicianNotificationsScreen';
+import TechnicianProfileScreen from '../screens/technician/TechnicianProfileScreen';
 
 const Tab = createBottomTabNavigator<TechnicianTabParamList>();
 
-// TODO: Create proper screens for other tabs
 
-function PlaceholderScreen() {
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <Text style={{ color: '#64748B' }}>Coming soon</Text>
-    </View>
-  );
-}
 
 export default function TechnicianNavigator() {
   return (
@@ -24,7 +19,7 @@ export default function TechnicianNavigator() {
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.secondary,
-        headerShown: true,
+        headerShown: false,
       }}
     >
       <Tab.Screen
@@ -34,17 +29,17 @@ export default function TechnicianNavigator() {
       />
       <Tab.Screen
         name="Jobs"
-        component={PlaceholderScreen}
+        component={TechnicianJobsScreen}
         options={{ title: 'Jobs' }}
       />
       <Tab.Screen
         name="Notifications"
-        component={PlaceholderScreen}
+        component={TechnicianNotificationsScreen}
         options={{ title: 'Notifications' }}
       />
       <Tab.Screen
         name="Profile"
-        component={PlaceholderScreen}
+        component={TechnicianProfileScreen}
         options={{ title: 'Profile' }}
       />
     </Tab.Navigator>
