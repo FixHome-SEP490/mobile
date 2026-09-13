@@ -46,7 +46,8 @@ const POPULAR_SERVICES: ServiceItem[] = [
     iconType: 'fa5',
     iconColor: '#0284C7',
     pedestalColor: '#E0F2FE',
-    isHot: true,
+    isHot: false,
+    imageSource: require('../../../assets/air-conditioner.png'),
   },
   {
     id: 'plumbing',

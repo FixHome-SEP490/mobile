@@ -1,60 +1,33 @@
 // src/navigation/CustomerNavigator.tsx
 import React from 'react';
-import { Text, View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Ionicons } from '@expo/vector-icons';
+import { Home, Calendar, Bell, User } from 'lucide-react-native';
 import type { CustomerTabParamList } from '../types';
-import { colors } from '../constants';
 import CustomerHomeScreen from '../screens/customer/CustomerHomeScreen';
 import CustomerBookingsScreen from '../screens/customer/CustomerBookingsScreen';
 import CustomerNotificationsScreen from '../screens/customer/CustomerNotificationsScreen';
 import CustomerProfileScreen from '../screens/customer/CustomerProfileScreen';
+import { GlassTabBar } from '../components/navigation/GlassTabBar';
 
 const Tab = createBottomTabNavigator<CustomerTabParamList>();
-
-
 
 export default function CustomerNavigator() {
   return (
     <Tab.Navigator
+      tabBar={(props) => <GlassTabBar {...props} />}
       screenOptions={({ route }) => ({
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: '#94A3B8',
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-        },
-        tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopColor: '#F1F5F9',
-          borderTopWidth: 1,
-          elevation: 8,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -3 },
-          shadowOpacity: 0.06,
-          shadowRadius: 6,
-          height: 62,
-          paddingBottom: 8,
-          paddingTop: 6,
-        },
+        headerShown: false, // You can toggle this per screen below
         tabBarIcon: ({ focused, color, size }) => {
-          let iconName: keyof typeof Ionicons.glyphMap = 'home';
-
           if (route.name === 'Home') {
-            iconName = focused ? 'home' : 'home-outline';
+            return <Home size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
           } else if (route.name === 'Bookings') {
-            iconName = focused ? 'calendar' : 'calendar-outline';
+            return <Calendar size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
           } else if (route.name === 'Notifications') {
-            iconName = focused ? 'notifications' : 'notifications-outline';
+            return <Bell size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
           } else if (route.name === 'Profile') {
-            iconName = focused ? 'person' : 'person-outline';
+            return <User size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
           }
-
-          return (
-            <View style={focused ? styles.activeTabIconWrapper : undefined}>
-              <Ionicons name={iconName} size={size} color={color} />
-            </View>
-          );
+          return null;
         },
       })}
     >
@@ -63,7 +36,6 @@ export default function CustomerNavigator() {
         component={CustomerHomeScreen}
         options={{
           title: 'Trang chủ',
-          headerShown: false,
         }}
       />
       <Tab.Screen
@@ -71,6 +43,7 @@ export default function CustomerNavigator() {
         component={CustomerBookingsScreen}
         options={{
           title: 'Đơn của tôi',
+          headerShown: true,
           headerTitle: 'Lịch sử & Hoạt động',
         }}
       />
@@ -79,13 +52,8 @@ export default function CustomerNavigator() {
         component={CustomerNotificationsScreen}
         options={{
           title: 'Thông báo',
+          headerShown: true,
           headerTitle: 'Thông báo & Ưu đãi',
-          tabBarBadge: 1,
-          tabBarBadgeStyle: {
-            backgroundColor: '#EF4444',
-            fontSize: 10,
-            fontWeight: 'bold',
-          },
         }}
       />
       <Tab.Screen
@@ -93,19 +61,10 @@ export default function CustomerNavigator() {
         component={CustomerProfileScreen}
         options={{
           title: 'Tài khoản',
+          headerShown: true,
           headerTitle: 'Hồ sơ cá nhân',
         }}
       />
     </Tab.Navigator>
   );
 }
-
-const styles = StyleSheet.create({
-
-  activeTabIconWrapper: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 12,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-});
