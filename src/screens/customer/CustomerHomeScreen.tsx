@@ -235,19 +235,6 @@ export default function CustomerHomeScreen() {
               <Text style={styles.notificationBadgeText}>1</Text>
             </View>
           </TouchableOpacity>
-
-          {/* Auth Button */}
-          <TouchableOpacity
-            style={[styles.headerIconBtn, isAuthenticated && styles.headerIconBtnAuth]}
-            onPress={handleOpenAuth}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name={isAuthenticated ? 'person' : 'log-in-outline'}
-              size={20}
-              color={isAuthenticated ? '#2563EB' : '#0F172A'}
-            />
-          </TouchableOpacity>
         </View>
       </View>
 

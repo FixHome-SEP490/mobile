@@ -41,7 +41,7 @@ export default function CustomerServicesScreen() {
       return (
         <Image 
           source={item.imageSource} 
-          style={{ width: 80, height: 80 }} 
+          style={{ width: 80, height: 80   }} 
           resizeMode="contain" 
         />
       );
