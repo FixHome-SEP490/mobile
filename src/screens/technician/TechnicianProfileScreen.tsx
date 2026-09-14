@@ -8,10 +8,11 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { UserRole } from '../../types';
 import { LinearGradient } from 'expo-linear-gradient';
+import { ProfileHeader } from '../../components/profile/ProfileHeader';
 
 export default function TechnicianProfileScreen() {
   const logout = useAuthStore((state) => state.logout);
-  const setAuth = useAuthStore((state) => state.setAuth);
+  const { user, setAuth } = useAuthStore();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const handleLogout = () => {
@@ -41,22 +42,13 @@ export default function TechnicianProfileScreen() {
       <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
-        {/* Profile Card */}
-        <View style={styles.profileCard}>
-          <View style={styles.profileTopRow}>
-            <View style={styles.avatar}>
-              <Ionicons name="person" size={24} color="#2563EB" />
-            </View>
-            <View style={styles.profileInfo}>
-              <Text style={styles.name}>Lạc Vỹ</Text>
-            </View>
-            <View style={styles.appBadge}>
-              <View style={styles.blueDot} />
-              <Text style={styles.appBadgeText}>App Thợ</Text>
-            </View>
-          </View>
-        </View>
+        <ProfileHeader 
+          name={user?.fullName || 'Lạc Vỹ'} 
+          phone={'+841234567890'} 
+          avatarText={(user?.fullName || 'L').charAt(0)} 
+        />
 
+        <View style={styles.innerContent}>
         {/* Số dư */}
         <View style={styles.balanceHeader}>
           <Ionicons name="wallet" size={20} color="#2563EB" />
@@ -131,6 +123,7 @@ export default function TechnicianProfileScreen() {
         <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
           <Text style={styles.logoutText}>Đăng xuất</Text>
         </TouchableOpacity>
+        </View>
 
       </ScrollView>
     </View>
@@ -143,72 +136,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   scrollContent: {
-    padding: 16,
-    paddingTop: 44,
     paddingBottom: 40,
   },
-  profileCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  profileTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#DBEAFE',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  profileInfo: {
-    flex: 1,
-  },
-  name: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 4,
-  },
-  warningBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  warningText: {
-    fontSize: 13,
-    color: '#DC2626',
-    marginLeft: 4,
-    fontWeight: '500',
-  },
-  appBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  blueDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#2563EB',
-    marginRight: 6,
-  },
-  appBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#2563EB',
+  innerContent: {
+    paddingHorizontal: 16,
   },
   switchRoleCard: {
     borderRadius: 16,

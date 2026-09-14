@@ -2,11 +2,17 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants';
+import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 
 export default function CustomerNotificationsScreen() {
+  const handleScroll = useScrollHideTabBar();
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      >
         <Text style={styles.sectionTitle}>Hôm nay</Text>
         
         <TouchableOpacity style={styles.card}>

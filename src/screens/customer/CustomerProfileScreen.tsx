@@ -7,6 +7,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { colors } from '../../constants';
 import { useAuthStore } from '../../store';
+import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
+import { ProfileHeader } from '../../components/profile/ProfileHeader';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface Address {
   id: string;
@@ -17,6 +20,7 @@ interface Address {
 export default function CustomerProfileScreen() {
   const logout = useAuthStore((state) => state.logout);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const handleScroll = useScrollHideTabBar();
   
   // States for user info
   const [name, setName] = useState('Trần Minh');
@@ -95,20 +99,41 @@ export default function CustomerProfileScreen() {
 
   return (
     <SafeAreaView style={[styles.container, isDarkMode && styles.containerDark]} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Profile Identity Card */}
-        <View style={[styles.identityCard, isDarkMode && styles.cardDark]}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{name.charAt(0)}</Text>
+      <ScrollView 
+        contentContainerStyle={{ paddingBottom: 40 }}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      >
+        <ProfileHeader 
+          name={name} 
+          phone={phone} 
+          avatarText={name.charAt(0)} 
+          isDarkMode={isDarkMode} 
+        />
+
+        <View style={styles.scrollContent}>
+          <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Ví & Điểm thưởng</Text>
+          <View style={styles.overviewRow}>
+            <LinearGradient colors={['#E0F2FE', '#F0F9FF']} style={styles.overviewCard}>
+              <View style={styles.cardTopRow}>
+                <View style={[styles.iconCircle, { backgroundColor: '#BAE6FD' }]}>
+                  <Ionicons name="wallet" size={16} color="#0284C7" />
+                </View>
+                <Text style={styles.cardLabel}>Số dư</Text>
+              </View>
+              <Text style={styles.cardValue}>0 <Text style={styles.cardUnit}>đ</Text></Text>
+            </LinearGradient>
+
+            <LinearGradient colors={['#FEF3C7', '#FFFBEB']} style={styles.overviewCard}>
+              <View style={styles.cardTopRow}>
+                <View style={[styles.iconCircle, { backgroundColor: '#FDE68A' }]}>
+                  <Ionicons name="gift" size={16} color="#D97706" />
+                </View>
+                <Text style={styles.cardLabel}>F-Point</Text>
+              </View>
+              <Text style={styles.cardValue}>0 <Text style={styles.cardUnit}>điểm</Text></Text>
+            </LinearGradient>
           </View>
-          <View style={styles.identityInfo}>
-            <Text style={[styles.name, isDarkMode && styles.textDark]}>{name}</Text>
-            <Text style={styles.contact}>{email} · {phone}</Text>
-            <View style={styles.badgeVerify}>
-              <Text style={styles.badgeTextVerify}>Đã xác minh</Text>
-            </View>
-          </View>
-        </View>
 
         <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Quản lý tài khoản</Text>
 
@@ -169,6 +194,7 @@ export default function CustomerProfileScreen() {
           <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
             <Text style={styles.logoutText}>Đăng xuất</Text>
           </TouchableOpacity>
+        </View>
         </View>
       </ScrollView>
 
@@ -239,17 +265,11 @@ export default function CustomerProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   containerDark: { backgroundColor: '#0F172A' },
-  scrollContent: { padding: 16 },
-  identityCard: { flexDirection: 'row', backgroundColor: '#FFFFFF', padding: 16, borderRadius: 16, marginBottom: 24, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  scrollContent: { paddingHorizontal: 16 },
   cardDark: { backgroundColor: '#1E293B' },
-  avatar: { width: 60, height: 60, borderRadius: 20, backgroundColor: '#E0F2FE', justifyContent: 'center', alignItems: 'center', marginRight: 16 },
-  avatarText: { fontSize: 24, fontWeight: '700', color: colors.primary },
   identityInfo: { flex: 1 },
   name: { fontSize: 20, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
   textDark: { color: '#F8FAFC' },
-  contact: { fontSize: 12, color: '#64748B', marginBottom: 6 },
-  badgeVerify: { alignSelf: 'flex-start', backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  badgeTextVerify: { fontSize: 10, fontWeight: '700', color: '#16A34A' },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 12 },
   menuContainer: { backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden', marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   menuItem: { flexDirection: 'row', padding: 16, alignItems: 'center' },
@@ -275,5 +295,12 @@ const styles = StyleSheet.create({
   addressItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12, marginBottom: 8 },
   addressName: { fontSize: 14, fontWeight: '600', color: '#0F172A', marginBottom: 4 },
   addressDetail: { fontSize: 12, color: '#64748B' },
-  iconBtn: { padding: 8, marginLeft: 4 }
+  iconBtn: { padding: 8, marginLeft: 4 },
+  overviewRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+  overviewCard: { flex: 1, borderRadius: 16, padding: 16 },
+  cardTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  iconCircle: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginRight: 8 },
+  cardLabel: { fontSize: 14, color: '#475569', fontWeight: '500' },
+  cardValue: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
+  cardUnit: { fontSize: 14, fontWeight: '600', color: '#64748B' },
 });

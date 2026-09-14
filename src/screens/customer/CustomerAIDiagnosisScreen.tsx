@@ -17,6 +17,8 @@ export default function CustomerAIDiagnosisScreen() {
   const [selectedDate, setSelectedDate] = useState(0);
   const [selectedTime, setSelectedTime] = useState('09:00');
   const [quantity, setQuantity] = useState(1);
+  const [optionsExpanded, setOptionsExpanded] = useState(true);
+  const [quoteExpanded, setQuoteExpanded] = useState(false);
 
   const handleAnalyze = () => {
     setAnalyzed(true);
@@ -63,6 +65,21 @@ export default function CustomerAIDiagnosisScreen() {
           onChangeText={setDescription}
           placeholderTextColor="#94A3B8"
         />
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.row}>
+          <Text style={styles.label}>Số lượng thiết bị</Text>
+          <View style={styles.quantityBox}>
+            <TouchableOpacity style={styles.qtyBtn} onPress={() => setQuantity(Math.max(1, quantity - 1))}>
+              <Ionicons name="remove" size={20} color="#0F172A" />
+            </TouchableOpacity>
+            <Text style={styles.qtyText}>{quantity}</Text>
+            <TouchableOpacity style={styles.qtyBtn} onPress={() => setQuantity(quantity + 1)}>
+              <Ionicons name="add" size={20} color="#0F172A" />
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
 
       {!analyzed ? (
@@ -134,65 +151,122 @@ export default function CustomerAIDiagnosisScreen() {
           ))}
         </View>
       </View>
-
-      <View style={styles.card}>
-        <View style={styles.row}>
-          <Text style={styles.label}>Số lượng thiết bị</Text>
-          <View style={styles.quantityBox}>
-            <TouchableOpacity style={styles.qtyBtn} onPress={() => setQuantity(Math.max(1, quantity - 1))}>
-              <Ionicons name="remove" size={20} color="#0F172A" />
-            </TouchableOpacity>
-            <Text style={styles.qtyText}>{quantity}</Text>
-            <TouchableOpacity style={styles.qtyBtn} onPress={() => setQuantity(quantity + 1)}>
-              <Ionicons name="add" size={20} color="#0F172A" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
     </>
   );
 
   const renderStep3 = () => (
     <>
-      <Text style={styles.mainTitle}>Kiểm tra lần cuối</Text>
-      
-      <View style={styles.card}>
-        <Text style={styles.serviceTitle}>Dịch vụ đã chọn</Text>
-        <Text style={styles.serviceName}>Vệ sinh máy lạnh</Text>
-        
-        <View style={styles.divider} />
-        
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Thời gian</Text>
-          <Text style={styles.summaryValue}>{selectedTime} · {selectedDate === 0 ? 'Hôm nay' : `Ngày ${selectedDate+1}`}</Text>
+      <View style={styles.summaryCard}>
+        {/* Timeline Item 1 */}
+        <View style={styles.timelineItem}>
+          <View style={styles.timelineLeftIconBox}>
+            <Ionicons name="chatbubble-ellipses" size={18} color="#2563EB" />
+          </View>
+          <View style={styles.timelineContent}>
+            <Text style={styles.timelineLabel}>Vấn đề của bạn <Text style={styles.redAsterisk}>*</Text></Text>
+            <Text style={styles.timelineValue}>Tình trạng: máy chạy yếu. Số lượng máy: {quantity} máy</Text>
+          </View>
+          <View style={styles.timelineRight}>
+            <Ionicons name="checkmark-circle" size={20} color="#3B82F6" />
+            <View style={styles.timelineLine} />
+          </View>
         </View>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Địa chỉ</Text>
-          <Text style={styles.summaryValue}>28 Duy Tân, Cầu Giấy</Text>
+
+        {/* Timeline Item 2 */}
+        <View style={styles.timelineItem}>
+          <View style={styles.timelineLeftIconBox}>
+            <Ionicons name="location" size={18} color="#3B82F6" />
+          </View>
+          <View style={styles.timelineContent}>
+            <Text style={styles.timelineLabel}>Địa chỉ làm việc</Text>
+            <Text style={styles.timelineValueTitle}>17 Mai Chí Thọ Phường An Khánh,Thành phố Hồ Chí Minh</Text>
+            <Text style={styles.timelineSubText}>Chạm để chỉnh sửa</Text>
+          </View>
+          <View style={styles.timelineRight}>
+            <Ionicons name="checkmark-circle" size={20} color="#3B82F6" />
+            <View style={styles.timelineLine} />
+          </View>
         </View>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Số lượng</Text>
-          <Text style={styles.summaryValue}>{quantity} thiết bị</Text>
-        </View>
-        
-        <View style={styles.divider} />
-        
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Phí dịch vụ</Text>
-          <Text style={styles.summaryValue}>{150000 * quantity}đ</Text>
-        </View>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Ưu đãi</Text>
-          <Text style={[styles.summaryValue, { color: '#16A34A' }]}>-50.000đ</Text>
-        </View>
-        
-        <View style={styles.divider} />
-        
-        <View style={styles.summaryRow}>
-          <Text style={styles.totalLabel}>Dự kiến thanh toán</Text>
-          <Text style={styles.totalValue}>{(150000 * quantity) - 50000}đ</Text>
+
+        {/* Timeline Item 3 */}
+        <View style={[styles.timelineItem, { marginBottom: 0 }]}>
+          <View style={styles.timelineLeftIconBox}>
+            <Ionicons name="time" size={18} color="#3B82F6" />
+          </View>
+          <View style={styles.timelineContent}>
+            <Text style={styles.timelineLabel}>Thời gian</Text>
+            <Text style={styles.timelineValueTitle}>{selectedTime} - 14/09/2026</Text>
+          </View>
+          <View style={styles.timelineRight}>
+            <Ionicons name="checkmark-circle" size={20} color="#3B82F6" />
+          </View>
         </View>
       </View>
+
+      <View style={styles.optionsCard}>
+        <TouchableOpacity style={styles.optionsHeader} onPress={() => setOptionsExpanded(!optionsExpanded)} activeOpacity={0.7}>
+          <View style={styles.optionsHeaderLeft}>
+            <View style={styles.optionsIconBox}>
+              <Ionicons name="albums" size={20} color="#60A5FA" />
+            </View>
+            <View>
+              <Text style={styles.optionsTitle}>Tuỳ chọn</Text>
+              <Text style={styles.optionsSub}>Ảnh, ghi chú, hoá đơn</Text>
+            </View>
+          </View>
+          <Ionicons name={optionsExpanded ? "chevron-up" : "chevron-down"} size={20} color="#0F172A" />
+        </TouchableOpacity>
+
+        {optionsExpanded && (
+          <View style={styles.optionsBody}>
+            {/* Hình ảnh */}
+            <View style={styles.optionSection}>
+              <View style={styles.optionSectionHeader}>
+                <View style={styles.optionsIconBoxSmall}>
+                  <Ionicons name="image" size={16} color="#3B82F6" />
+                </View>
+                <View>
+                  <Text style={styles.optionSectionTitle}>Hình ảnh</Text>
+                  <Text style={styles.optionSectionSub}>Giúp thợ hiểu rõ hơn</Text>
+                </View>
+              </View>
+              <TouchableOpacity style={styles.addImageBtn}>
+                <Ionicons name="image" size={24} color="#93C5FD" />
+                <Text style={styles.addImageText}>Thêm</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Ghi chú */}
+            <TouchableOpacity style={styles.optionItemRow}>
+              <View style={styles.optionsHeaderLeft}>
+                <View style={styles.optionsIconBoxSmall}>
+                  <Ionicons name="clipboard" size={16} color="#F59E0B" />
+                </View>
+                <View>
+                  <Text style={styles.optionSectionTitle}>Ghi chú <Text style={styles.optionSectionSub}>Tùy chọn</Text></Text>
+                  <Text style={styles.optionSectionSub}>Thêm yêu cầu đặc biệt...</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            </TouchableOpacity>
+
+            {/* Ghi chú */}
+            <TouchableOpacity style={styles.optionItemRow}>
+              <View style={styles.optionsHeaderLeft}>
+                <View style={styles.optionsIconBoxSmall}>
+                  <Ionicons name="document-text" size={16} color="#F59E0B" />
+                </View>
+                <View>
+                  <Text style={styles.optionSectionTitle}>Xuất hóa đơn</Text>
+                  <Text style={styles.optionSectionSub}>Yêu cầu xuất hóa đơn VAT</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+      <View style={{height: 180}} />
     </>
   );
 
@@ -203,7 +277,7 @@ export default function CustomerAIDiagnosisScreen() {
         <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color="#0F172A" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>AI Hỗ trợ chẩn đoán</Text>
+        <Text style={styles.headerTitle}>{step === 3 ? 'Vệ sinh máy lạnh' : 'AI Hỗ trợ chẩn đoán'}</Text>
         {step === 1 ? (
           <View style={styles.aiBadge}>
             <MaterialCommunityIcons name="robot-outline" size={14} color="#2563EB" />
@@ -215,19 +289,21 @@ export default function CustomerAIDiagnosisScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.progressWrap}>
-          <View style={styles.progressLabelRow}>
-            <Text style={styles.progressLabel}>Bước {step} / 3</Text>
-            <Text style={styles.progressLabel}>
-              {step === 1 ? 'Mô tả nhu cầu' : step === 2 ? 'Thời gian & địa chỉ' : 'Kiểm tra lần cuối'}
-            </Text>
+        {step < 3 && (
+          <View style={styles.progressWrap}>
+            <View style={styles.progressLabelRow}>
+              <Text style={styles.progressLabel}>Bước {step} / 3</Text>
+              <Text style={styles.progressLabel}>
+                {step === 1 ? 'Mô tả nhu cầu' : 'Thời gian & địa chỉ'}
+              </Text>
+            </View>
+            <View style={styles.steps}>
+              <View style={[styles.dot, step >= 1 && styles.dotOn]} />
+              <View style={[styles.dot, step >= 2 && styles.dotOn]} />
+              <View style={[styles.dot, step >= 3 && styles.dotOn]} />
+            </View>
           </View>
-          <View style={styles.steps}>
-            <View style={[styles.dot, step >= 1 && styles.dotOn]} />
-            <View style={[styles.dot, step >= 2 && styles.dotOn]} />
-            <View style={[styles.dot, step >= 3 && styles.dotOn]} />
-          </View>
-        </View>
+        )}
 
         {step === 1 && renderStep1()}
         {step === 2 && renderStep2()}
@@ -235,17 +311,65 @@ export default function CustomerAIDiagnosisScreen() {
 
       </ScrollView>
 
-      <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.bookBtn} activeOpacity={0.8} onPress={handleNextStep}>
-          <LinearGradient colors={['#1D4ED8', '#2563EB']} style={styles.bookBtnGradient}>
-            <Text style={styles.bookBtnText}>
-              {step === 1 ? 'Tiếp tục chọn lịch' : step === 2 ? 'Tiếp tục' : 'Xác nhận & tìm kỹ thuật viên'}
-            </Text>
-            {step < 3 && <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />}
-          </LinearGradient>
-        </TouchableOpacity>
-        {step === 1 && <Text style={styles.ctaNote}>Ảnh và mô tả được đính kèm lịch hẹn</Text>}
-      </View>
+      {step < 3 ? (
+        <View style={styles.bottomBar}>
+          <TouchableOpacity style={styles.bookBtn} activeOpacity={0.8} onPress={handleNextStep}>
+            <LinearGradient colors={['#1D4ED8', '#2563EB']} style={styles.bookBtnGradient}>
+              <Text style={styles.bookBtnText}>
+                {step === 1 ? 'Tiếp tục chọn lịch' : 'Tiếp tục'}
+              </Text>
+              <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+            </LinearGradient>
+          </TouchableOpacity>
+          {step === 1 && <Text style={styles.ctaNote}>Ảnh và mô tả được đính kèm lịch hẹn</Text>}
+        </View>
+      ) : (
+        <View style={styles.step3BottomBar}>
+          <View style={styles.quoteCardWrapper}>
+            <TouchableOpacity 
+              style={styles.quoteHeader} 
+              onPress={() => setQuoteExpanded(!quoteExpanded)}
+              activeOpacity={0.8}
+            >
+              <View>
+                <Text style={styles.quoteTitle}>Báo giá từ AI (tham khảo)</Text>
+                <Text style={styles.quotePrice}>230,000 - 650,000đ</Text>
+              </View>
+              <Ionicons name={quoteExpanded ? "chevron-down" : "chevron-up"} size={20} color="#0F172A" />
+            </TouchableOpacity>
+
+            {quoteExpanded && (
+              <View style={styles.quoteExpandedBody}>
+                <View style={styles.quoteDivider} />
+                <View style={styles.quoteRowItem}>
+                  <Text style={styles.quoteLabelText}>Tiền công</Text>
+                  <Text style={styles.quoteValueText}>150,000 - 400,000đ</Text>
+                </View>
+                <View style={styles.quoteRowItem}>
+                  <Text style={styles.quoteLabelText}>Vật tư</Text>
+                  <Text style={styles.quoteValueText}>80,000 - 250,000đ</Text>
+                </View>
+                
+                <View style={styles.quoteMaterialsBox}>
+                  <Text style={styles.quoteMaterialsTitle}>Có thể cần:</Text>
+                  <View style={styles.quoteMaterialsTags}>
+                    <View style={styles.quoteMaterialTag}><Text style={styles.quoteMaterialTagText} numberOfLines={1}>Dung dịch vệ sinh máy lạnh ch...</Text></View>
+                    <View style={styles.quoteMaterialTag}><Text style={styles.quoteMaterialTagText} numberOfLines={1}>Nước rửa dàn lạnh/dàn n...</Text></View>
+                  </View>
+                </View>
+
+                <View style={styles.quoteInfoRow}>
+                  <Ionicons name="information-circle-outline" size={16} color="#64748B" />
+                  <Text style={styles.quoteInfoText}>Vật tư có thể phát sinh thêm tùy tình trạng thực tế khi khảo sát.</Text>
+                </View>
+              </View>
+            )}
+          </View>
+          <TouchableOpacity style={styles.startBtn} activeOpacity={0.8} onPress={() => navigation.navigate('CustomerMatching')}>
+            <Text style={styles.startBtnText}>Bắt đầu tìm thợ</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -372,4 +496,53 @@ const styles = StyleSheet.create({
   summaryValue: { fontSize: 14, fontWeight: '600', color: '#0F172A' },
   totalLabel: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
   totalValue: { fontSize: 18, fontWeight: '700', color: '#2563EB' },
+
+  // Step 3 new styles
+  summaryCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  timelineItem: { flexDirection: 'row', marginBottom: 24, minHeight: 50 },
+  timelineLeftIconBox: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginRight: 12, marginTop: -2 },
+  timelineContent: { flex: 1, paddingRight: 16 },
+  timelineLabel: { fontSize: 12, color: '#64748B', marginBottom: 4, fontWeight: '500' },
+  redAsterisk: { color: '#EF4444' },
+  timelineValue: { fontSize: 14, color: '#334155', lineHeight: 22 },
+  timelineValueTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A', lineHeight: 22 },
+  timelineSubText: { fontSize: 12, color: '#94A3B8', marginTop: 4 },
+  timelineRight: { width: 24, alignItems: 'center' },
+  timelineLine: { width: 2, flex: 1, backgroundColor: '#60A5FA', marginTop: 4, borderRadius: 1 },
+
+  optionsCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  optionsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  optionsHeaderLeft: { flexDirection: 'row', alignItems: 'center' },
+  optionsIconBox: { width: 44, height: 44, borderRadius: 16, backgroundColor: '#F8FAFC', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  optionsTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
+  optionsSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  optionsBody: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  optionSection: { marginBottom: 20 },
+  optionSectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  optionsIconBoxSmall: { width: 24, height: 24, justifyContent: 'center', alignItems: 'center', marginRight: 8 },
+  optionSectionTitle: { fontSize: 14, fontWeight: '600', color: '#0F172A' },
+  optionSectionSub: { fontSize: 12, color: '#64748B', fontWeight: '400' },
+  addImageBtn: { width: 80, height: 80, borderRadius: 16, backgroundColor: '#F8FAFC', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0', borderStyle: 'dashed', marginLeft: 32 },
+  addImageText: { fontSize: 12, color: '#64748B', marginTop: 4, fontWeight: '500' },
+  optionItemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, paddingRight: 4 },
+
+  step3BottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFFFFF', padding: 16, paddingBottom: 32, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  quoteCardWrapper: { backgroundColor: '#FFFFFF', borderRadius: 20, borderWidth: 1, borderColor: '#F1F5F9', marginBottom: 16, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 3 },
+  quoteHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
+  quoteTitle: { fontSize: 13, color: '#64748B', fontWeight: '600', marginBottom: 4 },
+  quotePrice: { fontSize: 20, fontWeight: '700', color: '#0F172A' },
+  quoteExpandedBody: { padding: 20, paddingTop: 0 },
+  quoteDivider: { height: 1, backgroundColor: '#F1F5F9', marginBottom: 16 },
+  quoteRowItem: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  quoteLabelText: { fontSize: 14, color: '#64748B', fontWeight: '500' },
+  quoteValueText: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
+  quoteMaterialsBox: { backgroundColor: '#F8FAFC', borderRadius: 16, padding: 16, marginTop: 8 },
+  quoteMaterialsTitle: { fontSize: 13, fontWeight: '700', color: '#0F172A', marginBottom: 12 },
+  quoteMaterialsTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  quoteMaterialTag: { backgroundColor: '#FFFFFF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 100, borderWidth: 1, borderColor: '#E2E8F0', maxWidth: '100%' },
+  quoteMaterialTagText: { fontSize: 12, color: '#475569', fontWeight: '500' },
+  quoteInfoRow: { flexDirection: 'row', gap: 8, marginTop: 16, alignItems: 'flex-start' },
+  quoteInfoText: { fontSize: 12, color: '#64748B', flex: 1, lineHeight: 18 },
+  startBtn: { backgroundColor: '#2563EB', paddingVertical: 16, borderRadius: 100, alignItems: 'center' },
+  startBtnText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
 });

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, StatusBar, TextInput, Image } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, StatusBar, TextInput, Image } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -16,13 +17,13 @@ interface ServiceItem {
 }
 
 const ALL_SERVICES: ServiceItem[] = [
-  { id: '1', name: 'Vệ sinh máy lạnh', iconName: 'snowflake', iconType: 'fa5', iconColor: '#0284C7', pedestalColor: '#E0F2FE' },
-  { id: '2', name: 'Sửa ống nước', iconName: 'pipe-wrench', iconType: 'material', iconColor: '#0D9488', pedestalColor: '#CCFBF1' },
-  { id: '3', name: 'Sửa điện gia dụng', iconName: 'bolt', iconType: 'fa5', iconColor: '#EAB308', pedestalColor: '#FEF9C3' },
-  { id: '4', name: 'Thông nghẹt cống', iconName: 'water-pump', iconType: 'material', iconColor: '#4F46E5', pedestalColor: '#E0E7FF' },
-  { id: '5', name: 'Sửa máy lạnh', iconName: 'air-conditioner', iconType: 'material', iconColor: '#2563EB', pedestalColor: '#DBEAFE' },
-  { id: '6', name: 'Tháo & lắp máy lạnh', iconName: 'tools', iconType: 'fa5', iconColor: '#059669', pedestalColor: '#D1FAE5' },
-  { id: '7', name: 'Sửa máy giặt', iconName: 'washing-machine', iconType: 'material', iconColor: '#7C3AED', pedestalColor: '#EDE9FE' },
+  { id: '1', name: 'Vệ sinh máy lạnh', iconName: 'snowflake', iconType: 'fa5', iconColor: '#0284C7', pedestalColor: '#E0F2FE', imageSource: require('../../../assets/air-conditioner.png') },
+  { id: '2', name: 'Sửa ống nước', iconName: 'pipe-wrench', iconType: 'material', iconColor: '#0D9488', pedestalColor: '#CCFBF1', imageSource: require('../../../assets/water-pipeline.png') },
+  { id: '3', name: 'Lắp đặt hệ thống điện', iconName: 'bolt', iconType: 'fa5', iconColor: '#EAB308', pedestalColor: '#FEF9C3',imageSource: require('../../../assets/voltage-cabinet.png') },
+  { id: '4', name: 'Thông nghẹt cống', iconName: 'water-pump', iconType: 'material', iconColor: '#4F46E5', pedestalColor: '#E0E7FF',imageSource: require('../../../assets/unclogging-drains.png') },
+  { id: '5', name: 'Sửa Tivi', iconName: 'air-conditioner', iconType: 'material', iconColor: '#2563EB', pedestalColor: '#DBEAFE',imageSource: require('../../../assets/tv-repair.png')  },
+  { id: '6', name: 'Điện tử gia dụng', iconName: 'tools', iconType: 'fa5', iconColor: '#059669', pedestalColor: '#D1FAE5',imageSource: require('../../../assets/home-appliance-repair.png') },
+  { id: '7', name: 'Sửa máy giặt', iconName: 'washing-machine', iconType: 'material', iconColor: '#7C3AED', pedestalColor: '#EDE9FE', imageSource: require('../../../assets/washing-machine.png') },
   { id: '8', name: 'Sửa tủ lạnh', iconName: 'fridge-outline', iconType: 'material', iconColor: '#EA580C', pedestalColor: '#FFEDD5', imageSource: require('../../../assets/refrigerator.png') },
 ];
 
@@ -41,7 +42,7 @@ export default function CustomerServicesScreen() {
       return (
         <Image 
           source={item.imageSource} 
-          style={{ width: 80, height: 80 }} 
+          style={{ width: 80, height: 80   }} 
           resizeMode="contain" 
         />
       );
