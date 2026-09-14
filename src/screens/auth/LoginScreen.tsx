@@ -55,7 +55,7 @@ export default function LoginScreen() {
       {/* Back Button */}
       <TouchableOpacity
         style={styles.backBtn}
-        onPress={() => navigation.navigate('CustomerMain')}
+        onPress={handleContinueAsGuest}
         activeOpacity={0.7}
       >
         <Ionicons name="arrow-back" size={22} color="#0F172A" />

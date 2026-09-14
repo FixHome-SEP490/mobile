@@ -5,21 +5,13 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   StatusBar,
-  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store';
 import { LinearGradient } from 'expo-linear-gradient';
 
-const { width } = Dimensions.get('window');
-
 export default function TechnicianHomeScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user } = useAuthStore();
 
   return (

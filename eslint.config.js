@@ -8,6 +8,8 @@ module.exports = defineConfig([
     rules: {
       // Axios intentionally exposes instance helpers on its default export.
       'import/no-named-as-default-member': 'off',
+      // Reanimated shared values rely on mutating .value inside hooks and gestures
+      'react-hooks/immutability': 'off',
     },
   },
 ])

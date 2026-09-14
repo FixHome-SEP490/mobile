@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../constants';
 import { useAuthStore } from '../../store';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -49,8 +48,33 @@ export default function TechnicianProfileScreen() {
         />
 
         <View style={styles.innerContent}>
-        {/* Số dư */}
-        <View style={styles.balanceHeader}>
+          {/* Chuyển sang Khách hàng */}
+          <TouchableOpacity 
+            style={[styles.switchRoleCard, { marginBottom: 16 }]} 
+            onPress={handleSwitchToCustomer}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={['#FEF3C7', '#FDE68A']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.switchGradient}
+            >
+              <View style={styles.switchIcon}>
+                <Ionicons name="person" size={16} color="#D97706" />
+              </View>
+              <View style={styles.switchInfo}>
+                <Text style={styles.switchTitle}>Chuyển sang Khách hàng</Text>
+                <Text style={styles.switchDesc}>Đặt dịch vụ sửa chữa cho ngôi nhà của bạn</Text>
+              </View>
+              <View style={styles.arrowCircle}>
+                <Ionicons name="arrow-forward" size={16} color="#B45309" />
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* Số dư */}
+          <View style={styles.balanceHeader}>
           <Ionicons name="wallet" size={20} color="#2563EB" />
           <Text style={styles.balanceTitle}>Số dư</Text>
           <Ionicons name="chevron-forward" size={20} color="#94A3B8" />

@@ -9,7 +9,6 @@ import Animated, {
   interpolate, 
   Extrapolation,
   runOnJS,
-  useDerivedValue,
   SharedValue,
   withTiming
 } from 'react-native-reanimated';
@@ -19,6 +18,7 @@ import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome5 } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useUIStore } from '../../store/ui.store';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -90,8 +90,6 @@ function useSyncTabState(
     }
   }, [currentIndex, tabWidth, activeIndex, translateX]);
 }
-
-import { useUIStore } from '../../store/ui.store';
 
 export const GlassTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
   const insets = useSafeAreaInsets();

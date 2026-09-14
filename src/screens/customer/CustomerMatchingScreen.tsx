@@ -46,7 +46,7 @@ export default function CustomerMatchingScreen() {
   const [isExpanded, setIsExpanded] = useState(true);
 
   // Simple pulse animation for radar
-  const pulseAnim = new Animated.Value(1);
+  const [pulseAnim] = useState(() => new Animated.Value(1));
 
   useEffect(() => {
     if (isFinding) {
@@ -74,7 +74,7 @@ export default function CustomerMatchingScreen() {
 
       return () => clearTimeout(timer);
     }
-  }, [isFinding]);
+  }, [isFinding, pulseAnim]);
 
   if (!isFinding) {
     return (

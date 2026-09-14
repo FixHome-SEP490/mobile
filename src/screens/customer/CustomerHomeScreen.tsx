@@ -199,7 +199,7 @@ export default function CustomerHomeScreen() {
 
       {/* 1. Header Bar: Avatar + Name + Notification & Dev Role Switch */}
       <View style={styles.header}>
-        <View style={styles.userInfo}>
+        <TouchableOpacity style={styles.userInfo} onPress={handleOpenAuth} activeOpacity={0.8}>
           <View style={styles.avatarWrapper}>
             <Image
               source={require('../../../assets/icon.png')}
@@ -213,7 +213,7 @@ export default function CustomerHomeScreen() {
               {user?.fullName || 'Lạc Vỹ'}
             </Text>
           </View>
-        </View>
+        </TouchableOpacity>
 
         <View style={styles.headerActions}>
           {/* Quick Dev Switch Button to preview Technician */}

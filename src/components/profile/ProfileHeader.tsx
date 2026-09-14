@@ -1,8 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface ProfileHeaderProps {
   name: string;
