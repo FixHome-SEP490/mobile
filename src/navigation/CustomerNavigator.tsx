@@ -61,7 +61,7 @@ export default function CustomerNavigator() {
         component={CustomerProfileScreen}
         options={{
           title: 'Tài khoản',
-          headerShown: true,
+          headerShown: false,
           headerTitle: 'Hồ sơ cá nhân',
         }}
       />

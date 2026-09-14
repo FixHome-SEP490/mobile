@@ -10,7 +10,8 @@ import Animated, {
   Extrapolation,
   runOnJS,
   useDerivedValue,
-  SharedValue
+  SharedValue,
+  withTiming
 } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,22 +26,6 @@ const MARGIN_HORIZONTAL = 16;
 const GAP = 12;
 const ACTION_CIRCLE_SIZE = 64;
 const PILL_WIDTH = SCREEN_WIDTH - (MARGIN_HORIZONTAL * 2) - GAP - ACTION_CIRCLE_SIZE;
-
-const ColorfulGridIcon = () => {
-  return (
-    <View style={styles.gridIconContainer}>
-      <View style={styles.gridRow}>
-        <View style={[styles.gridBox, { backgroundColor: '#00E5FF', borderRadius: 6 }]} />
-        <View style={[styles.gridBox, { backgroundColor: '#2962FF', borderRadius: 6, transform: [{ rotate: '15deg' }] }]} />
-      </View>
-      <View style={styles.gridRow}>
-        <View style={[styles.gridBox, { backgroundColor: '#FF9100', borderRadius: 12 }]} />
-        <View style={[styles.gridBox, { backgroundColor: '#00E676', borderRadius: 6 }]} />
-      </View>
-      <View style={styles.sparkle} />
-    </View>
-  );
-};
 
 // Sub-component for Icon Color Interpolation
 const AnimatedTabIcon = ({ 
@@ -106,6 +91,8 @@ function useSyncTabState(
   }, [currentIndex, tabWidth, activeIndex, translateX]);
 }
 
+import { useUIStore } from '../../store/ui.store';
+
 export const GlassTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
   const insets = useSafeAreaInsets();
   const tabCount = state.routes.length;
@@ -116,6 +103,7 @@ export const GlassTabBar = ({ state, descriptors, navigation }: BottomTabBarProp
   const scaleX = useSharedValue(1);
   const scaleY = useSharedValue(1);
   const activeIndex = useSharedValue(state.index);
+  const isTabBarVisible = useUIStore((state) => state.isTabBarVisible);
 
   // Sync back to navigation state if changed from outside
   useSyncTabState(state.index, tabWidth, translateX, activeIndex);
@@ -224,10 +212,18 @@ export const GlassTabBar = ({ state, descriptors, navigation }: BottomTabBarProp
     };
   });
 
+  const animatedWrapperStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { translateY: withTiming(isTabBarVisible ? 0 : 150, { duration: 300 }) }
+      ],
+    };
+  });
+
   const composedGesture = Gesture.Simultaneous(tapGesture, panGesture);
 
   return (
-    <View style={[styles.wrapper, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+    <Animated.View style={[styles.wrapper, { paddingBottom: Math.max(insets.bottom, 16) }, animatedWrapperStyle]}>
       
       {/* 1. KHỐI MAIN PILL */}
       <GestureDetector gesture={composedGesture}>
@@ -262,14 +258,14 @@ export const GlassTabBar = ({ state, descriptors, navigation }: BottomTabBarProp
       </GestureDetector>
 
       {/* 2. KHỐI ACTION CIRCLE */}
-      <TouchableOpacity activeOpacity={0.8} onPress={() => console.log('Action Menu Pressed')}>
+      <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('CustomerAIChat')}>
         <View style={styles.actionCircleContainer}>
           <BlurView intensity={70} tint="light" style={styles.actionCircle}>
             <FontAwesome5 name="robot" size={24} color="#00E5FF" />
           </BlurView>
         </View>
       </TouchableOpacity>
-    </View>
+    </Animated.View>
   );
 };
 

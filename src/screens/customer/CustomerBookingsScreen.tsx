@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants';
+import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 
 export default function CustomerBookingsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
+  const handleScroll = useScrollHideTabBar();
 
   return (
     <View style={styles.container}>
@@ -37,7 +39,11 @@ export default function CustomerBookingsScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      >
         <TouchableOpacity style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={styles.iconContainer}>

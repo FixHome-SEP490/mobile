@@ -22,6 +22,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store';
+import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { UserRole } from '../../types';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -46,7 +47,6 @@ const POPULAR_SERVICES: ServiceItem[] = [
     iconType: 'fa5',
     iconColor: '#0284C7',
     pedestalColor: '#E0F2FE',
-    isHot: false,
     imageSource: require('../../../assets/air-conditioner.png'),
   },
   {
@@ -56,15 +56,16 @@ const POPULAR_SERVICES: ServiceItem[] = [
     iconType: 'material',
     iconColor: '#0D9488',
     pedestalColor: '#CCFBF1',
+    imageSource: require('../../../assets/water-pipeline.png'),
   },
   {
     id: 'electricity',
-    name: 'Sửa điện\ngia dụng',
+    name: 'Lắp đặt hệ\nthống điện',
     iconName: 'bolt',
     iconType: 'fa5',
     iconColor: '#EAB308',
     pedestalColor: '#FEF9C3',
-    isHot: true,
+    imageSource: require('../../../assets/voltage-cabinet.png'),
   },
   {
     id: 'drainage',
@@ -73,22 +74,25 @@ const POPULAR_SERVICES: ServiceItem[] = [
     iconType: 'material',
     iconColor: '#4F46E5',
     pedestalColor: '#E0E7FF',
+    imageSource: require('../../../assets/unclogging-drains.png'),
   },
   {
     id: 'ac_repair',
-    name: 'Sửa máy\nlạnh',
-    iconName: 'air-conditioner',
+    name: 'Sửa Tivi',
+    iconName: 'tv',
     iconType: 'material',
     iconColor: '#2563EB',
     pedestalColor: '#DBEAFE',
+    imageSource: require('../../../assets/tv-repair.png'),
   },
   {
     id: 'ac_install',
-    name: 'Tháo & lắp\nmáy lạnh',
+    name: 'Điện tử\ngia dụng',
     iconName: 'tools',
     iconType: 'fa5',
     iconColor: '#059669',
     pedestalColor: '#D1FAE5',
+    imageSource: require('../../../assets/home-appliance-repair.png'),
   },
   {
     id: 'washer_repair',
@@ -97,6 +101,7 @@ const POPULAR_SERVICES: ServiceItem[] = [
     iconType: 'material',
     iconColor: '#7C3AED',
     pedestalColor: '#EDE9FE',
+    imageSource: require('../../../assets/washing-machine.png'),
   },
   {
     id: 'fridge_repair',
@@ -120,6 +125,7 @@ const QUICK_TAGS = [
 export default function CustomerHomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user, isAuthenticated, setAuth, logout } = useAuthStore();
+  const handleScroll = useScrollHideTabBar();
   const [searchQuery, setSearchQuery] = useState('');
 
   const handleSearch = () => {
@@ -169,7 +175,7 @@ export default function CustomerHomeScreen() {
       return (
         <Image 
           source={item.imageSource} 
-          style={{ width: 96, height: 96 }} 
+          style={{ width: 88, height: 88 }} 
           resizeMode="contain" 
         />
       );
@@ -242,6 +248,8 @@ export default function CustomerHomeScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
       >
         {/* Address Selector */}
         <TouchableOpacity 
@@ -497,20 +505,6 @@ export default function CustomerHomeScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
-      {/* 9. Floating AI Assistant Mascot FAB */}
-      <TouchableOpacity
-        style={styles.floatingAiFab}
-        activeOpacity={0.85}
-        onPress={() => navigation.navigate('CustomerAIChat')}
-      >
-        <LinearGradient
-          colors={['#3B82F6', '#1D4ED8']}
-          style={styles.floatingAiGradient}
-        >
-          <MaterialCommunityIcons name="robot-outline" size={24} color="#FFFFFF" />
-          <Text style={styles.floatingAiText}>AI Soi Lỗi</Text>
-        </LinearGradient>
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -1039,29 +1033,4 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // 9. Floating AI Assistant FAB
-  floatingAiFab: {
-    position: 'absolute',
-    bottom: 20,
-    right: 16,
-    borderRadius: 25,
-    elevation: 6,
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-  },
-  floatingAiGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 25,
-  },
-  floatingAiText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
 });
