@@ -1,21 +1,44 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Switch, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../constants';
-import { useAuthStore } from '../../store';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { UserRole } from '../../types';
+import { useAuthStore } from '../../store';
+import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ProfileHeader } from '../../components/profile/ProfileHeader';
 import { authApi } from '../../api/auth';
 import { storageService } from '../../services/storage.service';
+import { usersApi } from '../../api/users';
 
 export default function TechnicianProfileScreen() {
-  const logout = useAuthStore((state) => state.logout);
-  const { user, setAuth } = useAuthStore();
+  const { user, logout, setAuth } = useAuthStore();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const handleScroll = useScrollHideTabBar();
+
+  const [name, setName] = useState(user?.fullName || 'Thợ Việt');
+  const [phone, setPhone] = useState(user?.phoneNumber || '');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatarUrl || null);
+  
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      try {
+        const res = await usersApi.getProfile();
+        if (res.data) {
+          setName(res.data.fullName || 'Thợ Việt');
+          setPhone(res.data.phoneNumber || '');
+          setAvatarUrl(res.data.avatarUrl || null);
+        }
+      } catch (error) {
+        console.error('Fetch tech profile error:', error);
+      }
+    };
+    fetchProfileData();
+  }, []);
 
   const handleLogout = () => {
     Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất?', [
@@ -33,7 +56,10 @@ export default function TechnicianProfileScreen() {
           await storageService.removeRefreshToken();
           logout();
           setTimeout(() => {
-            navigation.navigate('Auth');
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Auth' }],
+            });
           }, 100);
         }
       }},
@@ -51,301 +77,177 @@ export default function TechnicianProfileScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
-        <ProfileHeader 
-          name={user?.fullName || 'Lạc Vỹ'} 
-          phone={'+841234567890'} 
-          avatarText={(user?.fullName || 'L').charAt(0)} 
-        />
-
-        <View style={styles.innerContent}>
-        {/* Số dư */}
-        <View style={styles.balanceHeader}>
-          <Ionicons name="wallet" size={20} color="#2563EB" />
-          <Text style={styles.balanceTitle}>Số dư</Text>
-          <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
-        </View>
-
-        <View style={styles.balanceRow}>
-          <View style={styles.balanceCard}>
-            <View style={styles.balanceTop}>
-              <Ionicons name="folder-open" size={16} color="#2563EB" />
-              <Text style={styles.balanceLabel}>Số dư doanh thu</Text>
+    <SafeAreaView style={[styles.container, isDarkMode && styles.containerDark]} edges={['top']}>
+      <ScrollView 
+        contentContainerStyle={{ paddingBottom: 40, paddingTop: 60 }}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={[styles.mainWrapperCard, isDarkMode && styles.cardDark]}>
+          {/* Avatar Section */}
+          <View style={styles.avatarSection}>
+            <View style={[styles.avatarBorder, isDarkMode ? styles.avatarBorderDark : styles.avatarBorderLight]}>
+              <View style={styles.avatar}>
+                {avatarUrl ? (
+                  <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+                ) : (
+                  <Text style={styles.avatarText}>{name.charAt(0)}</Text>
+                )}
+              </View>
             </View>
-            <Text style={styles.balanceValue}>0đ</Text>
+            <Text style={[styles.name, isDarkMode && styles.textDark]}>{name}</Text>
+            <Text style={styles.phone}>{phone}</Text>
           </View>
 
-          <View style={styles.balanceCard}>
-            <View style={styles.balanceTop}>
-              <Ionicons name="cash" size={16} color="#EAB308" />
-              <Text style={styles.balanceLabel}>Số dư nền tảng</Text>
+          <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Ví & Doanh thu</Text>
+          <View style={styles.overviewRow}>
+            <LinearGradient colors={['#E0F2FE', '#F0F9FF']} style={styles.overviewCard}>
+              <View style={styles.cardTopRow}>
+                <View style={[styles.iconCircle, { backgroundColor: '#BAE6FD' }]}>
+                  <Ionicons name="folder-open" size={16} color="#0284C7" />
+                </View>
+                <Text style={styles.cardLabel}>Doanh thu</Text>
+              </View>
+              <Text style={styles.cardValue}>0 <Text style={styles.cardUnit}>đ</Text></Text>
+            </LinearGradient>
+
+            <LinearGradient colors={['#FEF3C7', '#FFFBEB']} style={styles.overviewCard}>
+              <View style={styles.cardTopRow}>
+                <View style={[styles.iconCircle, { backgroundColor: '#FDE68A' }]}>
+                  <Ionicons name="cash" size={16} color="#D97706" />
+                </View>
+                <Text style={styles.cardLabel}>Nền tảng</Text>
+              </View>
+              <Text style={styles.cardValue}>0 <Text style={styles.cardUnit}>đ</Text></Text>
+            </LinearGradient>
+          </View>
+
+          <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Công cụ làm việc</Text>
+          <View style={[styles.menuContainer, isDarkMode && styles.cardDark]}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => Alert.alert('Tính năng đang phát triển')}>
+              <Ionicons name="book" size={22} color="#64748B" style={styles.menuIcon} />
+              <View style={styles.menuContent}>
+                <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Nghiệp vụ</Text>
+                <Text style={styles.menuDesc}>Quy trình và hướng dẫn chuẩn</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.menuItem} onPress={handleSwitchToCustomer}>
+              <Ionicons name="people-outline" size={22} color="#64748B" style={styles.menuIcon} />
+              <View style={styles.menuContent}>
+                <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Chuyển sang Khách hàng</Text>
+                <Text style={styles.menuDesc}>Chế độ đặt dịch vụ</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Cài đặt & Hỗ trợ</Text>
+          <View style={[styles.menuContainer, isDarkMode && styles.cardDark]}>
+            <TouchableOpacity style={styles.menuItem}>
+              <Ionicons name="settings-outline" size={22} color="#64748B" style={styles.menuIcon} />
+              <View style={styles.menuContent}>
+                <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Cài đặt hệ thống</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            
+            <View style={styles.menuItem}>
+              <Ionicons name="moon-outline" size={22} color="#64748B" style={styles.menuIcon} />
+              <View style={styles.menuContent}>
+                <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Giao diện tối</Text>
+              </View>
+              <Switch value={isDarkMode} onValueChange={setIsDarkMode} />
             </View>
-            <Text style={styles.balanceValue}>0đ</Text>
+            <View style={styles.divider} />
+
+            <TouchableOpacity style={styles.menuItem}>
+              <Ionicons name="headset-outline" size={22} color="#64748B" style={styles.menuIcon} />
+              <View style={styles.menuContent}>
+                <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Trung tâm trợ giúp</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.footer}>
+            <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
+              <Text style={styles.logoutText}>Đăng xuất</Text>
+            </TouchableOpacity>
           </View>
         </View>
-
-        {/* Nghiệp vụ / Đồng phục */}
-        <View style={styles.toolsRow}>
-          <TouchableOpacity style={styles.toolCard}>
-            <Ionicons name="book" size={20} color="#2563EB" />
-            <Text style={styles.toolText}>Nghiệp vụ</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* CÀI ĐẶT */}
-        <Text style={styles.sectionHeading}>CÀI ĐẶT</Text>
-        <View style={styles.listContainer}>
-          <TouchableOpacity style={styles.listItem}>
-            <Ionicons name="settings-outline" size={20} color="#64748B" />
-            <Text style={styles.listText}>Cài đặt</Text>
-            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
-          </TouchableOpacity>
-          <View style={styles.divider} />
-          <TouchableOpacity style={styles.listItem}>
-            <Ionicons name="globe-outline" size={20} color="#64748B" />
-            <Text style={styles.listText}>Ngôn ngữ</Text>
-            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
-          </TouchableOpacity>
-        </View>
-
-        {/* HỖ TRỢ */}
-        <Text style={styles.sectionHeading}>HỖ TRỢ</Text>
-        <View style={styles.listContainer}>
-          <TouchableOpacity style={styles.listItem}>
-            <Ionicons name="headset-outline" size={20} color="#64748B" />
-            <Text style={styles.listText}>Hỗ trợ</Text>
-            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
-          </TouchableOpacity>
-          <View style={styles.divider} />
-          <TouchableOpacity style={styles.listItem}>
-            <Ionicons name="chatbubbles-outline" size={20} color="#64748B" />
-            <Text style={styles.listText}>Những câu hỏi thường gặp (FAQ)</Text>
-            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
-          </TouchableOpacity>
-          <View style={styles.divider} />
-          <TouchableOpacity style={styles.listItem}>
-            <Ionicons name="information-circle-outline" size={20} color="#64748B" />
-            <Text style={styles.listText}>Về chúng tôi</Text>
-            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-          <Text style={styles.logoutText}>Đăng xuất</Text>
-        </TouchableOpacity>
-        </View>
-
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  scrollContent: {
-    paddingBottom: 40,
-  },
-  innerContent: {
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  containerDark: { backgroundColor: '#0F172A' },
+  cardDark: { backgroundColor: '#1E293B' },
+  textDark: { color: '#F8FAFC' },
+  
+  mainWrapperCard: {
+    backgroundColor: '#FFFFFF',
+    flexGrow: 1,
     paddingHorizontal: 16,
-  },
-  switchRoleCard: {
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  switchGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-  },
-  switchIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FEF3C7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  switchInfo: {
-    flex: 1,
-  },
-  switchTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 2,
-  },
-  switchDesc: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  arrowCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#FCD34D',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  balanceHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  balanceTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginLeft: 8,
-    flex: 1,
-  },
-  balanceRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  balanceCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
+    paddingTop: 16,
+    paddingBottom: 40,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    marginTop: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
-    elevation: 2,
+    elevation: 5,
   },
-  balanceTop: {
-    flexDirection: 'row',
+  avatarSection: {
     alignItems: 'center',
-    marginBottom: 12,
-  },
-  balanceLabel: {
-    fontSize: 13,
-    color: '#64748B',
-    marginLeft: 6,
-    fontWeight: '500',
-  },
-  balanceValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  toolsRow: {
-    flexDirection: 'row',
-    gap: 12,
     marginBottom: 24,
+    marginTop: -66,
   },
-  toolCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+  avatarBorder: {
+    width: 100, height: 100, borderRadius: 50,
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: 12, borderWidth: 4,
   },
-  toolText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#0F172A',
-    marginLeft: 8,
+  avatarBorderLight: { borderColor: '#FFFFFF', backgroundColor: '#FFFFFF' },
+  avatarBorderDark: { borderColor: '#1E293B', backgroundColor: '#1E293B' },
+  avatar: {
+    width: '100%', height: '100%', borderRadius: 50,
+    backgroundColor: '#DBEAFE', justifyContent: 'center', alignItems: 'center', overflow: 'hidden'
   },
-  promoBanner: {
-    flexDirection: 'row',
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    marginBottom: 32,
+  avatarImage: { width: '100%', height: '100%' },
+  avatarText: { fontSize: 36, fontWeight: '700', color: '#2563EB' },
+  name: { fontSize: 20, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
+  phone: { fontSize: 14, color: '#64748B', fontWeight: '500' },
+  
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 12 },
+  menuContainer: { 
+    backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden', 
+    marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 
   },
-  promoIconPlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#3B82F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  promoLabel: {
-    fontSize: 12,
-    color: '#BFDBFE',
-  },
-  hotBadge: {
-    backgroundColor: '#EA580C',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  hotBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  promoTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginTop: 4,
-  },
-  whiteArrowCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sectionHeading: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748B',
-    marginBottom: 12,
-    letterSpacing: 0.5,
-    marginLeft: 8,
-  },
-  listContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    marginBottom: 24,
-    overflow: 'hidden',
-  },
-  listItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-  },
-  listText: {
-    flex: 1,
-    fontSize: 15,
-    color: '#0F172A',
-    marginLeft: 12,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginLeft: 48,
-  },
-  logoutBtn: {
-    marginTop: 8,
-    backgroundColor: '#FEE2E2',
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-  },
-  logoutText: {
-    color: '#DC2626',
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  menuItem: { flexDirection: 'row', padding: 16, alignItems: 'center' },
+  menuIcon: { marginRight: 16 },
+  menuContent: { flex: 1 },
+  menuTitle: { fontSize: 15, fontWeight: '600', color: '#0F172A' },
+  menuDesc: { fontSize: 13, color: '#64748B', marginTop: 2 },
+  divider: { height: 1, backgroundColor: '#F1F5F9', marginLeft: 54 },
+  
+  overviewRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+  overviewCard: { flex: 1, borderRadius: 16, padding: 16 },
+  cardTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  iconCircle: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginRight: 8 },
+  cardLabel: { fontSize: 14, color: '#475569', fontWeight: '500' },
+  cardValue: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
+  cardUnit: { fontSize: 14, fontWeight: '600', color: '#64748B' },
+  
+  footer: { alignItems: 'center', marginTop: 12, marginBottom: 32 },
+  logoutBtn: { paddingVertical: 12, paddingHorizontal: 24 },
+  logoutText: { fontSize: 14, fontWeight: '600', color: '#EF4444' },
 });

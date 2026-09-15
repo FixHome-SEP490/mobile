@@ -233,7 +233,7 @@ export default function RegisterScreen() {
             </View>
 
             <TouchableOpacity style={styles.registerBtn} onPress={handleRegister} activeOpacity={0.85}>
-              <Text style={styles.registerBtnText}>GỬI YÊU CẦU ĐĂNG KÝ</Text>
+              <Text style={styles.registerBtnText}>ĐĂNG KÝ</Text>
             </TouchableOpacity>
 
             <View style={styles.loginRow}>

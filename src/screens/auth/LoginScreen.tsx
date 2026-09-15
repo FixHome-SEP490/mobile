@@ -78,7 +78,7 @@ export default function LoginScreen() {
   };
 
   const handleLoginCustomer = () => handleLogin(undefined, 'testlog01@gmail.com', 'Ahihi113@');
-  const handleLoginTechnician = () => handleLogin(UserRole.TECHNICIAN, 'thoviet@fixhome.vn', 'Ahihi113@');
+  const handleLoginTechnician = () => handleLogin(UserRole.TECHNICIAN, 'tech1@fixhome.vn', 'Password123!');
 
   return (
     <SafeAreaView style={styles.container}>
@@ -87,15 +87,6 @@ export default function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => navigation.reset({ index: 0, routes: [{ name: 'CustomerMain' }] })}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={22} color="#4B5563" />
-            <Text style={styles.backText}>Về Trang chủ</Text>
-          </TouchableOpacity>
 
           <View style={styles.header}>
             <View style={styles.iconWrapper}>
@@ -108,14 +99,14 @@ export default function LoginScreen() {
 
           <View style={styles.formContainer}>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>EMAIL *</Text>
+              <Text style={styles.inputLabel}>Email</Text>
               <View style={styles.inputWrapper}>
                 <Ionicons name="mail-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   value={email}
                   onChangeText={setEmail}
-                  placeholder="ví dụ: email@domain.com"
+                  placeholder="example@gmail.com"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="email-address"
                   autoCapitalize="none"
@@ -124,14 +115,14 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>MẬT KHẨU *</Text>
+              <Text style={styles.inputLabel}>Mật khẩu</Text>
               <View style={styles.inputWrapper}>
                 <Ionicons name="lock-closed-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   value={password}
                   onChangeText={setPassword}
-                  placeholder="nhập mật khẩu"
+                  placeholder="Abc12345@"
                   placeholderTextColor="#9CA3AF"
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"

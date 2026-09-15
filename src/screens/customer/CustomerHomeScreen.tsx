@@ -1,5 +1,5 @@
 // src/screens/customer/CustomerHomeScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Dimensions,
   StatusBar,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -21,10 +22,12 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
+
 import { useAuthStore } from '../../store';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { UserRole } from '../../types';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { addressesApi } from '../../api/addresses';
 
 const { width } = Dimensions.get('window');
 
@@ -127,25 +130,57 @@ export default function CustomerHomeScreen() {
   const { user, isAuthenticated, setAuth, logout } = useAuthStore();
   const handleScroll = useScrollHideTabBar();
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedAddress, setSelectedAddress] = useState('Đang tải địa chỉ...');
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchAddress = async () => {
+    try {
+      if (!isAuthenticated) {
+        setSelectedAddress('Vui lòng đăng nhập để xem địa chỉ');
+        return;
+      }
+      
+      if (user?.role === UserRole.TECHNICIAN) {
+        setSelectedAddress('Không áp dụng cho Thợ');
+        return;
+      }
+      
+      const res = await addressesApi.getAddresses();
+      if (res.data && res.data.length > 0) {
+        const defaultAddress = res.data.find(a => a.isDefault) || res.data[0];
+        setSelectedAddress(defaultAddress.line1);
+      } else {
+        setSelectedAddress('Chưa có địa chỉ nào');
+      }
+    } catch (error) {
+      console.error('Failed to load addresses:', error);
+      setSelectedAddress('Không thể tải địa chỉ');
+    }
+  };
+
+  useEffect(() => {
+    fetchAddress();
+  }, [isAuthenticated]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchAddress();
+    setRefreshing(false);
+  };
 
   const handleSearch = () => {
     navigation.navigate('CustomerServices', { query: searchQuery });
   };
 
-  const ADDRESSES = [
-    '123 Đường Số 1, Quận 1, TP.HCM',
-    '456 Lê Lợi, Phường Bến Nghé, Quận 1, TP.HCM',
-    '789 Nguyễn Văn Linh, Quận 7, TP.HCM'
-  ];
-  const [selectedAddress, setSelectedAddress] = useState(ADDRESSES[0]);
-
   const handleSelectAddress = () => {
-    Alert.alert('Chọn địa chỉ', 'Vui lòng chọn địa chỉ của bạn', [
-      { text: ADDRESSES[0], onPress: () => setSelectedAddress(ADDRESSES[0]) },
-      { text: ADDRESSES[1], onPress: () => setSelectedAddress(ADDRESSES[1]) },
-      { text: ADDRESSES[2], onPress: () => setSelectedAddress(ADDRESSES[2]) },
-      { text: 'Hủy', style: 'cancel' }
-    ]);
+    Alert.alert(
+      'Chọn địa chỉ',
+      'Để thay đổi địa chỉ mặc định, vui lòng vào Quản lý địa chỉ trong mục Tài khoản.',
+      [
+        { text: 'Đóng', style: 'cancel' }
+      ]
+    );
   };
 
   // Switch role or test login quickly
@@ -218,6 +253,9 @@ export default function CustomerHomeScreen() {
         contentContainerStyle={styles.scrollContent}
         onScroll={handleScroll}
         scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563EB']} />
+        }
       >
         {/* 2. Hero Search Banner */}
         <LinearGradient

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
@@ -7,6 +7,14 @@ import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 export default function CustomerBookingsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const handleScroll = useScrollHideTabBar();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1000);
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -43,6 +51,9 @@ export default function CustomerBookingsScreen() {
         contentContainerStyle={styles.scrollContent}
         onScroll={handleScroll}
         scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563EB']} />
+        }
       >
         <TouchableOpacity style={styles.card}>
           <View style={styles.cardHeader}>

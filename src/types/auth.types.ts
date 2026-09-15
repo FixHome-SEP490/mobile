@@ -14,6 +14,8 @@ export interface UserInfo {
   email: string;
   fullName: string;
   role: UserRole;
+  phoneNumber?: string;
+  avatarUrl?: string | null;
 }
 
 export enum UserRole {
