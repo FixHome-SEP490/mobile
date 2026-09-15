@@ -10,6 +10,8 @@ import { useAuthStore } from '../../store';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { ProfileHeader } from '../../components/profile/ProfileHeader';
 import { LinearGradient } from 'expo-linear-gradient';
+import { authApi } from '../../api/auth';
+import { storageService } from '../../services/storage.service';
 
 interface Address {
   id: string;
@@ -88,11 +90,22 @@ export default function CustomerProfileScreen() {
   const handleLogout = () => {
     Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất?', [
       { text: 'Hủy', style: 'cancel' },
-      { text: 'Đăng xuất', style: 'destructive', onPress: () => {
-        logout();
-        setTimeout(() => {
-          navigation.navigate('Auth');
-        }, 100);
+      { text: 'Đăng xuất', style: 'destructive', onPress: async () => {
+        try {
+          const refreshToken = await storageService.getRefreshToken();
+          if (refreshToken) {
+            await authApi.logout({ refreshToken });
+          }
+        } catch (error) {
+          console.error('Logout error:', error);
+        } finally {
+          await storageService.removeToken();
+          await storageService.removeRefreshToken();
+          logout();
+          setTimeout(() => {
+            navigation.navigate('Auth');
+          }, 100);
+        }
       }},
     ]);
   };
@@ -100,18 +113,23 @@ export default function CustomerProfileScreen() {
   return (
     <SafeAreaView style={[styles.container, isDarkMode && styles.containerDark]} edges={['top']}>
       <ScrollView 
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingBottom: 40, paddingTop: 60 }}
         onScroll={handleScroll}
         scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
       >
-        <ProfileHeader 
-          name={name} 
-          phone={phone} 
-          avatarText={name.charAt(0)} 
-          isDarkMode={isDarkMode} 
-        />
+        <View style={[styles.mainWrapperCard, isDarkMode && styles.cardDark]}>
+          {/* Avatar Section */}
+          <View style={styles.avatarSection}>
+            <View style={[styles.avatarBorder, isDarkMode ? styles.avatarBorderDark : styles.avatarBorderLight]}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{name.charAt(0)}</Text>
+              </View>
+            </View>
+            <Text style={[styles.name, isDarkMode && styles.textDark]}>{name}</Text>
+            <Text style={styles.phone}>{phone}</Text>
+          </View>
 
-        <View style={styles.scrollContent}>
           <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Ví & Điểm thưởng</Text>
           <View style={styles.overviewRow}>
             <LinearGradient colors={['#E0F2FE', '#F0F9FF']} style={styles.overviewCard}>
@@ -179,7 +197,7 @@ export default function CustomerProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Tùy chọn</Text>
+        <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Cài đặt</Text>
         <View style={[styles.menuContainer, isDarkMode && styles.cardDark]}>
           <View style={styles.menuItem}>
             <Ionicons name="moon-outline" size={22} color="#64748B" style={styles.menuIcon} />
@@ -270,6 +288,40 @@ const styles = StyleSheet.create({
   identityInfo: { flex: 1 },
   name: { fontSize: 20, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
   textDark: { color: '#F8FAFC' },
+
+  mainWrapperCard: {
+    backgroundColor: '#FFFFFF',
+    flexGrow: 1,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 40,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    marginTop: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  avatarSection: {
+    alignItems: 'center',
+    marginBottom: 24,
+    marginTop: -66,
+  },
+  avatarBorder: {
+    width: 100, height: 100, borderRadius: 50,
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: 12, borderWidth: 4,
+  },
+  avatarBorderLight: { borderColor: '#FFFFFF', backgroundColor: '#FFFFFF' },
+  avatarBorderDark: { borderColor: '#1E293B', backgroundColor: '#1E293B' },
+  avatar: {
+    width: '100%', height: '100%', borderRadius: 50,
+    backgroundColor: '#DBEAFE', justifyContent: 'center', alignItems: 'center',
+  },
+  avatarText: { fontSize: 36, fontWeight: '700', color: '#2563EB' },
+  phone: { fontSize: 14, color: '#64748B', fontWeight: '500' },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 12 },
   menuContainer: { backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden', marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   menuItem: { flexDirection: 'row', padding: 16, alignItems: 'center' },

@@ -197,52 +197,20 @@ export default function CustomerHomeScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* 1. Header Bar: Avatar + Name + Notification & Dev Role Switch */}
+      {/* 1. Header Address Selector */}
       <View style={styles.header}>
-        <View style={styles.userInfo}>
-          <View style={styles.avatarWrapper}>
-            <Image
-              source={require('../../../assets/icon.png')}
-              style={styles.avatarImage}
-            />
-            <View style={styles.onlineBadge} />
+        <TouchableOpacity 
+          style={styles.addressSelector} 
+          onPress={handleSelectAddress}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="location" size={24} color="#EF4444" />
+          <View style={styles.addressTextContainer}>
+            <Text style={styles.addressLabel}>Giao đến</Text>
+            <Text style={styles.addressValue} numberOfLines={1}>{selectedAddress}</Text>
           </View>
-          <View style={styles.userTextContainer}>
-            <Text style={styles.greetingText}>Xin chào 👋</Text>
-            <Text style={styles.userNameText} numberOfLines={1}>
-              {user?.fullName || 'Lạc Vỹ'}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.headerActions}>
-          {/* Quick Dev Switch Button to preview Technician */}
-          <TouchableOpacity
-            style={styles.roleSwitchBtn}
-            onPress={handleQuickSwitchToTechnician}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="construct-outline" size={14} color="#2563EB" />
-            <Text style={styles.roleSwitchText}>Xem Thợ</Text>
-          </TouchableOpacity>
-
-          {/* Toggle theme */}
-          <TouchableOpacity style={styles.roleSwitchBtn}>
-            <Ionicons name="moon-outline" size={14} color="#0F172A" />
-          </TouchableOpacity>
-
-          {/* Notification Bell */}
-          <TouchableOpacity
-            style={styles.headerIconBtn}
-            onPress={() => Alert.alert('Thông báo', 'Bạn có 1 ưu đãi 50K cho dịch vụ điện nước!')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="notifications-outline" size={22} color="#0F172A" />
-            <View style={styles.notificationBadge}>
-              <Text style={styles.notificationBadgeText}>1</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
+          <Ionicons name="chevron-down" size={18} color="#64748B" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -251,21 +219,7 @@ export default function CustomerHomeScreen() {
         onScroll={handleScroll}
         scrollEventThrottle={16}
       >
-        {/* Address Selector */}
-        <TouchableOpacity 
-          style={styles.addressSelector} 
-          onPress={handleSelectAddress}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="location" size={20} color="#EF4444" />
-          <View style={styles.addressTextContainer}>
-            <Text style={styles.addressLabel}>Giao đến</Text>
-            <Text style={styles.addressValue} numberOfLines={1}>{selectedAddress}</Text>
-          </View>
-          <Ionicons name="chevron-down" size={16} color="#64748B" />
-        </TouchableOpacity>
-
-        {/* 2. Hero Search Banner (Xanh Dương Royal Gradient - Giống Hình 1 Vua Thợ) */}
+        {/* 2. Hero Search Banner */}
         <LinearGradient
           colors={['#1D4ED8', '#2563EB', '#3B82F6']}
           start={{ x: 0, y: 0 }}
@@ -275,12 +229,6 @@ export default function CustomerHomeScreen() {
           {/* Subtle Decorative Circles */}
           <View style={styles.decorCircle1} />
           <View style={styles.decorCircle2} />
-
-          {/* Slogan */}
-          <View style={styles.sloganRow}>
-            <Text style={styles.heroSlogan}>Tin tưởng - Nhanh chóng - Hiệu quả</Text>
-            <Ionicons name="sparkles" size={18} color="#FDE047" />
-          </View>
 
           {/* Pill Search Input */}
           <View style={styles.searchBar}>
@@ -301,54 +249,7 @@ export default function CustomerHomeScreen() {
               <Ionicons name="search" size={18} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
-
-          {/* Hero Sub Info */}
-          <View style={styles.heroStatsRow}>
-            <View style={styles.heroStatItem}>
-              <Ionicons name="flash" size={14} color="#FDE047" />
-              <Text style={styles.heroStatText}>Không mất phí khảo sát</Text>
-            </View>
-            <View style={styles.heroStatItem}>
-              <Ionicons name="people" size={14} color="#93C5FD" />
-              <Text style={styles.heroStatText}>100,000+ thợ tay nghề cao</Text>
-            </View>
-          </View>
         </LinearGradient>
-
-        {/* 3. Status Notice / Announcement Pill (Phong cách Hình 2 Xanh SM) */}
-        <View style={styles.statusPillWrapper}>
-          <TouchableOpacity
-            style={styles.statusPill}
-            activeOpacity={0.85}
-            onPress={() => Alert.alert('Thợ FixHome quanh bạn', 'Có 128 thợ đang rảnh trong bán kính 3km.')}
-          >
-            <View style={styles.statusPillIconContainer}>
-              <Ionicons name="shield-checkmark" size={18} color="#059669" />
-            </View>
-            <Text style={styles.statusPillText} numberOfLines={1}>
-              <Text style={{ fontWeight: 'bold' }}>128+ thợ FixHome</Text> sẵn sàng có mặt sau 15-30 phút!
-            </Text>
-            <Ionicons name="chevron-forward" size={16} color="#64748B" />
-          </TouchableOpacity>
-        </View>
-
-        {/* 4. Quick Category Chips (Cuộn ngang) */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipsScroll}
-        >
-          {QUICK_TAGS.map((tag) => (
-            <TouchableOpacity
-              key={tag.id}
-              style={styles.chipItem}
-              onPress={() => Alert.alert('Dịch vụ', tag.title)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.chipText}>{tag.title}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
 
         {/* 5. Hero Feature Cards (3 Thẻ Lớn: Đặt thợ, AI Chẩn đoán, FixHome Mall) */}
         <View style={styles.featureCardsRow}>
@@ -381,22 +282,6 @@ export default function CustomerHomeScreen() {
             <Text style={styles.featureCardDesc}>Báo giá ngay</Text>
             <View style={styles.featureCardIconBox}>
               <MaterialCommunityIcons name="robot-happy" size={36} color="#7C3AED" />
-            </View>
-          </TouchableOpacity>
-
-          {/* Card 3: FixHome Mall */}
-          <TouchableOpacity
-            style={[styles.featureCard, { backgroundColor: '#FEF3C7' }]}
-            activeOpacity={0.85}
-            onPress={() => Alert.alert('FixHome Mall', 'Phụ kiện, linh kiện máy giặt, máy lạnh chính hãng!')}
-          >
-            <View style={[styles.featureCardBadge, { backgroundColor: '#D97706' }]}>
-              <Text style={styles.featureCardBadgeText}>Chính hãng</Text>
-            </View>
-            <Text style={styles.featureCardTitle}>Vật tư Mall</Text>
-            <Text style={styles.featureCardDesc}>Bảo hành 12th</Text>
-            <View style={styles.featureCardIconBox}>
-              <MaterialCommunityIcons name="storefront-outline" size={36} color="#D97706" />
             </View>
           </TouchableOpacity>
         </View>
@@ -460,7 +345,7 @@ export default function CustomerHomeScreen() {
           onPress={() => Alert.alert('Ưu đãi FixHome', 'Nhập mã FIXHOME30 khi đặt lịch để giảm 30%!')}
         >
           <LinearGradient
-            colors={['#0F172A', '#1E293B', '#2563EB']}
+            colors={['#09f089', '#6dd0e9', '#2563EB']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.promoBanner}
@@ -522,10 +407,9 @@ const styles = StyleSheet.create({
   addressSelector: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
     gap: 8,
+    flex: 1,
+    marginRight: 16,
   },
   addressTextContainer: {
     flex: 1,

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants';
@@ -6,8 +6,32 @@ import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 
 export default function CustomerNotificationsScreen() {
   const handleScroll = useScrollHideTabBar();
+  const [activeFilter, setActiveFilter] = useState('Tất cả');
+  const filters = ['Tất cả', 'Giao dịch', 'Dịch vụ'];
+
   return (
     <View style={styles.container}>
+      <View style={styles.filterContainer}>
+        {filters.map((filter) => (
+          <TouchableOpacity
+            key={filter}
+            style={[
+              styles.filterButton,
+              activeFilter === filter && styles.filterButtonActive,
+            ]}
+            onPress={() => setActiveFilter(filter)}
+          >
+            <Text
+              style={[
+                styles.filterText,
+                activeFilter === filter && styles.filterTextActive,
+              ]}
+            >
+              {filter}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
         onScroll={handleScroll}
@@ -53,6 +77,32 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  filterButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    marginRight: 8,
+  },
+  filterButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  filterText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  filterTextActive: {
+    color: '#FFFFFF',
   },
   scrollContent: {
     padding: 16,

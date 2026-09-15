@@ -1,13 +1,14 @@
-// src/screens/auth/LoginScreen.tsx
 import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Image,
   TextInput,
   TouchableOpacity,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -15,299 +16,315 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList, AuthStackParamList } from '../../types';
 import { useAuthStore } from '../../store';
 import { UserRole } from '../../types';
-import { colors, spacing, fontSize } from '../../constants';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { authApi } from '../../api/auth';
+import { storageService } from '../../services/storage.service';
 
 export default function LoginScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList & RootStackParamList>>();
   const { setAuth } = useAuthStore();
-  const [phone, setPhone] = useState('0909123123');
-  const [otp, setOtp] = useState('');
-  const [step, setStep] = useState(1);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleLoginCustomer = () => {
-    setAuth('mock-jwt-customer-token', {
-      id: 'cust-01',
-      email: 'lacvy@fixhome.vn',
-      fullName: 'Lạc Vỹ',
-      role: UserRole.CUSTOMER,
-    });
-    navigation.navigate('CustomerMain');
+  const handleLogin = async (roleOverride?: UserRole, forcedEmail?: string, forcedPassword?: string) => {
+    const finalEmail = forcedEmail || email;
+    const finalPassword = forcedPassword || password;
+
+    if (!finalEmail.trim() || !finalPassword) {
+      Alert.alert('Lỗi', 'Vui lòng nhập email và mật khẩu');
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      const res = await authApi.login({
+        email: finalEmail,
+        password: finalPassword,
+      });
+      
+      const { accessToken, refreshToken, user } = res.data;
+      
+      await storageService.setToken(accessToken);
+      if (refreshToken) {
+        await storageService.setRefreshToken(refreshToken);
+      }
+      
+      const finalUser = { ...user };
+      if (roleOverride) {
+        finalUser.role = roleOverride;
+      }
+      
+      setAuth(accessToken, finalUser);
+      
+      if (finalUser.role === UserRole.TECHNICIAN) {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'TechnicianMain' }],
+        });
+      } else {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'CustomerMain' }],
+        });
+      }
+    } catch (error: any) {
+      const msg = error.response?.data?.message || error.response?.data?.error?.message || 'Đăng nhập thất bại';
+      Alert.alert('Lỗi', msg);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleLoginTechnician = () => {
-    setAuth('mock-jwt-tech-token', {
-      id: 'tech-01',
-      email: 'thoviet@fixhome.vn',
-      fullName: 'Nguyễn Văn Hùng (Thợ)',
-      role: UserRole.TECHNICIAN,
-    });
-    navigation.navigate('TechnicianMain');
-  };
-
-  const handleContinueAsGuest = () => {
-    navigation.navigate('CustomerMain');
-  };
+  const handleLoginCustomer = () => handleLogin(undefined, 'testlog01@gmail.com', 'Ahihi113@');
+  const handleLoginTechnician = () => handleLogin(UserRole.TECHNICIAN, 'thoviet@fixhome.vn', 'Ahihi113@');
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      {/* Back Button */}
-      <TouchableOpacity
-        style={styles.backBtn}
-        onPress={() => navigation.navigate('CustomerMain')}
-        activeOpacity={0.7}
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <Ionicons name="arrow-back" size={22} color="#0F172A" />
-        <Text style={styles.backText}>Về Trang chủ</Text>
-      </TouchableOpacity>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.reset({ index: 0, routes: [{ name: 'CustomerMain' }] })}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={22} color="#4B5563" />
+            <Text style={styles.backText}>Về Trang chủ</Text>
+          </TouchableOpacity>
 
-      <Image
-        source={require('../../../assets/icon.png')}
-        style={styles.logo}
-        resizeMode="contain"
-      />
-      <Text style={styles.title}>FixHome</Text>
-      <Text style={styles.subtitle}>Sửa Chữa & Bảo Trì Nhà Trọn Gói</Text>
+          <View style={styles.header}>
+            <View style={styles.iconWrapper}>
+              <Ionicons name="home" size={32} color="#D97706" />
+            </View>
+            <Text style={styles.title}>ĐĂNG NHẬP</Text>
+            <View style={styles.divider} />
+            <Text style={styles.subtitle}>CHÀO MỪNG TRỞ LẠI FIXHOME</Text>
+          </View>
 
-      {/* Form Login Mockup */}
-      <View style={styles.formContainer}>
-        <Text style={styles.formTitle}>Đăng nhập tài khoản</Text>
-
-        {step === 1 ? (
-          <>
+          <View style={styles.formContainer}>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Số điện thoại</Text>
+              <Text style={styles.inputLabel}>EMAIL *</Text>
               <View style={styles.inputWrapper}>
-                <Ionicons name="call-outline" size={18} color="#64748B" style={styles.inputIcon} />
+                <Ionicons name="mail-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  value={phone}
-                  onChangeText={setPhone}
-                  placeholder="Ví dụ: 0909123456"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="phone-pad"
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="ví dụ: email@domain.com"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
                 />
               </View>
             </View>
 
-            <TouchableOpacity
-              style={styles.loginBtn}
-              onPress={() => {
-                if (phone.length >= 9) setStep(2);
-              }}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.loginBtnText}>Tiếp tục</Text>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>MẬT KHẨU *</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="lock-closed-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="nhập mật khẩu"
+                  placeholderTextColor="#9CA3AF"
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
+                  <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color="#9CA3AF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.loginBtn} onPress={() => handleLogin()} activeOpacity={0.85}>
+              <Text style={styles.loginBtnText}>ĐĂNG NHẬP</Text>
             </TouchableOpacity>
 
             <View style={styles.registerRow}>
               <Text style={styles.registerText}>Chưa có tài khoản? </Text>
               <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-                <Text style={styles.registerLink}>Đăng ký</Text>
+                <Text style={styles.registerLink}>Đăng ký ngay</Text>
               </TouchableOpacity>
             </View>
-          </>
-        ) : (
-          <>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Mã xác thực (OTP)</Text>
-              <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 12 }}>
-                Mã OTP gồm 6 số đã được gửi đến số {phone}
-              </Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="keypad-outline" size={18} color="#64748B" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  value={otp}
-                  onChangeText={setOtp}
-                  placeholder="Nhập mã 6 số"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="number-pad"
-                  maxLength={6}
-                />
-              </View>
+
+            {/* Quick Dev Switcher Buttons */}
+            <View style={styles.dividerRow}>
+              <View style={styles.lineDivider} />
+              <Text style={styles.dividerText}>HOẶC THỬ NGHIỆM VAI TRÒ</Text>
+              <View style={styles.lineDivider} />
             </View>
 
             <TouchableOpacity
-              style={styles.loginBtn}
+              style={[styles.techLoginBtn, { backgroundColor: '#3B82F6', marginBottom: 12 }]}
               onPress={handleLoginCustomer}
               activeOpacity={0.85}
             >
-              <Text style={styles.loginBtnText}>Xác nhận OTP</Text>
+              <Ionicons name="person" size={16} color="#FFFFFF" />
+              <Text style={styles.techLoginBtnText}>Vào vai Khách (Customer)</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={{ marginTop: 16, alignItems: 'center' }}
-              onPress={() => setStep(1)}
+              style={[styles.techLoginBtn, { backgroundColor: '#111827' }]}
+              onPress={handleLoginTechnician}
+              activeOpacity={0.85}
             >
-              <Text style={{ color: '#64748B', fontSize: 13 }}>Đổi số điện thoại</Text>
+              <Ionicons name="construct" size={16} color="#FFFFFF" />
+              <Text style={styles.techLoginBtnText}>Vào vai Thợ (Technician)</Text>
             </TouchableOpacity>
-          </>
-        )}
-
-        {/* Quick Dev Switcher Buttons */}
-        <View style={styles.dividerRow}>
-          <View style={styles.divider} />
-          <Text style={styles.dividerText}>HOẶC THỬ NGHIỆM VAI TRÒ</Text>
-          <View style={styles.divider} />
-        </View>
-
-        <TouchableOpacity
-          style={[styles.techLoginBtn, { backgroundColor: '#2563EB', marginBottom: 12 }]}
-          onPress={handleLoginCustomer}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="person" size={16} color="#FFFFFF" />
-          <Text style={styles.techLoginBtnText}>Vào vai Khách (Customer)</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.techLoginBtn, { backgroundColor: '#0F172A' }]}
-          onPress={handleLoginTechnician}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="construct" size={16} color="#FFFFFF" />
-          <Text style={styles.techLoginBtnText}>Vào vai Thợ (Technician)</Text>
-        </TouchableOpacity>
-      </View>
-      </ScrollView>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+    backgroundColor: '#F3F4F6', // Light gray background to match RegisterScreen
+  },
+  scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    padding: spacing.lg,
-    paddingTop: 40,
+    padding: 24,
+    paddingTop: 60,
+    paddingBottom: 40,
   },
   backBtn: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 20,
+    marginBottom: 24,
+    marginTop: -20,
     paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#D1D5DB',
   },
   backText: {
     fontSize: 13,
-    color: '#0F172A',
+    color: '#4B5563',
     fontWeight: '600',
   },
-  logo: {
-    width: 100,
-    height: 100,
-    marginBottom: spacing.xs,
-    borderRadius: 20,
+  header: {
+    alignItems: 'center',
+    marginBottom: 32,
   },
-  title: {
-    fontSize: fontSize.xxxl,
-    fontWeight: 'bold',
-    color: colors.primary,
-    marginBottom: 2,
-  },
-  subtitle: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginBottom: spacing.lg,
-  },
-  formContainer: {
-    backgroundColor: '#FFFFFF',
-    padding: spacing.lg,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  formTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#0F172A',
+  iconWrapper: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    backgroundColor: '#FEF3C7',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 16,
   },
+  title: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#111827',
+    marginBottom: 12,
+  },
+  divider: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#D97706',
+    borderRadius: 2,
+    marginBottom: 12,
+  },
+  subtitle: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#6B7280',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  formContainer: {
+    width: '100%',
+  },
   inputGroup: {
-    marginBottom: 14,
+    marginBottom: 16,
   },
   inputLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-    marginBottom: 6,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#4B5563',
+    marginBottom: 8,
+    letterSpacing: 0.5,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
     paddingHorizontal: 12,
-    height: 44,
+    height: 50,
   },
   inputIcon: {
-    marginRight: 8,
+    marginRight: 10,
   },
   input: {
     flex: 1,
     fontSize: 14,
-    color: '#0F172A',
+    color: '#111827',
   },
   loginBtn: {
-    backgroundColor: colors.primary,
-    height: 44,
-    borderRadius: 10,
+    backgroundColor: '#D97706',
+    height: 50,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 16,
+    shadowColor: '#D97706',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
   },
   loginBtnText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
+    letterSpacing: 0.5,
   },
   registerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 20,
-    marginBottom: 8,
+    marginTop: 24,
   },
   registerText: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#6B7280',
   },
   registerLink: {
     fontSize: 13,
+    color: '#D97706',
     fontWeight: '700',
-    color: '#2563EB',
   },
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 18,
+    marginVertical: 24,
   },
-  divider: {
+  lineDivider: {
     flex: 1,
     height: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#D1D5DB',
   },
   dividerText: {
     fontSize: 10,
     fontWeight: 'bold',
-    color: '#94A3B8',
+    color: '#9CA3AF',
     marginHorizontal: 8,
     letterSpacing: 0.5,
   },
@@ -316,22 +333,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#0F172A',
-    height: 44,
-    borderRadius: 10,
+    backgroundColor: '#111827',
+    height: 48,
+    borderRadius: 8,
   },
   techLoginBtnText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
-  },
-  guestBtn: {
-    marginTop: 14,
-    alignItems: 'center',
-  },
-  guestBtnText: {
-    color: '#2563EB',
-    fontSize: 13,
-    fontWeight: '600',
   },
 });

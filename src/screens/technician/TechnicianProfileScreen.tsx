@@ -9,6 +9,8 @@ import type { RootStackParamList } from '../../types';
 import { UserRole } from '../../types';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ProfileHeader } from '../../components/profile/ProfileHeader';
+import { authApi } from '../../api/auth';
+import { storageService } from '../../services/storage.service';
 
 export default function TechnicianProfileScreen() {
   const logout = useAuthStore((state) => state.logout);
@@ -16,16 +18,27 @@ export default function TechnicianProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const handleLogout = () => {
-      Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất?', [
-        { text: 'Hủy', style: 'cancel' },
-        { text: 'Đăng xuất', style: 'destructive', onPress: () => {
+    Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất?', [
+      { text: 'Hủy', style: 'cancel' },
+      { text: 'Đăng xuất', style: 'destructive', onPress: async () => {
+        try {
+          const refreshToken = await storageService.getRefreshToken();
+          if (refreshToken) {
+            await authApi.logout({ refreshToken });
+          }
+        } catch (error) {
+          console.error('Logout error:', error);
+        } finally {
+          await storageService.removeToken();
+          await storageService.removeRefreshToken();
           logout();
           setTimeout(() => {
             navigation.navigate('Auth');
           }, 100);
-        }},
-      ]);
-    };
+        }
+      }},
+    ]);
+  };
 
   const handleSwitchToCustomer = () => {
     setAuth('mock-customer-token', {
