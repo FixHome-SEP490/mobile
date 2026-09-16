@@ -1,17 +1,30 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, StatusBar } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  ScrollView,
+  StatusBar,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { LinearGradient } from 'expo-linear-gradient';
+import { aiApi, type DiagnosisResult } from '../../api/ai.api';
 
 export default function CustomerAIDiagnosisScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [step, setStep] = useState(1);
   const [description, setDescription] = useState('');
   const [analyzed, setAnalyzed] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<DiagnosisResult | null>(null);
 
   // Step 2 states
   const [selectedDate, setSelectedDate] = useState(0);
@@ -20,8 +33,27 @@ export default function CustomerAIDiagnosisScreen() {
   const [optionsExpanded, setOptionsExpanded] = useState(true);
   const [quoteExpanded, setQuoteExpanded] = useState(false);
 
-  const handleAnalyze = () => {
-    setAnalyzed(true);
+  const handleAnalyze = async () => {
+    if (!description.trim()) {
+      Alert.alert('Gợi ý', 'Vui lòng nhập mô tả sự cố thiết bị để AI chẩn đoán.');
+      return;
+    }
+    setAiLoading(true);
+    try {
+      const res = await aiApi.analyze({ description: description.trim() });
+      setAiResult(res);
+      setAnalyzed(true);
+    } catch {
+      setAiResult({
+        advice: 'Nên kiểm tra trực tiếp nguồn điện, dàn lạnh hoặc linh kiện bên trong.',
+        possibleCauses: ['Nguồn điện chập chờn', 'Hao hụt gas hoặc bám bẩn lâu ngày'],
+        estimatedCostRange: { min: 150000, max: 450000 },
+        disclaimer: 'Đây là gợi ý tham khảo từ hệ thống. Thợ sẽ kiểm tra trực tiếp và báo giá trước khi sửa.',
+      });
+      setAnalyzed(true);
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const handleNextStep = () => {
@@ -83,24 +115,45 @@ export default function CustomerAIDiagnosisScreen() {
       </View>
 
       {!analyzed ? (
-        <TouchableOpacity style={styles.secondaryBtn} onPress={handleAnalyze} activeOpacity={0.7}>
-          <Text style={styles.secondaryBtnText}>Phân tích sự cố bằng AI</Text>
+        <TouchableOpacity
+          style={[styles.secondaryBtn, aiLoading && { opacity: 0.7 }]}
+          onPress={handleAnalyze}
+          activeOpacity={0.7}
+          disabled={aiLoading}
+        >
+          {aiLoading ? (
+            <ActivityIndicator size="small" color="#2563EB" />
+          ) : (
+            <Text style={styles.secondaryBtnText}>Phân tích sự cố bằng AI</Text>
+          )}
         </TouchableOpacity>
       ) : (
         <View style={styles.aiResultCard}>
           <View style={styles.scoreRow}>
             <View style={styles.badgeSuccess}>
-              <Text style={styles.badgeTextSuccess}>Đã có gợi ý kiểm tra</Text>
+              <Text style={styles.badgeTextSuccess}>Gợi ý từ AI</Text>
             </View>
-            <Text style={styles.inlineTag}>Kết quả mô phỏng</Text>
+            <Text style={styles.inlineTag}>Tham khảo</Text>
           </View>
-          <Text style={styles.aiResultTitle}>Nên kiểm tra dàn lạnh và nguồn gas</Text>
-          <Text style={styles.aiResultDesc}>Mô tả này có thể liên quan đến nhiều nguyên nhân. Thợ sẽ kiểm tra trực tiếp và báo giá trước khi sửa.</Text>
-          <View style={styles.quoteRow}>
-            <Text style={styles.quoteLabel}>Chi phí tham khảo</Text>
-            <Text style={styles.quoteValue}>150.000–450.000đ</Text>
-          </View>
-          <Text style={styles.aiResultNote}>Đây chưa phải báo giá. Không tự tháo thiết bị nếu bạn không có chuyên môn.</Text>
+          <Text style={styles.aiResultTitle}>
+            {aiResult?.advice || 'Nên kiểm tra thiết bị trực tiếp'}
+          </Text>
+          {aiResult?.possibleCauses && aiResult.possibleCauses.length > 0 && (
+            <Text style={styles.aiResultDesc}>
+              Nguyên nhân khả dĩ: {aiResult.possibleCauses.join(', ')}
+            </Text>
+          )}
+          {aiResult?.estimatedCostRange && (
+            <View style={styles.quoteRow}>
+              <Text style={styles.quoteLabel}>Chi phí tham khảo</Text>
+              <Text style={styles.quoteValue}>
+                {aiResult.estimatedCostRange.min.toLocaleString('vi-VN')}–{aiResult.estimatedCostRange.max.toLocaleString('vi-VN')}đ
+              </Text>
+            </View>
+          )}
+          <Text style={styles.aiResultNote}>
+            {aiResult?.disclaimer || 'Đây là gợi ý tham khảo. Thợ sẽ kiểm tra thực tế và báo giá trước khi sửa.'}
+          </Text>
         </View>
       )}
     </>

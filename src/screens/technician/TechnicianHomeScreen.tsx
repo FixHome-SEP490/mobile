@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,13 +6,70 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store';
 import { LinearGradient } from 'expo-linear-gradient';
+import { ordersApi } from '../../api/orders.api';
+import { useNavigation } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import type { TechnicianTabParamList } from '../../types';
 
 export default function TechnicianHomeScreen() {
   const { user } = useAuthStore();
+  const navigation = useNavigation<BottomTabNavigationProp<TechnicianTabParamList>>();
+  const [completedCount, setCompletedCount] = useState(0);
+  const [earnings, setEarnings] = useState(0);
+  const [activeCount, setActiveCount] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadStats = async () => {
+    try {
+      const orders = await ordersApi.getMyOrders();
+      if (Array.isArray(orders)) {
+        const completed = orders.filter((o) => String(o.status).toUpperCase() === 'COMPLETED');
+        const active = orders.filter((o) =>
+          ['ACCEPTED', 'EN_ROUTE', 'UNDER_REPAIR', 'IN_PROGRESS'].includes(String(o.status).toUpperCase())
+        );
+        const totalEarn = completed.reduce((sum, o) => sum + (o.laborTotal || o.grandTotal || 0), 0);
+        setCompletedCount(completed.length);
+        setEarnings(totalEarn);
+        setActiveCount(active.length);
+      }
+    } catch {
+      // Keep defaults
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    ordersApi
+      .getMyOrders()
+      .then((orders) => {
+        if (!mounted || !Array.isArray(orders)) return;
+        const completed = orders.filter((o) => String(o.status).toUpperCase() === 'COMPLETED');
+        const active = orders.filter((o) =>
+          ['ACCEPTED', 'EN_ROUTE', 'UNDER_REPAIR', 'IN_PROGRESS'].includes(String(o.status).toUpperCase())
+        );
+        const totalEarn = completed.reduce((sum, o) => sum + (o.laborTotal || o.grandTotal || 0), 0);
+        setCompletedCount(completed.length);
+        setEarnings(totalEarn);
+        setActiveCount(active.length);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadStats();
+    setRefreshing(false);
+  };
+
+  const targetPercentage = Math.min(Math.round((completedCount / 20) * 100), 100);
 
   return (
     <View style={styles.container}>
@@ -24,12 +81,29 @@ export default function TechnicianHomeScreen() {
           <View style={styles.avatarContainer}>
             <Ionicons name="person" size={24} color="#2563EB" />
           </View>
-          <Text style={styles.headerName}>{user?.fullName || 'Lạc Vỹ'}</Text>
+          <View>
+            <Text style={styles.greetingText}>Xin chào 👋</Text>
+            <Text style={styles.headerName}>{user?.fullName || 'Kỹ thuật viên'}</Text>
+          </View>
         </View>
+
+        {activeCount > 0 && (
+          <TouchableOpacity
+            style={styles.activeJobBadge}
+            onPress={() => navigation.navigate('Jobs')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="flash" size={14} color="#FFFFFF" />
+            <Text style={styles.activeJobBadgeText}>{activeCount} đơn chờ</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
         {/* Tổng quan tuần này */}
         <View style={styles.sectionHeader}>
           <Ionicons name="bar-chart" size={20} color="#2563EB" />
@@ -44,7 +118,9 @@ export default function TechnicianHomeScreen() {
               </View>
               <Text style={styles.cardLabel}>Thu nhập</Text>
             </View>
-            <Text style={styles.cardValue}>0 <Text style={styles.cardUnit}>đ</Text></Text>
+            <Text style={styles.cardValue}>
+              {earnings.toLocaleString('vi-VN')} <Text style={styles.cardUnit}>đ</Text>
+            </Text>
           </LinearGradient>
 
           <LinearGradient colors={['#FEF3C7', '#FFFBEB']} style={styles.overviewCard}>
@@ -54,7 +130,9 @@ export default function TechnicianHomeScreen() {
               </View>
               <Text style={styles.cardLabel}>Hoàn thành</Text>
             </View>
-            <Text style={styles.cardValue}>0 <Text style={styles.cardUnit}>đơn</Text></Text>
+            <Text style={styles.cardValue}>
+              {completedCount} <Text style={styles.cardUnit}>đơn</Text>
+            </Text>
           </LinearGradient>
         </View>
 
@@ -65,43 +143,47 @@ export default function TechnicianHomeScreen() {
               <Ionicons name="calendar" size={14} color="#2563EB" />
             </View>
             <Text style={styles.targetLabel}>Mục tiêu tuần</Text>
-            <Text style={styles.targetValue}>0/20 đơn</Text>
+            <Text style={styles.targetValue}>{completedCount}/20 đơn</Text>
           </View>
           <View style={styles.progressBarBg}>
-            <View style={[styles.progressBarFill, { width: '0%' }]} />
+            <View style={[styles.progressBarFill, { width: `${targetPercentage}%` }]} />
           </View>
         </View>
 
-        {/* Tăng xếp hạng */}
-        <View style={styles.targetContainer}>
-          <View style={styles.rankRow}>
-            <View style={styles.rankIconContainer}>
-              <Ionicons name="clipboard" size={20} color="#2563EB" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rankTitle}>Hoàn thành để tăng xếp hạng</Text>
-              <Text style={styles.rankSubtitle}>Đã đạt 2/10 tiêu chí</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+        {/* Quick CTA to Jobs */}
+        <TouchableOpacity
+          style={styles.jobsShortcutBtn}
+          onPress={() => navigation.navigate('Jobs')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.jobsShortcutIcon}>
+            <Ionicons name="briefcase" size={20} color="#2563EB" />
           </View>
-          <View style={styles.progressBarBg}>
-            <View style={[styles.progressBarFill, { width: '20%' }]} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.jobsShortcutTitle}>Quản lý công việc</Text>
+            <Text style={styles.jobsShortcutSubtitle}>
+              {activeCount > 0 ? `Có ${activeCount} đơn đang cần bạn xử lý` : 'Xem danh sách việc nhận'}
+            </Text>
           </View>
-        </View>
+          <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+        </TouchableOpacity>
 
         {/* Banner Cuối */}
         <LinearGradient colors={['#93C5FD', '#BFDBFE']} style={styles.bottomBanner}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.bottomBannerTitle}>Đua Top Ngay,{'\n'}Rinh Honda Wave</Text>
-            <Text style={styles.bottomBannerSubtitle}>Cơ hội sở hữu Honda Wave cùng nhiều phần thưởng giá trị.</Text>
-            <TouchableOpacity style={styles.joinBtn}>
-              <Text style={styles.joinBtnText}>Tham gia ngay</Text>
+            <Text style={styles.bottomBannerTitle}>Đua Top KTV FixHome</Text>
+            <Text style={styles.bottomBannerSubtitle}>Hoàn thành xuất sắc nhiệm vụ nhận thưởng quý và nâng hạn mức nhận việc.</Text>
+            <TouchableOpacity
+              style={styles.joinBtn}
+              onPress={() => navigation.navigate('Jobs')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.joinBtnText}>Nhận việc ngay</Text>
               <Ionicons name="chevron-forward" size={14} color="#000" />
             </TouchableOpacity>
           </View>
           <Ionicons name="trophy" size={60} color="#EAB308" style={{ marginLeft: 8 }} />
         </LinearGradient>
-
       </ScrollView>
     </View>
   );
@@ -118,73 +200,75 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 44,
-    paddingBottom: 12,
-    backgroundColor: '#FFFFFF',
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
   },
   avatarContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#DBEAFE',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#EFF6FF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+  },
+  greetingText: {
+    fontSize: 12,
+    color: '#64748B',
   },
   headerName: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
   },
-  headerLogo: {
-    backgroundColor: '#1E3A8A',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+  activeJobBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
   },
-  logoText1: {
-    color: '#FDE047',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  logoText2: {
+  activeJobBadgeText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: '700',
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 40,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    gap: 8,
+    marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#1E3A8A',
-    marginLeft: 8,
+    color: '#0F172A',
   },
   overviewRow: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 24,
+    marginBottom: 16,
   },
   overviewCard: {
     flex: 1,
-    borderRadius: 16,
     padding: 16,
+    borderRadius: 16,
   },
   cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    gap: 8,
+    marginBottom: 8,
   },
   iconCircle: {
     width: 28,
@@ -192,15 +276,14 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
   },
   cardLabel: {
-    fontSize: 14,
+    fontSize: 13,
+    fontWeight: '600',
     color: '#475569',
-    fontWeight: '500',
   },
   cardValue: {
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: '800',
     color: '#0F172A',
   },
@@ -209,46 +292,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#64748B',
   },
-  bannerScroll: {
-    marginBottom: 24,
-    overflow: 'visible',
-  },
-  bannerItem: {
-    width: 140,
-    height: 180,
-    borderRadius: 16,
-    padding: 16,
-    justifyContent: 'flex-start',
-  },
-  bannerTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#1E3A8A',
-    marginBottom: 4,
-  },
-  bannerSubtitle: {
-    fontSize: 12,
-    color: '#475569',
-    lineHeight: 16,
-  },
-  bannerImagePlaceholder: {
-    position: 'absolute',
-    bottom: -10,
-    right: -10,
-    opacity: 0.5,
-  },
   targetContainer: {
     backgroundColor: '#F8FAFC',
     borderRadius: 16,
     padding: 16,
-    marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+    marginBottom: 16,
   },
   targetRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
   targetIcon: {
     width: 24,
@@ -260,85 +316,93 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   targetLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#475569',
     flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
   },
   targetValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#2563EB',
   },
   progressBarBg: {
-    height: 6,
+    height: 8,
     backgroundColor: '#E2E8F0',
-    borderRadius: 3,
+    borderRadius: 4,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
     backgroundColor: '#2563EB',
-    borderRadius: 3,
+    borderRadius: 4,
   },
-  rankRow: {
+  jobsShortcutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-  },
-  rankIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
     backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  jobsShortcutIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#EFF6FF',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  rankTitle: {
-    fontSize: 14,
+  jobsShortcutTitle: {
+    fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
+    marginBottom: 2,
   },
-  rankSubtitle: {
-    fontSize: 12,
-    color: '#2563EB',
-    marginTop: 2,
-    fontWeight: '500',
+  jobsShortcutSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
   },
   bottomBanner: {
     flexDirection: 'row',
-    borderRadius: 16,
-    padding: 20,
     alignItems: 'center',
+    padding: 18,
+    borderRadius: 16,
+    marginTop: 8,
   },
   bottomBannerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#1E3A8A',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   bottomBannerSubtitle: {
     fontSize: 12,
-    color: '#475569',
-    marginBottom: 16,
-    lineHeight: 18,
+    color: '#1E40AF',
+    lineHeight: 16,
+    marginBottom: 12,
   },
   joinBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FCD34D',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
     alignSelf: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 4,
   },
   joinBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#000',
-    marginRight: 4,
+    color: '#0F172A',
   },
 });

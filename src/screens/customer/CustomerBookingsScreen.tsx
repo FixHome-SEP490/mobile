@@ -1,12 +1,120 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  ActivityIndicator,
+  RefreshControl,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../types';
 import { colors } from '../../constants';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
+import { ordersApi, type ServiceOrderItem, type CanonicalOrderStatus } from '../../api/orders.api';
+
+type TabType = 'all' | 'in_progress' | 'completed';
 
 export default function CustomerBookingsScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<TabType>('all');
+  const [orders, setOrders] = useState<ServiceOrderItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const handleScroll = useScrollHideTabBar();
+
+  useEffect(() => {
+    let mounted = true;
+    ordersApi
+      .getMyOrders()
+      .then((data) => {
+        if (mounted) {
+          setOrders(data || []);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setOrders([]);
+          setLoading(false);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const data = await ordersApi.getMyOrders();
+      setOrders(data || []);
+    } catch {
+      setOrders([]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const getStatusBadge = (status: CanonicalOrderStatus) => {
+    const s = String(status).toUpperCase();
+    switch (s) {
+      case 'EN_ROUTE':
+        return { label: 'Đang di chuyển', bg: '#FEF3C7', color: '#D97706' };
+      case 'UNDER_REPAIR':
+      case 'IN_PROGRESS':
+        return { label: 'Đang sửa chữa', bg: '#DBEAFE', color: '#2563EB' };
+      case 'ACCEPTED':
+        return { label: 'Đã nhận đơn', bg: '#E0E7FF', color: '#4F46E5' };
+      case 'COMPLETED':
+        return { label: 'Hoàn thành', bg: '#DCFCE7', color: '#16A34A' };
+      case 'CANCELLED':
+        return { label: 'Đã hủy', bg: '#FEE2E2', color: '#DC2626' };
+      default:
+        return { label: s, bg: '#F1F5F9', color: '#64748B' };
+    }
+  };
+
+  const filteredOrders = orders.filter((order) => {
+    const s = String(order.status).toUpperCase();
+    if (activeTab === 'in_progress') {
+      if (!['ACCEPTED', 'EN_ROUTE', 'UNDER_REPAIR', 'IN_PROGRESS'].includes(s)) return false;
+    } else if (activeTab === 'completed') {
+      if (s !== 'COMPLETED') return false;
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const codeMatch = order.code?.toLowerCase().includes(q);
+      const serviceMatch = order.serviceName?.toLowerCase().includes(q);
+      const techMatch = order.technician?.fullName?.toLowerCase().includes(q);
+      return codeMatch || serviceMatch || techMatch;
+    }
+
+    return true;
+  });
+
+  const handleOrderPress = (order: ServiceOrderItem) => {
+    const s = String(order.status).toUpperCase();
+    if (s === 'EN_ROUTE') {
+      navigation.navigate('CustomerTracking');
+    } else if (s === 'UNDER_REPAIR' || s === 'IN_PROGRESS') {
+      if (order.quotation && order.quotation.status === 'SENT') {
+        navigation.navigate('CustomerQuotation');
+      } else {
+        navigation.navigate('CustomerUnderRepair');
+      }
+    } else if (s === 'COMPLETED') {
+      navigation.navigate('CustomerCompleted');
+    } else {
+      navigation.navigate('CustomerTracking');
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -16,68 +124,111 @@ export default function CustomerBookingsScreen() {
           <Ionicons name="search" size={20} color="#94A3B8" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Tìm kiếm đơn..."
+            placeholder="Tìm theo mã đơn, dịch vụ, thợ..."
             placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
         </View>
-        <TouchableOpacity style={styles.filterBtn}>
-          <Ionicons name="options-outline" size={24} color="#0F172A" />
-        </TouchableOpacity>
       </View>
 
+      {/* Segment Tabs */}
       <View style={styles.segmentContainer}>
-        <TouchableOpacity style={[styles.segmentBtn, styles.segmentActive]}>
-          <Text style={styles.segmentTextActive}>Tất cả</Text>
+        <TouchableOpacity
+          style={[styles.segmentBtn, activeTab === 'all' && styles.segmentActive]}
+          onPress={() => setActiveTab('all')}
+        >
+          <Text style={activeTab === 'all' ? styles.segmentTextActive : styles.segmentText}>
+            Tất cả ({orders.length})
+          </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.segmentBtn}>
-          <Text style={styles.segmentText}>Đang xử lý</Text>
+        <TouchableOpacity
+          style={[styles.segmentBtn, activeTab === 'in_progress' && styles.segmentActive]}
+          onPress={() => setActiveTab('in_progress')}
+        >
+          <Text style={activeTab === 'in_progress' ? styles.segmentTextActive : styles.segmentText}>
+            Đang xử lý
+          </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.segmentBtn}>
-          <Text style={styles.segmentText}>Hoàn tất</Text>
+        <TouchableOpacity
+          style={[styles.segmentBtn, activeTab === 'completed' && styles.segmentActive]}
+          onPress={() => setActiveTab('completed')}
+        >
+          <Text style={activeTab === 'completed' ? styles.segmentTextActive : styles.segmentText}>
+            Hoàn tất
+          </Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-      >
-        <TouchableOpacity style={styles.card}>
-          <View style={styles.cardHeader}>
-            <View style={styles.iconContainer}>
-              <Ionicons name="snow-outline" size={24} color={colors.primary} />
-            </View>
-            <View style={styles.cardInfo}>
-              <View style={styles.badgeSuccess}>
-                <Text style={styles.badgeTextSuccess}>Hoàn thành</Text>
-              </View>
-              <Text style={styles.title}>Vệ sinh + thay tụ điều hòa</Text>
-              <Text style={styles.meta}>07/09/2026 · 350.000đ</Text>
-              <Text style={styles.meta}>KTV Nguyễn Đức Anh</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
-          </View>
-        </TouchableOpacity>
+      {/* Content List */}
+      {loading ? (
+        <View style={styles.centerLoading}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Đang tải đơn dịch vụ...</Text>
+        </View>
+      ) : filteredOrders.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="receipt-outline" size={56} color="#CBD5E1" />
+          <Text style={styles.emptyTitle}>Chưa có đơn dịch vụ nào</Text>
+          <Text style={styles.emptyDesc}>
+            {searchQuery
+              ? 'Không tìm thấy đơn phù hợp với từ khóa.'
+              : 'Đặt lịch ngay để thợ FixHome kiểm tra tại nhà bạn.'}
+          </Text>
+          <TouchableOpacity
+            style={styles.bookNowBtn}
+            onPress={() => navigation.navigate('CustomerServices')}
+          >
+            <Ionicons name="add-circle-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.bookNowText}>Đặt dịch vụ mới</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          {filteredOrders.map((order) => {
+            const badge = getStatusBadge(order.status);
+            const total = (order.grandTotal || (order.laborTotal || 0) + (order.partsTotal || 0)).toLocaleString('vi-VN');
+            const dateStr = order.createdAt
+              ? new Date(order.createdAt).toLocaleDateString('vi-VN')
+              : 'Gần đây';
 
-        <TouchableOpacity style={styles.card}>
-          <View style={styles.cardHeader}>
-            <View style={styles.iconContainer}>
-              <Ionicons name="water-outline" size={24} color={colors.primary} />
-            </View>
-            <View style={styles.cardInfo}>
-              <View style={styles.badgeNeutral}>
-                <Text style={styles.badgeTextNeutral}>Hoàn thành</Text>
-              </View>
-              <Text style={styles.title}>Sửa vòi rò nước</Text>
-              <Text style={styles.meta}>19/08/2026 · 220.000đ</Text>
-              <Text style={styles.meta}>KTV Quốc Huy</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
-          </View>
-        </TouchableOpacity>
-      </ScrollView>
+            return (
+              <TouchableOpacity
+                key={order.id || order.code}
+                style={styles.card}
+                onPress={() => handleOrderPress(order)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={styles.iconContainer}>
+                    <Ionicons name="construct-outline" size={24} color={colors.primary} />
+                  </View>
+                  <View style={styles.cardInfo}>
+                    <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+                      <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
+                    </View>
+                    <Text style={styles.title} numberOfLines={1}>
+                      {order.serviceName || `Đơn #${order.code}`}
+                    </Text>
+                    <Text style={styles.meta}>
+                      {dateStr} · {total}đ
+                    </Text>
+                    {order.technician?.fullName && (
+                      <Text style={styles.meta}>KTV {order.technician.fullName}</Text>
+                    )}
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -109,16 +260,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 14,
     color: '#0F172A',
-  },
-  filterBtn: {
-    width: 44,
-    height: 44,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   segmentContainer: {
     flexDirection: 'row',
@@ -155,6 +296,50 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingTop: 0,
   },
+  centerLoading: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#64748B',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyDesc: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  bookNowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  bookNowText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -182,31 +367,16 @@ const styles = StyleSheet.create({
   cardInfo: {
     flex: 1,
   },
-  badgeSuccess: {
+  badge: {
     alignSelf: 'flex-start',
-    backgroundColor: '#DCFCE7',
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: 6,
     marginBottom: 6,
   },
-  badgeTextSuccess: {
-    fontSize: 10,
+  badgeText: {
+    fontSize: 11,
     fontWeight: '700',
-    color: '#16A34A',
-  },
-  badgeNeutral: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    marginBottom: 6,
-  },
-  badgeTextNeutral: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
   },
   title: {
     fontSize: 15,

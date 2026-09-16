@@ -1,154 +1,161 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
-import { UserRole } from '../../types';
-import { LinearGradient } from 'expo-linear-gradient';
 import { ProfileHeader } from '../../components/profile/ProfileHeader';
+import { usersApi } from '../../api/users.api';
+import { ordersApi } from '../../api/orders.api';
+import { authApi } from '../../api/auth.api';
 
 export default function TechnicianProfileScreen() {
   const logout = useAuthStore((state) => state.logout);
-  const { user, setAuth } = useAuthStore();
+  const { user } = useAuthStore();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
+  const [fullName, setFullName] = useState(user?.fullName || 'Kỹ thuật viên');
+  const [phoneNumber, setPhoneNumber] = useState(user?.phoneNumber || '');
+  const [earningsTotal, setEarningsTotal] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+    usersApi
+      .getProfile()
+      .then((profile) => {
+        if (mounted && profile) {
+          if (profile.fullName) setFullName(profile.fullName);
+          if (profile.phoneNumber) setPhoneNumber(profile.phoneNumber);
+        }
+      })
+      .catch(() => {});
+
+    ordersApi
+      .getMyOrders()
+      .then((orders) => {
+        if (!mounted || !Array.isArray(orders)) return;
+        const completed = orders.filter((o) => String(o.status).toUpperCase() === 'COMPLETED');
+        const earn = completed.reduce((sum, o) => sum + (o.laborTotal || o.grandTotal || 0), 0);
+        setEarningsTotal(earn);
+      })
+      .catch(() => {});
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const handleLogout = () => {
-      Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất?', [
-        { text: 'Hủy', style: 'cancel' },
-        { text: 'Đăng xuất', style: 'destructive', onPress: () => {
+    Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất tài khoản Thợ?', [
+      { text: 'Hủy', style: 'cancel' },
+      {
+        text: 'Đăng xuất',
+        style: 'destructive',
+        onPress: async () => {
+          await authApi.logout();
           logout();
           setTimeout(() => {
             navigation.navigate('Auth');
           }, 100);
-        }},
-      ]);
-    };
-
-  const handleSwitchToCustomer = () => {
-    setAuth('mock-customer-token', {
-      id: 'cust-01',
-      email: 'lacvy@fixhome.vn',
-      fullName: 'Lạc Vỹ',
-      role: UserRole.CUSTOMER,
-    });
-    navigation.navigate('CustomerMain');
+        },
+      },
+    ]);
   };
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
-        <ProfileHeader 
-          name={user?.fullName || 'Lạc Vỹ'} 
-          phone={'+841234567890'} 
-          avatarText={(user?.fullName || 'L').charAt(0)} 
+        <ProfileHeader
+          name={fullName}
+          phone={phoneNumber || user?.email || 'Kỹ thuật viên FixHome'}
+          avatarText={fullName.charAt(0)}
         />
 
         <View style={styles.innerContent}>
-          {/* Chuyển sang Khách hàng */}
-          <TouchableOpacity 
-            style={[styles.switchRoleCard, { marginBottom: 16 }]} 
-            onPress={handleSwitchToCustomer}
-            activeOpacity={0.8}
-          >
-            <LinearGradient
-              colors={['#FEF3C7', '#FDE68A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.switchGradient}
-            >
-              <View style={styles.switchIcon}>
-                <Ionicons name="person" size={16} color="#D97706" />
-              </View>
-              <View style={styles.switchInfo}>
-                <Text style={styles.switchTitle}>Chuyển sang Khách hàng</Text>
-                <Text style={styles.switchDesc}>Đặt dịch vụ sửa chữa cho ngôi nhà của bạn</Text>
-              </View>
-              <View style={styles.arrowCircle}>
-                <Ionicons name="arrow-forward" size={16} color="#B45309" />
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          {/* Số dư */}
+          {/* Số dư doanh thu */}
           <View style={styles.balanceHeader}>
-          <Ionicons name="wallet" size={20} color="#2563EB" />
-          <Text style={styles.balanceTitle}>Số dư</Text>
-          <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
-        </View>
-
-        <View style={styles.balanceRow}>
-          <View style={styles.balanceCard}>
-            <View style={styles.balanceTop}>
-              <Ionicons name="folder-open" size={16} color="#2563EB" />
-              <Text style={styles.balanceLabel}>Số dư doanh thu</Text>
-            </View>
-            <Text style={styles.balanceValue}>0đ</Text>
+            <Ionicons name="wallet" size={20} color="#2563EB" />
+            <Text style={styles.balanceTitle}>Thu nhập & Doanh thu</Text>
           </View>
 
-          <View style={styles.balanceCard}>
-            <View style={styles.balanceTop}>
-              <Ionicons name="cash" size={16} color="#EAB308" />
-              <Text style={styles.balanceLabel}>Số dư nền tảng</Text>
+          <View style={styles.balanceRow}>
+            <View style={styles.balanceCard}>
+              <View style={styles.balanceTop}>
+                <Ionicons name="cash-outline" size={16} color="#2563EB" />
+                <Text style={styles.balanceLabel}>Doanh thu tích lũy</Text>
+              </View>
+              <Text style={styles.balanceValue}>{earningsTotal.toLocaleString('vi-VN')}đ</Text>
             </View>
-            <Text style={styles.balanceValue}>0đ</Text>
+
+            <View style={styles.balanceCard}>
+              <View style={styles.balanceTop}>
+                <Ionicons name="shield-checkmark-outline" size={16} color="#059669" />
+                <Text style={styles.balanceLabel}>Trạng thái</Text>
+              </View>
+              <Text style={[styles.balanceValue, { color: '#059669', fontSize: 14 }]}>Hoạt động tốt</Text>
+            </View>
           </View>
-        </View>
 
-        {/* Nghiệp vụ / Đồng phục */}
-        <View style={styles.toolsRow}>
-          <TouchableOpacity style={styles.toolCard}>
-            <Ionicons name="book" size={20} color="#2563EB" />
-            <Text style={styles.toolText}>Nghiệp vụ</Text>
+          {/* CÀI ĐẶT */}
+          <Text style={styles.sectionHeading}>CÀI ĐẶT</Text>
+          <View style={styles.listContainer}>
+            <TouchableOpacity
+              style={styles.listItem}
+              onPress={() => Alert.alert('Thông báo', 'Hệ thống thông báo nhận đơn đang bật.')}
+            >
+              <Ionicons name="notifications-outline" size={20} color="#64748B" />
+              <Text style={styles.listText}>Thông báo nhận việc</Text>
+              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity
+              style={styles.listItem}
+              onPress={() => Alert.alert('Hỗ trợ', 'Tổng đài KTV FixHome: 1900 6868')}
+            >
+              <Ionicons name="headset-outline" size={20} color="#64748B" />
+              <Text style={styles.listText}>Hỗ trợ kỹ thuật 24/7</Text>
+              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
+
+          {/* CHÍNH SÁCH */}
+          <Text style={styles.sectionHeading}>QUY TRÌNH & NỘI QUY</Text>
+          <View style={styles.listContainer}>
+            <TouchableOpacity
+              style={styles.listItem}
+              onPress={() =>
+                Alert.alert(
+                  'Quy chuẩn dịch vụ',
+                  '1. Đúng giờ theo lịch hẹn\n2. Mặc đồng phục, xuất trình thẻ\n3. Báo giá trước khi làm\n4. Không thu thêm phụ phí ngoài hệ thống',
+                )
+              }
+            >
+              <Ionicons name="book-outline" size={20} color="#64748B" />
+              <Text style={styles.listText}>Quy chuẩn dịch vụ 5 sao</Text>
+              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity
+              style={styles.listItem}
+              onPress={() =>
+                Alert.alert(
+                  'Chính sách hoa hồng',
+                  'Thợ nhận 85-90% giá trị công thợ trên mỗi đơn hoàn tất thành công.',
+                )
+              }
+            >
+              <Ionicons name="document-text-outline" size={20} color="#64748B" />
+              <Text style={styles.listText}>Chính sách thu nhập & Phí nền tảng</Text>
+              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
+            <Text style={styles.logoutText}>Đăng xuất</Text>
           </TouchableOpacity>
         </View>
-
-        {/* CÀI ĐẶT */}
-        <Text style={styles.sectionHeading}>CÀI ĐẶT</Text>
-        <View style={styles.listContainer}>
-          <TouchableOpacity style={styles.listItem}>
-            <Ionicons name="settings-outline" size={20} color="#64748B" />
-            <Text style={styles.listText}>Cài đặt</Text>
-            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
-          </TouchableOpacity>
-          <View style={styles.divider} />
-          <TouchableOpacity style={styles.listItem}>
-            <Ionicons name="globe-outline" size={20} color="#64748B" />
-            <Text style={styles.listText}>Ngôn ngữ</Text>
-            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
-          </TouchableOpacity>
-        </View>
-
-        {/* HỖ TRỢ */}
-        <Text style={styles.sectionHeading}>HỖ TRỢ</Text>
-        <View style={styles.listContainer}>
-          <TouchableOpacity style={styles.listItem}>
-            <Ionicons name="headset-outline" size={20} color="#64748B" />
-            <Text style={styles.listText}>Hỗ trợ</Text>
-            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
-          </TouchableOpacity>
-          <View style={styles.divider} />
-          <TouchableOpacity style={styles.listItem}>
-            <Ionicons name="chatbubbles-outline" size={20} color="#64748B" />
-            <Text style={styles.listText}>Những câu hỏi thường gặp (FAQ)</Text>
-            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
-          </TouchableOpacity>
-          <View style={styles.divider} />
-          <TouchableOpacity style={styles.listItem}>
-            <Ionicons name="information-circle-outline" size={20} color="#64748B" />
-            <Text style={styles.listText}>Về chúng tôi</Text>
-            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-          <Text style={styles.logoutText}>Đăng xuất</Text>
-        </TouchableOpacity>
-        </View>
-
       </ScrollView>
     </View>
   );
@@ -165,56 +172,17 @@ const styles = StyleSheet.create({
   innerContent: {
     paddingHorizontal: 16,
   },
-  switchRoleCard: {
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  switchGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-  },
-  switchIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FEF3C7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  switchInfo: {
-    flex: 1,
-  },
-  switchTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 2,
-  },
-  switchDesc: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  arrowCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#FCD34D',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   balanceHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    gap: 8,
+    marginTop: 16,
+    marginBottom: 12,
   },
   balanceTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
-    marginLeft: 8,
-    flex: 1,
   },
   balanceRow: {
     flexDirection: 'row',
@@ -226,121 +194,57 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
     elevation: 2,
   },
   balanceTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    gap: 6,
+    marginBottom: 8,
   },
   balanceLabel: {
-    fontSize: 13,
+    fontSize: 12,
+    fontWeight: '600',
     color: '#64748B',
-    marginLeft: 6,
-    fontWeight: '500',
   },
   balanceValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  toolsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
-  },
-  toolCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  toolText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#0F172A',
-    marginLeft: 8,
-  },
-  promoBanner: {
-    flexDirection: 'row',
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  promoIconPlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#3B82F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  promoLabel: {
-    fontSize: 12,
-    color: '#BFDBFE',
-  },
-  hotBadge: {
-    backgroundColor: '#EA580C',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  hotBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  promoTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#FFFFFF',
-    marginTop: 4,
-  },
-  whiteArrowCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
+    color: '#0F172A',
   },
   sectionHeading: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#64748B',
-    marginBottom: 12,
+    color: '#94A3B8',
     letterSpacing: 0.5,
-    marginLeft: 8,
+    marginBottom: 8,
+    marginTop: 8,
   },
   listContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    marginBottom: 24,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 16,
   },
   listItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
+    gap: 12,
   },
   listText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
+    fontWeight: '600',
     color: '#0F172A',
-    marginLeft: 12,
   },
   divider: {
     height: 1,
@@ -348,15 +252,13 @@ const styles = StyleSheet.create({
     marginLeft: 48,
   },
   logoutBtn: {
-    marginTop: 8,
-    backgroundColor: '#FEE2E2',
-    paddingVertical: 16,
-    borderRadius: 16,
     alignItems: 'center',
+    paddingVertical: 14,
+    marginTop: 12,
   },
   logoutText: {
-    color: '#DC2626',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
+    color: '#EF4444',
   },
 });

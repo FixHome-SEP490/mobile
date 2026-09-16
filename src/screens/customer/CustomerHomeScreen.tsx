@@ -23,7 +23,6 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
-import { UserRole } from '../../types';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
@@ -124,7 +123,7 @@ const QUICK_TAGS = [
 
 export default function CustomerHomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { user, isAuthenticated, setAuth, logout } = useAuthStore();
+  const { user, isAuthenticated, logout } = useAuthStore();
   const handleScroll = useScrollHideTabBar();
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -148,14 +147,8 @@ export default function CustomerHomeScreen() {
     ]);
   };
 
-  // Switch role or test login quickly
+  // Switch role or view technician mode
   const handleQuickSwitchToTechnician = () => {
-    setAuth('mock-tech-token', {
-      id: 'tech-01',
-      email: 'thoviet@fixhome.vn',
-      fullName: 'Nguyễn Văn Hùng (Thợ)',
-      role: UserRole.TECHNICIAN,
-    });
     navigation.navigate('TechnicianMain');
   };
 
@@ -189,8 +182,8 @@ export default function CustomerHomeScreen() {
     return <Ionicons name={item.iconName as any} size={28} color={item.iconColor} />;
   };
 
-  const handleServicePress = (service: ServiceItem) => {
-    navigation.navigate('CustomerServiceDetail');
+  const handleServicePress = (_service: ServiceItem) => {
+    navigation.navigate('CustomerServices');
   };
 
   return (
@@ -210,7 +203,7 @@ export default function CustomerHomeScreen() {
           <View style={styles.userTextContainer}>
             <Text style={styles.greetingText}>Xin chào 👋</Text>
             <Text style={styles.userNameText} numberOfLines={1}>
-              {user?.fullName || 'Lạc Vỹ'}
+              {user?.fullName || 'Khách hàng'}
             </Text>
           </View>
         </TouchableOpacity>
@@ -342,7 +335,13 @@ export default function CustomerHomeScreen() {
             <TouchableOpacity
               key={tag.id}
               style={styles.chipItem}
-              onPress={() => Alert.alert('Dịch vụ', tag.title)}
+              onPress={() => {
+                if (tag.id === 'ai') {
+                  navigation.navigate('CustomerAIDiagnosis');
+                } else {
+                  navigation.navigate('CustomerServices', { query: tag.id === 'ac' ? 'máy lạnh' : '' });
+                }
+              }}
               activeOpacity={0.7}
             >
               <Text style={styles.chipText}>{tag.title}</Text>
@@ -356,7 +355,7 @@ export default function CustomerHomeScreen() {
           <TouchableOpacity
             style={[styles.featureCard, { backgroundColor: '#E0F2FE' }]}
             activeOpacity={0.85}
-            onPress={() => Alert.alert('Đặt thợ', 'Mở danh sách thợ gần bạn nhất!')}
+            onPress={() => navigation.navigate('CustomerServices')}
           >
             <View style={styles.featureCardBadge}>
               <Text style={styles.featureCardBadgeText}>Thợ giỏi gần bạn</Text>
@@ -372,7 +371,7 @@ export default function CustomerHomeScreen() {
           <TouchableOpacity
             style={[styles.featureCard, { backgroundColor: '#F3E8FF' }]}
             activeOpacity={0.85}
-            onPress={() => Alert.alert('AI Chẩn đoán FixHome', 'Chụp ảnh thiết bị hư hỏng để AI phân tích nguyên nhân và báo giá tức thì!')}
+            onPress={() => navigation.navigate('CustomerAIDiagnosis')}
           >
             <View style={[styles.featureCardBadge, { backgroundColor: '#7C3AED' }]}>
               <Text style={styles.featureCardBadgeText}>AI 30s</Text>
@@ -388,7 +387,7 @@ export default function CustomerHomeScreen() {
           <TouchableOpacity
             style={[styles.featureCard, { backgroundColor: '#FEF3C7' }]}
             activeOpacity={0.85}
-            onPress={() => Alert.alert('FixHome Mall', 'Phụ kiện, linh kiện máy giặt, máy lạnh chính hãng!')}
+            onPress={() => navigation.navigate('CustomerServices')}
           >
             <View style={[styles.featureCardBadge, { backgroundColor: '#D97706' }]}>
               <Text style={styles.featureCardBadgeText}>Chính hãng</Text>
