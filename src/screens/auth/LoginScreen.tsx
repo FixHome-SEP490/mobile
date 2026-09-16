@@ -133,8 +133,8 @@ export default function LoginScreen() {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.loginBtn} onPress={() => handleLogin()} activeOpacity={0.85}>
-              <Text style={styles.loginBtnText}>ĐĂNG NHẬP</Text>
+            <TouchableOpacity style={[styles.loginBtn, isLoading && { opacity: 0.7 }]} onPress={() => handleLogin()} activeOpacity={0.85} disabled={isLoading}>
+              <Text style={styles.loginBtnText}>{isLoading ? 'ĐANG ĐĂNG NHẬP...' : 'ĐĂNG NHẬP'}</Text>
             </TouchableOpacity>
 
             <View style={styles.registerRow}>

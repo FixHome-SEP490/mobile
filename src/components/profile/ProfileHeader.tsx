@@ -1,6 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions, Platform } from 'react-native';
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { View, Text, StyleSheet, Platform } from 'react-native';
 
 interface ProfileHeaderProps {
   name: string;

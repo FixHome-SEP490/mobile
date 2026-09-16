@@ -17,6 +17,17 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList, RootStackParamList } from '../../types';
 import { authApi } from '../../api/auth';
 
+const RuleItem = ({ met, text }: { met: boolean, text: string }) => (
+  <View style={styles.ruleItem}>
+    <Ionicons 
+      name={met ? "checkmark-circle" : "ellipse-outline"} 
+      size={14} 
+      color={met ? "#22C55E" : "#9CA3AF"} 
+    />
+    <Text style={[styles.ruleText, met && styles.ruleTextMet]}>{text}</Text>
+  </View>
+);
+
 export default function RegisterScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList & RootStackParamList>>();
   
@@ -92,17 +103,6 @@ export default function RegisterScreen() {
       setIsLoading(false);
     }
   };
-
-  const RuleItem = ({ met, text }: { met: boolean, text: string }) => (
-    <View style={styles.ruleItem}>
-      <Ionicons 
-        name={met ? "checkmark-circle" : "ellipse-outline"} 
-        size={14} 
-        color={met ? "#22C55E" : "#9CA3AF"} 
-      />
-      <Text style={[styles.ruleText, met && styles.ruleTextMet]}>{text}</Text>
-    </View>
-  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -232,8 +232,8 @@ export default function RegisterScreen() {
               {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
             </View>
 
-            <TouchableOpacity style={styles.registerBtn} onPress={handleRegister} activeOpacity={0.85}>
-              <Text style={styles.registerBtnText}>ĐĂNG KÝ</Text>
+            <TouchableOpacity style={[styles.registerBtn, isLoading && { opacity: 0.7 }]} onPress={handleRegister} activeOpacity={0.85} disabled={isLoading}>
+              <Text style={styles.registerBtnText}>{isLoading ? 'ĐANG ĐĂNG KÝ...' : 'ĐĂNG KÝ'}</Text>
             </TouchableOpacity>
 
             <View style={styles.loginRow}>
