@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Switch, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Switch, StatusBar, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -78,6 +78,7 @@ export default function TechnicianProfileScreen() {
 
   return (
     <SafeAreaView style={[styles.container, isDarkMode && styles.containerDark]} edges={['top']}>
+      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor={isDarkMode ? "#0F172A" : "#F8FAFC"} />
       <ScrollView 
         contentContainerStyle={{ paddingBottom: 40, paddingTop: 60 }}
         onScroll={handleScroll}

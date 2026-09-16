@@ -46,11 +46,11 @@ export default function CustomerMatchingScreen() {
   const [isExpanded, setIsExpanded] = useState(true);
 
   // Simple pulse animation for radar
-  const pulseAnim = new Animated.Value(1);
+  const [pulseAnim] = useState(() => new Animated.Value(1));
 
   useEffect(() => {
     if (isFinding) {
-      Animated.loop(
+      const anim = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
             toValue: 1.2,
@@ -65,16 +65,20 @@ export default function CustomerMatchingScreen() {
             useNativeDriver: true,
           }),
         ])
-      ).start();
+      );
+      anim.start();
 
       // Mock finding technician after 3 seconds
       const timer = setTimeout(() => {
         setIsFinding(false);
       }, 3000);
 
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        anim.stop();
+      };
     }
-  }, [isFinding]);
+  }, [isFinding, pulseAnim]);
 
   if (!isFinding) {
     return (

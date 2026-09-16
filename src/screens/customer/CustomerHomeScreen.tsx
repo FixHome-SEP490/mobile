@@ -1,5 +1,5 @@
 // src/screens/customer/CustomerHomeScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -117,24 +117,16 @@ const POPULAR_SERVICES: ServiceItem[] = [
   },
 ];
 
-const QUICK_TAGS = [
-  { id: 'urgent', title: '⚡ Cứu hộ điện nước 24/7' },
-  { id: 'ac', title: '❄️ Vệ sinh máy lạnh 150K' },
-  { id: 'ai', title: '🤖 AI Chẩn đoán hỏng hóc' },
-  { id: 'drain', title: '🚿 Thông cống không đục phá' },
-  { id: 'voucher', title: '🎁 Voucher giảm 50.000đ' },
-];
-
 export default function CustomerHomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { user, isAuthenticated, setAuth, logout } = useAuthStore();
+  const { user, isAuthenticated } = useAuthStore();
   const handleScroll = useScrollHideTabBar();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAddress, setSelectedAddress] = useState('Đang tải địa chỉ...');
 
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchAddress = async () => {
+  const fetchAddress = useCallback(async () => {
     try {
       if (!isAuthenticated) {
         setSelectedAddress('Vui lòng đăng nhập để xem địa chỉ');
@@ -157,11 +149,12 @@ export default function CustomerHomeScreen() {
       console.error('Failed to load addresses:', error);
       setSelectedAddress('Không thể tải địa chỉ');
     }
-  };
+  }, [isAuthenticated, user]);
 
   useEffect(() => {
-    fetchAddress();
-  }, [isAuthenticated]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchAddress();
+  }, [fetchAddress]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -181,28 +174,6 @@ export default function CustomerHomeScreen() {
         { text: 'Đóng', style: 'cancel' }
       ]
     );
-  };
-
-  // Switch role or test login quickly
-  const handleQuickSwitchToTechnician = () => {
-    setAuth('mock-tech-token', {
-      id: 'tech-01',
-      email: 'thoviet@fixhome.vn',
-      fullName: 'Nguyễn Văn Hùng (Thợ)',
-      role: UserRole.TECHNICIAN,
-    });
-    navigation.navigate('TechnicianMain');
-  };
-
-  const handleOpenAuth = () => {
-    if (isAuthenticated) {
-      Alert.alert('Đăng xuất', 'Bạn có muốn đăng xuất khỏi tài khoản?', [
-        { text: 'Hủy', style: 'cancel' },
-        { text: 'Đăng xuất', onPress: () => logout(), style: 'destructive' },
-      ]);
-    } else {
-      navigation.navigate('Auth');
-    }
   };
 
   const renderServiceIcon = (item: ServiceItem) => {

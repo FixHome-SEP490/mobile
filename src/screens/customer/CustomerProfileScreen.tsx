@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Switch, Image, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,7 +6,6 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { UserRole } from '../../types';
-import { colors } from '../../constants';
 import { useAuthStore } from '../../store';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,7 +15,7 @@ import { usersApi } from '../../api/users';
 import { addressesApi, AddressData } from '../../api/addresses';
 
 export default function CustomerProfileScreen() {
-  const { user, logout, setAuth } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const handleScroll = useScrollHideTabBar();
   
@@ -30,7 +29,7 @@ export default function CustomerProfileScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchProfileData = async () => {
+  const fetchProfileData = useCallback(async () => {
     try {
       const profileRes = await usersApi.getProfile();
       if (profileRes.data) {
@@ -49,11 +48,12 @@ export default function CustomerProfileScreen() {
     } catch (error) {
       console.error('Fetch profile/addresses error:', error);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
-    fetchProfileData();
-  }, []);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchProfileData();
+  }, [fetchProfileData]);
 
   const onRefresh = async () => {
     setRefreshing(true);
