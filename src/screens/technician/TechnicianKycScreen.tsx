@@ -160,6 +160,9 @@ export default function TechnicianKycScreen() {
   };
 
   const canSubmit = slots.every((slot) => slot.asset && slot.mimeType);
+  const hasAnySelection = slots.some((slot) => slot.asset !== null);
+
+  const resetSlots = () => setSlots(INITIAL_SLOTS);
 
   const uploadSlot = async (slot: KycSlot): Promise<SubmitDocumentPayload> => {
     if (!slot.asset || !slot.mimeType) throw new Error(`Thiếu ảnh cho ${slot.label}`);
@@ -280,17 +283,31 @@ export default function TechnicianKycScreen() {
                   Ảnh JPEG, PNG hoặc WebP, tối đa 10MB mỗi ảnh.
                 </Text>
 
-                <TouchableOpacity
-                  style={[styles.submitBtn, (!canSubmit || submitting) && styles.submitBtnDisabled]}
-                  disabled={!canSubmit || submitting}
-                  onPress={handleSubmit}
-                >
-                  {submitting ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.submitBtnText}>Nộp hồ sơ xác minh</Text>
+                <View style={styles.actionRow}>
+                  {hasAnySelection && (
+                    <TouchableOpacity
+                      style={styles.resetBtn}
+                      disabled={submitting}
+                      onPress={resetSlots}
+                    >
+                      <Text style={styles.resetBtnText}>Chọn lại</Text>
+                    </TouchableOpacity>
                   )}
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.submitBtn,
+                      (!canSubmit || submitting) && styles.submitBtnDisabled,
+                    ]}
+                    disabled={!canSubmit || submitting}
+                    onPress={handleSubmit}
+                  >
+                    {submitting ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.submitBtnText}>Nộp hồ sơ xác minh</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
           </>
@@ -354,8 +371,19 @@ const styles = StyleSheet.create({
   slotHint: { fontSize: 10, fontWeight: '600', color: colors.textSecondary, marginTop: 4, textAlign: 'center' },
   slotLabel: { flex: 1, fontSize: fontSize.xs, fontWeight: '600', color: colors.text, textAlign: 'center' },
   helperText: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: spacing.md },
+  actionRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
+  resetBtn: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  resetBtnText: { color: colors.text, fontSize: fontSize.md, fontWeight: '700' },
   submitBtn: {
-    marginTop: spacing.md,
+    flex: 2,
     backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 14,
