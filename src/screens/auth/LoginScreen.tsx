@@ -15,7 +15,6 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList, AuthStackParamList } from '../../types';
 import { useAuthStore } from '../../store';
-import { UserRole } from '../../types';
 import { colors, spacing, fontSize } from '../../constants';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { authApi } from '../../api/auth.api';
@@ -33,12 +32,13 @@ export default function LoginScreen() {
     setError(null);
     try {
       const result = await authApi.login({ email: loginEmail, password: loginPassword });
+      // AppNavigator swaps to the Technician/Customer stack as soon as this
+      // state updates — do not also navigate() here. Doing so races the
+      // re-render: right after this call the navigator still only has the
+      // unauthenticated screens mounted, so navigating to 'TechnicianMain'
+      // (which only exists in the authenticated-technician stack) throws
+      // "action NAVIGATE ... was not handled by any navigator".
       setAuth(result.accessToken, result.user);
-      if (result.user.role === UserRole.TECHNICIAN) {
-        navigation.navigate('TechnicianMain');
-      } else {
-        navigation.navigate('CustomerMain');
-      }
     } catch (err: any) {
       const message =
         err?.response?.data?.message ||
