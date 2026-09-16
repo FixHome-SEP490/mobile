@@ -72,19 +72,8 @@ export default function TechnicianJobsScreen() {
   };
 
   const handleCheckIn = async (orderId: string) => {
-    setActionLoading(orderId);
-    try {
-      await ordersApi.checkIn(orderId, {
-        lat: 10.762622,
-        lng: 106.660172,
-      });
-      Alert.alert('Thành công', 'Đã check-in tại nhà khách hàng.');
-      await refreshJobs();
-    } catch (err: any) {
-      Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể check-in.');
-    } finally {
-      setActionLoading(null);
-    }
+    void orderId;
+    Alert.alert('Chưa hỗ trợ định vị', 'Vui lòng mở đơn trên Web tại địa chỉ sửa chữa để check-in bằng GPS.');
   };
 
   const getStatusBadge = (status: CanonicalOrderStatus) => {
