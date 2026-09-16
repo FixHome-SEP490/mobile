@@ -1,68 +1,39 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Switch, Image, RefreshControl } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
-import { UserRole } from '../../types';
 import { useAuthStore } from '../../store';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
+import { ProfileHeader } from '../../components/profile/ProfileHeader';
 import { LinearGradient } from 'expo-linear-gradient';
-import { authApi } from '../../api/auth';
-import { storageService } from '../../services/storage.service';
-import { usersApi } from '../../api/users';
-import { addressesApi, AddressData } from '../../api/addresses';
+
+interface Address {
+  id: string;
+  name: string;
+  detail: string;
+}
 
 export default function CustomerProfileScreen() {
-  const { user, logout } = useAuthStore();
+  const logout = useAuthStore((state) => state.logout);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const handleScroll = useScrollHideTabBar();
   
   // States for user info
-  const [name, setName] = useState(user?.fullName || 'Khách hàng');
-  const [email, setEmail] = useState(user?.email || '');
-  const [phone, setPhone] = useState(user?.phoneNumber || '');
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatarUrl || null);
-  
-  const [addresses, setAddresses] = useState<AddressData[]>([]);
-
-  const [refreshing, setRefreshing] = useState(false);
-
-  const fetchProfileData = useCallback(async () => {
-    try {
-      const profileRes = await usersApi.getProfile();
-      if (profileRes.data) {
-        setName(profileRes.data.fullName || 'Khách hàng');
-        setEmail(profileRes.data.email || '');
-        setPhone(profileRes.data.phoneNumber || '');
-        setAvatarUrl(profileRes.data.avatarUrl || null);
-      }
-      
-      if (user?.role !== UserRole.TECHNICIAN) {
-        const addressesRes = await addressesApi.getAddresses();
-        if (addressesRes.data) {
-          setAddresses(addressesRes.data);
-        }
-      }
-    } catch (error) {
-      console.error('Fetch profile/addresses error:', error);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void fetchProfileData();
-  }, [fetchProfileData]);
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchProfileData();
-    setRefreshing(false);
-  };
+  const [name, setName] = useState('Trần Minh');
+  const [email, setEmail] = useState('minh.tran@gmail.com');
+  const [phone, setPhone] = useState('0909123123');
   
   // State for theme
   const [isDarkMode, setIsDarkMode] = useState(false);
+
+  // States for addresses
+  const [addresses, setAddresses] = useState<Address[]>([
+    { id: '1', name: 'Nhà riêng', detail: '28 Duy Tân, Cầu Giấy, Hà Nội' },
+    { id: '2', name: 'Văn phòng', detail: '16 Phạm Hùng, Nam Từ Liêm, Hà Nội' },
+  ]);
 
   // Modals visibility
   const [isProfileModalVisible, setProfileModalVisible] = useState(false);
@@ -70,129 +41,57 @@ export default function CustomerProfileScreen() {
 
   // Temp states for editing profile
   const [editName, setEditName] = useState(name);
-  const [editEmail, setEditEmail] = useState(email); // Typically email isn't editable, but keeping for UI
+  const [editEmail, setEditEmail] = useState(email);
   const [editPhone, setEditPhone] = useState(phone);
-  const [editAvatar, setEditAvatar] = useState(avatarUrl || '');
 
   // Temp states for adding/editing address
   const [editAddressId, setEditAddressId] = useState<string | null>(null);
   const [addressName, setAddressName] = useState('');
   const [addressDetail, setAddressDetail] = useState('');
 
-  const handleSaveProfile = async () => {
-    if (!editName || editName.trim().length < 2) {
-      Alert.alert('Lỗi', 'Họ tên phải có ít nhất 2 ký tự.');
-      return;
-    }
-    
-    // Validate Vietnamese phone number format: 0[35789] followed by 8 digits
-    const phoneRegex = /^0[35789][0-9]{8}$/;
-    if (editPhone && !phoneRegex.test(editPhone.trim())) {
-      Alert.alert('Lỗi', 'Số điện thoại không hợp lệ (Ví dụ: 0987654321).');
-      return;
-    }
-
-    try {
-      const payload: any = {
-        fullName: editName.trim(),
-      };
-      
-      if (editPhone && editPhone.trim()) {
-        payload.phoneNumber = editPhone.trim();
-      }
-      
-      if (editAvatar && editAvatar.trim()) {
-        payload.avatarUrl = editAvatar.trim();
-      }
-
-      await usersApi.updateProfile(payload);
-      setName(editName.trim());
-      setPhone(editPhone ? editPhone.trim() : '');
-      setAvatarUrl(editAvatar ? editAvatar.trim() : null);
-      setProfileModalVisible(false);
-      Alert.alert('Thành công', 'Cập nhật thông tin thành công!');
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Lỗi', 'Không thể cập nhật thông tin.');
-    }
+  const handleSaveProfile = () => {
+    setName(editName);
+    setEmail(editEmail);
+    setPhone(editPhone);
+    setProfileModalVisible(false);
+    Alert.alert('Thành công', 'Cập nhật thông tin thành công!');
   };
 
-  const handleSaveAddress = async () => {
+  const handleSaveAddress = () => {
     if (!addressName || !addressDetail) {
       Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin địa chỉ.');
       return;
     }
 
-    try {
-      const payload = {
-        label: addressName,
-        line1: addressDetail,
-        ward: 'Phường/Xã',
-        district: 'Quận/Huyện',
-        province: 'Tỉnh/TP',
-        lat: 0,
-        lng: 0,
-        isDefault: addresses.length === 0
-      };
-
-      if (editAddressId) {
-        await addressesApi.updateAddress(editAddressId, payload);
-      } else {
-        await addressesApi.createAddress(payload);
-      }
-      
-      const res = await addressesApi.getAddresses();
-      setAddresses(res.data);
-      
-      setAddressName('');
-      setAddressDetail('');
-      setEditAddressId(null);
-      setAddressModalVisible(false);
-      Alert.alert('Thành công', 'Lưu địa chỉ thành công');
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Lỗi', 'Không thể lưu địa chỉ');
+    if (editAddressId) {
+      setAddresses(addresses.map(a => a.id === editAddressId ? { ...a, name: addressName, detail: addressDetail } : a));
+    } else {
+      setAddresses([...addresses, { id: Date.now().toString(), name: addressName, detail: addressDetail }]);
     }
+    
+    setAddressName('');
+    setAddressDetail('');
+    setEditAddressId(null);
   };
 
-  const handleEditAddress = (addr: AddressData) => {
+  const handleEditAddress = (addr: Address) => {
     setEditAddressId(addr.id);
-    setAddressName(addr.label);
-    setAddressDetail(addr.line1);
+    setAddressName(addr.name);
+    setAddressDetail(addr.detail);
   };
 
-  const handleDeleteAddress = async (id: string) => {
-    Alert.alert("Thông báo", "Bạn có chắc chắn muốn xoá địa chỉ này?", [
-      { text: 'Hủy', style: 'cancel' },
-      { text: 'Xóa', style: 'destructive', onPress: async () => {
-        await addressesApi.deleteAddress(id);
-        setAddresses(addresses.filter(a => a.id !== id));
-      }},
-    ]);
+  const handleDeleteAddress = (id: string) => {
+    setAddresses(addresses.filter(a => a.id !== id));
   };
 
   const handleLogout = () => {
     Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất?', [
       { text: 'Hủy', style: 'cancel' },
-      { text: 'Đăng xuất', style: 'destructive', onPress: async () => {
-        try {
-          const refreshToken = await storageService.getRefreshToken();
-          if (refreshToken) {
-            await authApi.logout({ refreshToken });
-          }
-        } catch (error) {
-          console.error('Logout error:', error);
-        } finally {
-          await storageService.removeToken();
-          await storageService.removeRefreshToken();
-          logout();
-          setTimeout(() => {
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Auth' }],
-            });
-          }, 100);
-        }
+      { text: 'Đăng xuất', style: 'destructive', onPress: () => {
+        logout();
+        setTimeout(() => {
+          navigation.navigate('Auth');
+        }, 100);
       }},
     ]);
   };
@@ -200,30 +99,18 @@ export default function CustomerProfileScreen() {
   return (
     <SafeAreaView style={[styles.container, isDarkMode && styles.containerDark]} edges={['top']}>
       <ScrollView 
-        contentContainerStyle={{ paddingBottom: 40, paddingTop: 60 }}
+        contentContainerStyle={{ paddingBottom: 40 }}
         onScroll={handleScroll}
         scrollEventThrottle={16}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563EB']} />
-        }
       >
-        <View style={[styles.mainWrapperCard, isDarkMode && styles.cardDark]}>
-          {/* Avatar Section */}
-          <View style={styles.avatarSection}>
-            <View style={[styles.avatarBorder, isDarkMode ? styles.avatarBorderDark : styles.avatarBorderLight]}>
-              <View style={styles.avatar}>
-                {avatarUrl ? (
-                  <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
-                ) : (
-                  <Text style={styles.avatarText}>{name.charAt(0)}</Text>
-                )}
-              </View>
-            </View>
-            <Text style={[styles.name, isDarkMode && styles.textDark]}>{name}</Text>
-            <Text style={styles.phone}>{phone}</Text>
-          </View>
+        <ProfileHeader 
+          name={name} 
+          phone={phone} 
+          avatarText={name.charAt(0)} 
+          isDarkMode={isDarkMode} 
+        />
 
+        <View style={styles.scrollContent}>
           <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Ví & Điểm thưởng</Text>
           <View style={styles.overviewRow}>
             <LinearGradient colors={['#E0F2FE', '#F0F9FF']} style={styles.overviewCard}>
@@ -291,7 +178,7 @@ export default function CustomerProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Cài đặt</Text>
+        <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Tùy chọn</Text>
         <View style={[styles.menuContainer, isDarkMode && styles.cardDark]}>
           <View style={styles.menuItem}>
             <Ionicons name="moon-outline" size={22} color="#64748B" style={styles.menuIcon} />
@@ -316,9 +203,8 @@ export default function CustomerProfileScreen() {
           <View style={[styles.modalContent, isDarkMode && styles.cardDark]}>
             <Text style={[styles.modalTitle, isDarkMode && styles.textDark]}>Chỉnh sửa thông tin</Text>
             <TextInput style={[styles.input, isDarkMode && styles.inputDark]} placeholder="Họ và tên" placeholderTextColor="#94A3B8" value={editName} onChangeText={setEditName} />
-            <TextInput style={[styles.input, isDarkMode && styles.inputDark]} placeholder="Email" placeholderTextColor="#94A3B8" value={editEmail} editable={false} keyboardType="email-address" />
+            <TextInput style={[styles.input, isDarkMode && styles.inputDark]} placeholder="Email" placeholderTextColor="#94A3B8" value={editEmail} onChangeText={setEditEmail} keyboardType="email-address" />
             <TextInput style={[styles.input, isDarkMode && styles.inputDark]} placeholder="Số điện thoại" placeholderTextColor="#94A3B8" value={editPhone} onChangeText={setEditPhone} keyboardType="phone-pad" />
-            <TextInput style={[styles.input, isDarkMode && styles.inputDark]} placeholder="Link Avatar URL" placeholderTextColor="#94A3B8" value={editAvatar} onChangeText={setEditAvatar} />
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.cancelBtn} onPress={() => setProfileModalVisible(false)}>
                 <Text style={styles.cancelBtnText}>Hủy</Text>
@@ -340,8 +226,8 @@ export default function CustomerProfileScreen() {
               {addresses.map(addr => (
                 <View key={addr.id} style={[styles.addressItem, isDarkMode && styles.inputDark]}>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.addressName, isDarkMode && styles.textDark]}>{addr.label}</Text>
-                    <Text style={styles.addressDetail}>{addr.line1}</Text>
+                    <Text style={[styles.addressName, isDarkMode && styles.textDark]}>{addr.name}</Text>
+                    <Text style={styles.addressDetail}>{addr.detail}</Text>
                   </View>
                   <TouchableOpacity onPress={() => handleEditAddress(addr)} style={styles.iconBtn}>
                     <Ionicons name="pencil" size={20} color="#2563EB" />
@@ -383,41 +269,6 @@ const styles = StyleSheet.create({
   identityInfo: { flex: 1 },
   name: { fontSize: 20, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
   textDark: { color: '#F8FAFC' },
-
-  mainWrapperCard: {
-    backgroundColor: '#FFFFFF',
-    flexGrow: 1,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 40,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    marginTop: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  avatarSection: {
-    alignItems: 'center',
-    marginBottom: 24,
-    marginTop: -66,
-  },
-  avatarBorder: {
-    width: 100, height: 100, borderRadius: 50,
-    justifyContent: 'center', alignItems: 'center',
-    marginBottom: 12, borderWidth: 4,
-  },
-  avatarBorderLight: { borderColor: '#FFFFFF', backgroundColor: '#FFFFFF' },
-  avatarBorderDark: { borderColor: '#1E293B', backgroundColor: '#1E293B' },
-  avatar: {
-    width: '100%', height: '100%', borderRadius: 50,
-    backgroundColor: '#DBEAFE', justifyContent: 'center', alignItems: 'center', overflow: 'hidden'
-  },
-  avatarImage: { width: '100%', height: '100%' },
-  avatarText: { fontSize: 36, fontWeight: '700', color: '#2563EB' },
-  phone: { fontSize: 14, color: '#64748B', fontWeight: '500' },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 12 },
   menuContainer: { backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden', marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   menuItem: { flexDirection: 'row', padding: 16, alignItems: 'center' },
