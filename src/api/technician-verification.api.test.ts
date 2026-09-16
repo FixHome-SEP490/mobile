@@ -83,21 +83,36 @@ describe('technicianVerificationApi', () => {
   });
 
   describe('uploadToSignedUrl', () => {
-    const originalFetch = globalThis.fetch;
+    let xhrMock: {
+      open: jest.Mock;
+      setRequestHeader: jest.Mock;
+      send: jest.Mock;
+      onload: (() => void) | null;
+      onerror: (() => void) | null;
+      status: number;
+    };
+
+    beforeEach(() => {
+      xhrMock = {
+        open: jest.fn(),
+        setRequestHeader: jest.fn(),
+        send: jest.fn(),
+        onload: null,
+        onerror: null,
+        status: 200,
+      };
+      (globalThis as Record<string, unknown>).XMLHttpRequest = jest.fn(() => xhrMock);
+    });
 
     afterEach(() => {
-      globalThis.fetch = originalFetch;
+      delete (globalThis as Record<string, unknown>).XMLHttpRequest;
     });
 
     it('reads the local file and PUTs its bytes with the given mimeType', async () => {
-      const blob = { size: 123 };
-      const fetchMock = jest
-        .fn()
-        // 1st call: read local file URI into a blob
-        .mockResolvedValueOnce({ blob: () => Promise.resolve(blob) })
-        // 2nd call: PUT to the signed URL
-        .mockResolvedValueOnce({ ok: true, status: 200 });
-      globalThis.fetch = fetchMock as unknown as typeof fetch;
+      xhrMock.send.mockImplementation(() => {
+        xhrMock.status = 200;
+        xhrMock.onload?.();
+      });
 
       await technicianVerificationApi.uploadToSignedUrl(
         'https://storage.example/upload?token=xyz',
@@ -105,19 +120,18 @@ describe('technicianVerificationApi', () => {
         { uri: 'file:///tmp/photo.jpg' },
       );
 
-      expect(fetchMock).toHaveBeenNthCalledWith(1, 'file:///tmp/photo.jpg');
-      expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://storage.example/upload?token=xyz', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'image/jpeg' },
-        body: blob,
-      });
+      expect(xhrMock.open).toHaveBeenCalledWith('PUT', 'https://storage.example/upload?token=xyz', true);
+      expect(xhrMock.setRequestHeader).toHaveBeenCalledWith('Content-Type', 'image/jpeg');
+      expect(xhrMock.send).toHaveBeenCalledWith(
+        expect.objectContaining({ uri: 'file:///tmp/photo.jpg', type: 'image/jpeg' }),
+      );
     });
 
     it('throws with the status code when the storage provider rejects the upload', async () => {
-      globalThis.fetch = jest
-        .fn()
-        .mockResolvedValueOnce({ blob: () => Promise.resolve({}) })
-        .mockResolvedValueOnce({ ok: false, status: 403 }) as unknown as typeof fetch;
+      xhrMock.send.mockImplementation(() => {
+        xhrMock.status = 403;
+        xhrMock.onload?.();
+      });
 
       await expect(
         technicianVerificationApi.uploadToSignedUrl('https://storage.example/upload', 'image/jpeg', {

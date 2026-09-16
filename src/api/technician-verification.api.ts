@@ -102,21 +102,29 @@ export const technicianVerificationApi = {
   },
 
   /** Uploads raw bytes straight to Supabase Storage. Deliberately bypasses
-   * apiClient: this is a different origin and must not carry our backend JWT. */
+   * apiClient: this is a different origin and must not carry our backend JWT.
+   *
+   * Uses XMLHttpRequest instead of fetch+blob because React Native's
+   * fetch-blob polyfill produces empty/malformed bodies on iOS, causing 400s. */
   async uploadToSignedUrl(
     uploadUrl: string,
     mimeType: KycMimeType,
     file: { uri: string },
   ): Promise<void> {
-    const body = await fetch(file.uri).then((r) => r.blob());
-    const res = await fetch(uploadUrl, {
-      method: 'PUT',
-      headers: { 'Content-Type': mimeType },
-      body,
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', uploadUrl, true);
+      xhr.setRequestHeader('Content-Type', mimeType);
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+        } else {
+          reject(new Error(`Tải ảnh lên thất bại (mã lỗi ${xhr.status}).`));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Tải ảnh lên thất bại (lỗi mạng).'));
+      xhr.send({ uri: file.uri, type: mimeType, name: 'upload' } as unknown as Blob);
     });
-    if (!res.ok) {
-      throw new Error(`Tải ảnh lên thất bại (mã lỗi ${res.status}).`);
-    }
   },
 
   async submit(documents: SubmitDocumentPayload[]): Promise<MyVerification> {
