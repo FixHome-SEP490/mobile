@@ -43,12 +43,11 @@ export default function AppNavigator() {
             <Stack.Screen name="CustomerUnderRepair" component={CustomerUnderRepairScreen} />
             <Stack.Screen name="CustomerCompleted" component={CustomerCompletedScreen} />
             <Stack.Screen name="CustomerReview" component={CustomerReviewScreen} />
-            <Stack.Screen name="Auth" component={AuthNavigator} options={{ gestureEnabled: false }} />
+            <Stack.Screen name="Auth" component={AuthNavigator} />
           </>
         ) : (
           <>
-            {/* Khi vừa mở app: Vào ngay Trang Đăng nhập */}
-            <Stack.Screen name="Auth" component={AuthNavigator} options={{ gestureEnabled: false }} />
+            {/* Khi vừa mở app: Vào ngay Trang chủ Khách hàng (theo chuẩn Vua Thợ / Xanh SM) */}
             <Stack.Screen name="CustomerMain" component={CustomerNavigator} />
             <Stack.Screen name="TechnicianMain" component={TechnicianNavigator} />
             <Stack.Screen name="CustomerServices" component={CustomerServicesScreen} />
@@ -62,6 +61,7 @@ export default function AppNavigator() {
             <Stack.Screen name="CustomerUnderRepair" component={CustomerUnderRepairScreen} />
             <Stack.Screen name="CustomerCompleted" component={CustomerCompletedScreen} />
             <Stack.Screen name="CustomerReview" component={CustomerReviewScreen} />
+            <Stack.Screen name="Auth" component={AuthNavigator} />
           </>
         )}
       </Stack.Navigator>

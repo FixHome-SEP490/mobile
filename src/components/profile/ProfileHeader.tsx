@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface ProfileHeaderProps {
   name: string;
@@ -16,7 +17,13 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
 }) => {
   return (
     <View style={styles.container}>
-      <View style={[styles.coverWrapper, { backgroundColor: isDarkMode ? '#1E293B' : '#3B82F6' }]} />
+      {/* Cover Background */}
+      <View style={styles.coverWrapper}>
+        <LinearGradient
+          colors={isDarkMode ? ['#1E293B', '#0F172A'] : ['#3B82F6', '#1D4ED8']}
+          style={styles.coverBackground}
+        />
+      </View>
 
       {/* Avatar & Info Container */}
       <View style={styles.infoContainer}>

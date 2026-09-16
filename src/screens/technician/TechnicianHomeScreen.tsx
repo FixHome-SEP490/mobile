@@ -10,11 +10,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 
 export default function TechnicianHomeScreen() {
   const { user } = useAuthStore();
-  const handleScroll = useScrollHideTabBar();
 
   return (
     <View style={styles.container}>
@@ -30,12 +28,7 @@ export default function TechnicianHomeScreen() {
         </View>
       </View>
 
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent} 
-        showsVerticalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-      >
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
         {/* Tổng quan tuần này */}
         <View style={styles.sectionHeader}>
@@ -108,34 +101,6 @@ export default function TechnicianHomeScreen() {
           </View>
           <Ionicons name="trophy" size={60} color="#EAB308" style={{ marginLeft: 8 }} />
         </LinearGradient>
-
-        <View style={styles.sectionHeader}>
-          <Ionicons name="newspaper-outline" size={20} color="#2563EB" />
-          <Text style={styles.sectionTitle}>Tin tức & Thông báo</Text>
-        </View>
-
-        <View style={styles.targetContainer}>
-          <Text style={styles.rankTitle}>Chính sách thưởng tháng 10</Text>
-          <Text style={styles.rankSubtitle}>Hoàn thành 50 đơn nhận ngay 2.000.000đ. Đọc chi tiết để không bỏ lỡ cơ hội!</Text>
-        </View>
-
-        <View style={styles.targetContainer}>
-          <Text style={styles.rankTitle}>Cập nhật quy trình an toàn</Text>
-          <Text style={styles.rankSubtitle}>Quy trình mới áp dụng từ 01/10/2026 cho tất cả các dịch vụ vệ sinh máy lạnh.</Text>
-        </View>
-
-        <View style={styles.targetContainer}>
-          <Text style={styles.rankTitle}>Mẹo xử lý khi gặp sự cố</Text>
-          <Text style={styles.rankSubtitle}>Hướng dẫn các bước khắc phục nhanh khi khách hàng phàn nàn về thái độ phục vụ.</Text>
-        </View>
-        
-        <View style={styles.targetContainer}>
-          <Text style={styles.rankTitle}>Lịch bảo trì hệ thống app</Text>
-          <Text style={styles.rankSubtitle}>Hệ thống sẽ bảo trì từ 2h-4h sáng chủ nhật tuần này.</Text>
-        </View>
-
-        <View style={{ height: 60 }} />
-
 
       </ScrollView>
     </View>
