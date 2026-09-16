@@ -5,3 +5,4 @@ export { ordersApi } from './orders.api';
 export { servicesApi } from './services.api';
 export { aiApi } from './ai.api';
 export { usersApi } from './users.api';
+export { technicianVerificationApi } from './technician-verification.api';

@@ -14,6 +14,7 @@ export type RootStackParamList = {
   CustomerUnderRepair: undefined;
   CustomerCompleted: undefined;
   CustomerReview: undefined;
+  TechnicianKyc: undefined;
 };
 
 export type AuthStackParamList = {

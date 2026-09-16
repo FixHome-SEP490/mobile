@@ -19,6 +19,7 @@ import CustomerQuotationScreen from '../screens/customer/CustomerQuotationScreen
 import CustomerUnderRepairScreen from '../screens/customer/CustomerUnderRepairScreen';
 import CustomerCompletedScreen from '../screens/customer/CustomerCompletedScreen';
 import CustomerReviewScreen from '../screens/customer/CustomerReviewScreen';
+import TechnicianKycScreen from '../screens/technician/TechnicianKycScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -43,6 +44,7 @@ export default function AppNavigator() {
             <Stack.Screen name="CustomerUnderRepair" component={CustomerUnderRepairScreen} />
             <Stack.Screen name="CustomerCompleted" component={CustomerCompletedScreen} />
             <Stack.Screen name="CustomerReview" component={CustomerReviewScreen} />
+            <Stack.Screen name="TechnicianKyc" component={TechnicianKycScreen} />
             <Stack.Screen name="Auth" component={AuthNavigator} />
           </>
         ) : (
