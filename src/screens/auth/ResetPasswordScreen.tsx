@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// src/screens/auth/ResetPasswordScreen.tsx
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,74 +10,90 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { AuthStackParamList, RootStackParamList } from '../../types';
+import type { RouteProp } from '@react-navigation/native';
+import type { AuthStackParamList } from '../../types';
 import { authApi } from '../../api/auth.api';
 
-export default function RegisterScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList & RootStackParamList>>();
+const PASSWORD_RULE_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
 
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
+export default function ResetPasswordScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
+  const route = useRoute<RouteProp<AuthStackParamList, 'ResetPassword'>>();
+  const { email } = route.params;
+
+  const [otp, setOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(0);
 
-  const handleRegister = async () => {
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => {
+      setCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
+
+  const handleSubmit = async () => {
     setError(null);
 
-    if (!fullName.trim()) {
-      setError('Vui lòng nhập họ và tên.');
+    if (!/^[0-9]{6}$/.test(otp.trim())) {
+      setError('Vui lòng nhập đủ 6 số của mã OTP.');
       return;
     }
-    if (!email.trim() || !email.includes('@')) {
-      setError('Vui lòng nhập email hợp lệ.');
-      return;
-    }
-    if (phone.trim() && !/^0[35789][0-9]{8}$/.test(phone.trim())) {
-      setError('Số điện thoại không đúng định dạng (10 số, bắt đầu 03, 05, 07, 08, 09).');
-      return;
-    }
-    if (password.length < 8) {
+    if (newPassword.length < 8) {
       setError('Mật khẩu phải từ 8 ký tự trở lên.');
       return;
     }
-    const pwdRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
-    if (!pwdRegex.test(password)) {
+    if (!PASSWORD_RULE_REGEX.test(newPassword)) {
       setError('Mật khẩu cần ít nhất: chữ hoa, chữ thường, số và ký tự đặc biệt.');
       return;
     }
-    if (password !== confirmPassword) {
+    if (newPassword !== confirmPassword) {
       setError('Mật khẩu xác nhận không khớp.');
       return;
     }
 
     setLoading(true);
     try {
-      const trimmedEmail = email.trim();
-      await authApi.register({
-        fullName: fullName.trim(),
-        email: trimmedEmail,
-        password,
-        phoneNumber: phone.trim() || undefined,
-        role: 'customer',
-      });
-
-      navigation.navigate('VerifyRegisterOtp', { email: trimmedEmail, password });
+      await authApi.resetPassword(email, otp.trim(), newPassword);
+      Alert.alert('Thành công', 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.', [
+        { text: 'Đăng nhập', onPress: () => navigation.navigate('Login') },
+      ]);
     } catch (err: any) {
-      const msg =
+      const message =
         err?.response?.data?.message ||
         err?.message ||
-        'Đăng ký thất bại. Vui lòng kiểm tra thông tin và thử lại.';
-      setError(Array.isArray(msg) ? msg.join(', ') : msg);
+        'Đặt lại mật khẩu thất bại. Vui lòng thử lại.';
+      setError(Array.isArray(message) ? message.join(', ') : message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setError(null);
+    setResending(true);
+    try {
+      await authApi.forgotPassword(email);
+      setCooldown(60);
+    } catch (err: any) {
+      const message =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Không thể gửi lại mã OTP. Vui lòng thử lại sau.';
+      setError(Array.isArray(message) ? message.join(', ') : message);
+    } finally {
+      setResending(false);
     }
   };
 
@@ -86,7 +103,7 @@ export default function RegisterScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <TouchableOpacity
             style={styles.backBtn}
             onPress={() => navigation.goBack()}
@@ -97,8 +114,10 @@ export default function RegisterScreen() {
           </TouchableOpacity>
 
           <View style={styles.header}>
-            <Text style={styles.title}>Tạo tài khoản</Text>
-            <Text style={styles.subtitle}>Đăng ký tài khoản Khách hàng tại FixHome</Text>
+            <Text style={styles.title}>Đặt lại mật khẩu</Text>
+            <Text style={styles.subtitle}>
+              Nhập mã OTP đã gửi đến <Text style={styles.emailText}>{email}</Text> và mật khẩu mới.
+            </Text>
           </View>
 
           <View style={styles.formContainer}>
@@ -110,52 +129,23 @@ export default function RegisterScreen() {
             )}
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Họ và tên *</Text>
+              <Text style={styles.inputLabel}>Mã OTP *</Text>
               <View style={styles.inputWrapper}>
-                <Ionicons name="person-outline" size={18} color="#64748B" style={styles.inputIcon} />
+                <Ionicons name="key-outline" size={18} color="#64748B" style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
-                  placeholder="Ví dụ: Nguyễn Văn A"
+                  style={[styles.input, styles.otpInput]}
+                  placeholder="000000"
                   placeholderTextColor="#94A3B8"
-                  value={fullName}
-                  onChangeText={setFullName}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  value={otp}
+                  onChangeText={(text) => setOtp(text.replace(/[^0-9]/g, ''))}
                 />
               </View>
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email *</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="mail-outline" size={18} color="#64748B" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="email@example.com"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  value={email}
-                  onChangeText={setEmail}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Số điện thoại</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="call-outline" size={18} color="#64748B" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ví dụ: 0909123456"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="phone-pad"
-                  value={phone}
-                  onChangeText={setPhone}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Mật khẩu *</Text>
+              <Text style={styles.inputLabel}>Mật khẩu mới *</Text>
               <View style={styles.inputWrapper}>
                 <Ionicons name="lock-closed-outline" size={18} color="#64748B" style={styles.inputIcon} />
                 <TextInput
@@ -163,19 +153,19 @@ export default function RegisterScreen() {
                   placeholder="Tối thiểu 8 ký tự (hoa, thường, số, đặc biệt)"
                   placeholderTextColor="#94A3B8"
                   secureTextEntry
-                  value={password}
-                  onChangeText={setPassword}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
                 />
               </View>
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Xác nhận mật khẩu *</Text>
+              <Text style={styles.inputLabel}>Xác nhận mật khẩu mới *</Text>
               <View style={styles.inputWrapper}>
                 <Ionicons name="shield-checkmark-outline" size={18} color="#64748B" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Nhập lại mật khẩu"
+                  placeholder="Nhập lại mật khẩu mới"
                   placeholderTextColor="#94A3B8"
                   secureTextEntry
                   value={confirmPassword}
@@ -185,24 +175,31 @@ export default function RegisterScreen() {
             </View>
 
             <TouchableOpacity
-              style={[styles.registerBtn, loading && { opacity: 0.7 }]}
-              onPress={handleRegister}
+              style={[styles.submitBtn, loading && { opacity: 0.7 }]}
+              onPress={handleSubmit}
               activeOpacity={0.85}
               disabled={loading}
             >
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.registerBtnText}>Tạo tài khoản</Text>
+                <Text style={styles.submitBtnText}>Đặt lại mật khẩu</Text>
               )}
             </TouchableOpacity>
 
-            <View style={styles.loginRow}>
-              <Text style={styles.loginText}>Đã có tài khoản? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-                <Text style={styles.loginLink}>Đăng nhập</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={styles.resendRow}
+              onPress={handleResend}
+              disabled={resending || cooldown > 0}
+            >
+              <Text style={[styles.resendText, cooldown > 0 && { color: '#94A3B8' }]}>
+                {resending
+                  ? 'Đang gửi lại mã...'
+                  : cooldown > 0
+                    ? `Gửi lại mã sau ${cooldown}s`
+                    : 'Gửi lại mã OTP'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -251,6 +248,10 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: '#64748B',
+  },
+  emailText: {
+    fontWeight: '700',
+    color: '#0F172A',
   },
   formContainer: {
     backgroundColor: '#FFFFFF',
@@ -306,7 +307,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#0F172A',
   },
-  registerBtn: {
+  otpInput: {
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 4,
+  },
+  submitBtn: {
     backgroundColor: '#2563EB',
     height: 46,
     borderRadius: 10,
@@ -314,23 +320,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
   },
-  registerBtnText: {
+  submitBtnText: {
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
   },
-  loginRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 18,
+  resendRow: {
+    alignItems: 'center',
+    marginTop: 16,
   },
-  loginText: {
+  resendText: {
     fontSize: 13,
-    color: '#64748B',
-  },
-  loginLink: {
-    fontSize: 13,
-    color: '#2563EB',
     fontWeight: '600',
+    color: '#2563EB',
   },
 });

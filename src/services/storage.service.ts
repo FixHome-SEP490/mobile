@@ -13,8 +13,7 @@ export const storageService = {
     }
   },
 
-  async setToken(token?: string): Promise<void> {
-    if (!token) return;
+  async setToken(token: string): Promise<void> {
     await SecureStore.setItemAsync(TOKEN_KEY, token);
   },
 
@@ -30,8 +29,7 @@ export const storageService = {
     }
   },
 
-  async setRefreshToken(token?: string): Promise<void> {
-    if (!token) return;
+  async setRefreshToken(token: string): Promise<void> {
     await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, token);
   },
 

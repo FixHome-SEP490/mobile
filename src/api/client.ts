@@ -56,7 +56,7 @@ apiClient.interceptors.response.use(
 
     // Only attempt refresh on 401, and only once per request
     if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
-      if (originalRequest.url?.includes('/auth/') && !originalRequest.url?.includes('/auth/refresh')) return Promise.reject(error);
+      if (originalRequest.url === '/auth/login' || originalRequest.url === '/auth/register') return Promise.reject(error);
       // Don't try to refresh if the failing request was itself the refresh call
       if (originalRequest.url?.includes('/auth/refresh')) {
         await storageService.clearAll();

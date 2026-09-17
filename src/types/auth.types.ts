@@ -9,6 +9,36 @@ export interface LoginResponse {
   user: UserInfo;
 }
 
+export interface RegisterResponse {
+  message: string;
+  email: string;
+  expiresInMinutes: number;
+}
+
+export interface VerifyOtpRequest {
+  email: string;
+  otp: string;
+}
+
+export interface ResendOtpResponse {
+  message: string;
+  resendAvailableAt: string;
+}
+
+export interface ForgotPasswordResponse {
+  message: string;
+}
+
+export interface ResetPasswordRequest {
+  email: string;
+  otp: string;
+  newPassword: string;
+}
+
+export interface ResetPasswordResponse {
+  message: string;
+}
+
 export interface UserInfo {
   id: string;
   email: string;

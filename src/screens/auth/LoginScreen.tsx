@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList, AuthStackParamList } from '../../types';
+import { UserRole } from '../../types';
 import { useAuthStore } from '../../store';
 import { colors, spacing, fontSize } from '../../constants';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -32,13 +33,20 @@ export default function LoginScreen() {
     setError(null);
     try {
       const result = await authApi.login({ email: loginEmail, password: loginPassword });
-      // AppNavigator swaps to the Technician/Customer stack as soon as this
-      // state updates — do not also navigate() here. Doing so races the
-      // re-render: right after this call the navigator still only has the
-      // unauthenticated screens mounted, so navigating to 'TechnicianMain'
-      // (which only exists in the authenticated-technician stack) throws
-      // "action NAVIGATE ... was not handled by any navigator".
       setAuth(result.accessToken, result.user);
+      // 'TechnicianMain' only exists once AppNavigator re-renders with the
+      // authenticated-technician stack, so navigating to it right after
+      // setAuth() races that re-render and throws "action NAVIGATE ...
+      // was not handled by any navigator" — leave the swap to the state
+      // update for that case. 'CustomerMain' is registered in every branch
+      // of AppNavigator regardless of auth state, so it's always safe to
+      // navigate there immediately, and doing so is required: otherwise a
+      // customer login stays stuck on this screen (isAuthenticated flips to
+      // true, but the screens list — and therefore the initial route —
+      // doesn't actually change, so nothing auto-navigates them anywhere).
+      if (result.user.role !== UserRole.TECHNICIAN) {
+        navigation.navigate('CustomerMain');
+      }
     } catch (err: any) {
       const message =
         err?.response?.data?.message ||
@@ -114,12 +122,7 @@ export default function LoginScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <Text style={styles.inputLabel}>Mật khẩu</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
-              <Text style={{ fontSize: 12, color: '#2563EB', fontWeight: '600' }}>Quên mật khẩu?</Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.inputLabel}>Mật khẩu</Text>
           <View style={styles.inputWrapper}>
             <Ionicons name="lock-closed-outline" size={18} color="#64748B" style={styles.inputIcon} />
             <TextInput
@@ -144,6 +147,13 @@ export default function LoginScreen() {
           ) : (
             <Text style={styles.loginBtnText}>Đăng nhập</Text>
           )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.forgotPasswordRow}
+          onPress={() => navigation.navigate('ForgotPassword')}
+        >
+          <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
         </TouchableOpacity>
 
         <View style={styles.registerRow}>
@@ -285,6 +295,15 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
+  },
+  forgotPasswordRow: {
+    alignItems: 'flex-end',
+    marginTop: 10,
+  },
+  forgotPasswordText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#2563EB',
   },
   registerRow: {
     flexDirection: 'row',

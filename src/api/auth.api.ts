@@ -1,7 +1,13 @@
 // src/api/auth.api.ts
 import apiClient from './client';
 import { storageService } from '../services/storage.service';
-import type { UserInfo } from '../types';
+import type {
+  UserInfo,
+  RegisterResponse,
+  ResendOtpResponse,
+  ForgotPasswordResponse,
+  ResetPasswordResponse,
+} from '../types';
 
 export interface LoginRequest {
   email: string;
@@ -14,31 +20,6 @@ export interface RegisterRequest {
   password: string;
   phoneNumber?: string;
   role: 'customer';
-}
-
-export interface RegisterResponse {
-  message: string;
-  email: string;
-  expiresInMinutes: number;
-}
-
-export interface VerifyOtpRequest {
-  email: string;
-  otp: string;
-}
-
-export interface ResendOtpRequest {
-  email: string;
-}
-
-export interface ForgotPasswordRequest {
-  email: string;
-}
-
-export interface ResetPasswordRequest {
-  email: string;
-  otp: string;
-  newPassword: string;
 }
 
 export interface AuthResponse {
@@ -73,6 +54,7 @@ export const authApi = {
     return result;
   },
 
+  /** Backend now requires OTP verification before issuing tokens; no auto-login here. */
   async register(data: RegisterRequest): Promise<RegisterResponse> {
     const res = await apiClient.post<
       { data: RegisterResponse } | RegisterResponse
@@ -80,44 +62,39 @@ export const authApi = {
     return unwrap(res.data);
   },
 
-  async verifyRegisterOtp(data: VerifyOtpRequest): Promise<AuthResponse> {
+  async verifyRegisterOtp(email: string, otp: string): Promise<AuthResponse> {
     const res = await apiClient.post<{ data: AuthResponse } | AuthResponse>(
       '/auth/verify-register-otp',
-      data,
+      { email, otp },
     );
     const result = unwrap(res.data);
     await storageService.setToken(result.accessToken);
-    if (result.refreshToken) {
-      await storageService.setRefreshToken(result.refreshToken);
-    }
+    await storageService.setRefreshToken(result.refreshToken);
     return result;
   },
 
-  async resendRegisterOtp(
-    data: ResendOtpRequest,
-  ): Promise<{ message: string; resendAvailableAt?: string }> {
+  async resendRegisterOtp(email: string): Promise<ResendOtpResponse> {
     const res = await apiClient.post<
-      | { data: { message: string; resendAvailableAt?: string } }
-      | { message: string; resendAvailableAt?: string }
-    >('/auth/resend-register-otp', data);
+      { data: ResendOtpResponse } | ResendOtpResponse
+    >('/auth/resend-register-otp', { email });
     return unwrap(res.data);
   },
 
-  async forgotPassword(
-    data: ForgotPasswordRequest,
-  ): Promise<{ message: string }> {
+  async forgotPassword(email: string): Promise<ForgotPasswordResponse> {
     const res = await apiClient.post<
-      { data: { message: string } } | { message: string }
-    >('/auth/forgot-password', data);
+      { data: ForgotPasswordResponse } | ForgotPasswordResponse
+    >('/auth/forgot-password', { email });
     return unwrap(res.data);
   },
 
   async resetPassword(
-    data: ResetPasswordRequest,
-  ): Promise<{ message: string }> {
+    email: string,
+    otp: string,
+    newPassword: string,
+  ): Promise<ResetPasswordResponse> {
     const res = await apiClient.post<
-      { data: { message: string } } | { message: string }
-    >('/auth/reset-password', data);
+      { data: ResetPasswordResponse } | ResetPasswordResponse
+    >('/auth/reset-password', { email, otp, newPassword });
     return unwrap(res.data);
   },
 
