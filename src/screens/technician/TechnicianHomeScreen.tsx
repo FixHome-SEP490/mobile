@@ -14,11 +14,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ordersApi } from '../../api/orders.api';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import type { TechnicianTabParamList } from '../../types';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList, TechnicianTabParamList } from '../../types';
+import { useChatUnreadCount } from '../../hooks/useChatUnreadCount';
 
 export default function TechnicianHomeScreen() {
   const { user } = useAuthStore();
   const navigation = useNavigation<BottomTabNavigationProp<TechnicianTabParamList>>();
+  // Chat lives on the root stack, not in the technician tab set.
+  const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const chatUnread = useChatUnreadCount();
   const [completedCount, setCompletedCount] = useState(0);
   const [earnings, setEarnings] = useState(0);
   const [activeCount, setActiveCount] = useState(0);
@@ -87,16 +92,34 @@ export default function TechnicianHomeScreen() {
           </View>
         </View>
 
-        {activeCount > 0 && (
+        <View style={styles.headerRight}>
+          {activeCount > 0 && (
+            <TouchableOpacity
+              style={styles.activeJobBadge}
+              onPress={() => navigation.navigate('Jobs')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="flash" size={14} color="#FFFFFF" />
+              <Text style={styles.activeJobBadgeText}>{activeCount} đơn chờ</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Messages (spec 8.6: booking chat with the customer) */}
           <TouchableOpacity
-            style={styles.activeJobBadge}
-            onPress={() => navigation.navigate('Jobs')}
+            style={styles.headerIconBtn}
+            onPress={() => rootNavigation.navigate('ChatList')}
             activeOpacity={0.8}
           >
-            <Ionicons name="flash" size={14} color="#FFFFFF" />
-            <Text style={styles.activeJobBadgeText}>{activeCount} đơn chờ</Text>
+            <Ionicons name="chatbubble-ellipses-outline" size={22} color="#0F172A" />
+            {chatUnread > 0 && (
+              <View style={styles.chatBadge}>
+                <Text style={styles.chatBadgeText}>
+                  {chatUnread > 9 ? '9+' : chatUnread}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
-        )}
+        </View>
       </View>
 
       <ScrollView
@@ -225,6 +248,39 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  chatBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: '#EF4444',
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 3,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  chatBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: 'bold',
   },
   activeJobBadge: {
     flexDirection: 'row',
