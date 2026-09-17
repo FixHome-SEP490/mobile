@@ -103,6 +103,15 @@ export default function TechnicianProfileScreen() {
           <View style={styles.listContainer}>
             <TouchableOpacity
               style={styles.listItem}
+              onPress={() => navigation.navigate('TechnicianKyc')}
+            >
+              <Ionicons name="shield-checkmark-outline" size={20} color="#64748B" />
+              <Text style={styles.listText}>Xác minh danh tính (KYC)</Text>
+              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity
+              style={styles.listItem}
               onPress={() => Alert.alert('Thông báo', 'Hệ thống thông báo nhận đơn đang bật.')}
             >
               <Ionicons name="notifications-outline" size={20} color="#64748B" />

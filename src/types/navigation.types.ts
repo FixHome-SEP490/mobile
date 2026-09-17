@@ -14,11 +14,15 @@ export type RootStackParamList = {
   CustomerUnderRepair: undefined;
   CustomerCompleted: undefined;
   CustomerReview: undefined;
+  TechnicianKyc: undefined;
 };
 
 export type AuthStackParamList = {
   Login: undefined;
   Register: undefined;
+  VerifyRegisterOtp: { email: string; password: string };
+  ForgotPassword: undefined;
+  ResetPassword: { email: string };
 };
 
 export type CustomerTabParamList = {

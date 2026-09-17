@@ -1,7 +1,13 @@
 // src/api/auth.api.ts
 import apiClient from './client';
 import { storageService } from '../services/storage.service';
-import type { UserInfo } from '../types';
+import type {
+  UserInfo,
+  RegisterResponse,
+  ResendOtpResponse,
+  ForgotPasswordResponse,
+  ResetPasswordResponse,
+} from '../types';
 
 export interface LoginRequest {
   email: string;
@@ -48,15 +54,48 @@ export const authApi = {
     return result;
   },
 
-  async register(data: RegisterRequest): Promise<AuthResponse> {
+  /** Backend now requires OTP verification before issuing tokens; no auto-login here. */
+  async register(data: RegisterRequest): Promise<RegisterResponse> {
+    const res = await apiClient.post<
+      { data: RegisterResponse } | RegisterResponse
+    >('/auth/register', data);
+    return unwrap(res.data);
+  },
+
+  async verifyRegisterOtp(email: string, otp: string): Promise<AuthResponse> {
     const res = await apiClient.post<{ data: AuthResponse } | AuthResponse>(
-      '/auth/register',
-      data,
+      '/auth/verify-register-otp',
+      { email, otp },
     );
     const result = unwrap(res.data);
     await storageService.setToken(result.accessToken);
     await storageService.setRefreshToken(result.refreshToken);
     return result;
+  },
+
+  async resendRegisterOtp(email: string): Promise<ResendOtpResponse> {
+    const res = await apiClient.post<
+      { data: ResendOtpResponse } | ResendOtpResponse
+    >('/auth/resend-register-otp', { email });
+    return unwrap(res.data);
+  },
+
+  async forgotPassword(email: string): Promise<ForgotPasswordResponse> {
+    const res = await apiClient.post<
+      { data: ForgotPasswordResponse } | ForgotPasswordResponse
+    >('/auth/forgot-password', { email });
+    return unwrap(res.data);
+  },
+
+  async resetPassword(
+    email: string,
+    otp: string,
+    newPassword: string,
+  ): Promise<ResetPasswordResponse> {
+    const res = await apiClient.post<
+      { data: ResetPasswordResponse } | ResetPasswordResponse
+    >('/auth/reset-password', { email, otp, newPassword });
+    return unwrap(res.data);
   },
 
   async getProfile(): Promise<UserInfo> {

@@ -1,3 +1,4 @@
+// src/screens/auth/ForgotPasswordScreen.tsx
 import React, { useState } from 'react';
 import {
   View,
@@ -14,67 +15,34 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { AuthStackParamList, RootStackParamList } from '../../types';
+import type { AuthStackParamList } from '../../types';
 import { authApi } from '../../api/auth.api';
 
-export default function RegisterScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList & RootStackParamList>>();
+export default function ForgotPasswordScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
 
-  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleRegister = async () => {
+  const handleSubmit = async () => {
     setError(null);
-
-    if (!fullName.trim()) {
-      setError('Vui lòng nhập họ và tên.');
-      return;
-    }
-    if (!email.trim() || !email.includes('@')) {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !trimmedEmail.includes('@')) {
       setError('Vui lòng nhập email hợp lệ.');
-      return;
-    }
-    if (phone.trim() && !/^0[35789][0-9]{8}$/.test(phone.trim())) {
-      setError('Số điện thoại không đúng định dạng (10 số, bắt đầu 03, 05, 07, 08, 09).');
-      return;
-    }
-    if (password.length < 8) {
-      setError('Mật khẩu phải từ 8 ký tự trở lên.');
-      return;
-    }
-    const pwdRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
-    if (!pwdRegex.test(password)) {
-      setError('Mật khẩu cần ít nhất: chữ hoa, chữ thường, số và ký tự đặc biệt.');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError('Mật khẩu xác nhận không khớp.');
       return;
     }
 
     setLoading(true);
     try {
-      const trimmedEmail = email.trim();
-      await authApi.register({
-        fullName: fullName.trim(),
-        email: trimmedEmail,
-        password,
-        phoneNumber: phone.trim() || undefined,
-        role: 'customer',
-      });
-
-      navigation.navigate('VerifyRegisterOtp', { email: trimmedEmail, password });
+      await authApi.forgotPassword(trimmedEmail);
+      navigation.navigate('ResetPassword', { email: trimmedEmail });
     } catch (err: any) {
-      const msg =
+      const message =
         err?.response?.data?.message ||
         err?.message ||
-        'Đăng ký thất bại. Vui lòng kiểm tra thông tin và thử lại.';
-      setError(Array.isArray(msg) ? msg.join(', ') : msg);
+        'Không thể gửi mã OTP. Vui lòng thử lại.';
+      setError(Array.isArray(message) ? message.join(', ') : message);
     } finally {
       setLoading(false);
     }
@@ -86,7 +54,7 @@ export default function RegisterScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <TouchableOpacity
             style={styles.backBtn}
             onPress={() => navigation.goBack()}
@@ -97,8 +65,10 @@ export default function RegisterScreen() {
           </TouchableOpacity>
 
           <View style={styles.header}>
-            <Text style={styles.title}>Tạo tài khoản</Text>
-            <Text style={styles.subtitle}>Đăng ký tài khoản Khách hàng tại FixHome</Text>
+            <Text style={styles.title}>Quên mật khẩu</Text>
+            <Text style={styles.subtitle}>
+              Nhập email đã đăng ký, chúng tôi sẽ gửi mã OTP để đặt lại mật khẩu.
+            </Text>
           </View>
 
           <View style={styles.formContainer}>
@@ -108,20 +78,6 @@ export default function RegisterScreen() {
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             )}
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Họ và tên *</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="person-outline" size={18} color="#64748B" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ví dụ: Nguyễn Văn A"
-                  placeholderTextColor="#94A3B8"
-                  value={fullName}
-                  onChangeText={setFullName}
-                />
-              </View>
-            </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Email *</Text>
@@ -139,66 +95,21 @@ export default function RegisterScreen() {
               </View>
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Số điện thoại</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="call-outline" size={18} color="#64748B" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ví dụ: 0909123456"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="phone-pad"
-                  value={phone}
-                  onChangeText={setPhone}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Mật khẩu *</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="lock-closed-outline" size={18} color="#64748B" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Tối thiểu 8 ký tự (hoa, thường, số, đặc biệt)"
-                  placeholderTextColor="#94A3B8"
-                  secureTextEntry
-                  value={password}
-                  onChangeText={setPassword}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Xác nhận mật khẩu *</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="shield-checkmark-outline" size={18} color="#64748B" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nhập lại mật khẩu"
-                  placeholderTextColor="#94A3B8"
-                  secureTextEntry
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                />
-              </View>
-            </View>
-
             <TouchableOpacity
-              style={[styles.registerBtn, loading && { opacity: 0.7 }]}
-              onPress={handleRegister}
+              style={[styles.submitBtn, loading && { opacity: 0.7 }]}
+              onPress={handleSubmit}
               activeOpacity={0.85}
               disabled={loading}
             >
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.registerBtnText}>Tạo tài khoản</Text>
+                <Text style={styles.submitBtnText}>Gửi mã OTP</Text>
               )}
             </TouchableOpacity>
 
             <View style={styles.loginRow}>
-              <Text style={styles.loginText}>Đã có tài khoản? </Text>
+              <Text style={styles.loginText}>Đã nhớ mật khẩu? </Text>
               <TouchableOpacity onPress={() => navigation.navigate('Login')}>
                 <Text style={styles.loginLink}>Đăng nhập</Text>
               </TouchableOpacity>
@@ -306,7 +217,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#0F172A',
   },
-  registerBtn: {
+  submitBtn: {
     backgroundColor: '#2563EB',
     height: 46,
     borderRadius: 10,
@@ -314,7 +225,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
   },
-  registerBtnText: {
+  submitBtnText: {
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',

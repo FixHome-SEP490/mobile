@@ -14,8 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList, AuthStackParamList } from '../../types';
-import { useAuthStore } from '../../store';
 import { UserRole } from '../../types';
+import { useAuthStore } from '../../store';
 import { colors, spacing, fontSize } from '../../constants';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { authApi } from '../../api/auth.api';
@@ -34,9 +34,17 @@ export default function LoginScreen() {
     try {
       const result = await authApi.login({ email: loginEmail, password: loginPassword });
       setAuth(result.accessToken, result.user);
-      if (result.user.role === UserRole.TECHNICIAN) {
-        navigation.navigate('TechnicianMain');
-      } else {
+      // 'TechnicianMain' only exists once AppNavigator re-renders with the
+      // authenticated-technician stack, so navigating to it right after
+      // setAuth() races that re-render and throws "action NAVIGATE ...
+      // was not handled by any navigator" — leave the swap to the state
+      // update for that case. 'CustomerMain' is registered in every branch
+      // of AppNavigator regardless of auth state, so it's always safe to
+      // navigate there immediately, and doing so is required: otherwise a
+      // customer login stays stuck on this screen (isAuthenticated flips to
+      // true, but the screens list — and therefore the initial route —
+      // doesn't actually change, so nothing auto-navigates them anywhere).
+      if (result.user.role !== UserRole.TECHNICIAN) {
         navigation.navigate('CustomerMain');
       }
     } catch (err: any) {
@@ -139,6 +147,13 @@ export default function LoginScreen() {
           ) : (
             <Text style={styles.loginBtnText}>Đăng nhập</Text>
           )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.forgotPasswordRow}
+          onPress={() => navigation.navigate('ForgotPassword')}
+        >
+          <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
         </TouchableOpacity>
 
         <View style={styles.registerRow}>
@@ -280,6 +295,15 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
+  },
+  forgotPasswordRow: {
+    alignItems: 'flex-end',
+    marginTop: 10,
+  },
+  forgotPasswordText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#2563EB',
   },
   registerRow: {
     flexDirection: 'row',

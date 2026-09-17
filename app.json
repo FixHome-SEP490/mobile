@@ -22,7 +22,14 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "FixHome cần quyền camera để bạn chụp ảnh CCCD/CMND và ảnh chân dung khi xác minh danh tính.",
+          "photosPermission": "FixHome cần quyền thư viện ảnh để bạn chọn ảnh CCCD/CMND có sẵn khi xác minh danh tính."
+        }
+      ]
     ]
   }
 }
