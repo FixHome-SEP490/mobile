@@ -146,11 +146,19 @@ export default function ChatThreadScreen() {
           peerTypingTimer.current = setTimeout(() => setPeerTyping(false), 6000);
         }
       },
+      // Nothing is pushed while the socket is down, so pull the newest page back
+      // instead of leaving a silent gap in the thread.
+      onReconnected: () => {
+        void messagingApi
+          .listMessages(conversationId, { limit: PAGE_SIZE })
+          .then((page) => page.data.forEach(upsert))
+          .catch(() => undefined);
+      },
     });
 
     return () => {
       unsubscribe();
-      chatSocketService.leaveConversation(conversationId);
+      chatSocketService.forgetConversation(conversationId);
       if (peerTypingTimer.current) clearTimeout(peerTypingTimer.current);
       if (typingStopTimer.current) clearTimeout(typingStopTimer.current);
     };
