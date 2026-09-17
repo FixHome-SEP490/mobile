@@ -20,6 +20,8 @@ import CustomerUnderRepairScreen from '../screens/customer/CustomerUnderRepairSc
 import CustomerCompletedScreen from '../screens/customer/CustomerCompletedScreen';
 import CustomerReviewScreen from '../screens/customer/CustomerReviewScreen';
 import TechnicianKycScreen from '../screens/technician/TechnicianKycScreen';
+import ChatListScreen from '../screens/chat/ChatListScreen';
+import ChatThreadScreen from '../screens/chat/ChatThreadScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -45,6 +47,8 @@ export default function AppNavigator() {
             <Stack.Screen name="CustomerCompleted" component={CustomerCompletedScreen} />
             <Stack.Screen name="CustomerReview" component={CustomerReviewScreen} />
             <Stack.Screen name="TechnicianKyc" component={TechnicianKycScreen} />
+            <Stack.Screen name="ChatList" component={ChatListScreen} />
+            <Stack.Screen name="ChatThread" component={ChatThreadScreen} />
             <Stack.Screen name="Auth" component={AuthNavigator} />
           </>
         ) : (
@@ -62,6 +66,8 @@ export default function AppNavigator() {
             <Stack.Screen name="CustomerUnderRepair" component={CustomerUnderRepairScreen} />
             <Stack.Screen name="CustomerCompleted" component={CustomerCompletedScreen} />
             <Stack.Screen name="CustomerReview" component={CustomerReviewScreen} />
+            <Stack.Screen name="ChatList" component={ChatListScreen} />
+            <Stack.Screen name="ChatThread" component={ChatThreadScreen} />
             <Stack.Screen name="Auth" component={AuthNavigator} />
           </>
         )}

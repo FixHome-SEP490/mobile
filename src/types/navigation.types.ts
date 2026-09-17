@@ -15,6 +15,12 @@ export type RootStackParamList = {
   CustomerCompleted: undefined;
   CustomerReview: undefined;
   TechnicianKyc: undefined;
+  ChatList: undefined;
+  ChatThread: {
+    conversationId: string;
+    counterpartName: string;
+    serviceName?: string;
+  };
 };
 
 export type AuthStackParamList = {

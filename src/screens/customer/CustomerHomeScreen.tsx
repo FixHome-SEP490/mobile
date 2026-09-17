@@ -23,6 +23,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
+import { useChatUnreadCount } from '../../hooks/useChatUnreadCount';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
@@ -125,6 +126,7 @@ export default function CustomerHomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user, isAuthenticated, logout } = useAuthStore();
   const handleScroll = useScrollHideTabBar();
+  const chatUnread = useChatUnreadCount();
   const [searchQuery, setSearchQuery] = useState('');
 
   const handleSearch = () => {
@@ -222,6 +224,22 @@ export default function CustomerHomeScreen() {
           {/* Toggle theme */}
           <TouchableOpacity style={styles.roleSwitchBtn}>
             <Ionicons name="moon-outline" size={14} color="#0F172A" />
+          </TouchableOpacity>
+
+          {/* Messages (spec 8.6: booking chat with the technician) */}
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            onPress={() => navigation.navigate('ChatList')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={22} color="#0F172A" />
+            {chatUnread > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {chatUnread > 9 ? '9+' : chatUnread}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
 
           {/* Notification Bell */}
