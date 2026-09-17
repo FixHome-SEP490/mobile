@@ -70,10 +70,9 @@ export default function RegisterScreen() {
         role: 'customer',
       });
 
-      setAuth(response.accessToken, response.user);
-      Alert.alert('Thành công', 'Đăng ký tài khoản thành công!', [
-        { text: 'Bắt đầu', onPress: () => navigation.navigate('CustomerMain') },
-      ]);
+      navigation.navigate('VerifyOtp', {
+        email: (response?.email || email).trim().toLowerCase(),
+      });
     } catch (err: any) {
       const msg =
         err?.response?.data?.message ||

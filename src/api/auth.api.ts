@@ -16,6 +16,31 @@ export interface RegisterRequest {
   role: 'customer';
 }
 
+export interface RegisterResponse {
+  message: string;
+  email: string;
+  expiresInMinutes: number;
+}
+
+export interface VerifyOtpRequest {
+  email: string;
+  otp: string;
+}
+
+export interface ResendOtpRequest {
+  email: string;
+}
+
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ResetPasswordRequest {
+  email: string;
+  otp: string;
+  newPassword: string;
+}
+
 export interface AuthResponse {
   accessToken: string;
   refreshToken: string;
@@ -48,15 +73,52 @@ export const authApi = {
     return result;
   },
 
-  async register(data: RegisterRequest): Promise<AuthResponse> {
+  async register(data: RegisterRequest): Promise<RegisterResponse> {
+    const res = await apiClient.post<
+      { data: RegisterResponse } | RegisterResponse
+    >('/auth/register', data);
+    return unwrap(res.data);
+  },
+
+  async verifyRegisterOtp(data: VerifyOtpRequest): Promise<AuthResponse> {
     const res = await apiClient.post<{ data: AuthResponse } | AuthResponse>(
-      '/auth/register',
+      '/auth/verify-register-otp',
       data,
     );
     const result = unwrap(res.data);
     await storageService.setToken(result.accessToken);
-    await storageService.setRefreshToken(result.refreshToken);
+    if (result.refreshToken) {
+      await storageService.setRefreshToken(result.refreshToken);
+    }
     return result;
+  },
+
+  async resendRegisterOtp(
+    data: ResendOtpRequest,
+  ): Promise<{ message: string; resendAvailableAt?: string }> {
+    const res = await apiClient.post<
+      | { data: { message: string; resendAvailableAt?: string } }
+      | { message: string; resendAvailableAt?: string }
+    >('/auth/resend-register-otp', data);
+    return unwrap(res.data);
+  },
+
+  async forgotPassword(
+    data: ForgotPasswordRequest,
+  ): Promise<{ message: string }> {
+    const res = await apiClient.post<
+      { data: { message: string } } | { message: string }
+    >('/auth/forgot-password', data);
+    return unwrap(res.data);
+  },
+
+  async resetPassword(
+    data: ResetPasswordRequest,
+  ): Promise<{ message: string }> {
+    const res = await apiClient.post<
+      { data: { message: string } } | { message: string }
+    >('/auth/reset-password', data);
+    return unwrap(res.data);
   },
 
   async getProfile(): Promise<UserInfo> {

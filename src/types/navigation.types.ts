@@ -20,6 +20,8 @@ export type RootStackParamList = {
 export type AuthStackParamList = {
   Login: undefined;
   Register: undefined;
+  VerifyOtp: { email: string };
+  ForgotPassword: undefined;
 };
 
 export type CustomerTabParamList = {
