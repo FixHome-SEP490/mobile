@@ -1,6 +1,6 @@
 "use no memo";
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Dimensions, Platform, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Dimensions, Platform, TouchableOpacity, Text } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import Animated, { 
   useSharedValue, 
@@ -68,8 +68,12 @@ const AnimatedTabIcon = ({
       <Animated.View style={whiteOpacityStyle}>
         {options.tabBarIcon ? options.tabBarIcon({ focused: true, color: '#FFFFFF', size: 26 }) : null}
       </Animated.View>
-      {options.tabBarBadge !== undefined && (
-        <View style={styles.badge} />
+      {options.tabBarBadge !== undefined && options.tabBarBadge > 0 && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>
+            {options.tabBarBadge > 99 ? '99+' : options.tabBarBadge}
+          </Text>
+        </View>
       )}
     </View>
   );
@@ -231,7 +235,7 @@ export const GlassTabBar = ({ state, descriptors, navigation }: BottomTabBarProp
             {/* Liquid Glass Indicator */}
             <Animated.View style={[styles.activeIndicator, { width: tabWidth }, animatedIndicatorStyle]}>
                <LinearGradient
-                 colors={['#00E5FF', '#0097A7']}
+                 colors={['#60A5FA', '#2563EB']}
                  start={{ x: 0, y: 0 }}
                  end={{ x: 1, y: 1 }}
                  style={styles.indicatorGradient}
@@ -259,7 +263,7 @@ export const GlassTabBar = ({ state, descriptors, navigation }: BottomTabBarProp
       <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('CustomerAIChat')}>
         <View style={styles.actionCircleContainer}>
           <BlurView intensity={70} tint="light" style={styles.actionCircle}>
-            <FontAwesome5 name="robot" size={24} color="#00E5FF" />
+            <FontAwesome5 name="robot" size={24} color="#2563EB" />
           </BlurView>
         </View>
       </TouchableOpacity>
@@ -286,7 +290,7 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     ...Platform.select({
       ios: {
-        shadowColor: '#00E5FF',
+        shadowColor: '#2563EB',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.15,
         shadowRadius: 20,
@@ -314,7 +318,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 26,
-    shadowColor: '#00E5FF',
+    shadowColor: '#2563EB',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.6,
     shadowRadius: 10,
@@ -343,13 +347,21 @@ const styles = StyleSheet.create({
   badge: {
     position: 'absolute',
     top: -4,
-    right: -6,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#FF3D00',
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#EF4444',
     borderWidth: 1.5,
     borderColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: 'bold',
   },
   actionCircleContainer: {
     width: ACTION_CIRCLE_SIZE,

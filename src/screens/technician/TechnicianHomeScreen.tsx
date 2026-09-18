@@ -17,6 +17,7 @@ import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList, TechnicianTabParamList } from '../../types';
 import { useChatUnreadCount } from '../../hooks/useChatUnreadCount';
+import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 
 export default function TechnicianHomeScreen() {
   const { user } = useAuthStore();
@@ -24,6 +25,7 @@ export default function TechnicianHomeScreen() {
   // Chat lives on the root stack, not in the technician tab set.
   const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const chatUnread = useChatUnreadCount();
+  const handleScroll = useScrollHideTabBar();
   const [completedCount, setCompletedCount] = useState(0);
   const [earnings, setEarnings] = useState(0);
   const [activeCount, setActiveCount] = useState(0);
@@ -126,6 +128,8 @@ export default function TechnicianHomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
       >
         {/* Tổng quan tuần này */}
         <View style={styles.sectionHeader}>
@@ -191,6 +195,25 @@ export default function TechnicianHomeScreen() {
           <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
         </TouchableOpacity>
 
+        {/* Lịch sử hoạt động gần đây */}
+        <View style={styles.sectionHeader}>
+          <Ionicons name="time" size={20} color="#2563EB" />
+          <Text style={styles.sectionTitle}>Hoạt động gần đây</Text>
+        </View>
+        <View style={styles.historyContainer}>
+          {[1, 2, 3, 4, 5].map((item) => (
+             <View key={item} style={styles.historyItem}>
+               <View style={styles.historyIconBox}>
+                 <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+               </View>
+               <View style={styles.historyItemContent}>
+                 <Text style={styles.historyItemTitle}>Hoàn thành đơn sửa máy lạnh</Text>
+                 <Text style={styles.historyItemTime}>Hôm qua, 14:30 • Thu nhập: 250.000đ</Text>
+               </View>
+             </View>
+          ))}
+        </View>
+
         {/* Banner Cuối */}
         <LinearGradient colors={['#93C5FD', '#BFDBFE']} style={styles.bottomBanner}>
           <View style={{ flex: 1 }}>
@@ -207,6 +230,7 @@ export default function TechnicianHomeScreen() {
           </View>
           <Ionicons name="trophy" size={60} color="#EAB308" style={{ marginLeft: 8 }} />
         </LinearGradient>
+        <View style={{ height: 80 }} />
       </ScrollView>
     </View>
   );
@@ -460,5 +484,72 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  guideContainer: {
+    marginBottom: 20,
+  },
+  guideCard: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  guideImage: {
+    width: 80,
+    height: 80,
+    backgroundColor: '#CBD5E1',
+  },
+  guideContent: {
+    flex: 1,
+    padding: 10,
+    justifyContent: 'center',
+  },
+  guideTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  guideDate: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  historyContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 16,
+    marginBottom: 16,
+  },
+  historyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  historyIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#D1FAE5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  historyItemContent: {
+    flex: 1,
+  },
+  historyItemTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  historyItemTime: {
+    fontSize: 12,
+    color: '#64748B',
   },
 });

@@ -59,7 +59,6 @@ export default function ChatThreadScreen() {
   const [nextBefore, setNextBefore] = useState<string | null>(null);
   const [peerTyping, setPeerTyping] = useState(false);
   const [editing, setEditing] = useState<ChatMessage | null>(null);
-  const [actionTarget, setActionTarget] = useState<ChatMessage | null>(null);
 
   const typingSentAt = useRef(0);
   const typingStopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

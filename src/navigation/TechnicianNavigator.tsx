@@ -8,10 +8,27 @@ import TechnicianJobsScreen from '../screens/technician/TechnicianJobsScreen';
 import TechnicianNotificationsScreen from '../screens/technician/TechnicianNotificationsScreen';
 import TechnicianProfileScreen from '../screens/technician/TechnicianProfileScreen';
 import { GlassTabBar } from '../components/navigation/GlassTabBar';
+import { useAuthStore } from '../store';
+import { Image } from 'react-native';
+import { notificationsApi } from '../api/notifications.api';
+import { useFocusEffect } from '@react-navigation/native';
 
 const Tab = createBottomTabNavigator<TechnicianTabParamList>();
 
 export default function TechnicianNavigator() {
+  const user = useAuthStore((state) => state.user);
+  const [unreadCount, setUnreadCount] = React.useState(0);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      let mounted = true;
+      notificationsApi.getCountUnread().then((count) => {
+        if (mounted) setUnreadCount(count);
+      }).catch(() => {});
+      return () => { mounted = false; };
+    }, [])
+  );
+
   return (
     <Tab.Navigator
       tabBar={(props) => <GlassTabBar {...props} />}
@@ -25,6 +42,9 @@ export default function TechnicianNavigator() {
           } else if (route.name === 'Notifications') {
             return <Bell size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
           } else if (route.name === 'Profile') {
+            if (user?.avatarUrl) {
+              return <Image source={{ uri: user.avatarUrl }} style={{ width: size, height: size, borderRadius: size / 2, borderWidth: focused ? 1.5 : 0, borderColor: '#FFFFFF' }} />;
+            }
             return <User size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
           }
           return null;
@@ -34,17 +54,27 @@ export default function TechnicianNavigator() {
       <Tab.Screen
         name="Home"
         component={TechnicianHomeScreen}
-        options={{ title: 'Trang chủ' }}
+        options={{ 
+          title: 'Trang chủ',
+          headerShown: false,
+         }}
       />
       <Tab.Screen
         name="Jobs"
         component={TechnicianJobsScreen}
-        options={{ title: 'Công việc' }}
+        options={{ 
+          title: 'Công việc',
+          headerShown: true,
+         }}
       />
       <Tab.Screen
         name="Notifications"
         component={TechnicianNotificationsScreen}
-        options={{ title: 'Thông báo' }}
+        options={{ 
+          title: 'Thông báo',
+          headerShown: true,
+          tabBarBadge: unreadCount,
+         }}
       />
       <Tab.Screen
         name="Profile"

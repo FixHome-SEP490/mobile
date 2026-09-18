@@ -1,11 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  StatusBar,
+  Alert,
+  Image,
+  Modal,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '../../store';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useAuthStore } from '../../store';
 import type { RootStackParamList } from '../../types';
-import { ProfileHeader } from '../../components/profile/ProfileHeader';
 import { usersApi } from '../../api/users.api';
 import { ordersApi } from '../../api/orders.api';
 import { authApi } from '../../api/auth.api';
@@ -17,7 +29,28 @@ export default function TechnicianProfileScreen() {
 
   const [fullName, setFullName] = useState(user?.fullName || 'Kỹ thuật viên');
   const [phoneNumber, setPhoneNumber] = useState(user?.phoneNumber || '');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatarUrl || null);
   const [earningsTotal, setEarningsTotal] = useState(0);
+
+  const [isAvatarModalVisible, setAvatarModalVisible] = useState(false);
+
+  const handlePickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled) {
+      const uri = result.assets[0].uri;
+      setAvatarUrl(uri);
+      try {
+        await usersApi.updateProfile({ avatarUrl: uri });
+      } catch (e) {
+        console.error('Failed to update avatar', e);
+      }
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -64,76 +97,106 @@ export default function TechnicianProfileScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <ProfileHeader
-          name={fullName}
-          phone={phoneNumber || user?.email || 'Kỹ thuật viên FixHome'}
-          avatarText={fullName.charAt(0)}
-        />
-
-        <View style={styles.innerContent}>
-          {/* Số dư doanh thu */}
-          <View style={styles.balanceHeader}>
-            <Ionicons name="wallet" size={20} color="#2563EB" />
-            <Text style={styles.balanceTitle}>Thu nhập & Doanh thu</Text>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 40, paddingTop: 60 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.mainWrapperCard}>
+          {/* Avatar Section */}
+          <View style={styles.avatarSection}>
+            <View style={styles.avatarBorder}>
+              <TouchableOpacity onPress={() => avatarUrl && setAvatarModalVisible(true)} activeOpacity={0.8} style={styles.avatar}>
+                {avatarUrl ? (
+                  <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+                ) : (
+                  <Text style={styles.avatarText}>{fullName.charAt(0)}</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.cameraIconBadge} onPress={handlePickImage} activeOpacity={0.8}>
+                 <Ionicons name="camera" size={16} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.name}>{fullName}</Text>
+            <Text style={styles.phone}>{phoneNumber || user?.email || 'Kỹ thuật viên FixHome'}</Text>
           </View>
 
-          <View style={styles.balanceRow}>
-            <View style={styles.balanceCard}>
-              <View style={styles.balanceTop}>
-                <Ionicons name="cash-outline" size={16} color="#2563EB" />
-                <Text style={styles.balanceLabel}>Doanh thu tích lũy</Text>
+          {/* Thu nhập & Trạng thái */}
+          <Text style={styles.sectionTitle}>Thu nhập & Trạng thái</Text>
+          <View style={styles.overviewRow}>
+            <LinearGradient colors={['#E0F2FE', '#F0F9FF']} style={styles.overviewCard}>
+              <View style={styles.cardTopRow}>
+                <View style={[styles.iconCircle, { backgroundColor: '#BAE6FD' }]}>
+                  <Ionicons name="cash" size={16} color="#0284C7" />
+                </View>
+                <Text style={styles.cardLabel}>Doanh thu</Text>
               </View>
-              <Text style={styles.balanceValue}>{earningsTotal.toLocaleString('vi-VN')}đ</Text>
-            </View>
+              <Text style={styles.cardValue}>
+                {earningsTotal.toLocaleString('vi-VN')} <Text style={styles.cardUnit}>đ</Text>
+              </Text>
+            </LinearGradient>
 
-            <View style={styles.balanceCard}>
-              <View style={styles.balanceTop}>
-                <Ionicons name="shield-checkmark-outline" size={16} color="#059669" />
-                <Text style={styles.balanceLabel}>Trạng thái</Text>
+            <LinearGradient colors={['#DCFCE7', '#F0FDF4']} style={styles.overviewCard}>
+              <View style={styles.cardTopRow}>
+                <View style={[styles.iconCircle, { backgroundColor: '#BBF7D0' }]}>
+                  <Ionicons name="shield-checkmark" size={16} color="#16A34A" />
+                </View>
+                <Text style={styles.cardLabel}>Trạng thái</Text>
               </View>
-              <Text style={[styles.balanceValue, { color: '#059669', fontSize: 14 }]}>Hoạt động tốt</Text>
-            </View>
+              <Text style={[styles.cardValue, { color: '#16A34A', fontSize: 18 }]}>
+                Tốt
+              </Text>
+            </LinearGradient>
           </View>
 
           {/* CÀI ĐẶT */}
-          <Text style={styles.sectionHeading}>CÀI ĐẶT</Text>
-          <View style={styles.listContainer}>
+          <Text style={styles.sectionTitle}>Cài đặt</Text>
+          <View style={styles.menuContainer}>
             <TouchableOpacity
-              style={styles.listItem}
+              style={styles.menuItem}
               onPress={() => navigation.navigate('TechnicianKyc')}
             >
-              <Ionicons name="shield-checkmark-outline" size={20} color="#64748B" />
-              <Text style={styles.listText}>Xác minh danh tính (KYC)</Text>
+              <Ionicons name="person-outline" size={22} color="#64748B" style={styles.menuIcon} />
+              <View style={styles.menuContent}>
+                <Text style={styles.menuTitle}>Xác minh danh tính (KYC)</Text>
+                <Text style={styles.menuDesc}>Cập nhật CCCD & Thông tin</Text>
+              </View>
               <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
             </TouchableOpacity>
             <View style={styles.divider} />
+
             <TouchableOpacity
-              style={styles.listItem}
+              style={styles.menuItem}
               onPress={() => Alert.alert('Thông báo', 'Hệ thống thông báo nhận đơn đang bật.')}
             >
-              <Ionicons name="notifications-outline" size={20} color="#64748B" />
-              <Text style={styles.listText}>Thông báo nhận việc</Text>
+              <Ionicons name="notifications-outline" size={22} color="#64748B" style={styles.menuIcon} />
+              <View style={styles.menuContent}>
+                <Text style={styles.menuTitle}>Thông báo nhận việc</Text>
+                <Text style={styles.menuDesc}>Đang bật</Text>
+              </View>
               <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
             </TouchableOpacity>
             <View style={styles.divider} />
+
             <TouchableOpacity
-              style={styles.listItem}
+              style={styles.menuItem}
               onPress={() => Alert.alert('Hỗ trợ', 'Tổng đài KTV FixHome: 1900 6868')}
             >
-              <Ionicons name="headset-outline" size={20} color="#64748B" />
-              <Text style={styles.listText}>Hỗ trợ kỹ thuật 24/7</Text>
+              <Ionicons name="headset-outline" size={22} color="#64748B" style={styles.menuIcon} />
+              <View style={styles.menuContent}>
+                <Text style={styles.menuTitle}>Hỗ trợ kỹ thuật 24/7</Text>
+                <Text style={styles.menuDesc}>Hotline: 1900 6868</Text>
+              </View>
               <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
             </TouchableOpacity>
           </View>
 
-          {/* CHÍNH SÁCH */}
-          <Text style={styles.sectionHeading}>QUY TRÌNH & NỘI QUY</Text>
-          <View style={styles.listContainer}>
+          {/* QUY TRÌNH & NỘI QUY */}
+          <Text style={styles.sectionTitle}>Quy trình & Nội quy</Text>
+          <View style={styles.menuContainer}>
             <TouchableOpacity
-              style={styles.listItem}
+              style={styles.menuItem}
               onPress={() =>
                 Alert.alert(
                   'Quy chuẩn dịch vụ',
@@ -141,13 +204,16 @@ export default function TechnicianProfileScreen() {
                 )
               }
             >
-              <Ionicons name="book-outline" size={20} color="#64748B" />
-              <Text style={styles.listText}>Quy chuẩn dịch vụ 5 sao</Text>
+              <Ionicons name="book-outline" size={22} color="#64748B" style={styles.menuIcon} />
+              <View style={styles.menuContent}>
+                <Text style={styles.menuTitle}>Quy chuẩn dịch vụ 5 sao</Text>
+              </View>
               <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
             </TouchableOpacity>
             <View style={styles.divider} />
+
             <TouchableOpacity
-              style={styles.listItem}
+              style={styles.menuItem}
               onPress={() =>
                 Alert.alert(
                   'Chính sách hoa hồng',
@@ -155,119 +221,94 @@ export default function TechnicianProfileScreen() {
                 )
               }
             >
-              <Ionicons name="document-text-outline" size={20} color="#64748B" />
-              <Text style={styles.listText}>Chính sách thu nhập & Phí nền tảng</Text>
+              <Ionicons name="document-text-outline" size={22} color="#64748B" style={styles.menuIcon} />
+              <View style={styles.menuContent}>
+                <Text style={styles.menuTitle}>Chính sách thu nhập & Phí</Text>
+              </View>
               <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-            <Text style={styles.logoutText}>Đăng xuất</Text>
-          </TouchableOpacity>
+          <View style={styles.footer}>
+            <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
+              <Text style={styles.logoutText}>Đăng xuất</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
-    </View>
+
+      <Modal visible={isAvatarModalVisible} transparent={true} animationType="fade">
+        <View style={styles.avatarModalContainer}>
+          <TouchableOpacity style={styles.closeAvatarModalBtn} onPress={() => setAvatarModalVisible(false)}>
+            <Ionicons name="close" size={30} color="#FFF" />
+          </TouchableOpacity>
+          {avatarUrl && (
+             <Image source={{ uri: avatarUrl }} style={styles.fullAvatarImage} resizeMode="contain" />
+          )}
+        </View>
+      </Modal>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  scrollContent: {
-    paddingBottom: 40,
-  },
-  innerContent: {
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  name: { fontSize: 20, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
+
+  mainWrapperCard: {
+    backgroundColor: '#FFFFFF',
+    flexGrow: 1,
     paddingHorizontal: 16,
-  },
-  balanceHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 16,
-    marginBottom: 12,
-  },
-  balanceTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  balanceRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  balanceCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    paddingTop: 16,
+    paddingBottom: 40,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    marginTop: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  balanceTop: {
-    flexDirection: 'row',
+  avatarSection: {
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
+    marginBottom: 24,
+    marginTop: -66,
   },
-  balanceLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
+  avatarBorder: {
+    width: 100, height: 100, borderRadius: 50,
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: 12, borderWidth: 4, borderColor: '#FFFFFF', backgroundColor: '#FFFFFF'
   },
-  balanceValue: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0F172A',
+  avatar: {
+    width: '100%', height: '100%', borderRadius: 50,
+    backgroundColor: '#DBEAFE', justifyContent: 'center', alignItems: 'center', overflow: 'hidden'
   },
-  sectionHeading: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#94A3B8',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-    marginTop: 8,
-  },
-  listContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 16,
-  },
-  listItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    gap: 12,
-  },
-  listText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#0F172A',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginLeft: 48,
-  },
-  logoutBtn: {
-    alignItems: 'center',
-    paddingVertical: 14,
-    marginTop: 12,
-  },
-  logoutText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#EF4444',
-  },
+  avatarImage: { width: '100%', height: '100%' },
+  avatarText: { fontSize: 36, fontWeight: '700', color: '#2563EB' },
+  phone: { fontSize: 14, color: '#64748B', fontWeight: '500' },
+
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 12 },
+  menuContainer: { backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden', marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  menuItem: { flexDirection: 'row', padding: 16, alignItems: 'center' },
+  menuIcon: { marginRight: 16 },
+  menuContent: { flex: 1 },
+  menuTitle: { fontSize: 15, fontWeight: '600', color: '#0F172A' },
+  menuDesc: { fontSize: 13, color: '#64748B', marginTop: 2 },
+  divider: { height: 1, backgroundColor: '#F1F5F9', marginLeft: 54 },
+  footer: { alignItems: 'center', marginTop: 12, marginBottom: 32 },
+  logoutBtn: { paddingVertical: 12, paddingHorizontal: 24 },
+  logoutText: { fontSize: 14, fontWeight: '600', color: '#EF4444' },
+
+  overviewRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+  overviewCard: { flex: 1, borderRadius: 16, padding: 16 },
+  cardTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  iconCircle: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginRight: 8 },
+  cardLabel: { fontSize: 14, color: '#475569', fontWeight: '500' },
+  cardValue: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
+  cardUnit: { fontSize: 14, fontWeight: '600', color: '#64748B' },
+  cameraIconBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#2563EB', width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' },
+  avatarModalContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
+  closeAvatarModalBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 8 },
+  fullAvatarImage: { width: '100%', height: 400 },
 });

@@ -35,4 +35,8 @@ export const notificationsApi = {
     });
     return res.data;
   },
+  async getCountUnread(): Promise<number> {
+    const res = await apiClient.get<any>('/notifications/unread-count');
+    return res.data.data.count;
+  },
 };
