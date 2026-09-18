@@ -225,7 +225,7 @@ export default function CustomerProfileScreen() {
           await authApi.logout();
           logout();
           setTimeout(() => {
-            navigation.navigate('Auth');
+            navigation.reset({ index: 0, routes: [{ name: 'Auth' }] });
           }, 100);
         },
       },

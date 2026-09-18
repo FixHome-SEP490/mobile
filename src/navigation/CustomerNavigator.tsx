@@ -1,7 +1,7 @@
 // src/navigation/CustomerNavigator.tsx
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Home, Calendar, Bell, User } from 'lucide-react-native';
+import { Home, Clock4, Bell, User } from 'lucide-react-native';
 import type { CustomerTabParamList } from '../types';
 import CustomerHomeScreen from '../screens/customer/CustomerHomeScreen';
 import CustomerBookingsScreen from '../screens/customer/CustomerBookingsScreen';
@@ -21,7 +21,7 @@ export default function CustomerNavigator() {
           if (route.name === 'Home') {
             return <Home size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
           } else if (route.name === 'Bookings') {
-            return <Calendar size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
+            return <Clock4 size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
           } else if (route.name === 'Notifications') {
             return <Bell size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
           } else if (route.name === 'Profile') {

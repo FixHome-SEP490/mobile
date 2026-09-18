@@ -1,5 +1,5 @@
 // src/screens/auth/VerifyRegisterOtpScreen.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -31,6 +31,7 @@ export default function VerifyRegisterOtpScreen() {
   const [resending, setResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
+  const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -58,7 +59,7 @@ export default function VerifyRegisterOtpScreen() {
       // always safe to navigate there directly instead of hoping the state
       // update alone moves the user off this screen (it won't: the screens
       // list doesn't change for a Customer, so nothing auto-navigates them).
-      navigation.navigate('CustomerMain');
+      navigation.reset({ index: 0, routes: [{ name: 'CustomerMain' }] });
     } catch (err: any) {
       // A slow/dropped connection can mean the OTP was actually verified and
       // the account activated on the Backend, but the response never made it
@@ -69,7 +70,7 @@ export default function VerifyRegisterOtpScreen() {
       try {
         const loginResult = await authApi.login({ email, password });
         setAuth(loginResult.accessToken, loginResult.user);
-        navigation.navigate('CustomerMain');
+        navigation.reset({ index: 0, routes: [{ name: 'CustomerMain' }] });
         return;
       } catch {
         // Fall through to surfacing the original OTP error below.
@@ -110,15 +111,7 @@ export default function VerifyRegisterOtpScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={22} color="#4B5563" />
-            <Text style={styles.backText}>Quay lại</Text>
-          </TouchableOpacity>
-
+          
           <View style={styles.header}>
             <View style={styles.iconWrapper}>
               <Ionicons name="shield-checkmark" size={32} color="#2563EB" />
@@ -137,7 +130,7 @@ export default function VerifyRegisterOtpScreen() {
               </View>
             )}
 
-            <View style={styles.otpWrapper}>
+            <TouchableOpacity activeOpacity={1} style={styles.otpWrapper} onPress={() => inputRef.current?.focus()}>
               <View style={styles.otpBoxesContainer} pointerEvents="none">
                 {[0, 1, 2, 3, 4, 5].map((index) => {
                   const char = otp[index] || '';
@@ -150,6 +143,7 @@ export default function VerifyRegisterOtpScreen() {
                 })}
               </View>
               <TextInput
+                ref={inputRef}
                 style={styles.hiddenOtpInput}
                 keyboardType="number-pad"
                 maxLength={6}
@@ -163,7 +157,7 @@ export default function VerifyRegisterOtpScreen() {
                 }}
                 caretHidden={true}
               />
-            </View>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.submitBtn, loading && { opacity: 0.7 }]}
@@ -206,25 +200,6 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingTop: 60,
     paddingBottom: 40,
-  },
-  backBtn: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 24,
-    marginTop: -20,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-  },
-  backText: {
-    fontSize: 13,
-    color: '#4B5563',
-    fontWeight: '600',
   },
   header: {
     alignItems: 'center',

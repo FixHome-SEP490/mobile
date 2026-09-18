@@ -9,6 +9,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  TextInput
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,17 +41,13 @@ function relativeTime(iso: string | null): string {
   return new Date(iso).toLocaleDateString('vi-VN');
 }
 
-/**
- * Thread list, shared by Customer and Technician: both sides see the same shape,
- * only the counterpart differs. The small line under the name is the booked
- * service, so a technician juggling several jobs knows which one this is.
- */
 export default function ChatListScreen() {
   const navigation = useNavigation<Nav>();
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const load = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
     if (mode === 'refresh') setRefreshing(true);
@@ -66,7 +63,6 @@ export default function ChatListScreen() {
     }
   }, []);
 
-  // Re-read on focus so counts are right after coming back from a thread.
   useFocusEffect(
     useCallback(() => {
       void load();
@@ -75,7 +71,6 @@ export default function ChatListScreen() {
 
   useEffect(() => {
     void chatSocketService.connect();
-    // A message arriving while the list is open reorders it without a reload.
     const unsubscribe = chatSocketService.subscribe({
       onConversationUpdated: () => {
         void load();
@@ -83,6 +78,10 @@ export default function ChatListScreen() {
     });
     return unsubscribe;
   }, [load]);
+
+  const filteredConversations = conversations.filter((c) =>
+    c.counterpart.fullName.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const renderItem = ({ item }: { item: ConversationItem }) => (
     <TouchableOpacity
@@ -145,32 +144,49 @@ export default function ChatListScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#0F172A" />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
+          <Text style={styles.headerBtnText}>Sửa</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Tin nhắn</Text>
-        <View style={styles.backBtn} />
+        <Text style={styles.headerTitle}>Chat</Text>
+        <TouchableOpacity style={styles.headerBtn}>
+          <Ionicons name="create-outline" size={24} color="#3B82F6" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBox}>
+          <Ionicons name="search" size={20} color="#94A3B8" />
+          <TextInput 
+            style={styles.searchInput}
+            placeholder="Tìm kiếm"
+            placeholderTextColor="#94A3B8"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
       </View>
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#2563EB" />
+          <ActivityIndicator size="large" color="#3B82F6" />
         </View>
       ) : (
         <FlatList
-          data={conversations}
+          data={filteredConversations}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={
-            conversations.length === 0 ? styles.emptyWrap : styles.listContent
+            filteredConversations.length === 0 ? styles.emptyWrap : styles.listContent
           }
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => load('refresh')} />
+            <RefreshControl refreshing={refreshing} onRefresh={() => load('refresh')} tintColor="#3B82F6" />
           }
           ListEmptyComponent={
             <View style={styles.center}>
-              <Ionicons name="chatbubbles-outline" size={56} color="#CBD5E1" />
+              <Ionicons name="chatbubbles-outline" size={56} color="#94A3B8" />
               <Text style={styles.emptyTitle}>Chưa có cuộc trò chuyện nào</Text>
               <Text style={styles.emptyText}>
                 {error ??
@@ -185,21 +201,47 @@ export default function ChatListScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
-  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerBtn: {
+    width: 60,
+    alignItems: 'center',
+  },
+  headerBtnText: {
+    color: '#2563EB',
+    fontSize: 17,
+  },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A' },
+  searchContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 36,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 15,
+    color: '#0F172A',
+  },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  listContent: { paddingVertical: 8 },
+  listContent: { paddingVertical: 0 },
   emptyWrap: { flexGrow: 1 },
   emptyTitle: {
     marginTop: 16,
@@ -229,11 +271,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: { fontSize: 20, fontWeight: '700', color: '#2563EB' },
-  rowBody: { flex: 1, justifyContent: 'center' },
+  rowBody: { 
+    flex: 1, 
+    justifyContent: 'center',
+    paddingBottom: 4,
+  },
   rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   name: { flex: 1, fontSize: 16, fontWeight: '700', color: '#0F172A' },
-  time: { fontSize: 12, color: '#94A3B8', marginLeft: 8 },
-  serviceNote: { fontSize: 12, color: '#2563EB', marginTop: 2 },
+  time: { fontSize: 13, color: '#94A3B8', marginLeft: 8 },
+  serviceNote: { fontSize: 13, color: '#2563EB', marginTop: 2 },
   rowBottom: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   preview: { flex: 1, fontSize: 14, color: '#64748B' },
   previewUnread: { color: '#0F172A', fontWeight: '600' },
@@ -248,5 +294,5 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   badgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
-  readOnlyTag: { marginTop: 4, fontSize: 11, color: '#F59E0B' },
+  readOnlyTag: { marginTop: 4, fontSize: 12, color: '#F59E0B' },
 });

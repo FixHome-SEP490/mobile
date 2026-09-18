@@ -96,7 +96,7 @@ export default function RegisterScreen() {
         phoneNumber: phone.trim() || undefined,
         role: 'customer',
       });
-      navigation.navigate('VerifyRegisterOtp', { email: trimmedEmail, password });
+      navigation.reset({ index: 0, routes: [{ name: 'VerifyRegisterOtp', params: { email: trimmedEmail, password } }] });
     } catch (error: any) {
       const msg =
         error?.response?.data?.message ||

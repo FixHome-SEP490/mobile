@@ -54,6 +54,7 @@ export default function AppNavigator() {
         ) : (
           <>
             {/* Khi vừa mở app: Vào ngay Trang chủ Khách hàng (theo chuẩn Vua Thợ / Xanh SM) */}
+            <Stack.Screen name="Auth" component={AuthNavigator} />
             <Stack.Screen name="CustomerMain" component={CustomerNavigator} />
             <Stack.Screen name="CustomerServices" component={CustomerServicesScreen} />
             <Stack.Screen name="CustomerServiceDetail" component={CustomerServiceDetailScreen} />
@@ -68,7 +69,6 @@ export default function AppNavigator() {
             <Stack.Screen name="CustomerReview" component={CustomerReviewScreen} />
             <Stack.Screen name="ChatList" component={ChatListScreen} />
             <Stack.Screen name="ChatThread" component={ChatThreadScreen} />
-            <Stack.Screen name="Auth" component={AuthNavigator} />
           </>
         )}
       </Stack.Navigator>

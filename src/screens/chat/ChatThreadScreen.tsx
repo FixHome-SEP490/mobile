@@ -4,19 +4,20 @@ import {
   Alert,
   FlatList,
   KeyboardAvoidingView,
-  Modal,
   Platform,
-  Pressable,
   StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { BottomSheetModal, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
+import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
 import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store/auth.store';
 import {
@@ -42,18 +43,12 @@ function newClientMessageId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-/**
- * One booking thread. History comes from REST and the socket only carries
- * deltas, so a dropped connection costs a refresh, never a gap.
- *
- * The list is inverted: state holds newest-first, which is what makes "scroll up
- * for older" a plain onEndReached instead of a scroll-offset correction.
- */
 export default function ChatThreadScreen() {
   const navigation = useNavigation();
   const route = useRoute<ThreadRoute>();
   const { conversationId, counterpartName, serviceName } = route.params;
   const myId = useAuthStore((state) => state.user?.id);
+  const insets = useSafeAreaInsets();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversation, setConversation] = useState<ConversationItem | null>(null);
@@ -69,6 +64,10 @@ export default function ChatThreadScreen() {
   const typingSentAt = useRef(0);
   const typingStopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const peerTypingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Gorhom Bottom Sheet Refs
+  const attachmentSheetRef = useRef<BottomSheetModal>(null);
+  const snapPoints = useMemo(() => ['30%', '50%'], []);
 
   const canSend = conversation?.canSend ?? true;
 
@@ -142,12 +141,9 @@ export default function ChatThreadScreen() {
         setPeerTyping(event.isTyping);
         if (peerTypingTimer.current) clearTimeout(peerTypingTimer.current);
         if (event.isTyping) {
-          // Guard against a lost "stopped typing" leaving the dots on forever.
           peerTypingTimer.current = setTimeout(() => setPeerTyping(false), 6000);
         }
       },
-      // Nothing is pushed while the socket is down, so pull the newest page back
-      // instead of leaving a silent gap in the thread.
       onReconnected: () => {
         void messagingApi
           .listMessages(conversationId, { limit: PAGE_SIZE })
@@ -177,7 +173,6 @@ export default function ChatThreadScreen() {
       setMessages((prev) => [...prev, ...[...page.data].reverse()]);
       setNextBefore(page.nextBefore);
     } catch {
-      // Keep what is already on screen; the user can pull again.
     } finally {
       setLoadingOlder(false);
     }
@@ -226,8 +221,6 @@ export default function ChatThreadScreen() {
     }
 
     const clientMessageId = newClientMessageId();
-    // Optimistic bubble; the server echoes clientMessageId so it is replaced,
-    // not duplicated, when the real row comes back.
     const optimistic: ChatMessage = {
       id: `local-${clientMessageId}`,
       conversationId,
@@ -251,18 +244,18 @@ export default function ChatThreadScreen() {
       );
       upsert(saved);
     } catch {
-      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+      setMessages((prev) => prev.filter((m) => m.clientMessageId !== clientMessageId));
+      Alert.alert('Không gửi được tin nhắn', 'Vui lòng kiểm tra kết nối và thử lại.');
       setDraft(content);
-      Alert.alert('Không gửi được', 'Kiểm tra kết nối rồi thử lại.');
     } finally {
       setSending(false);
     }
   }, [draft, sending, canSend, editing, conversationId, myId, upsert]);
 
   const handleDelete = useCallback(
-    async (message: ChatMessage) => {
+    async (target: ChatMessage) => {
       try {
-        const updated = await messagingApi.deleteMessage(message.id);
+        const updated = await messagingApi.deleteMessage(target.id);
         upsert(updated);
       } catch {
         Alert.alert('Không gỡ được tin nhắn', 'Vui lòng thử lại.');
@@ -271,57 +264,81 @@ export default function ChatThreadScreen() {
     [upsert],
   );
 
-  const openActions = useCallback(
-    (message: ChatMessage) => {
-      if (message.senderId !== myId || message.isDeleted || !canSend) return;
-      if (message.id.startsWith('local-')) return;
-      setActionTarget(message);
-    },
-    [myId, canSend],
-  );
+  // Action menu is handled by react-native-popup-menu inline
 
-  // ---------------------------------------------------------------- rendering
+  const openAttachmentMenu = useCallback(() => {
+    attachmentSheetRef.current?.present();
+  }, []);
+
+  // ----------------------------------------------------------------- render
 
   const renderItem = useCallback(
     ({ item }: { item: ChatMessage }) => {
       const mine = item.senderId === myId;
-      return (
-        <Pressable
-          onLongPress={() => openActions(item)}
-          delayLongPress={300}
-          style={[styles.msgRow, mine ? styles.msgRowMine : styles.msgRowTheirs]}
+      const content = (
+        <View
+          style={[
+            styles.bubble,
+            mine ? styles.bubbleMine : styles.bubbleTheirs,
+            item.isDeleted && styles.bubbleDeleted,
+          ]}
         >
-          <View
+          <Text
             style={[
-              styles.bubble,
-              mine ? styles.bubbleMine : styles.bubbleTheirs,
-              item.isDeleted && styles.bubbleDeleted,
+              styles.msgText,
+              mine ? styles.msgTextMine : styles.msgTextTheirs,
+              item.isDeleted && styles.msgTextDeleted,
             ]}
           >
-            <Text
-              style={[
-                styles.msgText,
-                mine ? styles.msgTextMine : styles.msgTextTheirs,
-                item.isDeleted && styles.msgTextDeleted,
-              ]}
-            >
-              {item.isDeleted ? 'Tin nhắn đã được gỡ' : item.content}
+            {item.isDeleted ? 'Tin nhắn đã được gỡ' : item.content}
+          </Text>
+          <View style={styles.metaRow}>
+            <Text style={[styles.metaText, mine ? styles.metaTextMine : styles.metaTextTheirs]}>
+              {clockOf(item.createdAt)}
             </Text>
-            <View style={styles.metaRow}>
-              <Text style={[styles.metaText, mine && styles.metaTextMine]}>
-                {clockOf(item.createdAt)}
+            {!!item.editedAt && !item.isDeleted && (
+              <Text style={[styles.metaText, mine ? styles.metaTextMine : styles.metaTextTheirs]}>
+                {' · đã sửa'}
               </Text>
-              {!!item.editedAt && !item.isDeleted && (
-                <Text style={[styles.metaText, mine && styles.metaTextMine]}>
-                  {' · đã sửa'}
-                </Text>
-              )}
-            </View>
+            )}
           </View>
-        </Pressable>
+        </View>
+      );
+
+      return (
+        <View style={[styles.msgRow, mine ? styles.msgRowMine : styles.msgRowTheirs]}>
+          {mine && !item.isDeleted ? (
+            <Menu style={{ flex: 1, alignItems: 'flex-end' }}>
+              <MenuTrigger triggerOnLongPress={true}>
+                {content}
+              </MenuTrigger>
+              <MenuOptions customStyles={{ optionsContainer: styles.menuOptionsContainer }}>
+                <MenuOption onSelect={() => { setEditing(item); setDraft(item.content); }}>
+                  <View style={styles.menuOptionRow}>
+                    <Ionicons name="create-outline" size={18} color="#0F172A" />
+                    <Text style={styles.menuOptionText}>Sửa tin nhắn</Text>
+                  </View>
+                </MenuOption>
+                <MenuOption onSelect={() => {
+                  Alert.alert('Gỡ tin nhắn', 'Tin nhắn sẽ bị gỡ với cả hai bên.', [
+                    { text: 'Huỷ', style: 'cancel' },
+                    { text: 'Gỡ', style: 'destructive', onPress: () => void handleDelete(item) },
+                  ]);
+                }}>
+                  <View style={styles.menuOptionRow}>
+                    <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                    <Text style={[styles.menuOptionText, { color: '#EF4444' }]}>Gỡ tin nhắn</Text>
+                  </View>
+                </MenuOption>
+              </MenuOptions>
+            </Menu>
+          ) : (
+            content
+          )}
+        </View>
       );
     },
-    [myId, openActions],
+    [myId, handleDelete],
   );
 
   const headerSubtitle = useMemo(
@@ -333,21 +350,35 @@ export default function ChatThreadScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerIconBtn}>
           <Ionicons name="arrow-back" size={24} color="#0F172A" />
         </TouchableOpacity>
-        <View style={styles.headerTextWrap}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {conversation?.counterpart.fullName ?? counterpartName}
-          </Text>
-          {!!headerSubtitle && (
-            <Text style={styles.headerSubtitle} numberOfLines={1}>
-              {headerSubtitle}
-            </Text>
+
+        <View style={styles.headerProfile}>
+          {conversation?.counterpart.avatarUrl ? (
+             <Image source={{ uri: conversation.counterpart.avatarUrl }} style={styles.headerAvatar} />
+          ) : (
+            <View style={styles.headerAvatarFallback}>
+               <Text style={styles.headerAvatarText}>{counterpartName[0]?.toUpperCase() ?? '?'}</Text>
+            </View>
           )}
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {conversation?.counterpart.fullName ?? counterpartName}
+            </Text>
+            {!!headerSubtitle && (
+              <Text style={styles.headerSubtitle} numberOfLines={1}>
+                {headerSubtitle}
+              </Text>
+            )}
+          </View>
         </View>
-        <View style={styles.backBtn} />
+
+        <TouchableOpacity style={styles.headerIconBtn}>
+          <Ionicons name="ellipsis-vertical" size={22} color="#0F172A" />
+        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
@@ -357,7 +388,7 @@ export default function ChatThreadScreen() {
       >
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color="#2563EB" />
+            <ActivityIndicator size="large" color="#3B82F6" />
           </View>
         ) : (
           <FlatList
@@ -376,7 +407,7 @@ export default function ChatThreadScreen() {
             ListHeaderComponent={peerTyping ? <TypingDots /> : null}
             ListFooterComponent={
               loadingOlder ? (
-                <ActivityIndicator style={styles.olderSpinner} color="#94A3B8" />
+                <ActivityIndicator style={styles.olderSpinner} color="#8E8E93" />
               ) : null
             }
             ListEmptyComponent={
@@ -391,7 +422,7 @@ export default function ChatThreadScreen() {
 
         {!!editing && (
           <View style={styles.editBanner}>
-            <Ionicons name="create-outline" size={16} color="#2563EB" />
+            <Ionicons name="create-outline" size={16} color="#3B82F6" />
             <Text style={styles.editBannerText} numberOfLines={1}>
               Đang sửa: {editing.content}
             </Text>
@@ -407,28 +438,37 @@ export default function ChatThreadScreen() {
         )}
 
         {canSend ? (
-          <View style={styles.inputContainer}>
+          <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+            <TouchableOpacity style={styles.attachBtn} onPress={openAttachmentMenu}>
+              <Ionicons name="attach" size={26} color="#64748B" />
+            </TouchableOpacity>
+
             <TextInput
               style={styles.input}
-              placeholder="Nhập tin nhắn..."
+              placeholder="Tin nhắn..."
               value={draft}
               onChangeText={onChangeDraft}
               placeholderTextColor="#94A3B8"
               multiline
               maxLength={2000}
             />
+            
             <TouchableOpacity
-              style={[styles.sendBtn, (!draft.trim() || sending) && styles.sendBtnOff]}
+              style={styles.sendIconBtn}
               onPress={handleSend}
               disabled={!draft.trim() || sending}
               activeOpacity={0.7}
             >
-              <Ionicons name={editing ? 'checkmark' : 'send'} size={20} color="#FFFFFF" />
+              <Ionicons 
+                name={editing ? 'checkmark' : (draft.trim() ? 'send' : 'mic')} 
+                size={22} 
+                color={draft.trim() ? '#3B82F6' : '#64748B'} 
+              />
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={styles.readOnlyBar}>
-            <Ionicons name="lock-closed-outline" size={16} color="#94A3B8" />
+          <View style={[styles.readOnlyBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+            <Ionicons name="lock-closed-outline" size={16} color="#64748B" />
             <Text style={styles.readOnlyText}>
               Cuộc trò chuyện này chỉ còn xem lại được.
             </Text>
@@ -436,58 +476,43 @@ export default function ChatThreadScreen() {
         )}
       </KeyboardAvoidingView>
 
-      <Modal
-        transparent
-        visible={!!actionTarget}
-        animationType="fade"
-        onRequestClose={() => setActionTarget(null)}
+      {/* Attachment Menu Dummy */}
+      <BottomSheetModal
+        ref={attachmentSheetRef}
+        snapPoints={snapPoints}
+        backdropComponent={(props) => (
+          <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} />
+        )}
       >
-        <Pressable style={styles.sheetBackdrop} onPress={() => setActionTarget(null)}>
-          <View style={styles.sheet}>
-            <TouchableOpacity
-              style={styles.sheetItem}
-              onPress={() => {
-                const target = actionTarget;
-                setActionTarget(null);
-                if (!target) return;
-                setEditing(target);
-                setDraft(target.content);
-              }}
-            >
-              <Ionicons name="create-outline" size={20} color="#0F172A" />
-              <Text style={styles.sheetText}>Sửa tin nhắn</Text>
+        <View style={styles.sheet}>
+          <View style={styles.attachmentGrid}>
+            <TouchableOpacity style={styles.attachOption}>
+              <View style={[styles.attachIconBg, { backgroundColor: '#3B82F6' }]}>
+                 <Ionicons name="image" size={24} color="#FFF" />
+              </View>
+              <Text style={styles.attachOptionText}>Thư viện</Text>
             </TouchableOpacity>
-
-            <View style={styles.sheetDivider} />
-
-            <TouchableOpacity
-              style={styles.sheetItem}
-              onPress={() => {
-                const target = actionTarget;
-                setActionTarget(null);
-                if (!target) return;
-                Alert.alert('Gỡ tin nhắn', 'Tin nhắn sẽ bị gỡ với cả hai bên.', [
-                  { text: 'Huỷ', style: 'cancel' },
-                  {
-                    text: 'Gỡ',
-                    style: 'destructive',
-                    onPress: () => void handleDelete(target),
-                  },
-                ]);
-              }}
-            >
-              <Ionicons name="trash-outline" size={20} color="#EF4444" />
-              <Text style={[styles.sheetText, styles.sheetTextDanger]}>Gỡ tin nhắn</Text>
+            <TouchableOpacity style={styles.attachOption}>
+              <View style={[styles.attachIconBg, { backgroundColor: '#10B981' }]}>
+                 <Ionicons name="document-text" size={24} color="#FFF" />
+              </View>
+              <Text style={styles.attachOptionText}>Tài liệu</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.attachOption}>
+              <View style={[styles.attachIconBg, { backgroundColor: '#F59E0B' }]}>
+                 <Ionicons name="location" size={24} color="#FFF" />
+              </View>
+              <Text style={styles.attachOptionText}>Vị trí</Text>
             </TouchableOpacity>
           </View>
-        </Pressable>
-      </Modal>
+        </View>
+      </BottomSheetModal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
   flex: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyText: {
@@ -496,19 +521,28 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     transform: [{ scaleY: -1 }],
   },
+  
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 10,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
-  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  headerTextWrap: { flex: 1, alignItems: 'center' },
+  headerIconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerProfile: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 },
+  headerAvatar: { width: 38, height: 38, borderRadius: 19, marginRight: 10 },
+  headerAvatarFallback: {
+    width: 38, height: 38, borderRadius: 19, marginRight: 10,
+    backgroundColor: '#DBEAFE', alignItems: 'center', justifyContent: 'center'
+  },
+  headerAvatarText: { color: '#2563EB', fontSize: 16, fontWeight: 'bold' },
+  headerTextWrap: { flex: 1, justifyContent: 'center' },
   headerTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
-  headerSubtitle: { fontSize: 12, color: '#2563EB', marginTop: 1 },
+  headerSubtitle: { fontSize: 13, color: '#64748B', marginTop: 1 },
+  
   chatContent: { paddingVertical: 12, flexGrow: 1 },
   olderSpinner: { marginVertical: 12 },
 
@@ -516,21 +550,22 @@ const styles = StyleSheet.create({
   msgRowMine: { justifyContent: 'flex-end' },
   msgRowTheirs: { justifyContent: 'flex-start' },
   bubble: { maxWidth: '78%', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 9 },
-  bubbleMine: { backgroundColor: '#2563EB', borderBottomRightRadius: 4 },
-  bubbleTheirs: {
-    backgroundColor: '#FFFFFF',
+  bubbleMine: { backgroundColor: '#2563EB', borderBottomRightRadius: 4 }, 
+  bubbleTheirs: { 
+    backgroundColor: '#FFFFFF', 
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
+    borderColor: '#E2E8F0' 
+  }, 
   bubbleDeleted: { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0', borderWidth: 1 },
   msgText: { fontSize: 15, lineHeight: 21 },
   msgTextMine: { color: '#FFFFFF' },
   msgTextTheirs: { color: '#0F172A' },
   msgTextDeleted: { color: '#94A3B8', fontStyle: 'italic' },
   metaRow: { flexDirection: 'row', alignSelf: 'flex-end', marginTop: 3 },
-  metaText: { fontSize: 10, color: '#94A3B8' },
+  metaText: { fontSize: 10 },
   metaTextMine: { color: '#BFDBFE' },
+  metaTextTheirs: { color: '#94A3B8' },
 
   editBanner: {
     flexDirection: 'row',
@@ -553,6 +588,12 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
   },
+  attachBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   input: {
     flex: 1,
     maxHeight: 120,
@@ -564,17 +605,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     fontSize: 15,
     color: '#0F172A',
+    marginHorizontal: 4,
   },
-  sendBtn: {
+  sendIconBtn: {
     width: 42,
     height: 42,
-    borderRadius: 21,
-    marginLeft: 8,
-    backgroundColor: '#2563EB',
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 21,
+    backgroundColor: '#EFF6FF',
   },
-  sendBtnOff: { backgroundColor: '#CBD5E1' },
 
   readOnlyBar: {
     flexDirection: 'row',
@@ -588,17 +628,10 @@ const styles = StyleSheet.create({
   },
   readOnlyText: { fontSize: 13, color: '#64748B' },
 
-  sheetBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(15,23,42,0.4)',
-    justifyContent: 'flex-end',
-  },
   sheet: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    paddingBottom: 28,
-    paddingTop: 8,
+    flex: 1,
+    paddingBottom: 20,
   },
   sheetItem: {
     flexDirection: 'row',
@@ -610,4 +643,50 @@ const styles = StyleSheet.create({
   sheetDivider: { height: 1, backgroundColor: '#F1F5F9', marginHorizontal: 22 },
   sheetText: { fontSize: 16, color: '#0F172A' },
   sheetTextDanger: { color: '#EF4444' },
+  
+  attachmentGrid: {
+    flexDirection: 'row',
+    padding: 24,
+    gap: 24,
+  },
+  attachOption: {
+    alignItems: 'center',
+    width: 64,
+  },
+  attachIconBg: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  attachOptionText: {
+    fontSize: 13,
+    color: '#0F172A',
+    fontWeight: '500',
+  },
+  
+  menuOptionsContainer: {
+    borderRadius: 12,
+    paddingVertical: 4,
+    width: 160,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  menuOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  menuOptionText: {
+    fontSize: 15,
+    color: '#0F172A',
+    fontWeight: '500',
+  }
 });

@@ -1,5 +1,5 @@
 // src/screens/auth/ResetPasswordScreen.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -34,6 +34,7 @@ export default function ResetPasswordScreen() {
   const [resending, setResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
+  const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -67,7 +68,7 @@ export default function ResetPasswordScreen() {
     try {
       await authApi.resetPassword(email, otp.trim(), newPassword);
       Alert.alert('Thành công', 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.', [
-        { text: 'Đăng nhập', onPress: () => navigation.navigate('Login') },
+        { text: 'Đăng nhập', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'Login' }] }) },
       ]);
     } catch (err: any) {
       const message =
@@ -131,7 +132,7 @@ export default function ResetPasswordScreen() {
               </View>
             )}
 
-            <View style={styles.otpWrapper}>
+            <TouchableOpacity activeOpacity={1} style={styles.otpWrapper} onPress={() => inputRef.current?.focus()}>
               <View style={styles.otpBoxesContainer} pointerEvents="none">
                 {[0, 1, 2, 3, 4, 5].map((index) => {
                   const char = otp[index] || '';
@@ -144,6 +145,7 @@ export default function ResetPasswordScreen() {
                 })}
               </View>
               <TextInput
+                ref={inputRef}
                 style={styles.hiddenOtpInput}
                 keyboardType="number-pad"
                 maxLength={6}
@@ -151,7 +153,7 @@ export default function ResetPasswordScreen() {
                 onChangeText={(text) => setOtp(text.replace(/[^0-9]/g, ''))}
                 caretHidden={true}
               />
-            </View>
+            </TouchableOpacity>
 
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Mật khẩu mới *</Text>

@@ -44,9 +44,9 @@ export default function LoginScreen() {
       const result = await authApi.login({ email: finalEmail, password: finalPassword });
       setAuth(result.accessToken, result.user);
       if (result.user.role === UserRole.CUSTOMER) {
-        navigation.navigate('CustomerMain');
+        navigation.reset({ index: 0, routes: [{ name: 'CustomerMain' }] });
       }else{
-        navigation.navigate('TechnicianMain');
+        navigation.reset({ index: 0, routes: [{ name: 'TechnicianMain' }] });
       }
     } catch (err: any) {
       const message =
