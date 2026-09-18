@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -7,24 +7,32 @@ import {
   TextInput,
   ScrollView,
   StatusBar,
-  ActivityIndicator,
+  Image,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { LinearGradient } from 'expo-linear-gradient';
-import { aiApi, type DiagnosisResult } from '../../api/ai.api';
+import { AI_MAX_IMAGES } from '../../api/ai.api';
+import { pickImagesForAi } from '../../services/image-for-ai';
+
+type DiagnosisRoute = RouteProp<RootStackParamList, 'CustomerAIDiagnosis'>;
 
 export default function CustomerAIDiagnosisScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<DiagnosisRoute>();
+
+  // Set when the assistant sent the customer here with a service in hand. The
+  // chat never books; it routes across, and this is the far end of that route.
+  const prefill = route.params?.prefill;
+
   const [step, setStep] = useState(1);
-  const [description, setDescription] = useState('');
-  const [analyzed, setAnalyzed] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiResult, setAiResult] = useState<DiagnosisResult | null>(null);
+  const [description, setDescription] = useState(prefill?.description || '');
+  /** Data URIs, at most three, only used to hand over to the assistant. */
+  const [images, setImages] = useState<string[]>([]);
 
   // Step 2 states
   const [selectedDate, setSelectedDate] = useState(0);
@@ -33,28 +41,40 @@ export default function CustomerAIDiagnosisScreen() {
   const [optionsExpanded, setOptionsExpanded] = useState(true);
   const [quoteExpanded, setQuoteExpanded] = useState(false);
 
-  const handleAnalyze = async () => {
-    if (!description.trim()) {
-      Alert.alert('Gợi ý', 'Vui lòng nhập mô tả sự cố thiết bị để AI chẩn đoán.');
+  /**
+   * Hand the photos and the description to the assistant.
+   *
+   * Diagnosis used to happen on this screen, in a card that read `advice`,
+   * `possibleCauses` and `estimatedCostRange` - three fields the AI Service has
+   * never returned, so the card showed a canned sentence whatever the customer
+   * typed. A diagnosis is a conversation: the assistant asks which appliance it
+   * is when the photo is ambiguous, and asks follow-up questions. That belongs
+   * in chat, so this screen collects the first message and hands it over.
+   *
+   * Booking without a diagnosis is untouched. A customer who knows what they
+   * want carries straight on to step two.
+   */
+  const askTheAssistant = useCallback(() => {
+    if (!description.trim() && images.length === 0) {
+      Alert.alert(
+        'Cần thêm một chút',
+        'Anh/chị mô tả sự cố hoặc gửi ảnh thiết bị để trợ lý xem giúp nhé.',
+      );
       return;
     }
-    setAiLoading(true);
-    try {
-      const res = await aiApi.analyze({ description: description.trim() });
-      setAiResult(res);
-      setAnalyzed(true);
-    } catch {
-      setAiResult({
-        advice: 'Nên kiểm tra trực tiếp nguồn điện, dàn lạnh hoặc linh kiện bên trong.',
-        possibleCauses: ['Nguồn điện chập chờn', 'Hao hụt gas hoặc bám bẩn lâu ngày'],
-        estimatedCostRange: { min: 150000, max: 450000 },
-        disclaimer: 'Đây là gợi ý tham khảo từ hệ thống. Thợ sẽ kiểm tra trực tiếp và báo giá trước khi sửa.',
-      });
-      setAnalyzed(true);
-    } finally {
-      setAiLoading(false);
+    navigation.navigate('CustomerAIChat', {
+      initialDescription: description.trim(),
+      initialImages: images,
+    });
+  }, [description, images, navigation]);
+
+  const pickImages = useCallback(async () => {
+    const result = await pickImagesForAi(images.length);
+    if (result.problemVi) Alert.alert('Ảnh', result.problemVi);
+    if (result.images.length > 0) {
+      setImages((prev) => [...prev, ...result.images].slice(0, AI_MAX_IMAGES));
     }
-  };
+  }, [images.length]);
 
   const handleNextStep = () => {
     if (step < 3) {
@@ -77,14 +97,49 @@ export default function CustomerAIDiagnosisScreen() {
       <Text style={styles.mainTitle}>Nhà mình đang gặp vấn đề gì?</Text>
       <Text style={styles.helperText}>Thêm mô tả để thợ chuẩn bị tốt hơn. Bạn có thể dùng ảnh để nhận gợi ý kiểm tra.</Text>
 
-      <TouchableOpacity style={styles.uploadArea} activeOpacity={0.7}>
+      {prefill?.serviceName && (
+        <View style={styles.prefillCard}>
+          <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+          <View style={styles.prefillText}>
+            <Text style={styles.prefillLabel}>Trợ lý đã chọn dịch vụ</Text>
+            <Text style={styles.prefillValue}>{prefill.serviceName}</Text>
+          </View>
+        </View>
+      )}
+
+      <TouchableOpacity style={styles.uploadArea} activeOpacity={0.7} onPress={pickImages}>
         <View style={styles.camIcon}>
           <Ionicons name="camera-outline" size={24} color="#2563EB" />
         </View>
         <Text style={styles.uploadTitle}>Thêm ảnh thiết bị</Text>
         <Text style={styles.uploadHelper}>Ảnh toàn cảnh và vị trí có vấn đề</Text>
-        <Text style={styles.uploadHelper}>Tối đa 5 ảnh · JPG, PNG · 10 MB/ảnh</Text>
+        {/* The assistant takes three images of 8 MB; promising five of ten
+            would fail on the fourth. */}
+        <Text style={styles.uploadHelper}>
+          Tối đa {AI_MAX_IMAGES} ảnh · JPG, PNG · 8 MB/ảnh
+        </Text>
       </TouchableOpacity>
+
+      {images.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.thumbRow}
+        >
+          {images.map((uri, index) => (
+            <View key={index} style={styles.thumbBox}>
+              <Image source={{ uri }} style={styles.thumb} />
+              <TouchableOpacity
+                style={styles.thumbRemove}
+                onPress={() => setImages((prev) => prev.filter((_, i) => i !== index))}
+                accessibilityLabel="Bỏ ảnh này"
+              >
+                <Ionicons name="close" size={12} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </ScrollView>
+      )}
 
       <View style={styles.field}>
         <Text style={styles.fieldLabel}>Mô tả nhu cầu <Text style={styles.inlineTag}>· không bắt buộc khi đặt lịch</Text></Text>
@@ -114,48 +169,21 @@ export default function CustomerAIDiagnosisScreen() {
         </View>
       </View>
 
-      {!analyzed ? (
-        <TouchableOpacity
-          style={[styles.secondaryBtn, aiLoading && { opacity: 0.7 }]}
-          onPress={handleAnalyze}
-          activeOpacity={0.7}
-          disabled={aiLoading}
-        >
-          {aiLoading ? (
-            <ActivityIndicator size="small" color="#2563EB" />
-          ) : (
-            <Text style={styles.secondaryBtnText}>Phân tích sự cố bằng AI</Text>
-          )}
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.aiResultCard}>
-          <View style={styles.scoreRow}>
-            <View style={styles.badgeSuccess}>
-              <Text style={styles.badgeTextSuccess}>Gợi ý từ AI</Text>
-            </View>
-            <Text style={styles.inlineTag}>Tham khảo</Text>
-          </View>
-          <Text style={styles.aiResultTitle}>
-            {aiResult?.advice || 'Nên kiểm tra thiết bị trực tiếp'}
-          </Text>
-          {aiResult?.possibleCauses && aiResult.possibleCauses.length > 0 && (
-            <Text style={styles.aiResultDesc}>
-              Nguyên nhân khả dĩ: {aiResult.possibleCauses.join(', ')}
-            </Text>
-          )}
-          {aiResult?.estimatedCostRange && (
-            <View style={styles.quoteRow}>
-              <Text style={styles.quoteLabel}>Chi phí tham khảo</Text>
-              <Text style={styles.quoteValue}>
-                {aiResult.estimatedCostRange.min.toLocaleString('vi-VN')}–{aiResult.estimatedCostRange.max.toLocaleString('vi-VN')}đ
-              </Text>
-            </View>
-          )}
-          <Text style={styles.aiResultNote}>
-            {aiResult?.disclaimer || 'Đây là gợi ý tham khảo. Thợ sẽ kiểm tra thực tế và báo giá trước khi sửa.'}
-          </Text>
-        </View>
-      )}
+      <TouchableOpacity
+        style={styles.secondaryBtn}
+        onPress={askTheAssistant}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="chatbubble-ellipses-outline" size={18} color="#2563EB" />
+        <Text style={styles.secondaryBtnText}>
+          {images.length > 0 ? 'Gửi ảnh cho trợ lý xem giúp' : 'Nhờ trợ lý chẩn đoán'}
+        </Text>
+      </TouchableOpacity>
+      <Text style={styles.assistantHint}>
+        Trợ lý sẽ xem ảnh, hỏi lại nếu cần và gợi ý dịch vụ. Anh/chị vẫn có thể
+        đặt lịch thẳng bên dưới mà không cần chẩn đoán.
+      </Text>
+
     </>
   );
 
@@ -465,6 +493,35 @@ const styles = StyleSheet.create({
   camIcon: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
   uploadTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
   uploadHelper: { fontSize: 12, color: '#64748B', marginTop: 4 },
+  thumbRow: { gap: 8, paddingVertical: 10 },
+  thumbBox: { width: 72, height: 72 },
+  thumb: { width: 72, height: 72, borderRadius: 10, backgroundColor: '#E2E8F0' },
+  thumbRemove: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  assistantHint: { fontSize: 12, color: '#64748B', lineHeight: 18, marginTop: 8 },
+  prefillCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  prefillText: { flex: 1 },
+  prefillLabel: { fontSize: 11, color: '#15803D', fontWeight: '700' },
+  prefillValue: { fontSize: 14, color: '#0F172A', fontWeight: '600', marginTop: 2 },
   field: { marginBottom: 16 },
   fieldLabel: { fontSize: 14, fontWeight: '600', color: '#0F172A', marginBottom: 8 },
   inlineTag: { fontSize: 12, color: '#64748B', fontWeight: '400' },
@@ -485,7 +542,10 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     borderRadius: 12,
     paddingVertical: 14,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
   secondaryBtnText: { fontSize: 14, fontWeight: '600', color: '#0F172A' },
   aiResultCard: {
