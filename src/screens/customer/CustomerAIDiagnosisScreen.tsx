@@ -16,8 +16,8 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as ImagePicker from 'expo-image-picker';
-import { AI_MAX_IMAGES, AI_IMAGE_QUALITY } from '../../api/ai.api';
+import { AI_MAX_IMAGES } from '../../api/ai.api';
+import { pickImagesForAi } from '../../services/image-for-ai';
 
 type DiagnosisRoute = RouteProp<RootStackParamList, 'CustomerAIDiagnosis'>;
 
@@ -69,33 +69,11 @@ export default function CustomerAIDiagnosisScreen() {
   }, [description, images, navigation]);
 
   const pickImages = useCallback(async () => {
-    const room = AI_MAX_IMAGES - images.length;
-    if (room <= 0) {
-      Alert.alert('Đủ ảnh rồi', `Trợ lý xem được tối đa ${AI_MAX_IMAGES} ảnh mỗi lần.`);
-      return;
+    const result = await pickImagesForAi(images.length);
+    if (result.problemVi) Alert.alert('Ảnh', result.problemVi);
+    if (result.images.length > 0) {
+      setImages((prev) => [...prev, ...result.images].slice(0, AI_MAX_IMAGES));
     }
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert(
-        'Chưa có quyền xem ảnh',
-        'Cho phép FixHome truy cập thư viện ảnh để gửi ảnh thiết bị.',
-      );
-      return;
-    }
-    const picked = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: room > 1,
-      selectionLimit: room,
-      quality: AI_IMAGE_QUALITY,
-      base64: true,
-    });
-    if (picked.canceled) return;
-
-    const encoded = picked.assets
-      .slice(0, room)
-      .filter((asset) => asset.base64)
-      .map((asset) => `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`);
-    setImages((prev) => [...prev, ...encoded].slice(0, AI_MAX_IMAGES));
   }, [images.length]);
 
   const handleNextStep = () => {

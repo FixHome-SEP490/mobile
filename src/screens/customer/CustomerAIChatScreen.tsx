@@ -28,14 +28,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import * as ImagePicker from 'expo-image-picker';
 import type { RootStackParamList } from '../../types';
+import { pickImagesForAi, takePhotoForAi } from '../../services/image-for-ai';
 import TypingDots from '../chat/TypingDots';
 import {
   aiApi,
   looksLikeAQuestion,
   AI_MAX_IMAGES,
-  AI_IMAGE_QUALITY,
   type AiReply,
   type RecommendedService,
 } from '../../api/ai.api';
@@ -249,70 +248,19 @@ export default function CustomerAIChatScreen() {
   // -------------------------------------------------------------- images
 
   const pickImages = useCallback(async () => {
-    const room = AI_MAX_IMAGES - pendingImages.length;
-    if (room <= 0) {
-      Alert.alert('Đủ ảnh rồi ạ', `Mỗi lần em xem được tối đa ${AI_MAX_IMAGES} ảnh thôi ạ.`);
-      return;
+    const result = await pickImagesForAi(pendingImages.length);
+    if (result.problemVi) Alert.alert('Ảnh', result.problemVi);
+    if (result.images.length > 0) {
+      setPendingImages((prev) => [...prev, ...result.images].slice(0, AI_MAX_IMAGES));
     }
-
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert(
-        'Chưa có quyền xem ảnh',
-        'Anh/chị cho phép FixHome truy cập thư viện ảnh để gửi ảnh thiết bị giúp em ạ.',
-      );
-      return;
-    }
-
-    const picked = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: room > 1,
-      selectionLimit: room,
-      quality: AI_IMAGE_QUALITY,
-      base64: true,
-    });
-    if (picked.canceled) return;
-
-    const encoded: string[] = [];
-    for (const asset of picked.assets.slice(0, room)) {
-      if (!asset.base64) continue;
-      // The AI rejects anything over 8 MiB decoded. Base64 is about a third
-      // bigger than the bytes it carries, so this is the ceiling in characters.
-      if (asset.base64.length > 8 * 1024 * 1024 * 1.37) {
-        Alert.alert('Ảnh hơi nặng', 'Anh/chị chụp lại ảnh nhỏ hơn giúp em nhé.');
-        continue;
-      }
-      const mime = asset.mimeType || 'image/jpeg';
-      encoded.push(`data:${mime};base64,${asset.base64}`);
-    }
-    setPendingImages((prev) => [...prev, ...encoded].slice(0, AI_MAX_IMAGES));
   }, [pendingImages.length]);
 
   const takePhoto = useCallback(async () => {
-    if (pendingImages.length >= AI_MAX_IMAGES) {
-      Alert.alert('Đủ ảnh rồi ạ', `Mỗi lần em xem được tối đa ${AI_MAX_IMAGES} ảnh thôi ạ.`);
-      return;
+    const result = await takePhotoForAi(pendingImages.length);
+    if (result.problemVi) Alert.alert('Ảnh', result.problemVi);
+    if (result.images.length > 0) {
+      setPendingImages((prev) => [...prev, ...result.images].slice(0, AI_MAX_IMAGES));
     }
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert(
-        'Chưa có quyền camera',
-        'Anh/chị cho phép FixHome dùng camera để chụp thiết bị giúp em ạ.',
-      );
-      return;
-    }
-    const shot = await ImagePicker.launchCameraAsync({
-      quality: AI_IMAGE_QUALITY,
-      base64: true,
-    });
-    if (shot.canceled || !shot.assets[0]?.base64) return;
-    const asset = shot.assets[0];
-    setPendingImages((prev) =>
-      [...prev, `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`].slice(
-        0,
-        AI_MAX_IMAGES,
-      ),
-    );
   }, [pendingImages.length]);
 
   // ------------------------------------------------------- a fresh start
