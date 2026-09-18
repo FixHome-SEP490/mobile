@@ -121,6 +121,13 @@ export default function CustomerAIChatScreen() {
    * clients that both made one up would share a conversation.
    */
   const sessionId = useRef<string | null>(null);
+  /**
+   * What the customer actually typed, carried into the booking form. The
+   * assistant's own reply was the obvious thing to send and the wrong one: the
+   * technician needs the symptom in the customer's words, not a paragraph the
+   * model wrote back to them.
+   */
+  const lastCustomerWords = useRef('');
   const [turnCount, setTurnCount] = useState(0);
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const [holdingLines, setHoldingLines] = useState<Record<string, string[]>>({});
@@ -162,6 +169,10 @@ export default function CustomerAIChatScreen() {
     async (text: string, images: string[], isQuestion: boolean) => {
       // The acknowledgement is already on screen; the answer waits for both the
       // model and a beat of reading time, so the two do not arrive together.
+      if (text.trim()) {
+        lastCustomerWords.current = text.trim();
+      }
+
       const [reply] = await Promise.all([
         isQuestion
           ? aiApi.ask({ question: text, sessionId: sessionId.current })
@@ -338,13 +349,13 @@ export default function CustomerAIChatScreen() {
 
   /** Chat does not book. It carries the service into the booking flow. */
   const goToBooking = useCallback(
-    (service: RecommendedService, context: string) => {
+    (service: RecommendedService) => {
       navigation.navigate('CustomerAIDiagnosis', {
         prefill: {
           serviceId: service.serviceId ?? null,
           serviceCode: service.serviceCode,
           serviceName: service.nameVi,
-          description: context,
+          description: lastCustomerWords.current,
         },
       });
     },
@@ -524,7 +535,7 @@ function DiagnosisCard({
   onBook,
 }: {
   reply: AiReply;
-  onBook: (service: RecommendedService, context: string) => void;
+  onBook: (service: RecommendedService) => void;
 }) {
   const urgent = reply.urgency === 'HIGH';
   const actions = reply.suggestedActionsVi || [];
@@ -626,7 +637,7 @@ function DiagnosisCard({
           key={service.serviceCode}
           style={styles.bookBtn}
           activeOpacity={0.85}
-          onPress={() => onBook(service, reply.messageVi || '')}
+          onPress={() => onBook(service)}
         >
           <Ionicons name="calendar-outline" size={16} color="#FFFFFF" />
           <Text style={styles.bookBtnText}>Đặt thợ · {service.nameVi}</Text>
