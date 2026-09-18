@@ -1,63 +1,92 @@
-import React, { useState } from 'react';
+// src/screens/auth/RegisterScreen.tsx
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
+  Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList, RootStackParamList } from '../../types';
 import { authApi } from '../../api/auth.api';
 
+const RuleItem = ({ met, text }: { met: boolean, text: string }) => (
+  <View style={styles.ruleItem}>
+    <Ionicons 
+      name={met ? "checkmark-circle" : "ellipse-outline"} 
+      size={14} 
+      color={met ? "#22C55E" : "#9CA3AF"} 
+    />
+    <Text style={[styles.ruleText, met && styles.ruleTextMet]}>{text}</Text>
+  </View>
+);
+
 export default function RegisterScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList & RootStackParamList>>();
-
-  const [fullName, setFullName] = useState('');
+  
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const [touchedEmail, setTouchedEmail] = useState(false);
+  const [touchedFullName, setTouchedFullName] = useState(false);
+  const [touchedPhone, setTouchedPhone] = useState(false);
+  const [touchedConfirm, setTouchedConfirm] = useState(false);
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const phoneRegex = /^0[35789][0-9]{8}$/;
+  
+  const isEmailValid = emailRegex.test(email.trim());
+  const isPhoneValid = !phone.trim() || phoneRegex.test(phone.trim());
+  const isFullNameValid = fullName.trim().length >= 2;
+  
+  const emailError = touchedEmail ? (!email.trim() ? 'Email không được bỏ trống' : (!isEmailValid ? 'Email sai định dạng' : '')) : '';
+  const fullNameError = touchedFullName ? (!fullName.trim() ? 'Họ tên không được bỏ trống' : (!isFullNameValid ? 'Họ tên tối thiểu 2 ký tự' : '')) : '';
+  const phoneError = touchedPhone ? (!isPhoneValid ? 'SĐT không hợp lệ (VD: 0901234567)' : '') : '';
+  const confirmError = touchedConfirm ? (password !== confirmPassword ? 'Mật khẩu xác nhận không khớp' : '') : '';
+
+  const passwordRules = useMemo(() => {
+    return {
+      minLength: password.length >= 8,
+      hasLower: /[a-z]/.test(password),
+      hasUpper: /[A-Z]/.test(password),
+      hasNumber: /[0-9]/.test(password),
+      hasSpecial: /[^A-Za-z0-9]/.test(password),
+    };
+  }, [password]);
+
+  const strengthScore = Object.values(passwordRules).filter(Boolean).length;
+  const barColors = ['#EF4444', '#F97316', '#EAB308', '#84CC16', '#22C55E'];
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleRegister = async () => {
-    setError(null);
+    setTouchedEmail(true);
+    setTouchedFullName(true);
+    setTouchedPhone(true);
+    setTouchedConfirm(true);
 
-    if (!fullName.trim()) {
-      setError('Vui lòng nhập họ và tên.');
+    if (!email.trim() || !isEmailValid || !password || !isFullNameValid || !isPhoneValid || password !== confirmPassword) {
+      Alert.alert('Lỗi', 'Vui lòng kiểm tra lại thông tin.');
       return;
     }
-    if (!email.trim() || !email.includes('@')) {
-      setError('Vui lòng nhập email hợp lệ.');
+    if (strengthScore < 5) {
+      Alert.alert('Lỗi', 'Mật khẩu chưa đủ mạnh. Vui lòng kiểm tra lại các yêu cầu.');
       return;
     }
-    if (phone.trim() && !/^0[35789][0-9]{8}$/.test(phone.trim())) {
-      setError('Số điện thoại không đúng định dạng (10 số, bắt đầu 03, 05, 07, 08, 09).');
-      return;
-    }
-    if (password.length < 8) {
-      setError('Mật khẩu phải từ 8 ký tự trở lên.');
-      return;
-    }
-    const pwdRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
-    if (!pwdRegex.test(password)) {
-      setError('Mật khẩu cần ít nhất: chữ hoa, chữ thường, số và ký tự đặc biệt.');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError('Mật khẩu xác nhận không khớp.');
-      return;
-    }
-
-    setLoading(true);
+    
+    setIsLoading(true);
     try {
       const trimmedEmail = email.trim();
       await authApi.register({
@@ -67,134 +96,172 @@ export default function RegisterScreen() {
         phoneNumber: phone.trim() || undefined,
         role: 'customer',
       });
-
       navigation.navigate('VerifyRegisterOtp', { email: trimmedEmail, password });
-    } catch (err: any) {
+    } catch (error: any) {
       const msg =
-        err?.response?.data?.message ||
-        err?.message ||
+        error?.response?.data?.message ||
+        error?.message ||
         'Đăng ký thất bại. Vui lòng kiểm tra thông tin và thử lại.';
-      setError(Array.isArray(msg) ? msg.join(', ') : msg);
+      Alert.alert('Lỗi đăng ký', Array.isArray(msg) ? msg.join(', ') : msg);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={22} color="#0F172A" />
-            <Text style={styles.backText}>Quay lại</Text>
-          </TouchableOpacity>
-
+      
           <View style={styles.header}>
-            <Text style={styles.title}>Tạo tài khoản</Text>
-            <Text style={styles.subtitle}>Đăng ký tài khoản Khách hàng tại FixHome</Text>
+            <View style={styles.iconWrapper}>
+              <Ionicons name="home" size={32} color="#2563EB" />
+            </View>
+            <Text style={styles.title}>ĐĂNG KÝ HỘI VIÊN</Text>
+            <View style={styles.divider} />
+            <Text style={styles.subtitle}>GIA NHẬP HỆ THỐNG FIXHOME</Text>
           </View>
 
           <View style={styles.formContainer}>
-            {error && (
-              <View style={styles.errorBox}>
-                <Ionicons name="alert-circle" size={16} color="#DC2626" />
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            )}
-
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Họ và tên *</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="person-outline" size={18} color="#64748B" style={styles.inputIcon} />
+              <Text style={styles.inputLabel}>Họ và tên</Text>
+              <View style={[
+                styles.inputWrapper,
+                fullNameError ? { borderColor: '#FF3B30', marginBottom: 6 } : undefined
+              ]}>
+                <Ionicons name="person-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Ví dụ: Nguyễn Văn A"
-                  placeholderTextColor="#94A3B8"
+                  placeholder="Nguyễn Văn An"
+                  placeholderTextColor="#9CA3AF"
                   value={fullName}
                   onChangeText={setFullName}
+                  onBlur={() => setTouchedFullName(true)}
                 />
               </View>
+              {fullNameError ? <Text style={styles.errorText}>{fullNameError}</Text> : null}
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email *</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="mail-outline" size={18} color="#64748B" style={styles.inputIcon} />
+              <Text style={styles.inputLabel}>Email</Text>
+              <View style={[
+                styles.inputWrapper,
+                emailError ? { borderColor: '#FF3B30', marginBottom: 6 } : undefined
+              ]}>
+                <Ionicons name="mail-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="email@example.com"
-                  placeholderTextColor="#94A3B8"
+                  placeholder="example@gmail.com"
+                  placeholderTextColor="#9CA3AF"
                   keyboardType="email-address"
                   autoCapitalize="none"
                   value={email}
                   onChangeText={setEmail}
+                  onBlur={() => setTouchedEmail(true)}
                 />
+                {emailError ? (
+                  <Ionicons name="alert-circle" size={20} color="#FF3B30" />
+                ) : (
+                  touchedEmail && isEmailValid ? <Ionicons name="checkmark-circle" size={20} color="#22C55E" /> : null
+                )}
               </View>
+              {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Mật khẩu</Text>
+              <View style={[
+                styles.inputWrapper,
+                (password.length > 0 && strengthScore < 5) ? { borderColor: '#FF3B30', marginBottom: 6 } : undefined
+              ]}>
+                <Ionicons name="lock-closed-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="••••••••"
+                  placeholderTextColor="#9CA3AF"
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
+                  <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color="#9CA3AF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {password.length > 0 && (
+              <View style={styles.passwordStrengthContainer}>
+                <View style={styles.strengthBars}>
+                  {[0, 1, 2, 3, 4].map((index) => (
+                    <View 
+                      key={index} 
+                      style={[
+                        styles.strengthBar, 
+                        { backgroundColor: strengthScore > index ? barColors[index] : '#E5E7EB' }
+                      ]} 
+                    />
+                  ))}
+                </View>
+                <View style={styles.rulesGrid}>
+                  <RuleItem met={passwordRules.minLength} text="Ít nhất 8 ký tự" />
+                  <RuleItem met={passwordRules.hasLower} text="1 chữ viết thường" />
+                  <RuleItem met={passwordRules.hasUpper} text="1 chữ viết hoa" />
+                  <RuleItem met={passwordRules.hasNumber} text="1 chữ số" />
+                  <RuleItem met={passwordRules.hasSpecial} text="1 ký tự đặc biệt" />
+                </View>
+              </View>
+            )}
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Xác nhận mật khẩu</Text>
+              <View style={[
+                styles.inputWrapper,
+                confirmError ? { borderColor: '#FF3B30', marginBottom: 6 } : undefined
+              ]}>
+                <Ionicons name="shield-checkmark-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="••••••••"
+                  placeholderTextColor="#9CA3AF"
+                  secureTextEntry={!showConfirmPassword}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  onBlur={() => setTouchedConfirm(true)}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={{ padding: 4 }}>
+                  <Ionicons name={showConfirmPassword ? "eye-off-outline" : "eye-outline"} size={18} color="#9CA3AF" />
+                </TouchableOpacity>
+              </View>
+              {confirmError ? <Text style={styles.errorText}>{confirmError}</Text> : null}
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Số điện thoại</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="call-outline" size={18} color="#64748B" style={styles.inputIcon} />
+              <View style={[
+                styles.inputWrapper,
+                phoneError ? { borderColor: '#FF3B30', marginBottom: 6 } : undefined
+              ]}>
+                <Ionicons name="call-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Ví dụ: 0909123456"
-                  placeholderTextColor="#94A3B8"
+                  placeholder="0901234567"
+                  placeholderTextColor="#9CA3AF"
                   keyboardType="phone-pad"
                   value={phone}
                   onChangeText={setPhone}
+                  onBlur={() => setTouchedPhone(true)}
                 />
               </View>
+              {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Mật khẩu *</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="lock-closed-outline" size={18} color="#64748B" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Tối thiểu 8 ký tự (hoa, thường, số, đặc biệt)"
-                  placeholderTextColor="#94A3B8"
-                  secureTextEntry
-                  value={password}
-                  onChangeText={setPassword}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Xác nhận mật khẩu *</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="shield-checkmark-outline" size={18} color="#64748B" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nhập lại mật khẩu"
-                  placeholderTextColor="#94A3B8"
-                  secureTextEntry
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                />
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.registerBtn, loading && { opacity: 0.7 }]}
-              onPress={handleRegister}
-              activeOpacity={0.85}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Text style={styles.registerBtnText}>Tạo tài khoản</Text>
-              )}
+            <TouchableOpacity style={[styles.registerBtn, isLoading && { opacity: 0.7 }]} onPress={handleRegister} activeOpacity={0.85} disabled={isLoading}>
+              <Text style={styles.registerBtnText}>{isLoading ? 'ĐANG ĐĂNG KÝ...' : 'ĐĂNG KÝ'}</Text>
             </TouchableOpacity>
 
             <View style={styles.loginRow}>
@@ -218,119 +285,159 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     padding: 24,
-    paddingTop: 30,
-    justifyContent: 'center',
+    paddingTop: 60,
+    paddingBottom: 40,
   },
   backBtn: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 20,
+    marginBottom: 24,
+    marginTop: -20,
     paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#D1D5DB',
   },
   backText: {
     fontSize: 13,
-    color: '#0F172A',
+    color: '#4B5563',
     fontWeight: '600',
   },
   header: {
-    marginBottom: 20,
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  iconWrapper: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    backgroundColor: '#DBEAFE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   title: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#0F172A',
-    marginBottom: 6,
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#111827',
+    marginBottom: 12,
+  },
+  divider: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#2563EB',
+    borderRadius: 2,
+    marginBottom: 12,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#6B7280',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   formContainer: {
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FEE2E2',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 14,
-  },
-  errorText: {
-    flex: 1,
-    color: '#DC2626',
-    fontSize: 12,
-    fontWeight: '500',
+    width: '100%',
   },
   inputGroup: {
-    marginBottom: 14,
+    marginBottom: 16,
   },
   inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
-    marginBottom: 6,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#4B5563',
+    marginBottom: 8,
+    letterSpacing: 0.5,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
     paddingHorizontal: 12,
-    height: 46,
+    height: 50,
   },
   inputIcon: {
-    marginRight: 8,
+    marginRight: 10,
   },
   input: {
     flex: 1,
     fontSize: 14,
-    color: '#0F172A',
+    color: '#111827',
+  },
+  errorText: {
+    color: '#FF3B30',
+    fontSize: 11,
+    fontWeight: '500',
+    paddingLeft: 4,
+    marginTop: -8,
+  },
+  passwordStrengthContainer: {
+    marginBottom: 16,
+    marginTop: -4,
+  },
+  strengthBars: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 12,
+  },
+  strengthBar: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+  },
+  rulesGrid: {
+    gap: 8,
+  },
+  ruleItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  ruleText: {
+    fontSize: 11,
+    color: '#9CA3AF',
+  },
+  ruleTextMet: {
+    color: '#22C55E',
   },
   registerBtn: {
     backgroundColor: '#2563EB',
-    height: 46,
-    borderRadius: 10,
+    height: 50,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 16,
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
   },
   registerBtnText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
+    letterSpacing: 0.5,
   },
   loginRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 18,
+    marginTop: 24,
   },
   loginText: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#6B7280',
   },
   loginLink: {
     fontSize: 13,
     color: '#2563EB',
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });
