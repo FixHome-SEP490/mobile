@@ -52,7 +52,7 @@ export default function CustomerNavigator() {
         component={CustomerNotificationsScreen}
         options={{
           title: 'Thông báo',
-          headerShown: true,
+          headerShown: false,
           headerTitle: 'Thông báo & Ưu đãi',
         }}
       />

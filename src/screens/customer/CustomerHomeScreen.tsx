@@ -1,5 +1,5 @@
 // src/screens/customer/CustomerHomeScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   Dimensions,
   StatusBar,
   Alert,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -22,6 +24,8 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store';
+import { UserRole } from '../../types';
+import { usersApi, AddressData } from '../../api/users.api';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { useChatUnreadCount } from '../../hooks/useChatUnreadCount';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -114,17 +118,8 @@ const POPULAR_SERVICES: ServiceItem[] = [
   },
 ];
 
-const QUICK_TAGS = [
-  { id: 'urgent', title: '⚡ Cứu hộ điện nước 24/7' },
-  { id: 'ac', title: '❄️ Vệ sinh máy lạnh 150K' },
-  { id: 'ai', title: '🤖 AI Chẩn đoán hỏng hóc' },
-  { id: 'drain', title: '🚿 Thông cống không đục phá' },
-  { id: 'voucher', title: '🎁 Voucher giảm 50.000đ' },
-];
-
 export default function CustomerHomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { user, isAuthenticated, logout } = useAuthStore();
   const handleScroll = useScrollHideTabBar();
   const chatUnread = useChatUnreadCount();
   const [searchQuery, setSearchQuery] = useState('');
@@ -133,37 +128,49 @@ export default function CustomerHomeScreen() {
     navigation.navigate('CustomerServices', { query: searchQuery });
   };
 
-  const ADDRESSES = [
-    '123 Đường Số 1, Quận 1, TP.HCM',
-    '456 Lê Lợi, Phường Bến Nghé, Quận 1, TP.HCM',
-    '789 Nguyễn Văn Linh, Quận 7, TP.HCM'
-  ];
-  const [selectedAddress, setSelectedAddress] = useState(ADDRESSES[0]);
+  const { user, isAuthenticated } = useAuthStore();
+  const [selectedAddress, setSelectedAddress] = useState('Đang tải địa chỉ...');
+  const [addresses, setAddresses] = useState<AddressData[]>([]);
+  const [isAddressModalVisible, setAddressModalVisible] = useState(false);
+
+  const fetchAddress = useCallback(async () => {
+    try {
+      if (!isAuthenticated) {
+        setSelectedAddress('Vui lòng đăng nhập để xem địa chỉ');
+        return;
+      }
+      
+      if (user?.role === UserRole.TECHNICIAN) {
+        setSelectedAddress('Không áp dụng cho Thợ');
+        return;
+      }
+      
+      const res = await usersApi.getAddresses();
+      if (res && res.length > 0) {
+        setAddresses(res);
+        const defaultAddress = res.find(a => a.isDefault) || res[0];
+        setSelectedAddress(defaultAddress.line1);
+      } else {
+        setAddresses([]);
+        setSelectedAddress('Chưa có địa chỉ nào');
+      }
+    } catch (error) {
+      console.error('Failed to load addresses:', error);
+      setSelectedAddress('Không thể tải địa chỉ');
+    }
+  }, [isAuthenticated, user]);
+
+  useEffect(() => {
+    const load = async () => {
+      await fetchAddress();
+    };
+    load();
+  }, [fetchAddress]);
 
   const handleSelectAddress = () => {
-    Alert.alert('Chọn địa chỉ', 'Vui lòng chọn địa chỉ của bạn', [
-      { text: ADDRESSES[0], onPress: () => setSelectedAddress(ADDRESSES[0]) },
-      { text: ADDRESSES[1], onPress: () => setSelectedAddress(ADDRESSES[1]) },
-      { text: ADDRESSES[2], onPress: () => setSelectedAddress(ADDRESSES[2]) },
-      { text: 'Hủy', style: 'cancel' }
-    ]);
+    setAddressModalVisible(true);
   };
 
-  // Switch role or view technician mode
-  const handleQuickSwitchToTechnician = () => {
-    navigation.navigate('TechnicianMain');
-  };
-
-  const handleOpenAuth = () => {
-    if (isAuthenticated) {
-      Alert.alert('Đăng xuất', 'Bạn có muốn đăng xuất khỏi tài khoản?', [
-        { text: 'Hủy', style: 'cancel' },
-        { text: 'Đăng xuất', onPress: () => logout(), style: 'destructive' },
-      ]);
-    } else {
-      navigation.navigate('Auth');
-    }
-  };
 
   const renderServiceIcon = (item: ServiceItem) => {
     if (item.imageSource) {
@@ -192,41 +199,23 @@ export default function CustomerHomeScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* 1. Header Bar: Avatar + Name + Notification & Dev Role Switch */}
+      {/* 1. Header Address Selector & Messages */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.userInfo} onPress={handleOpenAuth} activeOpacity={0.8}>
-          <View style={styles.avatarWrapper}>
-            <Image
-              source={require('../../../assets/icon.png')}
-              style={styles.avatarImage}
-            />
-            <View style={styles.onlineBadge} />
+        <TouchableOpacity 
+          style={styles.addressSelector} 
+          onPress={handleSelectAddress}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="location" size={24} color="#EF4444" />
+          <View style={styles.addressTextContainer}>
+            <Text style={styles.addressLabel}>Giao đến</Text>
+            <Text style={styles.addressValue} numberOfLines={1}>{selectedAddress}</Text>
           </View>
-          <View style={styles.userTextContainer}>
-            <Text style={styles.greetingText}>Xin chào 👋</Text>
-            <Text style={styles.userNameText} numberOfLines={1}>
-              {user?.fullName || 'Khách hàng'}
-            </Text>
-          </View>
+          <Ionicons name="chevron-down" size={18} color="#64748B" />
         </TouchableOpacity>
 
         <View style={styles.headerActions}>
-          {/* Quick Dev Switch Button to preview Technician */}
-          <TouchableOpacity
-            style={styles.roleSwitchBtn}
-            onPress={handleQuickSwitchToTechnician}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="construct-outline" size={14} color="#2563EB" />
-            <Text style={styles.roleSwitchText}>Xem Thợ</Text>
-          </TouchableOpacity>
-
-          {/* Toggle theme */}
-          <TouchableOpacity style={styles.roleSwitchBtn}>
-            <Ionicons name="moon-outline" size={14} color="#0F172A" />
-          </TouchableOpacity>
-
-          {/* Messages (spec 8.6: booking chat with the technician) */}
+          {/* Messages */}
           <TouchableOpacity
             style={styles.headerIconBtn}
             onPress={() => navigation.navigate('ChatList')}
@@ -241,18 +230,6 @@ export default function CustomerHomeScreen() {
               </View>
             )}
           </TouchableOpacity>
-
-          {/* Notification Bell */}
-          <TouchableOpacity
-            style={styles.headerIconBtn}
-            onPress={() => Alert.alert('Thông báo', 'Bạn có 1 ưu đãi 50K cho dịch vụ điện nước!')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="notifications-outline" size={22} color="#0F172A" />
-            <View style={styles.notificationBadge}>
-              <Text style={styles.notificationBadgeText}>1</Text>
-            </View>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -262,19 +239,6 @@ export default function CustomerHomeScreen() {
         onScroll={handleScroll}
         scrollEventThrottle={16}
       >
-        {/* Address Selector */}
-        <TouchableOpacity 
-          style={styles.addressSelector} 
-          onPress={handleSelectAddress}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="location" size={20} color="#EF4444" />
-          <View style={styles.addressTextContainer}>
-            <Text style={styles.addressLabel}>Giao đến</Text>
-            <Text style={styles.addressValue} numberOfLines={1}>{selectedAddress}</Text>
-          </View>
-          <Ionicons name="chevron-down" size={16} color="#64748B" />
-        </TouchableOpacity>
 
         {/* 2. Hero Search Banner (Xanh Dương Royal Gradient - Giống Hình 1 Vua Thợ) */}
         <LinearGradient
@@ -286,12 +250,6 @@ export default function CustomerHomeScreen() {
           {/* Subtle Decorative Circles */}
           <View style={styles.decorCircle1} />
           <View style={styles.decorCircle2} />
-
-          {/* Slogan */}
-          <View style={styles.sloganRow}>
-            <Text style={styles.heroSlogan}>Tin tưởng - Nhanh chóng - Hiệu quả</Text>
-            <Ionicons name="sparkles" size={18} color="#FDE047" />
-          </View>
 
           {/* Pill Search Input */}
           <View style={styles.searchBar}>
@@ -312,60 +270,8 @@ export default function CustomerHomeScreen() {
               <Ionicons name="search" size={18} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
-
-          {/* Hero Sub Info */}
-          <View style={styles.heroStatsRow}>
-            <View style={styles.heroStatItem}>
-              <Ionicons name="flash" size={14} color="#FDE047" />
-              <Text style={styles.heroStatText}>Không mất phí khảo sát</Text>
-            </View>
-            <View style={styles.heroStatItem}>
-              <Ionicons name="people" size={14} color="#93C5FD" />
-              <Text style={styles.heroStatText}>100,000+ thợ tay nghề cao</Text>
-            </View>
-          </View>
+          
         </LinearGradient>
-
-        {/* 3. Status Notice / Announcement Pill (Phong cách Hình 2 Xanh SM) */}
-        <View style={styles.statusPillWrapper}>
-          <TouchableOpacity
-            style={styles.statusPill}
-            activeOpacity={0.85}
-            onPress={() => Alert.alert('Thợ FixHome quanh bạn', 'Có 128 thợ đang rảnh trong bán kính 3km.')}
-          >
-            <View style={styles.statusPillIconContainer}>
-              <Ionicons name="shield-checkmark" size={18} color="#059669" />
-            </View>
-            <Text style={styles.statusPillText} numberOfLines={1}>
-              <Text style={{ fontWeight: 'bold' }}>128+ thợ FixHome</Text> sẵn sàng có mặt sau 15-30 phút!
-            </Text>
-            <Ionicons name="chevron-forward" size={16} color="#64748B" />
-          </TouchableOpacity>
-        </View>
-
-        {/* 4. Quick Category Chips (Cuộn ngang) */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipsScroll}
-        >
-          {QUICK_TAGS.map((tag) => (
-            <TouchableOpacity
-              key={tag.id}
-              style={styles.chipItem}
-              onPress={() => {
-                if (tag.id === 'ai') {
-                  navigation.navigate('CustomerAIDiagnosis');
-                } else {
-                  navigation.navigate('CustomerServices', { query: tag.id === 'ac' ? 'máy lạnh' : '' });
-                }
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.chipText}>{tag.title}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
 
         {/* 5. Hero Feature Cards (3 Thẻ Lớn: Đặt thợ, AI Chẩn đoán, FixHome Mall) */}
         <View style={styles.featureCardsRow}>
@@ -401,21 +307,6 @@ export default function CustomerHomeScreen() {
             </View>
           </TouchableOpacity>
 
-          {/* Card 3: FixHome Mall */}
-          <TouchableOpacity
-            style={[styles.featureCard, { backgroundColor: '#FEF3C7' }]}
-            activeOpacity={0.85}
-            onPress={() => navigation.navigate('CustomerServices')}
-          >
-            <View style={[styles.featureCardBadge, { backgroundColor: '#D97706' }]}>
-              <Text style={styles.featureCardBadgeText}>Chính hãng</Text>
-            </View>
-            <Text style={styles.featureCardTitle}>Vật tư Mall</Text>
-            <Text style={styles.featureCardDesc}>Bảo hành 12th</Text>
-            <View style={styles.featureCardIconBox}>
-              <MaterialCommunityIcons name="storefront-outline" size={36} color="#D97706" />
-            </View>
-          </TouchableOpacity>
         </View>
 
         {/* 6. Section "✨ Dịch vụ phổ biến" (Lưới Icon 3D Isometric chuẩn Hình 1) */}
@@ -522,6 +413,59 @@ export default function CustomerHomeScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Address Selection Modal */}
+      <Modal visible={isAddressModalVisible} transparent={true} animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Chọn địa chỉ giao hàng</Text>
+              <TouchableOpacity onPress={() => setAddressModalVisible(false)} style={styles.closeBtn}>
+                <Ionicons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+            
+            {addresses.length === 0 ? (
+              <View style={styles.emptyAddress}>
+                <Text style={styles.emptyAddressText}>Bạn chưa có địa chỉ nào.</Text>
+                <TouchableOpacity style={styles.addAddressBtn} onPress={() => {
+                  setAddressModalVisible(false);
+                  (navigation as any).navigate('Profile');
+                }}>
+                  <Text style={styles.addAddressBtnText}>Thêm địa chỉ mới</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <FlatList
+                data={addresses}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[styles.addressItem, selectedAddress === item.line1 && styles.addressItemActive]}
+                    onPress={() => {
+                      setSelectedAddress(item.line1);
+                      setAddressModalVisible(false);
+                    }}
+                  >
+                    <Ionicons 
+                      name={selectedAddress === item.line1 ? "radio-button-on" : "radio-button-off"} 
+                      size={20} 
+                      color={selectedAddress === item.line1 ? "#2563EB" : "#94A3B8"} 
+                    />
+                    <View style={styles.addressItemTextContainer}>
+                      <Text style={[styles.addressItemLabel, selectedAddress === item.line1 && styles.addressItemLabelActive]}>
+                        {item.label} {item.isDefault && '(Mặc định)'}
+                      </Text>
+                      <Text style={styles.addressItemLine}>{item.line1}</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -539,10 +483,9 @@ const styles = StyleSheet.create({
   addressSelector: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
     gap: 8,
+    flex: 1,
+    marginRight: 16,
   },
   addressTextContainer: {
     flex: 1,
@@ -690,18 +633,6 @@ const styles = StyleSheet.create({
     borderRadius: 70,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
-  sloganRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  heroSlogan: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -729,74 +660,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#2563EB',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  heroStatsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  heroStatItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  heroStatText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '500',
-  },
-
-  // 3. Status Notice Pill
-  statusPillWrapper: {
-    paddingHorizontal: 16,
-    marginTop: 10,
-  },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  statusPillIconContainer: {
-    marginRight: 8,
-  },
-  statusPillText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#334155',
-  },
-
-  // 4. Quick Category Chips
-  chipsScroll: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  chipItem: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  chipText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#334155',
   },
 
   // 5. Feature Cards Row
@@ -1049,5 +912,78 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
   },
-
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    paddingBottom: 30,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  addressItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  addressItemActive: {
+    backgroundColor: '#EFF6FF',
+  },
+  addressItemTextContainer: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  addressItemLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  addressItemLabelActive: {
+    color: '#2563EB',
+  },
+  addressItemLine: {
+    fontSize: 13,
+    color: '#64748B',
+  },
+  emptyAddress: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  emptyAddressText: {
+    fontSize: 15,
+    color: '#64748B',
+    marginBottom: 16,
+  },
+  addAddressBtn: {
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  addAddressBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
 });

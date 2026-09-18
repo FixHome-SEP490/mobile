@@ -40,16 +40,17 @@ export default function VerifyRegisterOtpScreen() {
     return () => clearInterval(timer);
   }, [cooldown]);
 
-  const handleVerify = async () => {
+  const handleVerify = async (otpOverride?: string) => {
+    const finalOtp = (typeof otpOverride === 'string' ? otpOverride : otp).trim();
     setError(null);
-    if (!/^[0-9]{6}$/.test(otp.trim())) {
+    if (!/^[0-9]{6}$/.test(finalOtp)) {
       setError('Vui lòng nhập đủ 6 số của mã OTP.');
       return;
     }
 
     setLoading(true);
     try {
-      const result = await authApi.verifyRegisterOtp(email, otp.trim());
+      const result = await authApi.verifyRegisterOtp(email, finalOtp);
       setAuth(result.accessToken, result.user);
       // Self-service OTP registration is Customer-only (Backend rejects any
       // other role at /auth/register), and 'CustomerMain' is registered in
@@ -153,14 +154,20 @@ export default function VerifyRegisterOtpScreen() {
                 keyboardType="number-pad"
                 maxLength={6}
                 value={otp}
-                onChangeText={(text) => setOtp(text.replace(/[^0-9]/g, ''))}
+                onChangeText={(text) => {
+                  const val = text.replace(/[^0-9]/g, '');
+                  setOtp(val);
+                  if (val.length === 6) {
+                    void handleVerify(val);
+                  }
+                }}
                 caretHidden={true}
               />
             </View>
 
             <TouchableOpacity
               style={[styles.submitBtn, loading && { opacity: 0.7 }]}
-              onPress={handleVerify}
+              onPress={() => handleVerify()}
               activeOpacity={0.85}
               disabled={loading}
             >
