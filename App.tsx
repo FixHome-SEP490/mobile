@@ -2,6 +2,8 @@
 import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
+import { MenuProvider } from 'react-native-popup-menu';
 import AppNavigator from './src/navigation/AppNavigator';
 import { ActivityIndicator, View } from 'react-native';
 import { storageService } from './src/services/storage.service';
@@ -32,8 +34,12 @@ export default function App() {
   if (isLoading) return <View style={{ flex: 1, justifyContent: 'center' }}><ActivityIndicator /></View>;
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar style="auto" />
-      <AppNavigator />
+      <BottomSheetModalProvider>
+        <MenuProvider>
+          <StatusBar style="auto" />
+          <AppNavigator />
+        </MenuProvider>
+      </BottomSheetModalProvider>
     </GestureHandlerRootView>
   );
 }
