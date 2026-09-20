@@ -12,6 +12,8 @@ import {
   Image,
   RefreshControl,
   ActivityIndicator,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { useUIStore } from '../../store/ui.store';
 import { Ionicons } from '@expo/vector-icons';
@@ -466,8 +468,10 @@ export default function CustomerProfileScreen() {
 
       {/* Profile Edit Modal (Thêm input URL Avatar của v2 + Nút Loading của bản thường) */}
       <Modal visible={isProfileModalVisible} animationType="fade" transparent={true}>
-        <View style={styles.modalContainer}>
-          <View style={[styles.modalContent, isDarkMode && styles.cardDark]}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalContainer}>
+            <TouchableWithoutFeedback>
+              <View style={[styles.modalContent, isDarkMode && styles.cardDark]}>
             <Text style={[styles.modalTitle, isDarkMode && styles.textDark]}>Chỉnh sửa thông tin</Text>
             <TextInput
               style={[styles.input, isDarkMode && styles.inputDark]}
@@ -518,14 +522,18 @@ export default function CustomerProfileScreen() {
                 )}
               </TouchableOpacity>
             </View>
-          </View>
+            </View>
+          </TouchableWithoutFeedback>
         </View>
-      </Modal>
+      </TouchableWithoutFeedback>
+    </Modal>
 
       {/* Address Edit Modal (Logic bản thường với Empty State tốt hơn) */}
       <Modal visible={isAddressModalVisible} animationType="fade" transparent={true}>
-        <View style={styles.modalContainer}>
-          <View style={[styles.modalContent, isDarkMode && styles.cardDark, { maxHeight: '80%' }]}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalContainer}>
+            <TouchableWithoutFeedback>
+              <View style={[styles.modalContent, isDarkMode && styles.cardDark, { maxHeight: '80%' }]}>
             <Text style={[styles.modalTitle, isDarkMode && styles.textDark]}>Quản lý địa chỉ</Text>
             <ScrollView style={{ width: '100%', marginBottom: 16 }}>
               {addresses.length === 0 ? (
@@ -647,9 +655,11 @@ export default function CustomerProfileScreen() {
                 )}
               </TouchableOpacity>
             </View>
-          </View>
+            </View>
+          </TouchableWithoutFeedback>
         </View>
-      </Modal>
+      </TouchableWithoutFeedback>
+    </Modal>
     </SafeAreaView>
   );
 }

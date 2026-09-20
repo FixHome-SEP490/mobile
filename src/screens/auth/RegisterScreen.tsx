@@ -1,6 +1,6 @@
 import { useAppTheme } from '../../constants/theme';
 // src/screens/auth/RegisterScreen.tsx
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -41,6 +41,12 @@ export default function RegisterScreen() {
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  
+  const phoneRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmPasswordRef = useRef<TextInput>(null);
+
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -147,6 +153,9 @@ export default function RegisterScreen() {
                   value={fullName}
                   onChangeText={setFullName}
                   onBlur={() => setTouchedFullName(true)}
+                  returnKeyType="next"
+                  onSubmitEditing={() => emailRef.current?.focus()}
+                  blurOnSubmit={false}
                 />
               </View>
               {fullNameError ? <Text style={styles.errorText}>{fullNameError}</Text> : null}
@@ -168,6 +177,10 @@ export default function RegisterScreen() {
                   value={email}
                   onChangeText={setEmail}
                   onBlur={() => setTouchedEmail(true)}
+                  ref={emailRef}
+                  returnKeyType="next"
+                  onSubmitEditing={() => passwordRef.current?.focus()}
+                  blurOnSubmit={false}
                 />
                 {emailError ? (
                   <Ionicons name="alert-circle" size={20} color="#FF3B30" />
@@ -193,6 +206,10 @@ export default function RegisterScreen() {
                   value={password}
                   onChangeText={setPassword}
                   autoCapitalize="none"
+                  ref={passwordRef}
+                  returnKeyType="next"
+                  onSubmitEditing={() => confirmPasswordRef.current?.focus()}
+                  blurOnSubmit={false}
                 />
                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
                   <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color="#9CA3AF" />
@@ -239,6 +256,10 @@ export default function RegisterScreen() {
                   onChangeText={setConfirmPassword}
                   onBlur={() => setTouchedConfirm(true)}
                   autoCapitalize="none"
+                  ref={confirmPasswordRef}
+                  returnKeyType="next"
+                  onSubmitEditing={() => phoneRef.current?.focus()}
+                  blurOnSubmit={false}
                 />
                 <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={{ padding: 4 }}>
                   <Ionicons name={showConfirmPassword ? "eye-off-outline" : "eye-outline"} size={18} color="#9CA3AF" />
@@ -262,6 +283,9 @@ export default function RegisterScreen() {
                   value={phone}
                   onChangeText={setPhone}
                   onBlur={() => setTouchedPhone(true)}
+                  ref={phoneRef}
+                  returnKeyType="done"
+                  onSubmitEditing={handleRegister}
                 />
               </View>
               {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}

@@ -16,6 +16,7 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   ScrollView,
   StatusBar,
@@ -112,6 +113,17 @@ export default function CustomerAIChatScreen() {
       },
     ];
   });
+  
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+  useEffect(() => {
+    const showSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   const [input, setInput] = useState('');
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [isThinking, setIsThinking] = useState(
@@ -440,7 +452,7 @@ export default function CustomerAIChatScreen() {
           </ScrollView>
         )}
 
-        <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+        <View style={[styles.composer, { paddingBottom: isKeyboardVisible ? 0 : Math.max(insets.bottom, 10) }]}>
           <TouchableOpacity style={styles.composerBtn} onPress={pickImages}>
             <Ionicons name="image-outline" size={22} color={colors.primary} />
           </TouchableOpacity>

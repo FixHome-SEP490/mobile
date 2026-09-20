@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
@@ -204,7 +205,7 @@ export default function TechnicianKycScreen() {
   const styles = getStyles(colors, spacing, fontSize);
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={colors.text} />
@@ -315,7 +316,7 @@ export default function TechnicianKycScreen() {
           </>
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -328,7 +329,6 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.xl,
     paddingBottom: spacing.sm,
   },
   backBtn: { width: 32, height: 32, justifyContent: 'center' },

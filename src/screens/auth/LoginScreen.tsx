@@ -1,6 +1,6 @@
 import { useAppTheme } from '../../constants/theme';
 // src/screens/auth/LoginScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -32,6 +32,8 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const passwordRef = useRef<TextInput>(null);
 
   const handleLogin = async (loginEmail?: string, loginPassword?: string) => {
     const finalEmail = loginEmail ?? email;
@@ -109,6 +111,9 @@ export default function LoginScreen() {
                   placeholderTextColor="#9CA3AF"
                   keyboardType="email-address"
                   autoCapitalize="none"
+                  returnKeyType="next"
+                  onSubmitEditing={() => passwordRef.current?.focus()}
+                  blurOnSubmit={false}
                 />
               </View>
             </View>
@@ -125,6 +130,9 @@ export default function LoginScreen() {
                   placeholderTextColor="#9CA3AF"
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  ref={passwordRef}
+                  returnKeyType="done"
+                  onSubmitEditing={() => handleLogin()}
                 />
                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
                   <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color="#9CA3AF" />

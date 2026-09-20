@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
   Image,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +28,7 @@ import {
 } from '../../api/messaging.api';
 import { chatSocketService } from '../../services/chat-socket.service';
 import TypingDots from './TypingDots';
+import { useAppTheme } from '../../constants/theme';
 
 type ThreadRoute = RouteProp<RootStackParamList, 'ChatThread'>;
 
@@ -43,7 +45,6 @@ function newClientMessageId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-import { useAppTheme } from '../../constants/theme';
 
 export default function ChatThreadScreen() {
   const { colors, isDark } = useAppTheme();
@@ -55,6 +56,17 @@ export default function ChatThreadScreen() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversation, setConversation] = useState<ConversationItem | null>(null);
+
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+  useEffect(() => {
+    const showSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -431,7 +443,7 @@ export default function ChatThreadScreen() {
         )}
 
         {canSend ? (
-          <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+          <View style={[styles.inputContainer, { paddingBottom: isKeyboardVisible ? 0 : Math.max(insets.bottom, 5) }]}>
             <TouchableOpacity style={styles.attachBtn} onPress={openAttachmentMenu}>
               <Ionicons name="attach" size={26} color="#64748B" />
             </TouchableOpacity>
@@ -603,7 +615,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     maxHeight: 120,
-    minHeight: 42,
+    minHeight: 44,
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 10,

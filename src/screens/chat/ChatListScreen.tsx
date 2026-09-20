@@ -17,6 +17,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { messagingApi, type ConversationItem } from '../../api/messaging.api';
+import { useAppTheme } from '../../constants/theme';
 import { chatSocketService } from '../../services/chat-socket.service';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -40,8 +41,6 @@ function relativeTime(iso: string | null): string {
   if (days < 7) return `${days} ngày`;
   return new Date(iso).toLocaleDateString('vi-VN');
 }
-import { useAppTheme } from '../../constants/theme';
-
 export default function ChatListScreen() {
   const { colors, isDark } = useAppTheme();
   const navigation = useNavigation<Nav>();
