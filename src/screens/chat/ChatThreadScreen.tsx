@@ -12,12 +12,13 @@ import {
   TouchableOpacity,
   View,
   Image,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { BottomSheetModal, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
-import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
+//import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
 import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store/auth.store';
 import {
@@ -27,6 +28,7 @@ import {
 } from '../../api/messaging.api';
 import { chatSocketService } from '../../services/chat-socket.service';
 import TypingDots from './TypingDots';
+import { useAppTheme } from '../../constants/theme';
 
 type ThreadRoute = RouteProp<RootStackParamList, 'ChatThread'>;
 
@@ -43,7 +45,9 @@ function newClientMessageId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+
 export default function ChatThreadScreen() {
+  const { colors, isDark } = useAppTheme();
   const navigation = useNavigation();
   const route = useRoute<ThreadRoute>();
   const { conversationId, counterpartName, serviceName } = route.params;
@@ -52,6 +56,17 @@ export default function ChatThreadScreen() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversation, setConversation] = useState<ConversationItem | null>(null);
+
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+  useEffect(() => {
+    const showSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -251,17 +266,7 @@ export default function ChatThreadScreen() {
     }
   }, [draft, sending, canSend, editing, conversationId, myId, upsert]);
 
-  const handleDelete = useCallback(
-    async (target: ChatMessage) => {
-      try {
-        const updated = await messagingApi.deleteMessage(target.id);
-        upsert(updated);
-      } catch {
-        Alert.alert('Không gỡ được tin nhắn', 'Vui lòng thử lại.');
-      }
-    },
-    [upsert],
-  );
+
 
   // Action menu is handled by react-native-popup-menu inline
 
@@ -307,7 +312,7 @@ export default function ChatThreadScreen() {
       return (
         <View style={[styles.msgRow, mine ? styles.msgRowMine : styles.msgRowTheirs]}>
           {mine && !item.isDeleted ? (
-            <Menu style={{ flex: 1, alignItems: 'flex-end' }}>
+            /*<Menu>
               <MenuTrigger triggerOnLongPress={true}>
                 {content}
               </MenuTrigger>
@@ -330,14 +335,15 @@ export default function ChatThreadScreen() {
                   </View>
                 </MenuOption>
               </MenuOptions>
-            </Menu>
+            </Menu>*/
+            content
           ) : (
             content
           )}
         </View>
       );
     },
-    [myId, handleDelete],
+    [myId],
   );
 
   const headerSubtitle = useMemo(
@@ -347,7 +353,7 @@ export default function ChatThreadScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -437,7 +443,7 @@ export default function ChatThreadScreen() {
         )}
 
         {canSend ? (
-          <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+          <View style={[styles.inputContainer, { paddingBottom: isKeyboardVisible ? 0 : Math.max(insets.bottom, 5) }]}>
             <TouchableOpacity style={styles.attachBtn} onPress={openAttachmentMenu}>
               <Ionicons name="attach" size={26} color="#64748B" />
             </TouchableOpacity>
@@ -545,25 +551,38 @@ const styles = StyleSheet.create({
   chatContent: { paddingVertical: 12, flexGrow: 1 },
   olderSpinner: { marginVertical: 12 },
 
-  msgRow: { paddingHorizontal: 12, marginVertical: 3, flexDirection: 'row' },
-  msgRowMine: { justifyContent: 'flex-end' },
-  msgRowTheirs: { justifyContent: 'flex-start' },
-  bubble: { maxWidth: '78%', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 9 },
-  bubbleMine: { backgroundColor: '#2563EB', borderBottomRightRadius: 4 }, 
+  msgRow: { paddingHorizontal: 12, marginVertical: 4 },
+  msgRowMine: { alignItems: 'flex-end' },
+  msgRowTheirs: { alignItems: 'flex-start' },
+  bubble: { 
+    maxWidth: '80%', 
+    paddingHorizontal: 14, 
+    paddingVertical: 10,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  bubbleMine: { 
+    backgroundColor: '#3B82F6', 
+    borderBottomRightRadius: 4,
+  }, 
   bubbleTheirs: { 
     backgroundColor: '#FFFFFF', 
     borderBottomLeftRadius: 4,
     borderWidth: 1,
     borderColor: '#E2E8F0' 
   }, 
-  bubbleDeleted: { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0', borderWidth: 1 },
-  msgText: { fontSize: 15, lineHeight: 21 },
+  bubbleDeleted: { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0', borderWidth: 1, borderRadius: 16 },
+  msgText: { fontSize: 15, lineHeight: 22 },
   msgTextMine: { color: '#FFFFFF' },
   msgTextTheirs: { color: '#0F172A' },
   msgTextDeleted: { color: '#94A3B8', fontStyle: 'italic' },
-  metaRow: { flexDirection: 'row', alignSelf: 'flex-end', marginTop: 3 },
-  metaText: { fontSize: 10 },
-  metaTextMine: { color: '#BFDBFE' },
+  metaRow: { flexDirection: 'row', alignSelf: 'flex-end', marginTop: 4 },
+  metaText: { fontSize: 11 },
+  metaTextMine: { color: 'rgba(255,255,255,0.7)' },
   metaTextTheirs: { color: '#94A3B8' },
 
   editBanner: {
@@ -596,7 +615,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     maxHeight: 120,
-    minHeight: 42,
+    minHeight: 44,
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 10,

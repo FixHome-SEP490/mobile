@@ -10,6 +10,8 @@ export interface AddressData {
   ward: string;
   district: string;
   province: string;
+  provinceCode?: string;
+  districtCode?: string;
   lat: number;
   lng: number;
   isDefault: boolean;
@@ -23,6 +25,8 @@ export interface CreateAddressRequest {
   ward: string;
   district: string;
   province: string;
+  provinceCode?: string;
+  districtCode?: string;
   lat?: number;
   lng?: number;
   isDefault?: boolean;

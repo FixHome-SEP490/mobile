@@ -37,6 +37,12 @@ export const notificationsApi = {
   },
   async getCountUnread(): Promise<number> {
     const res = await apiClient.get<any>('/notifications/unread-count');
-    return res.data.data.count;
+    return res.data.count;
   },
+  async readNotification(id: string): Promise<void> {
+    await apiClient.patch(`/notifications/${id}/read`);
+  },
+  async readAll(): Promise<void> {
+    await apiClient.patch('/notifications/read-all');
+  }
 };

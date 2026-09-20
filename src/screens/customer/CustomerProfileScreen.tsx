@@ -12,9 +12,14 @@ import {
   Image,
   RefreshControl,
   ActivityIndicator,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
+import { useUIStore } from '../../store/ui.store';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
+import MapView, { Marker } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -24,11 +29,16 @@ import { authApi } from '../../api/auth.api';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { usersApi, type AddressData } from '../../api/users.api';
+import { geoApi } from '../../api/geo.api';
+import { useAppTheme } from '../../constants/theme';
 
 export default function CustomerProfileScreen() {
   const { user, token, setAuth, logout } = useAuthStore();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const handleScroll = useScrollHideTabBar();
+  const { colors, isDark } = useAppTheme();
+  const isDarkMode = isDark;
+  const styles = getStyles(colors);
 
   // States for user info
   const [name, setName] = useState(user?.fullName || 'Khách hàng');
@@ -37,7 +47,7 @@ export default function CustomerProfileScreen() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatarUrl || null);
 
   // State for theme
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const toggleTheme = useUIStore((state) => state.toggleTheme);
 
   // States for addresses & Loading
   const [addresses, setAddresses] = useState<AddressData[]>([]);
@@ -75,10 +85,17 @@ export default function CustomerProfileScreen() {
   const [editPhone, setEditPhone] = useState(phone);
   const [editAvatar, setEditAvatar] = useState(avatarUrl || '');
 
-  // Temp states for adding/editing address
   const [editAddressId, setEditAddressId] = useState<string | null>(null);
   const [addressName, setAddressName] = useState('');
   const [addressDetail, setAddressDetail] = useState('');
+  const [addressWard, setAddressWard] = useState('');
+  const [addressDistrict, setAddressDistrict] = useState('');
+  const [addressProvince, setAddressProvince] = useState('');
+  const [addressProvinceCode, setAddressProvinceCode] = useState<string | undefined>(undefined);
+  const [addressDistrictCode, setAddressDistrictCode] = useState<string | undefined>(undefined);
+  const [addressLat, setAddressLat] = useState<number | undefined>(undefined);
+  const [addressLng, setAddressLng] = useState<number | undefined>(undefined);
+  const [gettingLocation, setGettingLocation] = useState(false);
 
   const fetchProfileData = useCallback(async () => {
     try {
@@ -165,23 +182,38 @@ export default function CustomerProfileScreen() {
 
     setSavingAddress(true);
     try {
+      const payload = {
+        label: addressName.trim(),
+        line1: addressDetail.trim(),
+        ward: addressWard,
+        district: addressDistrict || addressWard || addressProvince,
+        province: addressProvince,
+        provinceCode: addressProvinceCode,
+        districtCode: addressDistrictCode,
+        lat: addressLat,
+        lng: addressLng,
+      };
+
       if (editAddressId) {
-        await usersApi.updateAddress(editAddressId, {
-          label: addressName.trim(),
-          line1: addressDetail.trim(),
-        });
+        await usersApi.updateAddress(editAddressId, payload);
       } else {
-        await usersApi.createAddress({
-          label: addressName.trim(),
-          line1: addressDetail.trim(),
-          ward: '',
-          district: '',
-          province: 'TP.HCM',
-        });
+        if (!addressProvince) {
+          Alert.alert('Lỗi', 'Chưa xác định được tỉnh/thành. Vui lòng dùng vị trí hiện tại hoặc thử lại.');
+          setSavingAddress(false);
+          return;
+        }
+        await usersApi.createAddress(payload);
       }
       await refreshAddresses();
       setAddressName('');
       setAddressDetail('');
+      setAddressWard('');
+      setAddressDistrict('');
+      setAddressProvince('');
+      setAddressProvinceCode(undefined);
+      setAddressDistrictCode(undefined);
+      setAddressLat(undefined);
+      setAddressLng(undefined);
       setEditAddressId(null);
       setAddressModalVisible(false);
     } catch (err: any) {
@@ -195,6 +227,64 @@ export default function CustomerProfileScreen() {
     setEditAddressId(addr.id);
     setAddressName(addr.label);
     setAddressDetail(addr.line1);
+    setAddressWard(addr.ward || '');
+    setAddressDistrict(addr.district || '');
+    setAddressProvince(addr.province || '');
+    setAddressProvinceCode(addr.provinceCode);
+    setAddressDistrictCode(addr.districtCode);
+    setAddressLat(addr.lat);
+    setAddressLng(addr.lng);
+  };
+
+  const handleGetLocation = async () => {
+    setGettingLocation(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Quyền bị từ chối', 'Ứng dụng cần quyền truy cập vị trí để tự động lấy địa chỉ.');
+        setGettingLocation(false);
+        return;
+      }
+      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const lat = location.coords.latitude;
+      const lng = location.coords.longitude;
+      setAddressLat(lat);
+      setAddressLng(lng);
+
+      try {
+        const place = await geoApi.reverse(lat, lng);
+        setAddressDetail(place.formattedAddress || '');
+        setAddressWard(place.ward || '');
+        setAddressDistrict(place.district || '');
+        setAddressProvince(place.province || '');
+        setAddressProvinceCode(place.provinceCode);
+        setAddressDistrictCode(place.districtCode);
+      } catch {
+        // Just fail silently for geocoding if it fails but keep coordinates
+      }
+    } catch {
+      Alert.alert('Lỗi', 'Không thể lấy vị trí hiện tại.');
+    } finally {
+      setGettingLocation(false);
+    }
+  };
+
+  const handleMapPress = async (e: any) => {
+    const lat = e.nativeEvent.coordinate.latitude;
+    const lng = e.nativeEvent.coordinate.longitude;
+    setAddressLat(lat);
+    setAddressLng(lng);
+    try {
+      const place = await geoApi.reverse(lat, lng);
+      setAddressDetail(place.formattedAddress || '');
+      setAddressWard(place.ward || '');
+      setAddressDistrict(place.district || '');
+      setAddressProvince(place.province || '');
+      setAddressProvinceCode(place.provinceCode);
+      setAddressDistrictCode(place.districtCode);
+    } catch {
+      // Fail silently
+    }
   };
 
   const handleDeleteAddress = async (id: string) => {
@@ -240,7 +330,7 @@ export default function CustomerProfileScreen() {
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563EB']} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['colors.primary']} />
         }
       >
         {/* Main Wrapper từ UI v2 */}
@@ -303,7 +393,7 @@ export default function CustomerProfileScreen() {
                 setProfileModalVisible(true);
               }}
             >
-              <Ionicons name="person-outline" size={22} color="#64748B" style={styles.menuIcon} />
+              <Ionicons name="person-outline" size={22} color="colors.textSecondary" style={styles.menuIcon} />
               <View style={styles.menuContent}>
                 <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Thông tin cá nhân</Text>
                 <Text style={styles.menuDesc}>{name} · {phone || email}</Text>
@@ -313,7 +403,7 @@ export default function CustomerProfileScreen() {
             <View style={styles.divider} />
 
             <TouchableOpacity style={styles.menuItem} onPress={() => setAddressModalVisible(true)}>
-              <Ionicons name="location-outline" size={22} color="#64748B" style={styles.menuIcon} />
+              <Ionicons name="location-outline" size={22} color="colors.textSecondary" style={styles.menuIcon} />
               <View style={styles.menuContent}>
                 <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Địa chỉ sửa chữa</Text>
                 <Text style={styles.menuDesc}>
@@ -328,7 +418,7 @@ export default function CustomerProfileScreen() {
               style={styles.menuItem}
               onPress={() => Alert.alert('Thông báo', 'Hỗ trợ thanh toán tiền mặt và chuyển khoản khi hoàn tất.')}
             >
-              <Ionicons name="card-outline" size={22} color="#64748B" style={styles.menuIcon} />
+              <Ionicons name="card-outline" size={22} color="colors.textSecondary" style={styles.menuIcon} />
               <View style={styles.menuContent}>
                 <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Phương thức thanh toán</Text>
                 <Text style={styles.menuDesc}>Tiền mặt, Chuyển khoản QR</Text>
@@ -338,7 +428,7 @@ export default function CustomerProfileScreen() {
             <View style={styles.divider} />
 
             <TouchableOpacity style={styles.menuItem} onPress={() => Alert.alert('Tính năng đang phát triển')}>
-              <Ionicons name="shield-checkmark-outline" size={22} color="#64748B" style={styles.menuIcon} />
+              <Ionicons name="shield-checkmark-outline" size={22} color="colors.textSecondary" style={styles.menuIcon} />
               <View style={styles.menuContent}>
                 <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Bảo mật & phiên đăng nhập</Text>
               </View>
@@ -346,14 +436,14 @@ export default function CustomerProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Tùy chọn</Text>
-          <View style={[styles.menuContainer, isDarkMode && styles.cardDark]}>
+          <Text style={styles.sectionTitle}>Tùy chọn</Text>
+          <View style={styles.menuContainer}>
             <View style={styles.menuItem}>
-              <Ionicons name="moon-outline" size={22} color="#64748B" style={styles.menuIcon} />
+              <Ionicons name="moon-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
               <View style={styles.menuContent}>
-                <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Giao diện tối</Text>
+                <Text style={styles.menuTitle}>Giao diện tối</Text>
               </View>
-              <Switch value={isDarkMode} onValueChange={setIsDarkMode} />
+              <Switch value={isDark} onValueChange={toggleTheme} />
             </View>
           </View>
 
@@ -378,8 +468,10 @@ export default function CustomerProfileScreen() {
 
       {/* Profile Edit Modal (Thêm input URL Avatar của v2 + Nút Loading của bản thường) */}
       <Modal visible={isProfileModalVisible} animationType="fade" transparent={true}>
-        <View style={styles.modalContainer}>
-          <View style={[styles.modalContent, isDarkMode && styles.cardDark]}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalContainer}>
+            <TouchableWithoutFeedback>
+              <View style={[styles.modalContent, isDarkMode && styles.cardDark]}>
             <Text style={[styles.modalTitle, isDarkMode && styles.textDark]}>Chỉnh sửa thông tin</Text>
             <TextInput
               style={[styles.input, isDarkMode && styles.inputDark]}
@@ -430,14 +522,18 @@ export default function CustomerProfileScreen() {
                 )}
               </TouchableOpacity>
             </View>
-          </View>
+            </View>
+          </TouchableWithoutFeedback>
         </View>
-      </Modal>
+      </TouchableWithoutFeedback>
+    </Modal>
 
       {/* Address Edit Modal (Logic bản thường với Empty State tốt hơn) */}
       <Modal visible={isAddressModalVisible} animationType="fade" transparent={true}>
-        <View style={styles.modalContainer}>
-          <View style={[styles.modalContent, isDarkMode && styles.cardDark, { maxHeight: '80%' }]}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalContainer}>
+            <TouchableWithoutFeedback>
+              <View style={[styles.modalContent, isDarkMode && styles.cardDark, { maxHeight: '80%' }]}>
             <Text style={[styles.modalTitle, isDarkMode && styles.textDark]}>Quản lý địa chỉ</Text>
             <ScrollView style={{ width: '100%', marginBottom: 16 }}>
               {addresses.length === 0 ? (
@@ -452,10 +548,10 @@ export default function CustomerProfileScreen() {
                       <Text style={styles.addressDetail}>{addr.line1}</Text>
                     </View>
                     <TouchableOpacity onPress={() => handleEditAddress(addr)} style={styles.iconBtn}>
-                      <Ionicons name="pencil" size={18} color="#2563EB" />
+                      <Ionicons name="pencil" size={18} color="colors.primary" />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => handleDeleteAddress(addr.id)} style={styles.iconBtn}>
-                      <Ionicons name="trash" size={18} color="#EF4444" />
+                      <Ionicons name="trash" size={18} color="colors.error" />
                     </TouchableOpacity>
                   </View>
                 ))
@@ -480,6 +576,53 @@ export default function CustomerProfileScreen() {
               onChangeText={setAddressDetail}
             />
 
+            {(addressWard || addressProvince) ? (
+              <Text style={{ fontSize: 12, color: 'colors.textSecondary', alignSelf: 'flex-start', marginBottom: 12 }}>
+                <Ionicons name="location" size={12} /> {[addressWard, addressProvince].filter(Boolean).join(', ')}
+              </Text>
+            ) : null}
+
+            <Text style={{ fontSize: 13, color: 'colors.textSecondary', alignSelf: 'flex-start', marginBottom: 6, fontWeight: '500' }}>
+              Chọn trên bản đồ:
+            </Text>
+            <View style={{ width: '100%', height: 200, borderRadius: 12, overflow: 'hidden', marginBottom: 12, borderWidth: 1, borderColor: colors.border }}>
+              <MapView
+                style={{ width: '100%', height: '100%' }}
+                initialRegion={{
+                  latitude: addressLat || 10.7769,
+                  longitude: addressLng || 106.7009,
+                  latitudeDelta: 0.05,
+                  longitudeDelta: 0.05,
+                }}
+                region={addressLat && addressLng ? {
+                  latitude: addressLat,
+                  longitude: addressLng,
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.01,
+                } : undefined}
+                onPress={handleMapPress}
+              >
+                {addressLat && addressLng && (
+                  <Marker coordinate={{ latitude: addressLat, longitude: addressLng }} />
+                )}
+              </MapView>
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.locationBtn, isDarkMode && styles.cardDark]} 
+              onPress={handleGetLocation} 
+              disabled={gettingLocation}
+            >
+              {gettingLocation ? (
+                <ActivityIndicator size="small" color="colors.primary" />
+              ) : (
+                <>
+                  <Ionicons name="navigate-circle-outline" size={20} color="colors.primary" />
+                  <Text style={styles.locationBtnText}>Dùng vị trí hiện tại</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.cancelBtn}
@@ -488,6 +631,13 @@ export default function CustomerProfileScreen() {
                   setEditAddressId(null);
                   setAddressName('');
                   setAddressDetail('');
+                  setAddressWard('');
+                  setAddressDistrict('');
+                  setAddressProvince('');
+                  setAddressProvinceCode(undefined);
+                  setAddressDistrictCode(undefined);
+                  setAddressLat(undefined);
+                  setAddressLng(undefined);
                 }}
                 disabled={savingAddress}
               >
@@ -505,23 +655,25 @@ export default function CustomerProfileScreen() {
                 )}
               </TouchableOpacity>
             </View>
-          </View>
+            </View>
+          </TouchableWithoutFeedback>
         </View>
-      </Modal>
+      </TouchableWithoutFeedback>
+    </Modal>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  containerDark: { backgroundColor: '#0F172A' },
+const getStyles = (colors: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  containerDark: { backgroundColor: colors.text },
   cardDark: { backgroundColor: '#1E293B' },
-  name: { fontSize: 20, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
-  textDark: { color: '#F8FAFC' },
+  name: { fontSize: 20, fontWeight: '700', color: colors.text, marginBottom: 4 },
+  textDark: { color: colors.background },
 
   // Giao diện Main Wrapper & Avatar của v2
   mainWrapperCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     flexGrow: 1,
     paddingHorizontal: 16,
     paddingTop: 16,
@@ -545,50 +697,52 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
     marginBottom: 12, borderWidth: 4,
   },
-  avatarBorderLight: { borderColor: '#FFFFFF', backgroundColor: '#FFFFFF' },
+  avatarBorderLight: { borderColor: colors.surface, backgroundColor: colors.surface },
   avatarBorderDark: { borderColor: '#1E293B', backgroundColor: '#1E293B' },
   avatar: {
     width: '100%', height: '100%', borderRadius: 50,
     backgroundColor: '#DBEAFE', justifyContent: 'center', alignItems: 'center', overflow: 'hidden'
   },
   avatarImage: { width: '100%', height: '100%' },
-  avatarText: { fontSize: 36, fontWeight: '700', color: '#2563EB' },
-  phone: { fontSize: 14, color: '#64748B', fontWeight: '500' },
+  avatarText: { fontSize: 36, fontWeight: '700', color: colors.primary },
+  phone: { fontSize: 14, color: colors.textSecondary, fontWeight: '500' },
   
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 12 },
-  menuContainer: { backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden', marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 12 },
+  menuContainer: { backgroundColor: colors.surface, borderRadius: 16, overflow: 'hidden', marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   menuItem: { flexDirection: 'row', padding: 16, alignItems: 'center' },
   menuIcon: { marginRight: 16 },
   menuContent: { flex: 1 },
-  menuTitle: { fontSize: 15, fontWeight: '600', color: '#0F172A' },
-  menuDesc: { fontSize: 13, color: '#64748B', marginTop: 2 },
-  divider: { height: 1, backgroundColor: '#F1F5F9', marginLeft: 54 },
+  menuTitle: { fontSize: 15, fontWeight: '600', color: colors.text },
+  menuDesc: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+  divider: { height: 1, backgroundColor: colors.border, marginLeft: 54 },
   footer: { alignItems: 'center', marginTop: 12, marginBottom: 32 },
   logoutBtn: { paddingVertical: 12, paddingHorizontal: 24 },
-  logoutText: { fontSize: 14, fontWeight: '600', color: '#EF4444' },
+  logoutText: { fontSize: 14, fontWeight: '600', color: colors.error },
 
-  modalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: 16 },
-  modalContent: { width: '100%', backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, alignItems: 'center' },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A', marginBottom: 16 },
-  input: { width: '100%', backgroundColor: '#F1F5F9', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, color: '#0F172A', marginBottom: 12 },
-  inputDark: { backgroundColor: '#334155', color: '#F8FAFC' },
+  modalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', padding: 16 },
+  modalContent: { width: '100%', backgroundColor: colors.surface, borderRadius: 20, padding: 20, alignItems: 'center' },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 16 },
+  input: { width: '100%', backgroundColor: colors.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, color: colors.text, marginBottom: 12 },
+  inputDark: { backgroundColor: '#334155', color: colors.background },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', width: '100%', marginTop: 8, gap: 12 },
-  cancelBtn: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, backgroundColor: '#F1F5F9' },
-  cancelBtnText: { color: '#64748B', fontWeight: '600', fontSize: 14 },
-  saveBtn: { paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, backgroundColor: '#2563EB', justifyContent: 'center', alignItems: 'center' },
-  saveBtnText: { color: '#FFFFFF', fontWeight: '600', fontSize: 14 },
-  addressItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12, marginBottom: 8 },
-  addressName: { fontSize: 14, fontWeight: '600', color: '#0F172A', marginBottom: 4 },
-  addressDetail: { fontSize: 12, color: '#64748B' },
+  cancelBtn: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, backgroundColor: colors.border },
+  cancelBtnText: { color: colors.textSecondary, fontWeight: '600', fontSize: 14 },
+  saveBtn: { paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
+  saveBtnText: { color: colors.surface, fontWeight: '600', fontSize: 14 },
+  addressItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, padding: 12, borderRadius: 12, marginBottom: 8 },
+  addressName: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 4 },
+  addressDetail: { fontSize: 12, color: colors.textSecondary },
   iconBtn: { padding: 8, marginLeft: 4 },
+  locationBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: '#E0F2FE', borderRadius: 8, alignSelf: 'flex-start', marginBottom: 16 },
+  locationBtnText: { color: colors.primary, fontSize: 13, fontWeight: '600' },
   overviewRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
   overviewCard: { flex: 1, borderRadius: 16, padding: 16 },
   cardTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
   iconCircle: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginRight: 8 },
   cardLabel: { fontSize: 14, color: '#475569', fontWeight: '500' },
-  cardValue: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
-  cardUnit: { fontSize: 14, fontWeight: '600', color: '#64748B' },
-  cameraIconBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#2563EB', width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' },
+  cardValue: { fontSize: 22, fontWeight: '800', color: colors.text },
+  cardUnit: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
+  cameraIconBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: colors.primary, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' },
   avatarModalContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
   closeAvatarModalBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 8 },
   fullAvatarImage: { width: '100%', height: 400 },

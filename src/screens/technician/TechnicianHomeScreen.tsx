@@ -8,6 +8,7 @@ import {
   StatusBar,
   RefreshControl,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -79,7 +80,7 @@ export default function TechnicianHomeScreen() {
   const targetPercentage = Math.min(Math.round((completedCount / 20) * 100), 100);
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Header */}
@@ -232,7 +233,7 @@ export default function TechnicianHomeScreen() {
         </LinearGradient>
         <View style={{ height: 80 }} />
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -246,8 +247,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 44,
-    paddingBottom: 16,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
