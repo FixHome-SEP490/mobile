@@ -63,7 +63,7 @@ export default function CustomerNavigator() {
         component={CustomerBookingsScreen}
         options={{
           title: 'Đơn của tôi',
-          headerShown: true,
+          headerShown: false,
           headerTitle: 'Lịch sử & Hoạt động',
         }}
       />

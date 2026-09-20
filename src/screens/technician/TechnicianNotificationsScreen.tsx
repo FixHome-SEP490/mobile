@@ -1,9 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../constants';
+import { useAppTheme } from '../../constants/theme';
 
 export default function TechnicianNotificationsScreen() {
+  const { colors } = useAppTheme();
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>

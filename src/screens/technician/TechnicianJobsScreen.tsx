@@ -10,12 +10,13 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../constants';
+import { useAppTheme } from '../../constants/theme';
 import { ordersApi, type ServiceOrderItem, type CanonicalOrderStatus } from '../../api/orders.api';
 
 type JobTab = 'all' | 'pending' | 'in_progress';
 
 export default function TechnicianJobsScreen() {
+  const { colors } = useAppTheme();
   const [activeTab, setActiveTab] = useState<JobTab>('all');
   const [jobs, setJobs] = useState<ServiceOrderItem[]>([]);
   const [loading, setLoading] = useState(true);

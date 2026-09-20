@@ -15,7 +15,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import type { RootStackParamList } from '../../types';
-import { colors, spacing, fontSize } from '../../constants/theme';
+import { useAppTheme } from '../../constants/theme';
 import {
   technicianVerificationApi,
   type KycDocumentType,
@@ -80,6 +80,7 @@ const INITIAL_SLOTS: KycSlot[] = [
 ];
 
 export default function TechnicianKycScreen() {
+  const { colors, spacing, fontSize } = useAppTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -200,6 +201,7 @@ export default function TechnicianKycScreen() {
   };
 
   const showUploadForm = !verification || verification.status === 'REJECTED';
+  const styles = getStyles(colors, spacing, fontSize);
 
   return (
     <View style={styles.container}>
@@ -319,7 +321,7 @@ export default function TechnicianKycScreen() {
 
 const SLOT_SIZE = 96;
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',

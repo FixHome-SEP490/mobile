@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { useAppTheme } from '../../constants/theme';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, StatusBar, TextInput, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -16,24 +17,27 @@ interface ServiceItem {
   imageSource?: any;
 }
 
-const ALL_SERVICES: ServiceItem[] = [
+const getAllServices = (colors: any): ServiceItem[] => [
   { id: '1', name: 'Vệ sinh máy lạnh', iconName: 'snowflake', iconType: 'fa5', iconColor: '#0284C7', pedestalColor: '#E0F2FE', imageSource: require('../../../assets/air-conditioner.png') },
   { id: '2', name: 'Sửa ống nước', iconName: 'pipe-wrench', iconType: 'material', iconColor: '#0D9488', pedestalColor: '#CCFBF1', imageSource: require('../../../assets/water-pipeline.png') },
   { id: '3', name: 'Lắp đặt hệ thống điện', iconName: 'bolt', iconType: 'fa5', iconColor: '#EAB308', pedestalColor: '#FEF9C3',imageSource: require('../../../assets/voltage-cabinet.png') },
   { id: '4', name: 'Thông nghẹt cống', iconName: 'water-pump', iconType: 'material', iconColor: '#4F46E5', pedestalColor: '#E0E7FF',imageSource: require('../../../assets/unclogging-drains.png') },
-  { id: '5', name: 'Sửa Tivi', iconName: 'air-conditioner', iconType: 'material', iconColor: '#2563EB', pedestalColor: '#DBEAFE',imageSource: require('../../../assets/tv-repair.png')  },
+  { id: '5', name: 'Sửa Tivi', iconName: 'air-conditioner', iconType: 'material', iconColor: colors.primary, pedestalColor: '#DBEAFE',imageSource: require('../../../assets/tv-repair.png')  },
   { id: '6', name: 'Điện tử gia dụng', iconName: 'tools', iconType: 'fa5', iconColor: '#059669', pedestalColor: '#D1FAE5',imageSource: require('../../../assets/home-appliance-repair.png') },
   { id: '7', name: 'Sửa máy giặt', iconName: 'washing-machine', iconType: 'material', iconColor: '#7C3AED', pedestalColor: '#EDE9FE', imageSource: require('../../../assets/washing-machine.png') },
   { id: '8', name: 'Sửa tủ lạnh', iconName: 'fridge-outline', iconType: 'material', iconColor: '#EA580C', pedestalColor: '#FFEDD5', imageSource: require('../../../assets/refrigerator.png') },
 ];
 
 export default function CustomerServicesScreen() {
+  const { colors, spacing, fontSize, isDark } = useAppTheme();
+  const styles = getStyles(colors, spacing, fontSize);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const ALL_SERVICES = useMemo(() => getAllServices(colors), [colors]);
   const route = useRoute<RouteProp<RootStackParamList, 'CustomerServices'>>();
   const initialQuery = route.params?.query || '';
   const [searchQuery, setSearchQuery] = useState(initialQuery);
 
-  const filteredServices = ALL_SERVICES.filter(service => 
+  const filteredServices = ALL_SERVICES.filter((service: ServiceItem) => 
     service.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -58,10 +62,10 @@ export default function CustomerServicesScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#0F172A" />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Tất cả dịch vụ</Text>
         <View style={{ width: 40 }} />
@@ -107,41 +111,41 @@ export default function CustomerServicesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   header: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'space-between', 
     paddingHorizontal: 16, 
     paddingVertical: 12, 
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9'
+    borderBottomColor: colors.border
   },
   backBtn: {
     width: 40,
     height: 40,
     justifyContent: 'center',
   },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     margin: 16,
     marginBottom: 4,
     paddingHorizontal: 12,
     height: 48,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
   searchInput: {
     flex: 1,
     marginLeft: 8,
     fontSize: 14,
-    color: '#0F172A',
+    color: colors.text,
   },
   listContainer: {
     padding: 16,
@@ -150,7 +154,7 @@ const styles = StyleSheet.create({
   itemCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     padding: 12,
     borderRadius: 16,
     shadowColor: '#000',
@@ -173,6 +177,8 @@ const styles = StyleSheet.create({
   itemName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#0F172A',
+    color: colors.text,
   }
 });
+
+

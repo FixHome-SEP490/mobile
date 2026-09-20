@@ -8,19 +8,23 @@ import {
   TextInput,
   ActivityIndicator,
   RefreshControl,
+  StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
-import { colors } from '../../constants';
+import { useAppTheme } from '../../constants/theme';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { ordersApi, type ServiceOrderItem, type CanonicalOrderStatus } from '../../api/orders.api';
 
 type TabType = 'all' | 'in_progress' | 'completed';
 
 export default function CustomerBookingsScreen() {
+  const { colors, spacing, fontSize, isDark } = useAppTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const styles = getStyles(colors, spacing, fontSize);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>('all');
   const [orders, setOrders] = useState<ServiceOrderItem[]>([]);
@@ -68,7 +72,7 @@ export default function CustomerBookingsScreen() {
         return { label: 'Đang di chuyển', bg: '#FEF3C7', color: '#D97706' };
       case 'UNDER_REPAIR':
       case 'IN_PROGRESS':
-        return { label: 'Đang sửa chữa', bg: '#DBEAFE', color: '#2563EB' };
+        return { label: 'Đang sửa chữa', bg: '#DBEAFE', color: colors.primary };
       case 'ACCEPTED':
         return { label: 'Đã nhận đơn', bg: '#E0E7FF', color: '#4F46E5' };
       case 'COMPLETED':
@@ -76,7 +80,7 @@ export default function CustomerBookingsScreen() {
       case 'CANCELLED':
         return { label: 'Đã hủy', bg: '#FEE2E2', color: '#DC2626' };
       default:
-        return { label: s, bg: '#F1F5F9', color: '#64748B' };
+        return { label: s, bg: 'colors.border', color: 'colors.textSecondary' };
     }
   };
 
@@ -117,15 +121,20 @@ export default function CustomerBookingsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+      {/* Header */}
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>Đơn dịch vụ</Text>
+            </View>
       {/* Search & Filter */}
       <View style={styles.searchFilterContainer}>
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color="#94A3B8" />
+          <Ionicons name="search" size={20} color="colors.textSecondary" />
           <TextInput
             style={styles.searchInput}
             placeholder="Tìm theo mã đơn, dịch vụ, thợ..."
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor="colors.textSecondary"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
@@ -176,10 +185,10 @@ export default function CustomerBookingsScreen() {
               : 'Đặt lịch ngay để thợ FixHome kiểm tra tại nhà bạn.'}
           </Text>
           <TouchableOpacity
-            style={styles.bookNowBtn}
+            style={[styles.bookNowBtn, { backgroundColor: colors.primary }]}
             onPress={() => navigation.navigate('CustomerServices')}
           >
-            <Ionicons name="add-circle-outline" size={18} color="#FFFFFF" />
+            <Ionicons name="add-circle-outline" size={18} color="colors.surface" />
             <Text style={styles.bookNowText}>Đặt dịch vụ mới</Text>
           </TouchableOpacity>
         </View>
@@ -222,21 +231,36 @@ export default function CustomerBookingsScreen() {
                       <Text style={styles.meta}>KTV {order.technician.fullName}</Text>
                     )}
                   </View>
-                  <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+                  <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
                 </View>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.text,
   },
   searchFilterContainer: {
     flexDirection: 'row',
@@ -248,22 +272,22 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     paddingHorizontal: 12,
     height: 44,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
   searchInput: {
     flex: 1,
     marginLeft: 8,
     fontSize: 14,
-    color: '#0F172A',
+    color: colors.text,
   },
   segmentContainer: {
     flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.border,
     margin: 16,
     padding: 4,
     borderRadius: 12,
@@ -275,7 +299,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   segmentActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -285,12 +309,12 @@ const styles = StyleSheet.create({
   segmentText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#64748B',
+    color: colors.textSecondary,
   },
   segmentTextActive: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
   },
   scrollContent: {
     padding: 16,
@@ -304,7 +328,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: '#64748B',
+    color: colors.textSecondary,
   },
   emptyContainer: {
     flex: 1,
@@ -315,13 +339,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
     marginTop: 16,
     marginBottom: 8,
   },
   emptyDesc: {
     fontSize: 13,
-    color: '#64748B',
+    color: colors.primary,
     textAlign: 'center',
     lineHeight: 18,
     marginBottom: 20,
@@ -330,18 +354,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: colors.primary,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 10,
   },
   bookNowText: {
-    color: '#FFFFFF',
+    color: colors.surface,
     fontSize: 14,
     fontWeight: '700',
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
@@ -381,12 +404,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
     marginBottom: 4,
   },
   meta: {
     fontSize: 13,
-    color: '#64748B',
+    color: colors.textSecondary,
     marginBottom: 2,
   },
 });
+

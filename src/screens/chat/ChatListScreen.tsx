@@ -40,8 +40,10 @@ function relativeTime(iso: string | null): string {
   if (days < 7) return `${days} ngày`;
   return new Date(iso).toLocaleDateString('vi-VN');
 }
+import { useAppTheme } from '../../constants/theme';
 
 export default function ChatListScreen() {
+  const { colors, isDark } = useAppTheme();
   const navigation = useNavigation<Nav>();
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,12 +144,12 @@ export default function ChatListScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
-          <Text style={styles.headerBtnText}>Sửa</Text>
+          <Ionicons name="arrow-back" size={24} color="#3B82F6" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chat</Text>
         <TouchableOpacity style={styles.headerBtn}>

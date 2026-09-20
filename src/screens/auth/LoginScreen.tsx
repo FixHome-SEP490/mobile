@@ -1,3 +1,4 @@
+import { useAppTheme } from '../../constants/theme';
 // src/screens/auth/LoginScreen.tsx
 import React, { useState } from 'react';
 import {
@@ -10,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -21,6 +23,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { authApi } from '../../api/auth.api';
 
 export default function LoginScreen() {
+  const { colors, spacing, fontSize, isDark } = useAppTheme();
+  const styles = getStyles(colors, spacing, fontSize);
   const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList & RootStackParamList>>();
   const { setAuth } = useAuthStore();
   const [email, setEmail] = useState('');
@@ -69,6 +73,7 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -77,7 +82,7 @@ export default function LoginScreen() {
         
           <View style={styles.header}>
             <View style={styles.iconWrapper}>
-              <Ionicons name="home" size={32} color="#2563EB" />
+              <Ionicons name="home" size={32} color={colors.primary} />
             </View>
             <Text style={styles.title}>ĐĂNG NHẬP</Text>
             <View style={styles.divider} />
@@ -87,7 +92,7 @@ export default function LoginScreen() {
           <View style={styles.formContainer}>
             {error && (
               <View style={styles.errorBox}>
-                <Ionicons name="alert-circle" size={16} color="#DC2626" />
+                <Ionicons name="alert-circle" size={16} color={colors.error} />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             )}
@@ -136,7 +141,7 @@ export default function LoginScreen() {
 
             <TouchableOpacity style={[styles.loginBtn, loading && { opacity: 0.7 }]} onPress={() => handleLogin()} activeOpacity={0.85} disabled={loading}>
               {loading ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
+                <ActivityIndicator color={colors.surface} size="small" />
               ) : (
                 <Text style={styles.loginBtnText}>ĐĂNG NHẬP</Text>
               )}
@@ -161,7 +166,7 @@ export default function LoginScreen() {
               onPress={handleLoginCustomer}
               activeOpacity={0.85}
             >
-              <Ionicons name="person" size={16} color="#FFFFFF" />
+              <Ionicons name="person" size={16} color={colors.surface} />
               <Text style={styles.techLoginBtnText}>Vào vai Khách (Customer)</Text>
             </TouchableOpacity>
 
@@ -170,7 +175,7 @@ export default function LoginScreen() {
               onPress={handleLoginTechnician}
               activeOpacity={0.85}
             >
-              <Ionicons name="construct" size={16} color="#FFFFFF" />
+              <Ionicons name="construct" size={16} color={colors.surface} />
               <Text style={styles.techLoginBtnText}>Vào vai Thợ (Technician)</Text>
             </TouchableOpacity>
           </View>
@@ -180,10 +185,10 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
   scrollContent: {
     flexGrow: 1,
@@ -200,7 +205,7 @@ const styles = StyleSheet.create({
     marginTop: -20,
     paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#D1D5DB',
@@ -232,7 +237,7 @@ const styles = StyleSheet.create({
   divider: {
     width: 40,
     height: 4,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderRadius: 2,
     marginBottom: 12,
   },
@@ -257,7 +262,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     flex: 1,
-    color: '#DC2626',
+    color: colors.error,
     fontSize: 12,
     fontWeight: '500',
   },
@@ -274,7 +279,7 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: '#D1D5DB',
     borderRadius: 8,
@@ -297,23 +302,23 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#2563EB',
+    color: colors.primary,
   },
   loginBtn: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     height: 50,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 16,
-    shadowColor: '#2563EB',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 3,
   },
   loginBtnText: {
-    color: '#FFFFFF',
+    color: colors.surface,
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -329,7 +334,7 @@ const styles = StyleSheet.create({
   },
   registerLink: {
     fontSize: 13,
-    color: '#2563EB',
+    color: colors.primary,
     fontWeight: '700',
   },
   dividerRow: {
@@ -359,8 +364,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   techLoginBtnText: {
-    color: '#FFFFFF',
+    color: colors.surface,
     fontSize: 13,
     fontWeight: '700',
   },
 });
+
+
