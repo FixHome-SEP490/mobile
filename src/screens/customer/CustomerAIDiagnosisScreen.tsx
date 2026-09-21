@@ -72,7 +72,9 @@ export default function CustomerAIDiagnosisScreen() {
     const result = await pickImagesForAi(images.length);
     if (result.problemVi) Alert.alert('Ảnh', result.problemVi);
     if (result.images.length > 0) {
-      setImages((prev) => [...prev, ...result.images].slice(0, AI_MAX_IMAGES));
+      setImages((prev) =>
+        [...prev, ...result.images.map((image) => image.dataUri)].slice(0, AI_MAX_IMAGES),
+      );
     }
   }, [images.length]);
 
