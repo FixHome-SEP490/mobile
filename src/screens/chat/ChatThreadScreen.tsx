@@ -3,8 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   StatusBar,
   StyleSheet,
   Text,
@@ -14,6 +12,7 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useKeyboardInset } from '../../hooks/useKeyboardInset';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { BottomSheetModal, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
@@ -49,6 +48,7 @@ export default function ChatThreadScreen() {
   const { conversationId, counterpartName, serviceName } = route.params;
   const myId = useAuthStore((state) => state.user?.id);
   const insets = useSafeAreaInsets();
+  const keyboardInset = useKeyboardInset();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversation, setConversation] = useState<ConversationItem | null>(null);
@@ -380,11 +380,9 @@ export default function ChatThreadScreen() {
         </TouchableOpacity>
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
-      >
+      {/* Same reason as the assistant screen: KeyboardAvoidingView needs the
+          window to resize on Android, and edge-to-edge does not resize it. */}
+      <View style={[styles.flex, { paddingBottom: keyboardInset }]}>
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" color="#3B82F6" />
@@ -473,7 +471,7 @@ export default function ChatThreadScreen() {
             </Text>
           </View>
         )}
-      </KeyboardAvoidingView>
+      </View>
 
       {/* Attachment Menu Dummy */}
       <BottomSheetModal
