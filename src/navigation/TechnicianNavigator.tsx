@@ -43,7 +43,7 @@ export default function TechnicianNavigator() {
             return <Bell size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
           } else if (route.name === 'Profile') {
             if (user?.avatarUrl) {
-              return <Image source={{ uri: user.avatarUrl }} style={{ width: size, height: size, borderRadius: size / 2, borderWidth: focused ? 1.5 : 0, borderColor: '#FFFFFF' }} />;
+              return <Image source={{ uri: user.avatarUrl }} style={{ width: size + 5, height: size + 5, borderRadius: (size + 5) / 2, borderColor: '#FFFFFF' }} />;
             }
             return <User size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
           }
@@ -64,7 +64,7 @@ export default function TechnicianNavigator() {
         component={TechnicianJobsScreen}
         options={{ 
           title: 'Công việc',
-          headerShown: true,
+          headerShown: false,
          }}
       />
       <Tab.Screen
@@ -72,7 +72,7 @@ export default function TechnicianNavigator() {
         component={TechnicianNotificationsScreen}
         options={{ 
           title: 'Thông báo',
-          headerShown: true,
+          headerShown: false,
           tabBarBadge: unreadCount,
          }}
       />

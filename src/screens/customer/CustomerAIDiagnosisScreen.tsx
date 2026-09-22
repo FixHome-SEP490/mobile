@@ -1,3 +1,4 @@
+import { useAppTheme } from '../../constants/theme';
 import React, { useCallback, useState } from 'react';
 import {
   View,
@@ -22,6 +23,8 @@ import { pickImagesForAi } from '../../services/image-for-ai';
 type DiagnosisRoute = RouteProp<RootStackParamList, 'CustomerAIDiagnosis'>;
 
 export default function CustomerAIDiagnosisScreen() {
+  const { colors, spacing, fontSize, isDark } = useAppTheme();
+  const styles = getStyles(colors, spacing, fontSize);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<DiagnosisRoute>();
 
@@ -101,7 +104,7 @@ export default function CustomerAIDiagnosisScreen() {
 
       {prefill?.serviceName && (
         <View style={styles.prefillCard}>
-          <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+          <Ionicons name="checkmark-circle" size={18} color={colors.success} />
           <View style={styles.prefillText}>
             <Text style={styles.prefillLabel}>Trợ lý đã chọn dịch vụ</Text>
             <Text style={styles.prefillValue}>{prefill.serviceName}</Text>
@@ -111,7 +114,7 @@ export default function CustomerAIDiagnosisScreen() {
 
       <TouchableOpacity style={styles.uploadArea} activeOpacity={0.7} onPress={pickImages}>
         <View style={styles.camIcon}>
-          <Ionicons name="camera-outline" size={24} color="#2563EB" />
+          <Ionicons name="camera-outline" size={24} color={colors.primary} />
         </View>
         <Text style={styles.uploadTitle}>Thêm ảnh thiết bị</Text>
         <Text style={styles.uploadHelper}>Ảnh toàn cảnh và vị trí có vấn đề</Text>
@@ -136,7 +139,7 @@ export default function CustomerAIDiagnosisScreen() {
                 onPress={() => setImages((prev) => prev.filter((_, i) => i !== index))}
                 accessibilityLabel="Bỏ ảnh này"
               >
-                <Ionicons name="close" size={12} color="#FFFFFF" />
+                <Ionicons name="close" size={12} color={colors.surface} />
               </TouchableOpacity>
             </View>
           ))}
@@ -161,11 +164,11 @@ export default function CustomerAIDiagnosisScreen() {
           <Text style={styles.label}>Số lượng thiết bị</Text>
           <View style={styles.quantityBox}>
             <TouchableOpacity style={styles.qtyBtn} onPress={() => setQuantity(Math.max(1, quantity - 1))}>
-              <Ionicons name="remove" size={20} color="#0F172A" />
+              <Ionicons name="remove" size={20} color={colors.text} />
             </TouchableOpacity>
             <Text style={styles.qtyText}>{quantity}</Text>
             <TouchableOpacity style={styles.qtyBtn} onPress={() => setQuantity(quantity + 1)}>
-              <Ionicons name="add" size={20} color="#0F172A" />
+              <Ionicons name="add" size={20} color={colors.text} />
             </TouchableOpacity>
           </View>
         </View>
@@ -176,7 +179,7 @@ export default function CustomerAIDiagnosisScreen() {
         onPress={askTheAssistant}
         activeOpacity={0.7}
       >
-        <Ionicons name="chatbubble-ellipses-outline" size={18} color="#2563EB" />
+        <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.primary} />
         <Text style={styles.secondaryBtnText}>
           {images.length > 0 ? 'Gửi ảnh cho trợ lý xem giúp' : 'Nhờ trợ lý chẩn đoán'}
         </Text>
@@ -199,7 +202,7 @@ export default function CustomerAIDiagnosisScreen() {
           <TouchableOpacity><Text style={styles.link}>Thay đổi</Text></TouchableOpacity>
         </View>
         <View style={styles.addressBox}>
-          <Ionicons name="location" size={20} color="#2563EB" />
+          <Ionicons name="location" size={20} color={colors.primary} />
           <View style={{ marginLeft: 8 }}>
             <Text style={styles.addressTitle}>Nhà riêng</Text>
             <Text style={styles.addressDesc}>28 Duy Tân, Cầu Giấy, Hà Nội</Text>
@@ -243,7 +246,7 @@ export default function CustomerAIDiagnosisScreen() {
         {/* Timeline Item 1 */}
         <View style={styles.timelineItem}>
           <View style={styles.timelineLeftIconBox}>
-            <Ionicons name="chatbubble-ellipses" size={18} color="#2563EB" />
+            <Ionicons name="chatbubble-ellipses" size={18} color={colors.primary} />
           </View>
           <View style={styles.timelineContent}>
             <Text style={styles.timelineLabel}>Vấn đề của bạn <Text style={styles.redAsterisk}>*</Text></Text>
@@ -297,7 +300,7 @@ export default function CustomerAIDiagnosisScreen() {
               <Text style={styles.optionsSub}>Ảnh, ghi chú, hoá đơn</Text>
             </View>
           </View>
-          <Ionicons name={optionsExpanded ? "chevron-up" : "chevron-down"} size={20} color="#0F172A" />
+          <Ionicons name={optionsExpanded ? "chevron-up" : "chevron-down"} size={20} color={colors.text} />
         </TouchableOpacity>
 
         {optionsExpanded && (
@@ -323,7 +326,7 @@ export default function CustomerAIDiagnosisScreen() {
             <TouchableOpacity style={styles.optionItemRow}>
               <View style={styles.optionsHeaderLeft}>
                 <View style={styles.optionsIconBoxSmall}>
-                  <Ionicons name="clipboard" size={16} color="#F59E0B" />
+                  <Ionicons name="clipboard" size={16} color={colors.warning} />
                 </View>
                 <View>
                   <Text style={styles.optionSectionTitle}>Ghi chú <Text style={styles.optionSectionSub}>Tùy chọn</Text></Text>
@@ -337,7 +340,7 @@ export default function CustomerAIDiagnosisScreen() {
             <TouchableOpacity style={styles.optionItemRow}>
               <View style={styles.optionsHeaderLeft}>
                 <View style={styles.optionsIconBoxSmall}>
-                  <Ionicons name="document-text" size={16} color="#F59E0B" />
+                  <Ionicons name="document-text" size={16} color={colors.warning} />
                 </View>
                 <View>
                   <Text style={styles.optionSectionTitle}>Xuất hóa đơn</Text>
@@ -355,15 +358,15 @@ export default function CustomerAIDiagnosisScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#0F172A" />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{step === 3 ? 'Vệ sinh máy lạnh' : 'AI Hỗ trợ chẩn đoán'}</Text>
         {step === 1 ? (
           <View style={styles.aiBadge}>
-            <MaterialCommunityIcons name="robot-outline" size={14} color="#2563EB" />
+            <MaterialCommunityIcons name="robot-outline" size={14} color={colors.primary} />
             <Text style={styles.aiBadgeText}>AI 2.0</Text>
           </View>
         ) : (
@@ -397,11 +400,11 @@ export default function CustomerAIDiagnosisScreen() {
       {step < 3 ? (
         <View style={styles.bottomBar}>
           <TouchableOpacity style={styles.bookBtn} activeOpacity={0.8} onPress={handleNextStep}>
-            <LinearGradient colors={['#1D4ED8', '#2563EB']} style={styles.bookBtnGradient}>
+            <LinearGradient colors={[colors.primaryDark, colors.primary]} style={styles.bookBtnGradient}>
               <Text style={styles.bookBtnText}>
                 {step === 1 ? 'Tiếp tục chọn lịch' : 'Tiếp tục'}
               </Text>
-              <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+              <Ionicons name="arrow-forward" size={16} color={colors.surface} />
             </LinearGradient>
           </TouchableOpacity>
           {step === 1 && <Text style={styles.ctaNote}>Ảnh và mô tả được đính kèm lịch hẹn</Text>}
@@ -418,7 +421,7 @@ export default function CustomerAIDiagnosisScreen() {
                 <Text style={styles.quoteTitle}>Báo giá từ AI (tham khảo)</Text>
                 <Text style={styles.quotePrice}>230,000 - 650,000đ</Text>
               </View>
-              <Ionicons name={quoteExpanded ? "chevron-down" : "chevron-up"} size={20} color="#0F172A" />
+              <Ionicons name={quoteExpanded ? "chevron-down" : "chevron-up"} size={20} color={colors.text} />
             </TouchableOpacity>
 
             {quoteExpanded && (
@@ -442,7 +445,7 @@ export default function CustomerAIDiagnosisScreen() {
                 </View>
 
                 <View style={styles.quoteInfoRow}>
-                  <Ionicons name="information-circle-outline" size={16} color="#64748B" />
+                  <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
                   <Text style={styles.quoteInfoText}>Vật tư có thể phát sinh thêm tùy tình trạng thực tế khi khảo sát.</Text>
                 </View>
               </View>
@@ -457,47 +460,47 @@ export default function CustomerAIDiagnosisScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9'
+    borderBottomColor: colors.border
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A', flex: 1, textAlign: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text, flex: 1, textAlign: 'center' },
   aiBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#DBEAFE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 4 },
-  aiBadgeText: { color: '#2563EB', fontSize: 12, fontWeight: '700' },
+  aiBadgeText: { color: colors.primary, fontSize: 12, fontWeight: '700' },
   content: { padding: 16, paddingBottom: 100 },
   progressWrap: { marginBottom: 16 },
   progressLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  progressLabel: { fontSize: 12, color: '#64748B', fontWeight: '500' },
+  progressLabel: { fontSize: 12, color: colors.textSecondary, fontWeight: '500' },
   steps: { flexDirection: 'row', gap: 6 },
-  dot: { height: 4, flex: 1, backgroundColor: '#E2E8F0', borderRadius: 2 },
-  dotOn: { backgroundColor: '#2563EB' },
-  mainTitle: { fontSize: 24, fontWeight: '700', color: '#0F172A', marginBottom: 8 },
-  helperText: { fontSize: 14, color: '#64748B', lineHeight: 20, marginBottom: 16 },
+  dot: { height: 4, flex: 1, backgroundColor: colors.border, borderRadius: 2 },
+  dotOn: { backgroundColor: colors.primary },
+  mainTitle: { fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: 8 },
+  helperText: { fontSize: 14, color: colors.textSecondary, lineHeight: 20, marginBottom: 16 },
   uploadArea: {
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     borderStyle: 'dashed',
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     marginBottom: 16,
   },
   camIcon: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-  uploadTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
-  uploadHelper: { fontSize: 12, color: '#64748B', marginTop: 4 },
+  uploadTitle: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 4 },
+  uploadHelper: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
   thumbRow: { gap: 8, paddingVertical: 10 },
   thumbBox: { width: 72, height: 72 },
-  thumb: { width: 72, height: 72, borderRadius: 10, backgroundColor: '#E2E8F0' },
+  thumb: { width: 72, height: 72, borderRadius: 10, backgroundColor: colors.border },
   thumbRemove: {
     position: 'absolute',
     top: -4,
@@ -505,11 +508,11 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#0F172A',
+    backgroundColor: colors.text,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  assistantHint: { fontSize: 12, color: '#64748B', lineHeight: 18, marginTop: 8 },
+  assistantHint: { fontSize: 12, color: colors.textSecondary, lineHeight: 18, marginTop: 8 },
   prefillCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -523,25 +526,25 @@ const styles = StyleSheet.create({
   },
   prefillText: { flex: 1 },
   prefillLabel: { fontSize: 11, color: '#15803D', fontWeight: '700' },
-  prefillValue: { fontSize: 14, color: '#0F172A', fontWeight: '600', marginTop: 2 },
+  prefillValue: { fontSize: 14, color: colors.text, fontWeight: '600', marginTop: 2 },
   field: { marginBottom: 16 },
-  fieldLabel: { fontSize: 14, fontWeight: '600', color: '#0F172A', marginBottom: 8 },
-  inlineTag: { fontSize: 12, color: '#64748B', fontWeight: '400' },
+  fieldLabel: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 8 },
+  inlineTag: { fontSize: 12, color: colors.textSecondary, fontWeight: '400' },
   textArea: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     borderRadius: 12,
     padding: 12,
     fontSize: 14,
-    color: '#0F172A',
+    color: colors.text,
     minHeight: 100,
     textAlignVertical: 'top'
   },
   secondaryBtn: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     borderRadius: 12,
     paddingVertical: 14,
     flexDirection: 'row',
@@ -549,115 +552,117 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
-  secondaryBtnText: { fontSize: 14, fontWeight: '600', color: '#0F172A' },
+  secondaryBtnText: { fontSize: 14, fontWeight: '600', color: colors.text },
   aiResultCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     borderRadius: 16,
     padding: 16,
     marginTop: 8,
   },
   scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   badgeSuccess: { backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  badgeTextSuccess: { color: '#16A34A', fontSize: 12, fontWeight: '700' },
-  aiResultTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 8 },
+  badgeTextSuccess: { color: colors.success, fontSize: 12, fontWeight: '700' },
+  aiResultTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 8 },
   aiResultDesc: { fontSize: 14, color: '#475569', lineHeight: 22, marginBottom: 12 },
-  quoteRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9', marginBottom: 8 },
-  quoteLabel: { fontSize: 14, color: '#64748B' },
-  quoteValue: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
-  aiResultNote: { fontSize: 12, color: '#64748B', fontStyle: 'italic' },
+  quoteRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: colors.border, marginBottom: 8 },
+  quoteLabel: { fontSize: 14, color: colors.textSecondary },
+  quoteValue: { fontSize: 14, fontWeight: '700', color: colors.text },
+  aiResultNote: { fontSize: 12, color: colors.textSecondary, fontStyle: 'italic' },
   bottomBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: colors.border,
   },
   bookBtn: { borderRadius: 12, overflow: 'hidden', marginBottom: 8 },
   bookBtnGradient: { paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 },
-  bookBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-  ctaNote: { textAlign: 'center', fontSize: 12, color: '#64748B' },
+  bookBtnText: { color: colors.surface, fontSize: 16, fontWeight: '700' },
+  ctaNote: { textAlign: 'center', fontSize: 12, color: colors.textSecondary },
   
   // Step 2 & 3 styles
-  card: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9' },
+  card: { backgroundColor: colors.surface, borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: colors.border },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  label: { fontSize: 14, fontWeight: '700', color: '#0F172A', marginBottom: 8 },
-  link: { fontSize: 14, color: '#2563EB', fontWeight: '600' },
-  addressBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12 },
-  addressTitle: { fontSize: 14, fontWeight: '600', color: '#0F172A' },
-  addressDesc: { fontSize: 12, color: '#64748B', marginTop: 4 },
+  label: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 8 },
+  link: { fontSize: 14, color: colors.primary, fontWeight: '600' },
+  addressBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, padding: 12, borderRadius: 12 },
+  addressTitle: { fontSize: 14, fontWeight: '600', color: colors.text },
+  addressDesc: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
   dateStrip: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
-  dateChip: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF' },
-  dateChipActive: { borderColor: '#2563EB', backgroundColor: '#EFF6FF' },
-  dateText: { fontSize: 14, color: '#64748B', fontWeight: '500' },
+  dateChip: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface },
+  dateChipActive: { borderColor: colors.primary, backgroundColor: '#EFF6FF' },
+  dateText: { fontSize: 14, color: colors.textSecondary, fontWeight: '500' },
   timeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  timeChip: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, width: '31%', alignItems: 'center' },
-  timeChipActive: { borderColor: '#2563EB', backgroundColor: '#2563EB' },
-  timeText: { fontSize: 14, color: '#0F172A', fontWeight: '500' },
-  textActive: { color: '#FFFFFF', fontWeight: '700' },
+  timeChip: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, width: '31%', alignItems: 'center' },
+  timeChipActive: { borderColor: colors.primary, backgroundColor: colors.primary },
+  timeText: { fontSize: 14, color: colors.text, fontWeight: '500' },
+  textActive: { color: colors.surface, fontWeight: '700' },
   quantityBox: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  qtyBtn: { width: 36, height: 36, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' },
-  qtyText: { fontSize: 18, fontWeight: '700', color: '#0F172A' },
+  qtyBtn: { width: 36, height: 36, borderRadius: 12, borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  qtyText: { fontSize: 18, fontWeight: '700', color: colors.text },
   
-  serviceTitle: { fontSize: 12, color: '#64748B', marginBottom: 4 },
-  serviceName: { fontSize: 18, fontWeight: '700', color: '#0F172A' },
-  divider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 12 },
+  serviceTitle: { fontSize: 12, color: colors.textSecondary, marginBottom: 4 },
+  serviceName: { fontSize: 18, fontWeight: '700', color: colors.text },
+  divider: { height: 1, backgroundColor: colors.border, marginVertical: 12 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  summaryLabel: { fontSize: 14, color: '#64748B' },
-  summaryValue: { fontSize: 14, fontWeight: '600', color: '#0F172A' },
-  totalLabel: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
-  totalValue: { fontSize: 18, fontWeight: '700', color: '#2563EB' },
+  summaryLabel: { fontSize: 14, color: colors.textSecondary },
+  summaryValue: { fontSize: 14, fontWeight: '600', color: colors.text },
+  totalLabel: { fontSize: 16, fontWeight: '700', color: colors.text },
+  totalValue: { fontSize: 18, fontWeight: '700', color: colors.primary },
 
   // Step 3 new styles
-  summaryCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  summaryCard: { backgroundColor: colors.surface, borderRadius: 24, padding: 20, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   timelineItem: { flexDirection: 'row', marginBottom: 24, minHeight: 50 },
   timelineLeftIconBox: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginRight: 12, marginTop: -2 },
   timelineContent: { flex: 1, paddingRight: 16 },
-  timelineLabel: { fontSize: 12, color: '#64748B', marginBottom: 4, fontWeight: '500' },
-  redAsterisk: { color: '#EF4444' },
+  timelineLabel: { fontSize: 12, color: colors.textSecondary, marginBottom: 4, fontWeight: '500' },
+  redAsterisk: { color: colors.error },
   timelineValue: { fontSize: 14, color: '#334155', lineHeight: 22 },
-  timelineValueTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A', lineHeight: 22 },
+  timelineValueTitle: { fontSize: 14, fontWeight: '700', color: colors.text, lineHeight: 22 },
   timelineSubText: { fontSize: 12, color: '#94A3B8', marginTop: 4 },
   timelineRight: { width: 24, alignItems: 'center' },
   timelineLine: { width: 2, flex: 1, backgroundColor: '#60A5FA', marginTop: 4, borderRadius: 1 },
 
-  optionsCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  optionsCard: { backgroundColor: colors.surface, borderRadius: 24, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   optionsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   optionsHeaderLeft: { flexDirection: 'row', alignItems: 'center' },
-  optionsIconBox: { width: 44, height: 44, borderRadius: 16, backgroundColor: '#F8FAFC', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  optionsTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
-  optionsSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
-  optionsBody: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  optionsIconBox: { width: 44, height: 44, borderRadius: 16, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  optionsTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
+  optionsSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  optionsBody: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border },
   optionSection: { marginBottom: 20 },
   optionSectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   optionsIconBoxSmall: { width: 24, height: 24, justifyContent: 'center', alignItems: 'center', marginRight: 8 },
-  optionSectionTitle: { fontSize: 14, fontWeight: '600', color: '#0F172A' },
-  optionSectionSub: { fontSize: 12, color: '#64748B', fontWeight: '400' },
-  addImageBtn: { width: 80, height: 80, borderRadius: 16, backgroundColor: '#F8FAFC', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0', borderStyle: 'dashed', marginLeft: 32 },
-  addImageText: { fontSize: 12, color: '#64748B', marginTop: 4, fontWeight: '500' },
+  optionSectionTitle: { fontSize: 14, fontWeight: '600', color: colors.text },
+  optionSectionSub: { fontSize: 12, color: colors.textSecondary, fontWeight: '400' },
+  addImageBtn: { width: 80, height: 80, borderRadius: 16, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', marginLeft: 32 },
+  addImageText: { fontSize: 12, color: colors.textSecondary, marginTop: 4, fontWeight: '500' },
   optionItemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, paddingRight: 4 },
 
-  step3BottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFFFFF', padding: 16, paddingBottom: 32, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
-  quoteCardWrapper: { backgroundColor: '#FFFFFF', borderRadius: 20, borderWidth: 1, borderColor: '#F1F5F9', marginBottom: 16, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 3 },
+  step3BottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: colors.surface, padding: 16, paddingBottom: 32, borderTopWidth: 1, borderTopColor: colors.border },
+  quoteCardWrapper: { backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.border, marginBottom: 16, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 3 },
   quoteHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
-  quoteTitle: { fontSize: 13, color: '#64748B', fontWeight: '600', marginBottom: 4 },
-  quotePrice: { fontSize: 20, fontWeight: '700', color: '#0F172A' },
+  quoteTitle: { fontSize: 13, color: colors.textSecondary, fontWeight: '600', marginBottom: 4 },
+  quotePrice: { fontSize: 20, fontWeight: '700', color: colors.text },
   quoteExpandedBody: { padding: 20, paddingTop: 0 },
-  quoteDivider: { height: 1, backgroundColor: '#F1F5F9', marginBottom: 16 },
+  quoteDivider: { height: 1, backgroundColor: colors.border, marginBottom: 16 },
   quoteRowItem: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  quoteLabelText: { fontSize: 14, color: '#64748B', fontWeight: '500' },
-  quoteValueText: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
-  quoteMaterialsBox: { backgroundColor: '#F8FAFC', borderRadius: 16, padding: 16, marginTop: 8 },
-  quoteMaterialsTitle: { fontSize: 13, fontWeight: '700', color: '#0F172A', marginBottom: 12 },
+  quoteLabelText: { fontSize: 14, color: colors.textSecondary, fontWeight: '500' },
+  quoteValueText: { fontSize: 14, fontWeight: '700', color: colors.text },
+  quoteMaterialsBox: { backgroundColor: colors.background, borderRadius: 16, padding: 16, marginTop: 8 },
+  quoteMaterialsTitle: { fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 12 },
   quoteMaterialsTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  quoteMaterialTag: { backgroundColor: '#FFFFFF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 100, borderWidth: 1, borderColor: '#E2E8F0', maxWidth: '100%' },
+  quoteMaterialTag: { backgroundColor: colors.surface, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 100, borderWidth: 1, borderColor: colors.border, maxWidth: '100%' },
   quoteMaterialTagText: { fontSize: 12, color: '#475569', fontWeight: '500' },
   quoteInfoRow: { flexDirection: 'row', gap: 8, marginTop: 16, alignItems: 'flex-start' },
-  quoteInfoText: { fontSize: 12, color: '#64748B', flex: 1, lineHeight: 18 },
-  startBtn: { backgroundColor: '#2563EB', paddingVertical: 16, borderRadius: 100, alignItems: 'center' },
-  startBtnText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+  quoteInfoText: { fontSize: 12, color: colors.textSecondary, flex: 1, lineHeight: 18 },
+  startBtn: { backgroundColor: colors.primary, paddingVertical: 16, borderRadius: 100, alignItems: 'center' },
+  startBtnText: { fontSize: 16, fontWeight: '700', color: colors.surface },
 });
+
+

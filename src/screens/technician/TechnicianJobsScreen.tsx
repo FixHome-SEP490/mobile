@@ -8,14 +8,17 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../constants';
+import { useAppTheme } from '../../constants/theme';
 import { ordersApi, type ServiceOrderItem, type CanonicalOrderStatus } from '../../api/orders.api';
 
 type JobTab = 'all' | 'pending' | 'in_progress';
 
 export default function TechnicianJobsScreen() {
+  const { colors } = useAppTheme();
   const [activeTab, setActiveTab] = useState<JobTab>('all');
   const [jobs, setJobs] = useState<ServiceOrderItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,7 +108,15 @@ export default function TechnicianJobsScreen() {
   });
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Công việc</Text>
+      </View>
+
+      <View style={styles.container}>
+
       {/* Tabs */}
       <View style={styles.tabRow}>
         <TouchableOpacity
@@ -222,14 +233,34 @@ export default function TechnicianJobsScreen() {
           </View>
         </ScrollView>
       )}
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
   },
   tabRow: {
     flexDirection: 'row',

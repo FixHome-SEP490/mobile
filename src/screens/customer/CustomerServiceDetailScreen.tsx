@@ -1,3 +1,4 @@
+import { useAppTheme } from '../../constants/theme';
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
@@ -6,14 +7,16 @@ import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 export default function CustomerServiceDetailScreen() {
+  const { colors, spacing, fontSize, isDark } = useAppTheme();
+  const styles = getStyles(colors, spacing, fontSize);
   const navigation = useNavigation<any>();
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#0F172A" />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chi tiết dịch vụ</Text>
         <View style={{ width: 40 }} />
@@ -55,7 +58,7 @@ export default function CustomerServiceDetailScreen() {
       <View style={styles.bottomBar}>
         <TouchableOpacity style={styles.bookBtn} activeOpacity={0.8} onPress={() => navigation.navigate('CustomerAIDiagnosis')}>
           <LinearGradient
-            colors={['#1D4ED8', '#2563EB']}
+            colors={[colors.primaryDark, colors.primary]}
             style={styles.bookBtnGradient}
           >
             <Text style={styles.bookBtnText}>Đặt thợ ngay</Text>
@@ -66,28 +69,28 @@ export default function CustomerServiceDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   header: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'space-between', 
     paddingHorizontal: 16, 
     paddingVertical: 12, 
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9'
+    borderBottomColor: colors.border
   },
   backBtn: {
     width: 40,
     height: 40,
     justifyContent: 'center',
   },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   content: { padding: 16, paddingBottom: 100 },
   heroSection: {
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     padding: 24,
     borderRadius: 20,
     marginBottom: 16,
@@ -104,16 +107,16 @@ const styles = StyleSheet.create({
   serviceTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
     marginBottom: 8,
   },
   servicePrice: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#2563EB',
+    color: colors.primary,
   },
   descSection: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     padding: 16,
     borderRadius: 16,
     marginBottom: 16,
@@ -121,7 +124,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
     marginBottom: 12,
   },
   descText: {
@@ -130,7 +133,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   benefitsSection: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     padding: 16,
     borderRadius: 16,
   },
@@ -149,10 +152,10 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: colors.border,
   },
   bookBtn: {
     borderRadius: 12,
@@ -163,8 +166,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   bookBtnText: {
-    color: '#FFFFFF',
+    color: colors.surface,
     fontSize: 16,
     fontWeight: '700',
   }
 });
+
+

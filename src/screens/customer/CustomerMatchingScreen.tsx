@@ -1,3 +1,4 @@
+import { useAppTheme } from '../../constants/theme';
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated, Easing, Image, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -41,6 +42,8 @@ const TECHNICIANS = [
 ];
 
 export default function CustomerMatchingScreen() {
+  const { colors, spacing, fontSize, isDark } = useAppTheme();
+  const styles = getStyles(colors, spacing, fontSize);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [isFinding, setIsFinding] = useState(true);
   const [isExpanded, setIsExpanded] = useState(true);
@@ -83,7 +86,7 @@ export default function CustomerMatchingScreen() {
   if (!isFinding) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
         {/* Fake Map */}
         <Image 
           source={{uri: 'https://img.freepik.com/premium-vector/city-map-any-kind-digital-info-graphics-web-element-flat-map-with-pin-pointers_306734-712.jpg'}} 
@@ -94,7 +97,7 @@ export default function CustomerMatchingScreen() {
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           <View style={styles.foundHeader}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtnCircle}>
-              <Ionicons name="arrow-back" size={20} color="#0F172A" />
+              <Ionicons name="arrow-back" size={20} color={colors.text} />
             </TouchableOpacity>
             <View style={styles.foundHeaderCenter}>
               <Text style={styles.foundHeaderTitle}>Vệ sinh máy lạnh</Text>
@@ -102,10 +105,10 @@ export default function CustomerMatchingScreen() {
             </View>
             <View style={styles.foundHeaderRight}>
                <TouchableOpacity style={styles.iconCircleBtn}>
-                 <Ionicons name="receipt-outline" size={20} color="#0F172A" />
+                 <Ionicons name="receipt-outline" size={20} color={colors.text} />
                </TouchableOpacity>
                <TouchableOpacity style={[styles.iconCircleBtn, {marginLeft: 8}]}>
-                 <Ionicons name="headset-outline" size={20} color="#0F172A" />
+                 <Ionicons name="headset-outline" size={20} color={colors.text} />
                  <View style={styles.notiBadge}><Text style={styles.notiBadgeText}>1</Text></View>
                </TouchableOpacity>
             </View>
@@ -129,14 +132,14 @@ export default function CustomerMatchingScreen() {
               
               <View style={styles.warrantyRow}>
                 <View style={{flexDirection: 'row', alignItems: 'center', flex: 1, gap: 6}}>
-                  <Ionicons name="shield-checkmark" size={16} color="#2563EB" />
+                  <Ionicons name="shield-checkmark" size={16} color={colors.primary} />
                   <Text style={styles.warrantyText}>Bảo hành bởi Vua Thợ</Text>
                 </View>
                 <Text style={styles.feeText}>Phí 6% giá trị đơn</Text>
               </View>
 
               <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 6}}>
-                <Ionicons name="people" size={18} color="#2563EB" />
+                <Ionicons name="people" size={18} color={colors.primary} />
                 <Text style={styles.listTitle}>Danh sách thợ giỏi</Text>
               </View>
 
@@ -147,32 +150,32 @@ export default function CustomerMatchingScreen() {
                     <View style={styles.techInfo}>
                       <Text style={styles.techName} numberOfLines={1}>{tech.name}</Text>
                       <View style={styles.techStats}>
-                        <Ionicons name="star" size={12} color="#F59E0B" />
+                        <Ionicons name="star" size={12} color={colors.warning} />
                         <Text style={styles.techStatText}>{tech.rating} · {tech.jobs} đơn · {tech.completionRate}</Text>
                       </View>
                     </View>
                     <View style={styles.techRight}>
                       <View style={styles.distanceBadge}>
-                        <Ionicons name="location" size={12} color="#2563EB" />
+                        <Ionicons name="location" size={12} color={colors.primary} />
                         <Text style={styles.distanceText}>{tech.distance}</Text>
                       </View>
                       <TouchableOpacity style={styles.chatBtn}>
-                        <Ionicons name="chatbubble-ellipses-outline" size={14} color="#0F172A" />
+                        <Ionicons name="chatbubble-ellipses-outline" size={14} color={colors.text} />
                         <Text style={styles.chatBtnText}>Chat</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
 
-                  <LinearGradient colors={['#FFFFFF', '#EFF6FF']} style={styles.techActionArea} start={{x: 0, y: 0}} end={{x: 1, y: 0}}>
+                  <LinearGradient colors={[colors.surface, '#EFF6FF']} style={styles.techActionArea} start={{x: 0, y: 0}} end={{x: 1, y: 0}}>
                     <View>
                       <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
-                        <Ionicons name="pricetag-outline" size={12} color="#64748B" />
+                        <Ionicons name="pricetag-outline" size={12} color={colors.textSecondary} />
                         <Text style={styles.techPriceLabel}>Giá dự kiến</Text>
                       </View>
                       <Text style={styles.techPriceValue}>{tech.price}</Text>
                     </View>
                     <TouchableOpacity style={styles.viewTechBtn} onPress={() => navigation.navigate('CustomerTechFound')}>
-                      <Ionicons name="person-circle-outline" size={16} color="#FFFFFF" />
+                      <Ionicons name="person-circle-outline" size={16} color={colors.surface} />
                       <Text style={styles.viewTechBtnText}>Xem thông tin thợ</Text>
                     </TouchableOpacity>
                   </LinearGradient>
@@ -187,10 +190,10 @@ export default function CustomerMatchingScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#0F172A" />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Đang tìm kỹ thuật viên</Text>
         <View style={styles.badge}>
@@ -207,7 +210,7 @@ export default function CustomerMatchingScreen() {
         <View style={styles.matchStage}>
           <Animated.View style={[styles.radarContainer, { transform: [{ scale: pulseAnim }] }]}>
             <View style={styles.radarInner}>
-              <MaterialIcons name="radar" size={32} color="#2563EB" />
+              <MaterialIcons name="radar" size={32} color={colors.primary} />
             </View>
           </Animated.View>
           <Text style={styles.matchTitle}>Đang tìm thợ phù hợp gần bạn</Text>
@@ -215,15 +218,15 @@ export default function CustomerMatchingScreen() {
           
           <View style={styles.pointsRow}>
             <View style={styles.pointItem}>
-              <Ionicons name="checkmark-circle" size={16} color="#16A34A" />
+              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
               <Text style={styles.pointText}>Đã xác minh</Text>
             </View>
             <View style={styles.pointItem}>
-              <Ionicons name="build" size={16} color="#16A34A" />
+              <Ionicons name="build" size={16} color={colors.success} />
               <Text style={styles.pointText}>Đúng chuyên môn</Text>
             </View>
             <View style={styles.pointItem}>
-              <Ionicons name="location" size={16} color="#16A34A" />
+              <Ionicons name="location" size={16} color={colors.success} />
               <Text style={styles.pointText}>Ở gần bạn</Text>
             </View>
           </View>
@@ -243,26 +246,26 @@ export default function CustomerMatchingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9'
+    borderBottomColor: colors.border
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A', flex: 1 },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text, flex: 1 },
   badge: { backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-  badgeText: { color: '#16A34A', fontSize: 10, fontWeight: '700' },
+  badgeText: { color: colors.success, fontSize: 10, fontWeight: '700' },
   content: { padding: 16, flex: 1 },
   mapPlaceholder: {
     height: 180,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.border,
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
@@ -270,7 +273,7 @@ const styles = StyleSheet.create({
   },
   mapText: {
     marginTop: 8,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 14,
     fontWeight: '500',
   },
@@ -298,12 +301,12 @@ const styles = StyleSheet.create({
   matchTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
     marginBottom: 8,
   },
   matchDesc: {
     fontSize: 14,
-    color: '#64748B',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 16,
@@ -320,7 +323,7 @@ const styles = StyleSheet.create({
   },
   pointText: {
     fontSize: 12,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   noticeBox: {
@@ -335,55 +338,57 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   primaryBtn: {
-    backgroundColor: '#EF4444',
+    backgroundColor: colors.error,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 'auto',
   },
   primaryBtnText: {
-    color: '#FFFFFF',
+    color: colors.surface,
     fontSize: 16,
     fontWeight: '700',
   },
   
   // Found State Styles
   foundHeader: { flexDirection: 'row', padding: 16, alignItems: 'center', marginTop: Platform.OS === 'android' ? 24 : 0 },
-  backBtnCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
+  backBtnCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
   foundHeaderCenter: { flex: 1, marginLeft: 16, backgroundColor: 'rgba(255,255,255,0.95)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
-  foundHeaderTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
-  foundHeaderSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  foundHeaderTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
+  foundHeaderSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   foundHeaderRight: { flexDirection: 'row', marginLeft: 16 },
   iconCircleBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.95)', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
-  notiBadge: { position: 'absolute', top: -2, right: -2, backgroundColor: '#EF4444', width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFFFFF' },
-  notiBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
-  bottomSheet: { backgroundColor: '#F8FAFC', borderTopLeftRadius: 24, borderTopRightRadius: 24, flex: 3.5, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 10 },
-  dragHandleWrap: { alignItems: 'center', paddingVertical: 12, backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24 },
+  notiBadge: { position: 'absolute', top: -2, right: -2, backgroundColor: colors.error, width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: colors.surface },
+  notiBadgeText: { color: colors.surface, fontSize: 10, fontWeight: '700' },
+  bottomSheet: { backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, flex: 3.5, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 10 },
+  dragHandleWrap: { alignItems: 'center', paddingVertical: 12, backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
   dragHandle: { width: 40, height: 4, backgroundColor: '#CBD5E1', borderRadius: 2 },
-  greenDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#16A34A', marginRight: 8 },
-  sheetTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
-  expectedCostLabel: { fontSize: 14, color: '#64748B', marginTop: 12 },
-  expectedCostValue: { fontSize: 24, fontWeight: '700', color: '#0F172A', marginVertical: 4 },
-  expectedCostNote: { fontSize: 13, color: '#64748B', marginBottom: 20 },
-  warrantyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderTopWidth: 1, borderTopColor: '#E2E8F0', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', marginBottom: 16 },
+  greenDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.success, marginRight: 8 },
+  sheetTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
+  expectedCostLabel: { fontSize: 14, color: colors.textSecondary, marginTop: 12 },
+  expectedCostValue: { fontSize: 24, fontWeight: '700', color: colors.text, marginVertical: 4 },
+  expectedCostNote: { fontSize: 13, color: colors.textSecondary, marginBottom: 20 },
+  warrantyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderTopWidth: 1, borderTopColor: colors.border, borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: 16 },
   warrantyText: { fontSize: 14, fontWeight: '600', color: '#475569' },
-  feeText: { fontSize: 14, fontWeight: '700', color: '#2563EB' },
-  listTitle: { fontSize: 15, fontWeight: '700', color: '#0F172A' },
-  techCard: { backgroundColor: '#FFFFFF', borderRadius: 16, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2, overflow: 'hidden', borderWidth: 1, borderColor: '#F1F5F9' },
+  feeText: { fontSize: 14, fontWeight: '700', color: colors.primary },
+  listTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
+  techCard: { backgroundColor: colors.surface, borderRadius: 16, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2, overflow: 'hidden', borderWidth: 1, borderColor: colors.border },
   techTop: { flexDirection: 'row', padding: 16, alignItems: 'center' },
   techAvatar: { width: 56, height: 56, borderRadius: 28, marginRight: 12 },
   techInfo: { flex: 1 },
-  techName: { fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 6, textTransform: 'uppercase' },
+  techName: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 6, textTransform: 'uppercase' },
   techStats: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  techStatText: { fontSize: 12, color: '#64748B' },
+  techStatText: { fontSize: 12, color: colors.textSecondary },
   techRight: { alignItems: 'flex-end', justifyContent: 'space-between', height: 56 },
   distanceBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  distanceText: { fontSize: 12, color: '#2563EB', fontWeight: '600' },
-  chatBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#F1F5F9', borderRadius: 100 },
-  chatBtnText: { fontSize: 12, color: '#0F172A', fontWeight: '600' },
-  techActionArea: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
-  techPriceLabel: { fontSize: 12, color: '#64748B', fontWeight: '600' },
-  techPriceValue: { fontSize: 20, fontWeight: '700', color: '#2563EB' },
+  distanceText: { fontSize: 12, color: colors.primary, fontWeight: '600' },
+  chatBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 6, paddingHorizontal: 12, backgroundColor: colors.border, borderRadius: 100 },
+  chatBtnText: { fontSize: 12, color: colors.text, fontWeight: '600' },
+  techActionArea: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderTopWidth: 1, borderTopColor: colors.border },
+  techPriceLabel: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
+  techPriceValue: { fontSize: 20, fontWeight: '700', color: colors.primary },
   viewTechBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#3B82F6', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 100, shadowColor: '#3B82F6', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: {width:0, height: 4}, elevation: 4 },
-  viewTechBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' }
+  viewTechBtnText: { color: colors.surface, fontSize: 14, fontWeight: '700' }
 });
+
+
