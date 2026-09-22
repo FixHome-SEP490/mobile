@@ -10,12 +10,13 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import type { RootStackParamList } from '../../types';
-import { colors, spacing, fontSize } from '../../constants/theme';
+import { useAppTheme } from '../../constants/theme';
 import {
   technicianVerificationApi,
   type KycDocumentType,
@@ -80,6 +81,7 @@ const INITIAL_SLOTS: KycSlot[] = [
 ];
 
 export default function TechnicianKycScreen() {
+  const { colors, spacing, fontSize } = useAppTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -200,9 +202,10 @@ export default function TechnicianKycScreen() {
   };
 
   const showUploadForm = !verification || verification.status === 'REJECTED';
+  const styles = getStyles(colors, spacing, fontSize);
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={colors.text} />
@@ -313,20 +316,19 @@ export default function TechnicianKycScreen() {
           </>
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const SLOT_SIZE = 96;
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.xl,
     paddingBottom: spacing.sm,
   },
   backBtn: { width: 32, height: 32, justifyContent: 'center' },

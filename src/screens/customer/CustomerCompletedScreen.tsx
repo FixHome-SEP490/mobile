@@ -1,3 +1,4 @@
+import { useAppTheme } from '../../constants/theme';
 import React from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,14 +7,16 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 
 export default function CustomerCompletedScreen() {
+  const { colors, spacing, fontSize, isDark } = useAppTheme();
+  const styles = getStyles(colors, spacing, fontSize);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.navigate('CustomerMain')} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#0F172A" />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Hoàn thành</Text>
         <View style={styles.badge}>
@@ -24,7 +27,7 @@ export default function CustomerCompletedScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.successArea}>
           <View style={styles.successCircle}>
-            <Ionicons name="checkmark-circle" size={40} color="#16A34A" />
+            <Ionicons name="checkmark-circle" size={40} color={colors.success} />
           </View>
           <Text style={styles.successTitle}>Công việc đã hoàn tất</Text>
           <Text style={styles.successDesc}>Kỹ thuật viên đã cập nhật hình ảnh và các bước hoàn tất.</Text>
@@ -32,10 +35,10 @@ export default function CustomerCompletedScreen() {
 
         <View style={styles.evidenceRow}>
           <View style={styles.evidenceBox}>
-            <Ionicons name="camera" size={24} color="#2563EB" />
+            <Ionicons name="camera" size={24} color={colors.primary} />
           </View>
           <View style={styles.evidenceBox}>
-            <Ionicons name="camera" size={24} color="#2563EB" />
+            <Ionicons name="camera" size={24} color={colors.primary} />
           </View>
         </View>
 
@@ -50,7 +53,7 @@ export default function CustomerCompletedScreen() {
           </View>
           <View style={styles.quoteRow}>
             <Text style={styles.quoteLabel}>Voucher</Text>
-            <Text style={[styles.quoteValue, { color: '#16A34A' }]}>-50.000đ</Text>
+            <Text style={[styles.quoteValue, { color: colors.success }]}>-50.000đ</Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.quoteRowTotal}>
@@ -61,7 +64,7 @@ export default function CustomerCompletedScreen() {
 
         <Text style={styles.sectionTitle}>Thanh toán</Text>
         <TouchableOpacity style={styles.paymentCard}>
-          <Ionicons name="card" size={24} color="#64748B" />
+          <Ionicons name="card" size={24} color={colors.textSecondary} />
           <View style={styles.paymentContent}>
             <Text style={styles.paymentTitle}>Ví / thẻ đã liên kết</Text>
             <Text style={styles.paymentDesc}>•••• 9210 · mặc định</Text>
@@ -77,42 +80,44 @@ export default function CustomerCompletedScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9'
+    borderBottomColor: colors.border
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A', flex: 1 },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text, flex: 1 },
   badge: { backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-  badgeText: { color: '#16A34A', fontSize: 10, fontWeight: '700' },
+  badgeText: { color: colors.success, fontSize: 10, fontWeight: '700' },
   content: { padding: 16 },
   successArea: { alignItems: 'center', paddingVertical: 24 },
   successCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#DCFCE7', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
-  successTitle: { fontSize: 20, fontWeight: '700', color: '#0F172A', marginBottom: 8 },
-  successDesc: { fontSize: 14, color: '#64748B', textAlign: 'center', paddingHorizontal: 16 },
+  successTitle: { fontSize: 20, fontWeight: '700', color: colors.text, marginBottom: 8 },
+  successDesc: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', paddingHorizontal: 16 },
   evidenceRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
-  evidenceBox: { flex: 1, height: 100, backgroundColor: '#E2E8F0', borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#CBD5E1', borderStyle: 'dashed' },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 24, borderWidth: 1, borderColor: '#F1F5F9' },
+  evidenceBox: { flex: 1, height: 100, backgroundColor: colors.border, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#CBD5E1', borderStyle: 'dashed' },
+  card: { backgroundColor: colors.surface, borderRadius: 16, padding: 16, marginBottom: 24, borderWidth: 1, borderColor: colors.border },
   quoteRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  quoteLabel: { fontSize: 14, color: '#64748B' },
-  quoteValue: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
-  divider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 12 },
+  quoteLabel: { fontSize: 14, color: colors.textSecondary },
+  quoteValue: { fontSize: 14, fontWeight: '700', color: colors.text },
+  divider: { height: 1, backgroundColor: colors.border, marginVertical: 12 },
   quoteRowTotal: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  totalLabel: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
-  totalValue: { fontSize: 18, fontWeight: '700', color: '#2563EB' },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 12 },
-  paymentCard: { flexDirection: 'row', backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, alignItems: 'center', marginBottom: 24, borderWidth: 1, borderColor: '#F1F5F9' },
+  totalLabel: { fontSize: 16, fontWeight: '700', color: colors.text },
+  totalValue: { fontSize: 18, fontWeight: '700', color: colors.primary },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 12 },
+  paymentCard: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: 16, padding: 16, alignItems: 'center', marginBottom: 24, borderWidth: 1, borderColor: colors.border },
   paymentContent: { flex: 1, marginLeft: 12 },
-  paymentTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
-  paymentDesc: { fontSize: 12, color: '#64748B' },
-  primaryBtn: { backgroundColor: '#2563EB', paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
-  primaryBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' }
+  paymentTitle: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 4 },
+  paymentDesc: { fontSize: 12, color: colors.textSecondary },
+  primaryBtn: { backgroundColor: colors.primary, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
+  primaryBtnText: { color: colors.surface, fontSize: 16, fontWeight: '700' }
 });
+
+

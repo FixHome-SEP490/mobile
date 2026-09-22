@@ -1,3 +1,4 @@
+import { useAppTheme } from '../../constants/theme';
 import React, { useEffect, useState, useCallback } from 'react';
 import { 
   View, 
@@ -15,6 +16,8 @@ import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { notificationsApi, NotificationItem } from '../../api/notifications.api';
 
 export default function CustomerNotificationsScreen() {
+  const { colors, spacing, fontSize, isDark } = useAppTheme();
+  const styles = getStyles(colors, spacing, fontSize);
   const handleScroll = useScrollHideTabBar();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,7 +62,7 @@ export default function CustomerNotificationsScreen() {
   const renderNotificationIcon = (type?: string) => {
     switch (type) {
       case 'BOOKING':
-        return <Ionicons name="briefcase-outline" size={24} color="#2563EB" />;
+        return <Ionicons name="briefcase-outline" size={24} color={colors.primary} />;
       case 'PAYMENT':
         return <Ionicons name="cash-outline" size={24} color="#059669" />;
       case 'PROMOTION':
@@ -125,21 +128,21 @@ export default function CustomerNotificationsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Thông báo</Text>
         <TouchableOpacity style={styles.markAllBtn} activeOpacity={0.7}>
-          <Ionicons name="checkmark-done-outline" size={18} color="#2563EB" />
+          <Ionicons name="checkmark-done-outline" size={18} color={colors.primary} />
           <Text style={styles.markAllText}>Đã đọc tất cả</Text>
         </TouchableOpacity>
       </View>
 
       {loading && !refreshing ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2563EB" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
         <FlatList
@@ -152,7 +155,7 @@ export default function CustomerNotificationsScreen() {
           onScroll={handleScroll}
           scrollEventThrottle={16}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563EB']} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
           }
         />
       )}
@@ -160,10 +163,10 @@ export default function CustomerNotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -171,14 +174,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: colors.border,
   },
   headerTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#0F172A',
+    color: colors.text,
   },
   markAllBtn: {
     flexDirection: 'row',
@@ -192,7 +195,7 @@ const styles = StyleSheet.create({
   markAllText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#2563EB',
+    color: colors.primary,
   },
   loadingContainer: {
     flex: 1,
@@ -205,7 +208,7 @@ const styles = StyleSheet.create({
   },
   card: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     padding: 16,
     borderRadius: 16,
     marginBottom: 12,
@@ -219,8 +222,8 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   unreadCard: {
-    backgroundColor: '#F8FAFC',
-    borderColor: '#E2E8F0',
+    backgroundColor: colors.background,
+    borderColor: colors.border,
   },
   iconContainer: {
     width: 52,
@@ -238,9 +241,9 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#EF4444',
+    backgroundColor: colors.error,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: colors.surface,
   },
   cardContent: {
     flex: 1,
@@ -253,11 +256,11 @@ const styles = StyleSheet.create({
   },
   unreadText: {
     fontWeight: '800',
-    color: '#0F172A',
+    color: colors.text,
   },
   desc: {
     fontSize: 13,
-    color: '#64748B',
+    color: colors.textSecondary,
     lineHeight: 18,
     marginBottom: 6,
   },
@@ -275,7 +278,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
@@ -288,9 +291,11 @@ const styles = StyleSheet.create({
   },
   emptyDesc: {
     fontSize: 14,
-    color: '#64748B',
+    color: colors.textSecondary,
     textAlign: 'center',
     paddingHorizontal: 32,
     lineHeight: 20,
   },
 });
+
+

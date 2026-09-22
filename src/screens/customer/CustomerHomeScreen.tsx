@@ -1,3 +1,4 @@
+import { useAppTheme } from '../../constants/theme';
 // src/screens/customer/CustomerHomeScreen.tsx
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
@@ -43,7 +44,7 @@ interface ServiceItem {
   imageSource?: any;
 }
 
-const POPULAR_SERVICES: ServiceItem[] = [
+const getPopularServices = (colors: any): ServiceItem[] => [
   {
     id: 'ac_clean',
     name: 'Vệ sinh\nmáy lạnh',
@@ -85,7 +86,7 @@ const POPULAR_SERVICES: ServiceItem[] = [
     name: 'Sửa Tivi',
     iconName: 'tv',
     iconType: 'material',
-    iconColor: '#2563EB',
+    iconColor: colors.primary,
     pedestalColor: '#DBEAFE',
     imageSource: require('../../../assets/tv-repair.png'),
   },
@@ -119,6 +120,9 @@ const POPULAR_SERVICES: ServiceItem[] = [
 ];
 
 export default function CustomerHomeScreen() {
+  const { colors, spacing, fontSize, isDark } = useAppTheme();
+  const styles = getStyles(colors, spacing, fontSize);
+  const POPULAR_SERVICES = useMemo(() => getPopularServices(colors), [colors]);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const handleScroll = useScrollHideTabBar();
   const chatUnread = useChatUnreadCount();
@@ -167,7 +171,7 @@ export default function CustomerHomeScreen() {
       console.error('Failed to load addresses:', error);
       setSelectedAddress('Không thể tải địa chỉ');
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, setSelectedAddress]);
 
   useEffect(() => {
     const load = async () => {
@@ -205,8 +209,8 @@ export default function CustomerHomeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       {/* 1. Header Address Selector & Messages */}
       <View style={styles.header}>
@@ -215,12 +219,12 @@ export default function CustomerHomeScreen() {
           onPress={handleSelectAddress}
           activeOpacity={0.7}
         >
-          <Ionicons name="location" size={24} color="#EF4444" />
+          <Ionicons name="location" size={24} color={colors.error} />
           <View style={styles.addressTextContainer}>
             <Text style={styles.addressLabel}>Giao đến</Text>
             <Text style={styles.addressValue} numberOfLines={1}>{selectedAddress}</Text>
           </View>
-          <Ionicons name="chevron-down" size={18} color="#64748B" />
+          <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
         </TouchableOpacity>
 
         <View style={styles.headerActions}>
@@ -230,7 +234,7 @@ export default function CustomerHomeScreen() {
             onPress={() => navigation.navigate('ChatList')}
             activeOpacity={0.8}
           >
-            <Ionicons name="chatbubble-ellipses-outline" size={22} color="#0F172A" />
+            <Ionicons name="chatbubble-ellipses-outline" size={22} />
             {chatUnread > 0 && (
               <View style={styles.notificationBadge}>
                 <Text style={styles.notificationBadgeText}>
@@ -251,7 +255,7 @@ export default function CustomerHomeScreen() {
 
         {/* 2. Hero Search Banner (Xanh Dương Royal Gradient - Giống Hình 1 Vua Thợ) */}
         <LinearGradient
-          colors={['#1D4ED8', '#2563EB', '#3B82F6']}
+          colors={[colors.primaryDark, colors.primary, '#3B82F6']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.heroCard}
@@ -276,7 +280,7 @@ export default function CustomerHomeScreen() {
               onPress={handleSearch}
               activeOpacity={0.85}
             >
-              <Ionicons name="search" size={18} color="#FFFFFF" />
+              <Ionicons name="search" size={18} color={colors.surface} />
             </TouchableOpacity>
           </View>
           
@@ -321,7 +325,7 @@ export default function CustomerHomeScreen() {
         {/* 6. Section "✨ Dịch vụ phổ biến" (Lưới Icon 3D Isometric chuẩn Hình 1) */}
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
-            <Ionicons name="sparkles" size={18} color="#2563EB" />
+            <Ionicons name="sparkles" size={18} color={colors.primary} />
             <Text style={styles.sectionTitle}>Dịch vụ phổ biến</Text>
           </View>
           <TouchableOpacity
@@ -377,7 +381,7 @@ export default function CustomerHomeScreen() {
           onPress={() => Alert.alert('Ưu đãi FixHome', 'Nhập mã FIXHOME30 khi đặt lịch để giảm 30%!')}
         >
           <LinearGradient
-            colors={['#0F172A', '#1E293B', '#2563EB']}
+            colors={[colors.text, '#1E293B', colors.primary]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.promoBanner}
@@ -402,19 +406,19 @@ export default function CustomerHomeScreen() {
         {/* 8. Cam kết chất lượng FixHome */}
         <View style={styles.trustSection}>
           <View style={styles.trustItem}>
-            <Ionicons name="shield-checkmark-outline" size={20} color="#2563EB" />
+            <Ionicons name="shield-checkmark-outline" size={20} color={colors.primary} />
             <Text style={styles.trustTitle}>Thợ xác minh</Text>
             <Text style={styles.trustDesc}>Lý lịch 100% rõ ràng</Text>
           </View>
           <View style={styles.trustDivider} />
           <View style={styles.trustItem}>
-            <Ionicons name="pricetag-outline" size={20} color="#2563EB" />
+            <Ionicons name="pricetag-outline" size={20} color={colors.primary} />
             <Text style={styles.trustTitle}>Giá minh bạch</Text>
             <Text style={styles.trustDesc}>Báo giá trước khi làm</Text>
           </View>
           <View style={styles.trustDivider} />
           <View style={styles.trustItem}>
-            <Ionicons name="ribbon-outline" size={20} color="#2563EB" />
+            <Ionicons name="ribbon-outline" size={20} color={colors.primary} />
             <Text style={styles.trustTitle}>Bảo hành 30 ngày</Text>
             <Text style={styles.trustDesc}>Hỗ trợ tận tâm</Text>
           </View>
@@ -435,7 +439,7 @@ export default function CustomerHomeScreen() {
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Chọn địa chỉ giao hàng</Text>
             <TouchableOpacity onPress={closeAddressSheet} style={styles.closeBtn}>
-              <Ionicons name="close" size={24} color="#64748B" />
+              <Ionicons name="close" size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
           
@@ -464,7 +468,7 @@ export default function CustomerHomeScreen() {
                   <Ionicons 
                     name={selectedAddress === item.line1 ? "radio-button-on" : "radio-button-off"} 
                     size={22} 
-                    color={selectedAddress === item.line1 ? "#2563EB" : "#94A3B8"} 
+                    color={selectedAddress === item.line1 ? colors.primary : "#94A3B8"} 
                   />
                   <View style={styles.addressItemTextContainer}>
                     <Text style={[styles.addressItemLabel, selectedAddress === item.line1 && styles.addressItemLabelActive]}>
@@ -484,10 +488,10 @@ export default function CustomerHomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
   scrollContent: {
     paddingBottom: 20,
@@ -506,12 +510,12 @@ const styles = StyleSheet.create({
   },
   addressLabel: {
     fontSize: 11,
-    color: '#64748B',
+    color: colors.textSecondary,
   },
   addressValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#0F172A',
+    color: colors.text,
   },
 
   // 1. Header
@@ -520,11 +524,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 10,
-    backgroundColor: '#FFFFFF',
+    paddingVertical: 14,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: colors.border,
   },
   userInfo: {
     flexDirection: 'row',
@@ -546,22 +549,22 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#22C55E',
+    backgroundColor: colors.success,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: colors.surface,
   },
   userTextContainer: {
     marginLeft: 10,
   },
   greetingText: {
     fontSize: 12,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   userNameText: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
   },
   headerActions: {
     flexDirection: 'row',
@@ -582,13 +585,13 @@ const styles = StyleSheet.create({
   roleSwitchText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#2563EB',
+    color: colors.primary,
   },
   headerIconBtn: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -600,17 +603,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 4,
     right: 4,
-    backgroundColor: '#EF4444',
+    backgroundColor: colors.error,
     width: 16,
     height: 16,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#FFFFFF',
+    borderColor: colors.surface,
   },
   notificationBadgeText: {
-    color: '#FFFFFF',
+    color: colors.surface,
     fontSize: 9,
     fontWeight: 'bold',
   },
@@ -623,7 +626,7 @@ const styles = StyleSheet.create({
     padding: 16,
     position: 'relative',
     overflow: 'hidden',
-    shadowColor: '#1D4ED8',
+    shadowColor: colors.primaryDark,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
@@ -650,7 +653,7 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 25,
     paddingLeft: 14,
     paddingRight: 6,
@@ -664,14 +667,14 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: '#0F172A',
+    color: colors.text,
     paddingVertical: 4,
   },
   searchBtn: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -701,14 +704,14 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   featureCardBadgeText: {
-    color: '#FFFFFF',
+    color: colors.surface,
     fontSize: 9,
     fontWeight: 'bold',
   },
   featureCardTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
     marginTop: 4,
   },
   featureCardDesc: {
@@ -737,12 +740,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
   },
   viewAllText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#2563EB',
+    color: colors.primary,
   },
   servicesGrid: {
     flexDirection: 'row',
@@ -768,7 +771,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: colors.surface,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
@@ -790,16 +793,16 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -2,
     right: -2,
-    backgroundColor: '#EF4444',
+    backgroundColor: colors.error,
     paddingHorizontal: 4,
     paddingVertical: 1,
     borderRadius: 6,
     zIndex: 3,
     borderWidth: 1,
-    borderColor: '#FFFFFF',
+    borderColor: colors.surface,
   },
   hotBadgeText: {
-    color: '#FFFFFF',
+    color: colors.surface,
     fontSize: 8,
     fontWeight: 'bold',
   },
@@ -822,7 +825,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 5,
     borderRadius: 3,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
   inactiveDot: {
     width: 6,
@@ -866,7 +869,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   promoTitle: {
-    color: '#FFFFFF',
+    color: colors.surface,
     fontSize: 16,
     fontWeight: '700',
     marginBottom: 2,
@@ -878,13 +881,13 @@ const styles = StyleSheet.create({
   },
   promoButton: {
     alignSelf: 'flex-start',
-    backgroundColor: '#F59E0B',
+    backgroundColor: colors.warning,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
   },
   promoButtonText: {
-    color: '#0F172A',
+    color: colors.text,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -900,11 +903,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: 16,
     marginTop: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
   trustItem: {
     flex: 1,
@@ -913,17 +916,17 @@ const styles = StyleSheet.create({
   trustDivider: {
     width: 1,
     height: 30,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.border,
   },
   trustTitle: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
     marginTop: 4,
   },
   trustDesc: {
     fontSize: 9,
-    color: '#64748B',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   modalOverlay: {
@@ -932,7 +935,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '80%',
@@ -944,12 +947,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
   },
   closeBtn: {
     padding: 4,
@@ -959,7 +962,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: colors.border,
   },
   addressItemActive: {
     backgroundColor: '#EFF6FF',
@@ -971,15 +974,15 @@ const styles = StyleSheet.create({
   addressItemLabel: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#0F172A',
+    color: colors.text,
     marginBottom: 4,
   },
   addressItemLabelActive: {
-    color: '#2563EB',
+    color: colors.primary,
   },
   addressItemLine: {
     fontSize: 13,
-    color: '#64748B',
+    color: colors.textSecondary,
   },
   emptyAddress: {
     padding: 24,
@@ -987,17 +990,19 @@ const styles = StyleSheet.create({
   },
   emptyAddressText: {
     fontSize: 15,
-    color: '#64748B',
+    color: colors.textSecondary,
     marginBottom: 16,
   },
   addAddressBtn: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
   },
   addAddressBtnText: {
-    color: '#FFFFFF',
+    color: colors.surface,
     fontWeight: '600',
   },
 });
+
+

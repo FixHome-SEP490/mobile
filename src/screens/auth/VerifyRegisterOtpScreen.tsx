@@ -1,3 +1,4 @@
+import { useAppTheme } from '../../constants/theme';
 // src/screens/auth/VerifyRegisterOtpScreen.tsx
 import React, { useEffect, useState, useRef } from 'react';
 import {
@@ -21,6 +22,8 @@ import { authApi } from '../../api/auth.api';
 import { useAuthStore } from '../../store';
 
 export default function VerifyRegisterOtpScreen() {
+  const { colors, spacing, fontSize } = useAppTheme();
+  const styles = getStyles(colors, spacing, fontSize);
   const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList & RootStackParamList>>();
   const route = useRoute<RouteProp<AuthStackParamList, 'VerifyRegisterOtp'>>();
   const { email, password } = route.params;
@@ -114,7 +117,7 @@ export default function VerifyRegisterOtpScreen() {
           
           <View style={styles.header}>
             <View style={styles.iconWrapper}>
-              <Ionicons name="shield-checkmark" size={32} color="#2563EB" />
+              <Ionicons name="shield-checkmark" size={32} color={colors.primary} />
             </View>
             <Text style={styles.title}>XÁC THỰC OTP</Text>
             <View style={styles.divider} />
@@ -125,7 +128,7 @@ export default function VerifyRegisterOtpScreen() {
           <View style={styles.formContainer}>
             {error && (
               <View style={styles.errorBox}>
-                <Ionicons name="alert-circle" size={16} color="#DC2626" />
+                <Ionicons name="alert-circle" size={16} color={colors.error} />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             )}
@@ -166,7 +169,7 @@ export default function VerifyRegisterOtpScreen() {
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
+                <ActivityIndicator color={colors.surface} size="small" />
               ) : (
                 <Text style={styles.submitBtnText}>Xác nhận</Text>
               )}
@@ -190,10 +193,10 @@ export default function VerifyRegisterOtpScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
   scrollContent: {
     flexGrow: 1,
@@ -223,7 +226,7 @@ const styles = StyleSheet.create({
   divider: {
     width: 40,
     height: 4,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderRadius: 2,
     marginBottom: 12,
   },
@@ -249,7 +252,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     flex: 1,
-    color: '#DC2626',
+    color: colors.error,
     fontSize: 12,
     fontWeight: '500',
   },
@@ -266,7 +269,7 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: '#D1D5DB',
     borderRadius: 8,
@@ -282,20 +285,20 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   submitBtn: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     height: 50,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 16,
-    shadowColor: '#2563EB',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 3,
   },
   submitBtnText: {
-    color: '#FFFFFF',
+    color: colors.surface,
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -311,7 +314,7 @@ const styles = StyleSheet.create({
   },
   loginLink: {
     fontSize: 13,
-    color: '#2563EB',
+    color: colors.primary,
     fontWeight: '700',
   },
   otpWrapper: {
@@ -333,7 +336,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1.5,
     borderColor: '#BFDBFE',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -341,9 +344,9 @@ const styles = StyleSheet.create({
     borderColor: '#3B82F6',
   },
   otpBoxFocused: {
-    borderColor: '#2563EB',
+    borderColor: colors.primary,
     borderWidth: 2,
-    shadowColor: '#2563EB',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -352,7 +355,7 @@ const styles = StyleSheet.create({
   otpBoxText: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
   },
   hiddenOtpInput: {
     width: '100%',
@@ -369,12 +372,12 @@ const styles = StyleSheet.create({
   },
   resendTextWrapper: {
     fontSize: 13,
-    color: '#64748B',
+    color: colors.textSecondary,
   },
   resendText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#2563EB',
+    color: colors.primary,
   },
   helperText: {
     fontSize: 13,
@@ -386,7 +389,7 @@ const styles = StyleSheet.create({
   },
   timerText: {
     fontSize: 12,
-    color: '#2563EB',
+    color: colors.primary,
     fontWeight: '600',
   },
   resendBtn: {
@@ -395,7 +398,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   resendBtnText: {
-    color: '#2563EB',
+    color: colors.primary,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -403,4 +406,6 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
   }
 });
+
+
 

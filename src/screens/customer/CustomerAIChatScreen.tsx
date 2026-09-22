@@ -1,3 +1,4 @@
+import { useAppTheme } from '../../constants/theme';
 // src/screens/customer/CustomerAIChatScreen.tsx
 //
 // The assistant. It answers questions and gives a preliminary diagnosis, and
@@ -15,6 +16,7 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   ScrollView,
   StatusBar,
@@ -24,7 +26,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -87,8 +89,11 @@ type Situation =
   | 'general_question';
 
 export default function CustomerAIChatScreen() {
+  const { colors, spacing, fontSize, isDark } = useAppTheme();
+  const styles = getStyles(colors, spacing, fontSize);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<ChatRoute>();
+  const insets = useSafeAreaInsets();
 
   /**
    * When the customer arrived from the diagnosis screen their message is
@@ -115,6 +120,17 @@ export default function CustomerAIChatScreen() {
       },
     ];
   });
+  
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+  useEffect(() => {
+    const showSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   const [input, setInput] = useState('');
   const [pendingImages, setPendingImages] = useState<PickedImage[]>([]);
   const [isThinking, setIsThinking] = useState(
@@ -382,7 +398,7 @@ export default function CustomerAIChatScreen() {
       return (
         <View style={styles.botRow}>
           <View style={styles.avatar}>
-            <Ionicons name="hardware-chip-outline" size={16} color="#2563EB" />
+            <Ionicons name="hardware-chip-outline" size={16} color={colors.primary} />
           </View>
           <View style={styles.botColumn}>
             <View
@@ -406,20 +422,18 @@ export default function CustomerAIChatScreen() {
         </View>
       );
     },
-    // Nothing from the enclosing scope any more: the card renders what it is
-    // given, and booking moved to the pinned bar.
-    [],
+    [goToBooking, colors, styles],
   );
 
   const canSend = (input.trim().length > 0 || pendingImages.length > 0) && !isThinking;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
-          <Ionicons name="arrow-back" size={24} color="#0F172A" />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerTitleBox}>
           <Text style={styles.headerTitle}>Trợ lý FixHome</Text>
@@ -438,7 +452,7 @@ export default function CustomerAIChatScreen() {
           <Ionicons
             name="refresh"
             size={22}
-            color={turnCount === 0 ? '#CBD5E1' : '#2563EB'}
+            color={turnCount === 0 ? '#CBD5E1' : colors.primary}
           />
         </TouchableOpacity>
       </View>
@@ -496,7 +510,7 @@ export default function CustomerAIChatScreen() {
                   }
                   accessibilityLabel="Bỏ ảnh này"
                 >
-                  <Ionicons name="close" size={12} color="#FFFFFF" />
+                  <Ionicons name="close" size={12} color={colors.surface} />
                 </TouchableOpacity>
               </View>
             ))}
@@ -506,17 +520,17 @@ export default function CustomerAIChatScreen() {
           </ScrollView>
         )}
 
-        <View style={styles.composer}>
+        <View style={[styles.composer, { paddingBottom: isKeyboardVisible ? 0 : Math.max(insets.bottom, 10) }]}>
           <TouchableOpacity style={styles.composerBtn} onPress={pickImages}>
-            <Ionicons name="image-outline" size={22} color="#2563EB" />
+            <Ionicons name="image-outline" size={22} color={colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.composerBtn} onPress={takePhoto}>
-            <Ionicons name="camera-outline" size={22} color="#2563EB" />
+            <Ionicons name="camera-outline" size={22} color={colors.primary} />
           </TouchableOpacity>
           <TextInput
             style={styles.input}
             placeholder="Nhà mình đang gặp vấn đề gì ạ?"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor="#000000"
             value={input}
             onChangeText={setInput}
             multiline
@@ -528,9 +542,9 @@ export default function CustomerAIChatScreen() {
             accessibilityLabel="Gửi"
           >
             {isThinking ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator size="small" color={colors.surface} />
             ) : (
-              <Ionicons name="send" size={18} color="#FFFFFF" />
+              <Ionicons name="send" size={18} color={colors.surface} />
             )}
           </TouchableOpacity>
         </View>
@@ -548,7 +562,15 @@ export default function CustomerAIChatScreen() {
  * steps - turn off the gas, kill the breaker - because those are useless if the
  * customer reads them after a list of suspected faults.
  */
-function DiagnosisCard({ reply }: { reply: AiReply }) {
+function DiagnosisCard({
+  reply,
+  onBook,
+}: {
+  reply: AiReply;
+  onBook: (service: RecommendedService) => void;
+}) {
+  const { colors, spacing, fontSize } = useAppTheme();
+  const styles = getStyles(colors, spacing, fontSize);
   const urgent = reply.urgency === 'HIGH';
   const actions = reply.suggestedActionsVi || [];
   const faults = reply.suspectedFaults || [];
@@ -593,7 +615,7 @@ function DiagnosisCard({ reply }: { reply: AiReply }) {
       {reply.device && (
         <View style={styles.chipRow}>
           <View style={styles.deviceChip}>
-            <Ionicons name="cube-outline" size={13} color="#0F172A" />
+            <Ionicons name="cube-outline" size={13} color={colors.text} />
             <Text style={styles.deviceChipText}>{reply.device.nameVi}</Text>
           </View>
         </View>
@@ -644,10 +666,17 @@ function DiagnosisCard({ reply }: { reply: AiReply }) {
         <Text style={styles.priceNote}>Thợ xem tận nơi rồi mới báo giá chính xác ạ.</Text>
       )}
 
-      {/* No booking button here. It lives pinned above the composer, because
-          a button inside a message scrolls away the moment the assistant says
-          anything else, and the customer then has to hunt back up the thread
-          for the thing they came to press. */}
+      {services.map((service) => (
+        <TouchableOpacity
+          key={service.serviceCode}
+          style={styles.bookBtn}
+          activeOpacity={0.85}
+          onPress={() => onBook(service)}
+        >
+          <Ionicons name="calendar-outline" size={16} color={colors.surface} />
+          <Text style={styles.bookBtnText}>Đặt thợ · {service.nameVi}</Text>
+        </TouchableOpacity>
+      ))}
 
       {!!reply.disclaimerVi && (
         <Text style={styles.disclaimer}>{reply.disclaimerVi}</Text>
@@ -681,8 +710,8 @@ function composeFromFields(reply: AiReply): string {
 
 // -------------------------------------------------------------------- style
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F8FAFC' },
+const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
 
   header: {
@@ -690,9 +719,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: colors.border,
   },
   headerBtn: {
     width: 40,
@@ -702,8 +731,8 @@ const styles = StyleSheet.create({
   },
   headerBtnMuted: { opacity: 0.5 },
   headerTitleBox: { flex: 1, paddingHorizontal: 4 },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: '#0F172A' },
-  headerSubtitle: { fontSize: 11, color: '#64748B', marginTop: 2 },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
+  headerSubtitle: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
 
   listContent: { paddingVertical: 16, paddingBottom: 24 },
 
@@ -711,19 +740,24 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 18,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   userBubble: {
     alignSelf: 'flex-end',
-    backgroundColor: '#2563EB',
+    backgroundColor: '#3B82F6',
     borderBottomRightRadius: 4,
     marginHorizontal: 16,
     marginVertical: 4,
     maxWidth: '82%',
   },
-  userText: { color: '#FFFFFF', fontSize: 14, lineHeight: 20 },
+  userText: { color: colors.surface, fontSize: 15, lineHeight: 22 },
   bubbleImages: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 6 },
-  bubbleThumb: { width: 92, height: 92, borderRadius: 10, backgroundColor: '#1D4ED8' },
+  bubbleThumb: { width: 92, height: 92, borderRadius: 10, backgroundColor: colors.primaryDark },
 
   botRow: {
     flexDirection: 'row',
@@ -744,28 +778,28 @@ const styles = StyleSheet.create({
   botColumn: { flex: 1 },
   botBubble: {
     alignSelf: 'flex-start',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
-  botText: { color: '#0F172A', fontSize: 14, lineHeight: 21 },
-  acknowledgementBubble: { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' },
-  acknowledgementText: { color: '#64748B', fontStyle: 'italic' },
+  botText: { color: colors.text, fontSize: 15, lineHeight: 22 },
+  acknowledgementBubble: { backgroundColor: colors.border, borderColor: colors.border },
+  acknowledgementText: { color: colors.textSecondary, fontStyle: 'italic' },
 
   card: {
     marginTop: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     padding: 14,
   },
   section: { marginTop: 10 },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#64748B',
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
     marginBottom: 6,
@@ -788,25 +822,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.border,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 999,
   },
-  deviceChipText: { fontSize: 12, color: '#0F172A', fontWeight: '600' },
+  deviceChipText: { fontSize: 12, color: colors.text, fontWeight: '600' },
 
   faultRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 4 },
   faultDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     marginTop: 7,
     marginRight: 8,
   },
-  actionDot: { backgroundColor: '#16A34A' },
-  faultText: { flex: 1, fontSize: 13, color: '#0F172A', lineHeight: 20 },
-  questionText: { fontSize: 13, color: '#0F172A', lineHeight: 20, marginBottom: 4 },
+  actionDot: { backgroundColor: colors.success },
+  faultText: { flex: 1, fontSize: 13, color: colors.text, lineHeight: 20 },
+  questionText: { fontSize: 13, color: colors.text, lineHeight: 20, marginBottom: 4 },
 
   priceRow: {
     flexDirection: 'row',
@@ -815,23 +849,23 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: colors.border,
   },
-  priceLabel: { fontSize: 12, color: '#64748B' },
-  priceValue: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
-  priceNote: { fontSize: 11, color: '#64748B', marginTop: 2 },
+  priceLabel: { fontSize: 12, color: colors.textSecondary },
+  priceValue: { fontSize: 15, fontWeight: '800', color: colors.text },
+  priceNote: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
 
   bookBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 12,
     marginTop: 12,
   },
-  bookBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
+  bookBtnText: { color: colors.surface, fontWeight: '700', fontSize: 14 },
 
   disclaimer: { fontSize: 10, color: '#94A3B8', marginTop: 10, lineHeight: 15 },
 
@@ -868,13 +902,13 @@ const styles = StyleSheet.create({
 
   tray: {
     maxHeight: 86,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: colors.border,
   },
   trayContent: { alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
   trayItem: { width: 64, height: 64 },
-  trayThumb: { width: 64, height: 64, borderRadius: 10, backgroundColor: '#E2E8F0' },
+  trayThumb: { width: 64, height: 64, borderRadius: 10, backgroundColor: colors.border },
   trayRemove: {
     position: 'absolute',
     top: -4,
@@ -882,20 +916,20 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#0F172A',
+    backgroundColor: colors.text,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  trayHint: { fontSize: 11, color: '#64748B', marginLeft: 4 },
+  trayHint: { fontSize: 11, color: colors.textSecondary, marginLeft: 4 },
 
   composer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 8,
     paddingVertical: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: colors.border,
   },
   composerBtn: {
     width: 40,
@@ -907,22 +941,24 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 44,
     maxHeight: 120,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.border,
     borderRadius: 22,
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 12 : 8,
     paddingBottom: Platform.OS === 'ios' ? 12 : 8,
     fontSize: 14,
-    color: '#0F172A',
+    color: colors.text,
   },
   sendBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,
   },
   sendBtnDisabled: { backgroundColor: '#CBD5E1' },
 });
+
+

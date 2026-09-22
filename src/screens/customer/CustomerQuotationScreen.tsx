@@ -1,3 +1,4 @@
+import { useAppTheme } from '../../constants/theme';
 import React from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,14 +7,16 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 
 export default function CustomerQuotationScreen() {
+  const { colors, spacing, fontSize, isDark } = useAppTheme();
+  const styles = getStyles(colors, spacing, fontSize);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#0F172A" />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Báo giá phát sinh</Text>
         <View style={styles.badge}>
@@ -52,10 +55,10 @@ export default function CustomerQuotationScreen() {
         <Text style={styles.sectionTitle}>Bằng chứng kỹ thuật</Text>
         <View style={styles.evidenceRow}>
           <View style={styles.evidenceBox}>
-            <Ionicons name="camera" size={24} color="#2563EB" />
+            <Ionicons name="camera" size={24} color={colors.primary} />
           </View>
           <View style={styles.evidenceBox}>
-            <Ionicons name="camera" size={24} color="#2563EB" />
+            <Ionicons name="camera" size={24} color={colors.primary} />
           </View>
         </View>
 
@@ -79,43 +82,45 @@ export default function CustomerQuotationScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9'
+    borderBottomColor: colors.border
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A', flex: 1 },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text, flex: 1 },
   badge: { backgroundColor: '#FEF9C3', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   badgeText: { color: '#A16207', fontSize: 10, fontWeight: '700' },
   content: { padding: 16, paddingBottom: 100 },
   noticeBox: { backgroundColor: '#FEF9C3', padding: 16, borderRadius: 12, marginBottom: 16 },
   noticeText: { color: '#854D0E', fontSize: 13, lineHeight: 20 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 24, borderWidth: 1, borderColor: '#F1F5F9' },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 12 },
+  card: { backgroundColor: colors.surface, borderRadius: 16, padding: 16, marginBottom: 24, borderWidth: 1, borderColor: colors.border },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 12 },
   quoteRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  quoteLabel: { fontSize: 14, color: '#64748B' },
-  quoteValue: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
-  divider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 12 },
+  quoteLabel: { fontSize: 14, color: colors.textSecondary },
+  quoteValue: { fontSize: 14, fontWeight: '700', color: colors.text },
+  divider: { height: 1, backgroundColor: colors.border, marginVertical: 12 },
   quoteRowTotal: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  totalLabel: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
-  totalValue: { fontSize: 18, fontWeight: '700', color: '#2563EB' },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 12 },
+  totalLabel: { fontSize: 16, fontWeight: '700', color: colors.text },
+  totalValue: { fontSize: 18, fontWeight: '700', color: colors.primary },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 12 },
   evidenceRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
-  evidenceBox: { flex: 1, height: 100, backgroundColor: '#E2E8F0', borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#CBD5E1', borderStyle: 'dashed' },
-  noteCard: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#F1F5F9' },
+  evidenceBox: { flex: 1, height: 100, backgroundColor: colors.border, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#CBD5E1', borderStyle: 'dashed' },
+  noteCard: { backgroundColor: colors.surface, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: colors.border },
   noteText: { fontSize: 14, color: '#475569', lineHeight: 22 },
-  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFFFFF', padding: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: colors.surface, padding: 16, borderTopWidth: 1, borderTopColor: colors.border },
   btnRow: { flexDirection: 'row', gap: 12 },
   secondaryBtn: { flex: 1, backgroundColor: '#FEE2E2', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  secondaryBtnText: { color: '#DC2626', fontSize: 14, fontWeight: '700' },
-  primaryBtn: { flex: 1, backgroundColor: '#2563EB', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  primaryBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' }
+  secondaryBtnText: { color: colors.error, fontSize: 14, fontWeight: '700' },
+  primaryBtn: { flex: 1, backgroundColor: colors.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  primaryBtnText: { color: colors.surface, fontSize: 14, fontWeight: '700' }
 });
+
+

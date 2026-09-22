@@ -1,5 +1,6 @@
+import { useAppTheme } from '../../constants/theme';
 // src/screens/auth/RegisterScreen.tsx
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,23 +20,33 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList, RootStackParamList } from '../../types';
 import { authApi } from '../../api/auth.api';
 
-const RuleItem = ({ met, text }: { met: boolean, text: string }) => (
-  <View style={styles.ruleItem}>
-    <Ionicons 
-      name={met ? "checkmark-circle" : "ellipse-outline"} 
-      size={14} 
-      color={met ? "#22C55E" : "#9CA3AF"} 
-    />
-    <Text style={[styles.ruleText, met && styles.ruleTextMet]}>{text}</Text>
-  </View>
-);
 
 export default function RegisterScreen() {
+  const { colors, spacing, fontSize, isDark } = useAppTheme();
+  const styles = getStyles(colors, spacing, fontSize);
   const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList & RootStackParamList>>();
   
   const [email, setEmail] = useState('');
+  
+  const renderRuleItem = (met: boolean, text: string) => (
+    <View style={styles.ruleItem}>
+      <Ionicons 
+        name={met ? "checkmark-circle" : "ellipse-outline"} 
+        size={14} 
+        color={met ? colors.success : "#9CA3AF"} 
+      />
+      <Text style={[styles.ruleText, met && styles.ruleTextMet]}>{text}</Text>
+    </View>
+  );
+
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  
+  const phoneRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmPasswordRef = useRef<TextInput>(null);
+
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -68,7 +80,7 @@ export default function RegisterScreen() {
   }, [password]);
 
   const strengthScore = Object.values(passwordRules).filter(Boolean).length;
-  const barColors = ['#EF4444', '#F97316', '#EAB308', '#84CC16', '#22C55E'];
+  const barColors = [colors.error, '#F97316', '#EAB308', '#84CC16', colors.success];
   const [isLoading, setIsLoading] = useState(false);
 
   const handleRegister = async () => {
@@ -110,6 +122,7 @@ export default function RegisterScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -118,7 +131,7 @@ export default function RegisterScreen() {
       
           <View style={styles.header}>
             <View style={styles.iconWrapper}>
-              <Ionicons name="home" size={32} color="#2563EB" />
+              <Ionicons name="home" size={32} color={colors.primary} />
             </View>
             <Text style={styles.title}>ĐĂNG KÝ HỘI VIÊN</Text>
             <View style={styles.divider} />
@@ -140,6 +153,9 @@ export default function RegisterScreen() {
                   value={fullName}
                   onChangeText={setFullName}
                   onBlur={() => setTouchedFullName(true)}
+                  returnKeyType="next"
+                  onSubmitEditing={() => emailRef.current?.focus()}
+                  blurOnSubmit={false}
                 />
               </View>
               {fullNameError ? <Text style={styles.errorText}>{fullNameError}</Text> : null}
@@ -161,11 +177,15 @@ export default function RegisterScreen() {
                   value={email}
                   onChangeText={setEmail}
                   onBlur={() => setTouchedEmail(true)}
+                  ref={emailRef}
+                  returnKeyType="next"
+                  onSubmitEditing={() => passwordRef.current?.focus()}
+                  blurOnSubmit={false}
                 />
                 {emailError ? (
                   <Ionicons name="alert-circle" size={20} color="#FF3B30" />
                 ) : (
-                  touchedEmail && isEmailValid ? <Ionicons name="checkmark-circle" size={20} color="#22C55E" /> : null
+                  touchedEmail && isEmailValid ? <Ionicons name="checkmark-circle" size={20} color={colors.success} /> : null
                 )}
               </View>
               {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
@@ -186,6 +206,10 @@ export default function RegisterScreen() {
                   value={password}
                   onChangeText={setPassword}
                   autoCapitalize="none"
+                  ref={passwordRef}
+                  returnKeyType="next"
+                  onSubmitEditing={() => confirmPasswordRef.current?.focus()}
+                  blurOnSubmit={false}
                 />
                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
                   <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color="#9CA3AF" />
@@ -207,11 +231,11 @@ export default function RegisterScreen() {
                   ))}
                 </View>
                 <View style={styles.rulesGrid}>
-                  <RuleItem met={passwordRules.minLength} text="Ít nhất 8 ký tự" />
-                  <RuleItem met={passwordRules.hasLower} text="1 chữ viết thường" />
-                  <RuleItem met={passwordRules.hasUpper} text="1 chữ viết hoa" />
-                  <RuleItem met={passwordRules.hasNumber} text="1 chữ số" />
-                  <RuleItem met={passwordRules.hasSpecial} text="1 ký tự đặc biệt" />
+                  {renderRuleItem(passwordRules.minLength, "Ít nhất 8 ký tự")}
+                  {renderRuleItem(passwordRules.hasLower, "1 chữ viết thường")}
+                  {renderRuleItem(passwordRules.hasUpper, "1 chữ viết hoa")}
+                  {renderRuleItem(passwordRules.hasNumber, "1 chữ số")}
+                  {renderRuleItem(passwordRules.hasSpecial, "1 ký tự đặc biệt")}
                 </View>
               </View>
             )}
@@ -232,6 +256,10 @@ export default function RegisterScreen() {
                   onChangeText={setConfirmPassword}
                   onBlur={() => setTouchedConfirm(true)}
                   autoCapitalize="none"
+                  ref={confirmPasswordRef}
+                  returnKeyType="next"
+                  onSubmitEditing={() => phoneRef.current?.focus()}
+                  blurOnSubmit={false}
                 />
                 <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={{ padding: 4 }}>
                   <Ionicons name={showConfirmPassword ? "eye-off-outline" : "eye-outline"} size={18} color="#9CA3AF" />
@@ -255,6 +283,9 @@ export default function RegisterScreen() {
                   value={phone}
                   onChangeText={setPhone}
                   onBlur={() => setTouchedPhone(true)}
+                  ref={phoneRef}
+                  returnKeyType="done"
+                  onSubmitEditing={handleRegister}
                 />
               </View>
               {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
@@ -277,10 +308,10 @@ export default function RegisterScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
   scrollContent: {
     flexGrow: 1,
@@ -297,7 +328,7 @@ const styles = StyleSheet.create({
     marginTop: -20,
     paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#D1D5DB',
@@ -329,7 +360,7 @@ const styles = StyleSheet.create({
   divider: {
     width: 40,
     height: 4,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderRadius: 2,
     marginBottom: 12,
   },
@@ -356,7 +387,7 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: '#D1D5DB',
     borderRadius: 8,
@@ -405,23 +436,23 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
   },
   ruleTextMet: {
-    color: '#22C55E',
+    color: colors.success,
   },
   registerBtn: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     height: 50,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 16,
-    shadowColor: '#2563EB',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 3,
   },
   registerBtnText: {
-    color: '#FFFFFF',
+    color: colors.surface,
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -437,7 +468,9 @@ const styles = StyleSheet.create({
   },
   loginLink: {
     fontSize: 13,
-    color: '#2563EB',
+    color: colors.primary,
     fontWeight: '700',
   },
 });
+
+
