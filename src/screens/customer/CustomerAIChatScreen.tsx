@@ -15,7 +15,6 @@ import {
   Alert,
   FlatList,
   Image,
-  KeyboardAvoidingView,
   Keyboard,
   Platform,
   ScrollView,
@@ -419,7 +418,9 @@ export default function CustomerAIChatScreen() {
                 {item.text}
               </Text>
             </View>
-            {item.reply && <DiagnosisCard reply={item.reply} />}
+            {item.reply && (
+              <DiagnosisCard reply={item.reply} onBook={goToBooking} />
+            )}
           </View>
         </View>
       );

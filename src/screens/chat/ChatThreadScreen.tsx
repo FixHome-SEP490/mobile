@@ -11,6 +11,7 @@ import {
   View,
   Image,
   Keyboard,
+  Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardInset } from '../../hooks/useKeyboardInset';
