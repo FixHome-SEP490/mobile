@@ -15,7 +15,6 @@ import {
   Alert,
   FlatList,
   Image,
-  KeyboardAvoidingView,
   Keyboard,
   Platform,
   ScrollView,
@@ -31,6 +30,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
+import { useKeyboardInset } from '../../hooks/useKeyboardInset';
 import {
   pickImagesForAi,
   takePhotoForAi,
@@ -163,6 +163,7 @@ export default function CustomerAIChatScreen() {
   const [turnCount, setTurnCount] = useState(0);
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const [holdingLines, setHoldingLines] = useState<Record<string, string[]>>({});
+  const keyboardInset = useKeyboardInset();
 
   useEffect(() => {
     aiApi.acknowledgements().then((situations) => {
@@ -457,11 +458,12 @@ export default function CustomerAIChatScreen() {
         </TouchableOpacity>
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
-      >
+      {/* Not KeyboardAvoidingView: on Android it needs the window to resize
+          when the keyboard opens, and this app draws edge to edge, where it
+          does not. The composer stayed put and the keyboard covered it, so the
+          customer could type without seeing what they typed. The measured
+          inset works in both layout modes. */}
+      <View style={[styles.flex, { paddingBottom: keyboardInset }]}>
         <FlatList
           ref={listRef}
           data={messages}
@@ -548,7 +550,7 @@ export default function CustomerAIChatScreen() {
             )}
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }
