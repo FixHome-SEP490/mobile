@@ -33,17 +33,36 @@ const JPEG_QUALITY = 0.7;
  */
 const MAX_ENCODED_CHARS = Math.floor(8 * 1024 * 1024 * 1.37);
 
+/**
+ * A photograph the customer picked, kept in two forms.
+ *
+ * `uri` is the original on the device, and it is kept on purpose: when a send
+ * fails on a weak connection the only useful retry is a smaller picture, and
+ * you cannot make a smaller picture out of one that has already been encoded.
+ */
+export interface PickedImage {
+  uri: string;
+  dataUri: string;
+}
+
 export interface PickResult {
-  /** Data URIs, ready to send. */
-  images: string[];
+  images: PickedImage[];
   /** Set when something the customer chose could not be used. */
   problemVi?: string;
 }
 
-async function encode(uri: string): Promise<string | null> {
+/** What to try when the network will not carry the first attempt. */
+const RETRY_WIDTH = 640;
+const RETRY_QUALITY = 0.45;
+
+async function encode(
+  uri: string,
+  width: number = TARGET_WIDTH,
+  quality: number = JPEG_QUALITY,
+): Promise<string | null> {
   try {
-    const shrunk = await manipulateAsync(uri, [{ resize: { width: TARGET_WIDTH } }], {
-      compress: JPEG_QUALITY,
+    const shrunk = await manipulateAsync(uri, [{ resize: { width } }], {
+      compress: quality,
       format: SaveFormat.JPEG,
       base64: true,
     });
@@ -54,6 +73,23 @@ async function encode(uri: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * The same photographs, small enough to get through a bad connection.
+ *
+ * 640px at quality 0.45 is roughly a tenth of the bytes of the first attempt
+ * and still above what the detector sees, which runs at 640px. Used only after
+ * a send has already failed: sending everything this small by default would
+ * cost accuracy on the ordinary case to buy nothing.
+ */
+export async function shrinkForRetry(images: PickedImage[]): Promise<string[]> {
+  const smaller: string[] = [];
+  for (const image of images) {
+    const encoded = await encode(image.uri, RETRY_WIDTH, RETRY_QUALITY);
+    if (encoded) smaller.push(encoded);
+  }
+  return smaller;
 }
 
 /** Ask for photographs from the library, shrink them, encode them. */
@@ -79,11 +115,11 @@ export async function pickImagesForAi(alreadyHave: number): Promise<PickResult> 
   });
   if (picked.canceled) return { images: [] };
 
-  const images: string[] = [];
+  const images: PickedImage[] = [];
   let dropped = 0;
   for (const asset of picked.assets.slice(0, room)) {
     const encoded = await encode(asset.uri);
-    if (encoded) images.push(encoded);
+    if (encoded) images.push({ uri: asset.uri, dataUri: encoded });
     else dropped += 1;
   }
 
@@ -110,8 +146,9 @@ export async function takePhotoForAi(alreadyHave: number): Promise<PickResult> {
   const shot = await ImagePicker.launchCameraAsync({ quality: 1 });
   if (shot.canceled || !shot.assets[0]) return { images: [] };
 
-  const encoded = await encode(shot.assets[0].uri);
+  const asset = shot.assets[0];
+  const encoded = await encode(asset.uri);
   return encoded
-    ? { images: [encoded] }
+    ? { images: [{ uri: asset.uri, dataUri: encoded }] }
     : { images: [], problemVi: 'Ảnh vừa chụp em không đọc được, anh/chị chụp lại giúp em nhé.' };
 }

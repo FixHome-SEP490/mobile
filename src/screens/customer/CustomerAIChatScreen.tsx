@@ -15,7 +15,6 @@ import {
   Alert,
   FlatList,
   Image,
-  KeyboardAvoidingView,
   Keyboard,
   Platform,
   ScrollView,
@@ -31,7 +30,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
-import { pickImagesForAi, takePhotoForAi } from '../../services/image-for-ai';
+import { useKeyboardInset } from '../../hooks/useKeyboardInset';
+import {
+  pickImagesForAi,
+  takePhotoForAi,
+  shrinkForRetry,
+  type PickedImage,
+} from '../../services/image-for-ai';
 import TypingDots from '../chat/TypingDots';
 import {
   aiApi,
@@ -102,6 +107,8 @@ export default function CustomerAIChatScreen() {
     const text = handover?.initialDescription?.trim() || '';
     const images = handover?.initialImages || [];
     if (!text && images.length === 0) return [opening];
+    // Handed over already encoded; there is no original to shrink, so a weak
+    // connection here falls back to the ordinary unavailable message.
     return [
       opening,
       { id: nextId(), sender: 'user', text, images },
@@ -125,7 +132,7 @@ export default function CustomerAIChatScreen() {
   }, []);
 
   const [input, setInput] = useState('');
-  const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [pendingImages, setPendingImages] = useState<PickedImage[]>([]);
   const [isThinking, setIsThinking] = useState(
     Boolean(route.params?.initialDescription || route.params?.initialImages?.length),
   );
@@ -143,9 +150,20 @@ export default function CustomerAIChatScreen() {
    * model wrote back to them.
    */
   const lastCustomerWords = useRef('');
+  /**
+   * The service the customer is currently about to order.
+   *
+   * Pinned rather than rendered into a message, because a button inside a
+   * message scrolls away as soon as the assistant says anything else. It is
+   * replaced - never appended to - every time the assistant recommends
+   * something, so asking "đổi sang thợ sửa tủ lạnh" changes what the button
+   * books rather than leaving two contradictory buttons in the thread.
+   */
+  const [pinnedService, setPinnedService] = useState<RecommendedService | null>(null);
   const [turnCount, setTurnCount] = useState(0);
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const [holdingLines, setHoldingLines] = useState<Record<string, string[]>>({});
+  const keyboardInset = useKeyboardInset();
 
   useEffect(() => {
     aiApi.acknowledgements().then((situations) => {
@@ -181,19 +199,45 @@ export default function CustomerAIChatScreen() {
    * do the asking.
    */
   const awaitReply = useCallback(
-    async (text: string, images: string[], isQuestion: boolean) => {
+    async (text: string, images: PickedImage[], isQuestion: boolean) => {
       // The acknowledgement is already on screen; the answer waits for both the
       // model and a beat of reading time, so the two do not arrive together.
       if (text.trim()) {
         lastCustomerWords.current = text.trim();
       }
 
-      const [reply] = await Promise.all([
+      const ask = (payload: string[]) =>
         isQuestion
           ? aiApi.ask({ question: text, sessionId: sessionId.current })
-          : aiApi.analyze({ description: text, images, sessionId: sessionId.current }),
+          : aiApi.analyze({ description: text, images: payload, sessionId: sessionId.current });
+
+      const [firstTry] = await Promise.all([
+        ask(images.map((image) => image.dataUri)),
         new Promise((resolve) => setTimeout(resolve, ACKNOWLEDGEMENT_DWELL_MS)),
       ]);
+
+      // A send that fails with photographs attached is usually the photographs.
+      // On a weak connection the request never completes, and the customer is
+      // told the assistant is unreachable when the assistant is fine. One
+      // retry at roughly a tenth of the bytes - still above the 640px the
+      // detector actually sees - turns that into an answer.
+      let reply = firstTry;
+      if (reply.status === 'unavailable' && images.length > 0) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: nextId(),
+            sender: 'bot',
+            text: 'Mạng hơi yếu nên ảnh chưa gửi được, em thử lại với ảnh nhẹ hơn nhé...',
+            isAcknowledgement: true,
+          },
+        ]);
+        scrollToEnd();
+        const smaller = await shrinkForRetry(images);
+        if (smaller.length > 0) {
+          reply = await ask(smaller);
+        }
+      }
 
       // Always the server's id, never one of ours.
       if (reply.sessionId) {
@@ -204,6 +248,11 @@ export default function CustomerAIChatScreen() {
       const prose =
         reply.messageVi?.trim() || reply.answerVi?.trim() || composeFromFields(reply);
 
+      const offered = reply.recommendedServices?.[0];
+      if (offered) {
+        setPinnedService(offered);
+      }
+
       setMessages((prev) => [...prev, { id: nextId(), sender: 'bot', text: prose, reply }]);
       setIsThinking(false);
       scrollToEnd();
@@ -212,7 +261,7 @@ export default function CustomerAIChatScreen() {
   );
 
   const send = useCallback(
-    async (text: string, images: string[]) => {
+    async (text: string, images: PickedImage[]) => {
       const trimmed = text.trim();
       if (!trimmed && images.length === 0) return;
 
@@ -228,7 +277,7 @@ export default function CustomerAIChatScreen() {
 
       setMessages((prev) => [
         ...prev,
-        { id: nextId(), sender: 'user', text: trimmed, images },
+        { id: nextId(), sender: 'user', text: trimmed, images: images.map((i) => i.dataUri) },
         {
           id: nextId(),
           sender: 'bot',
@@ -254,11 +303,12 @@ export default function CustomerAIChatScreen() {
     const images = handover?.initialImages || [];
     if (!text && images.length === 0) return;
     initialSendStarted.current = true;
+    const handedOver: PickedImage[] = images.map((dataUri) => ({ uri: '', dataUri }));
     // The rule cannot see that this is async: awaitReply opens with an await,
     // so every setState inside it runs a microtask later, not during this
     // effect. The ref above is what actually prevents it running twice.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void awaitReply(text, images, false);
+    void awaitReply(text, handedOver, false);
   }, [awaitReply, handover]);
 
   // -------------------------------------------------------------- images
@@ -299,6 +349,7 @@ export default function CustomerAIChatScreen() {
           style: 'destructive',
           onPress: () => {
             sessionId.current = null;
+            setPinnedService(null);
             setTurnCount(0);
             setPendingImages([]);
             setInput('');
@@ -409,11 +460,12 @@ export default function CustomerAIChatScreen() {
         </TouchableOpacity>
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
-      >
+      {/* Not KeyboardAvoidingView: on Android it needs the window to resize
+          when the keyboard opens, and this app draws edge to edge, where it
+          does not. The composer stayed put and the keyboard covered it, so the
+          customer could type without seeing what they typed. The measured
+          inset works in both layout modes. */}
+      <View style={[styles.flex, { paddingBottom: keyboardInset }]}>
         <FlatList
           ref={listRef}
           data={messages}
@@ -425,6 +477,26 @@ export default function CustomerAIChatScreen() {
           keyboardShouldPersistTaps="handled"
         />
 
+        {pinnedService && (
+          <View style={styles.pinnedBar}>
+            <View style={styles.pinnedText}>
+              <Text style={styles.pinnedLabel}>Dịch vụ đang chọn</Text>
+              <Text style={styles.pinnedValue} numberOfLines={1}>
+                {pinnedService.nameVi}
+              </Text>
+              <Text style={styles.pinnedHint}>Muốn loại khác, cứ nhắn em đổi ạ</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.pinnedBtn}
+              activeOpacity={0.85}
+              onPress={() => goToBooking(pinnedService)}
+            >
+              <Ionicons name="calendar-outline" size={15} color="#FFFFFF" />
+              <Text style={styles.pinnedBtnText}>Đặt thợ</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {pendingImages.length > 0 && (
           <ScrollView
             horizontal
@@ -432,9 +504,9 @@ export default function CustomerAIChatScreen() {
             contentContainerStyle={styles.trayContent}
             showsHorizontalScrollIndicator={false}
           >
-            {pendingImages.map((uri, index) => (
+            {pendingImages.map((image, index) => (
               <View key={index} style={styles.trayItem}>
-                <Image source={{ uri }} style={styles.trayThumb} />
+                <Image source={{ uri: image.dataUri }} style={styles.trayThumb} />
                 <TouchableOpacity
                   style={styles.trayRemove}
                   onPress={() =>
@@ -480,7 +552,7 @@ export default function CustomerAIChatScreen() {
             )}
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -800,6 +872,37 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   bookBtnText: { color: colors.surface, fontWeight: '700', fontSize: 14 },
 
   disclaimer: { fontSize: 10, color: '#94A3B8', marginTop: 10, lineHeight: 15 },
+
+  pinnedBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#EFF6FF',
+    borderTopWidth: 1,
+    borderTopColor: '#BFDBFE',
+  },
+  pinnedText: { flex: 1 },
+  pinnedLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1D4ED8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  pinnedValue: { fontSize: 14, fontWeight: '700', color: '#0F172A', marginTop: 2 },
+  pinnedHint: { fontSize: 11, color: '#64748B', marginTop: 2 },
+  pinnedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#2563EB',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  pinnedBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
 
   tray: {
     maxHeight: 86,
