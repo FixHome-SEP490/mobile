@@ -35,3 +35,8 @@
 - T06 Negative matrix: address invalid/no coverage, no 2 tech, expired/declined standby, reschedule/cancel, duplicate POST/timeout/refresh/relogin/account-switch, GPS denied/LOW_ACCURACY/OUT_OF_GEOFENCE, photo provider503, quote/cost reject, request-before-AFTER, invoice NULL, 401/403/historical privacy.
 
 **Blocked/owned elsewhere:** geocoding/canonical area bug has separate teammate owner; no parallel implementation. Real online payment/cash settlement/commission provider and production deployment have separate leader/finance gate. No tickets are automatically assigned to named persons by this proposal.
+
+
+## 4. Addendum sau checkpoint — trạng thái Git thực tế
+
+Đã commit tài liệu `5d224fa` và commit local WIP source `b54f0c2` (62 paths); cụm '62 dirty' phía trên chỉ là snapshot trước commit. Nhánh cá nhân hiện sạch nhưng **chưa push/PR/merge/release**. Exact NEXT: integrator thực hiện cumulative independent review của source checkpoint so với `6a640f6`, rồi chia PR reviewable; không đưa nguyên khối WIP thẳng vào `dev`. Những người khác chỉ audit/đề xuất song song trước khi leader chốt file owner và tạo branch tương ứng.

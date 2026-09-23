@@ -85,3 +85,8 @@
 ## 5. Các gói việc và cách merge an toàn
 
 Xem `docs/BOOKING_SERVICEORDER_MOBILE_TASK_BOARD_2026-09-23.md` để có mã task, owner theo **vai trò đề xuất**, phạm vi file, dependency, điều kiện nghiệm thu, test/PR plan và phương án gom commit. Không có tên người nhận task nào được coi là đã phân công cho đến khi leader xác nhận. Đây là **bản audit chứ không phải yêu cầu tạo ticket tự động**.
+
+
+## 6. Addendum sau audit — Git checkpoint cục bộ
+
+Sau snapshot 62 dirty entries tại phần 0, integrator đã tạo local commits `5d224fa` (chỉ hai tài liệu) và `b54f0c2` (WIP checkpoint chính xác 62 đường dẫn `app.json` + `src/**`). Nhánh `foxonworld/booking-mobile-serviceorder-20260922` hiện sạch; official Mobile `main` không đổi. **Chưa push, chưa PR, chưa merge, chưa deploy**. WIP chứa nhiều slice chung file, chưa có cumulative independent code review hoặc full E2E; không coi commit là trạng thái đã tích hợp GitHub.
