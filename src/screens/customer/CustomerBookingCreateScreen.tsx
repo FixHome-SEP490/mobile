@@ -15,6 +15,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../../constants/theme';
 import { bookingsApi } from '../../api/bookings.api';
 import { servicesApi, type ServiceItem } from '../../api/services.api';
+import { serviceDetailTarget } from './service-catalog';
 import { usersApi, type AddressData } from '../../api/users.api';
 import { useAuthStore } from '../../store';
 import { UserRole, type RootStackParamList } from '../../types';
@@ -37,6 +38,7 @@ export default function CustomerBookingCreateScreen() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const userRole = useAuthStore((state) => state.user?.role);
   const prefill = route.params?.prefill;
+  const prefillServiceId = prefill?.serviceId;
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [addresses, setAddresses] = useState<AddressData[]>([]);
   const [serviceId, setServiceId] = useState('');
@@ -64,11 +66,24 @@ export default function CustomerBookingCreateScreen() {
         usersApi.getAddresses(),
       ]);
       const activeServices = catalog.data.filter((service) => service.isActive);
+      // A prefilled service beyond the first catalog page is reconciled by a
+      // direct active-service fetch; anything else stays unselected honestly.
+      const wantedId = serviceDetailTarget(prefillServiceId);
+      if (wantedId && !activeServices.some((service) => service.id === wantedId)) {
+        try {
+          const single = await servicesApi.getServiceById(wantedId);
+          if (single && single.id === wantedId && single.isActive !== false) {
+            activeServices.push(single);
+          }
+        } catch {
+          // Leave the prefill unselected; the form shows the honest empty state.
+        }
+      }
       setServices(activeServices);
       setAddresses(saved);
       setServiceId((existing) => {
         if (activeServices.some((service) => service.id === existing)) return existing;
-        return activeServices.find((service) => service.id === prefill?.serviceId)?.id ?? '';
+        return activeServices.find((service) => service.id === prefillServiceId)?.id ?? '';
       });
       setAddressId((existing) => {
         if (saved.some((address) => address.id === existing)) return existing;
@@ -79,7 +94,7 @@ export default function CustomerBookingCreateScreen() {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, prefill?.serviceId, userRole]);
+  }, [isAuthenticated, prefillServiceId, userRole]);
 
   useEffect(() => {
     // Defer the async catalog/address refresh; never synchronously set state in an effect body.

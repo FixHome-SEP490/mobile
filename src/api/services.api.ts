@@ -18,20 +18,32 @@ export interface CategoryItem {
   sortOrder: number;
 }
 
+export type ServicePricingMode = 'fixed_price' | 'inspection_required';
+
 export interface ServiceItem {
   id: string;
   name: string;
-  slug: string;
-  description?: string;
+  code?: string;
+  slug?: string | null;
+  description?: string | null;
   categoryId: string;
   categoryName?: string;
-  pricingMode: 'FIXED' | 'CUSTOM_QUOTE';
-  fixedUnitPrice?: number;
-  unit?: string;
-  scope?: string;
-  iconUrl?: string;
+  pricingMode: ServicePricingMode;
+  basePrice?: number | null;
+  minPrice?: number | null;
+  maxPrice?: number | null;
+  fixedPrice?: number | null;
+  unit?: string | null;
+  scopeDescription?: string | null;
   isActive: boolean;
-  sortOrder: number;
+  sortOrder?: number;
+}
+
+export const SERVICES_PAGE_SIZE = 20;
+export const SERVICES_MAX_LIMIT = 100;
+
+function toPositiveInt(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
 export const servicesApi = {
@@ -46,10 +58,12 @@ export const servicesApi = {
     page?: number;
     pageSize?: number;
   }): Promise<{ data: ServiceItem[]; total: number }> {
-    // The Backend PaginationDto accepts limit (max 100), not pageSize.
+    // The Backend PaginationDto accepts page + limit (max 100), not pageSize.
     const { pageSize, ...filters } = params ?? {};
+    const page = toPositiveInt(params?.page, 1);
+    const limit = Math.min(toPositiveInt(pageSize, SERVICES_PAGE_SIZE), SERVICES_MAX_LIMIT);
     const res = await apiClient.get('/services', {
-      params: { ...filters, ...(pageSize === undefined ? {} : { limit: pageSize }) },
+      params: { ...filters, page, limit },
     });
     const data = unwrap<ServiceItem[]>(res.data);
     return { data, total: res.data?.meta?.total ?? data.length };

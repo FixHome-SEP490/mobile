@@ -1,15 +1,49 @@
 import { useAppTheme } from '../../constants/theme';
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import React, { useCallback, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../types';
 import { LinearGradient } from 'expo-linear-gradient';
+import { servicesApi } from '../../api/services.api';
+import {
+  createServiceDetailLoader,
+  initialServiceDetailState,
+  resolveServicePrice,
+  serviceIdFromRoute,
+} from './service-catalog';
+
+type DetailRoute = RouteProp<RootStackParamList, 'CustomerServiceDetail'>;
 
 export default function CustomerServiceDetailScreen() {
   const { colors, spacing, fontSize, isDark } = useAppTheme();
   const styles = getStyles(colors, spacing, fontSize);
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<DetailRoute>();
+  // Fail closed on stale navigator state or deep links without params: the
+  // loader UUID rejection shows the error with no GET and no Booking CTA.
+  const serviceId = serviceIdFromRoute(route);
+  const [detailState, setDetailState] = useState(initialServiceDetailState);
+  const { service, loading, error } = detailState;
+  const loaderRef = useRef<ReturnType<typeof createServiceDetailLoader> | null>(null);
+  if (loaderRef.current === null) {
+    loaderRef.current = createServiceDetailLoader(servicesApi.getServiceById, setDetailState);
+  }
+  const loader = loaderRef.current;
+  useFocusEffect(useCallback(() => {
+    void loader.focus(serviceId);
+    return () => loader.blur();
+  }, [loader, serviceId]));
+
+  const onRetry = () => { void loader.focus(serviceId); };
+  const onBook = () => {
+    if (!service) return;
+    navigation.navigate('CustomerBookingCreate', {
+      prefill: { serviceId: service.id, serviceName: service.name },
+    });
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -22,61 +56,67 @@ export default function CustomerServiceDetailScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.heroSection}>
-          <View style={styles.iconCircle}>
-            <FontAwesome5 name="snowflake" size={40} color="#0284C7" />
-          </View>
-          <Text style={styles.serviceTitle}>Vệ sinh máy lạnh</Text>
-          <Text style={styles.servicePrice}>Từ 150.000đ</Text>
+      {loading ? (
+        <View style={styles.centerState}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.stateText}>Đang tải chi tiết dịch vụ...</Text>
         </View>
-
-        <View style={styles.descSection}>
-          <Text style={styles.sectionTitle}>Mô tả dịch vụ</Text>
-          <Text style={styles.descText}>
-            Dịch vụ vệ sinh máy lạnh chuyên nghiệp, sạch bong sáng bóng. Thợ sẽ có mặt sau 15 phút đặt lịch, bảo hành chảy nước 30 ngày.
-          </Text>
+      ) : !service ? (
+        <View style={styles.centerState}>
+          <Ionicons name="alert-circle-outline" size={56} color="#CBD5E1" />
+          {!!error && <Text style={styles.stateText}>{error}</Text>}
+          <TouchableOpacity onPress={onRetry} accessibilityRole="button" style={styles.retryBtn}>
+            <Text style={styles.retryText}>Thử lại</Text>
+          </TouchableOpacity>
         </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.heroSection}>
+            <View style={styles.iconCircle}>
+              <Ionicons name="construct-outline" size={40} color={colors.primary} />
+            </View>
+            <Text style={styles.serviceTitle}>{service.name}</Text>
+            <Text style={styles.servicePrice}>{resolveServicePrice(service).text}</Text>
+          </View>
 
-        <View style={styles.benefitsSection}>
-          <Text style={styles.sectionTitle}>Cam kết của chúng tôi</Text>
-          <View style={styles.benefitItem}>
-            <Ionicons name="time-outline" size={20} color="#059669" />
-            <Text style={styles.benefitText}>Có mặt nhanh chóng trong 15-30 phút</Text>
+          <View style={styles.descSection}>
+            <Text style={styles.sectionTitle}>Mô tả dịch vụ</Text>
+            <Text style={styles.descText}>{service.description?.trim() ? service.description : 'Chưa có mô tả chi tiết.'}</Text>
           </View>
-          <View style={styles.benefitItem}>
-            <Ionicons name="pricetag-outline" size={20} color="#059669" />
-            <Text style={styles.benefitText}>Báo giá minh bạch trước khi làm</Text>
-          </View>
-          <View style={styles.benefitItem}>
-            <Ionicons name="shield-checkmark-outline" size={20} color="#059669" />
-            <Text style={styles.benefitText}>Bảo hành 30 ngày</Text>
-          </View>
+
+          {!!service.scopeDescription?.trim() && (
+            <View style={styles.descSection}>
+              <Text style={styles.sectionTitle}>Phạm vi công việc</Text>
+              <Text style={styles.descText}>{service.scopeDescription}</Text>
+            </View>
+          )}
+        </ScrollView>
+      )}
+
+      {!!service && (
+        <View style={styles.bottomBar}>
+          <TouchableOpacity style={styles.bookBtn} activeOpacity={0.8} onPress={onBook}>
+            <LinearGradient
+              colors={[colors.primaryDark, colors.primary]}
+              style={styles.bookBtnGradient}
+            >
+              <Text style={styles.bookBtnText}>Đặt thợ ngay</Text>
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
-      </ScrollView>
-
-      <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.bookBtn} activeOpacity={0.8} onPress={() => navigation.navigate('CustomerAIDiagnosis')}>
-          <LinearGradient
-            colors={[colors.primaryDark, colors.primary]}
-            style={styles.bookBtnGradient}
-          >
-            <Text style={styles.bookBtnText}>Đặt thợ ngay</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
+      )}
     </SafeAreaView>
   );
 }
 
 const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    paddingHorizontal: 16, 
-    paddingVertical: 12, 
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border
@@ -88,6 +128,26 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   content: { padding: 16, paddingBottom: 100 },
+  centerState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+    gap: 12,
+  },
+  stateText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    padding: 12,
+  },
+  retryText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary,
+  },
   heroSection: {
     alignItems: 'center',
     backgroundColor: colors.surface,
@@ -99,7 +159,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#E0F2FE',
+    backgroundColor: '#EFF6FF',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -109,6 +169,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontWeight: '700',
     color: colors.text,
     marginBottom: 8,
+    textAlign: 'center',
   },
   servicePrice: {
     fontSize: 18,
@@ -131,21 +192,6 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontSize: 14,
     color: '#475569',
     lineHeight: 22,
-  },
-  benefitsSection: {
-    backgroundColor: colors.surface,
-    padding: 16,
-    borderRadius: 16,
-  },
-  benefitItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 12,
-  },
-  benefitText: {
-    fontSize: 14,
-    color: '#334155',
   },
   bottomBar: {
     position: 'absolute',
@@ -171,5 +217,3 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontWeight: '700',
   }
 });
-
-

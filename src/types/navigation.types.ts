@@ -4,7 +4,7 @@ export type RootStackParamList = {
   CustomerMain: undefined;
   TechnicianMain: undefined;
   CustomerServices: { query?: string } | undefined;
-  CustomerServiceDetail: undefined;
+  CustomerServiceDetail: { serviceId: string };
   /**
    * The booking flow. `prefill` is how the assistant hands a customer over:
    * chat itself never creates a booking, it only carries the service across.
