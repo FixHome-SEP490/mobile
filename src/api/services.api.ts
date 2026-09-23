@@ -46,7 +46,11 @@ export const servicesApi = {
     page?: number;
     pageSize?: number;
   }): Promise<{ data: ServiceItem[]; total: number }> {
-    const res = await apiClient.get('/services', { params });
+    // The Backend PaginationDto accepts limit (max 100), not pageSize.
+    const { pageSize, ...filters } = params ?? {};
+    const res = await apiClient.get('/services', {
+      params: { ...filters, ...(pageSize === undefined ? {} : { limit: pageSize }) },
+    });
     const data = unwrap<ServiceItem[]>(res.data);
     return { data, total: res.data?.meta?.total ?? data.length };
   },

@@ -1,6 +1,8 @@
 // src/api/bookings.api.ts
 import apiClient from './client';
 
+const USER_UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function unwrap<T>(payload: { data: T } | T): T {
   if (payload && typeof payload === 'object' && 'data' in payload) {
     return (payload as { data: T }).data;
@@ -8,10 +10,20 @@ function unwrap<T>(payload: { data: T } | T): T {
   return payload as T;
 }
 
+export interface CustomerBookingInvitation {
+  id: string;
+  bookingId: string;
+  priorityOrder: number;
+  status: 'PENDING' | 'STANDBY' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED' | 'CANCELLED';
+  invitedAt: string;
+  expiresAt: string | null;
+}
+
 export interface BookingItem {
   id: string;
   customerId: string;
-  serviceOrderId?: string;
+  serviceOrderId?: string | null;
+  invitations?: CustomerBookingInvitation[] | null;
   serviceId: string;
   serviceName?: string;
   addressId: string;
@@ -33,6 +45,15 @@ export interface BookingItem {
   };
 }
 
+export interface BookingsPage {
+  data: BookingItem[];
+  total: number;
+}
+
+function toPositiveInt(value: number, fallback: number): number {
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
 export interface CreateBookingDto {
   serviceId: string;
   addressId: string;
@@ -42,13 +63,14 @@ export interface CreateBookingDto {
   quantity?: number;
   urgency: 'LOW' | 'NORMAL' | 'HIGH' | 'EMERGENCY';
   mediaUrls?: string[];
+  photoUploadIds?: string[];
   aiDiagnosisId?: string;
 }
 
 export interface TechnicianCandidate {
   id: string;
   technicianId?: string;
-  userId?: string;
+  userId: string;
   fullName: string;
   avatarUrl?: string;
   averageRating: number;
@@ -76,15 +98,25 @@ export interface DiagnosisResult {
   recommendedActions?: string[];
 }
 
+export interface TechnicianBookingPreview {
+  id: string;
+  province: string | null;
+  district: string | null;
+  serviceName: string | null;
+  quantity: number;
+  urgency: string;
+  preferredStartAt: string | null;
+  preferredEndAt: string | null;
+}
+
 export interface InvitationItem {
   id: string;
   bookingId: string;
-  booking?: BookingItem;
-  technicianId: string;
+  booking?: TechnicianBookingPreview;
   priorityOrder: number;
   status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED';
   invitedAt: string;
-  expiresAt: string;
+  expiresAt: string | null;
 }
 
 type RawBooking = BookingItem & {
@@ -101,6 +133,10 @@ const normalizeBooking = (booking: RawBooking): BookingItem => ({
   preferredAt: booking.preferredStartAt || booking.preferredAt,
   status: booking.status?.toUpperCase() as BookingItem['status'],
   urgency: booking.urgency?.toUpperCase() as BookingItem['urgency'],
+  invitations: booking.invitations?.map((invitation) => ({
+    ...invitation,
+    status: invitation.status?.toUpperCase() as CustomerBookingInvitation['status'],
+  })) ?? booking.invitations,
   mediaUrls: booking.mediaUrls?.length
     ? booking.mediaUrls
     : booking.media?.map((m) => m.url) || [],
@@ -124,6 +160,18 @@ export const bookingsApi = {
     return unwrap<RawBooking[]>(res.data).map(normalizeBooking);
   },
 
+  async getMyBookingsPage(page = 1, pageSize = 20): Promise<BookingsPage> {
+    const safePage = toPositiveInt(page, 1);
+    const safePageSize = Math.min(toPositiveInt(pageSize, 20), 100);
+    const res = await apiClient.get('/bookings/my', { params: { page: safePage, pageSize: safePageSize } });
+    const body = res.data as { data?: RawBooking[]; meta?: { total?: number } } | RawBooking[];
+    const rows = Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : [];
+    const total = !Array.isArray(body)
+      && typeof body?.meta?.total === 'number' && body.meta.total >= 0
+      ? body.meta.total : rows.length;
+    return { data: rows.map(normalizeBooking), total };
+  },
+
   async getBooking(id: string): Promise<BookingItem> {
     const res = await apiClient.get(`/bookings/${id}`);
     return normalizeBooking(unwrap<RawBooking>(res.data));
@@ -145,32 +193,51 @@ export const bookingsApi = {
       `/bookings/${bookingId}/technician-candidates`,
     );
     const candidates = unwrap<TechnicianCandidate[]>(res.data);
-    return candidates.map((c) => ({
-      ...c,
-      id: c.userId || c.id,
-      technicianId: c.userId || c.technicianId,
-    }));
+    return candidates.map((candidate) => {
+      // Backend exposes both IDs. Only the User ID is valid in a shortlist.
+      if (!candidate.userId || !USER_UUID_REGEX.test(candidate.userId)) {
+        throw new Error('Candidate is missing a valid technician User ID');
+      }
+      return { ...candidate, id: candidate.userId };
+    });
   },
 
   async sendShortlist(
     bookingId: string,
-    technicianIds: string[],
+    technicianUserIds: readonly [string, string],
   ): Promise<void> {
-    await apiClient.post(`/bookings/${bookingId}/shortlist`, { technicianIds });
+    if (!Array.isArray(technicianUserIds)
+      || technicianUserIds.length !== 2
+      || technicianUserIds[0] === technicianUserIds[1]
+      || !technicianUserIds.every((id) => typeof id === 'string' && USER_UUID_REGEX.test(id))) {
+      throw new Error('Select exactly two different technicians in priority order');
+    }
+    // Preserve priority order: the Backend decides invitation activation and acceptance.
+    await apiClient.post(`/bookings/${bookingId}/shortlist`, { technicianIds: [...technicianUserIds] });
   },
-
   async getMyInvitations(): Promise<InvitationItem[]> {
     const res = await apiClient.get('/invitations/my');
-    const invitations = unwrap<
-      (InvitationItem & { booking: RawBooking })[]
-    >(res.data);
+    const invitations = unwrap<InvitationItem[]>(res.data);
     return invitations.map((inv) => ({
-      ...inv,
+      id: inv.id,
+      bookingId: inv.bookingId,
+      priorityOrder: inv.priorityOrder,
       status: inv.status?.toUpperCase() as InvitationItem['status'],
-      booking: inv.booking ? normalizeBooking(inv.booking) : undefined,
+      invitedAt: inv.invitedAt,
+      expiresAt: inv.expiresAt ?? null,
+      // Allowlist: a live invitation never exposes a full Booking or private customer media.
+      booking: inv.booking ? {
+        id: inv.booking.id,
+        province: inv.booking.province,
+        district: inv.booking.district,
+        serviceName: inv.booking.serviceName,
+        quantity: inv.booking.quantity,
+        urgency: inv.booking.urgency,
+        preferredStartAt: inv.booking.preferredStartAt,
+        preferredEndAt: inv.booking.preferredEndAt,
+      } : undefined,
     }));
   },
-
   async respondInvitation(
     id: string,
     action: 'ACCEPT' | 'DECLINE',

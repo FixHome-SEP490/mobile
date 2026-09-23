@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,58 +12,56 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAppTheme } from '../../constants/theme';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
+import { useAuthStore } from '../../store/auth.store';
+import { bookingsApi, type BookingItem } from '../../api/bookings.api';
 import { ordersApi, type ServiceOrderItem, type CanonicalOrderStatus } from '../../api/orders.api';
-
-type TabType = 'all' | 'in_progress' | 'completed';
+import {
+  createBookingsHistoryLoader,
+  customerBookingsUserId,
+  initialHistoryState,
+  orderTotalText,
+  resolveBookingsView,
+  resumeTargetFor,
+  type BookingsTab,
+} from './customer-bookings-history';
+import { orderDetailTarget } from './customer-order-detail';
 
 export default function CustomerBookingsScreen() {
   const { colors, spacing, fontSize, isDark } = useAppTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const styles = getStyles(colors, spacing, fontSize);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<TabType>('all');
-  const [orders, setOrders] = useState<ServiceOrderItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<BookingsTab>('all');
+  const [historyState, setHistoryState] = useState(initialHistoryState);
+  const { bookings, total, loading, refreshing, loadingMore, loadingMoreOrders, error, ordersError } = historyState;
+  const loaderRef = useRef<ReturnType<typeof createBookingsHistoryLoader> | null>(null);
+  if (loaderRef.current === null) {
+    loaderRef.current = createBookingsHistoryLoader(
+      (page, pageSize) => bookingsApi.getMyBookingsPage(page, pageSize),
+      ordersApi.getMyOrders,
+      setHistoryState,
+      {
+        getUserId: () => customerBookingsUserId(useAuthStore.getState()),
+        subscribe: (listener) => useAuthStore.subscribe(listener),
+      },
+      { getOrdersPage: (page, pageSize) => ordersApi.getMyOrdersPage(page, pageSize) },
+    );
+  }
+  const loader = loaderRef.current;
+  useFocusEffect(useCallback(() => {
+    void loader.focus();
+    return () => loader.blur();
+  }, [loader]));
   const handleScroll = useScrollHideTabBar();
 
-  useEffect(() => {
-    let mounted = true;
-    ordersApi
-      .getMyOrders()
-      .then((data) => {
-        if (mounted) {
-          setOrders(data || []);
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (mounted) {
-          setOrders([]);
-          setLoading(false);
-        }
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    try {
-      const data = await ordersApi.getMyOrders();
-      setOrders(data || []);
-    } catch {
-      setOrders([]);
-    } finally {
-      setRefreshing(false);
-    }
-  };
+  const onRefresh = () => { void loader.refresh(); };
+  const onLoadMore = () => { void loader.loadMore(); };
+  const onLoadMoreOrders = () => { void loader.loadMoreOrders(); };
 
   const getStatusBadge = (status: CanonicalOrderStatus) => {
     const s = String(status).toUpperCase();
@@ -84,49 +82,120 @@ export default function CustomerBookingsScreen() {
     }
   };
 
-  const filteredOrders = orders.filter((order) => {
-    const s = String(order.status).toUpperCase();
-    if (activeTab === 'in_progress') {
-      if (!['ACCEPTED', 'EN_ROUTE', 'UNDER_REPAIR', 'IN_PROGRESS'].includes(s)) return false;
-    } else if (activeTab === 'completed') {
-      if (s !== 'COMPLETED') return false;
+  const getBookingBadge = (status: BookingItem['status']) => {
+    const s = String(status).toUpperCase();
+    switch (s) {
+      case 'SUBMITTED':
+        return { label: 'Đã gửi yêu cầu', bg: '#E0E7FF', color: '#4F46E5' };
+      case 'MATCHING':
+        return { label: 'Đang tìm thợ', bg: '#FEF3C7', color: '#D97706' };
+      case 'MATCHED':
+        return { label: 'Đã ghép thợ', bg: '#DCFCE7', color: '#16A34A' };
+      case 'CONFIRMED':
+        return { label: 'Đã xác nhận', bg: '#DBEAFE', color: colors.primary };
+      case 'CLOSED':
+        return { label: 'Vòng tìm thợ đã kết thúc', bg: '#F1F5F9', color: '#64748B' };
+      case 'CANCELLED':
+        return { label: 'Đã hủy', bg: '#FEE2E2', color: '#DC2626' };
+      default:
+        return { label: s, bg: '#F1F5F9', color: '#64748B' };
     }
+  };
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const codeMatch = order.code?.toLowerCase().includes(q);
-      const serviceMatch = order.serviceName?.toLowerCase().includes(q);
-      const techMatch = order.technician?.fullName?.toLowerCase().includes(q);
-      return codeMatch || serviceMatch || techMatch;
-    }
+  const view = resolveBookingsView(historyState, searchQuery, activeTab);
+  const { cards, filtered: filteredCards, showList, emptyNote, showLoadMore, showLoadMoreOrders, ordersCoverageText } = view;
 
-    return true;
-  });
+  const renderOrderSummary = (order: ServiceOrderItem, bookingId: string | null) => {
+    const badge = getStatusBadge(order.status);
+    const totalText = orderTotalText(order);
+    const dateStr = order.createdAt
+      ? new Date(order.createdAt).toLocaleDateString('vi-VN')
+      : 'Gần đây';
+    return (
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <View style={styles.iconContainer}>
+            <Ionicons name="construct-outline" size={24} color={colors.primary} />
+          </View>
+          <View style={styles.cardInfo}>
+            <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+              <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
+            </View>
+            <Text style={styles.title} numberOfLines={1}>
+              {order.serviceName || `Đơn #${order.code}`}
+            </Text>
+            <Text style={styles.meta}>
+              {dateStr}{totalText ? ` · ${totalText}` : ''}
+            </Text>
+            {!totalText && (
+              <Text style={styles.meta}>Chưa có thông tin giá</Text>
+            )}
+            {order.technician?.fullName && (
+              <Text style={styles.meta}>KTV {order.technician.fullName}</Text>
+            )}
+            <Text style={styles.meta}>Mã đơn: {order.code || order.id}</Text>
+            {bookingId && (
+              <Text style={styles.meta}>Từ yêu cầu #{bookingId.slice(0, 8)}</Text>
+            )}
+          </View>
+        </View>
+      </View>
+    );
+  };
 
-  const handleOrderPress = (order: ServiceOrderItem) => {
-    const s = String(order.status).toUpperCase();
-    if (s === 'EN_ROUTE') {
-      navigation.navigate('CustomerTracking');
-    } else if (s === 'UNDER_REPAIR' || s === 'IN_PROGRESS') {
-      if (order.quotation && order.quotation.status === 'SENT') {
-        navigation.navigate('CustomerQuotation');
-      } else {
-        navigation.navigate('CustomerUnderRepair');
-      }
-    } else if (s === 'COMPLETED') {
-      navigation.navigate('CustomerCompleted');
-    } else {
-      navigation.navigate('CustomerTracking');
-    }
+  const renderBookingCard = (booking: BookingItem) => {
+    const badge = getBookingBadge(booking.status);
+    const resumeId = resumeTargetFor(booking, !view.ordersCoverageComplete);
+    const dateStr = booking.createdAt
+      ? new Date(booking.createdAt).toLocaleDateString('vi-VN')
+      : 'Gần đây';
+    const waiting = String(booking.status).toUpperCase() === 'MATCHING';
+    return (
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <View style={styles.iconContainer}>
+            <Ionicons name="calendar-outline" size={24} color={colors.primary} />
+          </View>
+          <View style={styles.cardInfo}>
+            <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+              <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
+            </View>
+            <Text style={styles.title} numberOfLines={1}>
+              {booking.serviceName || `Yêu cầu #${booking.id.slice(0, 8)}`}
+            </Text>
+            {!!booking.description && (
+              <Text style={styles.meta} numberOfLines={2}>{booking.description}</Text>
+            )}
+            {!!booking.addressSummary && (
+              <Text style={styles.meta} numberOfLines={1}>📍 {booking.addressSummary}</Text>
+            )}
+            <Text style={styles.meta}>{dateStr}</Text>
+            {waiting && (
+              <Text style={styles.meta}>Đang chờ kỹ thuật viên phản hồi — không cần gửi lại.</Text>
+            )}
+          </View>
+        </View>
+        {!!resumeId && (
+          <TouchableOpacity
+            style={[styles.resumeBtn, { backgroundColor: colors.primary }]}
+            onPress={() => navigation.navigate('CustomerMatching', { bookingId: resumeId })}
+            accessibilityRole="button"
+            accessibilityLabel="Tiếp tục chọn kỹ thuật viên"
+          >
+            <Text style={styles.resumeText}>Tiếp tục chọn thợ</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       {/* Header */}
-            <View style={styles.header}>
-              <Text style={styles.headerTitle}>Đơn dịch vụ</Text>
-            </View>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Đơn dịch vụ</Text>
+      </View>
       {/* Search & Filter */}
       <View style={styles.searchFilterContainer}>
         <View style={styles.searchBar}>
@@ -148,7 +217,7 @@ export default function CustomerBookingsScreen() {
           onPress={() => setActiveTab('all')}
         >
           <Text style={activeTab === 'all' ? styles.segmentTextActive : styles.segmentText}>
-            Tất cả ({orders.length})
+            Tất cả ({cards.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -175,15 +244,106 @@ export default function CustomerBookingsScreen() {
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Đang tải đơn dịch vụ...</Text>
         </View>
-      ) : filteredOrders.length === 0 ? (
+      ) : showList ? (
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          {!!error && (
+            <View style={styles.errorBanner} accessibilityRole="alert">
+              <Text style={styles.emptyDesc}>{error}</Text>
+              <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button">
+                <Text style={styles.retryText}>Thử lại</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {!!ordersError && (
+            <View style={styles.errorBanner} accessibilityRole="alert">
+              <Text style={styles.emptyDesc}>{ordersError}</Text>
+              <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button">
+                <Text style={styles.retryText}>Thử lại</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {filteredCards.length === 0 && emptyNote === 'more-pages' && (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="layers-outline" size={56} color="#CBD5E1" />
+              <Text style={styles.emptyTitle}>Chưa thấy mục phù hợp ở trang này</Text>
+              <Text style={styles.emptyDesc}>Còn trang lịch sử chưa tải. Bấm Tải thêm để xem tiếp.</Text>
+            </View>
+          )}
+          {filteredCards.length === 0 && emptyNote === 'no-match' && (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="search-outline" size={56} color="#CBD5E1" />
+              <Text style={styles.emptyTitle}>Không tìm thấy mục phù hợp</Text>
+              <Text style={styles.emptyDesc}>Không có mục nào phù hợp với tìm kiếm/bộ lọc hiện tại.</Text>
+              {!!searchQuery.trim() && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} accessibilityRole="button" style={styles.retryBtn}>
+                  <Text style={styles.retryText}>Xóa tìm kiếm</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+          {filteredCards.map((card) => {
+            const key = card.kind === 'booking' ? `booking-${card.booking.id}` : `order-${card.order.id}`;
+            if (card.kind === 'booking' && !card.order) return <View key={key}>{renderBookingCard(card.booking)}</View>;
+            const order = card.kind === 'booking' ? card.order! : card.order;
+            const bookingId = card.kind === 'booking' ? card.booking.id : order.bookingId ?? null;
+            const detailId = orderDetailTarget(order.id);
+            if (!detailId) return <View key={key}>{renderOrderSummary(order, bookingId)}</View>;
+            return (
+              <TouchableOpacity
+                key={key}
+                onPress={() => navigation.navigate('CustomerOrderDetail', { serviceOrderId: detailId })}
+                accessibilityRole="button"
+                accessibilityLabel="Xem chi tiết đơn dịch vụ"
+                activeOpacity={0.8}
+              >
+                {renderOrderSummary(order, bookingId)}
+              </TouchableOpacity>
+            );
+          })}
+          {showLoadMore && (
+            <TouchableOpacity
+              onPress={onLoadMore}
+              disabled={loadingMore}
+              accessibilityRole="button"
+              accessibilityLabel="Tải thêm lịch sử đặt lịch"
+              style={styles.loadMoreBtn}
+            >
+              {loadingMore ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Text style={styles.retryText}>Tải thêm ({bookings.length}/{total})</Text>
+              )}
+            </TouchableOpacity>
+          )}
+          {!!ordersCoverageText && (
+            <Text style={styles.coverageText}>{ordersCoverageText}</Text>
+          )}
+          {showLoadMoreOrders && (
+            <TouchableOpacity
+              onPress={onLoadMoreOrders}
+              disabled={loadingMoreOrders}
+              accessibilityRole="button"
+              accessibilityLabel="Tải thêm đơn đã nhận"
+              style={styles.loadMoreBtn}
+            >
+              {loadingMoreOrders ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Text style={styles.retryText}>Tải thêm đơn đã nhận</Text>
+              )}
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      ) : (
         <View style={styles.emptyContainer}>
           <Ionicons name="receipt-outline" size={56} color="#CBD5E1" />
           <Text style={styles.emptyTitle}>Chưa có đơn dịch vụ nào</Text>
-          <Text style={styles.emptyDesc}>
-            {searchQuery
-              ? 'Không tìm thấy đơn phù hợp với từ khóa.'
-              : 'Đặt lịch ngay để thợ FixHome kiểm tra tại nhà bạn.'}
-          </Text>
+          <Text style={styles.emptyDesc}>Đặt lịch ngay để thợ FixHome kiểm tra tại nhà bạn.</Text>
           <TouchableOpacity
             style={[styles.bookNowBtn, { backgroundColor: colors.primary }]}
             onPress={() => navigation.navigate('CustomerServices')}
@@ -191,52 +351,10 @@ export default function CustomerBookingsScreen() {
             <Ionicons name="add-circle-outline" size={18} color="colors.surface" />
             <Text style={styles.bookNowText}>Đặt dịch vụ mới</Text>
           </TouchableOpacity>
+          <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button" style={styles.retryBtn}>
+            <Text style={styles.retryText}>Làm mới</Text>
+          </TouchableOpacity>
         </View>
-      ) : (
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        >
-          {filteredOrders.map((order) => {
-            const badge = getStatusBadge(order.status);
-            const total = (order.grandTotal || (order.laborTotal || 0) + (order.partsTotal || 0)).toLocaleString('vi-VN');
-            const dateStr = order.createdAt
-              ? new Date(order.createdAt).toLocaleDateString('vi-VN')
-              : 'Gần đây';
-
-            return (
-              <TouchableOpacity
-                key={order.id || order.code}
-                style={styles.card}
-                onPress={() => handleOrderPress(order)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.cardHeader}>
-                  <View style={styles.iconContainer}>
-                    <Ionicons name="construct-outline" size={24} color={colors.primary} />
-                  </View>
-                  <View style={styles.cardInfo}>
-                    <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-                      <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
-                    </View>
-                    <Text style={styles.title} numberOfLines={1}>
-                      {order.serviceName || `Đơn #${order.code}`}
-                    </Text>
-                    <Text style={styles.meta}>
-                      {dateStr} · {total}đ
-                    </Text>
-                    {order.technician?.fullName && (
-                      <Text style={styles.meta}>KTV {order.technician.fullName}</Text>
-                    )}
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
       )}
     </SafeAreaView>
   );
@@ -363,6 +481,44 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontSize: 14,
     fontWeight: '700',
   },
+  retryBtn: {
+    padding: 12,
+    marginTop: 8,
+  },
+  retryText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  errorBanner: {
+    padding: 16,
+    marginBottom: 12,
+    gap: 8,
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+  },
+  loadMoreBtn: {
+    padding: 14,
+    alignItems: 'center',
+  },
+  coverageText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    paddingVertical: 4,
+  },
+  resumeBtn: {
+    marginTop: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  resumeText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
   card: {
     backgroundColor: colors.surface,
     borderRadius: 16,
@@ -413,4 +569,3 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     marginBottom: 2,
   },
 });
-

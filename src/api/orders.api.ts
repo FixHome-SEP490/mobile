@@ -8,6 +8,15 @@ function unwrap<T>(payload: { data: T } | T): T {
   return payload as T;
 }
 
+export interface OrdersPage {
+  data: ServiceOrderItem[];
+  total: number;
+}
+
+function toPositiveInt(value: number, fallback: number): number {
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
 export type CanonicalOrderStatus =
   | 'ACCEPTED'
   | 'EN_ROUTE'
@@ -20,6 +29,8 @@ export interface ServiceOrderItem {
   code: string;
   bookingId: string;
   serviceName: string;
+  /** Backend sanitized history marker: never a full detail payload. */
+  historical?: boolean;
   pricingMode?: string;
   fixedUnitPrice?: number;
   quantity?: number;
@@ -93,6 +104,52 @@ export interface EvidenceResponse {
   createdAt: string;
 }
 
+export interface EvidenceUploadImage {
+  uri: string;
+  name: string;
+  type: string;
+}
+
+export interface CreateQuotationLaborItem {
+  type: 'labor';
+  description: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface CreateQuotationTechnicianPartItem {
+  type: 'parts_equipment';
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  partSource: 'technician';
+  partWarrantyOption: 'no_warranty' | 'paid_warranty';
+  warrantyFee?: number;
+  warrantyTermDays?: number;
+}
+
+export type CreateQuotationItem =
+  | CreateQuotationLaborItem
+  | CreateQuotationTechnicianPartItem;
+
+export interface CreateQuotationPayload {
+  items: CreateQuotationItem[];
+  note?: string;
+}
+
+export interface CreateAdditionalCostItem {
+  type: 'labor';
+  description: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface CreateAdditionalCostPayload {
+  reason: string;
+  items: CreateAdditionalCostItem[];
+  note?: string;
+}
+
 export interface CostRequest {
   id: string;
   serviceOrderId: string;
@@ -101,6 +158,7 @@ export interface CostRequest {
   totalLaborDelta: number;
   totalPartsDelta: number;
   createdAt: string;
+  expiresAt?: string;
   items: (QuotationLineItem & { id: string; lineTotal: number })[];
 }
 
@@ -134,7 +192,7 @@ const normalizeOrder = (order: ServiceOrderItem): ServiceOrderItem => ({
     ? {
         ...order.quotation,
         status: order.quotation.status?.toUpperCase?.() || order.quotation.status,
-        items: order.quotation.items.map((item) => ({
+        items: (Array.isArray(order.quotation.items) ? order.quotation.items : []).map((item) => ({
           ...item,
           type:
             String(item.type).toLowerCase() === 'labor' ? 'LABOR' : 'PARTS',
@@ -159,6 +217,18 @@ export const ordersApi = {
     );
   },
 
+  async getMyOrdersPage(page = 1, pageSize = 20): Promise<OrdersPage> {
+    const safePage = toPositiveInt(page, 1);
+    const safePageSize = Math.min(toPositiveInt(pageSize, 20), 100);
+    const res = await apiClient.get('/service-orders/my', { params: { page: safePage, pageSize: safePageSize } });
+    const body = res.data as { data?: ServiceOrderItem[]; meta?: { total?: number } } | ServiceOrderItem[];
+    const rows = Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : [];
+    const total = !Array.isArray(body)
+      && typeof body?.meta?.total === 'number' && body.meta.total >= 0
+      ? body.meta.total : rows.length;
+    return { data: rows.map(normalizeOrder), total };
+  },
+
   async getOrder(id: string): Promise<ServiceOrderItem> {
     return normalizeOrder(
       await get<ServiceOrderItem>(`/service-orders/${id}`),
@@ -171,7 +241,7 @@ export const ordersApi = {
 
   async checkIn(
     id: string,
-    coords: { lat: number; lng: number; accuracyMeters?: number },
+    coords: { lat: number; lng: number; accuracyMeters: number },
   ) {
     return post(`/service-orders/${id}/check-in`, coords);
   },
@@ -208,8 +278,69 @@ export const ordersApi = {
     }));
   },
 
+  /**
+   * BEFORE-only evidence upload. Native multipart/form-data with an explicit
+   * per-request Content-Type override (the shared client defaults to JSON);
+   * no boundary is hardcoded and the global default is untouched. The POST
+   * response may carry a private storage reference — callers must ignore the
+   * body and re-fetch signed GET URLs instead of rendering it.
+   */
+  async uploadEvidenceBefore(id: string, image: EvidenceUploadImage): Promise<unknown> {
+    const form = new FormData();
+    form.append('type', 'before');
+    form.append('file', {
+      uri: image.uri,
+      name: image.name,
+      type: image.type,
+    } as unknown as Blob);
+    const res = await apiClient.post(`/service-orders/${id}/evidence`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return unwrap(res.data);
+  },
+
+  /**
+   * AFTER-only evidence upload. Same per-request multipart pattern as the
+   * BEFORE helper with exact lowercase `type='after'`; the BEFORE helper is
+   * untouched. The 201 body may carry a private storage reference — callers
+   * must ignore it and re-fetch signed GET URLs instead of rendering it.
+   */
+  async uploadEvidenceAfter(id: string, image: EvidenceUploadImage): Promise<unknown> {
+    const form = new FormData();
+    form.append('type', 'after');
+    form.append('file', {
+      uri: image.uri,
+      name: image.name,
+      type: image.type,
+    } as unknown as Blob);
+    const res = await apiClient.post(`/service-orders/${id}/evidence`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return unwrap(res.data);
+  },
+
   async getQuotations(id: string) {
     return get(`/service-orders/${id}/quotations`);
+  },
+
+  /**
+   * Labor-only quotation proposal for INSPECTION_REQUIRED orders. This is a
+   * proposal only — never payment, approval, or repair start. The 201 body is
+   * returned for reconciliation; callers refresh detail rather than trusting
+   * it as final quoted state.
+   */
+  async createQuotation(orderId: string, payload: CreateQuotationPayload): Promise<unknown> {
+    return post(`/service-orders/${orderId}/quotations`, payload);
+  },
+
+  /**
+   * Technician additional-cost PROPOSAL (one labor line + mandatory reason).
+   * A proposal only — never a charge, approval, or payment. The 201 body is
+   * returned for reconciliation; callers re-fetch the costs GET rather than
+   * trusting it as decided state.
+   */
+  async createAdditionalCostProposal(orderId: string, payload: CreateAdditionalCostPayload): Promise<unknown> {
+    return post(`/service-orders/${orderId}/additional-costs`, payload);
   },
 
   async approveQuotation(

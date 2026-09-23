@@ -82,13 +82,12 @@ export default function CustomerAIDiagnosisScreen() {
   }, [images.length]);
 
   const handleNextStep = () => {
-    if (step < 3) {
-      setStep(step + 1);
-    } else {
-      navigation.navigate('CustomerMatching');
-    }
+    // Use real catalog and saved address rather than legacy placeholder steps.
+    // AI chat is advisory and may prefill, but does not create the Booking.
+    navigation.navigate('CustomerBookingCreate', {
+      prefill: { ...prefill, description: description.trim() },
+    });
   };
-
   const handleBack = () => {
     if (step > 1) {
       setStep(step - 1);
@@ -407,7 +406,7 @@ export default function CustomerAIDiagnosisScreen() {
               <Ionicons name="arrow-forward" size={16} color={colors.surface} />
             </LinearGradient>
           </TouchableOpacity>
-          {step === 1 && <Text style={styles.ctaNote}>Ảnh và mô tả được đính kèm lịch hẹn</Text>}
+          {step === 1 && <Text style={styles.ctaNote}>Ảnh chỉ dùng cho trợ lý AI; hiện chưa đính kèm vào yêu cầu đặt thợ.</Text>}
         </View>
       ) : (
         <View style={styles.step3BottomBar}>
@@ -451,7 +450,7 @@ export default function CustomerAIDiagnosisScreen() {
               </View>
             )}
           </View>
-          <TouchableOpacity style={styles.startBtn} activeOpacity={0.8} onPress={() => navigation.navigate('CustomerMatching')}>
+          <TouchableOpacity style={styles.startBtn} activeOpacity={0.8} onPress={handleNextStep}>
             <Text style={styles.startBtnText}>Bắt đầu tìm thợ</Text>
           </TouchableOpacity>
         </View>

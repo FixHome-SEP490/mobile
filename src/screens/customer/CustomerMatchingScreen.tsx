@@ -1,394 +1,226 @@
-import { useAppTheme } from '../../constants/theme';
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated, Easing, Image, ScrollView, Platform } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../../types';
-import { LinearGradient } from 'expo-linear-gradient';
+import { bookingsApi, type BookingItem, type TechnicianCandidate } from '../../api/bookings.api';
+import { useAppTheme } from '../../constants/theme';
+import { useAuthStore } from '../../store';
+import { UserRole, type RootStackParamList } from '../../types';
+import { canChooseTechnicians, orderedCandidateIds, toggleCandidate } from '../../utils/booking-candidate-selection';
 
-const TECHNICIANS = [
-  {
-    id: '1',
-    name: 'TRƯƠNG VĂN THẮNG',
-    avatar: 'https://i.pravatar.cc/150?img=11',
-    rating: 4.9,
-    jobs: 209,
-    completionRate: '100%',
-    distance: '10.9 km',
-    price: '230,000đ',
-  },
-  {
-    id: '2',
-    name: 'PHẠM HỒNG LÂM',
-    avatar: 'https://i.pravatar.cc/150?img=12',
-    rating: 5.0,
-    jobs: 8,
-    completionRate: '100%',
-    distance: '9.1 km',
-    price: '230,000đ',
-  },
-  {
-    id: '3',
-    name: 'TÔ MINH LONG',
-    avatar: 'https://i.pravatar.cc/150?img=13',
-    rating: 4.4,
-    jobs: 184,
-    completionRate: '66%',
-    distance: '10.4 km',
-    price: '230,000đ',
-  },
-];
+type MatchingRoute = RouteProp<RootStackParamList, 'CustomerMatching'>;
+const PENDING_STATUSES = new Set(['PENDING', 'STANDBY']);
+
+function describeBooking(booking: BookingItem): string {
+  if (booking.serviceOrderId && booking.status === 'MATCHED') return 'Kỹ thuật viên đã nhận đơn. Đơn dịch vụ đã được tạo trên hệ thống.';
+  if (booking.status === 'MATCHED') return 'Đã có kỹ thuật viên nhận lời mời. Đang kiểm tra liên kết đơn dịch vụ.';
+  if (booking.status === 'MATCHING') {
+    const pending = (booking.invitations ?? []).find((invitation) => invitation.status === 'PENDING');
+    return pending
+      ? `Đang chờ phản hồi từ kỹ thuật viên ưu tiên số ${pending.priorityOrder}. Kỹ thuật viên dự phòng chỉ được mời khi người trước từ chối hoặc hết hạn.`
+      : 'Đang xử lý lời mời kỹ thuật viên. Hãy làm mới để xem trạng thái mới nhất.';
+  }
+  if (booking.status === 'CANCELLED') return 'Yêu cầu đặt thợ này đã bị hủy.';
+  if (booking.status === 'CLOSED') return 'Vòng tìm thợ trước đã kết thúc. Kiểm tra lịch hẹn trước khi chọn lại.';
+  return 'Yêu cầu đã được ghi nhận. Vui lòng chọn đúng hai kỹ thuật viên theo thứ tự ưu tiên.';
+}
 
 export default function CustomerMatchingScreen() {
-  const { colors, spacing, fontSize, isDark } = useAppTheme();
-  const styles = getStyles(colors, spacing, fontSize);
+  const { colors } = useAppTheme();
+  const route = useRoute<MatchingRoute>();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const [isFinding, setIsFinding] = useState(true);
-  const [isExpanded, setIsExpanded] = useState(true);
+  const bookingId = route.params.bookingId;
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const role = useAuthStore((state) => state.user?.role);
+  const [booking, setBooking] = useState<BookingItem | null>(null);
+  const [candidates, setCandidates] = useState<TechnicianCandidate[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const [sentConfirmed, setSentConfirmed] = useState(false);
+  const [uncertainSend, setUncertainSend] = useState(false);
+  const sendingRef = useRef(false);
+  // A shortlist POST is never repeated because a timeout may follow a successful write.
+  const shortlistRequestLockedRef = useRef(false);
+  const uncertainSendRef = useRef(false);
+  const loadGeneration = useRef(0);
 
-  // Simple pulse animation for radar
-  const [pulseAnim] = useState(() => new Animated.Value(1));
+  const loadCurrent = useCallback(async () => {
+    if (!isAuthenticated || role !== UserRole.CUSTOMER) {
+      setLoading(false);
+      return;
+    }
+    const generation = ++loadGeneration.current;
+    setLoading(true);
+    setError('');
+    try {
+      const nextBooking = await bookingsApi.getBooking(bookingId);
+      if (generation !== loadGeneration.current) return;
+      if (nextBooking.id !== bookingId) throw new Error('Mã Booking trả về không khớp yêu cầu.');
+      setBooking(nextBooking);
+      // An ambiguous POST can be reconciled only by positive server evidence.
+      if (uncertainSendRef.current && (nextBooking.status === 'MATCHING' || nextBooking.status === 'MATCHED'
+        || (nextBooking.invitations ?? []).some((invitation) => PENDING_STATUSES.has(invitation.status)))) {
+        uncertainSendRef.current = false;
+        setUncertainSend(false);
+        setSentConfirmed(true);
+      }
+      setCandidates([]);
+      setSelected([]);
+      if (canChooseTechnicians(nextBooking) && !shortlistRequestLockedRef.current) {
+        const list = await bookingsApi.getCandidates(bookingId);
+        if (generation !== loadGeneration.current) return;
+        setCandidates(list.filter((candidate) => candidate.isAvailable));
+      }
+    } catch {
+      if (generation === loadGeneration.current) {
+        setError('Không thể tải trạng thái Booking hoặc danh sách thợ. Kiểm tra kết nối và thử lại.');
+      }
+    } finally {
+      if (generation === loadGeneration.current) setLoading(false);
+    }
+  }, [bookingId, isAuthenticated, role]);
 
   useEffect(() => {
-    if (isFinding) {
-      const anim = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.2,
-            duration: 1000,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 1000,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ])
-      );
-      anim.start();
+    let active = true;
+    void Promise.resolve().then(() => { if (active) void loadCurrent(); });
+    return () => { active = false; loadGeneration.current += 1; };
+  }, [loadCurrent]);
 
-      // Mock finding technician after 3 seconds
-      const timer = setTimeout(() => {
-        setIsFinding(false);
-      }, 3000);
+  const choose = (userId: string) => {
+    if (!booking || !canChooseTechnicians(booking) || sending || loading || uncertainSend || sentConfirmed) return;
+    setSelected((previous) => toggleCandidate(previous, userId));
+  };
 
-      return () => {
-        clearTimeout(timer);
-        anim.stop();
-      };
+  const sendShortlist = async () => {
+    if (sendingRef.current || shortlistRequestLockedRef.current || loading || sentConfirmed || uncertainSend || !booking || !canChooseTechnicians(booking)) return;
+    let orderedIds: readonly [string, string];
+    try {
+      orderedIds = orderedCandidateIds(selected);
+      if (!orderedIds.every((id) => candidates.some((candidate) => candidate.userId === id))) {
+        throw new Error('Kỹ thuật viên đã chọn không còn nằm trong danh sách hiện tại.');
+      }
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : 'Vui lòng chọn đủ hai kỹ thuật viên.');
+      return;
     }
-  }, [isFinding, pulseAnim]);
+    shortlistRequestLockedRef.current = true;
+    sendingRef.current = true;
+    setSending(true);
+    setError('');
+    try {
+      // Backend owns PENDING/STANDBY activation, expiration and creating ServiceOrder.
+      await bookingsApi.sendShortlist(bookingId, orderedIds);
+      setSentConfirmed(true);
+      setSelected([]);
+      // A confirmed POST is not the same as technician acceptance. Refresh the source state.
+      try {
+        const updated = await bookingsApi.getBooking(bookingId);
+        if (updated.id === bookingId) setBooking(updated);
+      } catch {
+        setError('Lời mời đã được gửi nhưng chưa tải được trạng thái mới. Hãy bấm làm mới.');
+      }
+    } catch {
+      // Network timeout after a POST is ambiguous; GET reconciliation cannot prove non-creation.
+      uncertainSendRef.current = true;
+      setUncertainSend(true);
+      setError('Chưa xác định được kết quả gửi lời mời. Không gửi lại để tránh trùng; hãy làm mới Booking hoặc liên hệ hỗ trợ.');
+      try {
+        const updated = await bookingsApi.getBooking(bookingId);
+        if (updated.id === bookingId) {
+          setBooking(updated);
+          if (updated.status === 'MATCHING' || updated.status === 'MATCHED' ||
+              (updated.invitations ?? []).some((invitation) => PENDING_STATUSES.has(invitation.status))) {
+            uncertainSendRef.current = false;
+            setSentConfirmed(true);
+            setUncertainSend(false);
+            setError('');
+          }
+        }
+      } catch { /* Keep the ambiguous POST locked; no blind retry. */ }
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
+  };
 
-  if (!isFinding) {
-    return (
-      <View style={styles.container}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
-        {/* Fake Map */}
-        <Image 
-          source={{uri: 'https://img.freepik.com/premium-vector/city-map-any-kind-digital-info-graphics-web-element-flat-map-with-pin-pointers_306734-712.jpg'}} 
-          style={StyleSheet.absoluteFill} 
-          resizeMode="cover"
-        />
-        
-        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-          <View style={styles.foundHeader}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtnCircle}>
-              <Ionicons name="arrow-back" size={20} color={colors.text} />
-            </TouchableOpacity>
-            <View style={styles.foundHeaderCenter}>
-              <Text style={styles.foundHeaderTitle}>Vệ sinh máy lạnh</Text>
-              <Text style={styles.foundHeaderSub}>#00208496</Text>
-            </View>
-            <View style={styles.foundHeaderRight}>
-               <TouchableOpacity style={styles.iconCircleBtn}>
-                 <Ionicons name="receipt-outline" size={20} color={colors.text} />
-               </TouchableOpacity>
-               <TouchableOpacity style={[styles.iconCircleBtn, {marginLeft: 8}]}>
-                 <Ionicons name="headset-outline" size={20} color={colors.text} />
-                 <View style={styles.notiBadge}><Text style={styles.notiBadgeText}>1</Text></View>
-               </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={{ flex: 1 }} />
-
-          <View style={[styles.bottomSheet, { flex: isExpanded ? 3.5 : 1 }]}>
-            <TouchableOpacity style={styles.dragHandleWrap} activeOpacity={0.8} onPress={() => setIsExpanded(!isExpanded)}>
-              <View style={styles.dragHandle} />
-            </TouchableOpacity>
-            
-            <ScrollView contentContainerStyle={{padding: 16, paddingBottom: 40}} showsVerticalScrollIndicator={false}>
-              <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 8}}>
-                <View style={styles.greenDot} />
-                <Text style={styles.sheetTitle}>3 thợ báo giá</Text>
-              </View>
-              <Text style={styles.expectedCostLabel}>Chi phí dự kiến</Text>
-              <Text style={styles.expectedCostValue}>230,000 - 650,000đ</Text>
-              <Text style={styles.expectedCostNote}>Khoảng giá tham khảo - Thợ sẽ đến khảo sát và chốt giá</Text>
-              
-              <View style={styles.warrantyRow}>
-                <View style={{flexDirection: 'row', alignItems: 'center', flex: 1, gap: 6}}>
-                  <Ionicons name="shield-checkmark" size={16} color={colors.primary} />
-                  <Text style={styles.warrantyText}>Bảo hành bởi Vua Thợ</Text>
-                </View>
-                <Text style={styles.feeText}>Phí 6% giá trị đơn</Text>
-              </View>
-
-              <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 6}}>
-                <Ionicons name="people" size={18} color={colors.primary} />
-                <Text style={styles.listTitle}>Danh sách thợ giỏi</Text>
-              </View>
-
-              {TECHNICIANS.map((tech) => (
-                <View key={tech.id} style={styles.techCard}>
-                  <View style={styles.techTop}>
-                    <Image source={{uri: tech.avatar}} style={styles.techAvatar} />
-                    <View style={styles.techInfo}>
-                      <Text style={styles.techName} numberOfLines={1}>{tech.name}</Text>
-                      <View style={styles.techStats}>
-                        <Ionicons name="star" size={12} color={colors.warning} />
-                        <Text style={styles.techStatText}>{tech.rating} · {tech.jobs} đơn · {tech.completionRate}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.techRight}>
-                      <View style={styles.distanceBadge}>
-                        <Ionicons name="location" size={12} color={colors.primary} />
-                        <Text style={styles.distanceText}>{tech.distance}</Text>
-                      </View>
-                      <TouchableOpacity style={styles.chatBtn}>
-                        <Ionicons name="chatbubble-ellipses-outline" size={14} color={colors.text} />
-                        <Text style={styles.chatBtnText}>Chat</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <LinearGradient colors={[colors.surface, '#EFF6FF']} style={styles.techActionArea} start={{x: 0, y: 0}} end={{x: 1, y: 0}}>
-                    <View>
-                      <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
-                        <Ionicons name="pricetag-outline" size={12} color={colors.textSecondary} />
-                        <Text style={styles.techPriceLabel}>Giá dự kiến</Text>
-                      </View>
-                      <Text style={styles.techPriceValue}>{tech.price}</Text>
-                    </View>
-                    <TouchableOpacity style={styles.viewTechBtn} onPress={() => navigation.navigate('CustomerTechFound')}>
-                      <Ionicons name="person-circle-outline" size={16} color={colors.surface} />
-                      <Text style={styles.viewTechBtnText}>Xem thông tin thợ</Text>
-                    </TouchableOpacity>
-                  </LinearGradient>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        </SafeAreaView>
-      </View>
-    );
-  }
+  const refresh = () => { if (!sending) void loadCurrent(); };
+  const waiting = booking?.status === 'MATCHING' || booking?.status === 'MATCHED'
+    || !!booking?.serviceOrderId || sentConfirmed || uncertainSend;
+  const selectable = !!booking && canChooseTechnicians(booking) && !waiting && !loading && !error;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+    <SafeAreaView style={[styles.page, { backgroundColor: colors.background }]}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <Text style={[styles.title, { color: colors.text }]}>Chọn kỹ thuật viên</Text>
+        <Text style={[styles.note, { color: colors.textSecondary }]}>Mã Booking: {bookingId}</Text>
+        {!isAuthenticated || role !== UserRole.CUSTOMER ? (
+          <Text style={{ color: colors.error }}>Hãy đăng nhập bằng tài khoản khách hàng để xem yêu cầu này.</Text>
+        ) : (
+          <>
+            {loading && <ActivityIndicator accessibilityLabel="Đang tải Booking và ứng viên" color={colors.primary} />}
+            {!!error && <Text style={[styles.note, { color: colors.error }]}>{error}</Text>}
+            {!!booking && (
+              <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.heading, { color: colors.text }]}>{booking.serviceName || 'Yêu cầu dịch vụ'}</Text>
+                <Text style={[styles.note, { color: colors.textSecondary }]}>{describeBooking(booking)}</Text>
+                <Text style={[styles.note, { color: colors.textSecondary }]}>Trạng thái: {booking.status}</Text>
+                {!!booking.serviceOrderId && (
+                  <Text selectable style={{ color: colors.success }}>Mã ServiceOrder: {booking.serviceOrderId}</Text>
+                )}
+              </View>
+            )}
+            {selectable && (
+              <>
+                <Text style={[styles.heading, { color: colors.text }]}>Chọn hai người theo thứ tự ưu tiên ({selected.length}/2)</Text>
+                <Text style={[styles.note, { color: colors.textSecondary }]}>Chạm người thứ nhất để mời trước; người thứ hai dự phòng. Chạm lại để bỏ chọn.</Text>
+                {candidates.length < 2 && <Text style={{ color: colors.textSecondary }}>Chưa đủ hai kỹ thuật viên phù hợp. Hãy tải lại sau hoặc quay lại yêu cầu của bạn.</Text>}
+                {candidates.map((candidate) => {
+                  const priority = selected.indexOf(candidate.userId) + 1;
+                  return (
+                    <TouchableOpacity key={candidate.userId} accessibilityRole="button"
+                      accessibilityState={{ selected: priority > 0, disabled: selected.length === 2 && priority === 0 }}
+                      onPress={() => choose(candidate.userId)}
+                      disabled={selected.length === 2 && priority === 0}
+                      style={[styles.card, { borderColor: priority ? colors.primary : colors.border, backgroundColor: colors.surface }]}>
+                      <Text style={[styles.heading, { color: colors.text }]}>{candidate.fullName || 'Kỹ thuật viên'}</Text>
+                      <Text style={[styles.note, { color: colors.textSecondary }]}>{priority === 1 ? 'Ưu tiên 1 · Mời trước' : priority === 2 ? 'Ưu tiên 2 · Dự phòng' : 'Chạm để chọn'}</Text>
+                      {Number.isFinite(candidate.averageRating) && <Text style={{ color: colors.textSecondary }}>Đánh giá: {candidate.averageRating}/5 ({candidate.ratingCount} lượt)</Text>}
+                      {candidate.distanceKm != null && Number.isFinite(candidate.distanceKm) && <Text style={{ color: colors.textSecondary }}>Khoảng cách tham khảo: {candidate.distanceKm} km</Text>}
+                    </TouchableOpacity>
+                  );
+                })}
+                <TouchableOpacity accessibilityRole="button" onPress={sendShortlist} disabled={selected.length !== 2 || sending}
+                  style={[styles.action, { backgroundColor: selected.length === 2 ? colors.primary : colors.border }]}>
+                  <Text style={styles.actionText}>{sending ? 'Đang gửi...' : 'Xác nhận mời hai kỹ thuật viên'}</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            {waiting && <Text style={[styles.note, { color: colors.textSecondary }]}>Chỉ trạng thái Backend mới xác nhận kỹ thuật viên nhận đơn. Không cần gửi lại shortlist.</Text>}
+            {uncertainSend && <Text style={[styles.note, { color: colors.error }]}>Chưa thể xác nhận kết quả POST. Không gửi lại khi chưa được hỗ trợ kiểm tra yêu cầu trên hệ thống.</Text>}
+            <TouchableOpacity accessibilityRole="button" onPress={refresh} disabled={loading || sending}
+              style={[styles.action, { backgroundColor: colors.primary }]}>
+              <Text style={styles.actionText}>{loading ? 'Đang tải...' : 'Làm mới trạng thái Booking'}</Text>
+            </TouchableOpacity>
+          </>
+        )}
+        <TouchableOpacity accessibilityRole="button" onPress={() => navigation.goBack()} style={[styles.action, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}>
+          <Text style={{ color: colors.text, fontWeight: '700' }}>Quay lại</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Đang tìm kỹ thuật viên</Text>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>Đang tìm</Text>
-        </View>
-      </View>
-
-      <View style={styles.content}>
-        <View style={styles.mapPlaceholder}>
-          <Ionicons name="map-outline" size={48} color="#94A3B8" />
-          <Text style={styles.mapText}>Sơ đồ minh họa</Text>
-        </View>
-
-        <View style={styles.matchStage}>
-          <Animated.View style={[styles.radarContainer, { transform: [{ scale: pulseAnim }] }]}>
-            <View style={styles.radarInner}>
-              <MaterialIcons name="radar" size={32} color={colors.primary} />
-            </View>
-          </Animated.View>
-          <Text style={styles.matchTitle}>Đang tìm thợ phù hợp gần bạn</Text>
-          <Text style={styles.matchDesc}>FixHome ưu tiên kỹ thuật viên đã xác minh, đúng chuyên môn và có thể đến trong khung giờ bạn chọn.</Text>
-          
-          <View style={styles.pointsRow}>
-            <View style={styles.pointItem}>
-              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-              <Text style={styles.pointText}>Đã xác minh</Text>
-            </View>
-            <View style={styles.pointItem}>
-              <Ionicons name="build" size={16} color={colors.success} />
-              <Text style={styles.pointText}>Đúng chuyên môn</Text>
-            </View>
-            <View style={styles.pointItem}>
-              <Ionicons name="location" size={16} color={colors.success} />
-              <Text style={styles.pointText}>Ở gần bạn</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.noticeBox}>
-          <Text style={styles.noticeText}>
-            <Text style={{ fontWeight: '700' }}>Nếu chưa có thợ nhận ngay</Text>, FixHome sẽ tiếp tục tìm ứng viên khác và thông báo cho bạn. Bạn không cần thao tác lại.
-          </Text>
-        </View>
-
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.navigate('CustomerMain')}>
-          <Text style={styles.primaryBtnText}>Hủy tìm kiếm</Text>
-        </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border
-  },
-  backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text, flex: 1 },
-  badge: { backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-  badgeText: { color: colors.success, fontSize: 10, fontWeight: '700' },
-  content: { padding: 16, flex: 1 },
-  mapPlaceholder: {
-    height: 180,
-    backgroundColor: colors.border,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  mapText: {
-    marginTop: 8,
-    color: colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  matchStage: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  radarContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#DBEAFE',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  radarInner: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#EFF6FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  matchTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  matchDesc: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 16,
-    paddingHorizontal: 16,
-  },
-  pointsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  pointItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  pointText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  noticeBox: {
-    backgroundColor: '#FEF9C3',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 24,
-  },
-  noticeText: {
-    color: '#854D0E',
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  primaryBtn: {
-    backgroundColor: colors.error,
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 'auto',
-  },
-  primaryBtnText: {
-    color: colors.surface,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  
-  // Found State Styles
-  foundHeader: { flexDirection: 'row', padding: 16, alignItems: 'center', marginTop: Platform.OS === 'android' ? 24 : 0 },
-  backBtnCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
-  foundHeaderCenter: { flex: 1, marginLeft: 16, backgroundColor: 'rgba(255,255,255,0.95)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
-  foundHeaderTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
-  foundHeaderSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  foundHeaderRight: { flexDirection: 'row', marginLeft: 16 },
-  iconCircleBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.95)', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
-  notiBadge: { position: 'absolute', top: -2, right: -2, backgroundColor: colors.error, width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: colors.surface },
-  notiBadgeText: { color: colors.surface, fontSize: 10, fontWeight: '700' },
-  bottomSheet: { backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, flex: 3.5, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 10 },
-  dragHandleWrap: { alignItems: 'center', paddingVertical: 12, backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
-  dragHandle: { width: 40, height: 4, backgroundColor: '#CBD5E1', borderRadius: 2 },
-  greenDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.success, marginRight: 8 },
-  sheetTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
-  expectedCostLabel: { fontSize: 14, color: colors.textSecondary, marginTop: 12 },
-  expectedCostValue: { fontSize: 24, fontWeight: '700', color: colors.text, marginVertical: 4 },
-  expectedCostNote: { fontSize: 13, color: colors.textSecondary, marginBottom: 20 },
-  warrantyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderTopWidth: 1, borderTopColor: colors.border, borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: 16 },
-  warrantyText: { fontSize: 14, fontWeight: '600', color: '#475569' },
-  feeText: { fontSize: 14, fontWeight: '700', color: colors.primary },
-  listTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
-  techCard: { backgroundColor: colors.surface, borderRadius: 16, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2, overflow: 'hidden', borderWidth: 1, borderColor: colors.border },
-  techTop: { flexDirection: 'row', padding: 16, alignItems: 'center' },
-  techAvatar: { width: 56, height: 56, borderRadius: 28, marginRight: 12 },
-  techInfo: { flex: 1 },
-  techName: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 6, textTransform: 'uppercase' },
-  techStats: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  techStatText: { fontSize: 12, color: colors.textSecondary },
-  techRight: { alignItems: 'flex-end', justifyContent: 'space-between', height: 56 },
-  distanceBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  distanceText: { fontSize: 12, color: colors.primary, fontWeight: '600' },
-  chatBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 6, paddingHorizontal: 12, backgroundColor: colors.border, borderRadius: 100 },
-  chatBtnText: { fontSize: 12, color: colors.text, fontWeight: '600' },
-  techActionArea: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderTopWidth: 1, borderTopColor: colors.border },
-  techPriceLabel: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
-  techPriceValue: { fontSize: 20, fontWeight: '700', color: colors.primary },
-  viewTechBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#3B82F6', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 100, shadowColor: '#3B82F6', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: {width:0, height: 4}, elevation: 4 },
-  viewTechBtnText: { color: colors.surface, fontSize: 14, fontWeight: '700' }
+const styles = StyleSheet.create({
+  page: { flex: 1 },
+  content: { padding: 18, paddingBottom: 42, gap: 12 },
+  title: { fontSize: 23, fontWeight: '700', marginBottom: 6 },
+  heading: { fontSize: 16, fontWeight: '700' },
+  note: { fontSize: 13, lineHeight: 21 },
+  card: { padding: 15, borderWidth: 1, borderRadius: 12, gap: 7 },
+  action: { padding: 15, borderRadius: 12, alignItems: 'center' },
+  actionText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
 });
-
-
