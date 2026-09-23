@@ -1,5 +1,7 @@
 # FixHome Mobile — Task board / giao owner / kế hoạch commit & tích hợp
 
+> **Phương án nhân sự chưa chốt:** chỉ bạn hoặc bạn + 1 dev. Xem `docs/BOOKING_SERVICEORDER_MOBILE_DEEP_SCENARIOS_2026-09-24.md` và bản giải thích tiếng Việt `docs/BOOKING_SERVICEORDER_MOBILE_DEEP_AUDIT_VI_2026-09-24.md` (101 case, NEW-02 replacement + NEW-13 chat); 10 ticket ở đây chỉ là gói việc, **không tương đương 10 người** và chưa giao owner. Thứ tự/điều kiện nghiệm thu phụ thuộc review tổng hợp, không mở thêm writer sửa chung file.
+
 **Cập nhật 23/09/2026**. Đọc bảng audit `docs/BOOKING_SERVICEORDER_MOBILE_AUDIT_2026-09-23.md` trước. Phân công dưới đây là **đề xuất**, chưa có thành viên/leader nhận và chưa có PR. Mọi task phải xác minh source/Backend mới nhất trước khi code, tránh tái làm phần đã viết trong personal worktree.
 
 ## 1. Việc cần làm theo dependency / giao người không giẫm file nhau

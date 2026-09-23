@@ -1,5 +1,7 @@
 # FixHome Mobile — Audit Booking → ServiceOrder cho Customer và Technician
 
+> **Audit sâu mới hơn (24/09/2026):** `docs/BOOKING_SERVICEORDER_MOBILE_DEEP_SCENARIOS_2026-09-24.md` và bản giải thích tiếng Việt `docs/BOOKING_SERVICEORDER_MOBILE_DEEP_AUDIT_VI_2026-09-24.md` bổ sung 101 tình huống/13 finding. Bản 51 mục này là audit sơ bộ, không đủ làm release gate. Spec §8.6 xác nhận không chat tự do trước Booking; xem finding NEW-05. Dữ liệu "62 dirty" dưới đây là snapshot trước 3 local commits, HEAD tài liệu audit sâu sẽ cập nhật sau.
+
 **Mốc kiểm tra:** 23/09/2026, cuối ngày ICT. **Phạm vi:** UI, điều hướng và hợp đồng API trong worktree Mobile cá nhân đang phát triển; đối chiếu Backend `dev` và Master Spec v1.4. Đây là báo cáo **để nhóm review/chia task**, không phải chứng nhận release, không phải kết quả QA end-to-end. Không chứa tài khoản, token, địa chỉ cụ thể hay dữ liệu khách hàng.
 
 ## 0. Cách đọc kết quả và source-of-truth
