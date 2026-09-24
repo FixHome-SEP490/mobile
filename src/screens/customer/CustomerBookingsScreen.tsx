@@ -202,7 +202,7 @@ export default function CustomerBookingsScreen() {
       : 'Gần đây';
     const message = replacement === 'waiting'
       ? 'Đang tìm thợ thay thế; đang chờ kỹ thuật viên phản hồi; làm mới để cập nhật'
-      : 'Lượt mời thợ thay thế đã kết thúc; chưa thể chọn thợ mới tại đây; vui lòng liên hệ hỗ trợ hoặc làm mới';
+      : 'Lượt mời thợ thay thế đã kết thúc. Xem khả năng chọn lại; hệ thống sẽ kiểm tra trước khi gửi.';
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
@@ -233,9 +233,9 @@ export default function CustomerBookingsScreen() {
           style={[styles.resumeBtn, { backgroundColor: colors.primary }]}
           onPress={() => navigation.navigate('CustomerMatching', { bookingId: booking.id })}
           accessibilityRole="button"
-          accessibilityLabel="Xem tình trạng tìm thợ"
+          accessibilityLabel={replacement === 'waiting' ? 'Xem tình trạng tìm thợ' : 'Xem khả năng chọn lại'}
         >
-          <Text style={styles.resumeText}>Xem tình trạng tìm thợ</Text>
+          <Text style={styles.resumeText}>{replacement === 'waiting' ? 'Xem tình trạng tìm thợ' : 'Xem khả năng chọn lại'}</Text>
         </TouchableOpacity>
         {!!detailId && (
           <TouchableOpacity
