@@ -3,6 +3,7 @@ import {
   createBookingsHistoryLoader,
   customerBookingsUserId,
   initialHistoryState,
+  linkedReplacementState,
   mergeHistory,
   orderTotalText,
   resolveBookingsView,
@@ -525,5 +526,82 @@ describe('orders coverage view-model (resolveBookingsView)', () => {
     );
     expect(view.ordersCoverageComplete).toBe(false);
     expect(resumeTargetFor(booking({ status: 'SUBMITTED' }), !view.ordersCoverageComplete)).toBeNull();
+  });
+});
+
+describe('linked replacement read-only classification (202)', () => {
+  it.each([['ACCEPTED'], ['EN_ROUTE']])(
+    'classifies linked MATCHING + order %s as waiting',
+    (orderStatus) => {
+      const linkedBooking = booking({ id: 'booking-202-wait', status: 'MATCHING', serviceOrderId: undefined });
+      const linkedOrder = order({
+        id: 'order-202-wait', code: 'SO-202-W', bookingId: 'booking-202-wait',
+        status: orderStatus as ServiceOrderItem['status'],
+      });
+      expect(linkedReplacementState(linkedBooking, linkedOrder)).toBe('waiting');
+    },
+  );
+
+  it.each([['ACCEPTED'], ['EN_ROUTE']])(
+    'classifies linked CLOSED + order %s as support',
+    (orderStatus) => {
+      const linkedBooking = booking({ id: 'booking-202-support', status: 'CLOSED', serviceOrderId: undefined });
+      const linkedOrder = order({
+        id: 'order-202-support', code: 'SO-202-S', bookingId: 'booking-202-support',
+        status: orderStatus as ServiceOrderItem['status'],
+      });
+      expect(linkedReplacementState(linkedBooking, linkedOrder)).toBe('support');
+    },
+  );
+
+  it.each([['MATCHED'], ['CANCELLED'], ['SUBMITTED']])(
+    'returns null for linked booking status %s even with a live order',
+    (bookingStatus) => {
+      const linkedBooking = booking({ id: 'booking-202-other', status: bookingStatus as BookingItem['status'] });
+      const linkedOrder = order({ id: 'order-202-other', bookingId: 'booking-202-other', status: 'ACCEPTED' });
+      expect(linkedReplacementState(linkedBooking, linkedOrder)).toBeNull();
+    },
+  );
+
+  it.each([['UNDER_REPAIR'], ['COMPLETED'], ['CANCELLED']])(
+    'returns null for linked MATCHING/CLOSED when order status is %s',
+    (orderStatus) => {
+      const waitingBooking = booking({ id: 'booking-202-terminal', status: 'MATCHING' });
+      const supportBooking = booking({ id: 'booking-202-terminal', status: 'CLOSED' });
+      const terminalOrder = order({
+        id: 'order-202-terminal', bookingId: 'booking-202-terminal',
+        status: orderStatus as ServiceOrderItem['status'],
+      });
+      expect(linkedReplacementState(waitingBooking, terminalOrder)).toBeNull();
+      expect(linkedReplacementState(supportBooking, terminalOrder)).toBeNull();
+    },
+  );
+
+  it('returns null for wrong or absent linked order bookingId', () => {
+    const linkedBooking = booking({ id: 'booking-202-exact', status: 'MATCHING' });
+    expect(linkedReplacementState(linkedBooking, null)).toBeNull();
+    expect(linkedReplacementState(
+      linkedBooking,
+      order({ id: 'order-202-wrong', bookingId: 'booking-202-elsewhere', status: 'ACCEPTED' }),
+    )).toBeNull();
+  });
+
+  it('matches by authoritative order.bookingId even when list booking.serviceOrderId is undefined', () => {
+    const listBooking = booking({ id: 'booking-202-crosswalk', status: 'MATCHING', serviceOrderId: undefined });
+    const actualOrder = order({ id: 'order-202-crosswalk', bookingId: 'booking-202-crosswalk', status: 'EN_ROUTE' });
+    const cards = mergeHistory([listBooking], [actualOrder]);
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({ kind: 'booking', order: expect.objectContaining({ id: 'order-202-crosswalk' }) });
+    expect(linkedReplacementState(listBooking, actualOrder)).toBe('waiting');
+  });
+
+  it('never infers an active assignment from order history technician presenter', () => {
+    const listBooking = booking({ id: 'booking-202-historical', status: 'CLOSED', serviceOrderId: undefined });
+    const historicalOrder = order({
+      id: 'order-202-historical', bookingId: 'booking-202-historical', status: 'ACCEPTED',
+      technician: { id: 'tech-202', fullName: 'Old KTV', phoneNumber: '090', averageRating: 5 },
+    });
+    expect(linkedReplacementState(listBooking, historicalOrder)).toBe('support');
+    expect(linkedReplacementState(listBooking, historicalOrder)).not.toBe('waiting');
   });
 });

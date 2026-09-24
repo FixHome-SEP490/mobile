@@ -13,6 +13,8 @@ type MatchingRoute = RouteProp<RootStackParamList, 'CustomerMatching'>;
 const PENDING_STATUSES = new Set(['PENDING', 'STANDBY']);
 
 function describeBooking(booking: BookingItem): string {
+  if (booking.serviceOrderId && booking.status === 'CLOSED') return 'Lượt mời thợ thay thế đã kết thúc; chưa thể chọn thợ mới tại đây. Vui lòng liên hệ hỗ trợ hoặc làm mới để cập nhật.';
+  if (booking.serviceOrderId && booking.status === 'MATCHING') return 'Đang tìm thợ thay thế; đơn vẫn chờ kỹ thuật viên phản hồi lời mời còn lại. Làm mới để cập nhật, không cần gửi lại.';
   if (booking.serviceOrderId && booking.status === 'MATCHED') return 'Kỹ thuật viên đã nhận đơn. Đơn dịch vụ đã được tạo trên hệ thống.';
   if (booking.status === 'MATCHED') return 'Đã có kỹ thuật viên nhận lời mời. Đang kiểm tra liên kết đơn dịch vụ.';
   if (booking.status === 'MATCHING') {

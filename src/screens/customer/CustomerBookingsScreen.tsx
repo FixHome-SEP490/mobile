@@ -24,6 +24,7 @@ import {
   createBookingsHistoryLoader,
   customerBookingsUserId,
   initialHistoryState,
+  linkedReplacementState,
   orderTotalText,
   resolveBookingsView,
   resumeTargetFor,
@@ -189,6 +190,67 @@ export default function CustomerBookingsScreen() {
     );
   };
 
+  const renderLinkedReplacementCard = (
+    booking: BookingItem,
+    order: ServiceOrderItem,
+    replacement: 'waiting' | 'support',
+  ) => {
+    const badge = getBookingBadge(booking.status);
+    const detailId = orderDetailTarget(order.id);
+    const dateStr = booking.createdAt
+      ? new Date(booking.createdAt).toLocaleDateString('vi-VN')
+      : 'Gần đây';
+    const message = replacement === 'waiting'
+      ? 'Đang tìm thợ thay thế; đang chờ kỹ thuật viên phản hồi; làm mới để cập nhật'
+      : 'Lượt mời thợ thay thế đã kết thúc; chưa thể chọn thợ mới tại đây; vui lòng liên hệ hỗ trợ hoặc làm mới';
+    return (
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <View style={styles.iconContainer}>
+            <Ionicons name="calendar-outline" size={24} color={colors.primary} />
+          </View>
+          <View style={styles.cardInfo}>
+            <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+              <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
+            </View>
+            <Text style={styles.title} numberOfLines={1}>
+              {booking.serviceName || order.serviceName || `Yêu cầu #${booking.id.slice(0, 8)}`}
+            </Text>
+            {!!booking.description && (
+              <Text style={styles.meta} numberOfLines={2}>{booking.description}</Text>
+            )}
+            {!!booking.addressSummary && (
+              <Text style={styles.meta} numberOfLines={1}>📍 {booking.addressSummary}</Text>
+            )}
+            <Text style={styles.meta}>{dateStr}</Text>
+            <Text style={styles.meta}>{message}</Text>
+            <Text style={styles.meta}>
+              {`Đơn lịch sử ${order.code || order.id} — kỹ thuật viên trước đây chưa được xác nhận là thợ hiện tại.`}
+            </Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          style={[styles.resumeBtn, { backgroundColor: colors.primary }]}
+          onPress={() => navigation.navigate('CustomerMatching', { bookingId: booking.id })}
+          accessibilityRole="button"
+          accessibilityLabel="Xem tình trạng tìm thợ"
+        >
+          <Text style={styles.resumeText}>Xem tình trạng tìm thợ</Text>
+        </TouchableOpacity>
+        {!!detailId && (
+          <TouchableOpacity
+            style={[styles.secondaryBtn, { borderColor: colors.border }]}
+            onPress={() => navigation.navigate('CustomerOrderDetail', { serviceOrderId: detailId })}
+            accessibilityRole="button"
+            accessibilityLabel="Xem chi tiết đơn lịch sử"
+          >
+            <Text style={[styles.secondaryText, { color: colors.text }]}>Xem chi tiết đơn lịch sử</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
@@ -289,6 +351,12 @@ export default function CustomerBookingsScreen() {
           {filteredCards.map((card) => {
             const key = card.kind === 'booking' ? `booking-${card.booking.id}` : `order-${card.order.id}`;
             if (card.kind === 'booking' && !card.order) return <View key={key}>{renderBookingCard(card.booking)}</View>;
+            if (card.kind === 'booking' && card.order) {
+              const replacement = linkedReplacementState(card.booking, card.order);
+              if (replacement) {
+                return <View key={key}>{renderLinkedReplacementCard(card.booking, card.order, replacement)}</View>;
+              }
+            }
             const order = card.kind === 'booking' ? card.order! : card.order;
             const bookingId = card.kind === 'booking' ? card.booking.id : order.bookingId ?? null;
             const detailId = orderDetailTarget(order.id);
@@ -516,6 +584,17 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   resumeText: {
     color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  secondaryBtn: {
+    marginTop: 8,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  secondaryText: {
     fontSize: 13,
     fontWeight: '700',
   },

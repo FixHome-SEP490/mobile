@@ -51,6 +51,30 @@ export function bookingResumeTarget(booking: BookingItem): string | null {
   return RESUMABLE_STATUSES.has(String(booking.status).toUpperCase()) ? booking.id : null;
 }
 
+export type LinkedReplacementState = 'waiting' | 'support';
+
+/**
+ * Read-only classification for a merged linked Booking + authoritative Order card (202).
+ * DISPLAY ONLY — never an eligibility/can-shortlist signal and never an active-assignment claim.
+ * Exact crosswalk: order.bookingId must equal booking.id; order ACCEPTED/EN_ROUTE only;
+ * Booking MATCHING -> 'waiting', CLOSED -> 'support'. All other booking/order states -> null.
+ * The historical order technician presenter is ignored: it never marks anyone as current.
+ */
+export function linkedReplacementState(
+  booking: BookingItem | null | undefined,
+  order: ServiceOrderItem | null | undefined,
+): LinkedReplacementState | null {
+  if (!booking || !order) return null;
+  if (typeof booking.id !== 'string' || booking.id.length === 0) return null;
+  if (order.bookingId !== booking.id) return null;
+  const bookingStatus = String(booking.status).toUpperCase();
+  const orderStatus = String(order.status).toUpperCase();
+  if (orderStatus !== 'ACCEPTED' && orderStatus !== 'EN_ROUTE') return null;
+  if (bookingStatus === 'MATCHING') return 'waiting';
+  if (bookingStatus === 'CLOSED') return 'support';
+  return null;
+}
+
 export type HistoryCard =
   | { kind: 'booking'; booking: BookingItem; order: ServiceOrderItem | null }
   | { kind: 'order'; order: ServiceOrderItem };
