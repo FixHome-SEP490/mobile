@@ -96,6 +96,25 @@ export function quotationItemsList(order: ServiceOrderItem | null): NonNullable<
   return order.quotation.items;
 }
 
+export const TECHNICIAN_ATTRIBUTION_NOTE =
+  'Nếu đơn đang tìm thợ thay thế, đây có thể là thông tin thợ trước đó. Thông tin trên đơn chưa xác nhận thợ hiện phụ trách.';
+
+/**
+ * P3 provenance clarification (display-only): Backend `presentOrder` selects the
+ * latest assignment without an `isActive` predicate, so `order.technician` is the
+ * technician RECORDED on the order — which may be a previous technician while a
+ * replacement is underway. This pure derivation surfaces a hedged caution only
+ * when a technician is recorded AND the order is ACCEPTED/EN_ROUTE (the window
+ * where replacement can happen). It never claims who the current/active
+ * technician is, and returns null for missing tech, null orders, and all other
+ * statuses so genuine active contacts elsewhere stay untouched.
+ */
+export function technicianAttributionNote(order: ServiceOrderItem | null): string | null {
+  if (!order?.technician?.fullName) return null;
+  const status = String(order.status).toUpperCase();
+  return status === 'ACCEPTED' || status === 'EN_ROUTE' ? TECHNICIAN_ATTRIBUTION_NOTE : null;
+}
+
 /** Presence decisions for the read-only detail screen; the screen renders exactly this. */
 export function resolveOrderDetailSections(order: ServiceOrderItem | null): OrderDetailSections {
   const quotationStatus = order?.quotation?.status != null

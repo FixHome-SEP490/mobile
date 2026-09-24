@@ -4,6 +4,7 @@ import {
   orderDetailTarget,
   quotationItemsList,
   resolveOrderDetailSections,
+  technicianAttributionNote,
   type OrderDetailState,
 } from './customer-order-detail';
 import { customerBookingsUserId } from './customer-bookings-history';
@@ -239,6 +240,36 @@ describe('production quotation items guard (quotationItemsList)', () => {
 
   it('returns an empty list for a null order', () => {
     expect(quotationItemsList(null)).toEqual([]);
+  });
+});
+
+describe('technician attribution provenance note (technicianAttributionNote)', () => {
+  const EXPECTED_NOTE = 'Nếu đơn đang tìm thợ thay thế, đây có thể là thông tin thợ trước đó. Thông tin trên đơn chưa xác nhận thợ hiện phụ trách.';
+  const withTech = { technician: { id: 't1', fullName: 'Tho A', phoneNumber: '091', averageRating: 4.5 } };
+
+  it.each(['ACCEPTED', 'EN_ROUTE'] as const)(
+    'shows the recorded-technician caution for status %s without claiming current tech',
+    (status) => {
+      const note = technicianAttributionNote(order({ status, ...withTech }));
+      expect(note).toBe(EXPECTED_NOTE);
+      // Hedged provenance only: never asserts this tech is (or is not) the current one.
+      expect(note).toContain('có thể là thông tin thợ trước đó');
+    },
+  );
+
+  it.each(['UNDER_REPAIR', 'COMPLETED'] as const)(
+    'shows no caution for recorded technician when status is %s',
+    (status) => {
+      expect(technicianAttributionNote(order({ status, ...withTech }))).toBeNull();
+    },
+  );
+
+  it('shows no caution without a recorded technician or order', () => {
+    expect(technicianAttributionNote(order({ status: 'ACCEPTED' }))).toBeNull();
+    expect(technicianAttributionNote(order({
+      status: 'EN_ROUTE', technician: undefined,
+    } as unknown as Partial<ServiceOrderItem>))).toBeNull();
+    expect(technicianAttributionNote(null)).toBeNull();
   });
 });
 

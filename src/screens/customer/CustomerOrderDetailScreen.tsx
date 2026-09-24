@@ -25,6 +25,7 @@ import {
   initialOrderDetailState,
   quotationItemsList,
   resolveOrderDetailSections,
+  technicianAttributionNote,
   writeDetailWithMirror,
 } from './customer-order-detail';
 import {
@@ -363,6 +364,10 @@ export default function CustomerOrderDetailScreen() {
   const onDecideCancel = () => { decisionRef.current?.cancelConfirm(); };
   const onDecideSubmit = () => { void decisionRef.current?.submit(); };
   const sections = resolveOrderDetailSections(order);
+  // P3 provenance clarification (display-only): the shown technician is the one
+  // RECORDED on the order, which may be a previous tech while replacement is
+  // underway. Name/phone stay visible; only a hedged note is added below.
+  const attributionNote = technicianAttributionNote(order);
   // P3B7 decision visibility mirrors the controller gate: active customer
   // order in EN_ROUTE with the latest quotation SENT.
   const canDecideQuote = !!order &&
@@ -482,10 +487,13 @@ export default function CustomerOrderDetailScreen() {
 
           {sections.hasTechnician && (
             <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Kỹ thuật viên</Text>
+              <Text style={styles.sectionTitle}>Kỹ thuật viên ghi nhận trên đơn</Text>
               <Text style={styles.title}>{sections.technicianName}</Text>
               {!!sections.technicianPhone && (
                 <Text style={styles.meta}>SĐT: {sections.technicianPhone}</Text>
+              )}
+              {!!attributionNote && (
+                <Text style={styles.meta}>{attributionNote}</Text>
               )}
             </View>
           )}
