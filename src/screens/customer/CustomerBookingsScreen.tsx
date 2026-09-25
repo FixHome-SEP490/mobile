@@ -218,7 +218,7 @@ export default function CustomerBookingsScreen() {
       case 'CANCELLED':
         return { label: 'Đã hủy', bg: '#FEE2E2', color: '#DC2626' };
       default:
-        return { label: s, bg: 'colors.border', color: 'colors.textSecondary' };
+        return { label: s, bg: colors.border, color: colors.textSecondary };
     }
   };
 
@@ -597,11 +597,11 @@ export default function CustomerBookingsScreen() {
       {/* Search & Filter */}
       <View style={styles.searchFilterContainer}>
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color="colors.textSecondary" />
+          <Ionicons name="search" size={20} color={colors.textSecondary} />
           <TextInput
             style={styles.searchInput}
             placeholder="Tìm theo mã đơn, dịch vụ, thợ..."
-            placeholderTextColor="colors.textSecondary"
+            placeholderTextColor={colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
@@ -752,7 +752,7 @@ export default function CustomerBookingsScreen() {
             style={[styles.bookNowBtn, { backgroundColor: colors.primary }]}
             onPress={() => navigation.navigate('CustomerServices')}
           >
-            <Ionicons name="add-circle-outline" size={18} color="colors.surface" />
+            <Ionicons name="add-circle-outline" size={18} color={colors.surface} />
             <Text style={styles.bookNowText}>Đặt dịch vụ mới</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button" style={styles.retryBtn}>
