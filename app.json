@@ -3,6 +3,7 @@
     "name": "FixHome",
     "slug": "fixhome-mobile",
     "version": "0.1.0",
+    "scheme": "fixhome",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -29,7 +30,8 @@
           "cameraPermission": "FixHome cần quyền camera để bạn chụp ảnh CCCD/CMND và ảnh chân dung khi xác minh danh tính.",
           "photosPermission": "FixHome cần quyền thư viện ảnh để bạn chọn ảnh CCCD/CMND có sẵn khi xác minh danh tính."
         }
-      ]
+      ],
+      "expo-web-browser"
     ]
   }
 }
