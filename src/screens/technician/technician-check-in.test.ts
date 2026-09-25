@@ -1,3 +1,4 @@
+import type { ServiceOrderItem } from '../../api/orders.api';
 import {
   createCheckInController,
   normalizeCheckInResult,
@@ -8,6 +9,7 @@ import {
 } from './technician-check-in';
 
 const ORDER_ID = '11111111-1111-4111-8111-111111111111';
+let technicianSequence = 0;
 
 const enRouteJob = () => ({ id: ORDER_ID, status: 'EN_ROUTE' });
 
@@ -32,38 +34,90 @@ function deferred<T>() {
 interface Harness {
   deps: CheckInDeps;
   checkIn: (orderId: string) => Promise<void>;
+  reconcile: (orderId: string) => Promise<void>;
   setCurrent: (value: boolean) => void;
   setTechnicianId: (value: string | null) => void;
-  setJob: (job: { id: string; status: unknown; historical?: unknown } | null) => void;
+  setJob: (
+    job: { id: string; status: unknown; historical?: unknown } | null,
+  ) => void;
   notified: () => [string, string][];
+  verificationStates: () => [string, string][];
+  makeDetail: (overrides?: Partial<ServiceOrderItem>) => ServiceOrderItem;
 }
 
 /** Exercises the actual production controller the EN_ROUTE button calls. */
 function setup(): Harness {
   let current = true;
-  let technicianId: string | null = 'tech-1';
-  let job: { id: string; status: unknown; historical?: unknown } | null = enRouteJob();
+  let technicianId: string | null = 'tech-' + ++technicianSequence;
+  let job: { id: string; status: unknown; historical?: unknown } | null =
+    enRouteJob();
   const notifications: [string, string][] = [];
+  const verificationStates: [string, string][] = [];
+
+  const makeDetail = (
+    overrides: Partial<ServiceOrderItem> = {},
+  ): ServiceOrderItem => ({
+    id: ORDER_ID,
+    code: 'SO-CHECKIN',
+    bookingId: '22222222-2222-4222-8222-222222222222',
+    serviceName: 'Điều hòa',
+    status: 'EN_ROUTE',
+    customerName: 'Customer',
+    customerPhone: '',
+    addressSummary: '',
+    scheduledAt: '2030-01-02T00:00:00Z',
+    technician: {
+      id: technicianId ?? 'logged-out',
+      fullName: 'Technician',
+      phoneNumber: '',
+      averageRating: 0,
+    },
+    arrivalVerified: true,
+    laborTotal: 0,
+    partsTotal: 0,
+    grandTotal: 0,
+    paymentStatus: 'UNPAID',
+    createdAt: '2030-01-01T00:00:00Z',
+    ...overrides,
+  });
+
   const deps: CheckInDeps = {
     getJob: (id) => (job && job.id === id ? job : null),
     getTechnicianId: () => technicianId,
     captureFocus: () => () => current,
     requestPermission: jest.fn().mockResolvedValue('granted'),
-    getPosition: jest.fn().mockResolvedValue({ lat: 10.1, lng: 106.1, accuracy: 8 }),
+    getPosition: jest
+      .fn()
+      .mockResolvedValue({ lat: 10.1, lng: 106.1, accuracy: 8 }),
     postCheckIn: jest.fn().mockResolvedValue(validResponse()),
-    notify: jest.fn((title: string, message: string) => { notifications.push([title, message]); }),
+    getOrderDetail: jest.fn().mockImplementation(async () => makeDetail()),
+    notify: jest.fn((title: string, message: string) => {
+      notifications.push([title, message]);
+    }),
     refreshJobs: jest.fn().mockResolvedValue(undefined),
     onAccessDenied: jest.fn(),
     setBusy: jest.fn(),
+    onVerificationState: jest.fn((id: string, state: string) => {
+      verificationStates.push([id, state]);
+    }),
   };
-  const { checkIn } = createCheckInController(deps);
+  const controller = createCheckInController(deps);
   return {
     deps,
-    checkIn,
-    setCurrent: (value) => { current = value; },
-    setTechnicianId: (value) => { technicianId = value; },
-    setJob: (value) => { job = value; },
+    checkIn: controller.checkIn,
+    reconcile: controller.reconcile,
+    setCurrent: (value) => {
+      current = value;
+    },
+    setTechnicianId: (value) => {
+      technicianId = value;
+    },
+    setJob: (value) => {
+      job = value;
+    },
     notified: () => notifications,
+    verificationStates: () => verificationStates,
+    makeDetail,
   };
 }
 
@@ -74,10 +128,11 @@ const notified = (h: Harness) => h.deps.notify as jest.Mock;
 const refreshJobs = (h: Harness) => h.deps.refreshJobs as jest.Mock;
 const denied = (h: Harness) => h.deps.onAccessDenied as jest.Mock;
 const busy = (h: Harness) => h.deps.setBusy as jest.Mock;
+const orderDetail = (h: Harness) => h.deps.getOrderDetail as jest.Mock;
 
 it('exposes only the tap entrypoint: no auto-track/watch/upload surface', () => {
   const { deps } = setup();
-  expect(Object.keys(createCheckInController(deps)).sort()).toEqual(['checkIn']);
+  expect(Object.keys(createCheckInController(deps)).sort()).toEqual(['checkIn', 'reconcile']);
 });
 
 it('makes zero calls before an explicit tap', () => {
@@ -85,6 +140,7 @@ it('makes zero calls before an explicit tap', () => {
   expect(permission(h)).not.toHaveBeenCalled();
   expect(position(h)).not.toHaveBeenCalled();
   expect(postCheckIn(h)).not.toHaveBeenCalled();
+  expect(orderDetail(h)).not.toHaveBeenCalled();
   expect(refreshJobs(h)).not.toHaveBeenCalled();
 });
 
@@ -95,7 +151,7 @@ it('verifies arrival on valid, manages busy independently, and refreshes jobs', 
   expect(position(h)).toHaveBeenCalledTimes(1);
   expect(postCheckIn(h)).toHaveBeenCalledTimes(1);
   expect(postCheckIn(h)).toHaveBeenCalledWith(ORDER_ID, { lat: 10.1, lng: 106.1, accuracyMeters: 8 });
-  expect(h.notified()[0][0]).toBe('Đã check-in');
+  expect(h.notified()[0][0]).toBe('Đã xác minh check-in');
   expect(refreshJobs(h)).toHaveBeenCalledTimes(1);
   expect(busy(h).mock.calls[0]).toEqual([ORDER_ID]);
   expect(busy(h).mock.calls[busy(h).mock.calls.length - 1]).toEqual([null]);
@@ -105,26 +161,36 @@ it('accepts uppercase and enveloped valid results without advancing state itself
   const h = setup();
   postCheckIn(h).mockResolvedValue({ data: { ...validResponse(), result: 'VALID' } });
   await h.checkIn(ORDER_ID);
-  expect(h.notified()[0][0]).toBe('Đã check-in');
+  expect(h.notified()[0][0]).toBe('Đã xác minh check-in');
   expect(h.notified()[0][1]).not.toMatch(/UNDER_REPAIR|Hoàn thành|completed/i);
 });
 
 it.each([
-  ['low_accuracy', 'Vị trí chưa đủ chính xác'],
-  ['out_of_geofence', 'Ngoài khu vực'],
-  ['failed', 'Check-in thất bại'],
-  ['something_new', 'Kết quả chưa rõ'],
-  [undefined, 'Kết quả chưa rõ'],
-])('shows a distinct honest message for result %s and never claims arrival', async (result, title) => {
-  const h = setup();
-  postCheckIn(h).mockResolvedValue({ ...validResponse(), result });
-  await h.checkIn(ORDER_ID);
-  expect(postCheckIn(h)).toHaveBeenCalledTimes(1);
-  expect(h.notified()).toHaveLength(1);
-  expect(h.notified()[0][0]).toBe(title);
-  expect(h.notified()[0].join(' ')).not.toMatch(/Đã xác minh bạn đã đến/);
-  expect(refreshJobs(h)).not.toHaveBeenCalled();
-});
+  ['low_accuracy', 'Vị trí chưa đủ chính xác', false],
+  ['out_of_geofence', 'Ngoài khu vực', false],
+  ['failed', 'Check-in thất bại', false],
+  ['something_new', 'Kết quả check-in chưa rõ', true],
+  [undefined, 'Kết quả check-in chưa rõ', true],
+])(
+  'shows a distinct honest message for result %s and never claims arrival',
+  async (result, title, ambiguous) => {
+    const h = setup();
+    if (ambiguous) {
+      orderDetail(h).mockResolvedValue(
+        h.makeDetail({ arrivalVerified: false }),
+      );
+    }
+    postCheckIn(h).mockResolvedValue({ ...validResponse(), result });
+    await h.checkIn(ORDER_ID);
+    expect(postCheckIn(h)).toHaveBeenCalledTimes(1);
+    expect(h.notified()).toHaveLength(1);
+    expect(h.notified()[0][0]).toBe(title);
+    expect(h.notified()[0].join(' ')).not.toMatch(
+      /máy chủ xác nhận bạn đã đến/i,
+    );
+    expect(refreshJobs(h)).toHaveBeenCalledTimes(ambiguous ? 1 : 0);
+  },
+);
 
 it('includes server-derived distance for out_of_geofence only when safe', async () => {
   const h = setup();
@@ -290,21 +356,93 @@ it.each([401, 403])('purges via onAccessDenied on %s without retaining coordinat
   expect(denied(h)).toHaveBeenCalledTimes(1);
   expect(h.notified()[0][0]).toBe('Phiên đăng nhập đã hết');
   expect(refreshJobs(h)).not.toHaveBeenCalled();
-  expect(Object.keys(createCheckInController(h.deps))).toEqual(['checkIn']);
+  expect(Object.keys(createCheckInController(h.deps)).sort()).toEqual(['checkIn', 'reconcile']);
 });
 
 it.each([
   ['timeout with no status', { message: 'timeout' }],
   ['server 500', { response: { status: 500 } }],
   ['offline', new Error('Network request failed')],
-])('never auto-reposts on ambiguous POST failure %s', async (_label, error) => {
+])(
+  'locks ambiguous POST %s and reconciles by GET without a second POST',
+  async (_label, error) => {
+    const h = setup();
+    orderDetail(h).mockResolvedValue(
+      h.makeDetail({ arrivalVerified: false }),
+    );
+    postCheckIn(h).mockRejectedValue(error);
+
+    await h.checkIn(ORDER_ID);
+    expect(postCheckIn(h)).toHaveBeenCalledTimes(1);
+    expect(orderDetail(h)).toHaveBeenCalledWith(ORDER_ID);
+    expect(h.notified()[0][0]).toBe('Chưa xác nhận check-in');
+    expect(refreshJobs(h)).toHaveBeenCalledTimes(1);
+    expect(h.verificationStates()).toContainEqual([ORDER_ID, 'pending']);
+
+    await h.checkIn(ORDER_ID);
+    expect(postCheckIn(h)).toHaveBeenCalledTimes(1);
+    expect(permission(h)).toHaveBeenCalledTimes(1);
+    expect(h.verificationStates()).not.toContainEqual([ORDER_ID, 'clear']);
+    expect(busy(h).mock.calls[busy(h).mock.calls.length - 1]).toEqual([null]);
+  },
+);
+
+it('promotes an ambiguous check-in only after authoritative arrivalVerified GET', async () => {
   const h = setup();
-  postCheckIn(h).mockRejectedValue(error);
+  orderDetail(h)
+    .mockResolvedValueOnce(h.makeDetail({ arrivalVerified: false }))
+    .mockResolvedValueOnce(h.makeDetail({ arrivalVerified: true }));
+  postCheckIn(h).mockRejectedValue(new Error('timeout'));
+
   await h.checkIn(ORDER_ID);
   expect(postCheckIn(h)).toHaveBeenCalledTimes(1);
-  expect(h.notified()[0][0]).toBe('Chưa xác nhận check-in');
-  expect(refreshJobs(h)).toHaveBeenCalledTimes(1);
-  expect(busy(h).mock.calls[busy(h).mock.calls.length - 1]).toEqual([null]);
+  await h.reconcile(ORDER_ID);
+
+  expect(postCheckIn(h)).toHaveBeenCalledTimes(1);
+  expect(h.verificationStates()).toContainEqual([ORDER_ID, 'verified']);
+});
+
+it('GET-only re-entry discovers a previously verified arrival without requesting GPS', async () => {
+  const h = setup();
+  orderDetail(h).mockResolvedValue(h.makeDetail({ arrivalVerified: true }));
+
+  await h.reconcile(ORDER_ID);
+
+  expect(orderDetail(h)).toHaveBeenCalledWith(ORDER_ID);
+  expect(permission(h)).not.toHaveBeenCalled();
+  expect(position(h)).not.toHaveBeenCalled();
+  expect(postCheckIn(h)).not.toHaveBeenCalled();
+  expect(h.verificationStates()).toContainEqual([ORDER_ID, 'verified']);
+});
+
+it('does not accept a historical or other-technician detail as arrival proof', async () => {
+  const historical = setup();
+  orderDetail(historical).mockResolvedValue(
+    historical.makeDetail({ historical: true, arrivalVerified: true }),
+  );
+  await historical.reconcile(ORDER_ID);
+  expect(historical.verificationStates()).not.toContainEqual([
+    ORDER_ID,
+    'verified',
+  ]);
+
+  const other = setup();
+  orderDetail(other).mockResolvedValue(
+    other.makeDetail({
+      arrivalVerified: true,
+      technician: {
+        id: 'other-technician',
+        fullName: 'Other',
+        phoneNumber: '',
+        averageRating: 0,
+      },
+    }),
+  );
+  await other.reconcile(ORDER_ID);
+  expect(other.verificationStates()).not.toContainEqual([
+    ORDER_ID,
+    'verified',
+  ]);
 });
 
 it('handles 404 as not-found with GET reconciliation only', async () => {

@@ -21,7 +21,12 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store/auth.store';
 import * as Location from 'expo-location';
-import { createCheckInController, type PermissionDecision } from './technician-check-in';
+import {
+  checkInAttemptState,
+  createCheckInController,
+  type ArrivalVerificationState,
+  type PermissionDecision,
+} from './technician-check-in';
 
 type JobTab = 'all' | 'pending' | 'in_progress';
 
@@ -32,6 +37,7 @@ export default function TechnicianJobsScreen() {
   const [jobsState, setJobsState] = useState(initialJobsState);
   const { jobs, loading, refreshing, loadingMoreJobs, error, actionLoading, blockedOrderIds } = jobsState;
   const [checkInBusy, setCheckInBusy] = useState<string | null>(null);
+  const [arrivalStates, setArrivalStates] = useState<Record<string, Exclude<ArrivalVerificationState, 'clear'>>>({});
   const technicianUserId = useAuthStore(technicianJobsUserId);
   const jobsRef = useRef(jobsState.jobs);
   useEffect(() => {
@@ -79,10 +85,23 @@ export default function TechnicianJobsScreen() {
         };
       },
       postCheckIn: (id, coords) => ordersApi.checkIn(id, coords),
+      getOrderDetail: (id) => ordersApi.getOrder(id),
       notify: (title, message) => Alert.alert(title, message),
       refreshJobs: () => jobsLoader.refresh(true),
       onAccessDenied: () => { void jobsLoader.refresh(true); },
       setBusy: (orderId) => setCheckInBusy(orderId),
+      onVerificationState: (orderId, state) => {
+        setArrivalStates((previous) => {
+          if (state === 'clear') {
+            if (!(orderId in previous)) return previous;
+            const next = { ...previous };
+            delete next[orderId];
+            return next;
+          }
+          if (previous[orderId] === state) return previous;
+          return { ...previous, [orderId]: state };
+        });
+      },
     });
     return () => {
       checkInRef.current = null;
@@ -92,12 +111,33 @@ export default function TechnicianJobsScreen() {
     void loader.focus();
     return () => loader.blur();
   }, [loader]));
+  useEffect(() => {
+    const controller = checkInRef.current;
+    if (!controller || !technicianUserId) return;
+
+    for (const job of jobsState.jobs) {
+      if (
+        job.historical === true ||
+        String(job.status).toUpperCase() !== 'EN_ROUTE'
+      ) {
+        continue;
+      }
+      if (
+        job.arrivalVerified === true ||
+        checkInAttemptState(technicianUserId, job.id) !== 'clear'
+      ) {
+        void controller.reconcile(job.id);
+      }
+    }
+  }, [jobsState.jobs, technicianUserId]);
+
   const onRefresh = () => { void loader.refresh(); };
   const onLoadMoreJobs = () => { void loader.loadMoreJobs(); };
 
   const handleEnRoute = (orderId: string) => { void loader.handleEnRoute(orderId); };
 
   const handleCheckIn = (orderId: string) => { void checkInRef.current?.checkIn(orderId); };
+  const handleReconcileCheckIn = (orderId: string) => { void checkInRef.current?.reconcile(orderId); };
 
   const getStatusBadge = (status: CanonicalOrderStatus) => {
     const s = String(status).toUpperCase();
@@ -289,7 +329,55 @@ export default function TechnicianJobsScreen() {
                       </TouchableOpacity>
                     )}
 
-                    {s === 'EN_ROUTE' && (
+                    {s === 'EN_ROUTE' && arrivalStates[job.id] === 'verified' && (
+                      <View style={styles.arrivalVerifiedBox}>
+                        <View style={styles.arrivalVerifiedRow}>
+                          <Ionicons name="checkmark-circle-outline" size={18} color="#047857" />
+                          <Text style={styles.arrivalVerifiedText}>
+                            Đã đến nơi · Backend xác minh. Đơn vẫn EN_ROUTE.
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={[styles.actionBtn, { backgroundColor: '#059669' }]}
+                          onPress={() =>
+                            navigation.navigate('TechnicianOrderDetail', {
+                              serviceOrderId: job.id,
+                            })
+                          }
+                          accessibilityRole="button"
+                          accessibilityLabel="Tiếp tục công việc"
+                        >
+                          <Ionicons name="arrow-forward-outline" size={16} color="#FFF" />
+                          <Text style={styles.actionBtnText}>Tiếp tục công việc</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {s === 'EN_ROUTE' && arrivalStates[job.id] === 'pending' && (
+                      <View style={styles.arrivalPendingBox}>
+                        <Text style={styles.arrivalPendingText}>
+                          Check-in đang chờ xác minh. Không gửi POST lại.
+                        </Text>
+                        <TouchableOpacity
+                          style={[styles.actionBtn, { backgroundColor: '#D97706' }]}
+                          onPress={() => handleReconcileCheckIn(job.id)}
+                          disabled={checkInBusy === job.id}
+                          accessibilityRole="button"
+                          accessibilityLabel="Kiểm tra lại check-in"
+                        >
+                          {checkInBusy === job.id ? (
+                            <ActivityIndicator size="small" color="#FFF" />
+                          ) : (
+                            <>
+                              <Ionicons name="refresh-outline" size={16} color="#FFF" />
+                              <Text style={styles.actionBtnText}>Kiểm tra check-in</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {s === 'EN_ROUTE' && !arrivalStates[job.id] && (
                       <TouchableOpacity
                         style={[styles.actionBtn, { backgroundColor: '#059669' }]}
                         onPress={() => handleCheckIn(job.id)}
@@ -508,6 +596,42 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
     lineHeight: 16,
+  },
+  arrivalVerifiedBox: {
+    flex: 1,
+    gap: 8,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  arrivalVerifiedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  arrivalVerifiedText: {
+    flex: 1,
+    color: '#047857',
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  arrivalPendingBox: {
+    flex: 1,
+    gap: 8,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  arrivalPendingText: {
+    color: '#92400E',
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '600',
   },
   actionsRow: {
     marginTop: 12,
