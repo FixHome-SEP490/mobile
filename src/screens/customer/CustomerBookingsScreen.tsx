@@ -31,6 +31,22 @@ import {
   type BookingsTab,
 } from './customer-bookings-history';
 import { orderDetailTarget } from './customer-order-detail';
+import { buildBookingWindow } from '../../utils/booking-window';
+import {
+  canCancelBookingConservative,
+  canRescheduleBookingConservative,
+  cancelBookingConservative,
+  rescheduleBookingConservative,
+} from './customer-booking-manage';
+
+const MANAGE_DATE_OFFSETS = [0, 1, 2, 3, 7] as const;
+const MANAGE_START_TIMES = ['08:00', '09:00', '10:00', '13:00', '14:00', '15:00', '16:00'] as const;
+
+function manageDateLabel(offset: number): string {
+  if (offset === 0) return 'Hôm nay';
+  if (offset === 1) return 'Ngày mai';
+  return 'Sau ' + offset + ' ngày';
+}
 
 export default function CustomerBookingsScreen() {
   const { colors, spacing, fontSize, isDark } = useAppTheme();
@@ -38,6 +54,13 @@ export default function CustomerBookingsScreen() {
   const styles = getStyles(colors, spacing, fontSize);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<BookingsTab>('all');
+  const [manageBookingId, setManageBookingId] = useState<string | null>(null);
+  const [manageMode, setManageMode] = useState<'cancel' | 'reschedule' | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [rescheduleDayOffset, setRescheduleDayOffset] = useState(1);
+  const [rescheduleTime, setRescheduleTime] = useState('09:00');
+  const [manageBusy, setManageBusy] = useState(false);
+  const [manageError, setManageError] = useState<string | null>(null);
   const [historyState, setHistoryState] = useState(initialHistoryState);
   const { bookings, total, loading, refreshing, loadingMore, loadingMoreOrders, error, ordersError } = historyState;
   const loaderRef = useRef<ReturnType<typeof createBookingsHistoryLoader> | null>(null);
@@ -63,6 +86,122 @@ export default function CustomerBookingsScreen() {
   const onRefresh = () => { void loader.refresh(); };
   const onLoadMore = () => { void loader.loadMore(); };
   const onLoadMoreOrders = () => { void loader.loadMoreOrders(); };
+
+  const closeBookingManage = () => {
+    if (manageBusy) return;
+    setManageBookingId(null);
+    setManageMode(null);
+    setCancelReason('');
+    setManageError(null);
+  };
+
+  const openBookingManage = (booking: BookingItem, mode: 'cancel' | 'reschedule') => {
+    if (manageBusy) return;
+    if (mode === 'cancel' && !canCancelBookingConservative(booking)) return;
+    if (mode === 'reschedule' && !canRescheduleBookingConservative(booking)) return;
+    setManageBookingId(booking.id);
+    setManageMode(mode);
+    setCancelReason('');
+    setRescheduleDayOffset(1);
+    setRescheduleTime('09:00');
+    setManageError(null);
+  };
+
+  const bookingMutationDeps = {
+    getCustomerId: () => customerBookingsUserId(useAuthStore.getState()),
+    getBooking: (id: string) => bookingsApi.getBooking(id),
+    cancelBooking: (id: string, reason: string) => bookingsApi.cancelBooking(id, reason),
+    reschedule: (id: string, start: string, end: string) =>
+      bookingsApi.reschedule(id, start, end),
+  };
+
+  const handleBookingCancel = async (booking: BookingItem) => {
+    const reason = cancelReason.trim();
+    if (!reason || reason.length > 2000 || manageBusy) {
+      setManageError('Vui lòng nhập lý do hủy từ 1 đến 2000 ký tự.');
+      return;
+    }
+    setManageBusy(true);
+    setManageError(null);
+    try {
+      const result = await cancelBookingConservative(
+        bookingMutationDeps,
+        booking,
+        reason,
+      );
+      if (result.kind === 'cancelled') {
+        setManageBookingId(null);
+        setManageMode(null);
+        setCancelReason('');
+        await loader.refresh();
+        return;
+      }
+      if (result.kind === 'linked' && result.booking.serviceOrderId) {
+        setManageBookingId(null);
+        setManageMode(null);
+        const target = orderDetailTarget(result.booking.serviceOrderId);
+        if (target) {
+          navigation.navigate('CustomerOrderDetail', { serviceOrderId: target });
+          return;
+        }
+      }
+      setManageError(
+        result.kind === 'retryable'
+          ? 'Backend chưa hủy theo GET mới nhất. Bạn có thể thử lại bằng một thao tác mới.'
+          : 'Chưa xác minh được việc hủy. Không tự gửi lại; hãy làm mới danh sách trước.',
+      );
+      await loader.refresh();
+    } finally {
+      setManageBusy(false);
+    }
+  };
+
+  const handleBookingReschedule = async (booking: BookingItem) => {
+    if (manageBusy) return;
+    let window: ReturnType<typeof buildBookingWindow>;
+    try {
+      window = buildBookingWindow({
+        dayOffset: rescheduleDayOffset,
+        time: rescheduleTime,
+      });
+    } catch (error) {
+      setManageError((error as Error).message || 'Khung giờ không hợp lệ.');
+      return;
+    }
+    setManageBusy(true);
+    setManageError(null);
+    try {
+      const result = await rescheduleBookingConservative(
+        bookingMutationDeps,
+        booking,
+        window.preferredStartAt,
+        window.preferredEndAt,
+      );
+      if (result.kind === 'rescheduled') {
+        setManageBookingId(null);
+        setManageMode(null);
+        await loader.refresh();
+        return;
+      }
+      if (result.kind === 'linked' && result.booking.serviceOrderId) {
+        setManageBookingId(null);
+        setManageMode(null);
+        const target = orderDetailTarget(result.booking.serviceOrderId);
+        if (target) {
+          navigation.navigate('CustomerOrderDetail', { serviceOrderId: target });
+          return;
+        }
+      }
+      setManageError(
+        result.kind === 'retryable'
+          ? 'GET mới nhất vẫn giữ lịch cũ. Bạn có thể thử lại bằng một thao tác mới.'
+          : 'Chưa xác minh được việc đổi lịch. Không tự gửi lại; hãy làm mới danh sách trước.',
+      );
+      await loader.refresh();
+    } finally {
+      setManageBusy(false);
+    }
+  };
 
   const getStatusBadge = (status: CanonicalOrderStatus) => {
     const s = String(status).toUpperCase();
@@ -176,6 +315,203 @@ export default function CustomerBookingsScreen() {
             )}
           </View>
         </View>
+        {/* K09_B_BOOKING_MANAGE */}
+        {(canCancelBookingConservative(booking) ||
+          canRescheduleBookingConservative(booking)) && (
+          <View style={styles.manageActions}>
+            {canRescheduleBookingConservative(booking) && (
+              <TouchableOpacity
+                style={[
+                  styles.secondaryBtn,
+                  { borderColor: colors.border, flex: 1 },
+                ]}
+                onPress={() => openBookingManage(booking, 'reschedule')}
+                disabled={manageBusy}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.secondaryText, { color: colors.text }]}>
+                  Đổi lịch
+                </Text>
+              </TouchableOpacity>
+            )}
+            {canCancelBookingConservative(booking) && (
+              <TouchableOpacity
+                style={[
+                  styles.secondaryBtn,
+                  { borderColor: '#FCA5A5', flex: 1 },
+                ]}
+                onPress={() => openBookingManage(booking, 'cancel')}
+                disabled={manageBusy}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.secondaryText, { color: '#B91C1C' }]}>
+                  Hủy yêu cầu
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {manageBookingId === booking.id && manageMode === 'cancel' && (
+          <View style={styles.managePanel}>
+            <Text style={styles.manageTitle}>Hủy yêu cầu đặt lịch</Text>
+            <Text style={styles.meta}>
+              Chỉ áp dụng khi chưa có ServiceOrder. Nếu kỹ thuật viên vừa nhận đơn,
+              GET sẽ chặn Booking cancel và chuyển sang đơn dịch vụ.
+            </Text>
+            <TextInput
+              value={cancelReason}
+              onChangeText={setCancelReason}
+              editable={!manageBusy}
+              maxLength={2000}
+              multiline
+              placeholder="Lý do hủy"
+              placeholderTextColor={colors.textSecondary}
+              style={[
+                styles.manageInput,
+                { color: colors.text, borderColor: colors.border },
+              ]}
+            />
+            {!!manageError && (
+              <Text style={styles.manageError}>{manageError}</Text>
+            )}
+            <View style={styles.manageActions}>
+              <TouchableOpacity
+                style={[
+                  styles.resumeBtn,
+                  { backgroundColor: '#DC2626', flex: 1 },
+                ]}
+                onPress={() => {
+                  void handleBookingCancel(booking);
+                }}
+                disabled={manageBusy}
+                accessibilityRole="button"
+              >
+                <Text style={styles.resumeText}>
+                  {manageBusy ? 'Đang xác minh...' : 'Xác nhận hủy'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.secondaryBtn,
+                  { borderColor: colors.border, flex: 1 },
+                ]}
+                onPress={closeBookingManage}
+                disabled={manageBusy}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.secondaryText, { color: colors.text }]}>
+                  Giữ yêu cầu
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {manageBookingId === booking.id && manageMode === 'reschedule' && (
+          <View style={styles.managePanel}>
+            <Text style={styles.manageTitle}>
+              Đổi lịch trước khi có ServiceOrder
+            </Text>
+            <Text style={styles.meta}>
+              Mobile đang mirror Web conservative: chỉ SUBMITTED/MATCHING chưa
+              linked order. Backend capability đổi lịch linked ACCEPTED/EN_ROUTE
+              chưa expose ở đây.
+            </Text>
+            <Text style={styles.manageLabel}>Ngày</Text>
+            <View style={styles.manageChips}>
+              {MANAGE_DATE_OFFSETS.map((offset) => (
+                <TouchableOpacity
+                  key={offset}
+                  onPress={() => setRescheduleDayOffset(offset)}
+                  disabled={manageBusy}
+                  style={[
+                    styles.manageChip,
+                    {
+                      borderColor:
+                        rescheduleDayOffset === offset
+                          ? colors.primary
+                          : colors.border,
+                      backgroundColor:
+                        rescheduleDayOffset === offset
+                          ? '#EFF6FF'
+                          : colors.surface,
+                    },
+                  ]}
+                  accessibilityRole="radio"
+                  accessibilityState={{
+                    checked: rescheduleDayOffset === offset,
+                  }}
+                >
+                  <Text style={{ color: colors.text }}>
+                    {manageDateLabel(offset)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.manageLabel}>Giờ bắt đầu (khung 2 giờ)</Text>
+            <View style={styles.manageChips}>
+              {MANAGE_START_TIMES.map((time) => (
+                <TouchableOpacity
+                  key={time}
+                  onPress={() => setRescheduleTime(time)}
+                  disabled={manageBusy}
+                  style={[
+                    styles.manageChip,
+                    {
+                      borderColor:
+                        rescheduleTime === time
+                          ? colors.primary
+                          : colors.border,
+                      backgroundColor:
+                        rescheduleTime === time
+                          ? '#EFF6FF'
+                          : colors.surface,
+                    },
+                  ]}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: rescheduleTime === time }}
+                >
+                  <Text style={{ color: colors.text }}>{time}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {!!manageError && (
+              <Text style={styles.manageError}>{manageError}</Text>
+            )}
+            <View style={styles.manageActions}>
+              <TouchableOpacity
+                style={[
+                  styles.resumeBtn,
+                  { backgroundColor: colors.primary, flex: 1 },
+                ]}
+                onPress={() => {
+                  void handleBookingReschedule(booking);
+                }}
+                disabled={manageBusy}
+                accessibilityRole="button"
+              >
+                <Text style={styles.resumeText}>
+                  {manageBusy ? 'Đang xác minh...' : 'Lưu lịch mới'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.secondaryBtn,
+                  { borderColor: colors.border, flex: 1 },
+                ]}
+                onPress={closeBookingManage}
+                disabled={manageBusy}
+                accessibilityRole="button"
+              >
+                <Text style={[styles.secondaryText, { color: colors.text }]}>
+                  Hủy thay đổi
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {!!resumeId && (
           <TouchableOpacity
             style={[styles.resumeBtn, { backgroundColor: colors.primary }]}
@@ -597,6 +933,51 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   secondaryText: {
     fontSize: 13,
     fontWeight: '700',
+  },
+  manageActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  managePanel: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: colors.background,
+    gap: 8,
+  },
+  manageTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  manageLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  manageInput: {
+    minHeight: 72,
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    textAlignVertical: 'top',
+  },
+  manageError: {
+    color: '#B91C1C',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  manageChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  manageChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderRadius: 8,
   },
   card: {
     backgroundColor: colors.surface,

@@ -11,6 +11,8 @@ import {
   Image,
   Alert,
   TextInput,
+  Linking,
+  AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -73,6 +75,16 @@ import {
   customerReviewTarget,
   initialCustomerOrderReviewState,
 } from './customer-order-review';
+import {
+  createCustomerPaymentController,
+  customerPaymentTarget,
+  initialCustomerPaymentState,
+} from './customer-payment';
+import {
+  createCustomerOrderCancelController,
+  customerOrderCancelTarget,
+  initialCustomerOrderCancelState,
+} from './customer-order-cancel';
 
 type DetailRoute = RouteProp<RootStackParamList, 'CustomerOrderDetail'>;
 
@@ -96,6 +108,10 @@ export default function CustomerOrderDetailScreen() {
   const [costDecisionState, setCostDecisionState] = useState(initialCostDecisionState);
   const [confirmCompletionState, setConfirmCompletionState] = useState(initialCustomerConfirmCompletionState);
   const [reviewState, setReviewState] = useState(initialCustomerOrderReviewState);
+  const [paymentState, setPaymentState] = useState(initialCustomerPaymentState);
+  const [orderCancelState, setOrderCancelState] = useState(initialCustomerOrderCancelState);
+  const invoiceViewRef = useRef(invoiceState.invoice);
+  useEffect(() => { invoiceViewRef.current = invoiceState.invoice; }, [invoiceState.invoice]);
   const latestRef = useRef({ order, serviceOrderId });
   useEffect(() => {
     // Backstop only: every loader publish already mirrors synchronously via
@@ -234,6 +250,79 @@ export default function CustomerOrderDetailScreen() {
     };
   }, []);
 
+  // K08 Customer settlement: source parity with Web/Backend.
+  // Cash confirmation and VNPay URL creation are explicit user intents; all
+  // success/unknown outcomes reconcile through authoritative GETs.
+  const paymentRef = useRef<ReturnType<typeof createCustomerPaymentController> | null>(null);
+  useEffect(() => {
+    paymentRef.current = createCustomerPaymentController(
+      {
+        getOrder: () => {
+          const latest = latestRef.current;
+          if (!latest.order || latest.order.id !== latest.serviceOrderId) return null;
+          return {
+            id: latest.order.id,
+            status: latest.order.status,
+            paymentStatus: latest.order.paymentStatus,
+            customerConfirmed: latest.order.customerConfirmed,
+            historical: latest.order.historical,
+          };
+        },
+        getInvoice: () => invoiceViewRef.current,
+        getCustomerId: () => customerBookingsUserId(useAuthStore.getState()),
+        isFocused: () => focusAliveRef.current,
+        getCashSettlement: (id) => ordersApi.getCashSettlement(id),
+        confirmCashSettlement: (id, body) => ordersApi.confirmCashSettlement(id, body),
+        createVnpayUrl: (invoiceId) => ordersApi.createVnpayUrl(invoiceId),
+        openExternalUrl: (url) => Linking.openURL(url),
+        refreshAll: async () => {
+          await loaderRef.current?.refresh(true);
+          const latest = latestRef.current;
+          if (latest.order && latest.order.id === latest.serviceOrderId) {
+            const target = latest.order.id;
+            await invoiceRef.current?.refreshInvoice(() => isEvidenceReadable(target));
+          }
+        },
+        onAccessDenied: () => { void loaderRef.current?.refresh(true); },
+        notify: (title, message) => Alert.alert(title, message),
+      },
+      setPaymentState,
+    );
+    return () => {
+      paymentRef.current = null;
+    };
+  }, []);
+
+  // K09-B Customer ServiceOrder cancellation: expose only ACCEPTED/EN_ROUTE.
+  // UNDER_REPAIR and later remain support/manager paths; no compensation policy is invented.
+  const orderCancelRef = useRef<ReturnType<typeof createCustomerOrderCancelController> | null>(null);
+  useEffect(() => {
+    orderCancelRef.current = createCustomerOrderCancelController(
+      {
+        getOrder: () => {
+          const latest = latestRef.current;
+          return latest.order && latest.order.id === latest.serviceOrderId
+            ? latest.order
+            : null;
+        },
+        getCustomerId: () => customerBookingsUserId(useAuthStore.getState()),
+        isFocused: () => focusAliveRef.current,
+        cancelOrder: (id, reason) => ordersApi.cancelOrder(id, reason),
+        getOrderById: async (id) => {
+          const fresh = await ordersApi.getOrder(id);
+          await loaderRef.current?.refresh(true);
+          return fresh;
+        },
+        onAccessDenied: () => { void loaderRef.current?.refresh(true); },
+        notify: (title, message) => Alert.alert(title, message),
+      },
+      setOrderCancelState,
+    );
+    return () => {
+      orderCancelRef.current = null;
+    };
+  }, []);
+
   // K09-A server-backed review: only a real COMPLETED order is eligible.
   // GET existing review is mandatory before any create POST; unknown POST
   // outcomes stay locked until canonical GET proves the review.
@@ -315,6 +404,8 @@ export default function CustomerOrderDetailScreen() {
       decisionRef.current?.reset();
       confirmCompletionRef.current?.reset();
       reviewRef.current?.reset();
+      paymentRef.current?.reset();
+      orderCancelRef.current?.reset();
     };
   }, [serviceOrderId]));
   const isEvidenceReadable = (target: string) => {
@@ -373,6 +464,41 @@ export default function CustomerOrderDetailScreen() {
   useEffect(() => {
     if (!order || order.id !== serviceOrderId) confirmCompletionRef.current?.reset();
   }, [order, serviceOrderId]);
+
+  // K08 payment state follows only an authorized, customer-confirmed,
+  // unpaid UNDER_REPAIR order with a real invoice.
+  useEffect(() => {
+    const latest = latestRef.current;
+    const target = latest.order && latest.order.id === latest.serviceOrderId
+      ? customerPaymentTarget(
+          {
+            id: latest.order.id,
+            status: latest.order.status,
+            paymentStatus: latest.order.paymentStatus,
+            customerConfirmed: latest.order.customerConfirmed,
+            historical: latest.order.historical,
+          },
+          invoiceState.invoice,
+        )
+      : null;
+    if (target) {
+      void paymentRef.current?.loadCash();
+    } else if (!paymentState.onlinePending) {
+      paymentRef.current?.reset();
+    }
+  }, [order, serviceOrderId, invoiceState.invoice, paymentState.onlinePending]);
+
+  // K08 VNPay return reconciliation: the browser/app return is not proof of payment.
+  // When the app becomes active again, refresh authoritative Order + Invoice only.
+  useEffect(() => {
+    if (!paymentState.onlinePending) return;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active' && focusAliveRef.current) {
+        void paymentRef.current?.reconcileOnline();
+      }
+    });
+    return () => subscription.remove();
+  }, [paymentState.onlinePending]);
 
   // K09-A review follows only the same authorized COMPLETED detail.
   useEffect(() => {
@@ -479,6 +605,73 @@ export default function CustomerOrderDetailScreen() {
   const onConfirmCompletionCancel = () => { confirmCompletionRef.current?.cancelConfirm(); };
   const onConfirmCompletionSubmit = () => { void confirmCompletionRef.current?.submit(); };
   const onConfirmCompletionReconcile = () => { void confirmCompletionRef.current?.reconcile(); };
+  const onPaymentVnpay = () => {
+    Alert.alert(
+      'Thanh toán VNPay',
+      'Ứng dụng sẽ mở liên kết thanh toán do Backend tạo. Chỉ Backend xác nhận PAID/COMPLETED.',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { text: 'Tiếp tục', onPress: () => { void paymentRef.current?.startVnpay(); } },
+      ],
+    );
+  };
+  const onPaymentCheckOnline = () => { void paymentRef.current?.reconcileOnline(); };
+  const onPaymentCheckCash = () => { void paymentRef.current?.reconcileCash(); };
+  const onPaymentConfirmCash = () => {
+    const settlement = paymentState.settlement;
+    if (!settlement) return;
+    Alert.alert(
+      'Xác nhận đã trả tiền mặt',
+      'Xác nhận đã trả đúng ' + settlement.declaredAmount.toLocaleString('vi-VN') +
+        'đ cho kỹ thuật viên? Đây là xác nhận thanh toán riêng với nghiệm thu công việc.',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Xác nhận',
+          onPress: () => {
+            void paymentRef.current?.confirmCash(true, settlement.declaredAmount);
+          },
+        },
+      ],
+    );
+  };
+  const onPaymentDisputeCash = () => {
+    const settlement = paymentState.settlement;
+    if (!settlement) return;
+    Alert.alert(
+      'Báo sai số tiền',
+      'Backend sẽ chuyển đối soát sang DISPUTED/Support Case; hóa đơn không được đánh dấu PAID.',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Báo sai',
+          style: 'destructive',
+          onPress: () => {
+            void paymentRef.current?.confirmCash(
+              false,
+              settlement.declaredAmount,
+              'Khách hàng báo số tiền thực trả không khớp với khai báo kỹ thuật viên',
+            );
+          },
+        },
+      ],
+    );
+  };
+  const onOrderCancelReason = (reason: string) => {
+    orderCancelRef.current?.setReason(reason);
+  };
+  const onOrderCancelRequest = () => {
+    orderCancelRef.current?.requestConfirm();
+  };
+  const onOrderCancelBack = () => {
+    orderCancelRef.current?.cancelConfirm();
+  };
+  const onOrderCancelSubmit = () => {
+    void orderCancelRef.current?.submit();
+  };
+  const onOrderCancelReconcile = () => {
+    void orderCancelRef.current?.reconcile();
+  };
   const onReviewRating = (rating: number) => { reviewRef.current?.setRating(rating); };
   const onReviewComment = (comment: string) => { reviewRef.current?.setComment(comment); };
   const onReviewSubmit = () => { void reviewRef.current?.submit(); };
@@ -489,6 +682,21 @@ export default function CustomerOrderDetailScreen() {
   const onDecideCancel = () => { decisionRef.current?.cancelConfirm(); };
   const onDecideSubmit = () => { void decisionRef.current?.submit(); };
   const sections = resolveOrderDetailSections(order);
+  const orderCancelEligible = customerOrderCancelTarget(
+    order && order.id === serviceOrderId ? order : null,
+  );
+  const paymentEligible = order && order.id === serviceOrderId
+    ? customerPaymentTarget(
+        {
+          id: order.id,
+          status: order.status,
+          paymentStatus: order.paymentStatus,
+          customerConfirmed: order.customerConfirmed,
+          historical: order.historical,
+        },
+        invoiceState.invoice,
+      )
+    : null;
   const reviewEligible = order && order.id === serviceOrderId
     ? customerReviewTarget({
         id: order.id,
@@ -1033,6 +1241,187 @@ export default function CustomerOrderDetailScreen() {
               </View>
             )}
           </View>
+
+          {orderCancelEligible && (
+            <View style={styles.card}>
+              {/* K09_B_CUSTOMER_ORDER_CANCEL */}
+              <Text style={styles.sectionTitle}>Hủy đơn dịch vụ</Text>
+              <Text style={styles.meta}>
+                Chỉ áp dụng trước khi bắt đầu sửa chữa. Backend quyết định trạng thái cuối;
+                Mobile không tự áp phí, strike hoặc bồi thường.
+              </Text>
+              {orderCancelState.needsVerify ? (
+                <View style={styles.evidenceError}>
+                  <Text style={styles.meta}>
+                    Kết quả lần hủy trước chưa xác định. Không gửi POST lại.
+                  </Text>
+                  <TouchableOpacity
+                    onPress={onOrderCancelReconcile}
+                    disabled={orderCancelState.busy}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.retryText}>Kiểm tra trạng thái bằng GET</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : orderCancelState.status === 'confirming' ? (
+                <View style={styles.evidenceError}>
+                  <Text style={styles.meta}>
+                    Xác nhận hủy ServiceOrder này? Nếu trạng thái đã chuyển sang sửa chữa,
+                    Backend sẽ từ chối và hướng sang Service Manager/Support.
+                  </Text>
+                  <View style={styles.decisionBtnRow}>
+                    <TouchableOpacity
+                      style={[styles.decisionBtn, { backgroundColor: '#DC2626' }]}
+                      onPress={onOrderCancelSubmit}
+                      disabled={orderCancelState.busy}
+                      accessibilityRole="button"
+                    >
+                      {orderCancelState.busy ? (
+                        <ActivityIndicator size="small" color="#FFF" />
+                      ) : (
+                        <Text style={styles.decisionBtnText}>Xác nhận hủy</Text>
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.decisionBtn, { backgroundColor: '#F1F5F9' }]}
+                      onPress={onOrderCancelBack}
+                      disabled={orderCancelState.busy}
+                      accessibilityRole="button"
+                    >
+                      <Text style={[styles.decisionBtnText, { color: '#334155' }]}>
+                        Giữ đơn
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <>
+                  <TextInput
+                    value={orderCancelState.reason}
+                    onChangeText={onOrderCancelReason}
+                    editable={!orderCancelState.busy}
+                    maxLength={2000}
+                    multiline
+                    placeholder="Lý do hủy"
+                    placeholderTextColor="#94A3B8"
+                    style={{
+                      minHeight: 72,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      borderRadius: 10,
+                      padding: 10,
+                      color: colors.text,
+                      backgroundColor: colors.surface,
+                      textAlignVertical: 'top',
+                    }}
+                    accessibilityLabel="Lý do hủy đơn dịch vụ"
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.decisionBtn,
+                      { backgroundColor: '#DC2626', alignSelf: 'flex-start' },
+                    ]}
+                    onPress={onOrderCancelRequest}
+                    disabled={orderCancelState.busy}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.decisionBtnText}>Yêu cầu hủy đơn</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+              {!!orderCancelState.error && (
+                <Text style={[styles.meta, { color: '#B91C1C' }]}>
+                  {orderCancelState.error}
+                </Text>
+              )}
+            </View>
+          )}
+
+          {paymentEligible && (
+            <View style={styles.card}>
+              {/* K08_CUSTOMER_PAYMENT */}
+              <Text style={styles.sectionTitle}>Thanh toán</Text>
+              <Text style={styles.meta}>
+                Nghiệm thu công việc đã được xác nhận. Thanh toán là bước riêng; chỉ trạng thái PAID/COMPLETED từ Backend mới được coi là thành công.
+              </Text>
+
+              {paymentState.loading ? (
+                <Text style={styles.meta}>Đang kiểm tra thanh toán tiền mặt...</Text>
+              ) : paymentState.settlement?.status === 'PENDING_CONFIRMATION' ? (
+                <View style={styles.evidenceError}>
+                  <Text style={styles.meta}>
+                    Kỹ thuật viên khai đã nhận {paymentState.settlement.declaredAmount.toLocaleString('vi-VN')}đ tiền mặt.
+                  </Text>
+                  {!!paymentState.settlement.technicianNotes && (
+                    <Text style={styles.meta}>Ghi chú: {paymentState.settlement.technicianNotes}</Text>
+                  )}
+                  <View style={styles.decisionBtnRow}>
+                    <TouchableOpacity
+                      style={[styles.decisionBtn, { backgroundColor: '#059669' }]}
+                      onPress={onPaymentConfirmCash}
+                      disabled={paymentState.cashBusy || paymentState.cashNeedsVerify}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.decisionBtnText}>Xác nhận đã trả</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.decisionBtn, { backgroundColor: '#DC2626' }]}
+                      onPress={onPaymentDisputeCash}
+                      disabled={paymentState.cashBusy || paymentState.cashNeedsVerify}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.decisionBtnText}>Báo sai số tiền</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : paymentState.settlement?.status === 'DISPUTED' ? (
+                <Text style={[styles.meta, { color: '#B91C1C', fontWeight: '700' }]}>
+                  Đối soát tiền mặt đang DISPUTED; Support Case cần xử lý. Hóa đơn chưa được coi là PAID.
+                </Text>
+              ) : paymentState.settlement?.status === 'CONFIRMED' ? (
+                <Text style={[styles.meta, { color: '#047857', fontWeight: '700' }]}>
+                  Backend đã xác nhận đối soát tiền mặt.
+                </Text>
+              ) : (
+                <Text style={styles.meta}>Chưa có khai báo tiền mặt từ kỹ thuật viên.</Text>
+              )}
+
+              {paymentState.cashNeedsVerify && (
+                <TouchableOpacity onPress={onPaymentCheckCash} disabled={paymentState.cashBusy} accessibilityRole="button">
+                  <Text style={styles.retryText}>Kiểm tra đối soát tiền mặt bằng GET</Text>
+                </TouchableOpacity>
+              )}
+
+              <View style={{ marginTop: 10, gap: 8 }}>
+                <TouchableOpacity
+                  style={[styles.decisionBtn, { backgroundColor: '#2563EB', alignSelf: 'flex-start' }]}
+                  onPress={onPaymentVnpay}
+                  disabled={paymentState.onlineBusy || paymentState.onlinePending}
+                  accessibilityRole="button"
+                >
+                  {paymentState.onlineBusy ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                    <Text style={styles.decisionBtnText}>Thanh toán VNPay</Text>
+                  )}
+                </TouchableOpacity>
+                {paymentState.onlinePending && (
+                  <>
+                    <Text style={styles.meta}>
+                      Đã tạo/mở một lần thanh toán VNPay. Quay lại ứng dụng không đồng nghĩa đã PAID.
+                    </Text>
+                    <TouchableOpacity onPress={onPaymentCheckOnline} disabled={paymentState.onlineBusy} accessibilityRole="button">
+                      <Text style={styles.retryText}>Kiểm tra trạng thái Backend</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
+
+              {!!paymentState.error && (
+                <Text style={[styles.meta, { color: '#B91C1C' }]}>{paymentState.error}</Text>
+              )}
+            </View>
+          )}
 
           {reviewEligible && (
             <View style={styles.card}>

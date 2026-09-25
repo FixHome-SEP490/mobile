@@ -246,19 +246,21 @@ export const bookingsApi = {
     return unwrap(res.data);
   },
 
-  async cancelBooking(id: string, reason: string): Promise<void> {
-    await apiClient.post(`/bookings/${id}/cancel`, { reason });
+  async cancelBooking(id: string, reason: string): Promise<BookingItem> {
+    const res = await apiClient.post(`/bookings/${id}/cancel`, { reason });
+    return normalizeBooking(unwrap<RawBooking>(res.data));
   },
 
   async reschedule(
     id: string,
     preferredStartAt: string,
     preferredEndAt: string,
-  ): Promise<void> {
-    await apiClient.patch(`/bookings/${id}/schedule`, {
+  ): Promise<BookingItem> {
+    const res = await apiClient.patch(`/bookings/${id}/schedule`, {
       preferredStartAt,
       preferredEndAt,
     });
+    return normalizeBooking(unwrap<RawBooking>(res.data));
   },
 
   async attachMedia(

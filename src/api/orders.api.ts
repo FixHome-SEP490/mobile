@@ -427,4 +427,15 @@ export const ordersApi = {
   async payInvoice(id: string, idempotencyKey: string) {
     return post(`/invoices/${id}/pay`, { idempotencyKey });
   },
+
+  async createVnpayUrl(id: string): Promise<string> {
+    const payload = await post(`/invoices/${id}/vnpay-url`);
+    const url = typeof payload.paymentUrl === 'string'
+      ? payload.paymentUrl.trim()
+      : '';
+    if (!/^https:\/\//i.test(url)) {
+      throw new Error('Backend returned an invalid VNPay payment URL');
+    }
+    return url;
+  },
 };

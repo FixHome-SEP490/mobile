@@ -66,6 +66,11 @@ import {
   REQUEST_COMPLETION_CONFIRM_COPY,
 } from './technician-request-completion';
 import { createTechOrderDetailLoader } from './technician-order-detail';
+import {
+  createTechnicianCashController,
+  initialTechnicianCashState,
+  technicianCashTarget,
+} from './technician-cash-settlement';
 
 type DetailRoute = RouteProp<RootStackParamList, 'TechnicianOrderDetail'>;
 
@@ -95,6 +100,7 @@ export default function TechnicianOrderDetailScreen() {
   const [quoteState, setQuoteState] = useState(initialQuoteState);
   const [startRepairState, setStartRepairState] = useState(initialStartRepairState);
   const [completionState, setCompletionState] = useState(initialRequestCompletionState);
+  const [cashState, setCashState] = useState(initialTechnicianCashState);
   const focusAliveRef = useRef(false);
   const latestRef = useRef({ order, serviceOrderId });
   useEffect(() => {
@@ -149,6 +155,46 @@ export default function TechnicianOrderDetailScreen() {
   useEffect(() => {
     costStatusesRef.current = costsState.requests.map((request) => request.status);
   }, [costsState.requests]);
+  // K08 Technician cash declaration: exact server order total only.
+  // Mutation success/ambiguity is never trusted without GET reconciliation.
+  const cashRef = useRef<ReturnType<typeof createTechnicianCashController> | null>(null);
+  useEffect(() => {
+    cashRef.current = createTechnicianCashController(
+      {
+        getOrder: () => {
+          const latest = latestRef.current;
+          if (!latest.order || latest.order.id !== latest.serviceOrderId) return null;
+          return {
+            id: latest.order.id,
+            status: latest.order.status,
+            paymentStatus: latest.order.paymentStatus,
+            completionRequestedAt: latest.order.completionRequestedAt,
+            grandTotal: latest.order.grandTotal,
+            historical: latest.order.historical,
+          };
+        },
+        getTechnicianId: () => technicianJobsUserId(useAuthStore.getState()),
+        isFocused: () => focusAliveRef.current,
+        getCashSettlement: (id) => ordersApi.getCashSettlement(id),
+        declareCashSettlement: (id, body) => ordersApi.declareCashSettlement(id, body),
+        refreshDetail: async () => {
+          await loaderRef.current?.refresh(true);
+          const latest = latestRef.current;
+          if (latest.order && latest.order.id === latest.serviceOrderId) {
+            const target = latest.order.id;
+            await invoiceRef.current?.refreshInvoice(() => isEvidenceReadable(target));
+          }
+        },
+        onAccessDenied: () => { void loaderRef.current?.refresh(true); },
+        notify: (title, message) => Alert.alert(title, message),
+      },
+      setCashState,
+    );
+    return () => {
+      cashRef.current = null;
+    };
+  }, []);
+
   // P3B12 cost proposal form: same effect pattern, no ref read during render.
   const proposalRef = useRef<ReturnType<typeof createCostProposalController> | null>(null);
   useEffect(() => {
@@ -463,12 +509,30 @@ export default function TechnicianOrderDetailScreen() {
       quoteRef.current?.reset();
       startRepairRef.current?.reset();
       completionRef.current?.reset();
+      cashRef.current?.reset();
     };
   }, [serviceOrderId]));
   const isEvidenceReadable = (target: string) => {
     const latest = latestRef.current;
     return !!latest.order && latest.order.id === target && latest.order.id === latest.serviceOrderId;
   };
+  // K08 cash declaration follows only an unpaid UNDER_REPAIR order after
+  // completion was requested. The Backend invoice/order total remains authority.
+  useEffect(() => {
+    if (technicianCashTarget(order && order.id === serviceOrderId ? {
+      id: order.id,
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      completionRequestedAt: order.completionRequestedAt,
+      grandTotal: order.grandTotal,
+      historical: order.historical,
+    } : null)) {
+      void cashRef.current?.load();
+    } else {
+      cashRef.current?.reset();
+    }
+  }, [order, serviceOrderId]);
+
   // READ-ONLY evidence follows the authorized active detail only: suppressed
   // historical summaries (order null) never trigger an evidence GET.
   useEffect(() => {
@@ -627,6 +691,24 @@ export default function TechnicianOrderDetailScreen() {
     const target = latest.order.id;
     void costsRef.current?.refreshCosts(() => isEvidenceReadable(target));
   };
+  const onDeclareCash = () => {
+    if (!order) return;
+    Alert.alert(
+      'Khai báo đã nhận tiền mặt',
+      'Xác nhận bạn đã nhận đúng ' + order.grandTotal.toLocaleString('vi-VN') +
+        'đ theo tổng tiền Backend. Khách hàng vẫn phải xác nhận riêng trước khi hóa đơn PAID.',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Khai báo',
+          onPress: () => {
+            void cashRef.current?.declare('Kỹ thuật viên xác nhận đã nhận đủ tiền mặt theo hóa đơn.');
+          },
+        },
+      ],
+    );
+  };
+  const onCashReconcile = () => { void cashRef.current?.reconcile(); };
   const onProposalField = {
     reason: (value: string) => { proposalRef.current?.setField('reason', value); },
     description: (value: string) => { proposalRef.current?.setField('description', value); },
@@ -638,6 +720,14 @@ export default function TechnicianOrderDetailScreen() {
   const onProposalCancelConfirm = () => { proposalRef.current?.cancelConfirm(); };
   const onProposalSubmit = () => { void proposalRef.current?.submit(); };
   const sections = resolveOrderDetailSections(order);
+  const cashEligible = technicianCashTarget(order && order.id === serviceOrderId ? {
+    id: order.id,
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+    completionRequestedAt: order.completionRequestedAt,
+    grandTotal: order.grandTotal,
+    historical: order.historical,
+  } : null);
   // BEFORE upload is visible/enabled only on the assigned ACTIVE EN_ROUTE
   // detail whose Backend order is arrival-verified; anything else shows the
   // honest gate copy and never opens the picker.
@@ -1099,6 +1189,55 @@ export default function TechnicianOrderDetailScreen() {
               </View>
             )}
           </View>
+
+          {cashEligible && (
+            <View style={styles.jobCard}>
+              {/* K08_TECHNICIAN_CASH_SETTLEMENT */}
+              <Text style={styles.sectionTitle}>Thanh toán tiền mặt</Text>
+              <Text style={styles.jobMeta}>
+                Chỉ khai báo đúng tổng tiền Backend. Khai báo của kỹ thuật viên chưa phải PAID; khách hàng phải xác nhận riêng.
+              </Text>
+              {cashState.loading ? (
+                <Text style={styles.jobMeta}>Đang kiểm tra đối soát tiền mặt...</Text>
+              ) : cashState.status === 'NONE' ? (
+                <TouchableOpacity
+                  style={[styles.uploadBtn, { backgroundColor: '#2563EB', alignSelf: 'flex-start' }]}
+                  onPress={onDeclareCash}
+                  disabled={cashState.busy || cashState.needsVerify}
+                  accessibilityRole="button"
+                  accessibilityLabel="Khai báo đã nhận tiền mặt"
+                >
+                  {cashState.busy ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                    <Text style={styles.uploadBtnText}>
+                      Đã nhận {cashEligible.amount.toLocaleString('vi-VN')}đ tiền mặt
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              ) : cashState.status === 'PENDING_CONFIRMATION' ? (
+                <Text style={[styles.jobMeta, { color: '#92400E', fontWeight: '700' }]}>
+                  Đã khai báo {cashState.declaredAmount?.toLocaleString('vi-VN') ?? '—'}đ; đang chờ khách xác nhận.
+                </Text>
+              ) : cashState.status === 'CONFIRMED' ? (
+                <Text style={[styles.jobMeta, { color: '#047857', fontWeight: '700' }]}>
+                  Backend đã xác nhận đối soát tiền mặt.
+                </Text>
+              ) : (
+                <Text style={[styles.jobMeta, { color: '#B91C1C', fontWeight: '700' }]}>
+                  Đối soát DISPUTED; cần Support Case xử lý.
+                </Text>
+              )}
+              {cashState.needsVerify && (
+                <TouchableOpacity onPress={onCashReconcile} disabled={cashState.busy} accessibilityRole="button">
+                  <Text style={styles.retryText}>Kiểm tra đối soát bằng GET</Text>
+                </TouchableOpacity>
+              )}
+              {!!cashState.error && (
+                <Text style={[styles.jobMeta, { color: '#B91C1C' }]}>{cashState.error}</Text>
+              )}
+            </View>
+          )}
 
           <View style={styles.jobCard}>
             <Text style={styles.sectionTitle}>Chi phí phát sinh</Text>
