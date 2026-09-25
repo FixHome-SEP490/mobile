@@ -26,6 +26,7 @@ import { UserRole, type RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store/auth.store';
 import { createInvitationInbox, initialInboxState, isActionable } from './invitation-inbox';
 import { bookingsApi, type InvitationItem } from '../../api/bookings.api';
+import { ordersApi } from '../../api/orders.api';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -56,15 +57,19 @@ export default function TechnicianInvitationsScreen() {
   const [state, setState] = useState(initialInboxState);
   const controllerRef = useRef<ReturnType<typeof createInvitationInbox> | null>(null);
   if (controllerRef.current === null) {
-    controllerRef.current = createInvitationInbox(bookingsApi, setState, (notice, isCurrent) => {
+    controllerRef.current = createInvitationInbox(bookingsApi, ordersApi, setState, (notice, isCurrent) => {
       Alert.alert(notice.title, notice.message, notice.orderId ? [
         {
-          text: 'Mở khu vực thợ',
+          text: 'Xem đơn vừa nhận',
           onPress: () => {
-            if (isCurrent()) navigation.navigate('TechnicianMain');
+            if (isCurrent()) {
+              navigation.navigate('TechnicianOrderDetail', {
+                serviceOrderId: notice.orderId!,
+              });
+            }
           },
         },
-        { text: 'Ở lại', style: 'cancel' },
+        { text: 'Để sau', style: 'cancel' },
       ] : undefined);
     }, {
       getUserId: () => {
@@ -76,7 +81,7 @@ export default function TechnicianInvitationsScreen() {
     });
   }
   const controller = controllerRef.current;
-  const { invitations, loading, refreshing, error, actionInFlight } = state;
+  const { invitations, loading, refreshing, error, actionInFlight, acceptedOrderId, recoveryPending } = state;
   useFocusEffect(useCallback(() => {
     void controller.focus();
     return () => controller.blur();
@@ -174,6 +179,38 @@ export default function TechnicianInvitationsScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
+
+      {acceptedOrderId ? (
+        <View style={styles.acceptedCard}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.acceptedTitle}>Đã xác minh đơn vừa nhận</Text>
+            <Text style={styles.acceptedText}>
+              Đây là ServiceOrder đang được giao cho tài khoản kỹ thuật viên hiện tại.
+            </Text>
+          </View>
+          <TouchableOpacity
+            accessibilityRole="button"
+            style={styles.acceptedButton}
+            onPress={() =>
+              navigation.navigate('TechnicianOrderDetail', {
+                serviceOrderId: acceptedOrderId,
+              })
+            }
+          >
+            <Text style={styles.acceptedButtonText}>Xem đơn vừa nhận</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {recoveryPending ? (
+        <View style={styles.recoveryBanner}>
+          <Ionicons name="sync-outline" size={16} color="#92400E" />
+          <Text style={styles.recoveryText}>
+            Có phản hồi ACCEPT chưa xác định. Không gửi lại; ứng dụng chỉ đối chiếu bằng danh sách Công việc.
+          </Text>
+        </View>
+      ) : null}
+
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -225,6 +262,40 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
+  acceptedCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    gap: 10,
+  },
+  acceptedTitle: { fontSize: 15, fontWeight: '700', color: '#065F46' },
+  acceptedText: { fontSize: 13, color: '#047857', lineHeight: 19 },
+  acceptedButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#059669',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  acceptedButtonText: { color: '#FFFFFF', fontWeight: '700' },
+  recoveryBanner: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'flex-start',
+  },
+  recoveryText: { flex: 1, fontSize: 13, lineHeight: 19, color: '#92400E' },
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
