@@ -61,6 +61,12 @@ import {
   REJECT_COST_ONLY_WARNING,
 } from './customer-additional-cost-decision';
 import { customerUnderRepairTask } from './customer-under-repair-task';
+import {
+  createCustomerConfirmCompletionController,
+  customerConfirmCompletionTarget,
+  initialCustomerConfirmCompletionState,
+  CUSTOMER_CONFIRM_COMPLETION_COPY,
+} from './customer-confirm-completion';
 
 type DetailRoute = RouteProp<RootStackParamList, 'CustomerOrderDetail'>;
 
@@ -82,6 +88,7 @@ export default function CustomerOrderDetailScreen() {
   const [invoiceState, setInvoiceState] = useState(initialInvoiceState);
   const [costsState, setCostsState] = useState(initialAdditionalCostsState);
   const [costDecisionState, setCostDecisionState] = useState(initialCostDecisionState);
+  const [confirmCompletionState, setConfirmCompletionState] = useState(initialCustomerConfirmCompletionState);
   const latestRef = useRef({ order, serviceOrderId });
   useEffect(() => {
     // Backstop only: every loader publish already mirrors synchronously via
@@ -176,6 +183,50 @@ export default function CustomerOrderDetailScreen() {
       costDecisionRef.current = null;
     };
   }, []);
+  // K07 customer work confirmation: one explicit mutation attempt, then
+  // authoritative detail + invoice GET reconciliation. Payment stays separate.
+  const confirmCompletionRef = useRef<ReturnType<typeof createCustomerConfirmCompletionController> | null>(null);
+  useEffect(() => {
+    const detailLoader = loaderRef.current;
+    if (!detailLoader) return;
+
+    confirmCompletionRef.current = createCustomerConfirmCompletionController(
+      {
+        getOrder: () => {
+          const latest = latestRef.current;
+          if (!latest.order || latest.order.id !== latest.serviceOrderId) return null;
+          return {
+            id: latest.order.id,
+            status: latest.order.status,
+            completionRequestedAt: latest.order.completionRequestedAt,
+            customerConfirmed: latest.order.customerConfirmed,
+            historical: latest.order.historical,
+          };
+        },
+        getCustomerId: () => customerBookingsUserId(useAuthStore.getState()),
+        isFocused: () => focusAliveRef.current,
+        confirmCompletion: (id) => ordersApi.confirmCompletion(id),
+        refreshDetail: async () => {
+          await loaderRef.current?.refresh(true);
+        },
+        refreshInvoice: async () => {
+          const latest = latestRef.current;
+          if (latest.order && latest.order.id === latest.serviceOrderId) {
+            const target = latest.order.id;
+            await invoiceRef.current?.refreshInvoice(() => isEvidenceReadable(target));
+          }
+        },
+        onAccessDenied: () => { void loaderRef.current?.refresh(true); },
+        notify: (title, message) => Alert.alert(title, message),
+      },
+      setConfirmCompletionState,
+    );
+
+    return () => {
+      confirmCompletionRef.current = null;
+    };
+  }, []);
+
   // P3B7 customer quotation decision: created in an effect so no ref is read
   // during render. Reuses the existing decision POST clients; every gate
   // lives in the production controller.
@@ -224,6 +275,7 @@ export default function CustomerOrderDetailScreen() {
       costsRef.current?.blurCosts();
       costDecisionRef.current?.reset();
       decisionRef.current?.reset();
+      confirmCompletionRef.current?.reset();
     };
   }, [serviceOrderId]));
   const isEvidenceReadable = (target: string) => {
@@ -276,6 +328,11 @@ export default function CustomerOrderDetailScreen() {
   // P3B13: the cost decision confirmation belongs to one focused order.
   useEffect(() => {
     if (!order || order.id !== serviceOrderId) costDecisionRef.current?.reset();
+  }, [order, serviceOrderId]);
+
+  // K07 confirmation state belongs to one focused customer/order.
+  useEffect(() => {
+    if (!order || order.id !== serviceOrderId) confirmCompletionRef.current?.reset();
   }, [order, serviceOrderId]);
 
   // P3B7: the decision selection belongs to one focused customer order.
@@ -359,17 +416,32 @@ export default function CustomerOrderDetailScreen() {
   const onCostDecideReject = (costId: string) => { costDecisionRef.current?.requestConfirm(costId, 'reject'); };
   const onCostDecideCancel = () => { costDecisionRef.current?.cancelConfirm(); };
   const onCostDecideSubmit = () => { void costDecisionRef.current?.submit(); };
+  const onConfirmCompletionRequest = () => { confirmCompletionRef.current?.requestConfirm(); };
+  const onConfirmCompletionCancel = () => { confirmCompletionRef.current?.cancelConfirm(); };
+  const onConfirmCompletionSubmit = () => { void confirmCompletionRef.current?.submit(); };
+  const onConfirmCompletionReconcile = () => { void confirmCompletionRef.current?.reconcile(); };
   const onToggleWarranty = (itemId: string) => { decisionRef.current?.toggleWarranty(itemId); };
   const onDecideApprove = () => { decisionRef.current?.requestConfirm('approve'); };
   const onDecideReject = () => { decisionRef.current?.requestConfirm('reject'); };
   const onDecideCancel = () => { decisionRef.current?.cancelConfirm(); };
   const onDecideSubmit = () => { void decisionRef.current?.submit(); };
   const sections = resolveOrderDetailSections(order);
+  const confirmCompletionGate = order && order.id === serviceOrderId
+    ? {
+        id: order.id,
+        status: order.status,
+        completionRequestedAt: order.completionRequestedAt,
+        customerConfirmed: order.customerConfirmed,
+        historical: order.historical,
+      }
+    : null;
+  const confirmCompletionEligible = customerConfirmCompletionTarget(confirmCompletionGate);
   const underRepairTask = customerUnderRepairTask(
     order
       ? {
           status: order.status,
           completionRequestedAt: order.completionRequestedAt,
+          customerConfirmed: order.customerConfirmed,
           historical: order.historical,
           quotationStatus: order.quotation?.status,
         }
@@ -522,6 +594,74 @@ export default function CustomerOrderDetailScreen() {
               {underRepairTask.kind === 'additional_cost_pending' && (
                 <Text style={[styles.meta, { fontWeight: '700', color: '#92400E' }]}>
                   Phản hồi từng khoản trong mục “Chi phí phát sinh” bên dưới.
+                </Text>
+              )}
+              {underRepairTask.kind === 'completion_requested' && (
+                <View style={{ marginTop: 8, gap: 8 }}>
+                  {/* K07_CUSTOMER_CONFIRM_COMPLETION */}
+                  {confirmCompletionState.needsVerify ? (
+                    <>
+                      <Text style={[styles.meta, { color: '#92400E', fontWeight: '700' }]}>
+                        Kết quả xác nhận trước chưa rõ. Không gửi POST lại.
+                      </Text>
+                      <TouchableOpacity
+                        onPress={onConfirmCompletionReconcile}
+                        disabled={confirmCompletionState.busy}
+                        accessibilityRole="button"
+                        style={[styles.retryBtn, { alignSelf: 'flex-start' }]}
+                      >
+                        <Text style={styles.retryText}>
+                          {confirmCompletionState.busy ? 'Đang kiểm tra...' : 'Kiểm tra nghiệm thu'}
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : confirmCompletionState.confirming ? (
+                    <View style={styles.evidenceError}>
+                      <Text style={styles.meta}>{CUSTOMER_CONFIRM_COMPLETION_COPY}</Text>
+                      <View style={styles.decisionBtnRow}>
+                        <TouchableOpacity
+                          style={[styles.decisionBtn, { backgroundColor: '#059669' }]}
+                          onPress={onConfirmCompletionSubmit}
+                          disabled={confirmCompletionState.busy}
+                          accessibilityRole="button"
+                          accessibilityLabel="Xác nhận công việc đã hoàn tất"
+                        >
+                          {confirmCompletionState.busy ? (
+                            <ActivityIndicator size="small" color="#FFF" />
+                          ) : (
+                            <Text style={styles.decisionBtnText}>Xác nhận</Text>
+                          )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.decisionBtn, { backgroundColor: '#F1F5F9' }]}
+                          onPress={onConfirmCompletionCancel}
+                          disabled={confirmCompletionState.busy}
+                          accessibilityRole="button"
+                        >
+                          <Text style={[styles.decisionBtnText, { color: '#334155' }]}>Hủy</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : confirmCompletionEligible ? (
+                    <TouchableOpacity
+                      onPress={onConfirmCompletionRequest}
+                      disabled={confirmCompletionState.busy}
+                      accessibilityRole="button"
+                      style={[styles.decisionBtn, { backgroundColor: '#059669', alignSelf: 'flex-start' }]}
+                    >
+                      <Text style={styles.decisionBtnText}>Xác nhận đã hoàn tất công việc</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  {!!confirmCompletionState.error && (
+                    <Text style={[styles.meta, { color: '#B91C1C' }]}>
+                      {confirmCompletionState.error}
+                    </Text>
+                  )}
+                </View>
+              )}
+              {underRepairTask.kind === 'work_confirmed' && (
+                <Text style={[styles.meta, { fontWeight: '700', color: '#047857' }]}>
+                  Backend đã ghi nhận nghiệm thu. Hóa đơn/thanh toán vẫn hiển thị riêng bên dưới.
                 </Text>
               )}
             </View>

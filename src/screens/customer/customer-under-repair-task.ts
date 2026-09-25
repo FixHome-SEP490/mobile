@@ -1,6 +1,7 @@
 export interface CustomerUnderRepairOrder {
   status: unknown;
   completionRequestedAt?: unknown;
+  customerConfirmed?: unknown;
   historical?: unknown;
   quotationStatus?: unknown;
 }
@@ -13,6 +14,7 @@ export type CustomerUnderRepairTaskKind =
   | 'additional_cost_pending'
   | 'quote_inconsistent'
   | 'completion_requested'
+  | 'work_confirmed'
   | 'repair_in_progress';
 
 export interface CustomerUnderRepairTask {
@@ -31,6 +33,15 @@ export function customerUnderRepairTask(
     String(order.status).toUpperCase() !== 'UNDER_REPAIR'
   ) {
     return null;
+  }
+
+  if (order.completionRequestedAt && order.customerConfirmed === true) {
+    return {
+      kind: 'work_confirmed',
+      title: 'Đã xác nhận công việc hoàn tất',
+      detail:
+        'Nghiệm thu công việc đã được Backend ghi nhận. Thanh toán vẫn là bước riêng; đơn chỉ chuyển COMPLETED khi Backend xác nhận đủ điều kiện.',
+    };
   }
 
   if (order.completionRequestedAt) {

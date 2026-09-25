@@ -14,7 +14,22 @@ describe('customerUnderRepairTask', () => {
     ).toBeNull();
   });
 
-  it('prioritizes a technician completion request', () => {
+  it('prioritizes a confirmed-work state after customer confirmation', () => {
+    const task = customerUnderRepairTask(
+      {
+        status: 'UNDER_REPAIR',
+        completionRequestedAt: '2030-01-01T00:00:00Z',
+        customerConfirmed: true,
+      },
+      [{ status: 'PENDING_APPROVAL' }],
+    );
+
+    expect(task?.kind).toBe('work_confirmed');
+    expect(task?.detail).toMatch(/Thanh toán vẫn là bước riêng/i);
+    expect(task?.detail).toMatch(/COMPLETED/);
+  });
+
+  it('prioritizes a technician completion request before pending cost copy', () => {
     const task = customerUnderRepairTask(
       {
         status: 'UNDER_REPAIR',
