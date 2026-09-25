@@ -19,6 +19,12 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList, RootStackParamList } from '../../types';
 import { authApi } from '../../api/auth.api';
+import {
+  extractApiErrorMessage,
+  validateEmail,
+  validateFullName,
+  validatePhoneNumber,
+} from '../../utils/input-validation';
 
 
 export default function RegisterScreen() {
@@ -57,16 +63,18 @@ export default function RegisterScreen() {
   const [touchedPhone, setTouchedPhone] = useState(false);
   const [touchedConfirm, setTouchedConfirm] = useState(false);
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const phoneRegex = /^0[35789][0-9]{8}$/;
-  
-  const isEmailValid = emailRegex.test(email.trim());
-  const isPhoneValid = !phone.trim() || phoneRegex.test(phone.trim());
-  const isFullNameValid = fullName.trim().length >= 2;
-  
-  const emailError = touchedEmail ? (!email.trim() ? 'Email không được bỏ trống' : (!isEmailValid ? 'Email sai định dạng' : '')) : '';
-  const fullNameError = touchedFullName ? (!fullName.trim() ? 'Họ tên không được bỏ trống' : (!isFullNameValid ? 'Họ tên tối thiểu 2 ký tự' : '')) : '';
-  const phoneError = touchedPhone ? (!isPhoneValid ? 'SĐT không hợp lệ (VD: 0901234567)' : '') : '';
+  // Luật ký tự giữ đúng bản backend, xem src/utils/input-validation.ts.
+  const emailIssue = validateEmail(email);
+  const fullNameIssue = validateFullName(fullName);
+  const phoneIssue = validatePhoneNumber(phone);
+
+  const isEmailValid = emailIssue === '';
+  const isPhoneValid = phoneIssue === '';
+  const isFullNameValid = fullNameIssue === '';
+
+  const emailError = touchedEmail ? emailIssue : '';
+  const fullNameError = touchedFullName ? fullNameIssue : '';
+  const phoneError = touchedPhone ? phoneIssue : '';
   const confirmError = touchedConfirm ? (password !== confirmPassword ? 'Mật khẩu xác nhận không khớp' : '') : '';
 
   const passwordRules = useMemo(() => {
@@ -109,12 +117,17 @@ export default function RegisterScreen() {
         role: 'customer',
       });
       navigation.reset({ index: 0, routes: [{ name: 'VerifyRegisterOtp', params: { email: trimmedEmail, password } }] });
-    } catch (error: any) {
-      const msg =
-        error?.response?.data?.message ||
-        error?.message ||
-        'Đăng ký thất bại. Vui lòng kiểm tra thông tin và thử lại.';
-      Alert.alert('Lỗi đăng ký', Array.isArray(msg) ? msg.join(', ') : msg);
+    } catch (error: unknown) {
+      // Phong bì lỗi của backend là `{ error: { message, details } }`, không có
+      // khoá `message` ở cấp ngoài, nên trước đây mọi lỗi validation đều rơi về
+      // câu chung chung.
+      Alert.alert(
+        'Lỗi đăng ký',
+        extractApiErrorMessage(
+          error,
+          'Đăng ký thất bại. Vui lòng kiểm tra thông tin và thử lại.',
+        ),
+      );
     } finally {
       setIsLoading(false);
     }
