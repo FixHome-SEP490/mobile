@@ -60,6 +60,7 @@ import {
   isLaborOnlyItems,
   REJECT_COST_ONLY_WARNING,
 } from './customer-additional-cost-decision';
+import { customerUnderRepairTask } from './customer-under-repair-task';
 
 type DetailRoute = RouteProp<RootStackParamList, 'CustomerOrderDetail'>;
 
@@ -364,6 +365,17 @@ export default function CustomerOrderDetailScreen() {
   const onDecideCancel = () => { decisionRef.current?.cancelConfirm(); };
   const onDecideSubmit = () => { void decisionRef.current?.submit(); };
   const sections = resolveOrderDetailSections(order);
+  const underRepairTask = customerUnderRepairTask(
+    order
+      ? {
+          status: order.status,
+          completionRequestedAt: order.completionRequestedAt,
+          historical: order.historical,
+          quotationStatus: order.quotation?.status,
+        }
+      : null,
+    costsState.requests,
+  );
   // P3 provenance clarification (display-only): the shown technician is the one
   // RECORDED on the order, which may be a previous tech while replacement is
   // underway. Name/phone stay visible; only a hedged note is added below.
@@ -484,6 +496,36 @@ export default function CustomerOrderDetailScreen() {
               <Text style={styles.meta}>Mô tả yêu cầu: {order.bookingDescription}</Text>
             )}
           </View>
+
+          {underRepairTask && (
+            <View
+              style={[
+                styles.card,
+                {
+                  borderWidth: 1,
+                  borderColor:
+                    underRepairTask.kind === 'additional_cost_pending'
+                      ? '#F59E0B'
+                      : '#BFDBFE',
+                  backgroundColor:
+                    underRepairTask.kind === 'additional_cost_pending'
+                      ? '#FFFBEB'
+                      : '#EFF6FF',
+                },
+              ]}
+            >
+              <Text style={[styles.meta, { fontWeight: '800', color: '#1D4ED8' }]}>
+                BƯỚC TIẾP THEO
+              </Text>
+              <Text style={styles.sectionTitle}>{underRepairTask.title}</Text>
+              <Text style={styles.meta}>{underRepairTask.detail}</Text>
+              {underRepairTask.kind === 'additional_cost_pending' && (
+                <Text style={[styles.meta, { fontWeight: '700', color: '#92400E' }]}>
+                  Phản hồi từng khoản trong mục “Chi phí phát sinh” bên dưới.
+                </Text>
+              )}
+            </View>
+          )}
 
           {sections.hasTechnician && (
             <View style={styles.card}>

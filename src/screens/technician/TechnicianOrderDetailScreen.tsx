@@ -304,6 +304,7 @@ export default function TechnicianOrderDetailScreen() {
           };
         },
         uploadAfter: (id, image) => ordersApi.uploadEvidenceAfter(id, image),
+        getEvidence: (id) => ordersApi.getEvidence(id),
         refreshEvidence: async () => {
           const latest = latestRef.current;
           if (latest.order && latest.order.id === latest.serviceOrderId) {
@@ -546,6 +547,7 @@ export default function TechnicianOrderDetailScreen() {
   const onPickAfterCamera = () => { void afterUploadRef.current?.pickFromCamera(); };
   const onPickAfterGallery = () => { void afterUploadRef.current?.pickFromGallery(); };
   const onUploadAfter = () => { void afterUploadRef.current?.upload(); };
+  const onReconcileAfter = () => { void afterUploadRef.current?.reconcile(); };
   const onDiscardAfterUpload = () => { afterUploadRef.current?.discard(); };
   const onQuoteField = {
     note: (value: string) => { quoteRef.current?.setNote(value); },
@@ -847,6 +849,83 @@ export default function TechnicianOrderDetailScreen() {
                 <>
                   <Text style={styles.sectionTitle}>Kiểm tra điều kiện bắt đầu sửa</Text>
                   {startRepairBlockers.map((blocker) => (
+                    <Text key={blocker} style={styles.jobMeta}>• {blocker}</Text>
+                  ))}
+                </>
+              )}
+            </View>
+          )}
+
+          {String(order.status).toUpperCase() === 'UNDER_REPAIR' && (
+            <View style={[styles.jobCard, styles.nextStepCard]}>
+              {/* K06_UNDER_REPAIR_NEXT_STEP */}
+              <Text style={styles.nextStepEyebrow}>BƯỚC TIẾP THEO</Text>
+              {order.completionRequestedAt ? (
+                <>
+                  <Text style={styles.sectionTitle}>Đã yêu cầu hoàn thành</Text>
+                  <Text style={styles.jobMeta}>
+                    Chờ khách nghiệm thu. Yêu cầu hoàn thành không đồng nghĩa PAID hoặc COMPLETED.
+                  </Text>
+                </>
+              ) : hasPendingCosts ? (
+                <>
+                  <Text style={styles.sectionTitle}>Chờ phản hồi chi phí phát sinh</Text>
+                  <Text style={styles.jobMeta}>
+                    Khách cần duyệt hoặc từ chối khoản phát sinh. Từ chối khoản này không đồng nghĩa từ chối báo giá ban đầu hay hủy ServiceOrder.
+                  </Text>
+                </>
+              ) : afterUploadState.needsVerify ? (
+                <>
+                  <Text style={styles.sectionTitle}>Xác minh ảnh AFTER</Text>
+                  <Text style={styles.jobMeta}>
+                    Không gửi ảnh lại. Chỉ GET bằng chứng mới được gỡ khóa lần tải trước.
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.uploadBtn, styles.nextStepAction]}
+                    onPress={onReconcileAfter}
+                    disabled={afterUploadState.busy}
+                    accessibilityRole="button"
+                    accessibilityLabel="Kiểm tra ảnh AFTER"
+                  >
+                    <Text style={styles.uploadBtnText}>Kiểm tra bằng chứng</Text>
+                  </TouchableOpacity>
+                </>
+              ) : typeof order.afterEvidenceCount !== 'number' || order.afterEvidenceCount < 1 ? (
+                <>
+                  <Text style={styles.sectionTitle}>Tải ảnh sau sửa chữa</Text>
+                  <Text style={styles.jobMeta}>
+                    Hãy tải bằng chứng AFTER. Số lượng tối thiểu thật vẫn do Backend cấu hình và kiểm tra khi yêu cầu hoàn thành.
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.uploadBtn, styles.nextStepAction]}
+                    onPress={onPickAfterCamera}
+                    disabled={afterUploadState.busy}
+                    accessibilityRole="button"
+                    accessibilityLabel="Chụp ảnh AFTER từ bước tiếp theo"
+                  >
+                    <Text style={styles.uploadBtnText}>Chụp ảnh AFTER</Text>
+                  </TouchableOpacity>
+                </>
+              ) : completionEligible ? (
+                <>
+                  <Text style={styles.sectionTitle}>Đủ điều kiện sơ bộ để yêu cầu hoàn thành</Text>
+                  <Text style={styles.jobMeta}>
+                    Backend vẫn kiểm tra số ảnh AFTER cấu hình, báo giá và mọi chi phí đang chờ.
+                  </Text>
+                  {__DEV__ ? (
+                    <Text style={styles.nextStepWait}>
+                      Dùng mục “Yêu cầu hoàn thành (đơn test)” bên dưới khi có scope kiểm thử phù hợp.
+                    </Text>
+                  ) : (
+                    <Text style={styles.nextStepWait}>
+                      Yêu cầu hoàn thành hiện bị khóa ở release build. Không tự bỏ __DEV__ và không tạo invoice ngoài scope được duyệt.
+                    </Text>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Text style={styles.sectionTitle}>Chưa sẵn sàng yêu cầu hoàn thành</Text>
+                  {completionBlockers.map((blocker) => (
                     <Text key={blocker} style={styles.jobMeta}>• {blocker}</Text>
                   ))}
                 </>
@@ -1290,6 +1369,22 @@ export default function TechnicianOrderDetailScreen() {
               <Text style={styles.jobMeta}>
                 Ảnh sau sửa chữa chỉ tải được khi đơn đang sửa và chưa yêu cầu hoàn thành.
               </Text>
+            ) : afterUploadState.needsVerify ? (
+              <View style={styles.evidenceError}>
+                <Text style={styles.jobMeta}>
+                  Lần tải ảnh AFTER trước đang chờ Backend xác minh. Không gửi POST lại.
+                </Text>
+                <TouchableOpacity
+                  onPress={onReconcileAfter}
+                  disabled={afterUploadState.busy}
+                  accessibilityRole="button"
+                  accessibilityLabel="Kiểm tra bằng chứng sau sửa chữa"
+                >
+                  <Text style={styles.retryText}>
+                    {afterUploadState.busy ? 'Đang kiểm tra...' : 'Kiểm tra bằng chứng'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             ) : afterUploadState.pending ? (
               <>
                 <Image
@@ -1348,9 +1443,14 @@ export default function TechnicianOrderDetailScreen() {
             {!!afterUploadState.error && (
               <View style={styles.evidenceError}>
                 <Text style={styles.jobMeta}>{afterUploadState.error}</Text>
-                {!!afterUploadState.pending && (
+                {!!afterUploadState.pending && !afterUploadState.needsVerify && (
                   <TouchableOpacity onPress={onUploadAfter} disabled={afterUploadState.busy} accessibilityRole="button">
                     <Text style={styles.retryText}>Thử tải lại</Text>
+                  </TouchableOpacity>
+                )}
+                {afterUploadState.needsVerify && (
+                  <TouchableOpacity onPress={onReconcileAfter} disabled={afterUploadState.busy} accessibilityRole="button">
+                    <Text style={styles.retryText}>Kiểm tra bằng chứng</Text>
                   </TouchableOpacity>
                 )}
               </View>
