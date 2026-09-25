@@ -237,6 +237,7 @@ export default function TechnicianOrderDetailScreen() {
           };
         },
         uploadBefore: (id, image) => ordersApi.uploadEvidenceBefore(id, image),
+        getEvidence: (id) => ordersApi.getEvidence(id),
         refreshEvidence: async () => {
           const latest = latestRef.current;
           if (latest.order && latest.order.id === latest.serviceOrderId) {
@@ -540,6 +541,7 @@ export default function TechnicianOrderDetailScreen() {
   const onPickCamera = () => { void uploadRef.current?.pickFromCamera(); };
   const onPickGallery = () => { void uploadRef.current?.pickFromGallery(); };
   const onUploadBefore = () => { void uploadRef.current?.upload(); };
+  const onReconcileBefore = () => { void uploadRef.current?.reconcile(); };
   const onDiscardUpload = () => { uploadRef.current?.discard(); };
   const onPickAfterCamera = () => { void afterUploadRef.current?.pickFromCamera(); };
   const onPickAfterGallery = () => { void afterUploadRef.current?.pickFromGallery(); };
@@ -783,6 +785,74 @@ export default function TechnicianOrderDetailScreen() {
               <Text style={styles.jobMeta}>Phạm vi: {order.scopeDescription}</Text>
             )}
           </View>
+
+          {String(order.status).toUpperCase() === 'EN_ROUTE' && (
+            <View style={[styles.jobCard, styles.nextStepCard]}>
+              <Text style={styles.nextStepEyebrow}>BƯỚC TIẾP THEO</Text>
+              {order.arrivalVerified !== true ? (
+                <>
+                  <Text style={styles.sectionTitle}>Xác minh đã đến nơi</Text>
+                  <Text style={styles.jobMeta}>
+                    Quay lại Công việc để check-in. Chỉ GET ServiceOrder có arrivalVerified=true mới xác nhận đã đến; EN_ROUTE một mình không đủ.
+                  </Text>
+                </>
+              ) : typeof order.beforeEvidenceCount !== 'number' || order.beforeEvidenceCount < 1 ? (
+                <>
+                  <Text style={styles.sectionTitle}>Tải ảnh trước sửa chữa</Text>
+                  <Text style={styles.jobMeta}>
+                    Backend đã xác minh check-in. Hãy tải bằng chứng BEFORE; số lượng tối thiểu cấu hình và đúng người tải vẫn do Backend kiểm tra khi bắt đầu sửa.
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.uploadBtn, styles.nextStepAction]}
+                    onPress={onPickCamera}
+                    disabled={uploadState.busy || uploadState.needsVerify}
+                    accessibilityRole="button"
+                    accessibilityLabel="Chụp ảnh trước sửa chữa ngay"
+                  >
+                    <Text style={styles.uploadBtnText}>Chụp ảnh BEFORE</Text>
+                  </TouchableOpacity>
+                </>
+              ) : String(order.pricingMode ?? '').toLowerCase() === 'inspection_required' &&
+                String(order.quotation?.status ?? '').toUpperCase() !== 'APPROVED' ? (
+                <>
+                  <Text style={styles.sectionTitle}>Báo giá khảo sát</Text>
+                  <Text style={styles.jobMeta}>
+                    Ảnh BEFORE đã có trên dữ liệu chi tiết. Dịch vụ khảo sát chỉ được bắt đầu sửa sau khi khách APPROVE báo giá.
+                  </Text>
+                  {String(order.quotation?.status ?? '').toUpperCase() === 'SENT' ? (
+                    <Text style={styles.nextStepWait}>Đang chờ khách duyệt báo giá.</Text>
+                  ) : (
+                    <Text style={styles.nextStepWait}>Tạo báo giá ở phần Báo giá bên dưới.</Text>
+                  )}
+                </>
+              ) : startRepairEligible ? (
+                <>
+                  <Text style={styles.sectionTitle}>Bắt đầu sửa chữa</Text>
+                  <Text style={styles.jobMeta}>
+                    {String(order.pricingMode ?? '').toLowerCase() === 'fixed_price'
+                      ? 'Dịch vụ giá cố định — không cần báo giá. Backend vẫn kiểm tra toàn bộ điều kiện khi gửi.'
+                      : 'Báo giá khảo sát đã được khách duyệt. Backend vẫn là nguồn quyết định cuối cùng.'}
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.uploadBtn, styles.nextStepAction]}
+                    onPress={onStartRepairConfirm}
+                    disabled={startRepairState.busy || startRepairState.needsVerify}
+                    accessibilityRole="button"
+                    accessibilityLabel="Bắt đầu sửa chữa từ bước tiếp theo"
+                  >
+                    <Text style={styles.uploadBtnText}>Bắt đầu sửa chữa</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.sectionTitle}>Kiểm tra điều kiện bắt đầu sửa</Text>
+                  {startRepairBlockers.map((blocker) => (
+                    <Text key={blocker} style={styles.jobMeta}>• {blocker}</Text>
+                  ))}
+                </>
+              )}
+            </View>
+          )}
 
           <View style={styles.jobCard}>
             <Text style={styles.sectionTitle}>Chi phí</Text>
@@ -1126,6 +1196,22 @@ export default function TechnicianOrderDetailScreen() {
             <Text style={styles.sectionTitle}>Tải ảnh trước sửa chữa</Text>
             {!canUploadBefore ? (
               <Text style={styles.jobMeta}>Check-in hợp lệ trước khi tải ảnh.</Text>
+            ) : uploadState.needsVerify ? (
+              <View style={styles.evidenceError}>
+                <Text style={styles.jobMeta}>
+                  Lần tải ảnh trước đang chờ Backend xác minh. Không gửi POST lại.
+                </Text>
+                <TouchableOpacity
+                  onPress={onReconcileBefore}
+                  disabled={uploadState.busy}
+                  accessibilityRole="button"
+                  accessibilityLabel="Kiểm tra bằng chứng trước sửa chữa"
+                >
+                  <Text style={styles.retryText}>
+                    {uploadState.busy ? 'Đang kiểm tra...' : 'Kiểm tra bằng chứng'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             ) : uploadState.pending ? (
               <>
                 <Image
@@ -1184,9 +1270,14 @@ export default function TechnicianOrderDetailScreen() {
             {!!uploadState.error && (
               <View style={styles.evidenceError}>
                 <Text style={styles.jobMeta}>{uploadState.error}</Text>
-                {!!uploadState.pending && (
+                {!!uploadState.pending && !uploadState.needsVerify && (
                   <TouchableOpacity onPress={onUploadBefore} disabled={uploadState.busy} accessibilityRole="button">
                     <Text style={styles.retryText}>Thử tải lại</Text>
+                  </TouchableOpacity>
+                )}
+                {uploadState.needsVerify && (
+                  <TouchableOpacity onPress={onReconcileBefore} disabled={uploadState.busy} accessibilityRole="button">
+                    <Text style={styles.retryText}>Kiểm tra bằng chứng</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -1692,6 +1783,30 @@ const getStyles = (colors: any) => StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
+  },
+  nextStepCard: {
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    backgroundColor: '#EFF6FF',
+  },
+  nextStepEyebrow: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1D4ED8',
+    letterSpacing: 0.6,
+  },
+  nextStepAction: {
+    flex: 0,
+    alignSelf: 'stretch',
+    backgroundColor: '#2563EB',
+    marginTop: 6,
+  },
+  nextStepWait: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#92400E',
+    fontWeight: '700',
+    marginTop: 4,
   },
   badge: {
     alignSelf: 'flex-start',

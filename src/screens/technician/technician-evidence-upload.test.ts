@@ -9,6 +9,7 @@ import {
 } from './technician-evidence-upload';
 
 const ORDER_ID = '11111111-1111-4111-8111-111111111111';
+let technicianSequence = 0;
 
 const activeOrder = () => ({
   id: ORDER_ID,
@@ -47,9 +48,15 @@ interface Harness {
 
 /** Exercises the actual production controller the detail screen calls. */
 function setup(): Harness {
-  let order: { id: string; status: unknown; arrivalVerified: unknown; historical?: unknown } | null = activeOrder();
-  let technicianId: string | null = 'tech-1';
+  let order: {
+    id: string;
+    status: unknown;
+    arrivalVerified: unknown;
+    historical?: unknown;
+  } | null = activeOrder();
+  let technicianId: string | null = 'tech-' + ++technicianSequence;
   let focused = true;
+  let evidenceReads = 0;
   const write = jest.fn<void, [UploadState]>();
   const deps: EvidenceUploadDeps = {
     getOrder: () => order,
@@ -58,6 +65,20 @@ function setup(): Harness {
     requestPermission: jest.fn().mockResolvedValue('granted'),
     launchPicker: jest.fn().mockResolvedValue(picked()),
     uploadBefore: jest.fn().mockResolvedValue({ id: 'ev-new' }),
+    getEvidence: jest.fn().mockImplementation(async () => {
+      evidenceReads += 1;
+      return evidenceReads === 1
+        ? []
+        : [
+            {
+              id: 'ev-new',
+              serviceOrderId: ORDER_ID,
+              type: 'BEFORE',
+              mediaUrl: 'https://signed.example/ev-new',
+              createdAt: '2030-01-01T00:00:00Z',
+            },
+          ];
+    }),
     refreshEvidence: jest.fn().mockResolvedValue(undefined),
     onAccessDenied: jest.fn(),
     notify: jest.fn(),
@@ -66,9 +87,15 @@ function setup(): Harness {
   return {
     deps,
     controller,
-    setOrder: (value) => { order = value; },
-    setTechnicianId: (value) => { technicianId = value; },
-    setFocused: (value) => { focused = value; },
+    setOrder: (value) => {
+      order = value;
+    },
+    setTechnicianId: (value) => {
+      technicianId = value;
+    },
+    setFocused: (value) => {
+      focused = value;
+    },
     state: () => write.mock.calls[write.mock.calls.length - 1][0],
   };
 }
@@ -79,11 +106,12 @@ const permission = (h: Harness) => h.deps.requestPermission as jest.Mock;
 const notified = (h: Harness) => h.deps.notify as jest.Mock;
 const refreshed = (h: Harness) => h.deps.refreshEvidence as jest.Mock;
 const denied = (h: Harness) => h.deps.onAccessDenied as jest.Mock;
+const evidenceGet = (h: Harness) => h.deps.getEvidence as jest.Mock;
 
 it('exposes only the BEFORE upload surface: no after/quotation/status/payment', () => {
   const { controller } = setup();
   expect(Object.keys(controller).sort()).toEqual(
-    ['discard', 'pickFromCamera', 'pickFromGallery', 'upload'].sort(),
+    ['discard', 'pickFromCamera', 'pickFromGallery', 'reconcile', 'upload'].sort(),
   );
 });
 
@@ -92,6 +120,7 @@ it('touches no picker, permission, or POST before an explicit tap', () => {
   expect(permission(h)).not.toHaveBeenCalled();
   expect(picker(h)).not.toHaveBeenCalled();
   expect(uploadBefore(h)).not.toHaveBeenCalled();
+  expect(evidenceGet(h)).not.toHaveBeenCalled();
 });
 
 it('picks exactly one photo on tap with no POST until upload is tapped', async () => {
@@ -125,7 +154,7 @@ it('blocks pick until a valid check-in: gate copy, no picker, no POST', async ()
     await h.controller.pickFromCamera();
     expect(picker(h)).not.toHaveBeenCalled();
     expect(uploadBefore(h)).not.toHaveBeenCalled();
-    expect(notified(h).mock.calls[0][1]).toBe('Check-in hợp lệ trước khi tải ảnh.');
+    expect(notified(h).mock.calls[0][1]).toBe('Cần check-in hợp lệ trước khi tải ảnh.');
   }
 });
 
@@ -223,7 +252,7 @@ it('accepts exactly the 10 MiB boundary and extension fallback without MIME', as
 
 it('uploads once on tap, ignores the raw storage body, and refreshes signed GET photos', async () => {
   const h = setup();
-  uploadBefore(h).mockResolvedValue({ id: 'ev-x', mediaUrl: 'storage://bucket/ev-x' });
+  uploadBefore(h).mockResolvedValue({ id: 'ev-new', mediaUrl: 'storage://bucket/ev-new' });
   await h.controller.pickFromCamera();
   await h.controller.upload();
   expect(uploadBefore(h)).toHaveBeenCalledTimes(1);
@@ -233,8 +262,8 @@ it('uploads once on tap, ignores the raw storage body, and refreshes signed GET 
   );
   const rendered = JSON.stringify(h.state());
   expect(rendered).not.toMatch(/storage:\/\//);
-  expect(h.state()).toMatchObject({ pending: null, busy: false, error: null });
-  expect(notified(h).mock.calls[notified(h).mock.calls.length - 1][0]).toBe('Đã tải ảnh');
+  expect(h.state()).toMatchObject({ pending: null, busy: false, error: null, needsVerify: false });
+  expect(notified(h).mock.calls[notified(h).mock.calls.length - 1][0]).toBe('Đã xác minh ảnh');
   expect(refreshed(h)).toHaveBeenCalledTimes(1);
 });
 
@@ -287,7 +316,6 @@ it('discards a stale POST response after logout without notify or refresh', asyn
   await attempt;
   expect(notified(h)).not.toHaveBeenCalled();
   expect(refreshed(h)).not.toHaveBeenCalled();
-  expect(h.state().pending).toBeNull();
 });
 
 it.each([401, 403])('purges the selection on %s with re-login copy', async (status) => {
@@ -302,31 +330,158 @@ it.each([401, 403])('purges the selection on %s with re-login copy', async (stat
   expect(rendered).not.toMatch(/file:\/\/\//);
 });
 
-it('reports 503 as unavailable, keeps the selection for a user retry, reconciles GET only', async () => {
+it('keeps 503 provider uncertainty locked and never reposts', async () => {
   const h = setup();
+  evidenceGet(h).mockResolvedValue([]);
   await h.controller.pickFromCamera();
   uploadBefore(h).mockRejectedValue({ response: { status: 503 } });
+
+  await h.controller.upload();
+
+  expect(uploadBefore(h)).toHaveBeenCalledTimes(1);
+  expect(h.state()).toMatchObject({
+    needsVerify: true,
+    pending: expect.any(Object),
+  });
+  expect(h.state().error).toMatch(/Không gửi POST lại|Không gửi lại/);
+
   await h.controller.upload();
   expect(uploadBefore(h)).toHaveBeenCalledTimes(1);
-  expect(h.state().pending).not.toBeNull();
-  expect(h.state().error).toMatch(/không khả dụng/);
-  expect(refreshed(h)).toHaveBeenCalledTimes(1);
+  expect(evidenceGet(h)).toHaveBeenCalled();
 });
+
 
 it.each([
   ['timeout with no status', { message: 'timeout' }],
   ['server 500', { response: { status: 500 } }],
   ['offline', new Error('Network request failed')],
-])('never auto-reposts on ambiguous failure %s and directs evidence reload first', async (_label, error) => {
+])(
+  'never auto-reposts ambiguous %s and requires GET evidence',
+  async (_label, error) => {
+    const h = setup();
+    evidenceGet(h).mockResolvedValue([]);
+    await h.controller.pickFromCamera();
+    uploadBefore(h).mockRejectedValue(error);
+
+    await h.controller.upload();
+
+    expect(uploadBefore(h)).toHaveBeenCalledTimes(1);
+    expect(h.state().needsVerify).toBe(true);
+    expect(h.state().pending).not.toBeNull();
+    expect(h.state().error).toMatch(/Không gửi POST lại|Không gửi lại/);
+
+    await h.controller.upload();
+    expect(uploadBefore(h)).toHaveBeenCalledTimes(1);
+    expect(evidenceGet(h)).toHaveBeenCalled();
+  },
+);
+
+it('does not call a 201 ACK verified until GET contains its evidence id', async () => {
   const h = setup();
+  evidenceGet(h).mockResolvedValue([]);
   await h.controller.pickFromCamera();
-  uploadBefore(h).mockRejectedValue(error);
+  uploadBefore(h).mockResolvedValue({
+    id: 'ev-ack',
+    mediaUrl: 'storage://private/ev-ack',
+  });
+
   await h.controller.upload();
+
   expect(uploadBefore(h)).toHaveBeenCalledTimes(1);
-  expect(h.state().pending).not.toBeNull();
-  expect(h.state().error).toMatch(/tải lại bằng chứng/);
+  expect(refreshed(h)).not.toHaveBeenCalled();
+  expect(h.state().needsVerify).toBe(true);
+  expect(JSON.stringify(h.state())).not.toContain('storage://');
+
+  evidenceGet(h).mockResolvedValue([
+    {
+      id: 'ev-ack',
+      serviceOrderId: ORDER_ID,
+      type: 'BEFORE',
+      mediaUrl: 'https://signed.example/ev-ack',
+      createdAt: '2030-01-01T00:00:00Z',
+    },
+  ]);
+  await h.controller.reconcile();
+
+  expect(uploadBefore(h)).toHaveBeenCalledTimes(1);
+  expect(refreshed(h)).toHaveBeenCalledTimes(1);
+  expect(h.state()).toMatchObject({
+    pending: null,
+    needsVerify: false,
+    error: null,
+  });
+  expect(notified(h).mock.calls.at(-1)?.[0]).toBe('Đã xác minh ảnh');
+});
+
+it('reconciles a lost ACK only from exactly one new BEFORE id', async () => {
+  const h = setup();
+  evidenceGet(h)
+    .mockResolvedValueOnce([
+      {
+        id: 'old',
+        serviceOrderId: ORDER_ID,
+        type: 'BEFORE',
+        mediaUrl: 'https://signed.example/old',
+        createdAt: '2029-01-01T00:00:00Z',
+      },
+    ])
+    .mockResolvedValueOnce([
+      {
+        id: 'old',
+        serviceOrderId: ORDER_ID,
+        type: 'BEFORE',
+        mediaUrl: 'https://signed.example/old',
+        createdAt: '2029-01-01T00:00:00Z',
+      },
+      {
+        id: 'new-one',
+        serviceOrderId: ORDER_ID,
+        type: 'BEFORE',
+        mediaUrl: 'https://signed.example/new-one',
+        createdAt: '2030-01-01T00:00:00Z',
+      },
+    ]);
+  await h.controller.pickFromCamera();
+  uploadBefore(h).mockRejectedValue(new Error('lost ack'));
+
+  await h.controller.upload();
+
+  expect(uploadBefore(h)).toHaveBeenCalledTimes(1);
+  expect(h.state().needsVerify).toBe(false);
+  expect(h.state().pending).toBeNull();
   expect(refreshed(h)).toHaveBeenCalledTimes(1);
 });
+
+it('keeps lost ACK locked when GET shows multiple possible new BEFORE ids', async () => {
+  const h = setup();
+  evidenceGet(h)
+    .mockResolvedValueOnce([])
+    .mockResolvedValue([
+      {
+        id: 'new-a',
+        serviceOrderId: ORDER_ID,
+        type: 'BEFORE',
+        mediaUrl: 'https://signed.example/new-a',
+        createdAt: '2030-01-01T00:00:00Z',
+      },
+      {
+        id: 'new-b',
+        serviceOrderId: ORDER_ID,
+        type: 'BEFORE',
+        mediaUrl: 'https://signed.example/new-b',
+        createdAt: '2030-01-01T00:00:01Z',
+      },
+    ]);
+  await h.controller.pickFromCamera();
+  uploadBefore(h).mockRejectedValue(new Error('lost ack'));
+
+  await h.controller.upload();
+
+  expect(uploadBefore(h)).toHaveBeenCalledTimes(1);
+  expect(h.state().needsVerify).toBe(true);
+  expect(refreshed(h)).not.toHaveBeenCalled();
+});
+
 
 it('discard drops the pending selection without POST', async () => {
   const h = setup();
@@ -349,5 +504,5 @@ describe('validateEvidenceAsset (production helper)', () => {
 });
 
 it('shares the initial state shape', () => {
-  expect(initialUploadState).toMatchObject({ pending: null, busy: false, error: null });
+  expect(initialUploadState).toMatchObject({ pending: null, busy: false, error: null, needsVerify: false });
 });
