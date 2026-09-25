@@ -10,6 +10,7 @@ import {
   StatusBar,
   Image,
   Alert,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -67,6 +68,11 @@ import {
   initialCustomerConfirmCompletionState,
   CUSTOMER_CONFIRM_COMPLETION_COPY,
 } from './customer-confirm-completion';
+import {
+  createCustomerOrderReviewController,
+  customerReviewTarget,
+  initialCustomerOrderReviewState,
+} from './customer-order-review';
 
 type DetailRoute = RouteProp<RootStackParamList, 'CustomerOrderDetail'>;
 
@@ -89,6 +95,7 @@ export default function CustomerOrderDetailScreen() {
   const [costsState, setCostsState] = useState(initialAdditionalCostsState);
   const [costDecisionState, setCostDecisionState] = useState(initialCostDecisionState);
   const [confirmCompletionState, setConfirmCompletionState] = useState(initialCustomerConfirmCompletionState);
+  const [reviewState, setReviewState] = useState(initialCustomerOrderReviewState);
   const latestRef = useRef({ order, serviceOrderId });
   useEffect(() => {
     // Backstop only: every loader publish already mirrors synchronously via
@@ -227,6 +234,37 @@ export default function CustomerOrderDetailScreen() {
     };
   }, []);
 
+  // K09-A server-backed review: only a real COMPLETED order is eligible.
+  // GET existing review is mandatory before any create POST; unknown POST
+  // outcomes stay locked until canonical GET proves the review.
+  const reviewRef = useRef<ReturnType<typeof createCustomerOrderReviewController> | null>(null);
+  useEffect(() => {
+    reviewRef.current = createCustomerOrderReviewController(
+      {
+        getOrder: () => {
+          const latest = latestRef.current;
+          if (!latest.order || latest.order.id !== latest.serviceOrderId) return null;
+          return {
+            id: latest.order.id,
+            status: latest.order.status,
+            historical: latest.order.historical,
+          };
+        },
+        getCustomerId: () => customerBookingsUserId(useAuthStore.getState()),
+        isFocused: () => focusAliveRef.current,
+        getReview: (id) => ordersApi.getOrderReview(id),
+        submitReview: (id, body) => ordersApi.submitReview(id, body),
+        onAccessDenied: () => { void loaderRef.current?.refresh(true); },
+        notify: (title, message) => Alert.alert(title, message),
+      },
+      setReviewState,
+    );
+
+    return () => {
+      reviewRef.current = null;
+    };
+  }, []);
+
   // P3B7 customer quotation decision: created in an effect so no ref is read
   // during render. Reuses the existing decision POST clients; every gate
   // lives in the production controller.
@@ -276,6 +314,7 @@ export default function CustomerOrderDetailScreen() {
       costDecisionRef.current?.reset();
       decisionRef.current?.reset();
       confirmCompletionRef.current?.reset();
+      reviewRef.current?.reset();
     };
   }, [serviceOrderId]));
   const isEvidenceReadable = (target: string) => {
@@ -333,6 +372,26 @@ export default function CustomerOrderDetailScreen() {
   // K07 confirmation state belongs to one focused customer/order.
   useEffect(() => {
     if (!order || order.id !== serviceOrderId) confirmCompletionRef.current?.reset();
+  }, [order, serviceOrderId]);
+
+  // K09-A review follows only the same authorized COMPLETED detail.
+  useEffect(() => {
+    const controller = reviewRef.current;
+    if (!controller) return;
+
+    const target = order && order.id === serviceOrderId
+      ? customerReviewTarget({
+          id: order.id,
+          status: order.status,
+          historical: order.historical,
+        })
+      : null;
+
+    if (target) {
+      void controller.load();
+    } else {
+      controller.reset();
+    }
   }, [order, serviceOrderId]);
 
   // P3B7: the decision selection belongs to one focused customer order.
@@ -420,12 +479,23 @@ export default function CustomerOrderDetailScreen() {
   const onConfirmCompletionCancel = () => { confirmCompletionRef.current?.cancelConfirm(); };
   const onConfirmCompletionSubmit = () => { void confirmCompletionRef.current?.submit(); };
   const onConfirmCompletionReconcile = () => { void confirmCompletionRef.current?.reconcile(); };
+  const onReviewRating = (rating: number) => { reviewRef.current?.setRating(rating); };
+  const onReviewComment = (comment: string) => { reviewRef.current?.setComment(comment); };
+  const onReviewSubmit = () => { void reviewRef.current?.submit(); };
+  const onReviewReconcile = () => { void reviewRef.current?.reconcile(); };
   const onToggleWarranty = (itemId: string) => { decisionRef.current?.toggleWarranty(itemId); };
   const onDecideApprove = () => { decisionRef.current?.requestConfirm('approve'); };
   const onDecideReject = () => { decisionRef.current?.requestConfirm('reject'); };
   const onDecideCancel = () => { decisionRef.current?.cancelConfirm(); };
   const onDecideSubmit = () => { void decisionRef.current?.submit(); };
   const sections = resolveOrderDetailSections(order);
+  const reviewEligible = order && order.id === serviceOrderId
+    ? customerReviewTarget({
+        id: order.id,
+        status: order.status,
+        historical: order.historical,
+      })
+    : null;
   const confirmCompletionGate = order && order.id === serviceOrderId
     ? {
         id: order.id,
@@ -963,6 +1033,118 @@ export default function CustomerOrderDetailScreen() {
               </View>
             )}
           </View>
+
+          {reviewEligible && (
+            <View style={styles.card}>
+              {/* K09_A_SERVER_REVIEW */}
+              <Text style={styles.sectionTitle}>Đánh giá dịch vụ</Text>
+              {reviewState.loading && !reviewState.review ? (
+                <Text style={styles.meta}>Đang kiểm tra đánh giá hiện có...</Text>
+              ) : reviewState.review ? (
+                <>
+                  <Text style={[styles.meta, { fontWeight: '700', color: '#047857' }]}>
+                    Đã đánh giá {reviewState.review.rating}/5 sao
+                  </Text>
+                  {!!reviewState.review.comment && (
+                    <Text style={styles.meta}>{reviewState.review.comment}</Text>
+                  )}
+                  {!!reviewState.review.createdAt && (
+                    <Text style={styles.meta}>
+                      Gửi lúc: {new Date(reviewState.review.createdAt).toLocaleString('vi-VN')}
+                    </Text>
+                  )}
+                </>
+              ) : reviewState.needsVerify ? (
+                <View style={styles.evidenceError}>
+                  <Text style={styles.meta}>
+                    Kết quả gửi đánh giá trước chưa xác định. Không gửi POST lại.
+                  </Text>
+                  <TouchableOpacity
+                    onPress={onReviewReconcile}
+                    disabled={reviewState.busy}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.retryText}>
+                      {reviewState.busy ? 'Đang kiểm tra...' : 'Kiểm tra đánh giá'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  <Text style={styles.meta}>
+                    Chỉ đơn COMPLETED thật mới được đánh giá. Mỗi ServiceOrder chỉ có một đánh giá.
+                  </Text>
+                  <View style={[styles.decisionBtnRow, { flexWrap: 'wrap' }]}>
+                    {[1, 2, 3, 4, 5].map((rating) => (
+                      <TouchableOpacity
+                        key={rating}
+                        onPress={() => onReviewRating(rating)}
+                        disabled={reviewState.busy}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: reviewState.rating === rating }}
+                        accessibilityLabel={String(rating) + ' sao'}
+                        style={[
+                          styles.decisionBtn,
+                          {
+                            minWidth: 48,
+                            backgroundColor:
+                              reviewState.rating === rating ? '#F59E0B' : '#F1F5F9',
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.decisionBtnText,
+                            { color: reviewState.rating === rating ? '#FFFFFF' : '#334155' },
+                          ]}
+                        >
+                          {rating}★
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TextInput
+                    value={reviewState.comment}
+                    onChangeText={onReviewComment}
+                    editable={!reviewState.busy}
+                    maxLength={2000}
+                    multiline
+                    placeholder="Nhận xét thêm (không bắt buộc)"
+                    placeholderTextColor="#94A3B8"
+                    style={{
+                      minHeight: 88,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      borderRadius: 10,
+                      padding: 10,
+                      color: colors.text,
+                      backgroundColor: colors.surface,
+                      textAlignVertical: 'top',
+                    }}
+                    accessibilityLabel="Nhận xét đánh giá dịch vụ"
+                  />
+                  <TouchableOpacity
+                    style={[styles.decisionBtn, { backgroundColor: '#2563EB', alignSelf: 'flex-start' }]}
+                    onPress={onReviewSubmit}
+                    disabled={reviewState.busy}
+                    accessibilityRole="button"
+                    accessibilityLabel="Gửi đánh giá dịch vụ"
+                  >
+                    {reviewState.busy ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <Text style={styles.decisionBtnText}>Gửi đánh giá</Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+              {!!reviewState.error && (
+                <Text style={[styles.meta, { color: '#B91C1C' }]}>
+                  {reviewState.error}
+                </Text>
+              )}
+            </View>
+          )}
 
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Chi phí phát sinh</Text>
