@@ -11,7 +11,6 @@ import {
   Image,
   Dimensions,
   StatusBar,
-  Alert,
   FlatList,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -378,7 +377,7 @@ export default function CustomerHomeScreen() {
         <TouchableOpacity
           style={styles.promoBannerContainer}
           activeOpacity={0.9}
-          onPress={() => Alert.alert('Ưu đãi FixHome', 'Nhập mã FIXHOME30 khi đặt lịch để giảm 30%!')}
+          onPress={() => navigation.navigate('CustomerServices')}
         >
           <LinearGradient
             colors={[colors.text, '#1E293B', colors.primary]}
@@ -390,10 +389,10 @@ export default function CustomerHomeScreen() {
               <View style={styles.promoTag}>
                 <Text style={styles.promoTagText}>ĐẶT THỢ NGAY</Text>
               </View>
-              <Text style={styles.promoTitle}>Giảm 30% đơn đầu tiên</Text>
-              <Text style={styles.promoSubtitle}>Bảo hành sửa chữa 30 ngày an tâm</Text>
+              <Text style={styles.promoTitle}>Khám phá dịch vụ FixHome</Text>
+              <Text style={styles.promoSubtitle}>Xem dịch vụ và thông tin giá đang có trên hệ thống</Text>
               <View style={styles.promoButton}>
-                <Text style={styles.promoButtonText}>Tham gia ngay &gt;</Text>
+                <Text style={styles.promoButtonText}>Xem dịch vụ &gt;</Text>
               </View>
             </View>
 
@@ -419,8 +418,8 @@ export default function CustomerHomeScreen() {
           <View style={styles.trustDivider} />
           <View style={styles.trustItem}>
             <Ionicons name="ribbon-outline" size={20} color={colors.primary} />
-            <Text style={styles.trustTitle}>Bảo hành 30 ngày</Text>
-            <Text style={styles.trustDesc}>Hỗ trợ tận tâm</Text>
+            <Text style={styles.trustTitle}>Theo dõi rõ ràng</Text>
+            <Text style={styles.trustDesc}>Trạng thái theo từng đơn</Text>
           </View>
         </View>
 
