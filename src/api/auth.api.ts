@@ -1,6 +1,7 @@
 // src/api/auth.api.ts
 import apiClient from './client';
 import { storageService } from '../services/storage.service';
+import { useAuthStore } from '../store/auth.store';
 import type {
   UserInfo,
   RegisterResponse,
@@ -43,6 +44,7 @@ function unwrap<T>(payload: { data: T } | T): T {
 
 export const authApi = {
   async login(data: LoginRequest): Promise<AuthResponse> {
+    useAuthStore.getState().beginSessionTransition();
     const res = await apiClient.post<{ data: AuthResponse } | AuthResponse>(
       '/auth/login',
       { identifier: data.email.trim(), password: data.password },
@@ -63,6 +65,7 @@ export const authApi = {
   },
 
   async verifyRegisterOtp(email: string, otp: string): Promise<AuthResponse> {
+    useAuthStore.getState().beginSessionTransition();
     const res = await apiClient.post<{ data: AuthResponse } | AuthResponse>(
       '/auth/verify-register-otp',
       { email, otp },
@@ -116,6 +119,7 @@ export const authApi = {
   },
 
   async logout(): Promise<void> {
+    useAuthStore.getState().beginSessionTransition();
     try {
       const refreshToken = await storageService.getRefreshToken();
       await apiClient.post('/auth/logout', { refreshToken });
