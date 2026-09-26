@@ -26,6 +26,7 @@ import {
   GoogleSignInCancelled,
   startGoogleSignIn,
 } from '../../services/google-auth.service';
+import { extractApiErrorMessage } from '../../utils/input-validation';
 
 export default function LoginScreen() {
   const { colors, spacing, fontSize, isDark } = useAppTheme();
@@ -59,12 +60,13 @@ export default function LoginScreen() {
       }else{
         navigation.reset({ index: 0, routes: [{ name: 'TechnicianMain' }] });
       }
-    } catch (err: any) {
-      const message =
-        err?.response?.data?.message ||
-        err?.message ||
-        'Đăng nhập thất bại. Vui lòng thử lại.';
-      setError(Array.isArray(message) ? message.join(', ') : message);
+    } catch (err: unknown) {
+      // `data.message` không tồn tại trong phong bì lỗi của backend, nên nhánh
+      // cũ luôn rơi xuống `err.message` của axios và hiện ra cho người dùng câu
+      // "Request failed with status code 401" thay vì lý do thật.
+      setError(
+        extractApiErrorMessage(err, 'Đăng nhập thất bại. Vui lòng thử lại.'),
+      );
     } finally {
       setLoading(false);
     }
