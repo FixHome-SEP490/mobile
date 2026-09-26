@@ -19,6 +19,13 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList, RootStackParamList } from '../../types';
 import { authApi } from '../../api/auth.api';
+import { useAuthStore } from '../../store';
+import { UserRole } from '../../types';
+import GoogleSignInButton from '../../components/GoogleSignInButton';
+import {
+  GoogleSignInCancelled,
+  startGoogleSignIn,
+} from '../../services/google-auth.service';
 import {
   extractApiErrorMessage,
   validateEmail,
@@ -90,6 +97,47 @@ export default function RegisterScreen() {
   const strengthScore = Object.values(passwordRules).filter(Boolean).length;
   const barColors = [colors.error, '#F97316', '#EAB308', '#84CC16', colors.success];
   const [isLoading, setIsLoading] = useState(false);
+
+  const { setAuth } = useAuthStore();
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  /**
+   * Đăng ký bằng Google không đi qua bước OTP, vì Google đã xác minh email rồi.
+   * Người dùng vào thẳng ứng dụng.
+   */
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    try {
+      const code = await startGoogleSignIn();
+      const result = await authApi.exchangeGoogleCode(code);
+      setAuth(result.accessToken, result.user);
+      navigation.reset({
+        index: 0,
+        routes: [
+          {
+            name:
+              result.user.role === UserRole.CUSTOMER
+                ? 'CustomerMain'
+                : 'TechnicianMain',
+          },
+        ],
+      });
+    } catch (err: unknown) {
+      if (err instanceof GoogleSignInCancelled) return;
+      const envelope = (
+        err as { response?: { data?: { error?: { message?: string } } } }
+      )?.response?.data?.error?.message;
+      Alert.alert(
+        'Lỗi đăng ký',
+        envelope ||
+          (err instanceof Error
+            ? err.message
+            : 'Đăng ký bằng Google thất bại. Vui lòng thử lại.'),
+      );
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const handleRegister = async () => {
     setTouchedEmail(true);
@@ -308,7 +356,20 @@ export default function RegisterScreen() {
               <Text style={styles.registerBtnText}>{isLoading ? 'ĐANG ĐĂNG KÝ...' : 'ĐĂNG KÝ'}</Text>
             </TouchableOpacity>
 
-            <View style={styles.loginRow}>
+            <View style={styles.googleDividerRow}>
+              <View style={styles.googleDividerLine} />
+              <Text style={styles.googleDividerText}>HOẶC</Text>
+              <View style={styles.googleDividerLine} />
+            </View>
+
+            <GoogleSignInButton
+              onPress={() => void handleGoogleSignIn()}
+              loading={googleLoading}
+              disabled={isLoading}
+              label="Đăng ký với Google"
+            />
+
+            <View style={[styles.loginRow, { marginTop: 20 }]}>
               <Text style={styles.loginText}>Đã có tài khoản? </Text>
               <TouchableOpacity onPress={() => navigation.navigate('Login')}>
                 <Text style={styles.loginLink}>Đăng nhập</Text>
@@ -469,6 +530,24 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  googleDividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  googleDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  googleDividerText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    color: colors.textSecondary,
   },
   loginRow: {
     flexDirection: 'row',

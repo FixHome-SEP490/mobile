@@ -21,6 +21,11 @@ import { useAuthStore } from '../../store';
 import { UserRole } from '../../types';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { authApi } from '../../api/auth.api';
+import GoogleSignInButton from '../../components/GoogleSignInButton';
+import {
+  GoogleSignInCancelled,
+  startGoogleSignIn,
+} from '../../services/google-auth.service';
 import { extractApiErrorMessage } from '../../utils/input-validation';
 
 export default function LoginScreen() {
@@ -64,6 +69,44 @@ export default function LoginScreen() {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  /** Sau khi có phiên thì đi tiếp y hệt đăng nhập bằng mật khẩu. */
+  const goAfterLogin = (role: UserRole) => {
+    navigation.reset({
+      index: 0,
+      routes: [
+        { name: role === UserRole.CUSTOMER ? 'CustomerMain' : 'TechnicianMain' },
+      ],
+    });
+  };
+
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    setError(null);
+    try {
+      const code = await startGoogleSignIn();
+      const result = await authApi.exchangeGoogleCode(code);
+      setAuth(result.accessToken, result.user);
+      goAfterLogin(result.user.role);
+    } catch (err: unknown) {
+      // Người dùng tự bấm quay lại thì không phải lỗi, đừng doạ họ bằng thông
+      // báo đỏ.
+      if (err instanceof GoogleSignInCancelled) return;
+      const envelope = (
+        err as { response?: { data?: { error?: { message?: string } } } }
+      )?.response?.data?.error?.message;
+      setError(
+        envelope ||
+          (err instanceof Error
+            ? err.message
+            : 'Đăng nhập bằng Google thất bại. Vui lòng thử lại.'),
+      );
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -157,7 +200,19 @@ export default function LoginScreen() {
               )}
             </TouchableOpacity>
 
-            <View style={styles.registerRow}>
+            <View style={styles.dividerRow}>
+              <View style={styles.lineDivider} />
+              <Text style={styles.dividerText}>HOẶC</Text>
+              <View style={styles.lineDivider} />
+            </View>
+
+            <GoogleSignInButton
+              onPress={() => void handleGoogleSignIn()}
+              loading={googleLoading}
+              disabled={loading}
+            />
+
+            <View style={[styles.registerRow, { marginTop: 20 }]}>
               <Text style={styles.registerText}>Chưa có tài khoản? </Text>
               <TouchableOpacity onPress={() => navigation.navigate('Register')}>
                 <Text style={styles.registerLink}>Đăng ký ngay</Text>

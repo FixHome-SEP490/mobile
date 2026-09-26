@@ -54,6 +54,23 @@ export const authApi = {
     return result;
   },
 
+  /**
+   * Bước hai của đăng nhập Google: đổi mã bàn giao lấy phiên thật.
+   *
+   * Mã bàn giao chỉ sống 60 giây và đi qua thanh địa chỉ trình duyệt; token
+   * thật chỉ xuất hiện ở lời gọi POST này rồi vào thẳng expo-secure-store.
+   */
+  async exchangeGoogleCode(code: string): Promise<AuthResponse> {
+    const res = await apiClient.post<{ data: AuthResponse } | AuthResponse>(
+      '/auth/google/exchange',
+      { code, deviceInfo: 'Mobile - FixHome app' },
+    );
+    const result = unwrap(res.data);
+    await storageService.setToken(result.accessToken);
+    await storageService.setRefreshToken(result.refreshToken);
+    return result;
+  },
+
   /** Backend now requires OTP verification before issuing tokens; no auto-login here. */
   async register(data: RegisterRequest): Promise<RegisterResponse> {
     const res = await apiClient.post<
