@@ -89,7 +89,7 @@ async function confirmValid(h: Harness) {
 it('exposes the multi-line editor surface: no approval/payment/status', () => {
   const { controller } = setup();
   expect(Object.keys(controller).sort()).toEqual(
-    ['addRow', 'cancelConfirm', 'markReverified', 'removeRow', 'requestConfirm', 'reset',
+    ['addFixHomePart', 'addRow', 'cancelConfirm', 'markReverified', 'removeRow', 'requestConfirm', 'reset',
       'setField', 'setNote', 'setRowField', 'setWarrantyOption', 'submit'].sort(),
   );
 });
@@ -713,5 +713,53 @@ describe('ambiguous-retry screen path (review remediation)', () => {
     gate.resolve(detailOrder() as unknown as ServiceOrderItem);
     await attempt;
     expect(s.state().needsVerify).toBe(true);
+  });
+
+  it('adds and submits a FixHome catalog part row with catalogId, SKU and warranty', async () => {
+    const h = setup();
+    h.controller.addFixHomePart({
+      id: 'fh-part-123',
+      name: 'Tụ ngậm điều hòa 35uF',
+      sku: 'CAP-35UF',
+      description: 'Tụ ngậm chính hãng',
+      sellingPrice: 150000,
+      warrantyDays: 180,
+      warrantyPolicy: 'Bảo hành chính hãng FixHome',
+      isActive: true,
+    }, 2);
+
+    expect(h.state().rows).toHaveLength(1);
+    expect(h.state().rows[0]).toMatchObject({
+      kind: 'part',
+      partSource: 'fixhome',
+      partCatalogId: 'fh-part-123',
+      description: 'Tụ ngậm điều hòa 35uF',
+      quantity: '2',
+      unitPrice: '150000',
+    });
+
+    h.controller.requestConfirm();
+    expect(h.state().confirming).toBe(true);
+    expect(h.state().quotedCostText).toBe('300.000đ');
+
+    await h.controller.submit();
+    expect(post(h)).toHaveBeenCalledTimes(1);
+    expect(post(h)).toHaveBeenCalledWith(
+      ORDER_ID,
+      expect.objectContaining({
+        items: [
+          expect.objectContaining({
+            type: 'parts_equipment',
+            partSource: 'fixhome',
+            partCatalogId: 'fh-part-123',
+            description: 'Tụ ngậm điều hòa 35uF',
+            quantity: 2,
+            unitPrice: 150000,
+            partSku: 'CAP-35UF',
+            warrantyDays: 180,
+          }),
+        ],
+      }),
+    );
   });
 });

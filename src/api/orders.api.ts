@@ -92,6 +92,10 @@ export interface QuotationLineItem {
   partWarrantyOption?: string;
   warrantyFee?: number;
   warrantyTermDays?: number;
+  partCatalogId?: string;
+  partNameSnapshot?: string;
+  partSku?: string;
+  warrantyPolicy?: string;
 }
 
 export interface EvidenceResponse {
@@ -128,9 +132,23 @@ export interface CreateQuotationTechnicianPartItem {
   warrantyTermDays?: number;
 }
 
+export interface CreateQuotationFixHomePartItem {
+  type: 'parts_equipment';
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  partSource: 'fixhome';
+  partCatalogId: string;
+  partNameSnapshot?: string;
+  partSku?: string;
+  warrantyDays?: number;
+  warrantyPolicy?: string;
+}
+
 export type CreateQuotationItem =
   | CreateQuotationLaborItem
-  | CreateQuotationTechnicianPartItem;
+  | CreateQuotationTechnicianPartItem
+  | CreateQuotationFixHomePartItem;
 
 export interface CreateQuotationPayload {
   items: CreateQuotationItem[];
@@ -138,16 +156,25 @@ export interface CreateQuotationPayload {
 }
 
 export interface CreateAdditionalCostItem {
-  type: 'labor';
+  type: 'labor' | 'parts_equipment';
   description: string;
   quantity: number;
   unitPrice: number;
+  partSource?: 'fixhome' | 'technician' | 'external';
+  partCatalogId?: string;
+  partNameSnapshot?: string;
+  partSku?: string;
+  warrantyDays?: number;
+  warrantyPolicy?: string;
 }
 
 export interface CreateAdditionalCostPayload {
   reason: string;
   items: CreateAdditionalCostItem[];
   note?: string;
+  evidenceUrls?: string[];
+  fulfillmentMethod?: 'pickup' | 'delivery';
+  shippingFee?: number;
 }
 
 export interface CostRequest {

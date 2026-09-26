@@ -1,16 +1,15 @@
 import { orderDetailTarget } from '../customer/customer-order-detail';
 import type { CreateQuotationItem, CreateQuotationPayload } from '../../api/orders.api';
+import type { FixHomePart } from '../../api/parts-catalog.api';
 
 /**
- * P3B8 multi-line quotation editor: 1..100 rows of LABOR or TECHNICIAN-owned
- * PARTS on an assigned ACTIVE EN_ROUTE detail with
+ * Multi-line quotation editor: 1..100 rows of LABOR, FixHome catalog PARTS,
+ * or TECHNICIAN-owned PARTS on an assigned ACTIVE EN_ROUTE detail with
  * `pricingMode='inspection_required'`, Backend `arrivalVerified===true`, and
  * no existing SENT/APPROVED quotation (no silent supersede). Technician parts
  * default to no_warranty; paid_warranty needs fee > 0 and term 1..3650 and is
- * counted ONCE per line (never x quantity). FixHome catalog parts are NOT
- * supported — no catalog picker, no fabricated IDs/prices. Totals shown are
- * honest validated integers — never PAID/APPROVED. Ambiguous POSTs lock the
- * form until the detail is reloaded.
+ * counted ONCE per line (never x quantity). FixHome catalog parts preserve
+ * official warranty and SKU info.
  */
 
 export const QUOTE_DESCRIPTION_MAX = 2000;
@@ -27,6 +26,7 @@ export const QUOTE_WARRANTY_TERM_MAX = 3650;
 
 export type QuoteRowKind = 'labor' | 'part';
 export type QuoteWarrantyOption = 'no_warranty' | 'paid_warranty';
+export type QuotePartSource = 'fixhome' | 'technician' | 'external';
 
 export interface QuoteRowDraft {
   key: string;
@@ -37,6 +37,12 @@ export interface QuoteRowDraft {
   warrantyOption: QuoteWarrantyOption;
   warrantyFee: string;
   warrantyTermDays: string;
+  partSource?: QuotePartSource;
+  partCatalogId?: string;
+  partNameSnapshot?: string;
+  partSku?: string;
+  warrantyDays?: number;
+  warrantyPolicy?: string;
 }
 
 export interface QuoteDraft {
@@ -192,6 +198,12 @@ export interface ValidQuoteRow {
   lineTotal: number;
   warrantyFee: number | null;
   warrantyTermDays: number | null;
+  partSource?: QuotePartSource;
+  partCatalogId?: string;
+  partNameSnapshot?: string;
+  partSku?: string;
+  warrantyDays?: number;
+  warrantyPolicy?: string;
 }
 
 function validateRow(row: QuoteRowDraft): { valid: ValidQuoteRow | null; errors: QuoteFieldErrors } {
@@ -238,6 +250,12 @@ function validateRow(row: QuoteRowDraft): { valid: ValidQuoteRow | null; errors:
       lineTotal: quantity * unitPrice,
       warrantyFee,
       warrantyTermDays,
+      partSource: row.partSource,
+      partCatalogId: row.partCatalogId,
+      partNameSnapshot: row.partNameSnapshot,
+      partSku: row.partSku,
+      warrantyDays: row.warrantyDays,
+      warrantyPolicy: row.warrantyPolicy,
     },
     errors,
   };
@@ -286,6 +304,20 @@ export function validateQuoteRows(
 function toPayloadItem(line: ValidQuoteRow): CreateQuotationItem {
   if (line.kind === 'labor') {
     return { type: 'labor', description: line.description, quantity: line.quantity, unitPrice: line.unitPrice };
+  }
+  if (line.partSource === 'fixhome' && line.partCatalogId) {
+    return {
+      type: 'parts_equipment',
+      description: line.description,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      partSource: 'fixhome',
+      partCatalogId: line.partCatalogId,
+      partNameSnapshot: line.partNameSnapshot || line.description,
+      partSku: line.partSku,
+      warrantyDays: line.warrantyDays,
+      warrantyPolicy: line.warrantyPolicy,
+    };
   }
   if (line.warrantyFee !== null && line.warrantyTermDays !== null) {
     return {
@@ -402,6 +434,36 @@ export function createQuotationCreateController(
     if (state.rows.length >= QUOTE_MAX_ROWS) return;
     keySequence += 1;
     publish({ rows: [...state.rows, emptyRow(`row-${keySequence}`, kind)] });
+    touch();
+  }
+
+  function addFixHomePart(part: FixHomePart, quantity = 1): void {
+    if (busy || state.needsVerify) return;
+    if (state.rows.length >= QUOTE_MAX_ROWS) return;
+    keySequence += 1;
+    const key = `row-${keySequence}`;
+    const newRow: QuoteRowDraft = {
+      key,
+      kind: 'part',
+      description: part.name,
+      quantity: String(quantity),
+      unitPrice: String(part.sellingPrice),
+      warrantyOption: 'no_warranty',
+      warrantyFee: '',
+      warrantyTermDays: '',
+      partSource: 'fixhome',
+      partCatalogId: part.id,
+      partNameSnapshot: part.name,
+      partSku: part.sku ?? undefined,
+      warrantyDays: part.warrantyDays ?? undefined,
+      warrantyPolicy: part.warrantyPolicy ?? undefined,
+    };
+    const isSingleEmpty =
+      state.rows.length === 1 &&
+      !state.rows[0].description.trim() &&
+      !state.rows[0].unitPrice.trim();
+    const rows = isSingleEmpty ? [newRow] : [...state.rows, newRow];
+    publish({ rows });
     touch();
   }
 
@@ -564,6 +626,7 @@ export function createQuotationCreateController(
   return {
     setField,
     addRow,
+    addFixHomePart,
     removeRow,
     setRowField,
     setWarrantyOption,

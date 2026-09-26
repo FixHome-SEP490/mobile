@@ -22,6 +22,7 @@ import type { RootStackParamList } from '../../types';
 import { useAppTheme } from '../../constants/theme';
 import { useAuthStore } from '../../store/auth.store';
 import { ordersApi, type CanonicalOrderStatus } from '../../api/orders.api';
+import { partRequestsApi, type PartRequest } from '../../api/part-requests.api';
 import { customerBookingsUserId } from './customer-bookings-history';
 import {
   createOrderDetailLoader,
@@ -110,6 +111,14 @@ export default function CustomerOrderDetailScreen() {
   const [reviewState, setReviewState] = useState(initialCustomerOrderReviewState);
   const [paymentState, setPaymentState] = useState(initialCustomerPaymentState);
   const [orderCancelState, setOrderCancelState] = useState(initialCustomerOrderCancelState);
+  const [customerParts, setCustomerParts] = useState<PartRequest[]>([]);
+  useEffect(() => {
+    let active = true;
+    void partRequestsApi.getByOrderId(serviceOrderId).then((res) => {
+      if (active) setCustomerParts(res);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [serviceOrderId, order?.status]);
   const invoiceViewRef = useRef(invoiceState.invoice);
   useEffect(() => { invoiceViewRef.current = invoiceState.invoice; }, [invoiceState.invoice]);
   const latestRef = useRef({ order, serviceOrderId });
@@ -990,15 +999,38 @@ export default function CustomerOrderDetailScreen() {
 
           {sections.hasQuotation && order.quotation && (
             <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Báo giá</Text>
-              <Text style={styles.meta}>Trạng thái: {quoteStatusLabel(sections.quotationStatus)}</Text>
+              <Text style={styles.sectionTitle}>Báo giá ({quoteStatusLabel(sections.quotationStatus)})</Text>
+              {(order.quotation.laborTotal > 0 || order.quotation.partsTotal > 0) && (
+                <Text style={[styles.meta, { fontSize: 12, color: colors.textSecondary, marginBottom: 8 }]}>
+                  Công thợ: {amountOrNull(order.quotation.laborTotal) ?? '0đ'} | Linh kiện: {amountOrNull(order.quotation.partsTotal) ?? '0đ'}
+                </Text>
+              )}
               {quotationItemsList(order).length === 0 ? (
                 <Text style={styles.meta}>Chưa có chi tiết báo giá</Text>
               ) : (
                 quotationItemsList(order).map((item) => (
-                  <View key={item.id ?? `${item.description}-${item.quantity}-${item.unitPrice}`} style={styles.row}>
-                    <Text style={styles.meta}>{item.description} × {item.quantity}</Text>
-                    <Text style={styles.meta}>{amountOrNull(item.lineTotal) ?? '—'}</Text>
+                  <View key={item.id ?? `${item.description}-${item.quantity}-${item.unitPrice}`} style={[styles.row, { paddingVertical: 4 }]}>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <Text style={[styles.meta, { fontWeight: '700' }]}>
+                          {item.type === 'LABOR' ? '🔧 ' : '📦 '}
+                          {item.description} × {item.quantity}
+                        </Text>
+                        {(item.partCatalogId || item.partSource === 'fixhome') && (
+                          <View style={{ backgroundColor: '#ECFDF5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#059669' }}>FixHome</Text>
+                          </View>
+                        )}
+                      </View>
+                      {!!item.warrantyDays && (
+                        <Text style={[styles.meta, { fontSize: 11, color: '#059669', marginTop: 1 }]}>
+                          ✓ Bảo hành chính hãng {item.warrantyDays} ngày
+                        </Text>
+                      )}
+                    </View>
+                    <Text style={[styles.meta, { fontWeight: '700', color: colors.primary }]}>
+                      {amountOrNull(item.lineTotal) ?? '—'}
+                    </Text>
                   </View>
                 ))
               )}
@@ -1118,6 +1150,44 @@ export default function CustomerOrderDetailScreen() {
                   )}
                 </>
               )}
+            </View>
+          )}
+
+          {customerParts.length > 0 && (
+            <View style={styles.card}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <Ionicons name="cube-outline" size={18} color="#2563EB" />
+                <Text style={styles.sectionTitle}>Linh kiện kho FixHome</Text>
+              </View>
+              {customerParts.map((pr) => (
+                <View key={pr.id} style={{ paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' }}>
+                  <View style={styles.row}>
+                    <Text style={[styles.meta, { fontWeight: '600' }]}>
+                      {pr.fulfillmentMethod === 'delivery' ? 'Giao hàng tận nơi' : 'Lấy tại kho FixHome'}
+                    </Text>
+                    <View style={{ backgroundColor: '#DBEAFE', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#1E40AF' }}>
+                        {pr.status === 'requested'
+                          ? 'Đang chuẩn bị tại kho'
+                          : pr.status === 'ready'
+                            ? 'Sẵn sàng giao nhận'
+                            : pr.status === 'delivering'
+                              ? 'Đang giao tới thợ'
+                              : pr.status === 'received'
+                                ? 'Thợ đã nhận linh kiện'
+                                : pr.status === 'completed'
+                                  ? 'Đã hoàn tất'
+                                  : pr.status}
+                      </Text>
+                    </View>
+                  </View>
+                  {pr.items.map((pi) => (
+                    <Text key={pi.id} style={[styles.meta, { fontSize: 12, marginTop: 2 }]}>
+                      • {pi.partNameSnapshot} × {pi.quantity}
+                    </Text>
+                  ))}
+                </View>
+              ))}
             </View>
           )}
 

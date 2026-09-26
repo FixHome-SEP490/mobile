@@ -51,6 +51,9 @@ import {
   createQuotationCreateController,
   initialQuoteState,
 } from './technician-quotation-create';
+import TechnicianPartsManagementCard from '../../components/TechnicianPartsManagementCard';
+import FixHomePartPickerModal from '../../components/FixHomePartPickerModal';
+import type { FixHomePart } from '../../api/parts-catalog.api';
 import {
   createStartRepairController,
   describeStartRepairBlockers,
@@ -616,8 +619,12 @@ export default function TechnicianOrderDetailScreen() {
   const onQuoteField = {
     note: (value: string) => { quoteRef.current?.setNote(value); },
   };
+  const [showQuoteFixHomePicker, setShowQuoteFixHomePicker] = useState(false);
   const onQuoteAddLabor = () => { quoteRef.current?.addRow('labor'); };
   const onQuoteAddPart = () => { quoteRef.current?.addRow('part'); };
+  const onQuoteAddFixHomePart = (part: FixHomePart, quantity: number) => {
+    quoteRef.current?.addFixHomePart(part, quantity);
+  };
   const onQuoteRemoveRow = (key: string) => { quoteRef.current?.removeRow(key); };
   const onQuoteConfirm = () => { quoteRef.current?.requestConfirm(); };
   const onQuoteCancelConfirm = () => { quoteRef.current?.cancelConfirm(); };
@@ -1049,14 +1056,31 @@ export default function TechnicianOrderDetailScreen() {
 
           {sections.hasQuotation && order.quotation && (
             <View style={styles.jobCard}>
-              <Text style={styles.sectionTitle}>Báo giá</Text>
-              <Text style={styles.jobMeta}>Trạng thái: {sections.quotationStatus}</Text>
+              <Text style={styles.sectionTitle}>Báo giá ({sections.quotationStatus})</Text>
+              <Text style={styles.jobMeta}>
+                Nhân công: {amountOrNull(order.quotation.laborTotal) ?? '0đ'} | Linh kiện: {amountOrNull(order.quotation.partsTotal) ?? '0đ'}
+              </Text>
               {quotationItemsList(order).length === 0 ? (
                 <Text style={styles.jobMeta}>Chưa có chi tiết báo giá</Text>
               ) : (
                 quotationItemsList(order).map((item) => (
-                  <View key={item.id ?? `${item.description}-${item.quantity}-${item.unitPrice}`} style={styles.row}>
-                    <Text style={styles.jobMeta}>{item.description} × {item.quantity}</Text>
+                  <View key={item.id ?? `${item.description}-${item.quantity}-${item.unitPrice}`} style={[styles.row, { paddingVertical: 4 }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.jobMeta}>
+                        {item.type === 'LABOR' ? '🔧 ' : '📦 '}
+                        {item.description} × {item.quantity}
+                      </Text>
+                      {item.partCatalogId && (
+                        <Text style={[styles.jobMeta, { fontSize: 11, color: '#059669' }]}>
+                          ✓ Linh kiện chính hãng FixHome
+                        </Text>
+                      )}
+                      {!!item.warrantyDays && (
+                        <Text style={[styles.jobMeta, { fontSize: 11, color: '#0284C7' }]}>
+                          Bảo hành {item.warrantyDays} ngày
+                        </Text>
+                      )}
+                    </View>
                     <Text style={styles.jobMeta}>{amountOrNull(item.lineTotal) ?? '—'}</Text>
                   </View>
                 ))
@@ -1068,6 +1092,13 @@ export default function TechnicianOrderDetailScreen() {
               )}
             </View>
           )}
+
+          {/* FixHome Parts Management */}
+          <TechnicianPartsManagementCard
+            orderId={serviceOrderId}
+            orderStatus={order.status}
+            onPartsUpdated={() => void onRefresh()}
+          />
 
           {sections.hasTimeline && (
             <View style={styles.jobCard}>
@@ -1618,9 +1649,21 @@ export default function TechnicianOrderDetailScreen() {
                   return (
                     <View key={row.key} style={styles.quoteRow}>
                       <View style={styles.row}>
-                        <Text style={styles.jobMeta}>
-                          {row.kind === 'labor' ? `Nhân công ${index + 1}` : `Linh kiện kỹ thuật ${index + 1}`}
-                        </Text>
+                        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={styles.jobMeta}>
+                            {row.kind === 'labor'
+                              ? `Nhân công ${index + 1}`
+                              : row.partSource === 'fixhome'
+                                ? `Linh kiện FixHome ${index + 1}`
+                                : `Linh kiện kỹ thuật ${index + 1}`}
+                          </Text>
+                          {row.partSource === 'fixhome' && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#ECFDF5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, gap: 2 }}>
+                              <Ionicons name="shield-checkmark" size={10} color="#059669" />
+                              <Text style={{ fontSize: 10, fontWeight: '700', color: '#059669' }}>FixHome</Text>
+                            </View>
+                          )}
+                        </View>
                         {quoteState.rows.length > 1 && (
                           <TouchableOpacity
                             onPress={() => onQuoteRemoveRow(row.key)}
@@ -1737,13 +1780,23 @@ export default function TechnicianOrderDetailScreen() {
                     <Text style={[styles.uploadBtnText, { color: '#2563EB' }]}>Thêm nhân công</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.uploadBtn, { backgroundColor: '#EFF6FF' }]}
+                    style={[styles.uploadBtn, { backgroundColor: '#ECFDF5' }]}
+                    onPress={() => setShowQuoteFixHomePicker(true)}
+                    disabled={quoteState.busy || quoteState.needsVerify}
+                    accessibilityRole="button"
+                    accessibilityLabel="Thêm linh kiện FixHome"
+                  >
+                    <Ionicons name="cube-outline" size={13} color="#059669" style={{ marginRight: 4 }} />
+                    <Text style={[styles.uploadBtnText, { color: '#059669' }]}>+ Kho FixHome</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.uploadBtn, { backgroundColor: '#F1F5F9' }]}
                     onPress={onQuoteAddPart}
                     disabled={quoteState.busy || quoteState.needsVerify}
                     accessibilityRole="button"
                     accessibilityLabel="Thêm linh kiện kỹ thuật"
                   >
-                    <Text style={[styles.uploadBtnText, { color: '#2563EB' }]}>Thêm linh kiện</Text>
+                    <Text style={[styles.uploadBtnText, { color: '#475569' }]}>Linh kiện tự có</Text>
                   </TouchableOpacity>
                 </View>
                 <Text style={styles.fieldLabel}>Ghi chú (không bắt buộc)</Text>
@@ -1934,6 +1987,11 @@ export default function TechnicianOrderDetailScreen() {
           )}
         </ScrollView>
       )}
+      <FixHomePartPickerModal
+        visible={showQuoteFixHomePicker}
+        onClose={() => setShowQuoteFixHomePicker(false)}
+        onSelectPart={onQuoteAddFixHomePart}
+      />
     </SafeAreaView>
   );
 }
