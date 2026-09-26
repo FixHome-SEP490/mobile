@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,71 +13,131 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../constants/theme';
-import { ordersApi, type ServiceOrderItem, type CanonicalOrderStatus } from '../../api/orders.api';
+import { ordersApi, type CanonicalOrderStatus } from '../../api/orders.api';
+import { createJobsLoader, initialJobsState, technicianJobsUserId } from './technician-jobs-loader';
+import { historicalSummaryDates, isHistoricalOrder, resolveJobsView, techOrderDetailTarget } from './technician-order-detail';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../types';
+import { useAuthStore } from '../../store/auth.store';
+import * as Location from 'expo-location';
+import {
+  checkInAttemptState,
+  createCheckInController,
+  type ArrivalVerificationState,
+  type PermissionDecision,
+} from './technician-check-in';
 
 type JobTab = 'all' | 'pending' | 'in_progress';
 
 export default function TechnicianJobsScreen() {
   const { colors } = useAppTheme();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [activeTab, setActiveTab] = useState<JobTab>('all');
-  const [jobs, setJobs] = useState<ServiceOrderItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-
+  const [jobsState, setJobsState] = useState(initialJobsState);
+  const { jobs, loading, refreshing, loadingMoreJobs, error, actionLoading, blockedOrderIds } = jobsState;
+  const [checkInBusy, setCheckInBusy] = useState<string | null>(null);
+  const [arrivalStates, setArrivalStates] = useState<Record<string, Exclude<ArrivalVerificationState, 'clear'>>>({});
+  const technicianUserId = useAuthStore(technicianJobsUserId);
+  const jobsRef = useRef(jobsState.jobs);
   useEffect(() => {
-    let mounted = true;
-    ordersApi
-      .getMyOrders()
-      .then((data) => {
-        if (mounted) {
-          setJobs(data || []);
-          setLoading(false);
+    jobsRef.current = jobsState.jobs;
+  }, [jobsState.jobs]);
+  const loaderRef = useRef<ReturnType<typeof createJobsLoader> | null>(null);
+  if (loaderRef.current === null) {
+    loaderRef.current = createJobsLoader(ordersApi.getMyOrders, setJobsState, ordersApi.enRoute, {
+      getUserId: () => technicianJobsUserId(useAuthStore.getState()),
+      subscribe: (listener) => useAuthStore.subscribe(listener),
+    }, (title, message) => Alert.alert(title, message),
+    { getOrdersPage: (page, pageSize) => ordersApi.getMyOrdersPage(page, pageSize) });
+  }
+  const loader = loaderRef.current;
+  // P3B4 real user-tapped foreground check-in: permission + one-shot position
+  // happen only inside the tap handler below, never on focus. All guards live
+  // in the production controller; this only adapts Expo APIs and job state.
+  // Created in an effect so no ref is read during render.
+  const checkInRef = useRef<ReturnType<typeof createCheckInController> | null>(null);
+  useEffect(() => {
+    const jobsLoader = loaderRef.current;
+    if (!jobsLoader) return;
+    checkInRef.current = createCheckInController({
+      getJob: (id) => jobsRef.current.find((job) => job.id === id),
+      getTechnicianId: () => technicianJobsUserId(useAuthStore.getState()),
+      captureFocus: () => jobsLoader.captureFocus(),
+      requestPermission: async (): Promise<PermissionDecision> => {
+        try {
+          const servicesEnabled = await Location.hasServicesEnabledAsync();
+          if (!servicesEnabled) return 'unavailable';
+          const response = await Location.requestForegroundPermissionsAsync();
+          return response.status === 'granted' ? 'granted' : 'denied';
+        } catch {
+          return 'unavailable';
         }
-      })
-      .catch(() => {
-        if (mounted) {
-          setJobs([]);
-          setLoading(false);
-        }
-      });
+      },
+      getPosition: async () => {
+        const position = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Highest,
+        });
+        return {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        };
+      },
+      postCheckIn: (id, coords) => ordersApi.checkIn(id, coords),
+      getOrderDetail: (id) => ordersApi.getOrder(id),
+      notify: (title, message) => Alert.alert(title, message),
+      refreshJobs: () => jobsLoader.refresh(true),
+      onAccessDenied: () => { void jobsLoader.refresh(true); },
+      setBusy: (orderId) => setCheckInBusy(orderId),
+      onVerificationState: (orderId, state) => {
+        setArrivalStates((previous) => {
+          if (state === 'clear') {
+            if (!(orderId in previous)) return previous;
+            const next = { ...previous };
+            delete next[orderId];
+            return next;
+          }
+          if (previous[orderId] === state) return previous;
+          return { ...previous, [orderId]: state };
+        });
+      },
+    });
     return () => {
-      mounted = false;
+      checkInRef.current = null;
     };
   }, []);
+  useFocusEffect(useCallback(() => {
+    void loader.focus();
+    return () => loader.blur();
+  }, [loader]));
+  useEffect(() => {
+    const controller = checkInRef.current;
+    if (!controller || !technicianUserId) return;
 
-  const refreshJobs = async () => {
-    try {
-      const data = await ordersApi.getMyOrders();
-      setJobs(data || []);
-    } catch {
-      setJobs([]);
+    for (const job of jobsState.jobs) {
+      if (
+        job.historical === true ||
+        String(job.status).toUpperCase() !== 'EN_ROUTE'
+      ) {
+        continue;
+      }
+      if (
+        job.arrivalVerified === true ||
+        checkInAttemptState(technicianUserId, job.id) !== 'clear'
+      ) {
+        void controller.reconcile(job.id);
+      }
     }
-  };
+  }, [jobsState.jobs, technicianUserId]);
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await refreshJobs();
-    setRefreshing(false);
-  };
+  const onRefresh = () => { void loader.refresh(); };
+  const onLoadMoreJobs = () => { void loader.loadMoreJobs(); };
 
-  const handleEnRoute = async (orderId: string) => {
-    setActionLoading(orderId);
-    try {
-      await ordersApi.enRoute(orderId);
-      Alert.alert('Thành công', 'Đã cập nhật trạng thái: Đang di chuyển đến nhà khách hàng.');
-      await refreshJobs();
-    } catch (err: any) {
-      Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể cập nhật trạng thái.');
-    } finally {
-      setActionLoading(null);
-    }
-  };
+  const handleEnRoute = (orderId: string) => { void loader.handleEnRoute(orderId); };
 
-  const handleCheckIn = async (orderId: string) => {
-    void orderId;
-    Alert.alert('Chưa hỗ trợ định vị', 'Vui lòng mở đơn trên Web tại địa chỉ sửa chữa để check-in bằng GPS.');
-  };
+  const handleCheckIn = (orderId: string) => { void checkInRef.current?.checkIn(orderId); };
+  const handleReconcileCheckIn = (orderId: string) => { void checkInRef.current?.reconcile(orderId); };
 
   const getStatusBadge = (status: CanonicalOrderStatus) => {
     const s = String(status).toUpperCase();
@@ -96,16 +156,8 @@ export default function TechnicianJobsScreen() {
     }
   };
 
-  const filteredJobs = jobs.filter((job) => {
-    const s = String(job.status).toUpperCase();
-    if (activeTab === 'pending') {
-      return ['ACCEPTED', 'EN_ROUTE'].includes(s);
-    }
-    if (activeTab === 'in_progress') {
-      return ['UNDER_REPAIR', 'IN_PROGRESS'].includes(s);
-    }
-    return true;
-  });
+  const jobsView = resolveJobsView(jobsState, activeTab);
+  const { filtered: filteredJobs, showLoadMoreJobs, jobsCoverageText, emptyNote } = jobsView;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -113,6 +165,15 @@ export default function TechnicianJobsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Công việc</Text>
+        <TouchableOpacity
+          style={styles.invitationsBtn}
+          onPress={() => navigation.navigate('TechnicianInvitations')}
+          disabled={!technicianUserId}
+          accessibilityLabel="Xem lời mời chờ xác nhận"
+        >
+          <Ionicons name="mail-outline" size={18} color="#2563EB" />
+          <Text style={styles.invitationsBtnText}>Lời mời</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.container}>
@@ -150,22 +211,69 @@ export default function TechnicianJobsScreen() {
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Đang tải danh sách công việc...</Text>
         </View>
-      ) : filteredJobs.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="briefcase-outline" size={56} color="#CBD5E1" />
-          <Text style={styles.emptyTitle}>Chưa có công việc nào</Text>
-          <Text style={styles.emptyDesc}>Các công việc mới từ khách hàng sẽ hiển thị ở đây.</Text>
-        </View>
       ) : (
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, filteredJobs.length === 0 && styles.emptyScroll]}
+          alwaysBounceVertical
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
+          {error && (
+            <View style={styles.errorBanner} accessibilityRole="alert">
+              <Text style={styles.emptyDesc}>{error}</Text>
+              {jobs.length > 0 && <Text style={styles.emptyDesc}>Đang hiển thị danh sách đã tải trước đó.</Text>}
+              <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button">
+                <Text style={styles.invitationsBtnText}>Thử lại</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {filteredJobs.length === 0 && !error && (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="briefcase-outline" size={56} color="#CBD5E1" />
+              <Text style={styles.emptyTitle}>Chưa có công việc nào</Text>
+              <Text style={styles.emptyDesc}>
+                {emptyNote === 'more-pages'
+                  ? 'Tab này chưa có công việc phù hợp ở trang đã tải. Bấm Tải thêm công việc để xem tiếp.'
+                  : 'Các công việc mới từ khách hàng sẽ hiển thị ở đây.'}
+              </Text>
+              <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button" style={styles.refreshBtn}>
+                <Text style={styles.invitationsBtnText}>Làm mới</Text>
+              </TouchableOpacity>
+            </View>
+          )}
           <View style={styles.list}>
             {filteredJobs.map((job) => {
+              if (isHistoricalOrder(job)) {
+                const badge = getStatusBadge(job.status);
+                const dates = historicalSummaryDates(job);
+                return (
+                  <View key={job.id || job.code} style={styles.jobCard}>
+                    <View style={styles.cardHeader}>
+                      <View style={styles.iconMap}>
+                        <Ionicons name="archive-outline" size={24} color={colors.primary} />
+                      </View>
+                      <View style={styles.cardContent}>
+                        <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+                          <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
+                        </View>
+                        <Text style={styles.jobTitle}>
+                          #{job.code || (typeof job.id === 'string' ? job.id.slice(0, 8) : '—')}
+                        </Text>
+                        {!!dates.created && (
+                          <Text style={styles.jobMeta}>Tạo: {dates.created}</Text>
+                        )}
+                        {!!dates.ended && (
+                          <Text style={styles.jobMeta}>Kết thúc: {dates.ended}</Text>
+                        )}
+                        <Text style={styles.jobMeta}>Đơn lưu trữ — chỉ xem tóm tắt.</Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              }
               const badge = getStatusBadge(job.status);
               const s = String(job.status).toUpperCase();
               const isActioning = actionLoading === job.id;
+              const detailId = techOrderDetailTarget(job);
 
               return (
                 <View key={job.id || job.code} style={styles.jobCard}>
@@ -193,30 +301,89 @@ export default function TechnicianJobsScreen() {
 
                   {/* Actions depending on status */}
                   <View style={styles.actionsRow}>
+                    {!!detailId && (
+                      <TouchableOpacity
+                        style={styles.detailBtn}
+                        onPress={() => navigation.navigate('TechnicianOrderDetail', { serviceOrderId: detailId })}
+                        accessibilityRole="button"
+                        accessibilityLabel="Xem chi tiết đơn"
+                      >
+                        <Ionicons name="document-text-outline" size={16} color="#2563EB" />
+                        <Text style={styles.detailBtnText}>Xem chi tiết đơn</Text>
+                      </TouchableOpacity>
+                    )}
                     {s === 'ACCEPTED' && (
                       <TouchableOpacity
                         style={[styles.actionBtn, { backgroundColor: '#2563EB' }]}
                         onPress={() => handleEnRoute(job.id)}
-                        disabled={isActioning}
+                        disabled={isActioning || blockedOrderIds.includes(job.id) || checkInBusy === job.id}
                       >
                         {isActioning ? (
                           <ActivityIndicator size="small" color="#FFF" />
                         ) : (
                           <>
                             <Ionicons name="navigate-outline" size={16} color="#FFF" />
-                            <Text style={styles.actionBtnText}>Bắt đầu di chuyển</Text>
+                            <Text style={styles.actionBtnText}>{blockedOrderIds.includes(job.id) ? 'Đã gửi · kéo xuống để kiểm tra' : 'Bắt đầu di chuyển'}</Text>
                           </>
                         )}
                       </TouchableOpacity>
                     )}
 
-                    {s === 'EN_ROUTE' && (
+                    {s === 'EN_ROUTE' && arrivalStates[job.id] === 'verified' && (
+                      <View style={styles.arrivalVerifiedBox}>
+                        <View style={styles.arrivalVerifiedRow}>
+                          <Ionicons name="checkmark-circle-outline" size={18} color="#047857" />
+                          <Text style={styles.arrivalVerifiedText}>
+                            Đã đến nơi · Backend xác minh. Đơn vẫn EN_ROUTE.
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={[styles.actionBtn, { backgroundColor: '#059669' }]}
+                          onPress={() =>
+                            navigation.navigate('TechnicianOrderDetail', {
+                              serviceOrderId: job.id,
+                            })
+                          }
+                          accessibilityRole="button"
+                          accessibilityLabel="Tiếp tục công việc"
+                        >
+                          <Ionicons name="arrow-forward-outline" size={16} color="#FFF" />
+                          <Text style={styles.actionBtnText}>Tiếp tục công việc</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {s === 'EN_ROUTE' && arrivalStates[job.id] === 'pending' && (
+                      <View style={styles.arrivalPendingBox}>
+                        <Text style={styles.arrivalPendingText}>
+                          Check-in đang chờ xác minh. Không gửi POST lại.
+                        </Text>
+                        <TouchableOpacity
+                          style={[styles.actionBtn, { backgroundColor: '#D97706' }]}
+                          onPress={() => handleReconcileCheckIn(job.id)}
+                          disabled={checkInBusy === job.id}
+                          accessibilityRole="button"
+                          accessibilityLabel="Kiểm tra lại check-in"
+                        >
+                          {checkInBusy === job.id ? (
+                            <ActivityIndicator size="small" color="#FFF" />
+                          ) : (
+                            <>
+                              <Ionicons name="refresh-outline" size={16} color="#FFF" />
+                              <Text style={styles.actionBtnText}>Kiểm tra check-in</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {s === 'EN_ROUTE' && !arrivalStates[job.id] && (
                       <TouchableOpacity
                         style={[styles.actionBtn, { backgroundColor: '#059669' }]}
                         onPress={() => handleCheckIn(job.id)}
-                        disabled={isActioning}
+                        disabled={isActioning || checkInBusy === job.id}
                       >
-                        {isActioning ? (
+                        {isActioning || checkInBusy === job.id ? (
                           <ActivityIndicator size="small" color="#FFF" />
                         ) : (
                           <>
@@ -231,6 +398,24 @@ export default function TechnicianJobsScreen() {
               );
             })}
           </View>
+          {!!jobsCoverageText && (
+            <Text style={styles.coverageText}>{jobsCoverageText}</Text>
+          )}
+          {showLoadMoreJobs && (
+            <TouchableOpacity
+              onPress={onLoadMoreJobs}
+              disabled={loadingMoreJobs}
+              accessibilityRole="button"
+              accessibilityLabel="Tải thêm công việc"
+              style={styles.loadMoreBtn}
+            >
+              {loadingMoreJobs ? (
+                <ActivityIndicator size="small" color="#2563EB" />
+              ) : (
+                <Text style={styles.loadMoreText}>Tải thêm công việc</Text>
+              )}
+            </TouchableOpacity>
+          )}
         </ScrollView>
       )}
       </View>
@@ -261,6 +446,21 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800',
     color: '#0F172A',
+    flex: 1,
+  },
+  invitationsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  invitationsBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#2563EB',
   },
   tabRow: {
     flexDirection: 'row',
@@ -293,6 +493,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  emptyScroll: {
+    flexGrow: 1,
+  },
+  errorBanner: {
+    padding: 16,
+    marginBottom: 12,
+    gap: 8,
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+  },
+  refreshBtn: {
+    padding: 12,
+    marginTop: 8,
   },
   scrollContent: {
     padding: 16,
@@ -382,6 +597,42 @@ const styles = StyleSheet.create({
     marginTop: 2,
     lineHeight: 16,
   },
+  arrivalVerifiedBox: {
+    flex: 1,
+    gap: 8,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  arrivalVerifiedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  arrivalVerifiedText: {
+    flex: 1,
+    color: '#047857',
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  arrivalPendingBox: {
+    flex: 1,
+    gap: 8,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  arrivalPendingText: {
+    color: '#92400E',
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
   actionsRow: {
     marginTop: 12,
     paddingTop: 12,
@@ -400,5 +651,35 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+  },
+  detailBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    marginBottom: 8,
+  },
+  detailBtnText: {
+    color: '#2563EB',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  coverageText: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    paddingVertical: 4,
+  },
+  loadMoreBtn: {
+    padding: 14,
+    alignItems: 'center',
+  },
+  loadMoreText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#2563EB',
   },
 });

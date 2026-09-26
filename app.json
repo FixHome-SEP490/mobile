@@ -27,8 +27,14 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "FixHome cần quyền camera để bạn chụp ảnh CCCD/CMND và ảnh chân dung khi xác minh danh tính.",
-          "photosPermission": "FixHome cần quyền thư viện ảnh để bạn chọn ảnh CCCD/CMND có sẵn khi xác minh danh tính."
+          "cameraPermission": "FixHome cần quyền camera để bạn chụp ảnh CCCD/CMND, ảnh chân dung khi xác minh danh tính và ảnh hiện trạng trước/sau sửa chữa khi thực hiện đơn.",
+          "photosPermission": "FixHome cần quyền thư viện ảnh để bạn chọn ảnh CCCD/CMND có sẵn khi xác minh danh tính và ảnh hiện trạng trước/sau sửa chữa khi thực hiện đơn."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "FixHome cần vị trí của bạn khi dùng ứng dụng để kỹ thuật viên check-in khi đã đến nhà khách và để bạn chọn địa chỉ sửa chữa. Ứng dụng không theo dõi vị trí nền."
         }
       ],
       "expo-web-browser"

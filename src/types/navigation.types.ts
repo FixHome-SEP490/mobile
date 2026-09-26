@@ -4,7 +4,7 @@ export type RootStackParamList = {
   CustomerMain: undefined;
   TechnicianMain: undefined;
   CustomerServices: { query?: string } | undefined;
-  CustomerServiceDetail: undefined;
+  CustomerServiceDetail: { serviceId: string };
   /**
    * The booking flow. `prefill` is how the assistant hands a customer over:
    * chat itself never creates a booking, it only carries the service across.
@@ -30,7 +30,19 @@ export type RootStackParamList = {
         initialImages?: string[];
       }
     | undefined;
-  CustomerMatching: undefined;
+  CustomerBookingCreate:
+    | {
+        prefill?: {
+          serviceId?: string | null;
+          serviceCode?: string;
+          serviceName?: string;
+          description?: string;
+        };
+      }
+    | undefined;
+  CustomerMatching: { bookingId: string };
+  CustomerOrderDetail: { serviceOrderId: string };
+  TechnicianOrderDetail: { serviceOrderId: string };
   CustomerTechFound: undefined;
   CustomerTracking: undefined;
   CustomerQuotation: undefined;
@@ -38,6 +50,7 @@ export type RootStackParamList = {
   CustomerCompleted: undefined;
   CustomerReview: undefined;
   TechnicianKyc: undefined;
+  TechnicianInvitations: undefined;
   ChatList: undefined;
   ChatThread: {
     conversationId: string;

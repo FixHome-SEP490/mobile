@@ -11,15 +11,13 @@ import { UserRole } from '../types';
 import CustomerServicesScreen from '../screens/customer/CustomerServicesScreen';
 import CustomerServiceDetailScreen from '../screens/customer/CustomerServiceDetailScreen';
 import CustomerAIDiagnosisScreen from '../screens/customer/CustomerAIDiagnosisScreen';
+import CustomerBookingCreateScreen from '../screens/customer/CustomerBookingCreateScreen';
 import CustomerAIChatScreen from '../screens/customer/CustomerAIChatScreen';
 import CustomerMatchingScreen from '../screens/customer/CustomerMatchingScreen';
-import CustomerTechFoundScreen from '../screens/customer/CustomerTechFoundScreen';
-import CustomerTrackingScreen from '../screens/customer/CustomerTrackingScreen';
-import CustomerQuotationScreen from '../screens/customer/CustomerQuotationScreen';
-import CustomerUnderRepairScreen from '../screens/customer/CustomerUnderRepairScreen';
-import CustomerCompletedScreen from '../screens/customer/CustomerCompletedScreen';
-import CustomerReviewScreen from '../screens/customer/CustomerReviewScreen';
+import CustomerOrderDetailScreen from '../screens/customer/CustomerOrderDetailScreen';
+import TechnicianOrderDetailScreen from '../screens/technician/TechnicianOrderDetailScreen';
 import TechnicianKycScreen from '../screens/technician/TechnicianKycScreen';
+import TechnicianInvitationsScreen from '../screens/technician/TechnicianInvitationsScreen';
 import ChatListScreen from '../screens/chat/ChatListScreen';
 import ChatThreadScreen from '../screens/chat/ChatThreadScreen';
 
@@ -38,15 +36,13 @@ export default function AppNavigator() {
             <Stack.Screen name="CustomerServices" component={CustomerServicesScreen} />
             <Stack.Screen name="CustomerServiceDetail" component={CustomerServiceDetailScreen} />
             <Stack.Screen name="CustomerAIDiagnosis" component={CustomerAIDiagnosisScreen} />
+            <Stack.Screen name="CustomerBookingCreate" component={CustomerBookingCreateScreen} />
             <Stack.Screen name="CustomerAIChat" component={CustomerAIChatScreen} />
             <Stack.Screen name="CustomerMatching" component={CustomerMatchingScreen} />
-            <Stack.Screen name="CustomerTechFound" component={CustomerTechFoundScreen} />
-            <Stack.Screen name="CustomerTracking" component={CustomerTrackingScreen} />
-            <Stack.Screen name="CustomerQuotation" component={CustomerQuotationScreen} />
-            <Stack.Screen name="CustomerUnderRepair" component={CustomerUnderRepairScreen} />
-            <Stack.Screen name="CustomerCompleted" component={CustomerCompletedScreen} />
-            <Stack.Screen name="CustomerReview" component={CustomerReviewScreen} />
+            <Stack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
+            <Stack.Screen name="TechnicianOrderDetail" component={TechnicianOrderDetailScreen} />
             <Stack.Screen name="TechnicianKyc" component={TechnicianKycScreen} />
+            <Stack.Screen name="TechnicianInvitations" component={TechnicianInvitationsScreen} />
             <Stack.Screen name="ChatList" component={ChatListScreen} />
             <Stack.Screen name="ChatThread" component={ChatThreadScreen} />
             <Stack.Screen name="Auth" component={AuthNavigator} />
@@ -60,14 +56,11 @@ export default function AppNavigator() {
             <Stack.Screen name="CustomerServices" component={CustomerServicesScreen} />
             <Stack.Screen name="CustomerServiceDetail" component={CustomerServiceDetailScreen} />
             <Stack.Screen name="CustomerAIDiagnosis" component={CustomerAIDiagnosisScreen} />
+            <Stack.Screen name="CustomerBookingCreate" component={CustomerBookingCreateScreen} />
             <Stack.Screen name="CustomerAIChat" component={CustomerAIChatScreen} />
             <Stack.Screen name="CustomerMatching" component={CustomerMatchingScreen} />
-            <Stack.Screen name="CustomerTechFound" component={CustomerTechFoundScreen} />
-            <Stack.Screen name="CustomerTracking" component={CustomerTrackingScreen} />
-            <Stack.Screen name="CustomerQuotation" component={CustomerQuotationScreen} />
-            <Stack.Screen name="CustomerUnderRepair" component={CustomerUnderRepairScreen} />
-            <Stack.Screen name="CustomerCompleted" component={CustomerCompletedScreen} />
-            <Stack.Screen name="CustomerReview" component={CustomerReviewScreen} />
+            <Stack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
+            <Stack.Screen name="TechnicianOrderDetail" component={TechnicianOrderDetailScreen} />
             <Stack.Screen name="ChatList" component={ChatListScreen} />
             <Stack.Screen name="ChatThread" component={ChatThreadScreen} />
           </>

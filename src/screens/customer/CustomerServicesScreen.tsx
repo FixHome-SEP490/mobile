@@ -1,64 +1,47 @@
 import { useAppTheme } from '../../constants/theme';
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, StatusBar, TextInput, Image } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, StatusBar, TextInput, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
+import { servicesApi } from '../../api/services.api';
+import {
+  createServiceCatalogLoader,
+  initialCatalogState,
+  resolveServicePrice,
+} from './service-catalog';
 
-interface ServiceItem {
-  id: string;
-  name: string;
-  iconName: string;
-  iconType: 'ionic' | 'material' | 'fa5';
-  iconColor: string;
-  pedestalColor: string;
-  imageSource?: any;
-}
-
-const getAllServices = (colors: any): ServiceItem[] => [
-  { id: '1', name: 'Vệ sinh máy lạnh', iconName: 'snowflake', iconType: 'fa5', iconColor: '#0284C7', pedestalColor: '#E0F2FE', imageSource: require('../../../assets/air-conditioner.png') },
-  { id: '2', name: 'Sửa ống nước', iconName: 'pipe-wrench', iconType: 'material', iconColor: '#0D9488', pedestalColor: '#CCFBF1', imageSource: require('../../../assets/water-pipeline.png') },
-  { id: '3', name: 'Lắp đặt hệ thống điện', iconName: 'bolt', iconType: 'fa5', iconColor: '#EAB308', pedestalColor: '#FEF9C3',imageSource: require('../../../assets/voltage-cabinet.png') },
-  { id: '4', name: 'Thông nghẹt cống', iconName: 'water-pump', iconType: 'material', iconColor: '#4F46E5', pedestalColor: '#E0E7FF',imageSource: require('../../../assets/unclogging-drains.png') },
-  { id: '5', name: 'Sửa Tivi', iconName: 'air-conditioner', iconType: 'material', iconColor: colors.primary, pedestalColor: '#DBEAFE',imageSource: require('../../../assets/tv-repair.png')  },
-  { id: '6', name: 'Điện tử gia dụng', iconName: 'tools', iconType: 'fa5', iconColor: '#059669', pedestalColor: '#D1FAE5',imageSource: require('../../../assets/home-appliance-repair.png') },
-  { id: '7', name: 'Sửa máy giặt', iconName: 'washing-machine', iconType: 'material', iconColor: '#7C3AED', pedestalColor: '#EDE9FE', imageSource: require('../../../assets/washing-machine.png') },
-  { id: '8', name: 'Sửa tủ lạnh', iconName: 'fridge-outline', iconType: 'material', iconColor: '#EA580C', pedestalColor: '#FFEDD5', imageSource: require('../../../assets/refrigerator.png') },
-];
+type ServicesRoute = RouteProp<RootStackParamList, 'CustomerServices'>;
 
 export default function CustomerServicesScreen() {
   const { colors, spacing, fontSize, isDark } = useAppTheme();
   const styles = getStyles(colors, spacing, fontSize);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const ALL_SERVICES = useMemo(() => getAllServices(colors), [colors]);
-  const route = useRoute<RouteProp<RootStackParamList, 'CustomerServices'>>();
-  const initialQuery = route.params?.query || '';
-  const [searchQuery, setSearchQuery] = useState(initialQuery);
+  const route = useRoute<ServicesRoute>();
+  const [searchQuery, setSearchQuery] = useState(route.params?.query ?? '');
+  const [catalogState, setCatalogState] = useState(initialCatalogState);
+  const { services, total, loading, loadingMore, error } = catalogState;
+  const loaderRef = useRef<ReturnType<typeof createServiceCatalogLoader> | null>(null);
+  if (loaderRef.current === null) {
+    loaderRef.current = createServiceCatalogLoader(
+      (params) => servicesApi.getServices(params),
+      setCatalogState,
+    );
+  }
 
-  const filteredServices = ALL_SERVICES.filter((service: ServiceItem) => 
-    service.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Debounced server search: every keystroke re-queries page one, and the
+  // loader drops stale responses so only the latest query renders.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void loaderRef.current?.search(searchQuery.trim());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
-  const renderServiceIcon = (item: ServiceItem) => {
-    if (item.imageSource) {
-      return (
-        <Image 
-          source={item.imageSource} 
-          style={{ width: 80, height: 80   }} 
-          resizeMode="contain" 
-        />
-      );
-    }
-    if (item.iconType === 'fa5') {
-      return <FontAwesome5 name={item.iconName} size={24} color={item.iconColor} />;
-    }
-    if (item.iconType === 'material') {
-      return <MaterialCommunityIcons name={item.iconName as any} size={24} color={item.iconColor} />;
-    }
-    return <Ionicons name={item.iconName as any} size={24} color={item.iconColor} />;
-  };
+  const onRetry = () => { void loaderRef.current?.retry(); };
+  const onLoadMore = () => { void loaderRef.current?.loadMore(); };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -87,38 +70,86 @@ export default function CustomerServicesScreen() {
         )}
       </View>
 
-      <FlatList
-        data={filteredServices}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
-        renderItem={({ item }) => (
-          <TouchableOpacity 
-            style={styles.itemCard}
-            onPress={() => navigation.navigate('CustomerServiceDetail')}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.iconContainer, { backgroundColor: item.pedestalColor }]}>
-              {renderServiceIcon(item)}
-            </View>
-            <View style={styles.itemInfo}>
-              <Text style={styles.itemName}>{item.name}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+      {loading && services.length === 0 ? (
+        <View style={styles.centerState}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.stateText}>Đang tải danh sách dịch vụ...</Text>
+        </View>
+      ) : error && services.length === 0 ? (
+        <View style={styles.centerState}>
+          <Text style={styles.stateText}>{error}</Text>
+          <TouchableOpacity onPress={onRetry} accessibilityRole="button" style={styles.retryBtn}>
+            <Text style={styles.retryText}>Thử lại</Text>
           </TouchableOpacity>
-        )}
-      />
+        </View>
+      ) : services.length === 0 ? (
+        <View style={styles.centerState}>
+          <Ionicons name="search-outline" size={56} color="#CBD5E1" />
+          <Text style={styles.stateText}>Không tìm thấy dịch vụ nào phù hợp.</Text>
+          <TouchableOpacity onPress={onRetry} accessibilityRole="button" style={styles.retryBtn}>
+            <Text style={styles.retryText}>Tải lại</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList
+          data={services}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContainer}
+          onEndReached={onLoadMore}
+          onEndReachedThreshold={0.5}
+          ListHeaderComponent={
+            error ? (
+              <View style={styles.staleBanner} accessibilityRole="alert">
+                <Text style={styles.staleText}>
+                  Không tải được kết quả mới. Đang hiển thị kết quả đã tải trước đó.
+                </Text>
+                <TouchableOpacity onPress={onRetry} accessibilityRole="button">
+                  <Text style={styles.retryText}>Thử lại</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null
+          }
+          ListFooterComponent={
+            services.length < total ? (
+              <TouchableOpacity onPress={onLoadMore} disabled={loadingMore} accessibilityRole="button" style={styles.retryBtn}>
+                {loadingMore ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Text style={styles.retryText}>Tải thêm ({services.length}/{total})</Text>
+                )}
+              </TouchableOpacity>
+            ) : null
+          }
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.itemCard}
+              onPress={() => navigation.navigate('CustomerServiceDetail', { serviceId: item.id })}
+              activeOpacity={0.7}
+            >
+              <View style={styles.iconContainer}>
+                <Ionicons name="construct-outline" size={24} color={colors.primary} />
+              </View>
+              <View style={styles.itemInfo}>
+                <Text style={styles.itemName}>{item.name}</Text>
+                <Text style={styles.itemPrice}>{resolveServicePrice(item).text}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            </TouchableOpacity>
+          )}
+        />
+      )}
     </SafeAreaView>
   );
 }
 
 const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    paddingHorizontal: 16, 
-    paddingVertical: 12, 
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border
@@ -147,6 +178,39 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontSize: 14,
     color: colors.text,
   },
+  centerState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+    gap: 12,
+  },
+  stateText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    padding: 12,
+    alignItems: 'center',
+  },
+  retryText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  staleBanner: {
+    padding: 12,
+    gap: 4,
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+  },
+  staleText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
   listContainer: {
     padding: 16,
     gap: 12,
@@ -170,6 +234,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    backgroundColor: '#EFF6FF',
   },
   itemInfo: {
     flex: 1,
@@ -178,7 +243,10 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,
+  },
+  itemPrice: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: 2,
   }
 });
-
-
