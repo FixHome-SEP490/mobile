@@ -204,13 +204,14 @@ export const bookingsApi = {
 
   async sendShortlist(
     bookingId: string,
-    technicianUserIds: readonly [string, string],
+    technicianUserIds: readonly [string] | readonly [string, string],
   ): Promise<void> {
     if (!Array.isArray(technicianUserIds)
-      || technicianUserIds.length !== 2
-      || technicianUserIds[0] === technicianUserIds[1]
+      || technicianUserIds.length < 1
+      || technicianUserIds.length > 2
+      || new Set(technicianUserIds).size !== technicianUserIds.length
       || !technicianUserIds.every((id) => typeof id === 'string' && USER_UUID_REGEX.test(id))) {
-      throw new Error('Select exactly two different technicians in priority order');
+      throw new Error('Select 1 or 2 different technicians in priority order');
     }
     // Preserve priority order: the Backend decides invitation activation and acceptance.
     await apiClient.post(`/bookings/${bookingId}/shortlist`, { technicianIds: [...technicianUserIds] });

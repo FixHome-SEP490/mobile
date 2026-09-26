@@ -80,6 +80,19 @@ function order(overrides: Partial<ServiceOrderItem> = {}): ServiceOrderItem {
 }
 
 describe('initial shortlist durable attempt', () => {
+  it('persists a one-technician shortlist attempt before POST', async () => {
+    const storage = memoryStorage();
+    const saved = await saveInitialShortlistAttemptBeforePost(storage, {
+      customerId: CUSTOMER_A,
+      bookingId: BOOKING_A,
+      baselineInvitationIds: [],
+      selectedTechnicianUserIds: [TECH_1],
+    });
+    expect(saved.selectedTechnicianUserIds).toEqual([TECH_1]);
+    expect(await readInitialShortlistAttempt(storage, CUSTOMER_A, BOOKING_A))
+      .toEqual({ state: 'valid', attempt: saved });
+  });
+
   it('persists before POST and survives a fresh reader', async () => {
     const storage = memoryStorage();
     const saved = await saveInitialShortlistAttemptBeforePost(storage, {

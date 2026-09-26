@@ -12,11 +12,16 @@ export function toggleCandidate(selected: readonly string[], userId: string): st
 }
 
 /** Only User UUIDs may be sent. TechnicianProfile UUIDs are never an alternative. */
-export function orderedCandidateIds(selected: readonly string[]): readonly [string, string] {
-  if (selected.length !== 2 || selected[0] === selected[1] || !selected.every((id) => USER_UUID.test(id))) {
-    throw new Error('Vui lòng chọn hai kỹ thuật viên khác nhau theo thứ tự ưu tiên.');
+export function orderedCandidateIds(selected: readonly string[]): readonly [string] | readonly [string, string] {
+  if (
+    selected.length < 1 ||
+    selected.length > 2 ||
+    new Set(selected).size !== selected.length ||
+    !selected.every((id) => USER_UUID.test(id))
+  ) {
+    throw new Error('Vui lòng chọn 1 hoặc 2 kỹ thuật viên khác nhau theo thứ tự ưu tiên.');
   }
-  return [selected[0], selected[1]];
+  return selected.length === 1 ? [selected[0]] : [selected[0], selected[1]];
 }
 /** UI only; Backend revalidates ownership, eligibility and current time on every shortlist. */
 export function canChooseTechnicians(booking: BookingItem, now: Date = new Date()): boolean {

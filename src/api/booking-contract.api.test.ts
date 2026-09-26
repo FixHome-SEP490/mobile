@@ -32,23 +32,27 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
     expect(api.post).not.toHaveBeenCalled();
   });
 
-  it('sends exactly two distinct technician USER IDs in customer-selected order', async () => {
+  it('sends one or two distinct technician USER IDs in customer-selected order', async () => {
     api.post.mockResolvedValue({ data: { data: [] } });
+    await bookingsApi.sendShortlist('booking-1', [firstUserId]);
+    expect(api.post).toHaveBeenNthCalledWith(1, '/bookings/booking-1/shortlist', {
+      technicianIds: [firstUserId],
+    });
+
     await bookingsApi.sendShortlist('booking-1', [secondUserId, firstUserId]);
-    expect(api.post).toHaveBeenCalledTimes(1);
-    expect(api.post).toHaveBeenCalledWith('/bookings/booking-1/shortlist', {
+    expect(api.post).toHaveBeenCalledTimes(2);
+    expect(api.post).toHaveBeenNthCalledWith(2, '/bookings/booking-1/shortlist', {
       technicianIds: [secondUserId, firstUserId],
     });
   });
 
   it.each([
-    [[firstUserId], 'one candidate'],
     [[firstUserId, secondUserId, technicianProfileId], 'three candidates'],
     [[firstUserId, firstUserId], 'duplicate candidate'],
     [[firstUserId, 'profile-not-uuid'], 'invalid User ID'],
   ])('rejects %s without sending a shortlist (%s)', async (input) => {
-    await expect(bookingsApi.sendShortlist('booking-1', input as [string, string]))
-      .rejects.toThrow('exactly two');
+    await expect(bookingsApi.sendShortlist('booking-1', input as [string] | [string, string]))
+      .rejects.toThrow('1 or 2');
     expect(api.post).not.toHaveBeenCalled();
   });
 

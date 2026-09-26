@@ -14,7 +14,7 @@ export interface InitialShortlistAttempt {
   customerId: string;
   bookingId: string;
   baselineInvitationIds: string[];
-  selectedTechnicianUserIds: [string, string];
+  selectedTechnicianUserIds: string[];
   createdAt: string;
 }
 
@@ -61,9 +61,10 @@ function isAttempt(
       (id) => typeof id === 'string' && UUID.test(id),
     ) &&
     Array.isArray(candidate.selectedTechnicianUserIds) &&
-    candidate.selectedTechnicianUserIds.length === 2 &&
-    candidate.selectedTechnicianUserIds[0] !==
-      candidate.selectedTechnicianUserIds[1] &&
+    candidate.selectedTechnicianUserIds.length >= 1 &&
+    candidate.selectedTechnicianUserIds.length <= 2 &&
+    new Set(candidate.selectedTechnicianUserIds).size ===
+      candidate.selectedTechnicianUserIds.length &&
     candidate.selectedTechnicianUserIds.every(
       (id) => typeof id === 'string' && UUID.test(id),
     ) &&
@@ -99,7 +100,7 @@ export async function saveInitialShortlistAttemptBeforePost(
     customerId: string;
     bookingId: string;
     baselineInvitationIds: readonly string[];
-    selectedTechnicianUserIds: readonly [string, string];
+    selectedTechnicianUserIds: readonly string[];
   },
 ): Promise<InitialShortlistAttempt> {
   const key = initialShortlistAttemptKey(input.customerId, input.bookingId);
@@ -112,9 +113,9 @@ export async function saveInitialShortlistAttemptBeforePost(
 
   const selected = input.selectedTechnicianUserIds.map((id) =>
     requireUuid(id, 'Mã kỹ thuật viên'),
-  ) as [string, string];
-  if (selected[0] === selected[1]) {
-    throw new Error('Hai kỹ thuật viên phải khác nhau.');
+  );
+  if (selected.length < 1 || selected.length > 2 || new Set(selected).size !== selected.length) {
+    throw new Error('Phải chọn 1 hoặc 2 kỹ thuật viên khác nhau.');
   }
 
   const baseline = input.baselineInvitationIds.map((id) =>

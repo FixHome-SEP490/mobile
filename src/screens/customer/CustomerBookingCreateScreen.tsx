@@ -587,9 +587,9 @@ export default function CustomerBookingCreateScreen() {
             </Text>
             <Text style={[styles.note, { color: colors.textSecondary }]}>
               Booking đã được Backend xác nhận hoặc được đối chiếu bằng lịch sử của chính tài khoản.
-              Bước tiếp theo là chọn đúng hai kỹ thuật viên theo thứ tự ưu tiên.
+              Bước tiếp theo là chọn 1 hoặc 2 kỹ thuật viên theo thứ tự ưu tiên.
             </Text>
-            {action('Chọn hai kỹ thuật viên', () =>
+            {action('Chọn kỹ thuật viên', () =>
               navigation.navigate('CustomerMatching', {
                 bookingId: visibleCreatedBookingId,
               }),

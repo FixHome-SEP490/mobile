@@ -48,7 +48,7 @@ function describeBooking(booking: BookingItem): string {
   }
   if (booking.status === 'CANCELLED') return 'Yêu cầu đặt thợ này đã bị hủy.';
   if (booking.status === 'CLOSED') return 'Vòng tìm thợ trước đã kết thúc. Kiểm tra lịch hẹn trước khi chọn lại.';
-  return 'Yêu cầu đã được ghi nhận. Vui lòng chọn đúng hai kỹ thuật viên theo thứ tự ưu tiên.';
+  return 'Yêu cầu đã được ghi nhận. Bạn có thể chọn 1 hoặc 2 kỹ thuật viên theo thứ tự ưu tiên.';
 }
 
 export default function CustomerMatchingScreen() {
@@ -365,7 +365,7 @@ export default function CustomerMatchingScreen() {
       return;
     }
 
-    let orderedIds: readonly [string, string];
+    let orderedIds: ReturnType<typeof orderedCandidateIds>;
     try {
       orderedIds = orderedCandidateIds(selected);
       if (
@@ -381,7 +381,7 @@ export default function CustomerMatchingScreen() {
       setError(
         problem instanceof Error
           ? problem.message
-          : 'Vui lòng chọn đủ hai kỹ thuật viên.',
+          : 'Vui lòng chọn 1 hoặc 2 kỹ thuật viên.',
       );
       return;
     }
@@ -610,14 +610,14 @@ export default function CustomerMatchingScreen() {
       || uncertainSend || attemptLocked || rejectedDefinitive
       || !booking || !linkedOrder || !currentUserId) return;
     if (!mayRequestLinkedReplacement(booking, linkedOrder, currentUserId)) return;
-    let orderedIds: readonly [string, string];
+    let orderedIds: ReturnType<typeof orderedCandidateIds>;
     try {
       orderedIds = orderedCandidateIds(selected);
       if (!orderedIds.every((id) => candidates.some((candidate) => candidate.userId === id))) {
         throw new Error('Kỹ thuật viên đã chọn không còn nằm trong danh sách hiện tại.');
       }
     } catch (problem) {
-      setError(problem instanceof Error ? problem.message : 'Vui lòng chọn đủ hai kỹ thuật viên.');
+      setError(problem instanceof Error ? problem.message : 'Vui lòng chọn 1 hoặc 2 kỹ thuật viên.');
       return;
     }
     const snapshot: LinkedReselectPrePostSnapshot = {
@@ -865,13 +865,13 @@ export default function CustomerMatchingScreen() {
               <>
                 <Text style={[styles.heading, { color: colors.text }]}>
                   {linkedMode
-                    ? `Yêu cầu chọn hai thợ mới (hệ thống sẽ kiểm tra) (${selected.length}/2)`
-                    : `Chọn hai người theo thứ tự ưu tiên (${selected.length}/2)`}
+                    ? 'Yêu cầu chọn 1 hoặc 2 thợ mới (hệ thống sẽ kiểm tra) (' + selected.length + '/2)'
+                    : 'Chọn 1 hoặc 2 người theo thứ tự ưu tiên (' + selected.length + '/2)'}
                 </Text>
                 <Text style={[styles.note, { color: colors.textSecondary }]}>
                   {linkedMode
                     ? 'Thử yêu cầu chọn thợ mới; hệ thống kiểm tra trước khi gửi. Chỉ hệ thống mới quyết định lời mời có được tạo hay không.'
-                    : 'Chạm người thứ nhất để mời trước; người thứ hai dự phòng. Chạm lại để bỏ chọn.'}
+                    : 'Bạn có thể chọn 1 người để mời ngay, hoặc chọn thêm người thứ hai làm dự phòng. Thứ tự chọn là thứ tự ưu tiên.'}
                 </Text>
                 {candidateState === 'none' && (
                   <View style={styles.card}>
@@ -888,12 +888,10 @@ export default function CustomerMatchingScreen() {
                 {candidateState === 'one' && (
                   <View style={styles.card}>
                     <Text style={{ color: colors.textSecondary }}>
-                      Hiện chỉ có 1/2 kỹ thuật viên phù hợp. Cần đủ hai người khác nhau để gửi lượt
-                      mời theo thứ tự ưu tiên.
+                      Hiện có 1 kỹ thuật viên phù hợp. Bạn có thể chọn người này và gửi lời mời ngay.
                     </Text>
                     <Text style={[styles.note, { color: colors.textSecondary }]}>
-                      Hãy làm mới bằng GET hoặc quay lại kiểm tra lịch hẹn; không tự gửi một người
-                      hoặc tạo Booking khác.
+                      Nếu muốn có thêm lựa chọn, hãy làm mới bằng GET sau một lúc; không cần tạo Booking khác.
                     </Text>
                   </View>
                 )}
@@ -912,10 +910,10 @@ export default function CustomerMatchingScreen() {
                     </TouchableOpacity>
                   );
                 })}
-                <TouchableOpacity accessibilityRole="button" onPress={sendShortlist} disabled={selected.length !== 2 || sending}
-                  style={[styles.action, { backgroundColor: selected.length === 2 ? colors.primary : colors.border }]}>
+                <TouchableOpacity accessibilityRole="button" onPress={sendShortlist} disabled={selected.length < 1 || sending}
+                  style={[styles.action, { backgroundColor: selected.length >= 1 ? colors.primary : colors.border }]}>
                   <Text style={styles.actionText}>
-                    {sending ? 'Đang gửi...' : linkedMode ? 'Gửi yêu cầu chọn hai thợ mới' : 'Xác nhận mời hai kỹ thuật viên'}
+                    {sending ? 'Đang gửi...' : linkedMode ? 'Gửi yêu cầu chọn ' + selected.length + ' thợ mới' : 'Xác nhận mời ' + selected.length + ' kỹ thuật viên'}
                   </Text>
                 </TouchableOpacity>
               </>
