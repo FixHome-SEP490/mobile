@@ -3,7 +3,7 @@ export type RootStackParamList = {
   Auth: undefined;
   CustomerMain: undefined;
   TechnicianMain: undefined;
-  CustomerServices: { query?: string } | undefined;
+  CustomerServices: { query?: string; categoryCode?: string } | undefined;
   CustomerServiceDetail: { serviceId: string };
   /**
    * The booking flow. `prefill` is how the assistant hands a customer over:

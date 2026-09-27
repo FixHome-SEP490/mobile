@@ -15,21 +15,29 @@ const ink = {
 };
 
 const semantic = {
-  error: '#D92D20', // danger-600
-  success: '#0E8A5F', // success-600
-  warning: '#B07D00', // warning-600
+  error: '#DC2626', // matches the red already hardcoded across most screens
+  success: '#059669', // matches the green already hardcoded across most screens
+  warning: '#D97706',
   info: '#175CD3', // info-600
 };
 
+// Neutrals aligned to the slate palette most screens already hardcode
+// (not the unused warm `ink` scale below), so referencing these tokens
+// is a no-visual-change swap for the majority of existing screens.
 export const lightTheme = {
   primary: brand[500],
   primaryDark: brand[700],
+  primaryStrong: brand[600], // the darker blue most screens hardcode as '#2563EB'
+  primarySoft: brand[50], // pill/badge backgrounds tinted with primary
+  primaryTint: brand[100], // avatar/icon-circle backgrounds tinted with primary
   secondary: ink[600],
-  background: ink[50],
+  background: '#F8FAFC',
   surface: '#FFFFFF',
-  text: ink[900],
-  textSecondary: ink[600],
-  border: ink[200],
+  text: '#0F172A',
+  textSecondary: '#64748B',
+  muted: '#94A3B8', // placeholders, disabled text, inactive icons
+  border: '#E2E8F0',
+  divider: '#F1F5F9', // hairline separators, lighter than border
   ...semantic,
 };
 
@@ -37,12 +45,17 @@ export const lightTheme = {
 export const darkTheme = {
   primary: brand[500],
   primaryDark: brand[400],
+  primaryStrong: brand[300],
+  primarySoft: '#1E3A5F',
+  primaryTint: '#1E3A5F',
   secondary: ink[400],
-  background: ink[900],
-  surface: ink[800],
-  text: ink[50],
-  textSecondary: ink[300],
-  border: ink[700],
+  background: '#0F172A',
+  surface: '#1E293B',
+  text: '#F8FAFC',
+  textSecondary: '#94A3B8',
+  muted: '#64748B',
+  border: '#334155',
+  divider: '#334155',
   ...semantic,
 };
 
