@@ -191,6 +191,7 @@ export default function TechnicianProfileScreen() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount
     void loadTechnicianProfile();
   }, [loadTechnicianProfile]);
 

@@ -155,10 +155,6 @@ export default function CustomerHomeScreen() {
   const addressSheetRef = useRef<BottomSheetModal>(null);
   const snapPoints = useMemo(() => ['50%', '80%'], []);
 
-  const openAddressSheet = useCallback(() => {
-    addressSheetRef.current?.present();
-  }, []);
-
   const closeAddressSheet = useCallback(() => {
     addressSheetRef.current?.dismiss();
   }, []);

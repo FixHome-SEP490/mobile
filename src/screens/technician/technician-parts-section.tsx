@@ -13,7 +13,6 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  ScrollView,
   Modal,
   Alert,
 } from 'react-native';
@@ -148,6 +147,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount
     void loadPartRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
@@ -464,7 +464,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
           <View style={styles.emptyBox}>
             <Ionicons name="cube-outline" size={28} color={colors.muted} />
             <Text style={styles.emptyTitle}>Chưa có yêu cầu linh kiện nào cho đơn này.</Text>
-            <Text style={styles.jobMeta}>Nếu cần linh kiện dự kiến trước khi đi hoặc phát sinh khi sửa, hãy bấm "Tạo yêu cầu linh kiện" ở trên.</Text>
+            <Text style={styles.jobMeta}>Nếu cần linh kiện dự kiến trước khi đi hoặc phát sinh khi sửa, hãy bấm &quot;Tạo yêu cầu linh kiện&quot; ở trên.</Text>
           </View>
         )
       ) : (

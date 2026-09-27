@@ -43,7 +43,7 @@ export interface PartRequest {
 }
 
 export interface CreatePartRequestPayload {
-  items: Array<{ partCatalogId: string; quantity: number; note?: string }>;
+  items: { partCatalogId: string; quantity: number; note?: string }[];
   fulfillmentMethod?: FulfillmentMethod;
   reason?: string;
 }

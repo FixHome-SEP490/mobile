@@ -62,6 +62,7 @@ export default function TechnicianHomeScreen() {
 
   useEffect(() => {
     let mounted = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount, guarded by `mounted`
     void loadStats();
     technicianProfileApi
       .getMyProfile()
@@ -70,7 +71,6 @@ export default function TechnicianHomeScreen() {
     return () => {
       mounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onRefresh = async () => {

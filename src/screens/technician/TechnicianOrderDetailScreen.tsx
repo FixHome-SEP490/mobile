@@ -896,7 +896,7 @@ export default function TechnicianOrderDetailScreen() {
   // kept at 1 so the shared line validation never blocks on it.
   useEffect(() => {
     if (!proposalState.draft.quantity) {
-      onProposalField.quantity('1');
+      proposalRef.current?.setField('quantity', '1');
     }
   }, [proposalState.draft.quantity]);
   const onProposalConfirm = () => { proposalRef.current?.requestConfirm(); };
@@ -1251,7 +1251,7 @@ export default function TechnicianOrderDetailScreen() {
                     Backend vẫn kiểm tra số ảnh AFTER cấu hình, báo giá và mọi chi phí đang chờ.
                   </Text>
                   <Text style={styles.nextStepWait}>
-                    Gửi yêu cầu nghiệm thu ở mục "6. Khách hàng nghiệm thu & thanh toán" bên dưới.
+                    Gửi yêu cầu nghiệm thu ở mục &quot;6. Khách hàng nghiệm thu & thanh toán&quot; bên dưới.
                   </Text>
                 </>
               ) : (
@@ -2095,7 +2095,7 @@ export default function TechnicianOrderDetailScreen() {
                   </Text>
                 </View>
                 <Text style={[styles.jobMeta, { fontSize: 11, marginTop: 4 }]}>
-                  Có thu tiền mặt: khai báo ở thẻ "Thanh toán tiền mặt" bên dưới. Khách trả online: chỉ cần chờ khách thanh toán qua app.
+                  Có thu tiền mặt: khai báo ở thẻ &quot;Thanh toán tiền mặt&quot; bên dưới. Khách trả online: chỉ cần chờ khách thanh toán qua app.
                 </Text>
                 <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button">
                   <Text style={styles.retryText}>{refreshing ? 'Đang kiểm tra...' : 'Kiểm tra trạng thái nghiệm thu/thanh toán'}</Text>
