@@ -1,6 +1,7 @@
 import { useAppTheme } from '../../constants/theme';
 import React from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, StatusBar } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -15,7 +16,13 @@ export default function CustomerCompletedScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.navigate('CustomerMain')} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('CustomerMain')}
+          style={styles.backBtn}
+          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+          accessibilityRole="button"
+          accessibilityLabel="Quay lại"
+        >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Hoàn thành</Text>
@@ -69,10 +76,16 @@ export default function CustomerCompletedScreen() {
             <Text style={styles.paymentTitle}>Ví / thẻ đã liên kết</Text>
             <Text style={styles.paymentDesc}>•••• 9210 · mặc định</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.navigate('CustomerReview')}>
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            navigation.navigate('CustomerReview');
+          }}
+        >
           <Text style={styles.primaryBtnText}>Thanh toán 350.000đ</Text>
         </TouchableOpacity>
       </ScrollView>

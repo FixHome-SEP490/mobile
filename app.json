@@ -37,6 +37,12 @@
           "locationWhenInUsePermission": "FixHome cần vị trí của bạn khi dùng ứng dụng để kỹ thuật viên check-in khi đã đến nhà khách và để bạn chọn địa chỉ sửa chữa. Ứng dụng không theo dõi vị trí nền."
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "FixHome cần quyền camera để bạn quét mã QR xác nhận đã nhận linh kiện từ kho."
+        }
+      ],
       "expo-web-browser"
     ]
   }

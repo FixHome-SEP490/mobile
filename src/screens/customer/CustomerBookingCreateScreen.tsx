@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,7 +9,15 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import {
+  BottomSheetModal,
+  BottomSheetBackdrop,
+  BottomSheetFlatList,
+  BottomSheetTextInput,
+} from '@gorhom/bottom-sheet';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import {
   useFocusEffect,
   useNavigation,
@@ -19,7 +27,8 @@ import {
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../../constants/theme';
 import { bookingsApi } from '../../api/bookings.api';
-import { servicesApi, type ServiceItem } from '../../api/services.api';
+import { servicesApi, type ServiceItem, type CategoryItem } from '../../api/services.api';
+import CategoryPills from '../../components/CategoryPills';
 import {
   addressReadyForBooking,
   bookingCreateErrorStatus,
@@ -84,6 +93,11 @@ export default function CustomerBookingCreateScreen() {
   const [reconciling, setReconciling] = useState(false);
   const submittingRef = useRef(false);
   const loadGenerationRef = useRef(0);
+  const [pickerQuery, setPickerQuery] = useState('');
+  const [pickerCategoryId, setPickerCategoryId] = useState<string | null>(null);
+  const [pickerCategories, setPickerCategories] = useState<CategoryItem[]>([]);
+  const pickerSheetRef = useRef<BottomSheetModal>(null);
+  const pickerSnapPoints = useMemo(() => ['80%'], []);
 
   const loadOptions = useCallback(async () => {
     const generation = ++loadGenerationRef.current;
@@ -171,6 +185,34 @@ export default function CustomerBookingCreateScreen() {
     !selectedAddressReady ||
     !description.trim();
 
+  const openPicker = () => {
+    if (pickerCategories.length === 0) {
+      void servicesApi
+        .getCategories()
+        .then(setPickerCategories)
+        .catch(() => {
+          // No pills, name search inside the picker still works.
+        });
+    }
+    pickerSheetRef.current?.present();
+  };
+
+  const autoOpenedPickerRef = useRef(false);
+  useEffect(() => {
+    if (autoOpenedPickerRef.current) return;
+    if (loading || loadError || selectedService || services.length === 0) return;
+    autoOpenedPickerRef.current = true;
+    openPicker();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, loadError, selectedService, services]);
+
+
+  const pickerServices = services.filter((service) => {
+    if (pickerCategoryId && service.categoryId !== pickerCategoryId) return false;
+    const q = pickerQuery.trim().toLowerCase();
+    return q === '' || service.name.toLowerCase().includes(q);
+  });
+
   const openAddressEditor = () => {
     const rootNavigation = navigation as unknown as {
       navigate: (name: 'CustomerMain', params: { screen: 'Profile' }) => void;
@@ -179,6 +221,7 @@ export default function CustomerBookingCreateScreen() {
   };
 
   const submit = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (
       submittingRef.current ||
       visibleCreatedBookingId ||
@@ -334,13 +377,26 @@ export default function CustomerBookingCreateScreen() {
   const action = (label: string, onPress: () => void, disabled = false) => (
     <TouchableOpacity accessibilityRole="button" disabled={disabled} onPress={onPress}
       style={[styles.action, { backgroundColor: disabled ? colors.border : colors.primary }]}>
-      <Text style={[styles.actionText, { color: disabled ? colors.textSecondary : '#FFFFFF' }]}>{label}</Text>
+      <Text style={[styles.actionText, { color: disabled ? colors.textSecondary : colors.surface }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+
+  const backBtn = (
+    <TouchableOpacity
+      onPress={() => navigation.goBack()}
+      style={styles.backBtn}
+      accessibilityRole="button"
+      accessibilityLabel="Quay lại"
+      hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+    >
+      <Ionicons name="arrow-back" size={24} color={colors.text} />
     </TouchableOpacity>
   );
 
   if (!isAuthenticated || userRole !== UserRole.CUSTOMER) {
     return (
       <SafeAreaView style={[styles.page, { backgroundColor: colors.background }]}>
+        {backBtn}
         <Text style={[styles.title, { color: colors.text }]}>Đăng nhập bằng tài khoản khách hàng để đặt thợ.</Text>
         {action('Đăng nhập', () => navigation.navigate('Auth'))}
       </SafeAreaView>
@@ -350,6 +406,7 @@ export default function CustomerBookingCreateScreen() {
   return (
     <SafeAreaView style={[styles.page, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {backBtn}
         <Text style={[styles.title, { color: colors.text }]}>Đặt lịch sửa chữa</Text>
         <Text style={[styles.note, { color: colors.textSecondary }]}>Chọn dịch vụ, địa chỉ đã lưu và khung giờ thật. AI chỉ hỗ trợ gợi ý, không tự đặt lịch.</Text>
         {loading && <ActivityIndicator color={colors.primary} accessibilityLabel="Đang tải dịch vụ và địa chỉ" />}
@@ -363,7 +420,7 @@ export default function CustomerBookingCreateScreen() {
               }}
               style={[styles.action, { backgroundColor: colors.primary }]}
             >
-              <Text style={[styles.actionText, { color: '#FFFFFF' }]}>Tải lại</Text>
+              <Text style={[styles.actionText, { color: colors.surface }]}>Tải lại</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -375,26 +432,25 @@ export default function CustomerBookingCreateScreen() {
                 Chưa có dịch vụ khả dụng. Vui lòng thử lại sau.
               </Text>
             )}
-            {services.map((service) => (
+
+            {!!selectedService ? (
               <TouchableOpacity
-                key={service.id}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: serviceId === service.id }}
-                style={[
-                  styles.option,
-                  {
-                    borderColor: serviceId === service.id ? colors.primary : colors.border,
-                    backgroundColor: colors.surface,
-                  },
-                ]}
-                onPress={() => setServiceId(service.id)}
+                accessibilityRole="button"
+                style={[styles.option, { borderColor: colors.primary, backgroundColor: colors.surface }]}
+                onPress={openPicker}
               >
-                <Text style={{ color: colors.text }}>
-                  {service.name}
-                  {serviceId === service.id ? ' ✓' : ''}
-                </Text>
+                <Text style={{ color: colors.text, fontWeight: '700' }}>{selectedService.name}</Text>
+                <Text style={{ color: colors.primary }}>Đổi dịch vụ</Text>
               </TouchableOpacity>
-            ))}
+            ) : services.length > 0 ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                style={[styles.option, { borderColor: colors.border, backgroundColor: colors.surface }]}
+                onPress={openPicker}
+              >
+                <Text style={{ color: colors.textSecondary }}>Chọn dịch vụ...</Text>
+              </TouchableOpacity>
+            ) : null}
 
             {!!selectedService && (
               <View style={[styles.section, { backgroundColor: colors.surface }]}>
@@ -437,7 +493,10 @@ export default function CustomerBookingCreateScreen() {
                       backgroundColor: colors.surface,
                     },
                   ]}
-                  onPress={() => setAddressId(address.id)}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setAddressId(address.id);
+                  }}
                 >
                   <Text style={{ color: colors.text }}>
                     {address.label || 'Địa chỉ'}
@@ -491,7 +550,10 @@ export default function CustomerBookingCreateScreen() {
                   key={offset}
                   accessibilityRole="radio"
                   accessibilityState={{ checked: dayOffset === offset }}
-                  onPress={() => setDayOffset(offset)}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setDayOffset(offset);
+                  }}
                   style={[
                     styles.chip,
                     {
@@ -514,7 +576,10 @@ export default function CustomerBookingCreateScreen() {
                   key={time}
                   accessibilityRole="radio"
                   accessibilityState={{ checked: startTime === time }}
-                  onPress={() => setStartTime(time)}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setStartTime(time);
+                  }}
                   style={[
                     styles.chip,
                     {
@@ -545,7 +610,7 @@ export default function CustomerBookingCreateScreen() {
               <Text
                 style={[
                   styles.actionText,
-                  { color: submitDisabled ? colors.textSecondary : '#FFFFFF' },
+                  { color: submitDisabled ? colors.textSecondary : colors.surface },
                 ]}
               >
                 {submitting
@@ -596,8 +661,68 @@ export default function CustomerBookingCreateScreen() {
             )}
           </View>
         )}
-        {action('Quay lại', () => navigation.goBack())}
       </ScrollView>
+
+      <BottomSheetModal
+        ref={pickerSheetRef}
+        snapPoints={pickerSnapPoints}
+        backdropComponent={(props) => (
+          <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} />
+        )}
+      >
+        <View style={[styles.pickerHeader, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}>Chọn dịch vụ</Text>
+          {pickerCategories.length > 0 && (
+            <CategoryPills
+              categories={pickerCategories}
+              selectedId={pickerCategoryId}
+              onSelect={setPickerCategoryId}
+            />
+          )}
+          <BottomSheetTextInput
+            value={pickerQuery}
+            onChangeText={setPickerQuery}
+            placeholder="Tìm dịch vụ..."
+            placeholderTextColor={colors.textSecondary}
+            style={[
+              styles.input,
+              { minHeight: 44, color: colors.text, borderColor: colors.border, backgroundColor: colors.background },
+            ]}
+          />
+        </View>
+        <BottomSheetFlatList
+          data={pickerServices}
+          keyExtractor={(service) => service.id}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.pickerListContent}
+          renderItem={({ item: service }) => (
+            <TouchableOpacity
+              accessibilityRole="radio"
+              accessibilityState={{ checked: serviceId === service.id }}
+              style={[
+                styles.option,
+                {
+                  borderColor: serviceId === service.id ? colors.primary : colors.border,
+                  backgroundColor: colors.surface,
+                },
+              ]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setServiceId(service.id);
+                pickerSheetRef.current?.dismiss();
+              }}
+            >
+              <Text style={{ color: colors.text }}>
+                {service.name}
+                {serviceId === service.id ? ' ✓' : ''}
+              </Text>
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={
+            <Text style={{ color: colors.textSecondary, padding: 14 }}>Không tìm thấy dịch vụ phù hợp.</Text>
+          }
+        />
+      </BottomSheetModal>
     </SafeAreaView>
   );
 }
@@ -605,6 +730,7 @@ export default function CustomerBookingCreateScreen() {
 const styles = StyleSheet.create({
   page: { flex: 1 },
   content: { padding: 18, paddingBottom: 40, gap: 12 },
+  backBtn: { width: 40, height: 40, justifyContent: 'center' },
   title: { fontSize: 23, fontWeight: '700', marginVertical: 8 },
   section: { padding: 14, borderRadius: 12, gap: 12 },
   sectionTitle: { fontSize: 16, fontWeight: '700', marginTop: 12 },
@@ -615,4 +741,6 @@ const styles = StyleSheet.create({
   input: { minHeight: 94, padding: 12, borderWidth: 1, borderRadius: 12, textAlignVertical: 'top' },
   action: { padding: 15, marginTop: 7, borderRadius: 12, alignItems: 'center' },
   actionText: { fontWeight: '700', fontSize: 15 },
+  pickerHeader: { paddingHorizontal: 18, paddingBottom: 10, borderBottomWidth: 1, gap: 8 },
+  pickerListContent: { padding: 18, paddingTop: 10, gap: 10 },
 });

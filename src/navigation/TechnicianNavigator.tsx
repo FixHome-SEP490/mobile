@@ -8,8 +8,8 @@ import TechnicianJobsScreen from '../screens/technician/TechnicianJobsScreen';
 import TechnicianNotificationsScreen from '../screens/technician/TechnicianNotificationsScreen';
 import TechnicianProfileScreen from '../screens/technician/TechnicianProfileScreen';
 import { GlassTabBar } from '../components/navigation/GlassTabBar';
+import { AvatarTabIcon } from '../components/navigation/AvatarTabIcon';
 import { useAuthStore } from '../store';
-import { Image } from 'react-native';
 import { notificationsApi } from '../api/notifications.api';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -43,7 +43,7 @@ export default function TechnicianNavigator() {
             return <Bell size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
           } else if (route.name === 'Profile') {
             if (user?.avatarUrl) {
-              return <Image source={{ uri: user.avatarUrl }} style={{ width: size + 5, height: size + 5, borderRadius: (size + 5) / 2, borderColor: '#FFFFFF' }} />;
+              return <AvatarTabIcon uri={user.avatarUrl} size={size} color={color} focused={focused} />;
             }
             return <User size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
           }

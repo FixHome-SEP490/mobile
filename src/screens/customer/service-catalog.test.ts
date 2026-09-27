@@ -115,6 +115,17 @@ describe('createServiceCatalogLoader (paged search, stale-safe)', () => {
     expect(h.getServices).toHaveBeenCalledWith(expect.objectContaining({ search: 'máy lạnh', page: 1 }));
   });
 
+  it('forwards categoryId to the Backend and keeps it across loadMore/retry', async () => {
+    const h = setup();
+    h.getServices.mockResolvedValue({ data: [h.row()], total: 45 });
+    await h.loader.search('máy', UUID_B);
+    expect(h.getServices).toHaveBeenCalledWith(expect.objectContaining({ categoryId: UUID_B }));
+    await h.loader.loadMore();
+    expect(h.getServices).toHaveBeenLastCalledWith(expect.objectContaining({ categoryId: UUID_B, page: 2 }));
+    await h.loader.retry();
+    expect(h.getServices).toHaveBeenLastCalledWith(expect.objectContaining({ categoryId: UUID_B, page: 1 }));
+  });
+
   it('shows an honest empty state for a zero catalog', async () => {
     const h = setup();
     h.getServices.mockResolvedValue({ data: [], total: 0 });

@@ -76,6 +76,14 @@ export interface CostProposalDeps {
   refreshCosts: () => Promise<void>;
   onAccessDenied: () => void;
   notify: (title: string, message: string) => void;
+  /**
+   * Optional FixHome-catalog part lines picked in the screen's own part picker
+   * UI. Omitted/empty in every existing caller and test — the labor-only
+   * payload shape stays byte-identical when no parts are selected.
+   */
+  getExtraPartItems?: () => CreateAdditionalCostPayload['items'];
+  /** Only consulted when getExtraPartItems() returns at least one FixHome line. */
+  getFulfillment?: () => { method: 'pickup' | 'delivery'; shippingFee: number } | null;
 }
 
 function statusOf(error: unknown): number | undefined {
@@ -207,10 +215,17 @@ export function createCostProposalController(
       deps.getOrder()?.id === target &&
       costProposalTarget(deps.getOrder(), deps.getCostStatuses) === target;
     try {
+      const extraParts = deps.getExtraPartItems?.() ?? [];
+      const hasFixHomeParts = extraParts.some((item) => item.partSource === 'fixhome');
+      const fulfillment = hasFixHomeParts ? deps.getFulfillment?.() ?? null : null;
       const payload: CreateAdditionalCostPayload = {
         reason,
-        items: [{ type: 'labor', description: line.description, quantity: line.quantity, unitPrice: line.unitPrice }],
+        items: [
+          { type: 'labor', description: line.description, quantity: line.quantity, unitPrice: line.unitPrice },
+          ...extraParts,
+        ],
         ...(note !== null ? { note } : {}),
+        ...(fulfillment ? { fulfillmentMethod: fulfillment.method, shippingFee: fulfillment.method === 'delivery' ? fulfillment.shippingFee : 0 } : {}),
       };
       await deps.createProposal(target, payload);
       if (!sameSession()) {

@@ -12,15 +12,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ordersApi } from '../../api/orders.api';
+import { ordersApi, type ServiceOrderItem } from '../../api/orders.api';
+import { technicianProfileApi } from '../../api/technician-profile.api';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList, TechnicianTabParamList } from '../../types';
 import { useChatUnreadCount } from '../../hooks/useChatUnreadCount';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
+import { useAppTheme } from '../../constants/theme';
 
 export default function TechnicianHomeScreen() {
+  const { colors, isDark } = useAppTheme();
+  const styles = getStyles(colors);
   const { user } = useAuthStore();
   const navigation = useNavigation<BottomTabNavigationProp<TechnicianTabParamList>>();
   // Chat lives on the root stack, not in the technician tab set.
@@ -30,6 +34,8 @@ export default function TechnicianHomeScreen() {
   const [completedCount, setCompletedCount] = useState(0);
   const [earnings, setEarnings] = useState(0);
   const [activeCount, setActiveCount] = useState(0);
+  const [recentCompleted, setRecentCompleted] = useState<ServiceOrderItem[]>([]);
+  const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadStats = async () => {
@@ -41,9 +47,13 @@ export default function TechnicianHomeScreen() {
           ['ACCEPTED', 'EN_ROUTE', 'UNDER_REPAIR', 'IN_PROGRESS'].includes(String(o.status).toUpperCase())
         );
         const totalEarn = completed.reduce((sum, o) => sum + (o.laborTotal || o.grandTotal || 0), 0);
+        const sortedCompleted = [...completed].sort((a, b) =>
+          (b.completionRequestedAt || b.scheduledAt).localeCompare(a.completionRequestedAt || a.scheduledAt),
+        );
         setCompletedCount(completed.length);
         setEarnings(totalEarn);
         setActiveCount(active.length);
+        setRecentCompleted(sortedCompleted.slice(0, 5));
       }
     } catch {
       // Keep defaults
@@ -52,23 +62,15 @@ export default function TechnicianHomeScreen() {
 
   useEffect(() => {
     let mounted = true;
-    ordersApi
-      .getMyOrders()
-      .then((orders) => {
-        if (!mounted || !Array.isArray(orders)) return;
-        const completed = orders.filter((o) => String(o.status).toUpperCase() === 'COMPLETED');
-        const active = orders.filter((o) =>
-          ['ACCEPTED', 'EN_ROUTE', 'UNDER_REPAIR', 'IN_PROGRESS'].includes(String(o.status).toUpperCase())
-        );
-        const totalEarn = completed.reduce((sum, o) => sum + (o.laborTotal || o.grandTotal || 0), 0);
-        setCompletedCount(completed.length);
-        setEarnings(totalEarn);
-        setActiveCount(active.length);
-      })
+    void loadStats();
+    technicianProfileApi
+      .getMyProfile()
+      .then((profile) => { if (mounted) setIsAvailable(profile.isAvailable); })
       .catch(() => {});
     return () => {
       mounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onRefresh = async () => {
@@ -81,13 +83,21 @@ export default function TechnicianHomeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
 
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.avatarContainer}>
-            <Ionicons name="person" size={24} color="#2563EB" />
+            <Ionicons name="person" size={24} color={colors.primaryStrong} />
+            {isAvailable !== null && (
+              <View
+                style={[
+                  styles.availabilityDot,
+                  { backgroundColor: isAvailable ? colors.success : colors.muted },
+                ]}
+              />
+            )}
           </View>
           <View>
             <Text style={styles.greetingText}>Xin chào 👋</Text>
@@ -102,7 +112,7 @@ export default function TechnicianHomeScreen() {
               onPress={() => navigation.navigate('Jobs')}
               activeOpacity={0.8}
             >
-              <Ionicons name="flash" size={14} color="#FFFFFF" />
+              <Ionicons name="flash" size={14} color={colors.surface} />
               <Text style={styles.activeJobBadgeText}>{activeCount} đơn chờ</Text>
             </TouchableOpacity>
           )}
@@ -112,8 +122,11 @@ export default function TechnicianHomeScreen() {
             style={styles.headerIconBtn}
             onPress={() => rootNavigation.navigate('ChatList')}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={chatUnread > 0 ? `Tin nhắn, ${chatUnread} tin chưa đọc` : 'Tin nhắn'}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name="chatbubble-ellipses-outline" size={22} color="#0F172A" />
+            <Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.text} />
             {chatUnread > 0 && (
               <View style={styles.chatBadge}>
                 <Text style={styles.chatBadgeText}>
@@ -134,7 +147,7 @@ export default function TechnicianHomeScreen() {
       >
         {/* Tổng quan tuần này */}
         <View style={styles.sectionHeader}>
-          <Ionicons name="bar-chart" size={20} color="#2563EB" />
+          <Ionicons name="bar-chart" size={20} color={colors.primaryStrong} />
           <Text style={styles.sectionTitle}>Tổng quan tuần này</Text>
         </View>
 
@@ -168,7 +181,7 @@ export default function TechnicianHomeScreen() {
         <View style={styles.targetContainer}>
           <View style={styles.targetRow}>
             <View style={styles.targetIcon}>
-              <Ionicons name="calendar" size={14} color="#2563EB" />
+              <Ionicons name="calendar" size={14} color={colors.primaryStrong} />
             </View>
             <Text style={styles.targetLabel}>Mục tiêu tuần</Text>
             <Text style={styles.targetValue}>{completedCount}/20 đơn</Text>
@@ -185,7 +198,7 @@ export default function TechnicianHomeScreen() {
           activeOpacity={0.85}
         >
           <View style={styles.jobsShortcutIcon}>
-            <Ionicons name="briefcase" size={20} color="#2563EB" />
+            <Ionicons name="briefcase" size={20} color={colors.primaryStrong} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.jobsShortcutTitle}>Quản lý công việc</Text>
@@ -193,26 +206,33 @@ export default function TechnicianHomeScreen() {
               {activeCount > 0 ? `Có ${activeCount} đơn đang cần bạn xử lý` : 'Xem danh sách việc nhận'}
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
         </TouchableOpacity>
 
         {/* Lịch sử hoạt động gần đây */}
         <View style={styles.sectionHeader}>
-          <Ionicons name="time" size={20} color="#2563EB" />
+          <Ionicons name="time" size={20} color={colors.primaryStrong} />
           <Text style={styles.sectionTitle}>Hoạt động gần đây</Text>
         </View>
         <View style={styles.historyContainer}>
-          {[1, 2, 3, 4, 5].map((item) => (
-             <View key={item} style={styles.historyItem}>
-               <View style={styles.historyIconBox}>
-                 <Ionicons name="checkmark-circle" size={16} color="#10B981" />
-               </View>
-               <View style={styles.historyItemContent}>
-                 <Text style={styles.historyItemTitle}>Hoàn thành đơn sửa máy lạnh</Text>
-                 <Text style={styles.historyItemTime}>Hôm qua, 14:30 • Thu nhập: 250.000đ</Text>
-               </View>
-             </View>
-          ))}
+          {recentCompleted.length === 0 ? (
+            <Text style={styles.historyEmptyText}>Chưa có hoạt động nào.</Text>
+          ) : (
+            recentCompleted.map((order) => (
+              <View key={order.id} style={styles.historyItem}>
+                <View style={styles.historyIconBox}>
+                  <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+                </View>
+                <View style={styles.historyItemContent}>
+                  <Text style={styles.historyItemTitle}>Hoàn thành: {order.serviceName}</Text>
+                  <Text style={styles.historyItemTime}>
+                    {new Date(order.scheduledAt).toLocaleDateString('vi-VN')} • Thu nhập:{' '}
+                    {(order.laborTotal || order.grandTotal || 0).toLocaleString('vi-VN')}đ
+                  </Text>
+                </View>
+              </View>
+            ))
+          )}
         </View>
 
         {/* Banner Cuối */}
@@ -237,10 +257,10 @@ export default function TechnicianHomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   header: {
     flexDirection: 'row',
@@ -248,9 +268,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: colors.divider,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -261,18 +281,29 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  availabilityDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.surface,
   },
   greetingText: {
     fontSize: 12,
-    color: '#64748B',
+    color: colors.textSecondary,
   },
   headerName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
   },
   headerRight: {
     flexDirection: 'row',
@@ -283,7 +314,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.divider,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -292,7 +323,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 4,
     right: 4,
-    backgroundColor: '#EF4444',
+    backgroundColor: colors.error,
     minWidth: 16,
     height: 16,
     paddingHorizontal: 3,
@@ -300,10 +331,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#FFFFFF',
+    borderColor: colors.surface,
   },
   chatBadgeText: {
-    color: '#FFFFFF',
+    color: colors.surface,
     fontSize: 9,
     fontWeight: 'bold',
   },
@@ -311,13 +342,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primaryStrong,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 16,
   },
   activeJobBadgeText: {
-    color: '#FFFFFF',
+    color: colors.surface,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -333,7 +364,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
   },
   overviewRow: {
     flexDirection: 'row',
@@ -366,19 +397,19 @@ const styles = StyleSheet.create({
   cardValue: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#0F172A',
+    color: colors.text,
   },
   cardUnit: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#64748B',
+    color: colors.textSecondary,
   },
   targetContainer: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     marginBottom: 16,
   },
   targetRow: {
@@ -391,7 +422,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#DBEAFE',
+    backgroundColor: colors.primaryTint,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8,
@@ -405,27 +436,27 @@ const styles = StyleSheet.create({
   targetValue: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#2563EB',
+    color: colors.primaryStrong,
   },
   progressBarBg: {
     height: 8,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.border,
     borderRadius: 4,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primaryStrong,
     borderRadius: 4,
   },
   jobsShortcutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -437,7 +468,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -445,12 +476,12 @@ const styles = StyleSheet.create({
   jobsShortcutTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
     marginBottom: 2,
   },
   jobsShortcutSubtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: colors.textSecondary,
   },
   bottomBanner: {
     flexDirection: 'row',
@@ -475,7 +506,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
@@ -484,19 +515,19 @@ const styles = StyleSheet.create({
   joinBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
   },
   guideContainer: {
     marginBottom: 20,
   },
   guideCard: {
     flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     borderRadius: 12,
     overflow: 'hidden',
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
   guideImage: {
     width: 80,
@@ -511,18 +542,18 @@ const styles = StyleSheet.create({
   guideTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#0F172A',
+    color: colors.text,
     marginBottom: 4,
   },
   guideDate: {
     fontSize: 11,
-    color: '#64748B',
+    color: colors.textSecondary,
   },
   historyContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     padding: 16,
     marginBottom: 16,
   },
@@ -546,11 +577,17 @@ const styles = StyleSheet.create({
   historyItemTitle: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#0F172A',
+    color: colors.text,
     marginBottom: 2,
   },
   historyItemTime: {
     fontSize: 12,
-    color: '#64748B',
+    color: colors.textSecondary,
+  },
+  historyEmptyText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    paddingVertical: 8,
   },
 });

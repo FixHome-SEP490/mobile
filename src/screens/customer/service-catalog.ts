@@ -102,13 +102,19 @@ export interface CatalogPage {
  * query. Keeps last-good rows on transient failure.
  */
 export function createServiceCatalogLoader(
-  getServices: (params: { search: string; page: number; pageSize: number }) => Promise<CatalogPage>,
+  getServices: (params: {
+    search: string;
+    page: number;
+    pageSize: number;
+    categoryId?: string;
+  }) => Promise<CatalogPage>,
   write: (state: CatalogState) => void,
   pageSize: number = SERVICES_PAGE_SIZE,
 ) {
   let state = initialCatalogState;
   let generation = 0;
   let query = '';
+  let categoryId: string | undefined;
   let loaded = false;
   // A fresh page-1 search owns the list until it settles; appends started
   // while it is in flight would mix pages across queries.
@@ -123,7 +129,7 @@ export function createServiceCatalogLoader(
     if (!append) searchPending = true;
     publish({ loading: !loaded && !append, loadingMore: append, error: null });
     try {
-      const page = await getServices({ search: query, page: targetPage, pageSize });
+      const page = await getServices({ search: query, page: targetPage, pageSize, categoryId });
       if (!valid()) return;
       const rows = Array.isArray(page?.data) ? page.data : [];
       const total = typeof page?.total === 'number' && page.total >= 0 ? page.total : rows.length;
@@ -146,8 +152,9 @@ export function createServiceCatalogLoader(
       if (generationAtStart === generation) searchPending = false;
     }
   }
-  function search(nextQuery: string): Promise<void> {
+  function search(nextQuery: string, nextCategoryId?: string): Promise<void> {
     query = nextQuery;
+    categoryId = nextCategoryId;
     return load(1, false);
   }
   return {
@@ -159,9 +166,9 @@ export function createServiceCatalogLoader(
       if (state.services.length >= state.total) return Promise.resolve();
       return load(state.page + 1, true);
     },
-    /** Manual retry: reloads the current query from page one. */
+    /** Manual retry: reloads the current query/category from page one. */
     retry(): Promise<void> {
-      return search(query);
+      return search(query, categoryId);
     },
   };
 }

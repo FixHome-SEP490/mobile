@@ -25,6 +25,17 @@ export const initialJobsState: JobsState = {
   loading: true, refreshing: false, loadingMoreJobs: false,
   error: null, actionLoading: null, blockedOrderIds: [],
 };
+
+// Module-level (not component-level) so the last-loaded list survives a screen
+// remount — e.g. switching tabs away and back — instead of flashing the
+// full-page spinner again while a background refresh quietly catches up.
+let cachedJobsState: JobsState | null = null;
+let cachedJobsOwnerId: string | null = null;
+
+/** Snapshot to seed a fresh screen mount with, instead of `initialJobsState`. */
+export function getCachedJobsState(): JobsState {
+  return cachedJobsState ?? initialJobsState;
+}
 const deniedMessage = 'Không có quyền xem công việc. Vui lòng kiểm tra đăng nhập.';
 function accessDenied(error: unknown) {
   const status = (error as { response?: { status?: number } } | null)?.response?.status;
@@ -78,17 +89,19 @@ export function createJobsLoader(
 ) {
   const pageSize = options.pageSize ?? JOBS_PAGE_SIZE;
   const getOrdersPage = options.getOrdersPage;
-  let state = initialJobsState;
+  let state = cachedJobsState ?? initialJobsState;
   let active = false;
-  let ownerId: string | null = null;
+  let ownerId: string | null = cachedJobsOwnerId;
   let focusGeneration = 0;
   let requestGeneration = 0;
-  let loaded = false;
+  let loaded = cachedJobsState !== null;
   let inFlight: Promise<void> | null = null;
   let unsubscribe: (() => void) | undefined;
   const authorized = () => ownerId !== null && session.getUserId() === ownerId;
   const publish = (patch: Partial<JobsState>) => {
     state = { ...state, ...patch };
+    cachedJobsState = state;
+    cachedJobsOwnerId = ownerId;
     if (active) write(state);
   };
   function invalidate() { ++requestGeneration; inFlight = null; }

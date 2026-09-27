@@ -11,9 +11,10 @@ function unwrap<T>(payload: { data: T } | T): T {
 export interface CategoryItem {
   id: string;
   name: string;
-  slug: string;
-  description?: string;
-  iconUrl?: string;
+  code: string;
+  slug?: string | null;
+  description?: string | null;
+  iconKey?: string | null;
   isActive: boolean;
   sortOrder: number;
 }

@@ -6,12 +6,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
-import { servicesApi } from '../../api/services.api';
+import * as Haptics from 'expo-haptics';
+import { servicesApi, type CategoryItem } from '../../api/services.api';
 import {
   createServiceCatalogLoader,
   initialCatalogState,
   resolveServicePrice,
 } from './service-catalog';
+import CategoryPills from '../../components/CategoryPills';
 
 type ServicesRoute = RouteProp<RootStackParamList, 'CustomerServices'>;
 
@@ -31,14 +33,49 @@ export default function CustomerServicesScreen() {
     );
   }
 
-  // Debounced server search: every keystroke re-queries page one, and the
-  // loader drops stale responses so only the latest query renders.
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
+  const [categoriesLoaded, setCategoriesLoaded] = useState(false);
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+
+  // Resolve the requested categoryCode against the loaded categories exactly
+  // once, so a code that doesn't (yet) exist just falls back to unfiltered.
+  const requestedCategoryCode = useRef(route.params?.categoryCode);
   useEffect(() => {
+    let cancelled = false;
+    servicesApi
+      .getCategories()
+      .then((rows) => {
+        if (cancelled) return;
+        setCategories(rows);
+        const wanted = requestedCategoryCode.current;
+        if (wanted) {
+          setCategoryId(rows.find((category) => category.code === wanted)?.id ?? null);
+        }
+      })
+      .catch(() => {
+        // No pills, unfiltered search still works.
+      })
+      .finally(() => {
+        if (!cancelled) setCategoriesLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Debounced server search: every keystroke re-queries page one, and the
+  // loader drops stale responses so only the latest query renders. Held
+  // until categories resolve so a requested categoryCode never flashes the
+  // unfiltered list first.
+  useEffect(() => {
+    if (!categoriesLoaded) return;
     const timer = setTimeout(() => {
-      void loaderRef.current?.search(searchQuery.trim());
+      void loaderRef.current?.search(searchQuery.trim(), categoryId ?? undefined);
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, categoryId, categoriesLoaded]);
+
+  const selectedCategoryName = categories.find((category) => category.id === categoryId)?.name;
 
   const onRetry = () => { void loaderRef.current?.retry(); };
   const onLoadMore = () => { void loaderRef.current?.loadMore(); };
@@ -47,25 +84,42 @@ export default function CustomerServicesScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Quay lại"
+          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+        >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Tất cả dịch vụ</Text>
+        <Text style={styles.headerTitle}>{selectedCategoryName ?? 'Tất cả dịch vụ'}</Text>
         <View style={{ width: 40 }} />
       </View>
 
+      {categories.length > 0 && (
+        <View style={styles.pillsContainer}>
+          <CategoryPills categories={categories} selectedId={categoryId} onSelect={setCategoryId} />
+        </View>
+      )}
+
       <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#94A3B8" />
+        <Ionicons name="search" size={20} color={colors.muted} />
         <TextInput
           style={styles.searchInput}
           placeholder="Tìm kiếm dịch vụ..."
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor={colors.muted}
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
         {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={20} color="#94A3B8" />
+          <TouchableOpacity
+            onPress={() => setSearchQuery('')}
+            accessibilityRole="button"
+            accessibilityLabel="Xóa nội dung tìm kiếm"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Ionicons name="close-circle" size={20} color={colors.muted} />
           </TouchableOpacity>
         )}
       </View>
@@ -123,7 +177,10 @@ export default function CustomerServicesScreen() {
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.itemCard}
-              onPress={() => navigation.navigate('CustomerServiceDetail', { serviceId: item.id })}
+              onPress={() => {
+                Haptics.selectionAsync();
+                navigation.navigate('CustomerServiceDetail', { serviceId: item.id });
+              }}
               activeOpacity={0.7}
             >
               <View style={styles.iconContainer}>
@@ -133,7 +190,7 @@ export default function CustomerServicesScreen() {
                 <Text style={styles.itemName}>{item.name}</Text>
                 <Text style={styles.itemPrice}>{resolveServicePrice(item).text}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
             </TouchableOpacity>
           )}
         />
@@ -160,6 +217,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     justifyContent: 'center',
   },
   headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
+  pillsContainer: { paddingHorizontal: 16, backgroundColor: colors.surface },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -234,7 +292,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
   },
   itemInfo: {
     flex: 1,

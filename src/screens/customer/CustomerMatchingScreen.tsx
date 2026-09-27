@@ -1,5 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -344,10 +346,12 @@ export default function CustomerMatchingScreen() {
     if (!isVisibleBookingOwner(booking, currentUserId)) return;
     if (!canChooseTechnicians(booking)
       && !(linkedOrder && mayRequestLinkedReplacement(booking, linkedOrder, currentUserId))) return;
+    Haptics.selectionAsync();
     setSelected((previous) => toggleCandidate(previous, candidateUserId));
   };
 
   const sendShortlist = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (booking?.serviceOrderId && linkedOrder) {
       await sendLinkedReselect();
       return;
@@ -776,6 +780,15 @@ export default function CustomerMatchingScreen() {
   return (
     <SafeAreaView style={[styles.page, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Quay lại"
+          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
         <Text style={[styles.title, { color: colors.text }]}>Chọn kỹ thuật viên</Text>
         <Text style={[styles.note, { color: colors.textSecondary }]}>Mã Booking: {bookingId}</Text>
         {!isAuthenticated || role !== UserRole.CUSTOMER ? (
@@ -933,9 +946,6 @@ export default function CustomerMatchingScreen() {
             </TouchableOpacity>
           </>
         )}
-        <TouchableOpacity accessibilityRole="button" onPress={() => navigation.goBack()} style={[styles.action, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}>
-          <Text style={{ color: colors.text, fontWeight: '700' }}>Quay lại</Text>
-        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -944,6 +954,7 @@ export default function CustomerMatchingScreen() {
 const styles = StyleSheet.create({
   page: { flex: 1 },
   content: { padding: 18, paddingBottom: 42, gap: 12 },
+  backBtn: { width: 40, height: 40, justifyContent: 'center' },
   title: { fontSize: 23, fontWeight: '700', marginBottom: 6 },
   heading: { fontSize: 16, fontWeight: '700' },
   note: { fontSize: 13, lineHeight: 21 },

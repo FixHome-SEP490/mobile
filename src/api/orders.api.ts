@@ -1,6 +1,11 @@
 // src/api/orders.api.ts
 import apiClient from './client';
 
+// Backend's Cloudinary round-trip for evidence photos is observed at 30s+
+// (see service-orders.service.ts uploadEvidence comment); the shared 15s
+// client default aborts these before the server finishes, so override it here.
+const EVIDENCE_UPLOAD_TIMEOUT = 60000;
+
 function unwrap<T>(payload: { data: T } | T): T {
   if (payload && typeof payload === 'object' && 'data' in payload) {
     return (payload as { data: T }).data;
@@ -138,16 +143,22 @@ export interface CreateQuotationPayload {
 }
 
 export interface CreateAdditionalCostItem {
-  type: 'labor';
+  type: 'labor' | 'parts_equipment';
   description: string;
   quantity: number;
   unitPrice: number;
+  partSource?: 'fixhome';
+  partCatalogId?: string;
+  partNameSnapshot?: string;
+  warrantyDays?: number;
 }
 
 export interface CreateAdditionalCostPayload {
   reason: string;
   items: CreateAdditionalCostItem[];
   note?: string;
+  fulfillmentMethod?: 'pickup' | 'delivery';
+  shippingFee?: number;
 }
 
 export interface CostRequest {
@@ -209,6 +220,10 @@ const post = async (
   body: unknown = {},
 ): Promise<Record<string, unknown>> =>
   unwrap((await apiClient.post(url, body)).data);
+
+const del = async (url: string): Promise<void> => {
+  await apiClient.delete(url);
+};
 
 export const ordersApi = {
   async getMyOrders(): Promise<ServiceOrderItem[]> {
@@ -278,6 +293,10 @@ export const ordersApi = {
     }));
   },
 
+  async deleteEvidence(id: string, evidenceId: string): Promise<void> {
+    await del(`/service-orders/${id}/evidence/${evidenceId}`);
+  },
+
   /**
    * BEFORE-only evidence upload. Native multipart/form-data with an explicit
    * per-request Content-Type override (the shared client defaults to JSON);
@@ -295,6 +314,7 @@ export const ordersApi = {
     } as unknown as Blob);
     const res = await apiClient.post(`/service-orders/${id}/evidence`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: EVIDENCE_UPLOAD_TIMEOUT,
     });
     return unwrap(res.data);
   },
@@ -315,6 +335,7 @@ export const ordersApi = {
     } as unknown as Blob);
     const res = await apiClient.post(`/service-orders/${id}/evidence`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: EVIDENCE_UPLOAD_TIMEOUT,
     });
     return unwrap(res.data);
   },

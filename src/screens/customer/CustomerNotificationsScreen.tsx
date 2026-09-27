@@ -59,12 +59,48 @@ export default function CustomerNotificationsScreen() {
     void fetchNotifications();
   };
 
+  const [markingAll, setMarkingAll] = useState(false);
+
+  const onMarkAllRead = async () => {
+    if (markingAll) return;
+    setMarkingAll(true);
+    try {
+      await notificationsApi.readAll();
+      setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
+    } catch (error) {
+      console.error('Lỗi khi đánh dấu đã đọc tất cả:', error);
+    } finally {
+      setMarkingAll(false);
+    }
+  };
+
+  const onNotificationPress = (item: NotificationItem) => {
+    if (item.isRead !== false || !item.id) return;
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n)),
+    );
+    notificationsApi.readNotification(item.id).catch((error) => {
+      console.error('Lỗi khi đánh dấu đã đọc:', error);
+    });
+  };
+
+  /** Compact timestamp: same-day drops the date, otherwise skips the year/seconds noise. */
+  const formatNotificationTime = (iso: string): string => {
+    const date = new Date(iso);
+    const now = new Date();
+    const time = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    const sameDay = date.toDateString() === now.toDateString();
+    if (sameDay) return time;
+    const day = date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+    return `${day} ${time}`;
+  };
+
   const renderNotificationIcon = (type?: string) => {
     switch (type) {
       case 'BOOKING':
         return <Ionicons name="briefcase-outline" size={24} color={colors.primary} />;
       case 'PAYMENT':
-        return <Ionicons name="cash-outline" size={24} color="#059669" />;
+        return <Ionicons name="cash-outline" size={24} color={colors.success} />;
       case 'PROMOTION':
         return <Ionicons name="pricetag-outline" size={24} color="#EA580C" />;
       default:
@@ -75,7 +111,7 @@ export default function CustomerNotificationsScreen() {
   const renderIconBackground = (type?: string) => {
     switch (type) {
       case 'BOOKING':
-        return '#DBEAFE'; // Blue
+        return colors.primaryTint; // Blue
       case 'PAYMENT':
         return '#D1FAE5'; // Green
       case 'PROMOTION':
@@ -89,24 +125,27 @@ export default function CustomerNotificationsScreen() {
     const isUnread = item.isRead === false;
     
     return (
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[styles.card, isUnread && styles.unreadCard]}
         activeOpacity={0.7}
+        onPress={() => onNotificationPress(item)}
       >
         <View style={[styles.iconContainer, { backgroundColor: renderIconBackground(item.type) }]}>
           {renderNotificationIcon(item.type)}
           {isUnread && <View style={styles.unreadDot} />}
         </View>
         <View style={styles.cardContent}>
-          <Text style={[styles.title, isUnread && styles.unreadText]} numberOfLines={1}>
-            {item.title || 'Thông báo mới'}
-          </Text>
+          <View style={styles.cardTopRow}>
+            <Text style={[styles.title, isUnread && styles.unreadText]} numberOfLines={1}>
+              {item.title || 'Thông báo mới'}
+            </Text>
+            {!!item.createdAt && (
+              <Text style={styles.timeText}>{formatNotificationTime(item.createdAt)}</Text>
+            )}
+          </View>
           <Text style={styles.desc} numberOfLines={2}>
             {item.body || item.message || 'Bạn có một thông báo từ FixHome.'}
           </Text>
-          {item.createdAt && (
-            <Text style={styles.timeText}>{new Date(item.createdAt).toLocaleString('vi-VN')}</Text>
-          )}
         </View>
       </TouchableOpacity>
     );
@@ -117,7 +156,7 @@ export default function CustomerNotificationsScreen() {
     return (
       <View style={styles.emptyContainer}>
         <View style={styles.emptyIconCircle}>
-          <MaterialCommunityIcons name="bell-sleep-outline" size={64} color="#94A3B8" />
+          <MaterialCommunityIcons name="bell-sleep-outline" size={64} color={colors.muted} />
         </View>
         <Text style={styles.emptyTitle}>Chưa có thông báo nào</Text>
         <Text style={styles.emptyDesc}>
@@ -134,7 +173,12 @@ export default function CustomerNotificationsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Thông báo</Text>
-        <TouchableOpacity style={styles.markAllBtn} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={[styles.markAllBtn, markingAll && { opacity: 0.6 }]}
+          activeOpacity={0.7}
+          onPress={onMarkAllRead}
+          disabled={markingAll}
+        >
           <Ionicons name="checkmark-done-outline" size={18} color={colors.primary} />
           <Text style={styles.markAllText}>Đã đọc tất cả</Text>
         </TouchableOpacity>
@@ -186,7 +230,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   markAllBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 16,
@@ -248,11 +292,18 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   cardContent: {
     flex: 1,
   },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 4,
+  },
   title: {
+    flex: 1,
     fontSize: 15,
     fontWeight: '600',
     color: '#334155',
-    marginBottom: 4,
   },
   unreadText: {
     fontWeight: '800',
@@ -262,11 +313,10 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontSize: 13,
     color: colors.textSecondary,
     lineHeight: 18,
-    marginBottom: 6,
   },
   timeText: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: colors.muted,
     fontWeight: '500',
   },
   emptyContainer: {

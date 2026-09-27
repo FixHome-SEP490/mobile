@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
@@ -52,6 +53,7 @@ export default function VerifyRegisterOtpScreen() {
       return;
     }
 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     try {
       const result = await authApi.verifyRegisterOtp(email, finalOtp);
@@ -89,6 +91,7 @@ export default function VerifyRegisterOtpScreen() {
   };
 
   const handleResend = async () => {
+    Haptics.selectionAsync();
     setError(null);
     setResending(true);
     try {
@@ -114,7 +117,16 @@ export default function VerifyRegisterOtpScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel="Quay lại"
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
+
           <View style={styles.header}>
             <View style={styles.iconWrapper}>
               <Ionicons name="shield-checkmark" size={32} color={colors.primary} />
@@ -181,7 +193,7 @@ export default function VerifyRegisterOtpScreen() {
                 onPress={handleResend}
                 disabled={resending || cooldown > 0}
               >
-                <Text style={[styles.resendText, (resending || cooldown > 0) && { color: '#94A3B8' }]}>
+                <Text style={[styles.resendText, (resending || cooldown > 0) && { color: colors.muted }]}>
                   {resending ? 'Đang gửi...' : cooldown > 0 ? `Gửi lại (${cooldown}s)` : 'Gửi lại OTP'}
                 </Text>
               </TouchableOpacity>
@@ -197,6 +209,14 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    marginBottom: 8,
+    marginTop: -12,
+    marginLeft: -8,
   },
   scrollContent: {
     flexGrow: 1,

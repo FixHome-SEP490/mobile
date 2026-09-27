@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
 
 /** Three dots that bounce out of phase, the usual "is typing" tell. */
 export default function TypingDots() {
+  const reduceMotion = useReduceMotion();
   // useMemo, not useRef: these values are read while rendering the dots.
   const dots = useMemo(
     () => [new Animated.Value(0), new Animated.Value(0), new Animated.Value(0)],
@@ -10,6 +12,7 @@ export default function TypingDots() {
   );
 
   useEffect(() => {
+    if (reduceMotion) return;
     const animations = dots.map((dot, index) =>
       Animated.loop(
         Animated.sequence([
@@ -32,7 +35,7 @@ export default function TypingDots() {
     );
     animations.forEach((animation) => animation.start());
     return () => animations.forEach((animation) => animation.stop());
-  }, [dots]);
+  }, [dots, reduceMotion]);
 
   return (
     <View style={styles.bubble}>

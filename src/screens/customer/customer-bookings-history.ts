@@ -33,6 +33,17 @@ export const initialHistoryState: BookingsHistoryState = {
   error: null, ordersError: null,
 };
 
+// Module-level (not component-level) so the last-loaded list survives a screen
+// remount — e.g. switching tabs away and back — instead of flashing the
+// full-page spinner again while a background refresh quietly catches up.
+let cachedHistoryState: BookingsHistoryState | null = null;
+let cachedHistoryOwnerId: string | null = null;
+
+/** Snapshot to seed a fresh screen mount with, instead of `initialHistoryState`. */
+export function getCachedHistoryState(): BookingsHistoryState {
+  return cachedHistoryState ?? initialHistoryState;
+}
+
 export const BOOKINGS_PAGE_SIZE = 20;
 /** Navigate to technician selection only for these list-known statuses without a linked order. */
 const RESUMABLE_STATUSES = new Set(['SUBMITTED', 'CLOSED']);
@@ -257,16 +268,18 @@ export function createBookingsHistoryLoader(
 ) {
   const pageSize = options.pageSize ?? BOOKINGS_PAGE_SIZE;
   const getOrdersPage = options.getOrdersPage;
-  let state = initialHistoryState;
+  let state = cachedHistoryState ?? initialHistoryState;
   let active = false;
-  let ownerId: string | null = null;
+  let ownerId: string | null = cachedHistoryOwnerId;
   let requestGeneration = 0;
-  let loaded = false;
+  let loaded = cachedHistoryState !== null;
   let inFlight: Promise<void> | null = null;
   let unsubscribe: (() => void) | undefined;
   const authorized = () => ownerId !== null && session.getUserId() === ownerId;
   const publish = (patch: Partial<BookingsHistoryState>) => {
     state = { ...state, ...patch };
+    cachedHistoryState = state;
+    cachedHistoryOwnerId = ownerId;
     if (active) write(state);
   };
   function invalidate() { ++requestGeneration; inFlight = null; }

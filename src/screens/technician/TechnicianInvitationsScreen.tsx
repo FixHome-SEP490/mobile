@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { UserRole, type RootStackParamList } from '../../types';
@@ -27,6 +28,7 @@ import { useAuthStore } from '../../store/auth.store';
 import { createInvitationInbox, initialInboxState, isActionable } from './invitation-inbox';
 import { bookingsApi, type InvitationItem } from '../../api/bookings.api';
 import { ordersApi } from '../../api/orders.api';
+import { useAppTheme } from '../../constants/theme';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -53,6 +55,8 @@ function formatTime(iso: string | null | undefined): string {
 }
 
 export default function TechnicianInvitationsScreen() {
+  const { colors, isDark } = useAppTheme();
+  const styles = getStyles(colors);
   const navigation = useNavigation<NavProp>();
   const [state, setState] = useState(initialInboxState);
   const controllerRef = useRef<ReturnType<typeof createInvitationInbox> | null>(null);
@@ -88,6 +92,9 @@ export default function TechnicianInvitationsScreen() {
   }, [controller]));
   const onRefresh = () => { void controller.load(); };
   const handleRespond = (inv: InvitationItem, action: 'ACCEPT' | 'DECLINE') => {
+    Haptics.impactAsync(
+      action === 'ACCEPT' ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Heavy
+    );
     void controller.respond(inv.id, action);
   };
 
@@ -101,7 +108,7 @@ export default function TechnicianInvitationsScreen() {
         {/* Privacy: only allowlisted preview fields */}
         <View style={styles.cardHeader}>
           <View style={styles.serviceIconBox}>
-            <Ionicons name="construct-outline" size={22} color="#2563EB" />
+            <Ionicons name="construct-outline" size={22} color={colors.primaryStrong} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.serviceName}>{b?.serviceName ?? 'Dịch vụ sửa chữa'}</Text>
@@ -151,7 +158,7 @@ export default function TechnicianInvitationsScreen() {
               accessibilityLabel="Từ chối lời mời"
             >
               {inFlight === 'DECLINE' ? (
-                <ActivityIndicator size="small" color="#DC2626" />
+                <ActivityIndicator size="small" color={colors.error} />
               ) : (
                 <Text style={styles.btnDeclineText}>Từ chối</Text>
               )}
@@ -164,7 +171,7 @@ export default function TechnicianInvitationsScreen() {
               accessibilityLabel="Nhận lời mời"
             >
               {inFlight === 'ACCEPT' ? (
-                <ActivityIndicator size="small" color="#FFF" />
+                <ActivityIndicator size="small" color={colors.surface} />
               ) : (
                 <Text style={styles.btnAcceptText}>Nhận việc</Text>
               )}
@@ -177,7 +184,7 @@ export default function TechnicianInvitationsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
 
 
       {acceptedOrderId ? (
@@ -215,21 +222,23 @@ export default function TechnicianInvitationsScreen() {
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backBtn}
+          accessibilityRole="button"
           accessibilityLabel="Quay lại"
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
         >
-          <Ionicons name="arrow-back" size={24} color="#0F172A" />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Lời mời chờ xác nhận</Text>
       </View>
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#2563EB" />
+          <ActivityIndicator size="large" color={colors.primaryStrong} />
           <Text style={styles.loadingText}>Đang tải lời mời...</Text>
         </View>
       ) : error ? (
         <View style={styles.center}>
-          <Ionicons name="warning-outline" size={48} color="#EF4444" />
+          <Ionicons name="warning-outline" size={48} color={colors.error} />
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity style={styles.retryBtn} onPress={onRefresh}>
             <Text style={styles.retryBtnText}>Thử lại</Text>
@@ -257,10 +266,10 @@ export default function TechnicianInvitationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   acceptedCard: {
     marginHorizontal: 16,
@@ -276,12 +285,12 @@ const styles = StyleSheet.create({
   acceptedText: { fontSize: 13, color: '#047857', lineHeight: 19 },
   acceptedButton: {
     alignSelf: 'flex-start',
-    backgroundColor: '#059669',
+    backgroundColor: colors.success,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 10,
   },
-  acceptedButtonText: { color: '#FFFFFF', fontWeight: '700' },
+  acceptedButtonText: { color: colors.surface, fontWeight: '700' },
   recoveryBanner: {
     marginHorizontal: 16,
     marginTop: 12,
@@ -301,9 +310,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: colors.divider,
     gap: 12,
   },
   backBtn: {
@@ -315,7 +324,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#0F172A',
+    color: colors.text,
     flex: 1,
   },
   center: {
@@ -327,22 +336,22 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: '#64748B',
+    color: colors.textSecondary,
   },
   errorText: {
     fontSize: 14,
-    color: '#DC2626',
+    color: colors.error,
     textAlign: 'center',
   },
   retryBtn: {
     marginTop: 8,
     paddingHorizontal: 24,
     paddingVertical: 10,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primaryStrong,
     borderRadius: 8,
   },
   retryBtnText: {
-    color: '#FFFFFF',
+    color: colors.surface,
     fontWeight: '700',
     fontSize: 14,
   },
@@ -352,12 +361,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
     marginTop: 4,
   },
   emptyDesc: {
     fontSize: 13,
-    color: '#64748B',
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   listContent: {
@@ -365,7 +374,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
@@ -375,7 +384,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: colors.divider,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -387,14 +396,14 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
     justifyContent: 'center',
     alignItems: 'center',
   },
   serviceName: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
     marginBottom: 2,
   },
   locationText: {
@@ -410,7 +419,7 @@ const styles = StyleSheet.create({
   metaChip: {
     fontSize: 12,
     color: '#475569',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.divider,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -418,7 +427,7 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: 12,
-    color: '#64748B',
+    color: colors.textSecondary,
     marginBottom: 10,
   },
   expiredBanner: {
@@ -442,19 +451,19 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: colors.divider,
   },
   btnDecline: {
     flex: 1,
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1.5,
-    borderColor: '#DC2626',
+    borderColor: colors.error,
     alignItems: 'center',
     justifyContent: 'center',
   },
   btnDeclineText: {
-    color: '#DC2626',
+    color: colors.error,
     fontWeight: '700',
     fontSize: 14,
   },
@@ -462,12 +471,12 @@ const styles = StyleSheet.create({
     flex: 2,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primaryStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
   btnAcceptText: {
-    color: '#FFFFFF',
+    color: colors.surface,
     fontWeight: '700',
     fontSize: 14,
   },

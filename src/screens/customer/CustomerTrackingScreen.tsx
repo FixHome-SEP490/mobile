@@ -15,18 +15,27 @@ export default function CustomerTrackingScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Quay lại"
+        >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Theo dõi đơn</Text>
-        <TouchableOpacity style={styles.backBtn}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Trợ giúp"
+        >
           <Ionicons name="help-circle-outline" size={24} color={colors.text} />
         </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.mapPlaceholder}>
-          <Ionicons name="map-outline" size={48} color="#94A3B8" />
+          <Ionicons name="map-outline" size={48} color={colors.muted} />
           <Text style={styles.mapText}>Sơ đồ minh họa</Text>
         </View>
 
@@ -41,10 +50,19 @@ export default function CustomerTrackingScreen() {
               <Text style={styles.mutedText}>Dự kiến đến khoảng 09:03</Text>
             </View>
             <View style={styles.actionRow}>
-              <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('CustomerAIChat')}>
+              <TouchableOpacity
+                style={styles.iconBtn}
+                onPress={() => navigation.navigate('CustomerAIChat')}
+                accessibilityRole="button"
+                accessibilityLabel="Nhắn tin với kỹ thuật viên"
+              >
                 <Ionicons name="chatbubble-ellipses" size={20} color={colors.text} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.iconBtn}>
+              <TouchableOpacity
+                style={styles.iconBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Gọi cho kỹ thuật viên"
+              >
                 <Ionicons name="call" size={20} color={colors.text} />
               </TouchableOpacity>
             </View>
@@ -100,7 +118,7 @@ export default function CustomerTrackingScreen() {
           <View style={styles.timelineItem}>
             <View style={styles.dot} />
             <View style={styles.timelineContent}>
-              <Text style={[styles.timelineTitle, {color: '#94A3B8'}]}>Kiểm tra & sửa chữa</Text>
+              <Text style={[styles.timelineTitle, {color: colors.muted}]}>Kiểm tra & sửa chữa</Text>
               <Text style={styles.timelineTime}>Bắt đầu sau khi kỹ thuật viên đến nơi</Text>
             </View>
           </View>
@@ -109,7 +127,7 @@ export default function CustomerTrackingScreen() {
           <View style={styles.timelineItem}>
             <View style={styles.dot} />
             <View style={styles.timelineContent}>
-              <Text style={[styles.timelineTitle, {color: '#94A3B8'}]}>Hoàn thành</Text>
+              <Text style={[styles.timelineTitle, {color: colors.muted}]}>Hoàn thành</Text>
               <Text style={styles.timelineTime}>Xác nhận kết quả và thanh toán</Text>
             </View>
           </View>
@@ -153,7 +171,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   iconBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: 16 },
   techInfo: { flexDirection: 'row', alignItems: 'center' },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#DBEAFE', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primaryTint, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   techDetails: { flex: 1 },
   techName: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 2 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },

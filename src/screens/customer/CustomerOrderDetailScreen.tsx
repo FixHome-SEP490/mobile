@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
@@ -600,10 +601,16 @@ export default function CustomerOrderDetailScreen() {
   const onCostDecideApprove = (costId: string) => { costDecisionRef.current?.requestConfirm(costId, 'approve'); };
   const onCostDecideReject = (costId: string) => { costDecisionRef.current?.requestConfirm(costId, 'reject'); };
   const onCostDecideCancel = () => { costDecisionRef.current?.cancelConfirm(); };
-  const onCostDecideSubmit = () => { void costDecisionRef.current?.submit(); };
+  const onCostDecideSubmit = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    void costDecisionRef.current?.submit();
+  };
   const onConfirmCompletionRequest = () => { confirmCompletionRef.current?.requestConfirm(); };
   const onConfirmCompletionCancel = () => { confirmCompletionRef.current?.cancelConfirm(); };
-  const onConfirmCompletionSubmit = () => { void confirmCompletionRef.current?.submit(); };
+  const onConfirmCompletionSubmit = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    void confirmCompletionRef.current?.submit();
+  };
   const onConfirmCompletionReconcile = () => { void confirmCompletionRef.current?.reconcile(); };
   const onPaymentVnpay = () => {
     Alert.alert(
@@ -629,6 +636,7 @@ export default function CustomerOrderDetailScreen() {
         {
           text: 'Xác nhận',
           onPress: () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             void paymentRef.current?.confirmCash(true, settlement.declaredAmount);
           },
         },
@@ -647,6 +655,7 @@ export default function CustomerOrderDetailScreen() {
           text: 'Báo sai',
           style: 'destructive',
           onPress: () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
             void paymentRef.current?.confirmCash(
               false,
               settlement.declaredAmount,
@@ -667,20 +676,33 @@ export default function CustomerOrderDetailScreen() {
     orderCancelRef.current?.cancelConfirm();
   };
   const onOrderCancelSubmit = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     void orderCancelRef.current?.submit();
   };
   const onOrderCancelReconcile = () => {
     void orderCancelRef.current?.reconcile();
   };
-  const onReviewRating = (rating: number) => { reviewRef.current?.setRating(rating); };
+  const onReviewRating = (rating: number) => {
+    Haptics.selectionAsync();
+    reviewRef.current?.setRating(rating);
+  };
   const onReviewComment = (comment: string) => { reviewRef.current?.setComment(comment); };
-  const onReviewSubmit = () => { void reviewRef.current?.submit(); };
+  const onReviewSubmit = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    void reviewRef.current?.submit();
+  };
   const onReviewReconcile = () => { void reviewRef.current?.reconcile(); };
-  const onToggleWarranty = (itemId: string) => { decisionRef.current?.toggleWarranty(itemId); };
+  const onToggleWarranty = (itemId: string) => {
+    Haptics.selectionAsync();
+    decisionRef.current?.toggleWarranty(itemId);
+  };
   const onDecideApprove = () => { decisionRef.current?.requestConfirm('approve'); };
   const onDecideReject = () => { decisionRef.current?.requestConfirm('reject'); };
   const onDecideCancel = () => { decisionRef.current?.cancelConfirm(); };
-  const onDecideSubmit = () => { void decisionRef.current?.submit(); };
+  const onDecideSubmit = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    void decisionRef.current?.submit();
+  };
   const sections = resolveOrderDetailSections(order);
   const orderCancelEligible = customerOrderCancelTarget(
     order && order.id === serviceOrderId ? order : null,
@@ -758,13 +780,13 @@ export default function CustomerOrderDetailScreen() {
         return { label: 'Đang di chuyển', bg: '#FEF3C7', color: '#D97706' };
       case 'UNDER_REPAIR':
       case 'IN_PROGRESS':
-        return { label: 'Đang sửa chữa', bg: '#DBEAFE', color: colors.primary };
+        return { label: 'Đang sửa chữa', bg: colors.primaryTint, color: colors.primary };
       case 'COMPLETED':
         return { label: 'Hoàn thành', bg: '#DCFCE7', color: '#16A34A' };
       case 'CANCELLED':
-        return { label: 'Đã hủy', bg: '#FEE2E2', color: '#DC2626' };
+        return { label: 'Đã hủy', bg: '#FEE2E2', color: colors.error };
       default:
-        return { label: s, bg: '#F1F5F9', color: '#64748B' };
+        return { label: s, bg: colors.divider, color: colors.textSecondary };
     }
   };
 
@@ -785,7 +807,12 @@ export default function CustomerOrderDetailScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Quay lại">
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          accessibilityRole="button"
+          accessibilityLabel="Quay lại"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chi tiết đơn</Text>
@@ -860,7 +887,7 @@ export default function CustomerOrderDetailScreen() {
                   backgroundColor:
                     underRepairTask.kind === 'additional_cost_pending'
                       ? '#FFFBEB'
-                      : '#EFF6FF',
+                      : colors.primarySoft,
                 },
               ]}
             >
@@ -898,20 +925,20 @@ export default function CustomerOrderDetailScreen() {
                       <Text style={styles.meta}>{CUSTOMER_CONFIRM_COMPLETION_COPY}</Text>
                       <View style={styles.decisionBtnRow}>
                         <TouchableOpacity
-                          style={[styles.decisionBtn, { backgroundColor: '#059669' }]}
+                          style={[styles.decisionBtn, { backgroundColor: colors.success }]}
                           onPress={onConfirmCompletionSubmit}
                           disabled={confirmCompletionState.busy}
                           accessibilityRole="button"
                           accessibilityLabel="Xác nhận công việc đã hoàn tất"
                         >
                           {confirmCompletionState.busy ? (
-                            <ActivityIndicator size="small" color="#FFF" />
+                            <ActivityIndicator size="small" color={colors.surface} />
                           ) : (
                             <Text style={styles.decisionBtnText}>Xác nhận</Text>
                           )}
                         </TouchableOpacity>
                         <TouchableOpacity
-                          style={[styles.decisionBtn, { backgroundColor: '#F1F5F9' }]}
+                          style={[styles.decisionBtn, { backgroundColor: colors.divider }]}
                           onPress={onConfirmCompletionCancel}
                           disabled={confirmCompletionState.busy}
                           accessibilityRole="button"
@@ -925,7 +952,7 @@ export default function CustomerOrderDetailScreen() {
                       onPress={onConfirmCompletionRequest}
                       disabled={confirmCompletionState.busy}
                       accessibilityRole="button"
-                      style={[styles.decisionBtn, { backgroundColor: '#059669', alignSelf: 'flex-start' }]}
+                      style={[styles.decisionBtn, { backgroundColor: colors.success, alignSelf: 'flex-start' }]}
                     >
                       <Text style={styles.decisionBtnText}>Xác nhận đã hoàn tất công việc</Text>
                     </TouchableOpacity>
@@ -1034,7 +1061,7 @@ export default function CustomerOrderDetailScreen() {
                           <Ionicons
                             name={checked ? 'checkbox' : 'checkbox-outline'}
                             size={20}
-                            color={checked ? colors.primary : '#94A3B8'}
+                            color={checked ? colors.primary : colors.muted}
                           />
                           <Text style={[styles.meta, { flex: 1 }]}>
                             {option.description} — phí {option.feeText}, {option.termDays} ngày
@@ -1064,14 +1091,14 @@ export default function CustomerOrderDetailScreen() {
                       )}
                       <View style={styles.decisionBtnRow}>
                         <TouchableOpacity
-                          style={[styles.decisionBtn, { backgroundColor: decisionState.confirming === 'approve' ? '#059669' : '#DC2626' }]}
+                          style={[styles.decisionBtn, { backgroundColor: decisionState.confirming === 'approve' ? colors.success : colors.error }]}
                           onPress={onDecideSubmit}
                           disabled={decisionState.busy}
                           accessibilityRole="button"
                           accessibilityLabel={decisionState.confirming === 'approve' ? 'Xác nhận duyệt báo giá' : 'Xác nhận từ chối báo giá'}
                         >
                           {decisionState.busy ? (
-                            <ActivityIndicator size="small" color="#FFF" />
+                            <ActivityIndicator size="small" color={colors.surface} />
                           ) : (
                             <Text style={styles.decisionBtnText}>
                               {decisionState.confirming === 'approve' ? 'Xác nhận duyệt' : 'Xác nhận từ chối'}
@@ -1079,7 +1106,7 @@ export default function CustomerOrderDetailScreen() {
                           )}
                         </TouchableOpacity>
                         <TouchableOpacity
-                          style={[styles.decisionBtn, { backgroundColor: '#F1F5F9' }]}
+                          style={[styles.decisionBtn, { backgroundColor: colors.divider }]}
                           onPress={onDecideCancel}
                           disabled={decisionState.busy}
                           accessibilityRole="button"
@@ -1092,7 +1119,7 @@ export default function CustomerOrderDetailScreen() {
                   ) : (
                     <View style={styles.decisionBtnRow}>
                       <TouchableOpacity
-                        style={[styles.decisionBtn, { backgroundColor: '#059669' }]}
+                        style={[styles.decisionBtn, { backgroundColor: colors.success }]}
                         onPress={onDecideApprove}
                         disabled={decisionState.busy || decisionState.needsVerify}
                         accessibilityRole="button"
@@ -1101,7 +1128,7 @@ export default function CustomerOrderDetailScreen() {
                         <Text style={styles.decisionBtnText}>Duyệt báo giá</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.decisionBtn, { backgroundColor: '#DC2626' }]}
+                        style={[styles.decisionBtn, { backgroundColor: colors.error }]}
                         onPress={onDecideReject}
                         disabled={decisionState.busy || decisionState.needsVerify}
                         accessibilityRole="button"
@@ -1271,19 +1298,19 @@ export default function CustomerOrderDetailScreen() {
                   </Text>
                   <View style={styles.decisionBtnRow}>
                     <TouchableOpacity
-                      style={[styles.decisionBtn, { backgroundColor: '#DC2626' }]}
+                      style={[styles.decisionBtn, { backgroundColor: colors.error }]}
                       onPress={onOrderCancelSubmit}
                       disabled={orderCancelState.busy}
                       accessibilityRole="button"
                     >
                       {orderCancelState.busy ? (
-                        <ActivityIndicator size="small" color="#FFF" />
+                        <ActivityIndicator size="small" color={colors.surface} />
                       ) : (
                         <Text style={styles.decisionBtnText}>Xác nhận hủy</Text>
                       )}
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.decisionBtn, { backgroundColor: '#F1F5F9' }]}
+                      style={[styles.decisionBtn, { backgroundColor: colors.divider }]}
                       onPress={onOrderCancelBack}
                       disabled={orderCancelState.busy}
                       accessibilityRole="button"
@@ -1303,7 +1330,7 @@ export default function CustomerOrderDetailScreen() {
                     maxLength={2000}
                     multiline
                     placeholder="Lý do hủy"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={colors.muted}
                     style={{
                       minHeight: 72,
                       borderWidth: 1,
@@ -1319,7 +1346,7 @@ export default function CustomerOrderDetailScreen() {
                   <TouchableOpacity
                     style={[
                       styles.decisionBtn,
-                      { backgroundColor: '#DC2626', alignSelf: 'flex-start' },
+                      { backgroundColor: colors.error, alignSelf: 'flex-start' },
                     ]}
                     onPress={onOrderCancelRequest}
                     disabled={orderCancelState.busy}
@@ -1357,7 +1384,7 @@ export default function CustomerOrderDetailScreen() {
                   )}
                   <View style={styles.decisionBtnRow}>
                     <TouchableOpacity
-                      style={[styles.decisionBtn, { backgroundColor: '#059669' }]}
+                      style={[styles.decisionBtn, { backgroundColor: colors.success }]}
                       onPress={onPaymentConfirmCash}
                       disabled={paymentState.cashBusy || paymentState.cashNeedsVerify}
                       accessibilityRole="button"
@@ -1365,7 +1392,7 @@ export default function CustomerOrderDetailScreen() {
                       <Text style={styles.decisionBtnText}>Xác nhận đã trả</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.decisionBtn, { backgroundColor: '#DC2626' }]}
+                      style={[styles.decisionBtn, { backgroundColor: colors.error }]}
                       onPress={onPaymentDisputeCash}
                       disabled={paymentState.cashBusy || paymentState.cashNeedsVerify}
                       accessibilityRole="button"
@@ -1394,13 +1421,13 @@ export default function CustomerOrderDetailScreen() {
 
               <View style={{ marginTop: 10, gap: 8 }}>
                 <TouchableOpacity
-                  style={[styles.decisionBtn, { backgroundColor: '#2563EB', alignSelf: 'flex-start' }]}
+                  style={[styles.decisionBtn, { backgroundColor: colors.primaryStrong, alignSelf: 'flex-start' }]}
                   onPress={onPaymentVnpay}
                   disabled={paymentState.onlineBusy || paymentState.onlinePending}
                   accessibilityRole="button"
                 >
                   {paymentState.onlineBusy ? (
-                    <ActivityIndicator size="small" color="#FFF" />
+                    <ActivityIndicator size="small" color={colors.surface} />
                   ) : (
                     <Text style={styles.decisionBtnText}>Thanh toán VNPay</Text>
                   )}
@@ -1477,14 +1504,14 @@ export default function CustomerOrderDetailScreen() {
                           {
                             minWidth: 48,
                             backgroundColor:
-                              reviewState.rating === rating ? '#F59E0B' : '#F1F5F9',
+                              reviewState.rating === rating ? '#F59E0B' : colors.divider,
                           },
                         ]}
                       >
                         <Text
                           style={[
                             styles.decisionBtnText,
-                            { color: reviewState.rating === rating ? '#FFFFFF' : '#334155' },
+                            { color: reviewState.rating === rating ? colors.surface : '#334155' },
                           ]}
                         >
                           {rating}★
@@ -1499,7 +1526,7 @@ export default function CustomerOrderDetailScreen() {
                     maxLength={2000}
                     multiline
                     placeholder="Nhận xét thêm (không bắt buộc)"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={colors.muted}
                     style={{
                       minHeight: 88,
                       borderWidth: 1,
@@ -1513,14 +1540,14 @@ export default function CustomerOrderDetailScreen() {
                     accessibilityLabel="Nhận xét đánh giá dịch vụ"
                   />
                   <TouchableOpacity
-                    style={[styles.decisionBtn, { backgroundColor: '#2563EB', alignSelf: 'flex-start' }]}
+                    style={[styles.decisionBtn, { backgroundColor: colors.primaryStrong, alignSelf: 'flex-start' }]}
                     onPress={onReviewSubmit}
                     disabled={reviewState.busy}
                     accessibilityRole="button"
                     accessibilityLabel="Gửi đánh giá dịch vụ"
                   >
                     {reviewState.busy ? (
-                      <ActivityIndicator size="small" color="#FFF" />
+                      <ActivityIndicator size="small" color={colors.surface} />
                     ) : (
                       <Text style={styles.decisionBtnText}>Gửi đánh giá</Text>
                     )}
@@ -1579,14 +1606,14 @@ export default function CustomerOrderDetailScreen() {
                         )}
                         <View style={styles.decisionBtnRow}>
                           <TouchableOpacity
-                            style={[styles.decisionBtn, { backgroundColor: costDecisionState.confirming.kind === 'approve' ? '#059669' : '#DC2626' }]}
+                            style={[styles.decisionBtn, { backgroundColor: costDecisionState.confirming.kind === 'approve' ? colors.success : colors.error }]}
                             onPress={onCostDecideSubmit}
                             disabled={costDecisionState.busy}
                             accessibilityRole="button"
                             accessibilityLabel={costDecisionState.confirming.kind === 'approve' ? 'Xác nhận duyệt chi phí' : 'Xác nhận từ chối chi phí'}
                           >
                             {costDecisionState.busy ? (
-                              <ActivityIndicator size="small" color="#FFF" />
+                              <ActivityIndicator size="small" color={colors.surface} />
                             ) : (
                               <Text style={styles.decisionBtnText}>
                                 {costDecisionState.confirming.kind === 'approve' ? 'Xác nhận duyệt' : 'Xác nhận từ chối'}
@@ -1594,7 +1621,7 @@ export default function CustomerOrderDetailScreen() {
                             )}
                           </TouchableOpacity>
                           <TouchableOpacity
-                            style={[styles.decisionBtn, { backgroundColor: '#F1F5F9' }]}
+                            style={[styles.decisionBtn, { backgroundColor: colors.divider }]}
                             onPress={onCostDecideCancel}
                             disabled={costDecisionState.busy}
                             accessibilityRole="button"
@@ -1607,7 +1634,7 @@ export default function CustomerOrderDetailScreen() {
                     ) : (
                       <View style={styles.decisionBtnRow}>
                         <TouchableOpacity
-                          style={[styles.decisionBtn, { backgroundColor: '#059669' }]}
+                          style={[styles.decisionBtn, { backgroundColor: colors.success }]}
                           onPress={() => onCostDecideApprove(request.id)}
                           disabled={costDecisionState.busy || costDecisionState.needsVerify}
                           accessibilityRole="button"
@@ -1616,7 +1643,7 @@ export default function CustomerOrderDetailScreen() {
                           <Text style={styles.decisionBtnText}>Duyệt</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                          style={[styles.decisionBtn, { backgroundColor: '#DC2626' }]}
+                          style={[styles.decisionBtn, { backgroundColor: colors.error }]}
                           onPress={() => onCostDecideReject(request.id)}
                           disabled={costDecisionState.busy || costDecisionState.needsVerify}
                           accessibilityRole="button"
@@ -1784,7 +1811,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderRadius: 8,
   },
   decisionBtnText: {
-    color: '#FFFFFF',
+    color: colors.surface,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -1795,12 +1822,12 @@ const getStyles = (colors: any) => StyleSheet.create({
     width: '100%',
     height: 180,
     borderRadius: 12,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.divider,
   },
   evidencePlaceholder: {
     height: 120,
     borderRadius: 12,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.divider,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 12,
