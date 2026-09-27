@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
@@ -43,6 +44,7 @@ function relativeTime(iso: string | null): string {
 }
 export default function ChatListScreen() {
   const { colors, isDark } = useAppTheme();
+  const styles = getStyles(colors);
   const navigation = useNavigation<Nav>();
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,13 +90,14 @@ export default function ChatListScreen() {
     <TouchableOpacity
       style={styles.row}
       activeOpacity={0.7}
-      onPress={() =>
+      onPress={() => {
+        Haptics.selectionAsync();
         navigation.navigate('ChatThread', {
           conversationId: item.id,
           counterpartName: item.counterpart.fullName,
           serviceName: item.serviceName ?? undefined,
-        })
-      }
+        });
+      }}
     >
       {item.counterpart.avatarUrl ? (
         <Image source={{ uri: item.counterpart.avatarUrl }} style={styles.avatar} />
@@ -147,23 +150,34 @@ export default function ChatListScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
-          <Ionicons name="arrow-back" size={24} color="#3B82F6" />
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.headerBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="Quay lại"
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chat</Text>
-        <TouchableOpacity style={styles.headerBtn}>
-          <Ionicons name="create-outline" size={24} color="#3B82F6" />
+        <TouchableOpacity
+          style={styles.headerBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="Soạn tin nhắn mới"
+        >
+          <Ionicons name="create-outline" size={24} color={colors.primary} />
         </TouchableOpacity>
       </View>
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBox}>
-          <Ionicons name="search" size={20} color="#94A3B8" />
-          <TextInput 
+          <Ionicons name="search" size={20} color={colors.muted} />
+          <TextInput
             style={styles.searchInput}
             placeholder="Tìm kiếm"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={colors.muted}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
@@ -172,7 +186,7 @@ export default function ChatListScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#3B82F6" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
         <FlatList
@@ -183,11 +197,11 @@ export default function ChatListScreen() {
             filteredConversations.length === 0 ? styles.emptyWrap : styles.listContent
           }
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => load('refresh')} tintColor="#3B82F6" />
+            <RefreshControl refreshing={refreshing} onRefresh={() => load('refresh')} tintColor={colors.primary} />
           }
           ListEmptyComponent={
             <View style={styles.center}>
-              <Ionicons name="chatbubbles-outline" size={56} color="#94A3B8" />
+              <Ionicons name="chatbubbles-outline" size={56} color={colors.muted} />
               <Text style={styles.emptyTitle}>Chưa có cuộc trò chuyện nào</Text>
               <Text style={styles.emptyText}>
                 {error ??
@@ -201,36 +215,36 @@ export default function ChatListScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+const getStyles = (colors: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.surface },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: colors.border,
   },
   headerBtn: {
     width: 60,
     alignItems: 'center',
   },
   headerBtnText: {
-    color: '#2563EB',
+    color: colors.primaryStrong,
     fontSize: 17,
   },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   searchContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.divider,
     borderRadius: 10,
     paddingHorizontal: 12,
     height: 36,
@@ -239,7 +253,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 8,
     fontSize: 15,
-    color: '#0F172A',
+    color: colors.text,
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   listContent: { paddingVertical: 0 },
@@ -248,12 +262,12 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
   },
   emptyText: {
     marginTop: 8,
     fontSize: 14,
-    color: '#64748B',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -261,29 +275,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: colors.divider,
   },
   avatar: { width: 52, height: 52, borderRadius: 26, marginRight: 12 },
   avatarFallback: {
-    backgroundColor: '#DBEAFE',
+    backgroundColor: colors.primaryTint,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { fontSize: 20, fontWeight: '700', color: '#2563EB' },
-  rowBody: { 
-    flex: 1, 
+  avatarText: { fontSize: 20, fontWeight: '700', color: colors.primaryStrong },
+  rowBody: {
+    flex: 1,
     justifyContent: 'center',
     paddingBottom: 4,
   },
   rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  name: { flex: 1, fontSize: 16, fontWeight: '700', color: '#0F172A' },
-  time: { fontSize: 13, color: '#94A3B8', marginLeft: 8 },
-  serviceNote: { fontSize: 13, color: '#2563EB', marginTop: 2 },
+  name: { flex: 1, fontSize: 16, fontWeight: '700', color: colors.text },
+  time: { fontSize: 13, color: colors.muted, marginLeft: 8 },
+  serviceNote: { fontSize: 13, color: colors.primaryStrong, marginTop: 2 },
   rowBottom: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  preview: { flex: 1, fontSize: 14, color: '#64748B' },
-  previewUnread: { color: '#0F172A', fontWeight: '600' },
+  preview: { flex: 1, fontSize: 14, color: colors.textSecondary },
+  previewUnread: { color: colors.text, fontWeight: '600' },
   badge: {
     minWidth: 22,
     height: 22,
@@ -294,6 +308,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginLeft: 8,
   },
-  badgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
+  badgeText: { color: colors.surface, fontSize: 11, fontWeight: '700' },
   readOnlyTag: { marginTop: 4, fontSize: 12, color: '#F59E0B' },
 });
