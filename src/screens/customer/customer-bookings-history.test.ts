@@ -2,6 +2,7 @@ import {
   bookingResumeTarget,
   createBookingsHistoryLoader,
   customerBookingsUserId,
+  homeResumeTarget,
   initialHistoryState,
   linkedReplacementState,
   mergeHistory,
@@ -603,5 +604,55 @@ describe('linked replacement read-only classification (202)', () => {
     });
     expect(linkedReplacementState(listBooking, historicalOrder)).toBe('support');
     expect(linkedReplacementState(listBooking, historicalOrder)).not.toBe('waiting');
+  });
+});
+
+describe('homeResumeTarget', () => {
+  it('returns null when nothing is active', () => {
+    expect(homeResumeTarget([], [])).toBeNull();
+    expect(homeResumeTarget(
+      [booking({ status: 'CANCELLED' })],
+      [order({ status: 'COMPLETED', bookingId: 'booking-1' })],
+    )).toBeNull();
+  });
+
+  it('prefers the most recent active order over waiting bookings', () => {
+    const resume = homeResumeTarget(
+      [booking({ id: 'booking-wait', status: 'SUBMITTED', serviceOrderId: undefined })],
+      [
+        order({ id: 'order-old', bookingId: 'booking-old', status: 'ACCEPTED', createdAt: '2030-10-20T09:00:00Z' }),
+        order({ id: 'order-new', bookingId: 'booking-new', status: 'EN_ROUTE', serviceName: 'AC fix', createdAt: '2030-10-21T09:00:00Z' }),
+      ],
+    );
+    expect(resume).toEqual({
+      kind: 'order', orderId: 'order-new', title: 'Kỹ thuật viên đang đến', detail: 'AC fix',
+    });
+  });
+
+  it('routes a resumable unlinked booking to technician selection', () => {
+    const resume = homeResumeTarget(
+      [booking({ id: 'booking-resume', status: 'SUBMITTED', serviceName: 'Tap repair', serviceOrderId: undefined })],
+      [],
+    );
+    expect(resume).toEqual({
+      kind: 'booking', bookingId: 'booking-resume', title: 'Tiếp tục chọn kỹ thuật viên', detail: 'Tap repair',
+    });
+  });
+
+  it.each([['MATCHING'], ['MATCHED']])(
+    'returns null for non-resumable unlinked booking status %s with no active order',
+    (status) => {
+      expect(homeResumeTarget(
+        [booking({ id: 'booking-wait', status: status as BookingItem['status'], serviceName: 'Tap repair', serviceOrderId: undefined })],
+        [],
+      )).toBeNull();
+    },
+  );
+
+  it('ignores bookings already linked to a loaded order', () => {
+    expect(homeResumeTarget(
+      [booking({ id: 'booking-1', status: 'SUBMITTED', serviceOrderId: undefined })],
+      [order({ id: 'order-1', bookingId: 'booking-1', status: 'COMPLETED' })],
+    )).toBeNull();
   });
 });

@@ -38,19 +38,31 @@ import {
 
 type MatchingRoute = RouteProp<RootStackParamList, 'CustomerMatching'>;
 function describeBooking(booking: BookingItem): string {
-  if (booking.serviceOrderId && booking.status === 'CLOSED') return 'Lượt mời trước đã kết thúc. Thử yêu cầu chọn thợ mới; hệ thống kiểm tra trước khi gửi.';
-  if (booking.serviceOrderId && booking.status === 'MATCHING') return 'Đang tìm thợ thay thế; đơn vẫn chờ kỹ thuật viên phản hồi lời mời còn lại. Làm mới để cập nhật, không cần gửi lại.';
-  if (booking.serviceOrderId && booking.status === 'MATCHED') return 'Kỹ thuật viên đã nhận đơn. Đơn dịch vụ đã được tạo trên hệ thống.';
-  if (booking.status === 'MATCHED') return 'Đã có kỹ thuật viên nhận lời mời. Đang kiểm tra liên kết đơn dịch vụ.';
+  if (booking.serviceOrderId && booking.status === 'CLOSED') return 'Lượt mời trước đã kết thúc. Thử yêu cầu chọn kỹ thuật viên mới; hệ thống kiểm tra trước khi gửi.';
+  if (booking.serviceOrderId && booking.status === 'MATCHING') return 'Đang tìm kỹ thuật viên thay thế; đơn vẫn chờ kỹ thuật viên phản hồi lời mời còn lại. Làm mới để cập nhật, không cần gửi lại.';
+  if (booking.serviceOrderId && booking.status === 'MATCHED') return 'Kỹ thuật viên đã nhận đơn. Đơn sửa chữa đã được tạo trên hệ thống.';
+  if (booking.status === 'MATCHED') return 'Đã có kỹ thuật viên nhận lời mời. Đang kiểm tra liên kết đơn sửa chữa.';
   if (booking.status === 'MATCHING') {
     const pending = (booking.invitations ?? []).find((invitation) => invitation.status === 'PENDING');
     return pending
       ? `Đang chờ phản hồi từ kỹ thuật viên ưu tiên số ${pending.priorityOrder}. Kỹ thuật viên dự phòng chỉ được mời khi người trước từ chối hoặc hết hạn.`
       : 'Đang xử lý lời mời kỹ thuật viên. Hãy làm mới để xem trạng thái mới nhất.';
   }
-  if (booking.status === 'CANCELLED') return 'Yêu cầu đặt thợ này đã bị hủy.';
-  if (booking.status === 'CLOSED') return 'Vòng tìm thợ trước đã kết thúc. Kiểm tra lịch hẹn trước khi chọn lại.';
+  if (booking.status === 'CANCELLED') return 'Yêu cầu đặt lịch này đã bị hủy.';
+  if (booking.status === 'CLOSED') return 'Vòng tìm kỹ thuật viên trước đã kết thúc. Kiểm tra lịch hẹn trước khi chọn lại.';
   return 'Yêu cầu đã được ghi nhận. Bạn có thể chọn 1 hoặc 2 kỹ thuật viên theo thứ tự ưu tiên.';
+}
+
+function bookingStatusLabel(status: string): string {
+  switch (String(status).toUpperCase()) {
+    case 'SUBMITTED': return 'Đã gửi yêu cầu';
+    case 'MATCHING': return 'Đang tìm kỹ thuật viên';
+    case 'MATCHED': return 'Đã ghép kỹ thuật viên';
+    case 'CONFIRMED': return 'Đã xác nhận';
+    case 'CLOSED': return 'Vòng tìm kỹ thuật viên đã kết thúc';
+    case 'CANCELLED': return 'Đã hủy';
+    default: return 'Đang xử lý yêu cầu';
+  }
 }
 
 export default function CustomerMatchingScreen() {
@@ -135,7 +147,7 @@ export default function CustomerMatchingScreen() {
     try {
       const nextBooking = await bookingsApi.getBooking(bookingId);
       if (!sessionAlive()) return;
-      if (nextBooking.id !== bookingId) throw new Error('Mã Booking trả về không khớp yêu cầu.');
+      if (nextBooking.id !== bookingId) throw new Error('Thông tin trả về không khớp yêu cầu.');
       // Owner binding including the unlinked flow; a missing customerId fails closed.
       if (nextBooking.customerId !== currentUserId) {
         setBooking(null);
@@ -230,15 +242,15 @@ export default function CustomerMatchingScreen() {
         setLinkedOrder(null);
         setCandidates([]);
         setError(kind === 'denied'
-          ? 'Không có quyền xem đơn dịch vụ liên kết. Hãy kiểm tra lại tài khoản và thử lại.'
-          : 'Không thể tải đơn dịch vụ liên kết. Kiểm tra kết nối và thử lại.');
+          ? 'Không có quyền xem đơn sửa chữa liên kết. Hãy kiểm tra lại tài khoản và thử lại.'
+          : 'Không thể tải đơn sửa chữa liên kết. Kiểm tra kết nối và thử lại.');
         return;
       }
       if (!sessionAlive()) return;
       if (nextOrder.id !== nextBooking.serviceOrderId || nextOrder.bookingId !== nextBooking.id) {
         setLinkedOrder(null);
         setCandidates([]);
-        setError('Thông tin liên kết Booking–đơn dịch vụ không khớp. Hãy làm mới hoặc liên hệ hỗ trợ.');
+        setError('Thông tin liên kết yêu cầu–đơn sửa chữa không khớp. Hãy làm mới hoặc liên hệ hỗ trợ.');
         return;
       }
       setLinkedOrder(nextOrder);
@@ -310,7 +322,7 @@ export default function CustomerMatchingScreen() {
           if (!sessionAlive()) return;
           // Invalid/unauthorized candidate reads must not leak technician details.
           setCandidates([]);
-          setError('Không thể tải danh sách thợ. Kiểm tra kết nối và thử lại.');
+          setError('Không thể tải danh sách kỹ thuật viên. Kiểm tra kết nối và thử lại.');
         }
       }
     } catch (problem) {
@@ -323,7 +335,7 @@ export default function CustomerMatchingScreen() {
         const kind = classifyLinkedShortlistPostError(problem);
         setError(kind === 'denied'
           ? 'Phiên đăng nhập đã hết hạn hoặc không có quyền xem yêu cầu này. Hãy đăng nhập lại.'
-          : 'Không thể tải trạng thái Booking hoặc danh sách thợ. Kiểm tra kết nối và thử lại.');
+          : 'Không thể tải trạng thái yêu cầu hoặc danh sách kỹ thuật viên. Kiểm tra kết nối và thử lại.');
       }
     } finally {
       if (sessionAlive()) setLoading(false);
@@ -426,7 +438,7 @@ export default function CustomerMatchingScreen() {
         setError(
           saveError instanceof Error
             ? saveError.message
-            : 'Chưa thể lưu trạng thái lượt mời. Chưa gửi POST; hãy thử lại sau.',
+            : 'Chưa thể lưu trạng thái lượt mời. Chưa gửi yêu cầu; hãy thử lại sau.',
         );
         return;
       }
@@ -438,7 +450,7 @@ export default function CustomerMatchingScreen() {
         freshBooking = await bookingsApi.getBooking(bookingId);
       } catch {
         setError(
-          'Chưa thể xác nhận trạng thái Booking mới nhất. Chưa gửi lời mời; hãy làm mới rồi thử lại.',
+          'Chưa thể xác nhận trạng thái yêu cầu mới nhất. Chưa gửi lời mời; hãy làm mới rồi thử lại.',
         );
         return;
       }
@@ -468,7 +480,7 @@ export default function CustomerMatchingScreen() {
         setBooking(freshBooking);
         setSelected([]);
         setError(
-          'Trạng thái Booking vừa thay đổi. Chưa gửi lời mời; hãy kiểm tra trạng thái mới nhất.',
+          'Trạng thái yêu cầu vừa thay đổi. Chưa gửi lời mời; hãy kiểm tra trạng thái mới nhất.',
         );
         return;
       }
@@ -521,7 +533,7 @@ export default function CustomerMatchingScreen() {
             postError as { response?: { status?: unknown } }
           )?.response?.status;
           setError(
-            'Backend đã từ chối lượt mời' +
+            'Hệ thống đã từ chối lượt mời' +
               (typeof status === 'number' ? ' (mã ' + status + ')' : '') +
               '. Không tự gửi lại; hãy làm mới và chọn lại nếu trạng thái vẫn cho phép.',
           );
@@ -533,7 +545,7 @@ export default function CustomerMatchingScreen() {
         setUncertainSend(true);
         setAttemptLocked(true);
         setError(
-          'Chưa xác định được kết quả gửi lời mời. Không gửi lại; đang giữ khóa an toàn và chỉ đối chiếu bằng GET.',
+          'Chưa xác định được kết quả gửi lời mời. Không gửi lại; đang giữ khóa an toàn và chỉ đối chiếu bằng trạng thái mới nhất.',
         );
         try {
           const reconciled = await bookingsApi.getBooking(bookingId);
@@ -590,7 +602,7 @@ export default function CustomerMatchingScreen() {
         }
       } catch {
         setError(
-          'Lời mời đã được Backend xác nhận nhưng chưa tải được trạng thái mới. Hãy bấm làm mới.',
+          'Lời mời đã được hệ thống xác nhận nhưng chưa tải được trạng thái mới. Hãy bấm làm mới.',
         );
       }
     } finally {
@@ -665,7 +677,7 @@ export default function CustomerMatchingScreen() {
         if (freshBooking.id !== bookingId) throw new Error('stale');
         freshOrder = await ordersApi.getOrder(snapshot.serviceOrderId);
       } catch {
-        setError('Chưa thể xác nhận trạng thái mới nhất. Không gửi lại để tránh trùng; hãy làm mới Booking hoặc liên hệ hỗ trợ.');
+        setError('Chưa thể xác nhận trạng thái mới nhất. Không gửi lại để tránh trùng; hãy làm mới yêu cầu hoặc liên hệ hỗ trợ.');
         return;
       }
       // P1a, directly before dispatch: the session that built the snapshot must still
@@ -687,7 +699,7 @@ export default function CustomerMatchingScreen() {
           setLinkedOrder(freshOrder);
         }
         setSelected([]);
-        setError('Trạng thái Booking hoặc đơn dịch vụ vừa thay đổi. Đã làm mới; hãy kiểm tra lại trước khi gửi.');
+        setError('Trạng thái yêu cầu hoặc đơn sửa chữa vừa thay đổi. Đã làm mới; hãy kiểm tra lại trước khi gửi.');
         return;
       }
       // Only the Backend locked POST decides eligibility, assignment, and concurrency.
@@ -724,7 +736,7 @@ export default function CustomerMatchingScreen() {
         // Ambiguous: the POST may have committed. Keep the lock; only proof reconciles.
         uncertainSendRef.current = true;
         setUncertainSend(true);
-        setError('Chưa xác định được kết quả gửi yêu cầu chọn lại. Không gửi lại để tránh trùng; hãy làm mới Booking hoặc liên hệ hỗ trợ.');
+        setError('Chưa xác định được kết quả gửi yêu cầu chọn lại. Không gửi lại để tránh trùng; hãy làm mới yêu cầu hoặc liên hệ hỗ trợ.');
         try {
           const reconciled = await bookingsApi.getBooking(bookingId);
           if (reconciled.id === bookingId && stillOwner()) {
@@ -790,21 +802,21 @@ export default function CustomerMatchingScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.text }]}>Chọn kỹ thuật viên</Text>
-        <Text style={[styles.note, { color: colors.textSecondary }]}>Mã Booking: {bookingId}</Text>
+        <Text style={[styles.note, { color: colors.textSecondary }]}>Mã tham chiếu: {bookingId.slice(0, 8)}</Text>
         {!isAuthenticated || role !== UserRole.CUSTOMER ? (
           <Text style={{ color: colors.error }}>Hãy đăng nhập bằng tài khoản khách hàng để xem yêu cầu này.</Text>
         ) : (
           <>
-            {loading && <ActivityIndicator accessibilityLabel="Đang tải Booking và ứng viên" color={colors.primary} />}
+            {loading && <ActivityIndicator accessibilityLabel="Đang tải yêu cầu và danh sách kỹ thuật viên" color={colors.primary} />}
             {!!error && <Text style={[styles.note, { color: colors.error }]}>{error}</Text>}
             {!!booking && ownsVisibleBooking && (
               <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <Text style={[styles.heading, { color: colors.text }]}>{booking.serviceName || 'Yêu cầu dịch vụ'}</Text>
                 <Text style={[styles.note, { color: colors.textSecondary }]}>{describeBooking(booking)}</Text>
-                <Text style={[styles.note, { color: colors.textSecondary }]}>Trạng thái: {booking.status}</Text>
+                <Text style={[styles.note, { color: colors.textSecondary }]}>Trạng thái: {bookingStatusLabel(booking.status)}</Text>
                 {!!booking.serviceOrderId && (
                   <Text selectable style={{ color: colors.success }}>
-                    Mã ServiceOrder: {booking.serviceOrderId}
+                    Mã tham chiếu đơn: {booking.serviceOrderId.slice(0, 8)}
                   </Text>
                 )}
                 {!!verifiedOrderId && (
@@ -878,23 +890,23 @@ export default function CustomerMatchingScreen() {
               <>
                 <Text style={[styles.heading, { color: colors.text }]}>
                   {linkedMode
-                    ? 'Yêu cầu chọn 1 hoặc 2 thợ mới (hệ thống sẽ kiểm tra) (' + selected.length + '/2)'
+                    ? 'Yêu cầu chọn 1 hoặc 2 kỹ thuật viên mới (hệ thống sẽ kiểm tra) (' + selected.length + '/2)'
                     : 'Chọn 1 hoặc 2 người theo thứ tự ưu tiên (' + selected.length + '/2)'}
                 </Text>
                 <Text style={[styles.note, { color: colors.textSecondary }]}>
                   {linkedMode
-                    ? 'Thử yêu cầu chọn thợ mới; hệ thống kiểm tra trước khi gửi. Chỉ hệ thống mới quyết định lời mời có được tạo hay không.'
+                    ? 'Thử yêu cầu chọn kỹ thuật viên mới; hệ thống kiểm tra trước khi gửi. Chỉ hệ thống mới quyết định lời mời có được tạo hay không.'
                     : 'Bạn có thể chọn 1 người để mời ngay, hoặc chọn thêm người thứ hai làm dự phòng. Thứ tự chọn là thứ tự ưu tiên.'}
                 </Text>
                 {candidateState === 'none' && (
                   <View style={styles.card}>
                     <Text style={{ color: colors.textSecondary }}>
                       Hiện chưa có kỹ thuật viên phù hợp với dịch vụ, khu vực và khung giờ này.
-                      Hãy làm mới bằng GET sau một lúc hoặc quay lại xem lịch hẹn.
+                      Hãy làm mới sau một lúc hoặc quay lại xem lịch hẹn.
                     </Text>
                     <Text style={[styles.note, { color: colors.textSecondary }]}>
-                      Ứng dụng không tự đổi lịch, hủy hay tạo Booking mới. Việc đổi lịch chỉ thực
-                      hiện ở trạng thái được Backend cho phép và bằng thao tác riêng của khách hàng.
+                      Ứng dụng không tự đổi lịch, hủy hay tạo yêu cầu mới. Việc đổi lịch chỉ thực
+                      hiện ở trạng thái được cho phép và bằng thao tác riêng của khách hàng.
                     </Text>
                   </View>
                 )}
@@ -904,7 +916,7 @@ export default function CustomerMatchingScreen() {
                       Hiện có 1 kỹ thuật viên phù hợp. Bạn có thể chọn người này và gửi lời mời ngay.
                     </Text>
                     <Text style={[styles.note, { color: colors.textSecondary }]}>
-                      Nếu muốn có thêm lựa chọn, hãy làm mới bằng GET sau một lúc; không cần tạo Booking khác.
+                      Nếu muốn có thêm lựa chọn, hãy làm mới sau một lúc; không cần tạo yêu cầu khác.
                     </Text>
                   </View>
                 )}
@@ -926,23 +938,23 @@ export default function CustomerMatchingScreen() {
                 <TouchableOpacity accessibilityRole="button" onPress={sendShortlist} disabled={selected.length < 1 || sending}
                   style={[styles.action, { backgroundColor: selected.length >= 1 ? colors.primary : colors.border }]}>
                   <Text style={styles.actionText}>
-                    {sending ? 'Đang gửi...' : linkedMode ? 'Gửi yêu cầu chọn ' + selected.length + ' thợ mới' : 'Xác nhận mời ' + selected.length + ' kỹ thuật viên'}
+                    {sending ? 'Đang gửi...' : linkedMode ? 'Gửi yêu cầu chọn ' + selected.length + ' kỹ thuật viên mới' : 'Xác nhận mời ' + selected.length + ' kỹ thuật viên'}
                   </Text>
                 </TouchableOpacity>
               </>
             )}
-            {waiting && <Text style={[styles.note, { color: colors.textSecondary }]}>Chỉ trạng thái Backend mới xác nhận kỹ thuật viên nhận đơn. Không cần gửi lại shortlist.</Text>}
-            {ownsVisibleBooking && uncertainSend && <Text style={[styles.note, { color: colors.error }]}>Chưa thể xác nhận kết quả POST. Không gửi lại khi chưa được hỗ trợ kiểm tra yêu cầu trên hệ thống.</Text>}
+            {waiting && <Text style={[styles.note, { color: colors.textSecondary }]}>Chỉ trạng thái trên hệ thống mới xác nhận kỹ thuật viên nhận đơn. Không cần gửi lại danh sách mời.</Text>}
+            {ownsVisibleBooking && uncertainSend && <Text style={[styles.note, { color: colors.error }]}>Chưa thể xác nhận kết quả gửi. Không gửi lại khi chưa kiểm tra yêu cầu trên hệ thống.</Text>}
             {ownsVisibleBooking && attemptLocked && (
               <Text style={[styles.note, { color: colors.error }]}>
                 Đã có một lượt mời đang chờ xác minh. Không gửi lại để tránh trùng; hãy làm mới
-                Booking. Chỉ bằng chứng từ Backend mới được gỡ khóa.
+                yêu cầu. Chỉ bằng chứng từ hệ thống mới được gỡ khóa.
               </Text>
             )}
             {ownsVisibleBooking && rejectedDefinitive && <Text style={[styles.note, { color: colors.textSecondary }]}>Hệ thống đã từ chối yêu cầu chọn lại theo trạng thái mới nhất. Hãy làm mới để xem trạng thái hiện tại.</Text>}
             <TouchableOpacity accessibilityRole="button" onPress={refresh} disabled={loading || sending}
               style={[styles.action, { backgroundColor: colors.primary }]}>
-              <Text style={styles.actionText}>{loading ? 'Đang tải...' : 'Làm mới trạng thái Booking'}</Text>
+              <Text style={styles.actionText}>{loading ? 'Đang tải...' : 'Làm mới trạng thái'}</Text>
             </TouchableOpacity>
           </>
         )}

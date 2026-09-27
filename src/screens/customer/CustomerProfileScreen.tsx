@@ -471,12 +471,12 @@ export default function CustomerProfileScreen() {
 
             <TouchableOpacity
               style={styles.menuItem}
-              onPress={() => Alert.alert('Thông báo', 'Hỗ trợ thanh toán tiền mặt và chuyển khoản khi hoàn tất.')}
+              onPress={() => Alert.alert('Thông báo', 'Hỗ trợ thanh toán tiền mặt và VNPay khi hoàn tất.')}
             >
               <Ionicons name="card-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
               <View style={styles.menuContent}>
                 <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Phương thức thanh toán</Text>
-                <Text style={styles.menuDesc}>Tiền mặt, Chuyển khoản QR</Text>
+                <Text style={styles.menuDesc}>Tiền mặt, VNPay</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.muted} />
             </TouchableOpacity>

@@ -33,17 +33,9 @@ export default function CustomerAIDiagnosisScreen() {
   // chat never books; it routes across, and this is the far end of that route.
   const prefill = route.params?.prefill;
 
-  const [step, setStep] = useState(1);
   const [description, setDescription] = useState(prefill?.description || '');
   /** Data URIs, at most three, only used to hand over to the assistant. */
   const [images, setImages] = useState<string[]>([]);
-
-  // Step 2 states
-  const [selectedDate, setSelectedDate] = useState(0);
-  const [selectedTime, setSelectedTime] = useState('09:00');
-  const [quantity, setQuantity] = useState(1);
-  const [optionsExpanded, setOptionsExpanded] = useState(true);
-  const [quoteExpanded, setQuoteExpanded] = useState(false);
 
   /**
    * Hand the photos and the description to the assistant.
@@ -62,7 +54,7 @@ export default function CustomerAIDiagnosisScreen() {
     if (!description.trim() && images.length === 0) {
       Alert.alert(
         'Cần thêm một chút',
-        'Anh/chị mô tả sự cố hoặc gửi ảnh thiết bị để trợ lý xem giúp nhé.',
+        'Bạn mô tả sự cố hoặc gửi ảnh thiết bị để trợ lý xem giúp nhé.',
       );
       return;
     }
@@ -85,25 +77,29 @@ export default function CustomerAIDiagnosisScreen() {
   }, [images.length]);
 
   const handleNextStep = () => {
+    // Booking description is mandatory: do not hand an empty description to
+    // BookingCreate. AI chat is advisory and never creates the Booking.
+    if (!description.trim()) {
+      Alert.alert(
+        'Cần mô tả sự cố',
+        'Mô tả sự cố là bắt buộc khi đặt lịch. Bạn hãy mô tả thiết bị và vấn đề cần sửa trước khi tiếp tục.',
+      );
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     // Use real catalog and saved address rather than legacy placeholder steps.
-    // AI chat is advisory and may prefill, but does not create the Booking.
     navigation.navigate('CustomerBookingCreate', {
       prefill: { ...prefill, description: description.trim() },
     });
   };
   const handleBack = () => {
-    if (step > 1) {
-      setStep(step - 1);
-    } else {
-      navigation.goBack();
-    }
+    navigation.goBack();
   };
 
   const renderStep1 = () => (
     <>
       <Text style={styles.mainTitle}>Nhà mình đang gặp vấn đề gì?</Text>
-      <Text style={styles.helperText}>Thêm mô tả để thợ chuẩn bị tốt hơn. Bạn có thể dùng ảnh để nhận gợi ý kiểm tra.</Text>
+      <Text style={styles.helperText}>Thêm mô tả để kỹ thuật viên chuẩn bị tốt hơn. Bạn có thể dùng ảnh để nhận gợi ý kiểm tra.</Text>
 
       {prefill?.serviceName && (
         <View style={styles.prefillCard}>
@@ -155,7 +151,7 @@ export default function CustomerAIDiagnosisScreen() {
       )}
 
       <View style={styles.field}>
-        <Text style={styles.fieldLabel}>Mô tả nhu cầu <Text style={styles.inlineTag}>· không bắt buộc khi đặt lịch</Text></Text>
+        <Text style={styles.fieldLabel}>Mô tả sự cố <Text style={styles.inlineTag}>· bắt buộc khi đặt lịch</Text></Text>
         <TextInput
           style={styles.textArea}
           placeholder="Ví dụ: Điều hòa vẫn chạy nhưng không lạnh, có tiếng kêu nhẹ…"
@@ -165,33 +161,6 @@ export default function CustomerAIDiagnosisScreen() {
           onChangeText={setDescription}
           placeholderTextColor={colors.muted}
         />
-      </View>
-
-      <View style={styles.card}>
-        <View style={styles.row}>
-          <Text style={styles.label}>Số lượng thiết bị</Text>
-          <View style={styles.quantityBox}>
-            <TouchableOpacity
-              style={styles.qtyBtn}
-              onPress={() => setQuantity(Math.max(1, quantity - 1))}
-              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-              accessibilityRole="button"
-              accessibilityLabel="Giảm số lượng"
-            >
-              <Ionicons name="remove" size={20} color={colors.text} />
-            </TouchableOpacity>
-            <Text style={styles.qtyText}>{quantity}</Text>
-            <TouchableOpacity
-              style={styles.qtyBtn}
-              onPress={() => setQuantity(quantity + 1)}
-              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-              accessibilityRole="button"
-              accessibilityLabel="Tăng số lượng"
-            >
-              <Ionicons name="add" size={20} color={colors.text} />
-            </TouchableOpacity>
-          </View>
-        </View>
       </View>
 
       <TouchableOpacity
@@ -205,174 +174,10 @@ export default function CustomerAIDiagnosisScreen() {
         </Text>
       </TouchableOpacity>
       <Text style={styles.assistantHint}>
-        Trợ lý sẽ xem ảnh, hỏi lại nếu cần và gợi ý dịch vụ. Anh/chị vẫn có thể
+        Trợ lý sẽ xem ảnh, hỏi lại nếu cần và gợi ý dịch vụ. Bạn vẫn có thể
         đặt lịch thẳng bên dưới mà không cần chẩn đoán.
       </Text>
 
-    </>
-  );
-
-  const renderStep2 = () => (
-    <>
-      <Text style={styles.mainTitle}>Thông tin lịch hẹn</Text>
-      
-      <View style={styles.card}>
-        <View style={styles.row}>
-          <Text style={styles.label}>Địa chỉ sửa chữa</Text>
-          <TouchableOpacity><Text style={styles.link}>Thay đổi</Text></TouchableOpacity>
-        </View>
-        <View style={styles.addressBox}>
-          <Ionicons name="location" size={20} color={colors.primary} />
-          <View style={{ marginLeft: 8 }}>
-            <Text style={styles.addressTitle}>Nhà riêng</Text>
-            <Text style={styles.addressDesc}>28 Duy Tân, Cầu Giấy, Hà Nội</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.label}>Chọn ngày</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateStrip}>
-          {[0,1,2,3].map(i => (
-            <TouchableOpacity 
-              key={i} 
-              style={[styles.dateChip, selectedDate === i && styles.dateChipActive]}
-              onPress={() => setSelectedDate(i)}
-            >
-              <Text style={[styles.dateText, selectedDate === i && styles.textActive]}>{i === 0 ? 'Hôm nay' : `Ngày ${i+1}`}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        <Text style={[styles.label, { marginTop: 16 }]}>Chọn giờ</Text>
-        <View style={styles.timeGrid}>
-          {['09:00', '10:00', '13:00', '14:00', '15:00', '16:00'].map(time => (
-            <TouchableOpacity 
-              key={time} 
-              style={[styles.timeChip, selectedTime === time && styles.timeChipActive]}
-              onPress={() => setSelectedTime(time)}
-            >
-              <Text style={[styles.timeText, selectedTime === time && styles.textActive]}>{time}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-    </>
-  );
-
-  const renderStep3 = () => (
-    <>
-      <View style={styles.summaryCard}>
-        {/* Timeline Item 1 */}
-        <View style={styles.timelineItem}>
-          <View style={styles.timelineLeftIconBox}>
-            <Ionicons name="chatbubble-ellipses" size={18} color={colors.primary} />
-          </View>
-          <View style={styles.timelineContent}>
-            <Text style={styles.timelineLabel}>Vấn đề của bạn <Text style={styles.redAsterisk}>*</Text></Text>
-            <Text style={styles.timelineValue}>Tình trạng: máy chạy yếu. Số lượng máy: {quantity} máy</Text>
-          </View>
-          <View style={styles.timelineRight}>
-            <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-            <View style={styles.timelineLine} />
-          </View>
-        </View>
-
-        {/* Timeline Item 2 */}
-        <View style={styles.timelineItem}>
-          <View style={styles.timelineLeftIconBox}>
-            <Ionicons name="location" size={18} color={colors.primary} />
-          </View>
-          <View style={styles.timelineContent}>
-            <Text style={styles.timelineLabel}>Địa chỉ làm việc</Text>
-            <Text style={styles.timelineValueTitle}>17 Mai Chí Thọ Phường An Khánh,Thành phố Hồ Chí Minh</Text>
-            <Text style={styles.timelineSubText}>Chạm để chỉnh sửa</Text>
-          </View>
-          <View style={styles.timelineRight}>
-            <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-            <View style={styles.timelineLine} />
-          </View>
-        </View>
-
-        {/* Timeline Item 3 */}
-        <View style={[styles.timelineItem, { marginBottom: 0 }]}>
-          <View style={styles.timelineLeftIconBox}>
-            <Ionicons name="time" size={18} color={colors.primary} />
-          </View>
-          <View style={styles.timelineContent}>
-            <Text style={styles.timelineLabel}>Thời gian</Text>
-            <Text style={styles.timelineValueTitle}>{selectedTime} - 14/09/2026</Text>
-          </View>
-          <View style={styles.timelineRight}>
-            <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.optionsCard}>
-        <TouchableOpacity style={styles.optionsHeader} onPress={() => setOptionsExpanded(!optionsExpanded)} activeOpacity={0.7}>
-          <View style={styles.optionsHeaderLeft}>
-            <View style={styles.optionsIconBox}>
-              <Ionicons name="albums" size={20} color="#60A5FA" />
-            </View>
-            <View>
-              <Text style={styles.optionsTitle}>Tuỳ chọn</Text>
-              <Text style={styles.optionsSub}>Ảnh, ghi chú, hoá đơn</Text>
-            </View>
-          </View>
-          <Ionicons name={optionsExpanded ? "chevron-up" : "chevron-down"} size={20} color={colors.text} />
-        </TouchableOpacity>
-
-        {optionsExpanded && (
-          <View style={styles.optionsBody}>
-            {/* Hình ảnh */}
-            <View style={styles.optionSection}>
-              <View style={styles.optionSectionHeader}>
-                <View style={styles.optionsIconBoxSmall}>
-                  <Ionicons name="image" size={16} color={colors.primary} />
-                </View>
-                <View>
-                  <Text style={styles.optionSectionTitle}>Hình ảnh</Text>
-                  <Text style={styles.optionSectionSub}>Giúp thợ hiểu rõ hơn</Text>
-                </View>
-              </View>
-              <TouchableOpacity style={styles.addImageBtn}>
-                <Ionicons name="image" size={24} color="#93C5FD" />
-                <Text style={styles.addImageText}>Thêm</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Ghi chú */}
-            <TouchableOpacity style={styles.optionItemRow}>
-              <View style={styles.optionsHeaderLeft}>
-                <View style={styles.optionsIconBoxSmall}>
-                  <Ionicons name="clipboard" size={16} color={colors.warning} />
-                </View>
-                <View>
-                  <Text style={styles.optionSectionTitle}>Ghi chú <Text style={styles.optionSectionSub}>Tùy chọn</Text></Text>
-                  <Text style={styles.optionSectionSub}>Thêm yêu cầu đặc biệt...</Text>
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
-            </TouchableOpacity>
-
-            {/* Ghi chú */}
-            <TouchableOpacity style={styles.optionItemRow}>
-              <View style={styles.optionsHeaderLeft}>
-                <View style={styles.optionsIconBoxSmall}>
-                  <Ionicons name="document-text" size={16} color={colors.warning} />
-                </View>
-                <View>
-                  <Text style={styles.optionSectionTitle}>Xuất hóa đơn</Text>
-                  <Text style={styles.optionSectionSub}>Yêu cầu xuất hóa đơn VAT</Text>
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-      <View style={{height: 180}} />
     </>
   );
 
@@ -389,99 +194,26 @@ export default function CustomerAIDiagnosisScreen() {
         >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{step === 3 ? 'Vệ sinh máy lạnh' : 'AI Hỗ trợ chẩn đoán'}</Text>
-        {step === 1 ? (
-          <View style={styles.aiBadge}>
-            <MaterialCommunityIcons name="robot-outline" size={14} color={colors.primary} />
-            <Text style={styles.aiBadgeText}>AI 2.0</Text>
-          </View>
-        ) : (
-          <View style={{ width: 40 }} />
-        )}
+        <Text style={styles.headerTitle}>AI Hỗ trợ chẩn đoán</Text>
+        <View style={styles.aiBadge}>
+          <MaterialCommunityIcons name="robot-outline" size={14} color={colors.primary} />
+          <Text style={styles.aiBadgeText}>AI 2.0</Text>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {step < 3 && (
-          <View style={styles.progressWrap}>
-            <View style={styles.progressLabelRow}>
-              <Text style={styles.progressLabel}>Bước {step} / 3</Text>
-              <Text style={styles.progressLabel}>
-                {step === 1 ? 'Mô tả nhu cầu' : 'Thời gian & địa chỉ'}
-              </Text>
-            </View>
-            <View style={styles.steps}>
-              <View style={[styles.dot, step >= 1 && styles.dotOn]} />
-              <View style={[styles.dot, step >= 2 && styles.dotOn]} />
-              <View style={[styles.dot, step >= 3 && styles.dotOn]} />
-            </View>
-          </View>
-        )}
-
-        {step === 1 && renderStep1()}
-        {step === 2 && renderStep2()}
-        {step === 3 && renderStep3()}
-
+        {renderStep1()}
       </ScrollView>
 
-      {step < 3 ? (
-        <View style={styles.bottomBar}>
-          <TouchableOpacity style={styles.bookBtn} activeOpacity={0.8} onPress={handleNextStep}>
-            <LinearGradient colors={[colors.primaryDark, colors.primary]} style={styles.bookBtnGradient}>
-              <Text style={styles.bookBtnText}>
-                {step === 1 ? 'Tiếp tục chọn lịch' : 'Tiếp tục'}
-              </Text>
-              <Ionicons name="arrow-forward" size={16} color={colors.surface} />
-            </LinearGradient>
-          </TouchableOpacity>
-          {step === 1 && <Text style={styles.ctaNote}>Ảnh chỉ dùng cho trợ lý AI; hiện chưa đính kèm vào yêu cầu đặt thợ.</Text>}
-        </View>
-      ) : (
-        <View style={styles.step3BottomBar}>
-          <View style={styles.quoteCardWrapper}>
-            <TouchableOpacity 
-              style={styles.quoteHeader} 
-              onPress={() => setQuoteExpanded(!quoteExpanded)}
-              activeOpacity={0.8}
-            >
-              <View>
-                <Text style={styles.quoteTitle}>Báo giá từ AI (tham khảo)</Text>
-                <Text style={styles.quotePrice}>230,000 - 650,000đ</Text>
-              </View>
-              <Ionicons name={quoteExpanded ? "chevron-down" : "chevron-up"} size={20} color={colors.text} />
-            </TouchableOpacity>
-
-            {quoteExpanded && (
-              <View style={styles.quoteExpandedBody}>
-                <View style={styles.quoteDivider} />
-                <View style={styles.quoteRowItem}>
-                  <Text style={styles.quoteLabelText}>Tiền công</Text>
-                  <Text style={styles.quoteValueText}>150,000 - 400,000đ</Text>
-                </View>
-                <View style={styles.quoteRowItem}>
-                  <Text style={styles.quoteLabelText}>Vật tư</Text>
-                  <Text style={styles.quoteValueText}>80,000 - 250,000đ</Text>
-                </View>
-                
-                <View style={styles.quoteMaterialsBox}>
-                  <Text style={styles.quoteMaterialsTitle}>Có thể cần:</Text>
-                  <View style={styles.quoteMaterialsTags}>
-                    <View style={styles.quoteMaterialTag}><Text style={styles.quoteMaterialTagText} numberOfLines={1}>Dung dịch vệ sinh máy lạnh ch...</Text></View>
-                    <View style={styles.quoteMaterialTag}><Text style={styles.quoteMaterialTagText} numberOfLines={1}>Nước rửa dàn lạnh/dàn n...</Text></View>
-                  </View>
-                </View>
-
-                <View style={styles.quoteInfoRow}>
-                  <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
-                  <Text style={styles.quoteInfoText}>Vật tư có thể phát sinh thêm tùy tình trạng thực tế khi khảo sát.</Text>
-                </View>
-              </View>
-            )}
-          </View>
-          <TouchableOpacity style={styles.startBtn} activeOpacity={0.8} onPress={handleNextStep}>
-            <Text style={styles.startBtnText}>Bắt đầu tìm thợ</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      <View style={styles.bottomBar}>
+        <TouchableOpacity style={styles.bookBtn} activeOpacity={0.8} onPress={handleNextStep}>
+          <LinearGradient colors={[colors.primaryDark, colors.primary]} style={styles.bookBtnGradient}>
+            <Text style={styles.bookBtnText}>Tiếp tục chọn lịch</Text>
+            <Ionicons name="arrow-forward" size={16} color={colors.surface} />
+          </LinearGradient>
+        </TouchableOpacity>
+        <Text style={styles.ctaNote}>Ảnh chỉ dùng cho trợ lý AI; hiện chưa đính kèm vào yêu cầu đặt lịch.</Text>
+      </View>
     </SafeAreaView>
   );
 }

@@ -24,6 +24,7 @@ import { useAppTheme } from '../../constants/theme';
 import { useAuthStore } from '../../store/auth.store';
 import { ordersApi, type CanonicalOrderStatus } from '../../api/orders.api';
 import { customerBookingsUserId } from './customer-bookings-history';
+import { orderNextAction, timelineEntryLabel } from './customer-order-next-action';
 import {
   createOrderDetailLoader,
   initialOrderDetailState,
@@ -615,7 +616,7 @@ export default function CustomerOrderDetailScreen() {
   const onPaymentVnpay = () => {
     Alert.alert(
       'Thanh toán VNPay',
-      'Ứng dụng sẽ mở liên kết thanh toán do Backend tạo. Chỉ Backend xác nhận PAID/COMPLETED.',
+      'Ứng dụng sẽ mở liên kết thanh toán do hệ thống tạo. Chỉ khi hệ thống xác nhận đã thanh toán/hoàn thành mới được coi là thành công.',
       [
         { text: 'Hủy', style: 'cancel' },
         { text: 'Tiếp tục', onPress: () => { void paymentRef.current?.startVnpay(); } },
@@ -648,7 +649,7 @@ export default function CustomerOrderDetailScreen() {
     if (!settlement) return;
     Alert.alert(
       'Báo sai số tiền',
-      'Backend sẽ chuyển đối soát sang DISPUTED/Support Case; hóa đơn không được đánh dấu PAID.',
+      'Hệ thống sẽ chuyển đối soát sang trạng thái tranh chấp để xử lý; hóa đơn chưa được coi là đã thanh toán.',
       [
         { text: 'Hủy', style: 'cancel' },
         {
@@ -752,6 +753,20 @@ export default function CustomerOrderDetailScreen() {
   // RECORDED on the order, which may be a previous tech while replacement is
   // underway. Name/phone stay visible; only a hedged note is added below.
   const attributionNote = technicianAttributionNote(order);
+  // Universal top summary (display-only): reuses the eligibility outcomes
+  // already computed below/above instead of inventing new rules.
+  const orderSummaryAction = order && order.id === serviceOrderId
+    ? orderNextAction({
+        status: order.status,
+        quoteAwaitingDecision: sections.quoteAwaitingDecision,
+        additionalCostPending: underRepairTask?.kind === 'additional_cost_pending',
+        completionRequested:
+          underRepairTask?.kind === 'completion_requested' ||
+          (!!order.completionRequestedAt && !order.customerConfirmed),
+        paymentPending: paymentEligible != null,
+        reviewable: reviewEligible != null && !reviewState.review,
+      })
+    : null;
   // P3B7 decision visibility mirrors the controller gate: active customer
   // order in EN_ROUTE with the latest quotation SENT.
   const canDecideQuote = !!order &&
@@ -815,7 +830,7 @@ export default function CustomerOrderDetailScreen() {
         >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chi tiết đơn</Text>
+        <Text style={styles.headerTitle}>Chi tiết đơn sửa chữa</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -874,6 +889,26 @@ export default function CustomerOrderDetailScreen() {
             )}
           </View>
 
+          {!!orderSummaryAction && (
+            <View
+              style={[
+                styles.card,
+                {
+                  borderWidth: 1,
+                  borderColor: colors.primary,
+                  backgroundColor: colors.primarySoft,
+                },
+              ]}
+              accessibilityRole="summary"
+            >
+              <Text style={[styles.meta, { fontWeight: '800', color: colors.primary }]}>
+                TRẠNG THÁI · VIỆC CẦN LÀM
+              </Text>
+              <Text style={styles.sectionTitle}>{orderSummaryAction.title}</Text>
+              <Text style={styles.meta}>{orderSummaryAction.detail}</Text>
+            </View>
+          )}
+
           {underRepairTask && (
             <View
               style={[
@@ -907,7 +942,7 @@ export default function CustomerOrderDetailScreen() {
                   {confirmCompletionState.needsVerify ? (
                     <>
                       <Text style={[styles.meta, { color: '#92400E', fontWeight: '700' }]}>
-                        Kết quả xác nhận trước chưa rõ. Không gửi POST lại.
+                        Kết quả xác nhận trước chưa rõ. Không gửi lại.
                       </Text>
                       <TouchableOpacity
                         onPress={onConfirmCompletionReconcile}
@@ -966,7 +1001,7 @@ export default function CustomerOrderDetailScreen() {
               )}
               {underRepairTask.kind === 'work_confirmed' && (
                 <Text style={[styles.meta, { fontWeight: '700', color: '#047857' }]}>
-                  Backend đã ghi nhận nghiệm thu. Hóa đơn/thanh toán vẫn hiển thị riêng bên dưới.
+                  Hệ thống đã ghi nhận nghiệm thu. Hóa đơn/thanh toán vẫn hiển thị riêng bên dưới.
                 </Text>
               )}
             </View>
@@ -989,7 +1024,7 @@ export default function CustomerOrderDetailScreen() {
             <Text style={styles.sectionTitle}>Chi phí</Text>
             {sections.laborText !== null && (
               <View style={styles.row}>
-                <Text style={styles.meta}>Nhân công</Text>
+                <Text style={styles.meta}>Tiền công</Text>
                 <Text style={styles.meta}>{sections.laborText}</Text>
               </View>
             )}
@@ -1038,7 +1073,7 @@ export default function CustomerOrderDetailScreen() {
                 <Text style={styles.meta}>
                   {decisionState.decided === 'APPROVED'
                     ? 'Đã duyệt báo giá. Đây chưa phải thanh toán.'
-                    : 'Đã từ chối báo giá. Đơn dịch vụ đã bị hủy.'}
+                    : 'Đã từ chối báo giá. Đơn sửa chữa đã bị hủy.'}
                 </Text>
               )}
               {canDecideQuote && (
@@ -1153,7 +1188,7 @@ export default function CustomerOrderDetailScreen() {
               <Text style={styles.sectionTitle}>Tiến độ</Text>
               {order.timeline!.map((entry, index) => (
                 <View key={`${entry.status}-${entry.timestamp}-${index}`} style={styles.row}>
-                  <Text style={styles.meta}>{entry.title || entry.status}</Text>
+                  <Text style={styles.meta}>{timelineEntryLabel(entry.title, entry.status)}</Text>
                   <Text style={styles.meta}>{new Date(entry.timestamp).toLocaleString('vi-VN')}</Text>
                 </View>
               ))}
@@ -1225,7 +1260,7 @@ export default function CustomerOrderDetailScreen() {
                 </View>
                 {invoiceState.invoice.laborText !== null && (
                   <View style={styles.row}>
-                    <Text style={styles.meta}>Nhân công</Text>
+                    <Text style={styles.meta}>Tiền công</Text>
                     <Text style={styles.meta}>{invoiceState.invoice.laborText}</Text>
                   </View>
                 )}
@@ -1272,29 +1307,29 @@ export default function CustomerOrderDetailScreen() {
           {orderCancelEligible && (
             <View style={styles.card}>
               {/* K09_B_CUSTOMER_ORDER_CANCEL */}
-              <Text style={styles.sectionTitle}>Hủy đơn dịch vụ</Text>
+              <Text style={styles.sectionTitle}>Hủy đơn sửa chữa</Text>
               <Text style={styles.meta}>
-                Chỉ áp dụng trước khi bắt đầu sửa chữa. Backend quyết định trạng thái cuối;
-                Mobile không tự áp phí, strike hoặc bồi thường.
+                Chỉ áp dụng trước khi bắt đầu sửa chữa. Hệ thống quyết định trạng thái cuối;
+                ứng dụng không tự áp phí hoặc bồi thường.
               </Text>
               {orderCancelState.needsVerify ? (
                 <View style={styles.evidenceError}>
                   <Text style={styles.meta}>
-                    Kết quả lần hủy trước chưa xác định. Không gửi POST lại.
+                    Kết quả lần hủy trước chưa xác định. Không gửi lại.
                   </Text>
                   <TouchableOpacity
                     onPress={onOrderCancelReconcile}
                     disabled={orderCancelState.busy}
                     accessibilityRole="button"
                   >
-                    <Text style={styles.retryText}>Kiểm tra trạng thái bằng GET</Text>
+                    <Text style={styles.retryText}>Kiểm tra trạng thái</Text>
                   </TouchableOpacity>
                 </View>
               ) : orderCancelState.status === 'confirming' ? (
                 <View style={styles.evidenceError}>
                   <Text style={styles.meta}>
-                    Xác nhận hủy ServiceOrder này? Nếu trạng thái đã chuyển sang sửa chữa,
-                    Backend sẽ từ chối và hướng sang Service Manager/Support.
+                    Xác nhận hủy đơn sửa chữa này? Nếu trạng thái đã chuyển sang sửa chữa,
+                    hệ thống sẽ từ chối và hướng dẫn liên hệ hỗ trợ.
                   </Text>
                   <View style={styles.decisionBtnRow}>
                     <TouchableOpacity
@@ -1341,7 +1376,7 @@ export default function CustomerOrderDetailScreen() {
                       backgroundColor: colors.surface,
                       textAlignVertical: 'top',
                     }}
-                    accessibilityLabel="Lý do hủy đơn dịch vụ"
+                    accessibilityLabel="Lý do hủy đơn sửa chữa"
                   />
                   <TouchableOpacity
                     style={[
@@ -1369,7 +1404,7 @@ export default function CustomerOrderDetailScreen() {
               {/* K08_CUSTOMER_PAYMENT */}
               <Text style={styles.sectionTitle}>Thanh toán</Text>
               <Text style={styles.meta}>
-                Nghiệm thu công việc đã được xác nhận. Thanh toán là bước riêng; chỉ trạng thái PAID/COMPLETED từ Backend mới được coi là thành công.
+                Nghiệm thu công việc đã được xác nhận. Thanh toán là bước riêng; chỉ khi hệ thống xác nhận đã thanh toán/hoàn thành mới được coi là thành công.
               </Text>
 
               {paymentState.loading ? (
@@ -1403,11 +1438,11 @@ export default function CustomerOrderDetailScreen() {
                 </View>
               ) : paymentState.settlement?.status === 'DISPUTED' ? (
                 <Text style={[styles.meta, { color: '#B91C1C', fontWeight: '700' }]}>
-                  Đối soát tiền mặt đang DISPUTED; Support Case cần xử lý. Hóa đơn chưa được coi là PAID.
+                  Đối soát tiền mặt đang tranh chấp và cần xử lý. Hóa đơn chưa được coi là đã thanh toán.
                 </Text>
               ) : paymentState.settlement?.status === 'CONFIRMED' ? (
                 <Text style={[styles.meta, { color: '#047857', fontWeight: '700' }]}>
-                  Backend đã xác nhận đối soát tiền mặt.
+                  Hệ thống đã xác nhận đối soát tiền mặt.
                 </Text>
               ) : (
                 <Text style={styles.meta}>Chưa có khai báo tiền mặt từ kỹ thuật viên.</Text>
@@ -1415,7 +1450,7 @@ export default function CustomerOrderDetailScreen() {
 
               {paymentState.cashNeedsVerify && (
                 <TouchableOpacity onPress={onPaymentCheckCash} disabled={paymentState.cashBusy} accessibilityRole="button">
-                  <Text style={styles.retryText}>Kiểm tra đối soát tiền mặt bằng GET</Text>
+                  <Text style={styles.retryText}>Kiểm tra đối soát tiền mặt</Text>
                 </TouchableOpacity>
               )}
 
@@ -1435,10 +1470,10 @@ export default function CustomerOrderDetailScreen() {
                 {paymentState.onlinePending && (
                   <>
                     <Text style={styles.meta}>
-                      Đã tạo/mở một lần thanh toán VNPay. Quay lại ứng dụng không đồng nghĩa đã PAID.
+                      Đã tạo/mở một lần thanh toán VNPay. Quay lại ứng dụng không đồng nghĩa đã thanh toán thành công.
                     </Text>
                     <TouchableOpacity onPress={onPaymentCheckOnline} disabled={paymentState.onlineBusy} accessibilityRole="button">
-                      <Text style={styles.retryText}>Kiểm tra trạng thái Backend</Text>
+                      <Text style={styles.retryText}>Kiểm tra trạng thái thanh toán</Text>
                     </TouchableOpacity>
                   </>
                 )}
@@ -1473,7 +1508,7 @@ export default function CustomerOrderDetailScreen() {
               ) : reviewState.needsVerify ? (
                 <View style={styles.evidenceError}>
                   <Text style={styles.meta}>
-                    Kết quả gửi đánh giá trước chưa xác định. Không gửi POST lại.
+                    Kết quả gửi đánh giá trước chưa xác định. Không gửi lại.
                   </Text>
                   <TouchableOpacity
                     onPress={onReviewReconcile}
@@ -1488,7 +1523,7 @@ export default function CustomerOrderDetailScreen() {
               ) : (
                 <>
                   <Text style={styles.meta}>
-                    Chỉ đơn COMPLETED thật mới được đánh giá. Mỗi ServiceOrder chỉ có một đánh giá.
+                    Chỉ đơn đã hoàn thành thật mới được đánh giá. Mỗi đơn sửa chữa chỉ có một đánh giá.
                   </Text>
                   <View style={[styles.decisionBtnRow, { flexWrap: 'wrap' }]}>
                     {[1, 2, 3, 4, 5].map((rating) => (

@@ -244,6 +244,78 @@ export function resumeTargetFor(booking: BookingItem, ordersUnknown: boolean): s
   return bookingResumeTarget(booking);
 }
 
+export type HomeResumeItem =
+  | { kind: 'order'; orderId: string; title: string; detail: string }
+  | { kind: 'booking'; bookingId: string; title: string; detail: string };
+
+const HOME_ACTIVE_ORDER_STATUSES = new Set(['ACCEPTED', 'EN_ROUTE', 'UNDER_REPAIR', 'IN_PROGRESS']);
+
+function createdAtTime(value: unknown): number {
+  const time = typeof value === 'string' ? Date.parse(value) : Number.NaN;
+  return Number.isFinite(time) ? time : 0;
+}
+
+/**
+ * At most one concise actionable item for the Customer Home resume card.
+ * Pure display selection over already-loaded data: the most recent active
+ * ServiceOrder wins; otherwise the most recent resumable unlinked Booking
+ * for which `bookingResumeTarget()` returns a real ID.
+ * Non-resumable Booking states (e.g. MATCHING/MATCHED) never produce a Home
+ * item, so Home never routes a passive row into CustomerMatching.
+ * Returns null on empty input — never invents status or assignment, and
+ * callers must pass only successfully loaded data (never error fallbacks).
+ */
+export function homeResumeTarget(
+  bookings: BookingItem[],
+  orders: ServiceOrderItem[],
+): HomeResumeItem | null {
+  const activeOrders = (orders ?? []).filter(
+    (order) => order
+      && typeof order.id === 'string'
+      && order.id.length > 0
+      && HOME_ACTIVE_ORDER_STATUSES.has(String(order.status).toUpperCase()),
+  );
+  if (activeOrders.length > 0) {
+    activeOrders.sort((a, b) => createdAtTime(b.createdAt) - createdAtTime(a.createdAt));
+    const order = activeOrders[0];
+    const status = String(order.status).toUpperCase();
+    const title = status === 'EN_ROUTE'
+      ? 'Kỹ thuật viên đang đến'
+      : status === 'UNDER_REPAIR' || status === 'IN_PROGRESS'
+        ? 'Đơn đang sửa chữa'
+        : 'Kỹ thuật viên đã nhận đơn';
+    return {
+      kind: 'order',
+      orderId: order.id,
+      title,
+      detail: order.serviceName || 'Đơn sửa chữa của bạn',
+    };
+  }
+  const linkedBookingIds = new Set(
+    (orders ?? [])
+      .map((order) => order?.bookingId)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0),
+  );
+  const waiting = (bookings ?? []).filter(
+    (booking) => booking
+      && typeof booking.id === 'string'
+      && booking.id.length > 0
+      && !linkedBookingIds.has(booking.id)
+      && bookingResumeTarget(booking) !== null,
+  );
+  if (waiting.length === 0) return null;
+  waiting.sort((a, b) => createdAtTime(b.createdAt) - createdAtTime(a.createdAt));
+  const booking = waiting[0];
+  const resumeId = bookingResumeTarget(booking);
+  if (resumeId === null) return null;
+  return {
+    kind: 'booking',
+    bookingId: resumeId,
+    title: 'Tiếp tục chọn kỹ thuật viên',
+    detail: booking.serviceName || 'Yêu cầu đặt lịch của bạn',
+  };
+}
+
 /** Display total for an assigned order, or null when pricing is genuinely unknown (never a fake 0đ). */
 export function orderTotalText(order: ServiceOrderItem): string | null {
   if (typeof order.grandTotal !== 'number'
