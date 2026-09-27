@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import type { RootStackParamList } from '../../types';
 import { useAppTheme } from '../../constants/theme';
@@ -185,6 +186,7 @@ export default function TechnicianKycScreen() {
 
   const handleSubmit = async () => {
     if (!canSubmit || submitting) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSubmitting(true);
     try {
       const documents = await Promise.all(slots.map(uploadSlot));
@@ -207,8 +209,14 @@ export default function TechnicianKycScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Quay lại"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Xác minh danh tính (KYC)</Text>
         <View style={styles.backBtn} />
@@ -262,6 +270,8 @@ export default function TechnicianKycScreen() {
                       key={slot.key}
                       style={[styles.slotBox, slot.asset && styles.slotBoxFilled]}
                       onPress={() => handleSlotPress(slot)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${slot.label}${slot.asset ? ', đã chọn ảnh' : ', ' + slot.hint}`}
                     >
                       {slot.asset ? (
                         <Image source={{ uri: slot.asset.uri }} style={styles.slotImage} />
@@ -305,7 +315,7 @@ export default function TechnicianKycScreen() {
                     onPress={handleSubmit}
                   >
                     {submitting ? (
-                      <ActivityIndicator color="#FFFFFF" />
+                      <ActivityIndicator color={colors.surface} />
                     ) : (
                       <Text style={styles.submitBtnText}>Nộp hồ sơ xác minh</Text>
                     )}
@@ -392,5 +402,5 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     alignItems: 'center',
   },
   submitBtnDisabled: { backgroundColor: colors.border },
-  submitBtnText: { color: '#FFFFFF', fontSize: fontSize.md, fontWeight: '700' },
+  submitBtnText: { color: colors.surface, fontSize: fontSize.md, fontWeight: '700' },
 });

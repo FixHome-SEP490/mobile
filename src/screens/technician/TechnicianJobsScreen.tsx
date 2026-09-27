@@ -14,12 +14,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../constants/theme';
 import { ordersApi, type CanonicalOrderStatus } from '../../api/orders.api';
-import { createJobsLoader, initialJobsState, technicianJobsUserId } from './technician-jobs-loader';
+import { createJobsLoader, getCachedJobsState, technicianJobsUserId } from './technician-jobs-loader';
 import { historicalSummaryDates, isHistoricalOrder, resolveJobsView, techOrderDetailTarget } from './technician-order-detail';
+import { findChatForBooking } from './technician-chat-shortcut';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store/auth.store';
+import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import {
   checkInAttemptState,
@@ -32,9 +34,10 @@ type JobTab = 'all' | 'pending' | 'in_progress';
 
 export default function TechnicianJobsScreen() {
   const { colors } = useAppTheme();
+  const styles = getStyles(colors);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [activeTab, setActiveTab] = useState<JobTab>('all');
-  const [jobsState, setJobsState] = useState(initialJobsState);
+  const [jobsState, setJobsState] = useState(getCachedJobsState);
   const { jobs, loading, refreshing, loadingMoreJobs, error, actionLoading, blockedOrderIds } = jobsState;
   const [checkInBusy, setCheckInBusy] = useState<string | null>(null);
   const [arrivalStates, setArrivalStates] = useState<Record<string, Exclude<ArrivalVerificationState, 'clear'>>>({});
@@ -134,10 +137,38 @@ export default function TechnicianJobsScreen() {
   const onRefresh = () => { void loader.refresh(); };
   const onLoadMoreJobs = () => { void loader.loadMoreJobs(); };
 
-  const handleEnRoute = (orderId: string) => { void loader.handleEnRoute(orderId); };
+  const handleEnRoute = (orderId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    void loader.handleEnRoute(orderId);
+  };
 
-  const handleCheckIn = (orderId: string) => { void checkInRef.current?.checkIn(orderId); };
+  const handleCheckIn = (orderId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    void checkInRef.current?.checkIn(orderId);
+  };
   const handleReconcileCheckIn = (orderId: string) => { void checkInRef.current?.reconcile(orderId); };
+
+  const [openingChatFor, setOpeningChatFor] = useState<string | null>(null);
+  const handleOpenChat = async (bookingId: string) => {
+    if (openingChatFor) return;
+    setOpeningChatFor(bookingId);
+    try {
+      const target = await findChatForBooking(bookingId);
+      if (!target) {
+        Alert.alert('Chưa có cuộc trò chuyện', 'Chưa có cuộc trò chuyện nào cho đơn này.');
+        return;
+      }
+      navigation.navigate('ChatThread', {
+        conversationId: target.conversationId,
+        counterpartName: target.counterpartName,
+        serviceName: target.serviceName,
+      });
+    } catch {
+      Alert.alert('Lỗi', 'Không thể mở cuộc trò chuyện. Vui lòng thử lại.');
+    } finally {
+      setOpeningChatFor(null);
+    }
+  };
 
   const getStatusBadge = (status: CanonicalOrderStatus) => {
     const s = String(status).toUpperCase();
@@ -148,11 +179,11 @@ export default function TechnicianJobsScreen() {
         return { label: 'Đang trên đường', bg: '#DCFCE7', color: '#16A34A' };
       case 'UNDER_REPAIR':
       case 'IN_PROGRESS':
-        return { label: 'Đang sửa chữa', bg: '#DBEAFE', color: '#2563EB' };
+        return { label: 'Đang sửa chữa', bg: colors.primaryTint, color: colors.primaryStrong };
       case 'COMPLETED':
-        return { label: 'Hoàn tất', bg: '#F1F5F9', color: '#64748B' };
+        return { label: 'Hoàn tất', bg: colors.divider, color: colors.textSecondary };
       default:
-        return { label: s, bg: '#F1F5F9', color: '#64748B' };
+        return { label: s, bg: colors.divider, color: colors.textSecondary };
     }
   };
 
@@ -161,7 +192,7 @@ export default function TechnicianJobsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Công việc</Text>
@@ -171,7 +202,7 @@ export default function TechnicianJobsScreen() {
           disabled={!technicianUserId}
           accessibilityLabel="Xem lời mời chờ xác nhận"
         >
-          <Ionicons name="mail-outline" size={18} color="#2563EB" />
+          <Ionicons name="mail-outline" size={18} color={colors.primaryStrong} />
           <Text style={styles.invitationsBtnText}>Lời mời</Text>
         </TouchableOpacity>
       </View>
@@ -308,21 +339,39 @@ export default function TechnicianJobsScreen() {
                         accessibilityRole="button"
                         accessibilityLabel="Xem chi tiết đơn"
                       >
-                        <Ionicons name="document-text-outline" size={16} color="#2563EB" />
+                        <Ionicons name="document-text-outline" size={16} color={colors.primaryStrong} />
                         <Text style={styles.detailBtnText}>Xem chi tiết đơn</Text>
+                      </TouchableOpacity>
+                    )}
+                    {!!job.bookingId && (
+                      <TouchableOpacity
+                        style={styles.detailBtn}
+                        onPress={() => handleOpenChat(job.bookingId)}
+                        disabled={openingChatFor === job.bookingId}
+                        accessibilityRole="button"
+                        accessibilityLabel="Nhắn tin với khách"
+                      >
+                        {openingChatFor === job.bookingId ? (
+                          <ActivityIndicator size="small" color={colors.primaryStrong} />
+                        ) : (
+                          <>
+                            <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.primaryStrong} />
+                            <Text style={styles.detailBtnText}>Nhắn tin</Text>
+                          </>
+                        )}
                       </TouchableOpacity>
                     )}
                     {s === 'ACCEPTED' && (
                       <TouchableOpacity
-                        style={[styles.actionBtn, { backgroundColor: '#2563EB' }]}
+                        style={[styles.actionBtn, { backgroundColor: colors.primaryStrong }]}
                         onPress={() => handleEnRoute(job.id)}
                         disabled={isActioning || blockedOrderIds.includes(job.id) || checkInBusy === job.id}
                       >
                         {isActioning ? (
-                          <ActivityIndicator size="small" color="#FFF" />
+                          <ActivityIndicator size="small" color={colors.surface} />
                         ) : (
                           <>
-                            <Ionicons name="navigate-outline" size={16} color="#FFF" />
+                            <Ionicons name="navigate-outline" size={16} color={colors.surface} />
                             <Text style={styles.actionBtnText}>{blockedOrderIds.includes(job.id) ? 'Đã gửi · kéo xuống để kiểm tra' : 'Bắt đầu di chuyển'}</Text>
                           </>
                         )}
@@ -338,7 +387,7 @@ export default function TechnicianJobsScreen() {
                           </Text>
                         </View>
                         <TouchableOpacity
-                          style={[styles.actionBtn, { backgroundColor: '#059669' }]}
+                          style={[styles.actionBtn, { backgroundColor: colors.success }]}
                           onPress={() =>
                             navigation.navigate('TechnicianOrderDetail', {
                               serviceOrderId: job.id,
@@ -347,7 +396,7 @@ export default function TechnicianJobsScreen() {
                           accessibilityRole="button"
                           accessibilityLabel="Tiếp tục công việc"
                         >
-                          <Ionicons name="arrow-forward-outline" size={16} color="#FFF" />
+                          <Ionicons name="arrow-forward-outline" size={16} color={colors.surface} />
                           <Text style={styles.actionBtnText}>Tiếp tục công việc</Text>
                         </TouchableOpacity>
                       </View>
@@ -366,10 +415,10 @@ export default function TechnicianJobsScreen() {
                           accessibilityLabel="Kiểm tra lại check-in"
                         >
                           {checkInBusy === job.id ? (
-                            <ActivityIndicator size="small" color="#FFF" />
+                            <ActivityIndicator size="small" color={colors.surface} />
                           ) : (
                             <>
-                              <Ionicons name="refresh-outline" size={16} color="#FFF" />
+                              <Ionicons name="refresh-outline" size={16} color={colors.surface} />
                               <Text style={styles.actionBtnText}>Kiểm tra check-in</Text>
                             </>
                           )}
@@ -379,15 +428,15 @@ export default function TechnicianJobsScreen() {
 
                     {s === 'EN_ROUTE' && !arrivalStates[job.id] && (
                       <TouchableOpacity
-                        style={[styles.actionBtn, { backgroundColor: '#059669' }]}
+                        style={[styles.actionBtn, { backgroundColor: colors.success }]}
                         onPress={() => handleCheckIn(job.id)}
                         disabled={isActioning || checkInBusy === job.id}
                       >
                         {isActioning || checkInBusy === job.id ? (
-                          <ActivityIndicator size="small" color="#FFF" />
+                          <ActivityIndicator size="small" color={colors.surface} />
                         ) : (
                           <>
-                            <Ionicons name="location-outline" size={16} color="#FFF" />
+                            <Ionicons name="location-outline" size={16} color={colors.surface} />
                             <Text style={styles.actionBtnText}>Check-in tại nhà khách</Text>
                           </>
                         )}
@@ -410,7 +459,7 @@ export default function TechnicianJobsScreen() {
               style={styles.loadMoreBtn}
             >
               {loadingMoreJobs ? (
-                <ActivityIndicator size="small" color="#2563EB" />
+                <ActivityIndicator size="small" color={colors.primaryStrong} />
               ) : (
                 <Text style={styles.loadMoreText}>Tải thêm công việc</Text>
               )}
@@ -423,14 +472,14 @@ export default function TechnicianJobsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -438,21 +487,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: colors.divider,
   },
   headerTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#0F172A',
+    color: colors.text,
     flex: 1,
   },
   invitationsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 20,
@@ -460,11 +509,11 @@ const styles = StyleSheet.create({
   invitationsBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#2563EB',
+    color: colors.primaryStrong,
   },
   tabRow: {
     flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.divider,
     margin: 16,
     marginBottom: 8,
     padding: 4,
@@ -477,7 +526,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   tabBtnActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -487,12 +536,12 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#64748B',
+    color: colors.textSecondary,
   },
   tabTextActive: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
   },
   emptyScroll: {
     flexGrow: 1,
@@ -520,7 +569,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: '#64748B',
+    color: colors.textSecondary,
   },
   emptyContainer: {
     flex: 1,
@@ -531,20 +580,20 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
     marginTop: 16,
     marginBottom: 8,
   },
   emptyDesc: {
     fontSize: 13,
-    color: '#64748B',
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   list: {
     gap: 12,
   },
   jobCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 16,
     shadowColor: '#000',
@@ -561,7 +610,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.divider,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -583,7 +632,7 @@ const styles = StyleSheet.create({
   jobTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#0F172A',
+    color: colors.text,
     marginBottom: 4,
   },
   jobMeta: {
@@ -593,7 +642,7 @@ const styles = StyleSheet.create({
   },
   jobAddress: {
     fontSize: 12,
-    color: '#64748B',
+    color: colors.textSecondary,
     marginTop: 2,
     lineHeight: 16,
   },
@@ -637,7 +686,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: colors.divider,
   },
   actionBtn: {
     flexDirection: 'row',
@@ -648,7 +697,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   actionBtnText: {
-    color: '#FFFFFF',
+    color: colors.surface,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -659,17 +708,17 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
     marginBottom: 8,
   },
   detailBtnText: {
-    color: '#2563EB',
+    color: colors.primaryStrong,
     fontSize: 13,
     fontWeight: '700',
   },
   coverageText: {
     fontSize: 12,
-    color: '#64748B',
+    color: colors.textSecondary,
     textAlign: 'center',
     paddingVertical: 4,
   },
@@ -680,6 +729,6 @@ const styles = StyleSheet.create({
   loadMoreText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#2563EB',
+    color: colors.primaryStrong,
   },
 });
