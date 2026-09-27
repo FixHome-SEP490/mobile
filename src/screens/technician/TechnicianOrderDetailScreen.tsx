@@ -2082,15 +2082,27 @@ export default function TechnicianOrderDetailScreen() {
               </View>
             ) : completionState.requested || !!order.completionRequestedAt ? (
               <View style={styles.evidenceError}>
-                <View style={styles.row}>
+                <View style={styles.completionStepRow}>
                   <Text style={styles.jobMeta}>1. Khách nghiệm thu dịch vụ</Text>
-                  <Text style={[styles.jobMeta, { fontWeight: '700', color: order.customerConfirmed ? colors.success : '#B45309' }]}>
+                  <Text
+                    style={[
+                      styles.jobMeta,
+                      styles.completionStepStatus,
+                      { color: order.customerConfirmed ? colors.success : '#B45309' },
+                    ]}
+                  >
                     {order.customerConfirmed ? 'Đã nghiệm thu' : 'Chờ khách bấm nghiệm thu'}
                   </Text>
                 </View>
-                <View style={styles.row}>
+                <View style={styles.completionStepRow}>
                   <Text style={styles.jobMeta}>2. Thanh toán</Text>
-                  <Text style={[styles.jobMeta, { fontWeight: '700', color: String(order.paymentStatus).toUpperCase() === 'PAID' ? colors.success : '#B45309' }]}>
+                  <Text
+                    style={[
+                      styles.jobMeta,
+                      styles.completionStepStatus,
+                      { color: String(order.paymentStatus).toUpperCase() === 'PAID' ? colors.success : '#B45309' },
+                    ]}
+                  >
                     {String(order.paymentStatus).toUpperCase() === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}
                   </Text>
                 </View>
@@ -2604,6 +2616,18 @@ const getStyles = (colors: any) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 12,
+  },
+  completionStepRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
+  completionStepStatus: {
+    fontWeight: '700',
+    textAlign: 'right',
   },
   evidenceItem: {
     gap: 4,
