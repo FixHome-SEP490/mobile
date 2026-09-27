@@ -407,10 +407,6 @@ export function createBookingsHistoryLoader(
         denyAccess();
       });
       if (!authorized()) { denyAccess(); return Promise.resolve(); }
-      // Already loaded (e.g. switching tabs back to this screen): re-publish
-      // the cached list instantly instead of refetching over the network.
-      // Callers that want a real refresh use `refresh(true)` explicitly.
-      if (loaded) { publish({}); return Promise.resolve(); }
       return refresh();
     },
   };
