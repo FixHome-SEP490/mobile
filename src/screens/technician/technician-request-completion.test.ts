@@ -41,8 +41,6 @@ interface Harness {
   setOrder: (order: ReturnType<typeof gate> | null) => void;
   setTechnicianId: (value: string | null) => void;
   setFocused: (value: boolean) => void;
-  setDevBuild: (value: boolean) => void;
-  removeDevBuild: () => void;
   state: () => RequestCompletionState;
 }
 
@@ -51,13 +49,11 @@ function setup(orderOverrides: Record<string, unknown> = {}): Harness {
   let order: ReturnType<typeof gate> | null = gate(orderOverrides);
   let technicianId: string | null = 'tech-1';
   let focused = true;
-  let devBuild = true;
   const write = jest.fn<void, [RequestCompletionState]>();
   const deps: RequestCompletionDeps = {
     getOrder: () => order,
     getTechnicianId: () => technicianId,
     isFocused: () => focused,
-    isDevBuild: () => devBuild,
     requestCompletion: jest.fn().mockResolvedValue({ id: ORDER_ID }),
     refreshDetail: jest.fn().mockResolvedValue(undefined),
     onAccessDenied: jest.fn(),
@@ -70,8 +66,6 @@ function setup(orderOverrides: Record<string, unknown> = {}): Harness {
     setOrder: (value) => { order = value; },
     setTechnicianId: (value) => { technicianId = value; },
     setFocused: (value) => { focused = value; },
-    setDevBuild: (value) => { devBuild = value; },
-    removeDevBuild: () => { delete (deps as Partial<RequestCompletionDeps>).isDevBuild; },
     state: () => write.mock.calls[write.mock.calls.length - 1][0],
   };
 }
@@ -309,33 +303,5 @@ it('shares the initial state shape', () => {
     error: null,
     needsVerify: false,
     requested: false,
-  });
-});
-
-describe('dev-release gate (review P1 remediation)', () => {
-  it('RED: rejects confirmation and submit when the build is not dev', async () => {
-    const h = setup();
-    h.setDevBuild(false);
-    h.controller.requestConfirm();
-    await h.controller.submit();
-    expect(post(h)).not.toHaveBeenCalled();
-  });
-
-  it('RED: drops a stale dev-time confirmation when the flag flips false', async () => {
-    const h = setup();
-    h.controller.requestConfirm();
-    expect(h.state().confirming).toBe(true);
-    h.setDevBuild(false);
-    await h.controller.submit();
-    expect(post(h)).not.toHaveBeenCalled();
-    expect(h.state().confirming).toBe(false);
-  });
-
-  it('RED: fails closed when the dev predicate is omitted', async () => {
-    const h = setup();
-    h.removeDevBuild();
-    h.controller.requestConfirm();
-    await h.controller.submit();
-    expect(post(h)).not.toHaveBeenCalled();
   });
 });

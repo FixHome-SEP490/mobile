@@ -367,7 +367,7 @@ it('shares the initial state shape', () => {
 
 function fillRow(h: { controller: ReturnType<typeof createQuotationCreateController> }, key: string, fields: Record<string, string>) {
   for (const [field, value] of Object.entries(fields)) {
-    h.controller.setRowField(key, field as 'description' | 'quantity' | 'unitPrice' | 'warrantyFee' | 'warrantyTermDays', value);
+    h.controller.setRowField(key, field as 'description' | 'quantity' | 'unitPrice' | 'warrantyTermDays', value);
   }
 }
 
@@ -397,21 +397,20 @@ describe('multi-line labor + technician-parts editor (P3B8)', () => {
     expect(post(h)).not.toHaveBeenCalled();
   });
 
-  it('confirms mixed lines with cost and warranty totals separated, fee once per line', async () => {
+  it('confirms mixed lines with cost totaled and warranty term sent once per line', async () => {
     const h = setup();
     fillRow(h, 'row-1', { description: 'Thay tụ nguồn', quantity: '2', unitPrice: '180000' });
     h.controller.addRow('part');
     const partKey = h.state().rows[1].key;
     h.controller.setWarrantyOption(partKey, 'paid_warranty');
-    fillRow(h, partKey, { description: 'Tụ 450V', quantity: '3', unitPrice: '25000', warrantyFee: '20000', warrantyTermDays: '90' });
+    fillRow(h, partKey, { description: 'Tụ 450V', quantity: '3', unitPrice: '25000', warrantyTermDays: '90' });
     h.controller.addRow('part');
     const plainKey = h.state().rows[2].key;
     fillRow(h, plainKey, { description: 'Dây điện', quantity: '1', unitPrice: '50000' });
     h.controller.requestConfirm();
     expect(h.state()).toMatchObject({ confirming: true });
-    // Cost 2*180000 + 3*25000 + 50000 = 485000; warranty 20000 once (not x3).
+    // Cost 2*180000 + 3*25000 + 50000 = 485000.
     expect(h.state().quotedCostText).toContain('485');
-    expect(h.state().quotedWarrantyText).toContain('20');
     await h.controller.submit();
     expect(post(h)).toHaveBeenCalledTimes(1);
     expect(post(h)).toHaveBeenCalledWith(ORDER_ID, {
@@ -420,7 +419,7 @@ describe('multi-line labor + technician-parts editor (P3B8)', () => {
         {
           type: 'parts_equipment', description: 'Tụ 450V', quantity: 3, unitPrice: 25000,
           partSource: 'technician', partWarrantyOption: 'paid_warranty',
-          warrantyFee: 20000, warrantyTermDays: 90,
+          warrantyTermDays: 90,
         },
         {
           type: 'parts_equipment', description: 'Dây điện', quantity: 1, unitPrice: 50000,
@@ -429,7 +428,7 @@ describe('multi-line labor + technician-parts editor (P3B8)', () => {
       ],
     });
     const rendered = JSON.stringify(post(h).mock.calls[0][1]);
-    expect(rendered).not.toMatch(/partCatalogId|fixhome/i);
+    expect(rendered).not.toMatch(/partCatalogId|fixhome|warrantyFee/i);
     expect(h.state()).toMatchObject({ sent: true });
   });
 
@@ -438,7 +437,7 @@ describe('multi-line labor + technician-parts editor (P3B8)', () => {
     h.controller.addRow('part');
     const partKey = h.state().rows.find((row) => row.kind === 'part')?.key ?? '';
     h.controller.setWarrantyOption(partKey, 'paid_warranty');
-    fillRow(h, partKey, { description: 'Bo mạch', quantity: '1', unitPrice: '850000', warrantyFee: '90000', warrantyTermDays: '180' });
+    fillRow(h, partKey, { description: 'Bo mạch', quantity: '1', unitPrice: '850000', warrantyTermDays: '180' });
     fillRow(h, 'row-1', { description: 'Công lắp', quantity: '1', unitPrice: '100000' });
     h.controller.requestConfirm();
     await h.controller.submit();
@@ -447,9 +446,9 @@ describe('multi-line labor + technician-parts editor (P3B8)', () => {
       type: 'parts_equipment',
       partSource: 'technician',
       partWarrantyOption: 'paid_warranty',
-      warrantyFee: 90000,
       warrantyTermDays: 180,
     });
+    expect(part.warrantyFee).toBeUndefined();
   });
 
   it('stops the whole POST when any single row is invalid, never dropping it', async () => {
@@ -466,12 +465,12 @@ describe('multi-line labor + technician-parts editor (P3B8)', () => {
     expect(post(h)).not.toHaveBeenCalled();
   });
 
-  it('rejects paid warranty with zero fee or out-of-range term', async () => {
-    for (const [fee, term] of [['0', '90'], ['-5', '90'], ['100', '0'], ['100', '3651'], ['100', '1.5']]) {
+  it('rejects paid warranty with an out-of-range term', async () => {
+    for (const term of ['0', '-5', '3651', '1.5']) {
       const h = setup();
       h.controller.addRow('part');
       const partKey = h.state().rows.find((row) => row.kind === 'part')?.key ?? '';
-      fillRow(h, partKey, { description: 'Tụ', quantity: '1', unitPrice: '1000', warrantyFee: fee, warrantyTermDays: term });
+      fillRow(h, partKey, { description: 'Tụ', quantity: '1', unitPrice: '1000', warrantyTermDays: term });
       h.controller.setWarrantyOption(partKey, 'paid_warranty');
       fillRow(h, 'row-1', { description: 'Công', quantity: '1', unitPrice: '1000' });
       h.controller.requestConfirm();
@@ -482,21 +481,21 @@ describe('multi-line labor + technician-parts editor (P3B8)', () => {
     ok.controller.addRow('part');
     const partKey = ok.state().rows.find((row) => row.kind === 'part')?.key ?? '';
     ok.controller.setWarrantyOption(partKey, 'paid_warranty');
-    fillRow(ok, partKey, { description: 'Tụ', quantity: '1', unitPrice: '1000', warrantyFee: '1', warrantyTermDays: '3650' });
+    fillRow(ok, partKey, { description: 'Tụ', quantity: '1', unitPrice: '1000', warrantyTermDays: '3650' });
     fillRow(ok, 'row-1', { description: 'Công', quantity: '1', unitPrice: '1000' });
     ok.controller.requestConfirm();
     expect(ok.state().confirming).toBe(true);
   });
 
-  it('switching warranty option clears fee/term inputs', () => {
+  it('switching warranty option clears the term input', () => {
     const h = setup();
     h.controller.addRow('part');
     const partKey = h.state().rows.find((row) => row.kind === 'part')?.key ?? '';
-    fillRow(h, partKey, { description: 'Tụ', quantity: '1', unitPrice: '1000', warrantyFee: '5000', warrantyTermDays: '30' });
+    fillRow(h, partKey, { description: 'Tụ', quantity: '1', unitPrice: '1000', warrantyTermDays: '30' });
     h.controller.setWarrantyOption(partKey, 'paid_warranty');
     h.controller.setWarrantyOption(partKey, 'no_warranty');
     expect(h.state().rows.find((row) => row.key === partKey)).toMatchObject({
-      warrantyOption: 'no_warranty', warrantyFee: '', warrantyTermDays: '',
+      warrantyOption: 'no_warranty', warrantyTermDays: '',
     });
   });
 
@@ -531,7 +530,7 @@ describe('validateQuoteRows (production helper)', () => {
     expect(validateQuoteRows(
       Array.from({ length: QUOTE_MAX_ROWS + 1 }, (_, index) => ({
         key: `k${index}`, kind: 'labor' as const, description: 'V', quantity: '1', unitPrice: '1',
-        warrantyOption: 'no_warranty' as const, warrantyFee: '', warrantyTermDays: '',
+        warrantyOption: 'no_warranty' as const, warrantyTermDays: '',
       })), '',
     ).lines).toBeNull();
   });
@@ -539,7 +538,7 @@ describe('validateQuoteRows (production helper)', () => {
   it('flags an oversized note without dropping rows', () => {
     const rows = [{
       key: 'k1', kind: 'labor' as const, description: 'V', quantity: '1', unitPrice: '1',
-      warrantyOption: 'no_warranty' as const, warrantyFee: '', warrantyTermDays: '',
+      warrantyOption: 'no_warranty' as const, warrantyTermDays: '',
     }];
     const result = validateQuoteRows(rows, 'n'.repeat(5001));
     expect(result.lines).toBeNull();
