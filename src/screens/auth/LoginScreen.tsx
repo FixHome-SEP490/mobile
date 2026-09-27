@@ -12,8 +12,10 @@ import {
   Platform,
   ActivityIndicator,
   StatusBar,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList, AuthStackParamList } from '../../types';
@@ -50,6 +52,7 @@ export default function LoginScreen() {
       return;
     }
 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     setError(null);
     try {
@@ -85,6 +88,7 @@ export default function LoginScreen() {
   };
 
   const handleGoogleSignIn = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setGoogleLoading(true);
     setError(null);
     try {
@@ -110,12 +114,19 @@ export default function LoginScreen() {
     }
   };
 
-  const handleLoginCustomer = () => {
-    void handleLogin('testlog01@gmail.com', 'Ahihi113@');
+  /** Giống bản web: chỉ điền sẵn email/mật khẩu, người dùng tự bấm ĐĂNG NHẬP. */
+  const fillCustomerRole = () => {
+    Haptics.selectionAsync();
+    setEmail('testlog01@gmail.com');
+    setPassword('Ahihi113@');
+    setError(null);
   };
 
-  const handleLoginTechnician = () => {
-    void handleLogin('tech1@fixhome.vn', 'Password123!');
+  const fillTechnicianRole = () => {
+    Haptics.selectionAsync();
+    setEmail('tech1@fixhome.vn');
+    setPassword('Password123!');
+    setError(null);
   };
 
   return (
@@ -129,7 +140,7 @@ export default function LoginScreen() {
         
           <View style={styles.header}>
             <View style={styles.iconWrapper}>
-              <Ionicons name="home" size={32} color={colors.primary} />
+              <Image source={require('../../../assets/icon.png')} style={styles.logo} />
             </View>
             <Text style={styles.title}>ĐĂNG NHẬP</Text>
             <View style={styles.divider} />
@@ -179,7 +190,13 @@ export default function LoginScreen() {
                   returnKeyType="done"
                   onSubmitEditing={() => handleLogin()}
                 />
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={{ padding: 4 }}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                >
                   <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color="#9CA3AF" />
                 </TouchableOpacity>
               </View>
@@ -227,8 +244,8 @@ export default function LoginScreen() {
             </View>
 
             <TouchableOpacity
-              style={[styles.techLoginBtn, { backgroundColor: '#3B82F6', marginBottom: 12 }]}
-              onPress={handleLoginCustomer}
+              style={[styles.techLoginBtn, { backgroundColor: colors.primary, marginBottom: 12 }]}
+              onPress={fillCustomerRole}
               activeOpacity={0.85}
             >
               <Ionicons name="person" size={16} color={colors.surface} />
@@ -237,7 +254,7 @@ export default function LoginScreen() {
 
             <TouchableOpacity
               style={[styles.techLoginBtn, { backgroundColor: '#111827' }]}
-              onPress={handleLoginTechnician}
+              onPress={fillTechnicianRole}
               activeOpacity={0.85}
             >
               <Ionicons name="construct" size={16} color={colors.surface} />
@@ -285,13 +302,23 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     marginBottom: 32,
   },
   iconWrapper: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: '#DBEAFE',
+    width: 88,
+    height: 88,
+    borderRadius: 24,
+    backgroundColor: colors.primaryTint,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  logo: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
   },
   title: {
     fontSize: 22,
@@ -350,6 +377,11 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 50,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
   inputIcon: {
     marginRight: 10,
@@ -427,6 +459,11 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     backgroundColor: '#111827',
     height: 48,
     borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
   techLoginBtnText: {
     color: colors.surface,
