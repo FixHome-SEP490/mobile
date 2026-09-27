@@ -1,6 +1,7 @@
 import { useAppTheme } from '../../constants/theme';
 import React from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, StatusBar } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -15,7 +16,13 @@ export default function CustomerQuotationScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+          accessibilityRole="button"
+          accessibilityLabel="Quay lại"
+        >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Báo giá phát sinh</Text>
@@ -70,10 +77,22 @@ export default function CustomerQuotationScreen() {
 
       <View style={styles.bottomBar}>
         <View style={styles.btnRow}>
-          <TouchableOpacity style={styles.secondaryBtn} onPress={() => navigation.goBack()}>
+          <TouchableOpacity
+            style={styles.secondaryBtn}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+              navigation.goBack();
+            }}
+          >
             <Text style={styles.secondaryBtnText}>Từ chối</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.navigate('CustomerUnderRepair')}>
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              navigation.navigate('CustomerUnderRepair');
+            }}
+          >
             <Text style={styles.primaryBtnText}>Duyệt 250.000đ</Text>
           </TouchableOpacity>
         </View>

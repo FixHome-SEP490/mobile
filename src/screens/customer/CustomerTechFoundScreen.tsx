@@ -1,6 +1,7 @@
 import { useAppTheme } from '../../constants/theme';
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Image } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -16,7 +17,13 @@ export default function CustomerTechFoundScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtnCircle}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtnCircle}
+          accessibilityRole="button"
+          accessibilityLabel="Quay lại"
+          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+        >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
       </View>
@@ -118,7 +125,13 @@ export default function CustomerTechFoundScreen() {
           </View>
           <Text style={styles.priceValue}>230,000đ</Text>
         </View>
-        <TouchableOpacity style={styles.bookBtn} onPress={() => navigation.navigate('CustomerTracking')}>
+        <TouchableOpacity
+          style={styles.bookBtn}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            navigation.navigate('CustomerTracking');
+          }}
+        >
           <Text style={styles.bookBtnText}>Đặt ngay</Text>
         </TouchableOpacity>
       </View>
@@ -150,7 +163,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   dividerV2: { width: 1, height: 32, backgroundColor: colors.border, marginTop: 4 },
   criteriaBox: { backgroundColor: colors.surface },
   criteriaTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  criteriaIconWrap: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: colors.primary },
+  criteriaIconWrap: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primarySoft, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: colors.primary },
   criteriaStar: { position: 'absolute', bottom: -4, right: -4, backgroundColor: colors.warning, width: 16, height: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   criteriaTitle: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 2 },
   criteriaSub: { fontSize: 12, color: colors.primary, fontWeight: '600' },
@@ -160,7 +173,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   dividerH: { height: 1, backgroundColor: colors.border, marginVertical: 24 },
   reviewsSection: { paddingHorizontal: 4 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 24 },
-  starCircle: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center' },
+  starCircle: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.primarySoft, justifyContent: 'center', alignItems: 'center' },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   reviewStatsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 32 },
   overallRating: { width: 120, alignItems: 'center' },
@@ -186,7 +199,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   priceLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   priceLabel: { fontSize: 14, color: colors.textSecondary },
   priceValue: { fontSize: 20, fontWeight: '700', color: colors.primary },
-  bookBtn: { backgroundColor: '#3B82F6', paddingVertical: 16, borderRadius: 100, alignItems: 'center' },
+  bookBtn: { backgroundColor: colors.primary, paddingVertical: 16, borderRadius: 100, alignItems: 'center' },
   bookBtnText: { color: colors.surface, fontSize: 16, fontWeight: '700' }
 });
 

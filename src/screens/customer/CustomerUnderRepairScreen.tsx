@@ -15,7 +15,13 @@ export default function CustomerUnderRepairScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Quay lại"
+          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+        >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Đang sửa chữa</Text>
@@ -98,8 +104,8 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   badge: { backgroundColor: colors.border, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   badgeText: { color: colors.textSecondary, fontSize: 10, fontWeight: '700' },
   content: { padding: 16 },
-  heroCard: { backgroundColor: '#DBEAFE', borderRadius: 16, padding: 20, marginBottom: 24 },
-  heroBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#3B82F6', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginBottom: 12 },
+  heroCard: { backgroundColor: colors.primaryTint, borderRadius: 16, padding: 20, marginBottom: 24 },
+  heroBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primary, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginBottom: 12 },
   heroBadgeText: { color: colors.surface, fontSize: 12, fontWeight: '600', marginLeft: 4 },
   heroTitle: { fontSize: 20, fontWeight: '700', color: colors.text, marginBottom: 8 },
   heroDesc: { fontSize: 14, color: '#475569', lineHeight: 20 },

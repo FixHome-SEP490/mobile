@@ -7,6 +7,7 @@ import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { servicesApi } from '../../api/services.api';
 import {
   createServiceDetailLoader,
@@ -40,6 +41,7 @@ export default function CustomerServiceDetailScreen() {
   const onRetry = () => { void loader.focus(serviceId); };
   const onBook = () => {
     if (!service) return;
+    Haptics.selectionAsync();
     navigation.navigate('CustomerBookingCreate', {
       prefill: { serviceId: service.id, serviceName: service.name },
     });
@@ -49,7 +51,13 @@ export default function CustomerServiceDetailScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Quay lại"
+          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+        >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chi tiết dịch vụ</Text>
@@ -159,7 +167,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,

@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
@@ -65,6 +66,7 @@ export default function CustomerAIDiagnosisScreen() {
       );
       return;
     }
+    Haptics.selectionAsync();
     navigation.navigate('CustomerAIChat', {
       initialDescription: description.trim(),
       initialImages: images,
@@ -72,6 +74,7 @@ export default function CustomerAIDiagnosisScreen() {
   }, [description, images, navigation]);
 
   const pickImages = useCallback(async () => {
+    Haptics.selectionAsync();
     const result = await pickImagesForAi(images.length);
     if (result.problemVi) Alert.alert('Ảnh', result.problemVi);
     if (result.images.length > 0) {
@@ -82,6 +85,7 @@ export default function CustomerAIDiagnosisScreen() {
   }, [images.length]);
 
   const handleNextStep = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     // Use real catalog and saved address rather than legacy placeholder steps.
     // AI chat is advisory and may prefill, but does not create the Booking.
     navigation.navigate('CustomerBookingCreate', {
@@ -135,7 +139,12 @@ export default function CustomerAIDiagnosisScreen() {
               <Image source={{ uri }} style={styles.thumb} />
               <TouchableOpacity
                 style={styles.thumbRemove}
-                onPress={() => setImages((prev) => prev.filter((_, i) => i !== index))}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setImages((prev) => prev.filter((_, i) => i !== index));
+                }}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityRole="button"
                 accessibilityLabel="Bỏ ảnh này"
               >
                 <Ionicons name="close" size={12} color={colors.surface} />
@@ -154,7 +163,7 @@ export default function CustomerAIDiagnosisScreen() {
           numberOfLines={4}
           value={description}
           onChangeText={setDescription}
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor={colors.muted}
         />
       </View>
 
@@ -162,11 +171,23 @@ export default function CustomerAIDiagnosisScreen() {
         <View style={styles.row}>
           <Text style={styles.label}>Số lượng thiết bị</Text>
           <View style={styles.quantityBox}>
-            <TouchableOpacity style={styles.qtyBtn} onPress={() => setQuantity(Math.max(1, quantity - 1))}>
+            <TouchableOpacity
+              style={styles.qtyBtn}
+              onPress={() => setQuantity(Math.max(1, quantity - 1))}
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+              accessibilityRole="button"
+              accessibilityLabel="Giảm số lượng"
+            >
               <Ionicons name="remove" size={20} color={colors.text} />
             </TouchableOpacity>
             <Text style={styles.qtyText}>{quantity}</Text>
-            <TouchableOpacity style={styles.qtyBtn} onPress={() => setQuantity(quantity + 1)}>
+            <TouchableOpacity
+              style={styles.qtyBtn}
+              onPress={() => setQuantity(quantity + 1)}
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+              accessibilityRole="button"
+              accessibilityLabel="Tăng số lượng"
+            >
               <Ionicons name="add" size={20} color={colors.text} />
             </TouchableOpacity>
           </View>
@@ -252,7 +273,7 @@ export default function CustomerAIDiagnosisScreen() {
             <Text style={styles.timelineValue}>Tình trạng: máy chạy yếu. Số lượng máy: {quantity} máy</Text>
           </View>
           <View style={styles.timelineRight}>
-            <Ionicons name="checkmark-circle" size={20} color="#3B82F6" />
+            <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
             <View style={styles.timelineLine} />
           </View>
         </View>
@@ -260,7 +281,7 @@ export default function CustomerAIDiagnosisScreen() {
         {/* Timeline Item 2 */}
         <View style={styles.timelineItem}>
           <View style={styles.timelineLeftIconBox}>
-            <Ionicons name="location" size={18} color="#3B82F6" />
+            <Ionicons name="location" size={18} color={colors.primary} />
           </View>
           <View style={styles.timelineContent}>
             <Text style={styles.timelineLabel}>Địa chỉ làm việc</Text>
@@ -268,7 +289,7 @@ export default function CustomerAIDiagnosisScreen() {
             <Text style={styles.timelineSubText}>Chạm để chỉnh sửa</Text>
           </View>
           <View style={styles.timelineRight}>
-            <Ionicons name="checkmark-circle" size={20} color="#3B82F6" />
+            <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
             <View style={styles.timelineLine} />
           </View>
         </View>
@@ -276,14 +297,14 @@ export default function CustomerAIDiagnosisScreen() {
         {/* Timeline Item 3 */}
         <View style={[styles.timelineItem, { marginBottom: 0 }]}>
           <View style={styles.timelineLeftIconBox}>
-            <Ionicons name="time" size={18} color="#3B82F6" />
+            <Ionicons name="time" size={18} color={colors.primary} />
           </View>
           <View style={styles.timelineContent}>
             <Text style={styles.timelineLabel}>Thời gian</Text>
             <Text style={styles.timelineValueTitle}>{selectedTime} - 14/09/2026</Text>
           </View>
           <View style={styles.timelineRight}>
-            <Ionicons name="checkmark-circle" size={20} color="#3B82F6" />
+            <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
           </View>
         </View>
       </View>
@@ -308,7 +329,7 @@ export default function CustomerAIDiagnosisScreen() {
             <View style={styles.optionSection}>
               <View style={styles.optionSectionHeader}>
                 <View style={styles.optionsIconBoxSmall}>
-                  <Ionicons name="image" size={16} color="#3B82F6" />
+                  <Ionicons name="image" size={16} color={colors.primary} />
                 </View>
                 <View>
                   <Text style={styles.optionSectionTitle}>Hình ảnh</Text>
@@ -332,7 +353,7 @@ export default function CustomerAIDiagnosisScreen() {
                   <Text style={styles.optionSectionSub}>Thêm yêu cầu đặc biệt...</Text>
                 </View>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
             </TouchableOpacity>
 
             {/* Ghi chú */}
@@ -346,7 +367,7 @@ export default function CustomerAIDiagnosisScreen() {
                   <Text style={styles.optionSectionSub}>Yêu cầu xuất hóa đơn VAT</Text>
                 </View>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
             </TouchableOpacity>
           </View>
         )}
@@ -359,7 +380,13 @@ export default function CustomerAIDiagnosisScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={handleBack}
+          style={styles.backBtn}
+          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+          accessibilityRole="button"
+          accessibilityLabel="Quay lại"
+        >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{step === 3 ? 'Vệ sinh máy lạnh' : 'AI Hỗ trợ chẩn đoán'}</Text>
@@ -473,7 +500,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text, flex: 1, textAlign: 'center' },
-  aiBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#DBEAFE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 4 },
+  aiBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primaryTint, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 4 },
   aiBadgeText: { color: colors.primary, fontSize: 12, fontWeight: '700' },
   content: { padding: 16, paddingBottom: 100 },
   progressWrap: { marginBottom: 16 },
@@ -494,7 +521,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     backgroundColor: colors.surface,
     marginBottom: 16,
   },
-  camIcon: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  camIcon: { width: 48, height: 48, borderRadius: 12, backgroundColor: colors.primarySoft, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
   uploadTitle: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 4 },
   uploadHelper: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
   thumbRow: { gap: 8, paddingVertical: 10 },
@@ -594,7 +621,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   addressDesc: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
   dateStrip: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
   dateChip: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface },
-  dateChipActive: { borderColor: colors.primary, backgroundColor: '#EFF6FF' },
+  dateChipActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   dateText: { fontSize: 14, color: colors.textSecondary, fontWeight: '500' },
   timeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   timeChip: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, width: '31%', alignItems: 'center' },
@@ -617,13 +644,13 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   // Step 3 new styles
   summaryCard: { backgroundColor: colors.surface, borderRadius: 24, padding: 20, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   timelineItem: { flexDirection: 'row', marginBottom: 24, minHeight: 50 },
-  timelineLeftIconBox: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginRight: 12, marginTop: -2 },
+  timelineLeftIconBox: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.primarySoft, justifyContent: 'center', alignItems: 'center', marginRight: 12, marginTop: -2 },
   timelineContent: { flex: 1, paddingRight: 16 },
   timelineLabel: { fontSize: 12, color: colors.textSecondary, marginBottom: 4, fontWeight: '500' },
   redAsterisk: { color: colors.error },
   timelineValue: { fontSize: 14, color: '#334155', lineHeight: 22 },
   timelineValueTitle: { fontSize: 14, fontWeight: '700', color: colors.text, lineHeight: 22 },
-  timelineSubText: { fontSize: 12, color: '#94A3B8', marginTop: 4 },
+  timelineSubText: { fontSize: 12, color: colors.muted, marginTop: 4 },
   timelineRight: { width: 24, alignItems: 'center' },
   timelineLine: { width: 2, flex: 1, backgroundColor: '#60A5FA', marginTop: 4, borderRadius: 1 },
 
