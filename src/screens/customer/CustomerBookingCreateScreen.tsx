@@ -114,12 +114,22 @@ export default function CustomerBookingCreateScreen() {
 
     setLoading(true);
     setLoadError('');
+    // Independent calls: a transient failure in one (flaky network) must not
+    // block the other — the customer can still book with whichever loaded,
+    // and only sees the blocking error when both fail.
+    const [catalogResult, savedResult] = await Promise.allSettled([
+      servicesApi.getServices({ pageSize: 100 }),
+      usersApi.getAddresses(),
+    ]);
+    if (!isCurrentLoad()) return;
+    if (catalogResult.status === 'rejected' && savedResult.status === 'rejected') {
+      setLoadError('Không tải được dịch vụ hoặc địa chỉ đã lưu. Hãy thử lại khi có kết nối.');
+      setLoading(false);
+      return;
+    }
     try {
-      const [catalog, saved] = await Promise.all([
-        servicesApi.getServices({ pageSize: 100 }),
-        usersApi.getAddresses(),
-      ]);
-      if (!isCurrentLoad()) return;
+      const catalog = catalogResult.status === 'fulfilled' ? catalogResult.value : { data: [] };
+      const saved = savedResult.status === 'fulfilled' ? savedResult.value : [];
 
       const activeServices = catalog.data.filter((service) => service.isActive);
       const wantedId = serviceDetailTarget(prefillServiceId);
