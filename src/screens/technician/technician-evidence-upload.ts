@@ -81,7 +81,11 @@ export interface EvidenceUploadDeps {
 interface BeforeUploadAttempt {
   baselineIds: string[];
   expectedId: string | null;
+  startedAt: number;
 }
+
+/** Past this age an unverified attempt is abandoned so a fresh photo can be tried. */
+const STALE_ATTEMPT_MS = 3 * 60 * 1000;
 
 /**
  * Same-process no-repost guard, scoped by technician User ID + ServiceOrder.
@@ -267,17 +271,24 @@ export function createEvidenceUploadController(
       return;
     }
 
-    if (attemptsFor(technicianId).has(initialTarget)) {
-      publish({
-        needsVerify: true,
-        error:
-          'Có ảnh trước sửa chữa đang chờ xác minh. Không chọn hoặc gửi ảnh mới.',
-      });
-      deps.notify(
-        'Đang xác minh ảnh',
-        'Không gửi ảnh mới. Hãy kiểm tra bằng chứng hiện tại trước.',
-      );
-      return;
+    const technicianAttempts = attemptsFor(technicianId);
+    const existingAttempt = technicianAttempts.get(initialTarget);
+    if (existingAttempt) {
+      if (Date.now() - existingAttempt.startedAt < STALE_ATTEMPT_MS) {
+        publish({
+          needsVerify: true,
+          error:
+            'Có ảnh trước sửa chữa đang chờ xác minh. Không chọn hoặc gửi ảnh mới.',
+        });
+        deps.notify(
+          'Đang xác minh ảnh',
+          'Không gửi ảnh mới. Hãy kiểm tra bằng chứng hiện tại trước.',
+        );
+        return;
+      }
+      // Old attempt never resolved (e.g. an upload that genuinely failed
+      // server-side) — abandon it rather than block this order forever.
+      technicianAttempts.delete(initialTarget);
     }
 
     const sameSession = () =>
@@ -523,6 +534,7 @@ export function createEvidenceUploadController(
       attempts.set(target, {
         baselineIds: beforeEvidenceIds(baselineRows, target),
         expectedId: null,
+        startedAt: Date.now(),
       });
 
       let response: unknown;

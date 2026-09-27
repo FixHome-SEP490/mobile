@@ -48,7 +48,11 @@ export interface AfterEvidenceUploadDeps {
 interface AfterUploadAttempt {
   baselineIds: string[];
   expectedId: string | null;
+  startedAt: number;
 }
+
+/** Past this age an unverified attempt is abandoned so a fresh photo can be tried. */
+const STALE_ATTEMPT_MS = 3 * 60 * 1000;
 
 const attemptsByTechnician = new Map<
   string,
@@ -169,13 +173,18 @@ export function createAfterEvidenceUploadController(
       return;
     }
 
-    if (attemptsFor(technicianId).has(target)) {
-      publish({
-        needsVerify: true,
-        error:
-          'Có ảnh AFTER đang chờ xác minh. Không chọn hoặc gửi ảnh mới.',
-      });
-      return;
+    const technicianAttempts = attemptsFor(technicianId);
+    const existingAttempt = technicianAttempts.get(target);
+    if (existingAttempt) {
+      if (Date.now() - existingAttempt.startedAt < STALE_ATTEMPT_MS) {
+        publish({
+          needsVerify: true,
+          error:
+            'Có ảnh AFTER đang chờ xác minh. Không chọn hoặc gửi ảnh mới.',
+        });
+        return;
+      }
+      technicianAttempts.delete(target);
     }
 
     const sameSession = () =>
@@ -413,6 +422,7 @@ export function createAfterEvidenceUploadController(
       attempts.set(target, {
         baselineIds: afterEvidenceIds(baselineRows, target),
         expectedId: null,
+        startedAt: Date.now(),
       });
 
       let response: unknown;
