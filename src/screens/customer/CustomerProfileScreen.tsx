@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,17 +6,22 @@ import {
   ScrollView,
   TouchableOpacity,
   Modal,
-  TextInput,
   Alert,
   Switch,
   Image,
   RefreshControl,
   ActivityIndicator,
-  Keyboard,
-  TouchableWithoutFeedback,
 } from 'react-native';
+import {
+  BottomSheetModal,
+  BottomSheetBackdrop,
+  BottomSheetView,
+  BottomSheetScrollView,
+  BottomSheetTextInput,
+} from '@gorhom/bottom-sheet';
 import { useUIStore } from '../../store/ui.store';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import MapView, { Marker } from '../../components/AddressMap';
@@ -29,7 +34,7 @@ import { authApi } from '../../api/auth.api';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { usersApi, type AddressData } from '../../api/users.api';
-import { geoApi } from '../../api/geo.api';
+import { geoApi, type PlaceSuggestion } from '../../api/geo.api';
 import { useAppTheme } from '../../constants/theme';
 
 export default function CustomerProfileScreen() {
@@ -55,13 +60,15 @@ export default function CustomerProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   // Modals visibility
-  const [isProfileModalVisible, setProfileModalVisible] = useState(false);
-  const [isAddressModalVisible, setAddressModalVisible] = useState(false);
   const [isAvatarModalVisible, setAvatarModalVisible] = useState(false);
+  const profileSheetRef = useRef<BottomSheetModal>(null);
+  const addressSheetRef = useRef<BottomSheetModal>(null);
+  const profileSnapPoints = useMemo(() => ['60%'], []);
+  const addressSnapPoints = useMemo(() => ['90%'], []);
 
   const handlePickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -95,7 +102,11 @@ export default function CustomerProfileScreen() {
   const [addressDistrictCode, setAddressDistrictCode] = useState<string | undefined>(undefined);
   const [addressLat, setAddressLat] = useState<number | undefined>(undefined);
   const [addressLng, setAddressLng] = useState<number | undefined>(undefined);
+  const [addressIsDefault, setAddressIsDefault] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [searchingAddress, setSearchingAddress] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchProfileData = useCallback(async () => {
     try {
@@ -145,6 +156,7 @@ export default function CustomerProfileScreen() {
       Alert.alert('Lỗi', 'Vui lòng nhập họ và tên.');
       return;
     }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSavingProfile(true);
     try {
       // Gộp payload edit avatar theo UI v2
@@ -165,7 +177,7 @@ export default function CustomerProfileScreen() {
       if (token && user) {
         setAuth(token, { ...user, fullName: updated.fullName, phoneNumber: updated.phoneNumber, avatarUrl: payload.avatarUrl });
       }
-      setProfileModalVisible(false);
+      profileSheetRef.current?.dismiss();
       Alert.alert('Thành công', 'Cập nhật thông tin thành công!');
     } catch (err: any) {
       Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể cập nhật thông tin.');
@@ -180,6 +192,7 @@ export default function CustomerProfileScreen() {
       return;
     }
 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSavingAddress(true);
     try {
       const payload = {
@@ -192,6 +205,7 @@ export default function CustomerProfileScreen() {
         districtCode: addressDistrictCode,
         lat: addressLat,
         lng: addressLng,
+        isDefault: addressIsDefault,
       };
 
       if (editAddressId) {
@@ -214,8 +228,10 @@ export default function CustomerProfileScreen() {
       setAddressDistrictCode(undefined);
       setAddressLat(undefined);
       setAddressLng(undefined);
+      setAddressIsDefault(false);
+      setAddressSuggestions([]);
       setEditAddressId(null);
-      setAddressModalVisible(false);
+      addressSheetRef.current?.dismiss();
     } catch (err: any) {
       Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể lưu địa chỉ.');
     } finally {
@@ -224,6 +240,7 @@ export default function CustomerProfileScreen() {
   };
 
   const handleEditAddress = (addr: AddressData) => {
+    Haptics.selectionAsync();
     setEditAddressId(addr.id);
     setAddressName(addr.label);
     setAddressDetail(addr.line1);
@@ -234,6 +251,35 @@ export default function CustomerProfileScreen() {
     setAddressDistrictCode(addr.districtCode);
     setAddressLat(addr.lat);
     setAddressLng(addr.lng);
+    setAddressIsDefault(addr.isDefault);
+    setAddressSuggestions([]);
+  };
+
+  const handleAddressSearchChange = (text: string) => {
+    setAddressDetail(text);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    const query = text.trim();
+    if (query.length < 3) { setAddressSuggestions([]); return; }
+    searchDebounceRef.current = setTimeout(async () => {
+      setSearchingAddress(true);
+      try {
+        setAddressSuggestions(await geoApi.autocomplete(query));
+      } catch {
+        setAddressSuggestions([]);
+      } finally {
+        setSearchingAddress(false);
+      }
+    }, 350);
+  };
+
+  const handleSelectSuggestion = (s: PlaceSuggestion) => {
+    setAddressSuggestions([]);
+    setAddressDetail(s.description);
+    setAddressWard(s.ward || '');
+    setAddressDistrict(s.district || '');
+    setAddressProvince(s.province || '');
+    setAddressLat(s.lat);
+    setAddressLng(s.lng);
   };
 
   const handleGetLocation = async () => {
@@ -294,6 +340,7 @@ export default function CustomerProfileScreen() {
         text: 'Xóa',
         style: 'destructive',
         onPress: async () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
           try {
             await usersApi.deleteAddress(id);
             await refreshAddresses();
@@ -312,6 +359,7 @@ export default function CustomerProfileScreen() {
         text: 'Đăng xuất',
         style: 'destructive',
         onPress: async () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
           await authApi.logout();
           logout();
           setTimeout(() => {
@@ -330,7 +378,7 @@ export default function CustomerProfileScreen() {
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['colors.primary']} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
         }
       >
         {/* Main Wrapper từ UI v2 */}
@@ -346,8 +394,15 @@ export default function CustomerProfileScreen() {
                   <Text style={styles.avatarText}>{name.charAt(0)}</Text>
                 )}
               </TouchableOpacity>
-              <TouchableOpacity style={styles.cameraIconBadge} onPress={handlePickImage} activeOpacity={0.8}>
-                 <Ionicons name="camera" size={16} color="#FFF" />
+              <TouchableOpacity
+                style={styles.cameraIconBadge}
+                onPress={handlePickImage}
+                activeOpacity={0.8}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Đổi ảnh đại diện"
+              >
+                 <Ionicons name="camera" size={16} color={colors.surface} />
               </TouchableOpacity>
             </View>
             <Text style={[styles.name, isDarkMode && styles.textDark]}>{name}</Text>
@@ -390,27 +445,27 @@ export default function CustomerProfileScreen() {
                 setEditName(name);
                 setEditPhone(phone);
                 setEditAvatar(avatarUrl || '');
-                setProfileModalVisible(true);
+                profileSheetRef.current?.present();
               }}
             >
-              <Ionicons name="person-outline" size={22} color="colors.textSecondary" style={styles.menuIcon} />
+              <Ionicons name="person-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
               <View style={styles.menuContent}>
                 <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Thông tin cá nhân</Text>
                 <Text style={styles.menuDesc}>{name} · {phone || email}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
             </TouchableOpacity>
             <View style={styles.divider} />
 
-            <TouchableOpacity style={styles.menuItem} onPress={() => setAddressModalVisible(true)}>
-              <Ionicons name="location-outline" size={22} color="colors.textSecondary" style={styles.menuIcon} />
+            <TouchableOpacity style={styles.menuItem} onPress={() => addressSheetRef.current?.present()}>
+              <Ionicons name="location-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
               <View style={styles.menuContent}>
                 <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Địa chỉ sửa chữa</Text>
                 <Text style={styles.menuDesc}>
                   {loadingAddresses ? 'Đang tải...' : `${addresses.length} địa chỉ đã lưu`}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
             </TouchableOpacity>
             <View style={styles.divider} />
 
@@ -418,21 +473,21 @@ export default function CustomerProfileScreen() {
               style={styles.menuItem}
               onPress={() => Alert.alert('Thông báo', 'Hỗ trợ thanh toán tiền mặt và chuyển khoản khi hoàn tất.')}
             >
-              <Ionicons name="card-outline" size={22} color="colors.textSecondary" style={styles.menuIcon} />
+              <Ionicons name="card-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
               <View style={styles.menuContent}>
                 <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Phương thức thanh toán</Text>
                 <Text style={styles.menuDesc}>Tiền mặt, Chuyển khoản QR</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
             </TouchableOpacity>
             <View style={styles.divider} />
 
             <TouchableOpacity style={styles.menuItem} onPress={() => Alert.alert('Tính năng đang phát triển')}>
-              <Ionicons name="shield-checkmark-outline" size={22} color="colors.textSecondary" style={styles.menuIcon} />
+              <Ionicons name="shield-checkmark-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
               <View style={styles.menuContent}>
                 <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Bảo mật & phiên đăng nhập</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
             </TouchableOpacity>
           </View>
 
@@ -457,8 +512,13 @@ export default function CustomerProfileScreen() {
 
       <Modal visible={isAvatarModalVisible} transparent={true} animationType="fade">
         <View style={styles.avatarModalContainer}>
-          <TouchableOpacity style={styles.closeAvatarModalBtn} onPress={() => setAvatarModalVisible(false)}>
-            <Ionicons name="close" size={30} color="#FFF" />
+          <TouchableOpacity
+            style={styles.closeAvatarModalBtn}
+            onPress={() => setAvatarModalVisible(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Đóng"
+          >
+            <Ionicons name="close" size={30} color={colors.surface} />
           </TouchableOpacity>
           {avatarUrl && (
              <Image source={{ uri: avatarUrl }} style={styles.fullAvatarImage} resizeMode="contain" />
@@ -466,200 +526,246 @@ export default function CustomerProfileScreen() {
         </View>
       </Modal>
 
-      {/* Profile Edit Modal (Thêm input URL Avatar của v2 + Nút Loading của bản thường) */}
-      <Modal visible={isProfileModalVisible} animationType="fade" transparent={true}>
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={styles.modalContainer}>
-            <TouchableWithoutFeedback>
-              <View style={[styles.modalContent, isDarkMode && styles.cardDark]}>
-            <Text style={[styles.modalTitle, isDarkMode && styles.textDark]}>Chỉnh sửa thông tin</Text>
-            <TextInput
-              style={[styles.input, isDarkMode && styles.inputDark]}
-              placeholder="Họ và tên"
-              placeholderTextColor="#94A3B8"
-              value={editName}
-              onChangeText={setEditName}
-            />
-            <TextInput
-              style={[styles.input, isDarkMode && styles.inputDark, { opacity: 0.6 }]}
-              placeholder="Email"
-              placeholderTextColor="#94A3B8"
-              value={email}
-              editable={false}
-            />
-            <TextInput
-              style={[styles.input, isDarkMode && styles.inputDark]}
-              placeholder="Số điện thoại"
-              placeholderTextColor="#94A3B8"
-              value={editPhone}
-              onChangeText={setEditPhone}
-              keyboardType="phone-pad"
-            />
-            <TextInput 
-              style={[styles.input, isDarkMode && styles.inputDark]} 
-              placeholder="Link Avatar URL (Tùy chọn)" 
-              placeholderTextColor="#94A3B8" 
-              value={editAvatar} 
-              onChangeText={setEditAvatar} 
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setProfileModalVisible(false)}
-                disabled={savingProfile}
-              >
-                <Text style={styles.cancelBtnText}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveBtn, savingProfile && { opacity: 0.7 }]}
-                onPress={handleSaveProfile}
-                disabled={savingProfile}
-              >
-                {savingProfile ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <Text style={styles.saveBtnText}>Lưu</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-            </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
-    </Modal>
-
-      {/* Address Edit Modal (Logic bản thường với Empty State tốt hơn) */}
-      <Modal visible={isAddressModalVisible} animationType="fade" transparent={true}>
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={styles.modalContainer}>
-            <TouchableWithoutFeedback>
-              <View style={[styles.modalContent, isDarkMode && styles.cardDark, { maxHeight: '80%' }]}>
-            <Text style={[styles.modalTitle, isDarkMode && styles.textDark]}>Quản lý địa chỉ</Text>
-            <ScrollView style={{ width: '100%', marginBottom: 16 }}>
-              {addresses.length === 0 ? (
-                <Text style={{ textAlign: 'center', color: '#94A3B8', marginVertical: 12 }}>
-                  Chưa có địa chỉ nào được lưu.
-                </Text>
-              ) : (
-                addresses.map((addr) => (
-                  <View key={addr.id} style={[styles.addressItem, isDarkMode && styles.inputDark]}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.addressName, isDarkMode && styles.textDark]}>{addr.label}</Text>
-                      <Text style={styles.addressDetail}>{addr.line1}</Text>
-                    </View>
-                    <TouchableOpacity onPress={() => handleEditAddress(addr)} style={styles.iconBtn}>
-                      <Ionicons name="pencil" size={18} color="colors.primary" />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleDeleteAddress(addr.id)} style={styles.iconBtn}>
-                      <Ionicons name="trash" size={18} color="colors.error" />
-                    </TouchableOpacity>
-                  </View>
-                ))
-              )}
-            </ScrollView>
-
-            <Text style={[styles.sectionTitle, isDarkMode && styles.textDark, { alignSelf: 'flex-start' }]}>
-              {editAddressId ? 'Sửa địa chỉ' : 'Thêm địa chỉ mới'}
-            </Text>
-            <TextInput
-              style={[styles.input, isDarkMode && styles.inputDark]}
-              placeholder="Tên gợi nhớ (VD: Nhà riêng)"
-              placeholderTextColor="#94A3B8"
-              value={addressName}
-              onChangeText={setAddressName}
-            />
-            <TextInput
-              style={[styles.input, isDarkMode && styles.inputDark]}
-              placeholder="Địa chỉ chi tiết (số nhà, tên đường...)"
-              placeholderTextColor="#94A3B8"
-              value={addressDetail}
-              onChangeText={setAddressDetail}
-            />
-
-            {(addressWard || addressProvince) ? (
-              <Text style={{ fontSize: 12, color: 'colors.textSecondary', alignSelf: 'flex-start', marginBottom: 12 }}>
-                <Ionicons name="location" size={12} /> {[addressWard, addressProvince].filter(Boolean).join(', ')}
-              </Text>
-            ) : null}
-
-            <Text style={{ fontSize: 13, color: 'colors.textSecondary', alignSelf: 'flex-start', marginBottom: 6, fontWeight: '500' }}>
-              Chọn trên bản đồ:
-            </Text>
-            <View style={{ width: '100%', height: 200, borderRadius: 12, overflow: 'hidden', marginBottom: 12, borderWidth: 1, borderColor: colors.border }}>
-              <MapView
-                style={{ width: '100%', height: '100%' }}
-                initialRegion={{
-                  latitude: addressLat || 10.7769,
-                  longitude: addressLng || 106.7009,
-                  latitudeDelta: 0.05,
-                  longitudeDelta: 0.05,
-                }}
-                region={addressLat && addressLng ? {
-                  latitude: addressLat,
-                  longitude: addressLng,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01,
-                } : undefined}
-                onPress={handleMapPress}
-              >
-                {addressLat && addressLng && (
-                  <Marker coordinate={{ latitude: addressLat, longitude: addressLng }} />
-                )}
-              </MapView>
-            </View>
-
-            <TouchableOpacity 
-              style={[styles.locationBtn, isDarkMode && styles.cardDark]} 
-              onPress={handleGetLocation} 
-              disabled={gettingLocation}
+      {/* Profile Edit Sheet (Thêm input URL Avatar của v2 + Nút Loading của bản thường) */}
+      <BottomSheetModal
+        ref={profileSheetRef}
+        snapPoints={profileSnapPoints}
+        keyboardBehavior="interactive"
+        keyboardBlurBehavior="restore"
+        backdropComponent={(props) => (
+          <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} />
+        )}
+      >
+        <BottomSheetView style={[styles.modalContent, isDarkMode && styles.cardDark]}>
+          <Text style={[styles.modalTitle, isDarkMode && styles.textDark]}>Chỉnh sửa thông tin</Text>
+          <BottomSheetTextInput
+            style={[styles.input, isDarkMode && styles.inputDark]}
+            placeholder="Họ và tên"
+            placeholderTextColor={colors.muted}
+            value={editName}
+            onChangeText={setEditName}
+          />
+          <BottomSheetTextInput
+            style={[styles.input, isDarkMode && styles.inputDark, { opacity: 0.6 }]}
+            placeholder="Email"
+            placeholderTextColor={colors.muted}
+            value={email}
+            editable={false}
+          />
+          <BottomSheetTextInput
+            style={[styles.input, isDarkMode && styles.inputDark]}
+            placeholder="Số điện thoại"
+            placeholderTextColor={colors.muted}
+            value={editPhone}
+            onChangeText={setEditPhone}
+            keyboardType="phone-pad"
+          />
+          <BottomSheetTextInput
+            style={[styles.input, isDarkMode && styles.inputDark]}
+            placeholder="Link Avatar URL (Tùy chọn)"
+            placeholderTextColor={colors.muted}
+            value={editAvatar}
+            onChangeText={setEditAvatar}
+          />
+          <View style={styles.modalActions}>
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => profileSheetRef.current?.dismiss()}
+              disabled={savingProfile}
             >
-              {gettingLocation ? (
-                <ActivityIndicator size="small" color="colors.primary" />
+              <Text style={styles.cancelBtnText}>Hủy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.saveBtn, savingProfile && { opacity: 0.7 }]}
+              onPress={handleSaveProfile}
+              disabled={savingProfile}
+            >
+              {savingProfile ? (
+                <ActivityIndicator size="small" color={colors.surface} />
               ) : (
-                <>
-                  <Ionicons name="navigate-circle-outline" size={20} color="colors.primary" />
-                  <Text style={styles.locationBtnText}>Dùng vị trí hiện tại</Text>
-                </>
+                <Text style={styles.saveBtnText}>Lưu</Text>
               )}
             </TouchableOpacity>
+          </View>
+        </BottomSheetView>
+      </BottomSheetModal>
 
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => {
-                  setAddressModalVisible(false);
-                  setEditAddressId(null);
-                  setAddressName('');
-                  setAddressDetail('');
-                  setAddressWard('');
-                  setAddressDistrict('');
-                  setAddressProvince('');
-                  setAddressProvinceCode(undefined);
-                  setAddressDistrictCode(undefined);
-                  setAddressLat(undefined);
-                  setAddressLng(undefined);
-                }}
-                disabled={savingAddress}
-              >
-                <Text style={styles.cancelBtnText}>Đóng</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveBtn, savingAddress && { opacity: 0.7 }]}
-                onPress={handleSaveAddress}
-                disabled={savingAddress}
-              >
-                {savingAddress ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <Text style={styles.saveBtnText}>{editAddressId ? 'Cập nhật' : 'Thêm'}</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-            </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
-    </Modal>
+      {/* Address Edit Sheet (Logic bản thường với Empty State tốt hơn) */}
+      <BottomSheetModal
+        ref={addressSheetRef}
+        snapPoints={addressSnapPoints}
+        keyboardBehavior="interactive"
+        keyboardBlurBehavior="restore"
+        backdropComponent={(props) => (
+          <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} />
+        )}
+      >
+        <BottomSheetScrollView
+          contentContainerStyle={[styles.modalContent, isDarkMode && styles.cardDark]}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text style={[styles.modalTitle, isDarkMode && styles.textDark]}>Quản lý địa chỉ</Text>
+          <View style={{ width: '100%', marginBottom: 16 }}>
+            {addresses.length === 0 ? (
+              <Text style={{ textAlign: 'center', color: colors.muted, marginVertical: 12 }}>
+                Chưa có địa chỉ nào được lưu.
+              </Text>
+            ) : (
+              addresses.map((addr) => (
+                <View key={addr.id} style={[styles.addressItem, isDarkMode && styles.inputDark]}>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[styles.addressName, isDarkMode && styles.textDark]}>{addr.label}</Text>
+                      {addr.isDefault && (
+                        <View style={styles.defaultBadge}>
+                          <Ionicons name="star" size={10} color={colors.primary} />
+                          <Text style={styles.defaultBadgeText}>Mặc định</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.addressDetail}>{addr.line1}</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => handleEditAddress(addr)}
+                    style={styles.iconBtn}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Sửa địa chỉ"
+                  >
+                    <Ionicons name="pencil" size={18} color={colors.primary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleDeleteAddress(addr.id)}
+                    style={styles.iconBtn}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Xoá địa chỉ"
+                  >
+                    <Ionicons name="trash" size={18} color={colors.error} />
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+          </View>
+
+          <Text style={[styles.sectionTitle, isDarkMode && styles.textDark, { alignSelf: 'flex-start' }]}>
+            {editAddressId ? 'Sửa địa chỉ' : 'Thêm địa chỉ mới'}
+          </Text>
+          <BottomSheetTextInput
+            style={[styles.input, isDarkMode && styles.inputDark]}
+            placeholder="Tên gợi nhớ (VD: Nhà riêng)"
+            placeholderTextColor={colors.muted}
+            value={addressName}
+            onChangeText={setAddressName}
+          />
+          <View style={{ width: '100%' }}>
+            <BottomSheetTextInput
+              style={[styles.input, isDarkMode && styles.inputDark]}
+              placeholder="Tìm địa chỉ (số nhà, tên đường...)"
+              placeholderTextColor={colors.muted}
+              value={addressDetail}
+              onChangeText={handleAddressSearchChange}
+            />
+            {searchingAddress && <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: -8, marginBottom: 8 }} />}
+            {addressSuggestions.length > 0 && (
+              <View style={[styles.suggestionBox, isDarkMode && styles.cardDark]}>
+                {addressSuggestions.map((s) => (
+                  <TouchableOpacity key={s.placeId} style={styles.suggestionItem} onPress={() => handleSelectSuggestion(s)}>
+                    <Text style={[styles.suggestionText, isDarkMode && styles.textDark]} numberOfLines={2}>{s.description}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+
+          {(addressWard || addressProvince) ? (
+            <Text style={{ fontSize: 12, color: colors.textSecondary, alignSelf: 'flex-start', marginBottom: 12 }}>
+              <Ionicons name="location" size={12} /> {[addressWard, addressProvince].filter(Boolean).join(', ')}
+            </Text>
+          ) : null}
+
+          <Text style={{ fontSize: 13, color: colors.textSecondary, alignSelf: 'flex-start', marginBottom: 6, fontWeight: '500' }}>
+            Chọn trên bản đồ:
+          </Text>
+          <View style={{ width: '100%', height: 200, borderRadius: 12, overflow: 'hidden', marginBottom: 12, borderWidth: 1, borderColor: colors.border }}>
+            <MapView
+              style={{ width: '100%', height: '100%' }}
+              initialRegion={{
+                latitude: addressLat || 10.7769,
+                longitude: addressLng || 106.7009,
+                latitudeDelta: 0.05,
+                longitudeDelta: 0.05,
+              }}
+              region={addressLat && addressLng ? {
+                latitude: addressLat,
+                longitude: addressLng,
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
+              } : undefined}
+              onPress={handleMapPress}
+            >
+              {addressLat && addressLng && (
+                <Marker coordinate={{ latitude: addressLat, longitude: addressLng }} />
+              )}
+            </MapView>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.locationBtn, isDarkMode && styles.cardDark]}
+            onPress={handleGetLocation}
+            disabled={gettingLocation}
+          >
+            {gettingLocation ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <>
+                <Ionicons name="navigate-circle-outline" size={20} color={colors.primary} />
+                <Text style={styles.locationBtnText}>Dùng vị trí hiện tại</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.defaultRow}>
+            <Text style={[styles.locationBtnText, { color: colors.text }]}>Đặt làm địa chỉ mặc định</Text>
+            <Switch value={addressIsDefault} onValueChange={setAddressIsDefault} />
+          </View>
+
+          <View style={styles.modalActions}>
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => {
+                addressSheetRef.current?.dismiss();
+                setEditAddressId(null);
+                setAddressName('');
+                setAddressDetail('');
+                setAddressWard('');
+                setAddressDistrict('');
+                setAddressProvince('');
+                setAddressProvinceCode(undefined);
+                setAddressDistrictCode(undefined);
+                setAddressLat(undefined);
+                setAddressLng(undefined);
+                setAddressIsDefault(false);
+                setAddressSuggestions([]);
+              }}
+              disabled={savingAddress}
+            >
+              <Text style={styles.cancelBtnText}>Đóng</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.saveBtn, savingAddress && { opacity: 0.7 }]}
+              onPress={handleSaveAddress}
+              disabled={savingAddress}
+            >
+              {savingAddress ? (
+                <ActivityIndicator size="small" color={colors.surface} />
+              ) : (
+                <Text style={styles.saveBtnText}>{editAddressId ? 'Cập nhật' : 'Thêm'}</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </BottomSheetScrollView>
+      </BottomSheetModal>
     </SafeAreaView>
   );
 }
@@ -701,7 +807,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   avatarBorderDark: { borderColor: '#1E293B', backgroundColor: '#1E293B' },
   avatar: {
     width: '100%', height: '100%', borderRadius: 50,
-    backgroundColor: '#DBEAFE', justifyContent: 'center', alignItems: 'center', overflow: 'hidden'
+    backgroundColor: colors.primaryTint, justifyContent: 'center', alignItems: 'center', overflow: 'hidden'
   },
   avatarImage: { width: '100%', height: '100%' },
   avatarText: { fontSize: 36, fontWeight: '700', color: colors.primary },
@@ -719,7 +825,6 @@ const getStyles = (colors: any) => StyleSheet.create({
   logoutBtn: { paddingVertical: 12, paddingHorizontal: 24 },
   logoutText: { fontSize: 14, fontWeight: '600', color: colors.error },
 
-  modalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', padding: 16 },
   modalContent: { width: '100%', backgroundColor: colors.surface, borderRadius: 20, padding: 20, alignItems: 'center' },
   modalTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 16 },
   input: { width: '100%', backgroundColor: colors.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, color: colors.text, marginBottom: 12 },
@@ -735,6 +840,12 @@ const getStyles = (colors: any) => StyleSheet.create({
   iconBtn: { padding: 8, marginLeft: 4 },
   locationBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: '#E0F2FE', borderRadius: 8, alignSelf: 'flex-start', marginBottom: 16 },
   locationBtnText: { color: colors.primary, fontSize: 13, fontWeight: '600' },
+  defaultBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: colors.primaryTint, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  defaultBadgeText: { fontSize: 10, fontWeight: '700', color: colors.primary },
+  suggestionBox: { width: '100%', backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border, marginTop: -8, marginBottom: 12, overflow: 'hidden' },
+  suggestionItem: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
+  suggestionText: { fontSize: 13, color: colors.text },
+  defaultRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: 8 },
   overviewRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
   overviewCard: { flex: 1, borderRadius: 16, padding: 16 },
   cardTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
@@ -742,7 +853,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   cardLabel: { fontSize: 14, color: '#475569', fontWeight: '500' },
   cardValue: { fontSize: 22, fontWeight: '800', color: colors.text },
   cardUnit: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
-  cameraIconBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: colors.primary, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' },
+  cameraIconBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: colors.primary, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: colors.surface },
   avatarModalContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
   closeAvatarModalBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 8 },
   fullAvatarImage: { width: '100%', height: 400 },
