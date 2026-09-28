@@ -43,6 +43,7 @@ import {
 import CategoryPills from '../../components/CategoryPills';
 import MapView, { Marker } from '../../components/AddressMap';
 import { useAppTheme } from '../../constants/theme';
+import { extractApiErrorMessage } from '../../utils/input-validation';
 
 const DAY_NAMES = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
 const START_TIMES = ['06:00', '07:00', '08:00', '09:00', '10:00', '13:00', '14:00'];
@@ -204,8 +205,8 @@ export default function TechnicianProfileScreen() {
     try {
       const updated = await technicianProfileApi.updateMyProfile({ isAvailable: next });
       setTechnicianProfile(updated);
-    } catch (err: any) {
-      Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể cập nhật trạng thái nhận việc.');
+    } catch (err: unknown) {
+      Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể cập nhật trạng thái nhận việc.'));
     } finally {
       setTogglingAvailability(false);
     }
@@ -263,8 +264,8 @@ export default function TechnicianProfileScreen() {
       });
       setMyOfferings((prev) => ({ ...prev, [service.id]: offering }));
       await loadTechnicianProfile();
-    } catch (err: any) {
-      Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể lưu kỹ năng này.');
+    } catch (err: unknown) {
+      Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể lưu kỹ năng này.'));
     } finally {
       setSavingSkillId(null);
     }
@@ -382,8 +383,8 @@ export default function TechnicianProfileScreen() {
       });
       await loadTechnicianProfile();
       locationSheetRef.current?.dismiss();
-    } catch (err: any) {
-      Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể lưu vị trí.');
+    } catch (err: unknown) {
+      Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể lưu vị trí.'));
     } finally {
       setSavingLocation(false);
     }
@@ -414,8 +415,8 @@ export default function TechnicianProfileScreen() {
       await technicianProfileApi.updateMySchedule(schedules);
       await loadTechnicianProfile();
       scheduleSheetRef.current?.dismiss();
-    } catch (err: any) {
-      Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể lưu khung giờ nhận việc.');
+    } catch (err: unknown) {
+      Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể lưu khung giờ nhận việc.'));
     } finally {
       setSavingSchedule(false);
     }
@@ -454,8 +455,8 @@ export default function TechnicianProfileScreen() {
       setNewTimeOffEnd('');
       setNewTimeOffReason('');
       setTimeOffList(await technicianProfileApi.getMyTimeOff());
-    } catch (err: any) {
-      Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể thêm ngày nghỉ. Kiểm tra lại khoảng ngày.');
+    } catch (err: unknown) {
+      Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể thêm ngày nghỉ. Kiểm tra lại khoảng ngày.'));
     } finally {
       setSavingTimeOff(false);
     }

@@ -19,6 +19,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../../types';
 import { authApi } from '../../api/auth.api';
+import { extractApiErrorMessage } from '../../utils/input-validation';
 
 export default function ForgotPasswordScreen() {
   const { colors, spacing, fontSize } = useAppTheme();
@@ -42,12 +43,8 @@ export default function ForgotPasswordScreen() {
     try {
       await authApi.forgotPassword(trimmedEmail);
       navigation.navigate('ResetPassword', { email: trimmedEmail });
-    } catch (err: any) {
-      const message =
-        err?.response?.data?.message ||
-        err?.message ||
-        'Không thể gửi mã OTP. Vui lòng thử lại.';
-      setError(Array.isArray(message) ? message.join(', ') : message);
+    } catch (err: unknown) {
+      setError(extractApiErrorMessage(err, 'Không thể gửi mã OTP. Vui lòng thử lại.'));
     } finally {
       setLoading(false);
     }

@@ -29,8 +29,9 @@ import {
   type ArrivalVerificationState,
   type PermissionDecision,
 } from './technician-check-in';
+import { useInvitationCount } from '../../hooks/useInvitationCount';
 
-type JobTab = 'all' | 'pending' | 'in_progress';
+type JobTab = 'all' | 'pending' | 'in_progress' | 'completed';
 
 export default function TechnicianJobsScreen() {
   const { colors } = useAppTheme();
@@ -42,31 +43,26 @@ export default function TechnicianJobsScreen() {
   const [checkInBusy, setCheckInBusy] = useState<string | null>(null);
   const [arrivalStates, setArrivalStates] = useState<Record<string, Exclude<ArrivalVerificationState, 'clear'>>>({});
   const technicianUserId = useAuthStore(technicianJobsUserId);
+  const invitationCount = useInvitationCount();
   const jobsRef = useRef(jobsState.jobs);
   useEffect(() => {
     jobsRef.current = jobsState.jobs;
   }, [jobsState.jobs]);
-  const loaderRef = useRef<ReturnType<typeof createJobsLoader> | null>(null);
-  if (loaderRef.current === null) {
-    loaderRef.current = createJobsLoader(ordersApi.getMyOrders, setJobsState, ordersApi.enRoute, {
-      getUserId: () => technicianJobsUserId(useAuthStore.getState()),
-      subscribe: (listener) => useAuthStore.subscribe(listener),
-    }, (title, message) => Alert.alert(title, message),
-    { getOrdersPage: (page, pageSize) => ordersApi.getMyOrdersPage(page, pageSize) });
-  }
-  const loader = loaderRef.current;
+  const [loader] = useState(() => createJobsLoader(ordersApi.getMyOrders, setJobsState, ordersApi.enRoute, {
+    getUserId: () => technicianJobsUserId(useAuthStore.getState()),
+    subscribe: (listener) => useAuthStore.subscribe(listener),
+  }, (title, message) => Alert.alert(title, message),
+  { getOrdersPage: (page, pageSize) => ordersApi.getMyOrdersPage(page, pageSize) }));
   // P3B4 real user-tapped foreground check-in: permission + one-shot position
   // happen only inside the tap handler below, never on focus. All guards live
   // in the production controller; this only adapts Expo APIs and job state.
   // Created in an effect so no ref is read during render.
   const checkInRef = useRef<ReturnType<typeof createCheckInController> | null>(null);
   useEffect(() => {
-    const jobsLoader = loaderRef.current;
-    if (!jobsLoader) return;
     checkInRef.current = createCheckInController({
       getJob: (id) => jobsRef.current.find((job) => job.id === id),
       getTechnicianId: () => technicianJobsUserId(useAuthStore.getState()),
-      captureFocus: () => jobsLoader.captureFocus(),
+      captureFocus: () => loader.captureFocus(),
       requestPermission: async (): Promise<PermissionDecision> => {
         try {
           const servicesEnabled = await Location.hasServicesEnabledAsync();
@@ -90,8 +86,8 @@ export default function TechnicianJobsScreen() {
       postCheckIn: (id, coords) => ordersApi.checkIn(id, coords),
       getOrderDetail: (id) => ordersApi.getOrder(id),
       notify: (title, message) => Alert.alert(title, message),
-      refreshJobs: () => jobsLoader.refresh(true),
-      onAccessDenied: () => { void jobsLoader.refresh(true); },
+      refreshJobs: () => loader.refresh(true),
+      onAccessDenied: () => { void loader.refresh(true); },
       setBusy: (orderId) => setCheckInBusy(orderId),
       onVerificationState: (orderId, state) => {
         setArrivalStates((previous) => {
@@ -109,11 +105,22 @@ export default function TechnicianJobsScreen() {
     return () => {
       checkInRef.current = null;
     };
-  }, []);
+  }, [loader]);
   useFocusEffect(useCallback(() => {
     void loader.focus();
     return () => loader.blur();
   }, [loader]));
+  // Switching back into this tab reuses the cached list silently (background
+  // refresh, no visible spinner). Tapping the tab icon while already on it is
+  // the explicit "reload" gesture — same pattern as CustomerBookingsScreen.
+  const [manualRefreshing, setManualRefreshing] = useState(false);
+  useEffect(() => {
+    return (navigation as any).addListener('tabPress', () => {
+      if (!navigation.isFocused()) return;
+      setManualRefreshing(true);
+      void loader.refresh(true).finally(() => setManualRefreshing(false));
+    });
+  }, [navigation, loader]);
   useEffect(() => {
     const controller = checkInRef.current;
     if (!controller || !technicianUserId) return;
@@ -134,7 +141,10 @@ export default function TechnicianJobsScreen() {
     }
   }, [jobsState.jobs, technicianUserId]);
 
-  const onRefresh = () => { void loader.refresh(); };
+  const onRefresh = () => {
+    setManualRefreshing(true);
+    void loader.refresh(true).finally(() => setManualRefreshing(false));
+  };
   const onLoadMoreJobs = () => { void loader.loadMoreJobs(); };
 
   const handleEnRoute = (orderId: string) => {
@@ -189,6 +199,7 @@ export default function TechnicianJobsScreen() {
 
   const jobsView = resolveJobsView(jobsState, activeTab);
   const { filtered: filteredJobs, showLoadMoreJobs, jobsCoverageText, emptyNote } = jobsView;
+  const completedCount = jobs.filter((job) => String(job.status).toUpperCase() === 'COMPLETED').length;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -200,14 +211,43 @@ export default function TechnicianJobsScreen() {
           style={styles.invitationsBtn}
           onPress={() => navigation.navigate('TechnicianInvitations')}
           disabled={!technicianUserId}
-          accessibilityLabel="Xem lời mời chờ xác nhận"
+          accessibilityRole="button"
+          accessibilityLabel={
+            invitationCount > 0 ? `Xem lời mời chờ xác nhận, ${invitationCount} lời mời mới` : 'Xem lời mời chờ xác nhận'
+          }
         >
           <Ionicons name="mail-outline" size={18} color={colors.primaryStrong} />
           <Text style={styles.invitationsBtnText}>Lời mời</Text>
+          {invitationCount > 0 && (
+            <View style={styles.invitationsBtnBadge}>
+              <Text style={styles.invitationsBtnBadgeText}>{invitationCount > 9 ? '9+' : invitationCount}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
       <View style={styles.container}>
+
+      {invitationCount > 0 && (
+        <TouchableOpacity
+          style={styles.invitationBanner}
+          onPress={() => navigation.navigate('TechnicianInvitations')}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Bạn có ${invitationCount} lời mời nhận việc mới, xem ngay`}
+        >
+          <View style={styles.invitationBannerIcon}>
+            <Ionicons name="mail-unread" size={20} color="#D97706" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.invitationBannerTitle}>
+              {invitationCount} lời mời nhận việc mới
+            </Text>
+            <Text style={styles.invitationBannerSubtitle}>Xác nhận sớm để không bỏ lỡ đơn</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#D97706" />
+        </TouchableOpacity>
+      )}
 
       {/* Tabs */}
       <View style={styles.tabRow}>
@@ -215,7 +255,12 @@ export default function TechnicianJobsScreen() {
           style={[styles.tabBtn, activeTab === 'all' && styles.tabBtnActive]}
           onPress={() => setActiveTab('all')}
         >
-          <Text style={activeTab === 'all' ? styles.tabTextActive : styles.tabText}>
+          <Text
+            style={activeTab === 'all' ? styles.tabTextActive : styles.tabText}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+          >
             Tất cả ({jobs.length})
           </Text>
         </TouchableOpacity>
@@ -223,7 +268,12 @@ export default function TechnicianJobsScreen() {
           style={[styles.tabBtn, activeTab === 'pending' && styles.tabBtnActive]}
           onPress={() => setActiveTab('pending')}
         >
-          <Text style={activeTab === 'pending' ? styles.tabTextActive : styles.tabText}>
+          <Text
+            style={activeTab === 'pending' ? styles.tabTextActive : styles.tabText}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+          >
             Cần di chuyển
           </Text>
         </TouchableOpacity>
@@ -231,8 +281,26 @@ export default function TechnicianJobsScreen() {
           style={[styles.tabBtn, activeTab === 'in_progress' && styles.tabBtnActive]}
           onPress={() => setActiveTab('in_progress')}
         >
-          <Text style={activeTab === 'in_progress' ? styles.tabTextActive : styles.tabText}>
+          <Text
+            style={activeTab === 'in_progress' ? styles.tabTextActive : styles.tabText}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+          >
             Đang sửa
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabBtn, activeTab === 'completed' && styles.tabBtnActive]}
+          onPress={() => setActiveTab('completed')}
+        >
+          <Text
+            style={activeTab === 'completed' ? styles.tabTextActive : styles.tabText}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+          >
+            Hoàn thành ({completedCount})
           </Text>
         </TouchableOpacity>
       </View>
@@ -246,7 +314,7 @@ export default function TechnicianJobsScreen() {
         <ScrollView
           contentContainerStyle={[styles.scrollContent, filteredJobs.length === 0 && styles.emptyScroll]}
           alwaysBounceVertical
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          refreshControl={<RefreshControl refreshing={manualRefreshing} onRefresh={onRefresh} />}
         >
           {error && (
             <View style={styles.errorBanner} accessibilityRole="alert">
@@ -319,6 +387,14 @@ export default function TechnicianJobsScreen() {
                       <Text style={styles.jobTitle}>
                         #{job.code || job.id.slice(0, 8)} · {job.serviceName || 'Dịch vụ sửa chữa'}
                       </Text>
+                      <View style={styles.jobMetaRow}>
+                        {!!job.scheduledAt && (
+                          <Text style={styles.jobMeta}>{new Date(job.scheduledAt).toLocaleDateString('vi-VN')}</Text>
+                        )}
+                        {typeof job.grandTotal === 'number' && (
+                          <Text style={styles.jobAmount}>Dự kiến thu: {job.grandTotal.toLocaleString('vi-VN')}đ</Text>
+                        )}
+                      </View>
                       {job.customerName && (
                         <Text style={styles.jobMeta}>Khách: {job.customerName} {job.customerPhone ? `(${job.customerPhone})` : ''}</Text>
                       )}
@@ -332,34 +408,38 @@ export default function TechnicianJobsScreen() {
 
                   {/* Actions depending on status */}
                   <View style={styles.actionsRow}>
-                    {!!detailId && (
-                      <TouchableOpacity
-                        style={styles.detailBtn}
-                        onPress={() => navigation.navigate('TechnicianOrderDetail', { serviceOrderId: detailId })}
-                        accessibilityRole="button"
-                        accessibilityLabel="Xem chi tiết đơn"
-                      >
-                        <Ionicons name="document-text-outline" size={16} color={colors.primaryStrong} />
-                        <Text style={styles.detailBtnText}>Xem chi tiết đơn</Text>
-                      </TouchableOpacity>
-                    )}
-                    {!!job.bookingId && (
-                      <TouchableOpacity
-                        style={styles.detailBtn}
-                        onPress={() => handleOpenChat(job.bookingId)}
-                        disabled={openingChatFor === job.bookingId}
-                        accessibilityRole="button"
-                        accessibilityLabel="Nhắn tin với khách"
-                      >
-                        {openingChatFor === job.bookingId ? (
-                          <ActivityIndicator size="small" color={colors.primaryStrong} />
-                        ) : (
-                          <>
-                            <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.primaryStrong} />
-                            <Text style={styles.detailBtnText}>Nhắn tin</Text>
-                          </>
+                    {(!!detailId || !!job.bookingId) && (
+                      <View style={styles.secondaryRow}>
+                        {!!detailId && (
+                          <TouchableOpacity
+                            style={styles.detailBtn}
+                            onPress={() => navigation.navigate('TechnicianOrderDetail', { serviceOrderId: detailId })}
+                            accessibilityRole="button"
+                            accessibilityLabel="Xem chi tiết đơn"
+                          >
+                            <Ionicons name="document-text-outline" size={16} color={colors.primaryStrong} />
+                            <Text style={styles.detailBtnText}>Chi tiết đơn</Text>
+                          </TouchableOpacity>
                         )}
-                      </TouchableOpacity>
+                        {!!job.bookingId && (
+                          <TouchableOpacity
+                            style={styles.detailBtn}
+                            onPress={() => handleOpenChat(job.bookingId)}
+                            disabled={openingChatFor === job.bookingId}
+                            accessibilityRole="button"
+                            accessibilityLabel="Nhắn tin với khách"
+                          >
+                            {openingChatFor === job.bookingId ? (
+                              <ActivityIndicator size="small" color={colors.primaryStrong} />
+                            ) : (
+                              <>
+                                <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.primaryStrong} />
+                                <Text style={styles.detailBtnText}>Nhắn tin</Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     )}
                     {s === 'ACCEPTED' && (
                       <TouchableOpacity
@@ -511,6 +591,50 @@ const getStyles = (colors: any) => StyleSheet.create({
     fontWeight: '700',
     color: colors.primaryStrong,
   },
+  invitationsBtnBadge: {
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: colors.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  invitationsBtnBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.surface,
+  },
+  invitationBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  invitationBannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FDE68A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  invitationBannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  invitationBannerSubtitle: {
+    fontSize: 12,
+    color: '#92400E',
+    marginTop: 2,
+  },
   tabRow: {
     flexDirection: 'row',
     backgroundColor: colors.divider,
@@ -635,10 +759,21 @@ const getStyles = (colors: any) => StyleSheet.create({
     color: colors.text,
     marginBottom: 4,
   },
+  jobMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
   jobMeta: {
     fontSize: 13,
     color: '#334155',
     marginBottom: 2,
+  },
+  jobAmount: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primaryStrong,
   },
   jobAddress: {
     fontSize: 12,
@@ -687,6 +822,11 @@ const getStyles = (colors: any) => StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: colors.divider,
+    gap: 10,
+  },
+  secondaryRow: {
+    flexDirection: 'row',
+    gap: 10,
   },
   actionBtn: {
     flexDirection: 'row',
@@ -702,6 +842,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     fontWeight: '700',
   },
   detailBtn: {
+    flex: 1,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -709,7 +850,6 @@ const getStyles = (colors: any) => StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     backgroundColor: colors.primarySoft,
-    marginBottom: 8,
   },
   detailBtnText: {
     color: colors.primaryStrong,
