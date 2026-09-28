@@ -21,6 +21,7 @@ import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAppTheme } from '../../constants/theme';
+import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import { useAuthStore } from '../../store/auth.store';
 import { ordersApi, type CanonicalOrderStatus } from '../../api/orders.api';
 import { customerBookingsUserId } from './customer-bookings-history';
@@ -835,9 +836,9 @@ export default function CustomerOrderDetailScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.centerLoading}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Đang tải chi tiết đơn...</Text>
+        <View style={styles.loadingState}>
+          <CustomerSkeleton variant="orderDetail" rows={3} />
+          <Text style={styles.loadingText} accessibilityLiveRegion="polite">Đang tải chi tiết đơn...</Text>
         </View>
       ) : !order ? (
         <View style={styles.emptyContainer}>
@@ -1747,15 +1748,15 @@ const getStyles = (colors: any) => StyleSheet.create({
     padding: 16,
     gap: 12,
   },
-  centerLoading: {
+  loadingState: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
   },
   loadingText: {
     fontSize: 14,
     color: colors.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   emptyContainer: {
     flex: 1,

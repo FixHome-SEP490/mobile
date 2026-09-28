@@ -16,7 +16,7 @@ import {
   SKELETON_MIN_OPACITY,
 } from '../../constants/motion';
 
-export type CustomerSkeletonVariant = 'service' | 'notification';
+export type CustomerSkeletonVariant = 'service' | 'notification' | 'booking' | 'orderDetail';
 
 type CustomerSkeletonProps = {
   variant: CustomerSkeletonVariant;
@@ -63,6 +63,35 @@ export default function CustomerSkeleton({ variant, rows }: CustomerSkeletonProp
     opacity: SKELETON_MIN_OPACITY + (SKELETON_MAX_OPACITY - SKELETON_MIN_OPACITY) * progress.value,
   }));
 
+  if (variant === 'orderDetail') {
+    return (
+      <View
+        style={styles.list}
+        accessible={false}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        pointerEvents="none"
+      >
+        {Array.from({ length: rowCount }, (_, index) => (
+          <View
+            key={`orderDetail-${index}`}
+            style={styles.detailCard}
+            accessible={false}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          >
+            <Animated.View style={[styles.badgeLine, pulseStyle]} accessible={false} />
+            <Animated.View style={[styles.lineLong, pulseStyle]} accessible={false} />
+            <Animated.View
+              style={[index === 0 ? styles.lineMedium : styles.lineShort, pulseStyle]}
+              accessible={false}
+            />
+          </View>
+        ))}
+      </View>
+    );
+  }
+
   return (
     <View
       style={styles.list}
@@ -85,6 +114,12 @@ export default function CustomerSkeleton({ variant, rows }: CustomerSkeletonProp
               <>
                 <Animated.View style={[styles.lineLong, pulseStyle]} accessible={false} />
                 <Animated.View style={[styles.lineShort, pulseStyle]} accessible={false} />
+              </>
+            ) : variant === 'booking' ? (
+              <>
+                <Animated.View style={[styles.badgeLine, pulseStyle]} accessible={false} />
+                <Animated.View style={[styles.lineLong, pulseStyle]} accessible={false} />
+                <Animated.View style={[styles.lineMedium, pulseStyle]} accessible={false} />
               </>
             ) : (
               <>
@@ -116,6 +151,12 @@ const getStyles = (colors: any) =>
       padding: 12,
       borderRadius: 16,
     },
+    detailCard: {
+      backgroundColor: colors.surface,
+      padding: 16,
+      borderRadius: 16,
+      gap: 8,
+    },
     icon: {
       width: 48,
       height: 48,
@@ -141,6 +182,12 @@ const getStyles = (colors: any) =>
     },
     time: {
       width: 40,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: colors.border,
+    },
+    badgeLine: {
+      width: '32%',
       height: 10,
       borderRadius: 5,
       backgroundColor: colors.border,
