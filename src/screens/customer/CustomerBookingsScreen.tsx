@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,9 @@ import {
   ActivityIndicator,
   RefreshControl,
   StatusBar,
+  Modal,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -23,7 +25,7 @@ import { ordersApi, type ServiceOrderItem, type CanonicalOrderStatus } from '../
 import {
   createBookingsHistoryLoader,
   customerBookingsUserId,
-  initialHistoryState,
+  getCachedHistoryState,
   linkedReplacementState,
   orderTotalText,
   resolveBookingsView,
@@ -61,26 +63,30 @@ export default function CustomerBookingsScreen() {
   const [rescheduleTime, setRescheduleTime] = useState('09:00');
   const [manageBusy, setManageBusy] = useState(false);
   const [manageError, setManageError] = useState<string | null>(null);
-  const [historyState, setHistoryState] = useState(initialHistoryState);
+  const [historyState, setHistoryState] = useState(getCachedHistoryState);
   const { bookings, total, loading, refreshing, loadingMore, loadingMoreOrders, error, ordersError } = historyState;
-  const loaderRef = useRef<ReturnType<typeof createBookingsHistoryLoader> | null>(null);
-  if (loaderRef.current === null) {
-    loaderRef.current = createBookingsHistoryLoader(
-      (page, pageSize) => bookingsApi.getMyBookingsPage(page, pageSize),
-      ordersApi.getMyOrders,
-      setHistoryState,
-      {
-        getUserId: () => customerBookingsUserId(useAuthStore.getState()),
-        subscribe: (listener) => useAuthStore.subscribe(listener),
-      },
-      { getOrdersPage: (page, pageSize) => ordersApi.getMyOrdersPage(page, pageSize) },
-    );
-  }
-  const loader = loaderRef.current;
+  const [loader] = useState(() => createBookingsHistoryLoader(
+    (page, pageSize) => bookingsApi.getMyBookingsPage(page, pageSize),
+    ordersApi.getMyOrders,
+    setHistoryState,
+    {
+      getUserId: () => customerBookingsUserId(useAuthStore.getState()),
+      subscribe: (listener) => useAuthStore.subscribe(listener),
+    },
+    { getOrdersPage: (page, pageSize) => ordersApi.getMyOrdersPage(page, pageSize) },
+  ));
   useFocusEffect(useCallback(() => {
     void loader.focus();
     return () => loader.blur();
   }, [loader]));
+  // Tapping the tab icon while already on this screen is the explicit
+  // "reload" gesture; every other visit (switching tabs back here) reuses
+  // the cached list from `loader.focus()` instead of refetching.
+  useEffect(() => {
+    return (navigation as any).addListener('tabPress', () => {
+      if (navigation.isFocused()) void loader.refresh(true);
+    });
+  }, [navigation, loader]);
   const handleScroll = useScrollHideTabBar();
 
   const onRefresh = () => { void loader.refresh(); };
@@ -147,7 +153,7 @@ export default function CustomerBookingsScreen() {
       }
       setManageError(
         result.kind === 'retryable'
-          ? 'Backend chưa hủy theo GET mới nhất. Bạn có thể thử lại bằng một thao tác mới.'
+          ? 'Hệ thống chưa xác nhận việc hủy theo trạng thái mới nhất. Bạn có thể thử lại bằng một thao tác mới.'
           : 'Chưa xác minh được việc hủy. Không tự gửi lại; hãy làm mới danh sách trước.',
       );
       await loader.refresh();
@@ -194,7 +200,7 @@ export default function CustomerBookingsScreen() {
       }
       setManageError(
         result.kind === 'retryable'
-          ? 'GET mới nhất vẫn giữ lịch cũ. Bạn có thể thử lại bằng một thao tác mới.'
+          ? 'Trạng thái mới nhất vẫn giữ lịch cũ. Bạn có thể thử lại bằng một thao tác mới.'
           : 'Chưa xác minh được việc đổi lịch. Không tự gửi lại; hãy làm mới danh sách trước.',
       );
       await loader.refresh();
@@ -210,13 +216,13 @@ export default function CustomerBookingsScreen() {
         return { label: 'Đang di chuyển', bg: '#FEF3C7', color: '#D97706' };
       case 'UNDER_REPAIR':
       case 'IN_PROGRESS':
-        return { label: 'Đang sửa chữa', bg: '#DBEAFE', color: colors.primary };
+        return { label: 'Đang sửa chữa', bg: colors.primaryTint, color: colors.primary };
       case 'ACCEPTED':
         return { label: 'Đã nhận đơn', bg: '#E0E7FF', color: '#4F46E5' };
       case 'COMPLETED':
         return { label: 'Hoàn thành', bg: '#DCFCE7', color: '#16A34A' };
       case 'CANCELLED':
-        return { label: 'Đã hủy', bg: '#FEE2E2', color: '#DC2626' };
+        return { label: 'Đã hủy', bg: '#FEE2E2', color: colors.error };
       default:
         return { label: s, bg: colors.border, color: colors.textSecondary };
     }
@@ -228,17 +234,17 @@ export default function CustomerBookingsScreen() {
       case 'SUBMITTED':
         return { label: 'Đã gửi yêu cầu', bg: '#E0E7FF', color: '#4F46E5' };
       case 'MATCHING':
-        return { label: 'Đang tìm thợ', bg: '#FEF3C7', color: '#D97706' };
+        return { label: 'Đang tìm kỹ thuật viên', bg: '#FEF3C7', color: '#D97706' };
       case 'MATCHED':
-        return { label: 'Đã ghép thợ', bg: '#DCFCE7', color: '#16A34A' };
+        return { label: 'Đã ghép kỹ thuật viên', bg: '#DCFCE7', color: '#16A34A' };
       case 'CONFIRMED':
-        return { label: 'Đã xác nhận', bg: '#DBEAFE', color: colors.primary };
+        return { label: 'Đã xác nhận', bg: colors.primaryTint, color: colors.primary };
       case 'CLOSED':
-        return { label: 'Vòng tìm thợ đã kết thúc', bg: '#F1F5F9', color: '#64748B' };
+        return { label: 'Vòng tìm kỹ thuật viên đã kết thúc', bg: colors.divider, color: colors.textSecondary };
       case 'CANCELLED':
-        return { label: 'Đã hủy', bg: '#FEE2E2', color: '#DC2626' };
+        return { label: 'Đã hủy', bg: '#FEE2E2', color: colors.error };
       default:
-        return { label: s, bg: '#F1F5F9', color: '#64748B' };
+        return { label: s, bg: colors.divider, color: colors.textSecondary };
     }
   };
 
@@ -271,11 +277,11 @@ export default function CustomerBookingsScreen() {
               <Text style={styles.meta}>Chưa có thông tin giá</Text>
             )}
             {order.technician?.fullName && (
-              <Text style={styles.meta}>KTV {order.technician.fullName}</Text>
+              <Text style={styles.meta}>Kỹ thuật viên {order.technician.fullName}</Text>
             )}
-            <Text style={styles.meta}>Mã đơn: {order.code || order.id}</Text>
+            <Text style={styles.meta}>Mã tham chiếu: {order.code || order.id.slice(0, 8)}</Text>
             {bookingId && (
-              <Text style={styles.meta}>Từ yêu cầu #{bookingId.slice(0, 8)}</Text>
+              <Text style={styles.meta}>Thuộc yêu cầu #{bookingId.slice(0, 8)}</Text>
             )}
           </View>
         </View>
@@ -304,47 +310,56 @@ export default function CustomerBookingsScreen() {
               {booking.serviceName || `Yêu cầu #${booking.id.slice(0, 8)}`}
             </Text>
             {!!booking.description && (
-              <Text style={styles.meta} numberOfLines={2}>{booking.description}</Text>
+              <View style={styles.metaRow}>
+                <Ionicons name="document-text-outline" size={14} color={colors.textSecondary} />
+                <Text style={[styles.metaRowText, styles.noteText]} numberOfLines={2}>
+                  {booking.description}
+                </Text>
+              </View>
             )}
             {!!booking.addressSummary && (
-              <Text style={styles.meta} numberOfLines={1}>📍 {booking.addressSummary}</Text>
+              <View style={styles.metaRow}>
+                <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
+                <Text style={styles.metaRowText} numberOfLines={2}>{booking.addressSummary}</Text>
+              </View>
             )}
-            <Text style={styles.meta}>{dateStr}</Text>
+            <View style={styles.metaRow}>
+              <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
+              <Text style={styles.metaRowText}>{dateStr}</Text>
+            </View>
             {waiting && (
-              <Text style={styles.meta}>Đang chờ kỹ thuật viên phản hồi — không cần gửi lại.</Text>
+              <View style={styles.waitingNote}>
+                <Text style={styles.waitingNoteText}>
+                  Đang chờ kỹ thuật viên phản hồi — không cần gửi lại.
+                </Text>
+              </View>
             )}
           </View>
         </View>
         {/* K09_B_BOOKING_MANAGE */}
         {(canCancelBookingConservative(booking) ||
           canRescheduleBookingConservative(booking)) && (
-          <View style={styles.manageActions}>
+          <View style={[styles.cardActionsRow, { marginTop: 12 }]}>
             {canRescheduleBookingConservative(booking) && (
               <TouchableOpacity
-                style={[
-                  styles.secondaryBtn,
-                  { borderColor: colors.border, flex: 1 },
-                ]}
+                style={[styles.pillBtn, { borderColor: colors.border }]}
                 onPress={() => openBookingManage(booking, 'reschedule')}
                 disabled={manageBusy}
                 accessibilityRole="button"
               >
-                <Text style={[styles.secondaryText, { color: colors.text }]}>
+                <Text style={[styles.pillBtnText, { color: colors.text }]}>
                   Đổi lịch
                 </Text>
               </TouchableOpacity>
             )}
             {canCancelBookingConservative(booking) && (
               <TouchableOpacity
-                style={[
-                  styles.secondaryBtn,
-                  { borderColor: '#FCA5A5', flex: 1 },
-                ]}
+                style={[styles.pillBtn, { borderColor: '#FCA5A5' }]}
                 onPress={() => openBookingManage(booking, 'cancel')}
                 disabled={manageBusy}
                 accessibilityRole="button"
               >
-                <Text style={[styles.secondaryText, { color: '#B91C1C' }]}>
+                <Text style={[styles.pillBtnText, { color: '#B91C1C' }]}>
                   Hủy yêu cầu
                 </Text>
               </TouchableOpacity>
@@ -352,12 +367,18 @@ export default function CustomerBookingsScreen() {
           </View>
         )}
 
-        {manageBookingId === booking.id && manageMode === 'cancel' && (
-          <View style={styles.managePanel}>
+        <Modal
+          visible={manageBookingId === booking.id && manageMode === 'cancel'}
+          transparent
+          animationType="slide"
+          onRequestClose={closeBookingManage}
+        >
+          <View style={styles.manageModalBackdrop}>
+            <View style={[styles.manageModalSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={styles.manageTitle}>Hủy yêu cầu đặt lịch</Text>
             <Text style={styles.meta}>
-              Chỉ áp dụng khi chưa có ServiceOrder. Nếu kỹ thuật viên vừa nhận đơn,
-              GET sẽ chặn Booking cancel và chuyển sang đơn dịch vụ.
+              Chỉ áp dụng khi chưa có đơn sửa chữa. Nếu kỹ thuật viên vừa nhận đơn,
+              hệ thống sẽ chuyển sang đơn sửa chữa.
             </Text>
             <TextInput
               value={cancelReason}
@@ -379,9 +400,10 @@ export default function CustomerBookingsScreen() {
               <TouchableOpacity
                 style={[
                   styles.resumeBtn,
-                  { backgroundColor: '#DC2626', flex: 1 },
+                  { backgroundColor: colors.error, flex: 1 },
                 ]}
                 onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
                   void handleBookingCancel(booking);
                 }}
                 disabled={manageBusy}
@@ -405,18 +427,25 @@ export default function CustomerBookingsScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+            </View>
           </View>
-        )}
+        </Modal>
 
-        {manageBookingId === booking.id && manageMode === 'reschedule' && (
-          <View style={styles.managePanel}>
+        <Modal
+          visible={manageBookingId === booking.id && manageMode === 'reschedule'}
+          transparent
+          animationType="slide"
+          onRequestClose={closeBookingManage}
+        >
+          <View style={styles.manageModalBackdrop}>
+            <View style={[styles.manageModalSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <ScrollView keyboardShouldPersistTaps="handled">
             <Text style={styles.manageTitle}>
-              Đổi lịch trước khi có ServiceOrder
+              Đổi lịch trước khi có đơn sửa chữa
             </Text>
             <Text style={styles.meta}>
-              Mobile đang mirror Web conservative: chỉ SUBMITTED/MATCHING chưa
-              linked order. Backend capability đổi lịch linked ACCEPTED/EN_ROUTE
-              chưa expose ở đây.
+              Chỉ áp dụng cho yêu cầu đã gửi hoặc đang tìm kỹ thuật viên, khi chưa
+              có đơn sửa chữa.
             </Text>
             <Text style={styles.manageLabel}>Ngày</Text>
             <View style={styles.manageChips}>
@@ -434,7 +463,7 @@ export default function CustomerBookingsScreen() {
                           : colors.border,
                       backgroundColor:
                         rescheduleDayOffset === offset
-                          ? '#EFF6FF'
+                          ? colors.primarySoft
                           : colors.surface,
                     },
                   ]}
@@ -465,7 +494,7 @@ export default function CustomerBookingsScreen() {
                           : colors.border,
                       backgroundColor:
                         rescheduleTime === time
-                          ? '#EFF6FF'
+                          ? colors.primarySoft
                           : colors.surface,
                     },
                   ]}
@@ -486,6 +515,7 @@ export default function CustomerBookingsScreen() {
                   { backgroundColor: colors.primary, flex: 1 },
                 ]}
                 onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   void handleBookingReschedule(booking);
                 }}
                 disabled={manageBusy}
@@ -509,8 +539,10 @@ export default function CustomerBookingsScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+              </ScrollView>
+            </View>
           </View>
-        )}
+        </Modal>
 
         {!!resumeId && (
           <TouchableOpacity
@@ -519,7 +551,7 @@ export default function CustomerBookingsScreen() {
             accessibilityRole="button"
             accessibilityLabel="Tiếp tục chọn kỹ thuật viên"
           >
-            <Text style={styles.resumeText}>Tiếp tục chọn thợ</Text>
+            <Text style={styles.resumeText}>Tiếp tục chọn kỹ thuật viên</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -537,8 +569,8 @@ export default function CustomerBookingsScreen() {
       ? new Date(booking.createdAt).toLocaleDateString('vi-VN')
       : 'Gần đây';
     const message = replacement === 'waiting'
-      ? 'Đang tìm thợ thay thế; đang chờ kỹ thuật viên phản hồi; làm mới để cập nhật'
-      : 'Lượt mời thợ thay thế đã kết thúc. Xem khả năng chọn lại; hệ thống sẽ kiểm tra trước khi gửi.';
+      ? 'Đang tìm kỹ thuật viên thay thế; đang chờ kỹ thuật viên phản hồi; làm mới để cập nhật'
+      : 'Lượt mời kỹ thuật viên thay thế đã kết thúc. Xem khả năng chọn lại; hệ thống sẽ kiểm tra trước khi gửi.';
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
@@ -553,15 +585,28 @@ export default function CustomerBookingsScreen() {
               {booking.serviceName || order.serviceName || `Yêu cầu #${booking.id.slice(0, 8)}`}
             </Text>
             {!!booking.description && (
-              <Text style={styles.meta} numberOfLines={2}>{booking.description}</Text>
+              <View style={styles.metaRow}>
+                <Ionicons name="document-text-outline" size={14} color={colors.textSecondary} />
+                <Text style={[styles.metaRowText, styles.noteText]} numberOfLines={2}>
+                  {booking.description}
+                </Text>
+              </View>
             )}
             {!!booking.addressSummary && (
-              <Text style={styles.meta} numberOfLines={1}>📍 {booking.addressSummary}</Text>
+              <View style={styles.metaRow}>
+                <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
+                <Text style={styles.metaRowText} numberOfLines={2}>{booking.addressSummary}</Text>
+              </View>
             )}
-            <Text style={styles.meta}>{dateStr}</Text>
-            <Text style={styles.meta}>{message}</Text>
+            <View style={styles.metaRow}>
+              <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
+              <Text style={styles.metaRowText}>{dateStr}</Text>
+            </View>
+            <View style={styles.waitingNote}>
+              <Text style={styles.waitingNoteText}>{message}</Text>
+            </View>
             <Text style={styles.meta}>
-              {`Đơn lịch sử ${order.code || order.id} — kỹ thuật viên trước đây chưa được xác nhận là thợ hiện tại.`}
+              {`Đơn lịch sử ${order.code || order.id.slice(0, 8)} — kỹ thuật viên trước đây chưa được xác nhận là kỹ thuật viên hiện tại.`}
             </Text>
           </View>
         </View>
@@ -569,18 +614,18 @@ export default function CustomerBookingsScreen() {
           style={[styles.resumeBtn, { backgroundColor: colors.primary }]}
           onPress={() => navigation.navigate('CustomerMatching', { bookingId: booking.id })}
           accessibilityRole="button"
-          accessibilityLabel={replacement === 'waiting' ? 'Xem tình trạng tìm thợ' : 'Xem khả năng chọn lại'}
+          accessibilityLabel={replacement === 'waiting' ? 'Xem tình trạng tìm kỹ thuật viên' : 'Xem khả năng chọn lại'}
         >
-          <Text style={styles.resumeText}>{replacement === 'waiting' ? 'Xem tình trạng tìm thợ' : 'Xem khả năng chọn lại'}</Text>
+          <Text style={styles.resumeText}>{replacement === 'waiting' ? 'Xem tình trạng tìm kỹ thuật viên' : 'Xem khả năng chọn lại'}</Text>
         </TouchableOpacity>
         {!!detailId && (
           <TouchableOpacity
-            style={[styles.secondaryBtn, { borderColor: colors.border }]}
+            style={[styles.pillBtn, { borderColor: colors.border, alignSelf: 'flex-start', marginTop: 8 }]}
             onPress={() => navigation.navigate('CustomerOrderDetail', { serviceOrderId: detailId })}
             accessibilityRole="button"
             accessibilityLabel="Xem chi tiết đơn lịch sử"
           >
-            <Text style={[styles.secondaryText, { color: colors.text }]}>Xem chi tiết đơn lịch sử</Text>
+            <Text style={[styles.pillBtnText, { color: colors.text }]}>Xem chi tiết đơn lịch sử</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -592,7 +637,7 @@ export default function CustomerBookingsScreen() {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Đơn dịch vụ</Text>
+        <Text style={styles.headerTitle}>Đơn của tôi</Text>
       </View>
       {/* Search & Filter */}
       <View style={styles.searchFilterContainer}>
@@ -600,7 +645,7 @@ export default function CustomerBookingsScreen() {
           <Ionicons name="search" size={20} color={colors.textSecondary} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Tìm theo mã đơn, dịch vụ, thợ..."
+            placeholder="Tìm theo mã đơn, dịch vụ, kỹ thuật viên..."
             placeholderTextColor={colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -612,7 +657,7 @@ export default function CustomerBookingsScreen() {
       <View style={styles.segmentContainer}>
         <TouchableOpacity
           style={[styles.segmentBtn, activeTab === 'all' && styles.segmentActive]}
-          onPress={() => setActiveTab('all')}
+          onPress={() => { Haptics.selectionAsync(); setActiveTab('all'); }}
         >
           <Text style={activeTab === 'all' ? styles.segmentTextActive : styles.segmentText}>
             Tất cả ({cards.length})
@@ -620,7 +665,7 @@ export default function CustomerBookingsScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.segmentBtn, activeTab === 'in_progress' && styles.segmentActive]}
-          onPress={() => setActiveTab('in_progress')}
+          onPress={() => { Haptics.selectionAsync(); setActiveTab('in_progress'); }}
         >
           <Text style={activeTab === 'in_progress' ? styles.segmentTextActive : styles.segmentText}>
             Đang xử lý
@@ -628,7 +673,7 @@ export default function CustomerBookingsScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.segmentBtn, activeTab === 'completed' && styles.segmentActive]}
-          onPress={() => setActiveTab('completed')}
+          onPress={() => { Haptics.selectionAsync(); setActiveTab('completed'); }}
         >
           <Text style={activeTab === 'completed' ? styles.segmentTextActive : styles.segmentText}>
             Hoàn tất
@@ -640,7 +685,7 @@ export default function CustomerBookingsScreen() {
       {loading ? (
         <View style={styles.centerLoading}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Đang tải đơn dịch vụ...</Text>
+          <Text style={styles.loadingText}>Đang tải đơn của tôi...</Text>
         </View>
       ) : showList ? (
         <ScrollView
@@ -702,7 +747,7 @@ export default function CustomerBookingsScreen() {
                 key={key}
                 onPress={() => navigation.navigate('CustomerOrderDetail', { serviceOrderId: detailId })}
                 accessibilityRole="button"
-                accessibilityLabel="Xem chi tiết đơn dịch vụ"
+                accessibilityLabel="Xem chi tiết đơn sửa chữa"
                 activeOpacity={0.8}
               >
                 {renderOrderSummary(order, bookingId)}
@@ -746,8 +791,8 @@ export default function CustomerBookingsScreen() {
       ) : (
         <View style={styles.emptyContainer}>
           <Ionicons name="receipt-outline" size={56} color="#CBD5E1" />
-          <Text style={styles.emptyTitle}>Chưa có đơn dịch vụ nào</Text>
-          <Text style={styles.emptyDesc}>Đặt lịch ngay để thợ FixHome kiểm tra tại nhà bạn.</Text>
+          <Text style={styles.emptyTitle}>Chưa có đơn nào</Text>
+          <Text style={styles.emptyDesc}>Đặt lịch ngay để kỹ thuật viên FixHome kiểm tra tại nhà bạn.</Text>
           <TouchableOpacity
             style={[styles.bookNowBtn, { backgroundColor: colors.primary }]}
             onPress={() => navigation.navigate('CustomerServices')}
@@ -919,7 +964,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     alignItems: 'center',
   },
   resumeText: {
-    color: '#FFFFFF',
+    color: '#FFFFFF', // chữ trên nút nền primary/error, luôn trắng bất kể theme
     fontSize: 13,
     fontWeight: '700',
   },
@@ -939,12 +984,41 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     gap: 8,
     marginTop: 8,
   },
+  cardActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    gap: 8,
+    marginTop: 8,
+  },
+  pillBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  pillBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
   managePanel: {
     marginTop: 12,
     padding: 12,
     borderRadius: 10,
     backgroundColor: colors.background,
     gap: 8,
+  },
+  manageModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  manageModalSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderWidth: 1,
+    padding: 16,
+    gap: 8,
+    maxHeight: '85%',
   },
   manageTitle: {
     fontSize: 14,
@@ -1027,5 +1101,30 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontSize: 13,
     color: colors.textSecondary,
     marginBottom: 2,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 2,
+  },
+  metaRowText: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  noteText: {
+    fontStyle: 'italic',
+  },
+  waitingNote: {
+    marginTop: 4,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: colors.primarySoft,
+  },
+  waitingNoteText: {
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '600',
   },
 });

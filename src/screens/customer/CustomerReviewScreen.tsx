@@ -1,6 +1,7 @@
 import { useAppTheme } from '../../constants/theme';
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, StatusBar, TextInput, Alert } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -17,6 +18,7 @@ export default function CustomerReviewScreen() {
   const [selectedChips, setSelectedChips] = useState<string[]>(['Đúng giờ', 'Lịch sự']);
 
   const toggleChip = (chip: string) => {
+    Haptics.selectionAsync();
     if (selectedChips.includes(chip)) {
       setSelectedChips(selectedChips.filter(c => c !== chip));
     } else {
@@ -25,6 +27,7 @@ export default function CustomerReviewScreen() {
   };
 
   const handleSubmit = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert('Thành công', 'Đánh giá đã được gửi. Cảm ơn bạn!', [
       { text: 'OK', onPress: () => navigation.navigate('CustomerMain') }
     ]);
@@ -34,7 +37,13 @@ export default function CustomerReviewScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.navigate('CustomerMain')} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('CustomerMain')}
+          style={styles.backBtn}
+          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+          accessibilityRole="button"
+          accessibilityLabel="Quay lại"
+        >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Đánh giá dịch vụ</Text>
@@ -56,7 +65,17 @@ export default function CustomerReviewScreen() {
           <Text style={styles.ratingTitle}>Trải nghiệm của bạn thế nào?</Text>
           <View style={styles.starsContainer}>
             {[1, 2, 3, 4, 5].map(star => (
-              <TouchableOpacity key={star} onPress={() => setRating(star)} style={styles.starBtn}>
+              <TouchableOpacity
+                key={star}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setRating(star);
+                }}
+                style={styles.starBtn}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: rating === star }}
+                accessibilityLabel={`${star} sao`}
+              >
                 <Ionicons name={star <= rating ? "star" : "star-outline"} size={36} color={star <= rating ? "#EAB308" : "#CBD5E1"} />
               </TouchableOpacity>
             ))}
@@ -84,7 +103,7 @@ export default function CustomerReviewScreen() {
             value={comment}
             onChangeText={setComment}
             placeholder="Chia sẻ thêm về trải nghiệm của bạn..."
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={colors.muted}
           />
         </View>
 
@@ -115,7 +134,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text, flex: 1, textAlign: 'center' },
   content: { padding: 16 },
   techCard: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: 16, padding: 16, alignItems: 'center', marginBottom: 24, borderWidth: 1, borderColor: colors.border },
-  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#DBEAFE', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.primaryTint, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   techDetails: { flex: 1 },
   techName: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 4 },
   mutedText: { fontSize: 12, color: colors.textSecondary },
@@ -125,7 +144,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   starBtn: { padding: 4 },
   chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24, justifyContent: 'center' },
   chip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
-  chipActive: { backgroundColor: '#DBEAFE', borderColor: colors.primary },
+  chipActive: { backgroundColor: colors.primaryTint, borderColor: colors.primary },
   chipText: { fontSize: 14, color: colors.textSecondary, fontWeight: '600' },
   chipTextActive: { color: colors.primary },
   field: { marginBottom: 24 },

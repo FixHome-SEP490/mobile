@@ -16,9 +16,8 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardInset } from '../../hooks/useKeyboardInset';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
-import { BottomSheetModal, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
-//import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
 import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store/auth.store';
 import {
@@ -48,6 +47,7 @@ function newClientMessageId(): string {
 
 export default function ChatThreadScreen() {
   const { colors, isDark } = useAppTheme();
+  const styles = getStyles(colors);
   const navigation = useNavigation();
   const route = useRoute<ThreadRoute>();
   const { conversationId, counterpartName, serviceName } = route.params;
@@ -79,10 +79,6 @@ export default function ChatThreadScreen() {
   const typingSentAt = useRef(0);
   const typingStopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const peerTypingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  
-  // Gorhom Bottom Sheet Refs
-  const attachmentSheetRef = useRef<BottomSheetModal>(null);
-  const snapPoints = useMemo(() => ['30%', '50%'], []);
 
   const canSend = conversation?.canSend ?? true;
 
@@ -220,6 +216,8 @@ export default function ChatThreadScreen() {
     const content = draft.trim();
     if (!content || sending || !canSend) return;
 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
     if (editing) {
       setSending(true);
       try {
@@ -268,12 +266,6 @@ export default function ChatThreadScreen() {
   }, [draft, sending, canSend, editing, conversationId, myId, upsert]);
 
 
-
-  // Action menu is handled by react-native-popup-menu inline
-
-  const openAttachmentMenu = useCallback(() => {
-    attachmentSheetRef.current?.present();
-  }, []);
 
   // ----------------------------------------------------------------- render
 
@@ -344,7 +336,7 @@ export default function ChatThreadScreen() {
         </View>
       );
     },
-    [myId],
+    [myId, styles],
   );
 
   const headerSubtitle = useMemo(
@@ -358,8 +350,14 @@ export default function ChatThreadScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerIconBtn}>
-          <Ionicons name="arrow-back" size={24} color="#0F172A" />
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.headerIconBtn}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          accessibilityRole="button"
+          accessibilityLabel="Quay lại"
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
 
         <View style={styles.headerProfile}>
@@ -381,10 +379,6 @@ export default function ChatThreadScreen() {
             )}
           </View>
         </View>
-
-        <TouchableOpacity style={styles.headerIconBtn}>
-          <Ionicons name="ellipsis-vertical" size={22} color="#0F172A" />
-        </TouchableOpacity>
       </View>
 
       {/* Same reason as the assistant screen: KeyboardAvoidingView needs the
@@ -392,7 +386,7 @@ export default function ChatThreadScreen() {
       <View style={[styles.flex, { paddingBottom: keyboardInset }]}>
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color="#3B82F6" />
+            <ActivityIndicator size="large" color={colors.primary} />
           </View>
         ) : (
           <FlatList
@@ -426,7 +420,7 @@ export default function ChatThreadScreen() {
 
         {!!editing && (
           <View style={styles.editBanner}>
-            <Ionicons name="create-outline" size={16} color="#3B82F6" />
+            <Ionicons name="create-outline" size={16} color={colors.primary} />
             <Text style={styles.editBannerText} numberOfLines={1}>
               Đang sửa: {editing.content}
             </Text>
@@ -435,24 +429,23 @@ export default function ChatThreadScreen() {
                 setEditing(null);
                 setDraft('');
               }}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="Huỷ sửa tin nhắn"
             >
-              <Ionicons name="close" size={18} color="#64748B" />
+              <Ionicons name="close" size={18} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
         )}
 
         {canSend ? (
           <View style={[styles.inputContainer, { paddingBottom: isKeyboardVisible ? 0 : Math.max(insets.bottom, 5) }]}>
-            <TouchableOpacity style={styles.attachBtn} onPress={openAttachmentMenu}>
-              <Ionicons name="attach" size={26} color="#64748B" />
-            </TouchableOpacity>
-
             <TextInput
               style={styles.input}
               placeholder="Tin nhắn..."
               value={draft}
               onChangeText={onChangeDraft}
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor={colors.muted}
               multiline
               maxLength={2000}
             />
@@ -462,100 +455,70 @@ export default function ChatThreadScreen() {
               onPress={handleSend}
               disabled={!draft.trim() || sending}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={editing ? 'Lưu chỉnh sửa' : 'Gửi tin nhắn'}
             >
-              <Ionicons 
-                name={editing ? 'checkmark' : (draft.trim() ? 'send' : 'mic')} 
-                size={22} 
-                color={draft.trim() ? '#3B82F6' : '#64748B'} 
+              <Ionicons
+                name={editing ? 'checkmark' : 'send'}
+                size={22}
+                color={draft.trim() ? colors.primary : colors.textSecondary}
               />
             </TouchableOpacity>
           </View>
         ) : (
           <View style={[styles.readOnlyBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-            <Ionicons name="lock-closed-outline" size={16} color="#64748B" />
+            <Ionicons name="lock-closed-outline" size={16} color={colors.textSecondary} />
             <Text style={styles.readOnlyText}>
               Cuộc trò chuyện này chỉ còn xem lại được.
             </Text>
           </View>
         )}
       </View>
-
-      {/* Attachment Menu Dummy */}
-      <BottomSheetModal
-        ref={attachmentSheetRef}
-        snapPoints={snapPoints}
-        backdropComponent={(props) => (
-          <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} />
-        )}
-      >
-        <View style={styles.sheet}>
-          <View style={styles.attachmentGrid}>
-            <TouchableOpacity style={styles.attachOption}>
-              <View style={[styles.attachIconBg, { backgroundColor: '#3B82F6' }]}>
-                 <Ionicons name="image" size={24} color="#FFF" />
-              </View>
-              <Text style={styles.attachOptionText}>Thư viện</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.attachOption}>
-              <View style={[styles.attachIconBg, { backgroundColor: '#10B981' }]}>
-                 <Ionicons name="document-text" size={24} color="#FFF" />
-              </View>
-              <Text style={styles.attachOptionText}>Tài liệu</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.attachOption}>
-              <View style={[styles.attachIconBg, { backgroundColor: '#F59E0B' }]}>
-                 <Ionicons name="location" size={24} color="#FFF" />
-              </View>
-              <Text style={styles.attachOptionText}>Vị trí</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </BottomSheetModal>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+const getStyles = (colors: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyText: {
     fontSize: 14,
-    color: '#94A3B8',
+    color: colors.muted,
     textAlign: 'center',
     transform: [{ scaleY: -1 }],
   },
-  
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: colors.border,
   },
   headerIconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerProfile: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 },
   headerAvatar: { width: 38, height: 38, borderRadius: 19, marginRight: 10 },
   headerAvatarFallback: {
     width: 38, height: 38, borderRadius: 19, marginRight: 10,
-    backgroundColor: '#DBEAFE', alignItems: 'center', justifyContent: 'center'
+    backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center'
   },
-  headerAvatarText: { color: '#2563EB', fontSize: 16, fontWeight: 'bold' },
+  headerAvatarText: { color: colors.primaryStrong, fontSize: 16, fontWeight: 'bold' },
   headerTextWrap: { flex: 1, justifyContent: 'center' },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
-  headerSubtitle: { fontSize: 13, color: '#64748B', marginTop: 1 },
-  
+  headerTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
+  headerSubtitle: { fontSize: 13, color: colors.textSecondary, marginTop: 1 },
+
   chatContent: { paddingVertical: 12, flexGrow: 1 },
   olderSpinner: { marginVertical: 12 },
 
   msgRow: { paddingHorizontal: 12, marginVertical: 4 },
   msgRowMine: { alignItems: 'flex-end' },
   msgRowTheirs: { alignItems: 'flex-start' },
-  bubble: { 
-    maxWidth: '80%', 
-    paddingHorizontal: 14, 
+  bubble: {
+    maxWidth: '80%',
+    paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 20,
     shadowColor: '#000',
@@ -564,25 +527,25 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 1,
   },
-  bubbleMine: { 
-    backgroundColor: '#3B82F6', 
+  bubbleMine: {
+    backgroundColor: colors.primary,
     borderBottomRightRadius: 4,
-  }, 
-  bubbleTheirs: { 
-    backgroundColor: '#FFFFFF', 
+  },
+  bubbleTheirs: {
+    backgroundColor: colors.surface,
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: '#E2E8F0' 
-  }, 
-  bubbleDeleted: { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0', borderWidth: 1, borderRadius: 16 },
+    borderColor: colors.border
+  },
+  bubbleDeleted: { backgroundColor: colors.divider, borderColor: colors.border, borderWidth: 1, borderRadius: 16 },
   msgText: { fontSize: 15, lineHeight: 22 },
-  msgTextMine: { color: '#FFFFFF' },
-  msgTextTheirs: { color: '#0F172A' },
-  msgTextDeleted: { color: '#94A3B8', fontStyle: 'italic' },
+  msgTextMine: { color: colors.surface },
+  msgTextTheirs: { color: colors.text },
+  msgTextDeleted: { color: colors.muted, fontStyle: 'italic' },
   metaRow: { flexDirection: 'row', alignSelf: 'flex-end', marginTop: 4 },
   metaText: { fontSize: 11 },
   metaTextMine: { color: 'rgba(255,255,255,0.7)' },
-  metaTextTheirs: { color: '#94A3B8' },
+  metaTextTheirs: { color: colors.muted },
 
   editBanner: {
     flexDirection: 'row',
@@ -590,20 +553,20 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
     borderTopWidth: 1,
-    borderTopColor: '#DBEAFE',
+    borderTopColor: colors.primaryTint,
   },
-  editBannerText: { flex: 1, fontSize: 13, color: '#1D4ED8' },
+  editBannerText: { flex: 1, fontSize: 13, color: colors.primaryDark },
 
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: colors.border,
   },
   attachBtn: {
     width: 44,
@@ -619,9 +582,9 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 10,
     borderRadius: 21,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.divider,
     fontSize: 15,
-    color: '#0F172A',
+    color: colors.text,
     marginHorizontal: 4,
   },
   sendIconBtn: {
@@ -630,7 +593,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 21,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
   },
 
   readOnlyBar: {
@@ -639,14 +602,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 16,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.divider,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: colors.border,
   },
-  readOnlyText: { fontSize: 13, color: '#64748B' },
+  readOnlyText: { fontSize: 13, color: colors.textSecondary },
 
   sheet: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     flex: 1,
     paddingBottom: 20,
   },
@@ -657,10 +620,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 16,
   },
-  sheetDivider: { height: 1, backgroundColor: '#F1F5F9', marginHorizontal: 22 },
-  sheetText: { fontSize: 16, color: '#0F172A' },
+  sheetDivider: { height: 1, backgroundColor: colors.divider, marginHorizontal: 22 },
+  sheetText: { fontSize: 16, color: colors.text },
   sheetTextDanger: { color: '#EF4444' },
-  
+
   attachmentGrid: {
     flexDirection: 'row',
     padding: 24,
@@ -680,10 +643,10 @@ const styles = StyleSheet.create({
   },
   attachOptionText: {
     fontSize: 13,
-    color: '#0F172A',
+    color: colors.text,
     fontWeight: '500',
   },
-  
+
   menuOptionsContainer: {
     borderRadius: 12,
     paddingVertical: 4,
@@ -703,7 +666,7 @@ const styles = StyleSheet.create({
   },
   menuOptionText: {
     fontSize: 15,
-    color: '#0F172A',
+    color: colors.text,
     fontWeight: '500',
   }
 });

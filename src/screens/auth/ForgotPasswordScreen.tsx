@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../../types';
@@ -36,6 +37,7 @@ export default function ForgotPasswordScreen() {
       return;
     }
 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     try {
       await authApi.forgotPassword(trimmedEmail);
@@ -61,10 +63,11 @@ export default function ForgotPasswordScreen() {
           <TouchableOpacity
             style={styles.backBtn}
             onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Quay lại"
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name="arrow-back" size={22} color="#4B5563" />
-            <Text style={styles.backText}>Quay lại</Text>
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
 
           <View style={styles.header}>
@@ -92,7 +95,7 @@ export default function ForgotPasswordScreen() {
                 <TextInput
                   style={styles.input}
                   placeholder="email@example.com"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={colors.muted}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   value={email}
@@ -139,23 +142,12 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     paddingBottom: 40,
   },
   backBtn: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 24,
-    marginTop: -20,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-  },
-  backText: {
-    fontSize: 13,
-    color: '#4B5563',
-    fontWeight: '600',
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    marginBottom: 8,
+    marginTop: -12,
+    marginLeft: -8,
   },
   header: {
     alignItems: 'center',

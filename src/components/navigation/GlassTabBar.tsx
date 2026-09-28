@@ -19,6 +19,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome5 } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useUIStore } from '../../store/ui.store';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -106,6 +107,7 @@ export const GlassTabBar = ({ state, descriptors, navigation }: BottomTabBarProp
   const scaleY = useSharedValue(1);
   const activeIndex = useSharedValue(state.index);
   const isTabBarVisible = useUIStore((state) => state.isTabBarVisible);
+  const reduceMotion = useReduceMotion();
 
   // Sync back to navigation state if changed from outside
   useSyncTabState(state.index, tabWidth, translateX, activeIndex);
@@ -217,7 +219,7 @@ export const GlassTabBar = ({ state, descriptors, navigation }: BottomTabBarProp
   const animatedWrapperStyle = useAnimatedStyle(() => {
     return {
       transform: [
-        { translateY: withTiming(isTabBarVisible ? 0 : 150, { duration: 300 }) }
+        { translateY: withTiming(isTabBarVisible ? 0 : 150, { duration: reduceMotion ? 0 : 300 }) }
       ],
     };
   });
@@ -260,7 +262,12 @@ export const GlassTabBar = ({ state, descriptors, navigation }: BottomTabBarProp
       </GestureDetector>
 
       {/* 2. KHỐI ACTION CIRCLE */}
-      <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('CustomerAIChat')}>
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => navigation.navigate('CustomerAIChat')}
+        accessibilityRole="button"
+        accessibilityLabel="Mở trợ lý AI"
+      >
         <View style={styles.actionCircleContainer}>
           <BlurView intensity={70} tint="light" style={styles.actionCircle}>
             <FontAwesome5 name="robot" size={24} color="#2563EB" />

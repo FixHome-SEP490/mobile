@@ -19,16 +19,21 @@ import {
   MaterialCommunityIcons,
   FontAwesome5,
 } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store';
 import { UserRole } from '../../types';
 import { usersApi, AddressData } from '../../api/users.api';
+import { bookingsApi } from '../../api/bookings.api';
+import { ordersApi } from '../../api/orders.api';
+import { homeResumeTarget, type HomeResumeItem } from './customer-bookings-history';
+import { orderDetailTarget } from './customer-order-detail';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { useChatUnreadCount } from '../../hooks/useChatUnreadCount';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomSheetModal, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
+import * as Haptics from 'expo-haptics';
 
 const { width } = Dimensions.get('window');
 
@@ -41,6 +46,11 @@ interface ServiceItem {
   pedestalColor: string;
   isHot?: boolean;
   imageSource?: any;
+  // Deep-link target on CustomerServices: categoryCode filters by the
+  // Backend's seeded category, query pre-fills the search box. At least
+  // one of the two should be set or the tile just opens the full list.
+  categoryCode?: string;
+  query?: string;
 }
 
 const getPopularServices = (colors: any): ServiceItem[] => [
@@ -52,6 +62,7 @@ const getPopularServices = (colors: any): ServiceItem[] => [
     iconColor: '#0284C7',
     pedestalColor: '#E0F2FE',
     imageSource: require('../../../assets/air-conditioner.png'),
+    categoryCode: 'DIEN_LANH',
   },
   {
     id: 'plumbing',
@@ -61,6 +72,8 @@ const getPopularServices = (colors: any): ServiceItem[] => [
     iconColor: '#0D9488',
     pedestalColor: '#CCFBF1',
     imageSource: require('../../../assets/water-pipeline.png'),
+    categoryCode: 'DIEN_NUOC',
+    query: 'nước',
   },
   {
     id: 'electricity',
@@ -70,6 +83,8 @@ const getPopularServices = (colors: any): ServiceItem[] => [
     iconColor: '#EAB308',
     pedestalColor: '#FEF9C3',
     imageSource: require('../../../assets/voltage-cabinet.png'),
+    categoryCode: 'DIEN_NUOC',
+    query: 'điện',
   },
   {
     id: 'drainage',
@@ -79,6 +94,7 @@ const getPopularServices = (colors: any): ServiceItem[] => [
     iconColor: '#4F46E5',
     pedestalColor: '#E0E7FF',
     imageSource: require('../../../assets/unclogging-drains.png'),
+    categoryCode: 'DIEN_NUOC',
   },
   {
     id: 'ac_repair',
@@ -88,6 +104,7 @@ const getPopularServices = (colors: any): ServiceItem[] => [
     iconColor: colors.primary,
     pedestalColor: '#DBEAFE',
     imageSource: require('../../../assets/tv-repair.png'),
+    query: 'tivi',
   },
   {
     id: 'ac_install',
@@ -97,6 +114,7 @@ const getPopularServices = (colors: any): ServiceItem[] => [
     iconColor: '#059669',
     pedestalColor: '#D1FAE5',
     imageSource: require('../../../assets/home-appliance-repair.png'),
+    categoryCode: 'BEP_GIA_DUNG',
   },
   {
     id: 'washer_repair',
@@ -106,6 +124,8 @@ const getPopularServices = (colors: any): ServiceItem[] => [
     iconColor: '#7C3AED',
     pedestalColor: '#EDE9FE',
     imageSource: require('../../../assets/washing-machine.png'),
+    categoryCode: 'DIEN_LANH',
+    query: 'máy giặt',
   },
   {
     id: 'fridge_repair',
@@ -115,6 +135,8 @@ const getPopularServices = (colors: any): ServiceItem[] => [
     iconColor: '#EA580C',
     pedestalColor: '#FFEDD5',
     imageSource: require('../../../assets/refrigerator.png'),
+    categoryCode: 'DIEN_LANH',
+    query: 'tủ lạnh',
   },
 ];
 
@@ -134,12 +156,9 @@ export default function CustomerHomeScreen() {
   const { user, isAuthenticated } = useAuthStore();
   const [selectedAddress, setSelectedAddress] = useState('Đang tải địa chỉ...');
   const [addresses, setAddresses] = useState<AddressData[]>([]);
+  const [resume, setResume] = useState<HomeResumeItem | null>(null);
   const addressSheetRef = useRef<BottomSheetModal>(null);
   const snapPoints = useMemo(() => ['50%', '80%'], []);
-
-  const openAddressSheet = useCallback(() => {
-    addressSheetRef.current?.present();
-  }, []);
 
   const closeAddressSheet = useCallback(() => {
     addressSheetRef.current?.dismiss();
@@ -179,9 +198,45 @@ export default function CustomerHomeScreen() {
     load();
   }, [fetchAddress]);
 
-  const handleSelectAddress = () => {
-    openAddressSheet();
-  };
+  // Active-order resume (read-only): at most one concise card from real
+  // Booking/Order data. Hidden on error/unknown data — never a false claim.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      const session = useAuthStore.getState();
+      const ownerId = session.user?.id ?? null;
+      if (!session.isAuthenticated || session.user?.role !== UserRole.CUSTOMER || !ownerId) {
+        setResume(null);
+        return;
+      }
+      void (async () => {
+        try {
+          const [bookingsPage, orders] = await Promise.all([
+            bookingsApi.getMyBookingsPage(1, 5),
+            ordersApi.getMyOrders(),
+          ]);
+          if (cancelled || useAuthStore.getState().user?.id !== ownerId) return;
+          setResume(homeResumeTarget(bookingsPage.data ?? [], orders ?? []));
+        } catch {
+          if (!cancelled) setResume(null);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
+
+  const openResume = useCallback(() => {
+    if (!resume) return;
+    Haptics.selectionAsync();
+    if (resume.kind === 'order') {
+      const target = orderDetailTarget(resume.orderId);
+      if (target) navigation.navigate('CustomerOrderDetail', { serviceOrderId: target });
+    } else {
+      navigation.navigate('CustomerMatching', { bookingId: resume.bookingId });
+    }
+  }, [navigation, resume]);
 
 
   const renderServiceIcon = (item: ServiceItem) => {
@@ -203,28 +258,24 @@ export default function CustomerHomeScreen() {
     return <Ionicons name={item.iconName as any} size={28} color={item.iconColor} />;
   };
 
-  const handleServicePress = (_service: ServiceItem) => {
-    navigation.navigate('CustomerServices');
+  const handleServicePress = (service: ServiceItem) => {
+    Haptics.selectionAsync();
+    navigation.navigate('CustomerServices', {
+      categoryCode: service.categoryCode,
+      query: service.query,
+    });
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
-      {/* 1. Header Address Selector & Messages */}
+      {/* 1. Header Brand & Messages */}
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.addressSelector} 
-          onPress={handleSelectAddress}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="location" size={24} color={colors.error} />
-          <View style={styles.addressTextContainer}>
-            <Text style={styles.addressLabel}>Giao đến</Text>
-            <Text style={styles.addressValue} numberOfLines={1}>{selectedAddress}</Text>
-          </View>
-          <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
-        </TouchableOpacity>
+        <View style={styles.brandRow}>
+          <Image source={require('../../../assets/icon.png')} style={styles.brandLogo} />
+          <Text style={styles.brandName}>FixHome</Text>
+        </View>
 
         <View style={styles.headerActions}>
           {/* Messages */}
@@ -232,6 +283,9 @@ export default function CustomerHomeScreen() {
             style={styles.headerIconBtn}
             onPress={() => navigation.navigate('ChatList')}
             activeOpacity={0.8}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            accessibilityRole="button"
+            accessibilityLabel={chatUnread > 0 ? `Tin nhắn, ${chatUnread} tin chưa đọc` : 'Tin nhắn'}
           >
             <Ionicons name="chatbubble-ellipses-outline" size={22} />
             {chatUnread > 0 && (
@@ -254,7 +308,7 @@ export default function CustomerHomeScreen() {
 
         {/* 2. Hero Search Banner (Xanh Dương Royal Gradient - Giống Hình 1 Vua Thợ) */}
         <LinearGradient
-          colors={[colors.primaryDark, colors.primary, '#3B82F6']}
+          colors={[colors.primaryDark, colors.primary, colors.primary]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.heroCard}
@@ -268,7 +322,7 @@ export default function CustomerHomeScreen() {
             <TextInput
               style={styles.searchInput}
               placeholder="Điện, nước, máy lạnh, thông cống..."
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor={colors.muted}
               value={searchQuery}
               onChangeText={setSearchQuery}
               onSubmitEditing={handleSearch}
@@ -278,12 +332,38 @@ export default function CustomerHomeScreen() {
               style={styles.searchBtn}
               onPress={handleSearch}
               activeOpacity={0.85}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              accessibilityRole="button"
+              accessibilityLabel="Tìm kiếm dịch vụ"
             >
               <Ionicons name="search" size={18} color={colors.surface} />
             </TouchableOpacity>
           </View>
           
         </LinearGradient>
+
+        {/* Active-order resume: one concise card only with real active data */}
+        {!!resume && (
+          <TouchableOpacity
+            style={styles.resumeCard}
+            onPress={openResume}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`${resume.title}. ${resume.detail}`}
+          >
+            <View style={styles.resumeIconBox}>
+              <Ionicons name="time-outline" size={22} color={colors.surface} />
+            </View>
+            <View style={styles.resumeTextBox}>
+              <Text style={styles.resumeTitle}>{resume.title}</Text>
+              <Text style={styles.resumeDetail} numberOfLines={1}>{resume.detail}</Text>
+            </View>
+            <View style={styles.resumeCta}>
+              <Text style={styles.resumeCtaText}>Tiếp tục</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.surface} />
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* 5. Hero Feature Cards (3 Thẻ Lớn: Đặt thợ, AI Chẩn đoán, FixHome Mall) */}
         <View style={styles.featureCardsRow}>
@@ -294,9 +374,9 @@ export default function CustomerHomeScreen() {
             onPress={() => navigation.navigate('CustomerServices')}
           >
             <View style={styles.featureCardBadge}>
-              <Text style={styles.featureCardBadgeText}>Thợ giỏi gần bạn</Text>
+              <Text style={styles.featureCardBadgeText}>Kỹ thuật viên gần bạn</Text>
             </View>
-            <Text style={styles.featureCardTitle}>Đặt thợ</Text>
+            <Text style={styles.featureCardTitle}>Đặt lịch</Text>
             <Text style={styles.featureCardDesc}>Có mặt 15p</Text>
             <View style={styles.featureCardIconBox}>
               <FontAwesome5 name="user-cog" size={32} color="#0284C7" />
@@ -387,7 +467,7 @@ export default function CustomerHomeScreen() {
           >
             <View style={styles.promoContent}>
               <View style={styles.promoTag}>
-                <Text style={styles.promoTagText}>ĐẶT THỢ NGAY</Text>
+                <Text style={styles.promoTagText}>ĐẶT LỊCH NGAY</Text>
               </View>
               <Text style={styles.promoTitle}>Khám phá dịch vụ FixHome</Text>
               <Text style={styles.promoSubtitle}>Xem dịch vụ và thông tin giá đang có trên hệ thống</Text>
@@ -437,7 +517,13 @@ export default function CustomerHomeScreen() {
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Chọn địa chỉ giao hàng</Text>
-            <TouchableOpacity onPress={closeAddressSheet} style={styles.closeBtn}>
+            <TouchableOpacity
+              onPress={closeAddressSheet}
+              style={styles.closeBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Đóng"
+            >
               <Ionicons name="close" size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -460,6 +546,7 @@ export default function CustomerHomeScreen() {
                 <TouchableOpacity
                   style={[styles.addressItem, selectedAddress === item.line1 && styles.addressItemActive]}
                   onPress={() => {
+                    Haptics.selectionAsync();
                     setSelectedAddress(item.line1);
                     closeAddressSheet();
                   }}
@@ -467,7 +554,7 @@ export default function CustomerHomeScreen() {
                   <Ionicons 
                     name={selectedAddress === item.line1 ? "radio-button-on" : "radio-button-off"} 
                     size={22} 
-                    color={selectedAddress === item.line1 ? colors.primary : "#94A3B8"} 
+                    color={selectedAddress === item.line1 ? colors.primary : colors.muted}
                   />
                   <View style={styles.addressItemTextContainer}>
                     <Text style={[styles.addressItemLabel, selectedAddress === item.line1 && styles.addressItemLabelActive]}>
@@ -496,24 +583,21 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     paddingBottom: 20,
   },
 
-  // Address Selector
-  addressSelector: {
+  // Brand
+  brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    flex: 1,
-    marginRight: 16,
-  },
-  addressTextContainer: {
+    gap: 10,
     flex: 1,
   },
-  addressLabel: {
-    fontSize: 11,
-    color: colors.textSecondary,
+  brandLogo: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
   },
-  addressValue: {
-    fontSize: 14,
-    fontWeight: '600',
+  brandName: {
+    fontSize: 22,
+    fontWeight: '800',
     color: colors.text,
   },
 
@@ -539,7 +623,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
   },
   onlineBadge: {
     position: 'absolute',
@@ -574,7 +658,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
     paddingHorizontal: 8,
     paddingVertical: 6,
     borderRadius: 14,
@@ -596,7 +680,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     position: 'relative',
   },
   headerIconBtnAuth: {
-    backgroundColor: '#DBEAFE',
+    backgroundColor: colors.primaryTint,
   },
   notificationBadge: {
     position: 'absolute',
@@ -679,6 +763,47 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
 
   // 5. Feature Cards Row
+  resumeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: colors.primary,
+    gap: 10,
+  },
+  resumeIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  resumeTextBox: {
+    flex: 1,
+  },
+  resumeTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.surface,
+  },
+  resumeDetail: {
+    fontSize: 12,
+    color: colors.surface,
+    opacity: 0.9,
+  },
+  resumeCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  resumeCtaText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.surface,
+  },
   featureCardsRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
@@ -874,7 +999,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     marginBottom: 2,
   },
   promoSubtitle: {
-    color: '#94A3B8',
+    color: colors.muted,
     fontSize: 11,
     marginBottom: 10,
   },
@@ -964,7 +1089,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     borderBottomColor: colors.border,
   },
   addressItemActive: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
   },
   addressItemTextContainer: {
     marginLeft: 12,

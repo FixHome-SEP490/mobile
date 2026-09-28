@@ -6,8 +6,8 @@ import type { CreateQuotationItem, CreateQuotationPayload } from '../../api/orde
  * PARTS on an assigned ACTIVE EN_ROUTE detail with
  * `pricingMode='inspection_required'`, Backend `arrivalVerified===true`, and
  * no existing SENT/APPROVED quotation (no silent supersede). Technician parts
- * default to no_warranty; paid_warranty needs fee > 0 and term 1..3650 and is
- * counted ONCE per line (never x quantity). FixHome catalog parts are NOT
+ * default to no_warranty; paid_warranty needs term 1..3650 (no separate fee —
+ * warranty is included in the part's price). FixHome catalog parts are NOT
  * supported — no catalog picker, no fabricated IDs/prices. Totals shown are
  * honest validated integers — never PAID/APPROVED. Ambiguous POSTs lock the
  * form until the detail is reloaded.
@@ -20,8 +20,6 @@ export const QUOTE_UNIT_PRICE_MIN = 0;
 export const QUOTE_UNIT_PRICE_MAX = 999999999;
 export const QUOTE_NOTE_MAX = 5000;
 export const QUOTE_MAX_ROWS = 100;
-export const QUOTE_WARRANTY_FEE_MIN = 1;
-export const QUOTE_WARRANTY_FEE_MAX = 999999999;
 export const QUOTE_WARRANTY_TERM_MIN = 1;
 export const QUOTE_WARRANTY_TERM_MAX = 3650;
 
@@ -35,7 +33,6 @@ export interface QuoteRowDraft {
   quantity: string;
   unitPrice: string;
   warrantyOption: QuoteWarrantyOption;
-  warrantyFee: string;
   warrantyTermDays: string;
 }
 
@@ -51,7 +48,6 @@ export interface QuoteFieldErrors {
   quantity?: string;
   unitPrice?: string;
   note?: string;
-  warrantyFee?: string;
   warrantyTermDays?: string;
 }
 
@@ -76,9 +72,8 @@ export interface QuoteState {
   needsVerify: boolean;
   /** Last submit returned 201 and refreshed. */
   sent: boolean;
-  /** Honest validated cost (labor+parts line totals), warranty fees separate. */
+  /** Honest validated cost (labor+parts line totals). */
   quotedCostText: string | null;
-  quotedWarrantyText: string | null;
   /** Kept for the single-line labor flow: equals quotedCostText when valid. */
   quotedTotalText: string | null;
   /** Kept for the single-line labor flow. */
@@ -94,7 +89,6 @@ const emptyRow = (key: string, kind: QuoteRowKind = 'labor'): QuoteRowDraft => (
   quantity: '',
   unitPrice: '',
   warrantyOption: 'no_warranty',
-  warrantyFee: '',
   warrantyTermDays: '',
 });
 
@@ -110,7 +104,6 @@ export const initialQuoteState: QuoteState = {
   needsVerify: false,
   sent: false,
   quotedCostText: null,
-  quotedWarrantyText: null,
   quotedTotalText: null,
   draft: emptyDraft(),
   fieldErrors: {},
@@ -190,7 +183,6 @@ export interface ValidQuoteRow {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
-  warrantyFee: number | null;
   warrantyTermDays: number | null;
 }
 
@@ -210,15 +202,8 @@ function validateRow(row: QuoteRowDraft): { valid: ValidQuoteRow | null; errors:
   if (unitPrice === null || unitPrice < QUOTE_UNIT_PRICE_MIN || unitPrice > QUOTE_UNIT_PRICE_MAX) {
     errors.unitPrice = `Đơn giá là số nguyên từ ${QUOTE_UNIT_PRICE_MIN} đến ${QUOTE_UNIT_PRICE_MAX}đ.`;
   }
-  let warrantyFee: number | null = null;
   let warrantyTermDays: number | null = null;
   if (row.kind === 'part' && row.warrantyOption === 'paid_warranty') {
-    const fee = parseInteger(row.warrantyFee);
-    if (fee === null || fee < QUOTE_WARRANTY_FEE_MIN || fee > QUOTE_WARRANTY_FEE_MAX) {
-      errors.warrantyFee = `Phí bảo hành là số nguyên từ ${QUOTE_WARRANTY_FEE_MIN} đến ${QUOTE_WARRANTY_FEE_MAX}đ.`;
-    } else {
-      warrantyFee = fee;
-    }
     const term = parseInteger(row.warrantyTermDays);
     if (term === null || term < QUOTE_WARRANTY_TERM_MIN || term > QUOTE_WARRANTY_TERM_MAX) {
       errors.warrantyTermDays = `Thời hạn bảo hành là số nguyên từ ${QUOTE_WARRANTY_TERM_MIN} đến ${QUOTE_WARRANTY_TERM_MAX} ngày.`;
@@ -236,7 +221,6 @@ function validateRow(row: QuoteRowDraft): { valid: ValidQuoteRow | null; errors:
       quantity,
       unitPrice,
       lineTotal: quantity * unitPrice,
-      warrantyFee,
       warrantyTermDays,
     },
     errors,
@@ -253,7 +237,6 @@ export function validateQuoteRows(
   rowErrors: Record<string, QuoteFieldErrors>;
   noteError?: string;
   costTotal: number;
-  warrantyTotal: number;
 } {
   const rowErrors: Record<string, QuoteFieldErrors> = {};
   const lines: ValidQuoteRow[] = [];
@@ -274,20 +257,18 @@ export function validateQuoteRows(
     failed = true;
   }
   if (failed) {
-    return { lines: null, note: null, rowErrors, noteError, costTotal: 0, warrantyTotal: 0 };
+    return { lines: null, note: null, rowErrors, noteError, costTotal: 0 };
   }
   // Worst case 100 x 1000 x 999999999 < 2^53: exact integer arithmetic.
   const costTotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
-  // Paid fee counted ONCE per eligible line, never multiplied by quantity.
-  const warrantyTotal = lines.reduce((sum, line) => sum + (line.warrantyFee ?? 0), 0);
-  return { lines, note: note.length > 0 ? note : null, rowErrors, noteError, costTotal, warrantyTotal };
+  return { lines, note: note.length > 0 ? note : null, rowErrors, noteError, costTotal };
 }
 
 function toPayloadItem(line: ValidQuoteRow): CreateQuotationItem {
   if (line.kind === 'labor') {
     return { type: 'labor', description: line.description, quantity: line.quantity, unitPrice: line.unitPrice };
   }
-  if (line.warrantyFee !== null && line.warrantyTermDays !== null) {
+  if (line.warrantyTermDays !== null) {
     return {
       type: 'parts_equipment',
       description: line.description,
@@ -295,7 +276,6 @@ function toPayloadItem(line: ValidQuoteRow): CreateQuotationItem {
       unitPrice: line.unitPrice,
       partSource: 'technician',
       partWarrantyOption: 'paid_warranty',
-      warrantyFee: line.warrantyFee,
       warrantyTermDays: line.warrantyTermDays,
     };
   }
@@ -371,7 +351,6 @@ export function createQuotationCreateController(
     syncLegacyDraft({
       confirming: false,
       quotedCostText: null,
-      quotedWarrantyText: null,
       quotedTotalText: null,
       sent: false,
     });
@@ -414,7 +393,7 @@ export function createQuotationCreateController(
     touch();
   }
 
-  function setRowField(key: string, field: 'description' | 'quantity' | 'unitPrice' | 'warrantyFee' | 'warrantyTermDays', value: string): void {
+  function setRowField(key: string, field: 'description' | 'quantity' | 'unitPrice' | 'warrantyTermDays', value: string): void {
     if (busy || state.needsVerify) return;
     const rows = state.rows.map((row) => (row.key === key ? { ...row, [field]: value } : row));
     const rowErrors = { ...state.rowErrors };
@@ -431,7 +410,7 @@ export function createQuotationCreateController(
   function setWarrantyOption(key: string, option: QuoteWarrantyOption): void {
     if (busy || state.needsVerify) return;
     const rows = state.rows.map((row) => (row.key === key && row.kind === 'part'
-      ? { ...row, warrantyOption: option, warrantyFee: '', warrantyTermDays: '' }
+      ? { ...row, warrantyOption: option, warrantyTermDays: '' }
       : row));
     const rowErrors = { ...state.rowErrors };
     delete rowErrors[key];
@@ -456,7 +435,7 @@ export function createQuotationCreateController(
     const validated = validateQuoteRows(state.rows, state.note);
     if (!validated.lines) {
       syncLegacyDraft({ rowErrors: validated.rowErrors, noteError: validated.noteError, confirming: false,
-        quotedCostText: null, quotedWarrantyText: null, quotedTotalText: null });
+        quotedCostText: null, quotedTotalText: null });
       return;
     }
     syncLegacyDraft({
@@ -464,7 +443,6 @@ export function createQuotationCreateController(
       noteError: undefined,
       confirming: true,
       quotedCostText: moneyText(validated.costTotal),
-      quotedWarrantyText: moneyText(validated.warrantyTotal),
       quotedTotalText: moneyText(validated.costTotal),
       error: null,
     });
@@ -472,7 +450,7 @@ export function createQuotationCreateController(
 
   function cancelConfirm(): void {
     if (busy) return;
-    publish({ confirming: false, quotedCostText: null, quotedWarrantyText: null, quotedTotalText: null });
+    publish({ confirming: false, quotedCostText: null, quotedTotalText: null });
   }
 
   async function submit(): Promise<void> {
@@ -487,7 +465,7 @@ export function createQuotationCreateController(
     const validated = validateQuoteRows(state.rows, state.note);
     if (!validated.lines) {
       syncLegacyDraft({ rowErrors: validated.rowErrors, noteError: validated.noteError, confirming: false,
-        quotedCostText: null, quotedWarrantyText: null, quotedTotalText: null });
+        quotedCostText: null, quotedTotalText: null });
       return;
     }
     busy = true;
@@ -536,7 +514,6 @@ export function createQuotationCreateController(
           busy: false,
           confirming: false,
           quotedCostText: null,
-          quotedWarrantyText: null,
           quotedTotalText: null,
           error: `Máy chủ từ chối báo giá (mã ${status}). Vui lòng tải lại chi tiết đơn và kiểm tra báo giá hiện có.`,
         });
@@ -549,7 +526,6 @@ export function createQuotationCreateController(
         busy: false,
         confirming: false,
         quotedCostText: null,
-        quotedWarrantyText: null,
         quotedTotalText: null,
         needsVerify: true,
         error: 'Chưa xác nhận báo giá đã được tạo hay chưa. Hãy tải lại chi tiết đơn để kiểm tra trước khi thử lại.',

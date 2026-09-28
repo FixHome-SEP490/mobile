@@ -16,6 +16,7 @@
     "axios": "^1.20.0",
     "expo": "~57.0.25",
     "expo-blur": "~57.0.3",
+    "expo-camera": "~57.0.5",
     "expo-haptics": "~57.0.3",
     "expo-image-manipulator": "~57.0.20",
     "expo-image-picker": "~57.0.20",

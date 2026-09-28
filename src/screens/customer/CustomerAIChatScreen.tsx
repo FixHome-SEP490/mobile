@@ -27,6 +27,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
@@ -314,6 +315,7 @@ export default function CustomerAIChatScreen() {
   // -------------------------------------------------------------- images
 
   const pickImages = useCallback(async () => {
+    Haptics.selectionAsync();
     const result = await pickImagesForAi(pendingImages.length);
     if (result.problemVi) Alert.alert('Ảnh', result.problemVi);
     if (result.images.length > 0) {
@@ -322,6 +324,7 @@ export default function CustomerAIChatScreen() {
   }, [pendingImages.length]);
 
   const takePhoto = useCallback(async () => {
+    Haptics.selectionAsync();
     const result = await takePhotoForAi(pendingImages.length);
     if (result.problemVi) Alert.alert('Ảnh', result.problemVi);
     if (result.images.length > 0) {
@@ -348,6 +351,7 @@ export default function CustomerAIChatScreen() {
           text: 'Bắt đầu mới',
           style: 'destructive',
           onPress: () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
             sessionId.current = null;
             setPinnedService(null);
             setTurnCount(0);
@@ -435,7 +439,13 @@ export default function CustomerAIChatScreen() {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.headerBtn}
+          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+          accessibilityRole="button"
+          accessibilityLabel="Quay lại"
+        >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerTitleBox}>
@@ -450,6 +460,8 @@ export default function CustomerAIChatScreen() {
           onPress={startOver}
           style={[styles.headerBtn, turnCount === 0 && styles.headerBtnMuted]}
           disabled={turnCount === 0}
+          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+          accessibilityRole="button"
           accessibilityLabel="Bắt đầu phiên chat mới"
         >
           <Ionicons
@@ -489,9 +501,12 @@ export default function CustomerAIChatScreen() {
             <TouchableOpacity
               style={styles.pinnedBtn}
               activeOpacity={0.85}
-              onPress={() => goToBooking(pinnedService)}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                goToBooking(pinnedService);
+              }}
             >
-              <Ionicons name="calendar-outline" size={15} color="#FFFFFF" />
+              <Ionicons name="calendar-outline" size={15} color={colors.surface} />
               <Text style={styles.pinnedBtnText}>Đặt thợ</Text>
             </TouchableOpacity>
           </View>
@@ -509,9 +524,12 @@ export default function CustomerAIChatScreen() {
                 <Image source={{ uri: image.dataUri }} style={styles.trayThumb} />
                 <TouchableOpacity
                   style={styles.trayRemove}
-                  onPress={() =>
-                    setPendingImages((prev) => prev.filter((_, i) => i !== index))
-                  }
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setPendingImages((prev) => prev.filter((_, i) => i !== index));
+                  }}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  accessibilityRole="button"
                   accessibilityLabel="Bỏ ảnh này"
                 >
                   <Ionicons name="close" size={12} color={colors.surface} />
@@ -525,10 +543,22 @@ export default function CustomerAIChatScreen() {
         )}
 
         <View style={[styles.composer, { paddingBottom: isKeyboardVisible ? 0 : Math.max(insets.bottom, 10) }]}>
-          <TouchableOpacity style={styles.composerBtn} onPress={pickImages}>
+          <TouchableOpacity
+            style={styles.composerBtn}
+            onPress={pickImages}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel="Chọn ảnh từ thư viện"
+          >
             <Ionicons name="image-outline" size={22} color={colors.primary} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.composerBtn} onPress={takePhoto}>
+          <TouchableOpacity
+            style={styles.composerBtn}
+            onPress={takePhoto}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel="Chụp ảnh"
+          >
             <Ionicons name="camera-outline" size={22} color={colors.primary} />
           </TouchableOpacity>
           <TextInput
@@ -541,8 +571,12 @@ export default function CustomerAIChatScreen() {
           />
           <TouchableOpacity
             style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
-            onPress={() => send(input, pendingImages)}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              send(input, pendingImages);
+            }}
             disabled={!canSend}
+            accessibilityRole="button"
             accessibilityLabel="Gửi"
           >
             {isThinking ? (
@@ -675,7 +709,10 @@ function DiagnosisCard({
           key={service.serviceCode}
           style={styles.bookBtn}
           activeOpacity={0.85}
-          onPress={() => onBook(service)}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            onBook(service);
+          }}
         >
           <Ionicons name="calendar-outline" size={16} color={colors.surface} />
           <Text style={styles.bookBtnText}>Đặt thợ · {service.nameVi}</Text>
@@ -753,7 +790,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   userBubble: {
     alignSelf: 'flex-end',
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.primary,
     borderBottomRightRadius: 4,
     marginHorizontal: 16,
     marginVertical: 4,
@@ -773,7 +810,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#DBEAFE',
+    backgroundColor: colors.primaryTint,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
@@ -871,7 +908,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   bookBtnText: { color: colors.surface, fontWeight: '700', fontSize: 14 },
 
-  disclaimer: { fontSize: 10, color: '#94A3B8', marginTop: 10, lineHeight: 15 },
+  disclaimer: { fontSize: 10, color: colors.muted, marginTop: 10, lineHeight: 15 },
 
   pinnedBar: {
     flexDirection: 'row',
@@ -879,7 +916,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     gap: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.primarySoft,
     borderTopWidth: 1,
     borderTopColor: '#BFDBFE',
   },
@@ -887,22 +924,22 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   pinnedLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#1D4ED8',
+    color: colors.primaryDark,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
-  pinnedValue: { fontSize: 14, fontWeight: '700', color: '#0F172A', marginTop: 2 },
-  pinnedHint: { fontSize: 11, color: '#64748B', marginTop: 2 },
+  pinnedValue: { fontSize: 14, fontWeight: '700', color: colors.text, marginTop: 2 },
+  pinnedHint: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
   pinnedBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primaryStrong,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  pinnedBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
+  pinnedBtnText: { color: colors.surface, fontWeight: '700', fontSize: 13 },
 
   tray: {
     maxHeight: 86,

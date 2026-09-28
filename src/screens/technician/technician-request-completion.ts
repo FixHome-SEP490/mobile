@@ -1,15 +1,15 @@
 import { orderDetailTarget } from '../customer/customer-order-detail';
 
 /**
- * Bounded technician REQUEST COMPLETION (dev/test orders only in this slice).
- * Runs only on an assigned ACTIVE UNDER_REPAIR detail with AFTER photos on
- * record, no completion requested yet, no pending additional costs, and either
- * FIXED_PRICE or INSPECTION_REQUIRED with an APPROVED quotation (SENT always
- * blocks). These UI checks are preliminary — the Backend transaction is the
- * final validator. One explicit two-tap confirmation, one-shot POST, no
- * auto-repost on ambiguity. This requests completion ONLY: it never marks the
- * order COMPLETED, never pays/settles, and the durable invoice stays UNPAID
- * until customer acceptance and payment (separate flows).
+ * Bounded technician REQUEST COMPLETION. Runs only on an assigned ACTIVE
+ * UNDER_REPAIR detail with AFTER photos on record, no completion requested
+ * yet, no pending additional costs, and either FIXED_PRICE or
+ * INSPECTION_REQUIRED with an APPROVED quotation (SENT always blocks). These
+ * UI checks are preliminary — the Backend transaction is the final validator.
+ * One explicit two-tap confirmation, one-shot POST, no auto-repost on
+ * ambiguity. This requests completion ONLY: it never marks the order
+ * COMPLETED, never pays/settles, and the durable invoice stays UNPAID until
+ * customer acceptance and payment (separate flows).
  */
 
 /** Explicit two-tap confirmation copy; screen renders this verbatim. */
@@ -49,12 +49,6 @@ export interface RequestCompletionDeps {
   getOrder: () => RequestCompletionOrderGate | null;
   getTechnicianId: () => string | null;
   isFocused: () => boolean;
-  /**
-   * Dev-release gate: the screen passes `() => __DEV__`. Confirmation and
-   * submit fail closed when this is omitted or false — even for a stale
-   * confirmation opened while it was true. Production builds can never POST.
-   */
-  isDevBuild?: () => boolean;
   requestCompletion: (orderId: string) => Promise<unknown>;
   /** GET-only reconciliation: reload order, evidence, and invoice. */
   refreshDetail: () => Promise<void>;
@@ -152,7 +146,6 @@ export function createRequestCompletionController(
 
   function requestConfirm(): void {
     if (busy || state.needsVerify) return;
-    if (deps.isDevBuild?.() !== true) return;
     if (!deps.getTechnicianId() || !deps.isFocused()) return;
     const target = requestCompletionTarget(deps.getOrder());
     if (!target) {
@@ -169,12 +162,6 @@ export function createRequestCompletionController(
 
   async function submit(): Promise<void> {
     if (busy || !state.confirming || state.needsVerify) return;
-    // Re-check the release gate at POST time: a confirmation opened in a dev
-    // build must never POST once the build is not dev. Drops silently.
-    if (deps.isDevBuild?.() !== true) {
-      publish({ confirming: false });
-      return;
-    }
     const technicianId = deps.getTechnicianId();
     if (!technicianId || !deps.isFocused()) return;
     const target = requestCompletionTarget(deps.getOrder());

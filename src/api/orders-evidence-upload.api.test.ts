@@ -33,7 +33,7 @@ describe('uploadEvidenceBefore multipart contract (BEFORE only)', () => {
     expect(appends).toContainEqual(['type', 'before']);
     expect(appends).toContainEqual(['file', image]);
     expect(appends.filter(([name]) => name === 'type')).toHaveLength(1);
-    expect(config).toEqual({ headers: { 'Content-Type': 'multipart/form-data' } });
+    expect(config).toEqual({ headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60000 });
   });
 
   it('never hardcodes a multipart boundary and never sends another evidence type', async () => {
@@ -53,7 +53,7 @@ describe('uploadEvidenceBefore multipart contract (BEFORE only)', () => {
     expect(post).toHaveBeenCalledWith(
       expect.any(String),
       expect.anything(),
-      { headers: { 'Content-Type': 'multipart/form-data' } },
+      { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60000 },
     );
   });
 
@@ -76,7 +76,7 @@ describe('uploadEvidenceAfter multipart contract (AFTER only)', () => {
     expect(appends).toContainEqual(['type', 'after']);
     expect(appends).toContainEqual(['file', image]);
     expect(appends.map(([name]) => name).sort()).toEqual(['file', 'type']);
-    expect(config).toEqual({ headers: { 'Content-Type': 'multipart/form-data' } });
+    expect(config).toEqual({ headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60000 });
     expect(JSON.stringify(config)).not.toMatch(/boundary/i);
     const rendered = JSON.stringify(appends);
     expect(rendered).not.toMatch(/before|additional/i);
