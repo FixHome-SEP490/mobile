@@ -19,12 +19,16 @@ import {
   MaterialCommunityIcons,
   FontAwesome5,
 } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store';
 import { UserRole } from '../../types';
 import { usersApi, AddressData } from '../../api/users.api';
+import { bookingsApi } from '../../api/bookings.api';
+import { ordersApi } from '../../api/orders.api';
+import { homeResumeTarget, type HomeResumeItem } from './customer-bookings-history';
+import { orderDetailTarget } from './customer-order-detail';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { useChatUnreadCount } from '../../hooks/useChatUnreadCount';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -152,6 +156,7 @@ export default function CustomerHomeScreen() {
   const { user, isAuthenticated } = useAuthStore();
   const [selectedAddress, setSelectedAddress] = useState('Đang tải địa chỉ...');
   const [addresses, setAddresses] = useState<AddressData[]>([]);
+  const [resume, setResume] = useState<HomeResumeItem | null>(null);
   const addressSheetRef = useRef<BottomSheetModal>(null);
   const snapPoints = useMemo(() => ['50%', '80%'], []);
 
@@ -192,6 +197,46 @@ export default function CustomerHomeScreen() {
     };
     load();
   }, [fetchAddress]);
+
+  // Active-order resume (read-only): at most one concise card from real
+  // Booking/Order data. Hidden on error/unknown data — never a false claim.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      const session = useAuthStore.getState();
+      const ownerId = session.user?.id ?? null;
+      if (!session.isAuthenticated || session.user?.role !== UserRole.CUSTOMER || !ownerId) {
+        setResume(null);
+        return;
+      }
+      void (async () => {
+        try {
+          const [bookingsPage, orders] = await Promise.all([
+            bookingsApi.getMyBookingsPage(1, 5),
+            ordersApi.getMyOrders(),
+          ]);
+          if (cancelled || useAuthStore.getState().user?.id !== ownerId) return;
+          setResume(homeResumeTarget(bookingsPage.data ?? [], orders ?? []));
+        } catch {
+          if (!cancelled) setResume(null);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
+
+  const openResume = useCallback(() => {
+    if (!resume) return;
+    Haptics.selectionAsync();
+    if (resume.kind === 'order') {
+      const target = orderDetailTarget(resume.orderId);
+      if (target) navigation.navigate('CustomerOrderDetail', { serviceOrderId: target });
+    } else {
+      navigation.navigate('CustomerMatching', { bookingId: resume.bookingId });
+    }
+  }, [navigation, resume]);
 
 
   const renderServiceIcon = (item: ServiceItem) => {
@@ -297,6 +342,29 @@ export default function CustomerHomeScreen() {
           
         </LinearGradient>
 
+        {/* Active-order resume: one concise card only with real active data */}
+        {!!resume && (
+          <TouchableOpacity
+            style={styles.resumeCard}
+            onPress={openResume}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`${resume.title}. ${resume.detail}`}
+          >
+            <View style={styles.resumeIconBox}>
+              <Ionicons name="time-outline" size={22} color={colors.surface} />
+            </View>
+            <View style={styles.resumeTextBox}>
+              <Text style={styles.resumeTitle}>{resume.title}</Text>
+              <Text style={styles.resumeDetail} numberOfLines={1}>{resume.detail}</Text>
+            </View>
+            <View style={styles.resumeCta}>
+              <Text style={styles.resumeCtaText}>Tiếp tục</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.surface} />
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* 5. Hero Feature Cards (3 Thẻ Lớn: Đặt thợ, AI Chẩn đoán, FixHome Mall) */}
         <View style={styles.featureCardsRow}>
           {/* Card 1: Đặt thợ */}
@@ -306,9 +374,9 @@ export default function CustomerHomeScreen() {
             onPress={() => navigation.navigate('CustomerServices')}
           >
             <View style={styles.featureCardBadge}>
-              <Text style={styles.featureCardBadgeText}>Thợ giỏi gần bạn</Text>
+              <Text style={styles.featureCardBadgeText}>Kỹ thuật viên gần bạn</Text>
             </View>
-            <Text style={styles.featureCardTitle}>Đặt thợ</Text>
+            <Text style={styles.featureCardTitle}>Đặt lịch</Text>
             <Text style={styles.featureCardDesc}>Có mặt 15p</Text>
             <View style={styles.featureCardIconBox}>
               <FontAwesome5 name="user-cog" size={32} color="#0284C7" />
@@ -399,7 +467,7 @@ export default function CustomerHomeScreen() {
           >
             <View style={styles.promoContent}>
               <View style={styles.promoTag}>
-                <Text style={styles.promoTagText}>ĐẶT THỢ NGAY</Text>
+                <Text style={styles.promoTagText}>ĐẶT LỊCH NGAY</Text>
               </View>
               <Text style={styles.promoTitle}>Khám phá dịch vụ FixHome</Text>
               <Text style={styles.promoSubtitle}>Xem dịch vụ và thông tin giá đang có trên hệ thống</Text>
@@ -695,6 +763,47 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
 
   // 5. Feature Cards Row
+  resumeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: colors.primary,
+    gap: 10,
+  },
+  resumeIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  resumeTextBox: {
+    flex: 1,
+  },
+  resumeTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.surface,
+  },
+  resumeDetail: {
+    fontSize: 12,
+    color: colors.surface,
+    opacity: 0.9,
+  },
+  resumeCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  resumeCtaText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.surface,
+  },
   featureCardsRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,

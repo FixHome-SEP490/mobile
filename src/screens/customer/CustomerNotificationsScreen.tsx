@@ -22,6 +22,7 @@ export default function CustomerNotificationsScreen() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -34,13 +35,14 @@ export default function CustomerNotificationsScreen() {
         } else {
           setNotifications([]);
         }
+        setLoadError(null);
       } else {
-        setNotifications([]);
+        // A failed load is not an empty inbox: keep the last list and show retry.
+        setLoadError('Không thể tải thông báo. Kiểm tra kết nối rồi thử lại.');
       }
     } catch (error) {
       console.error('Lỗi khi tải thông báo:', error);
-      // Fallback empty on error
-      setNotifications([]);
+      setLoadError('Không thể tải thông báo. Kiểm tra kết nối rồi thử lại.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -56,6 +58,7 @@ export default function CustomerNotificationsScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
+    setLoadError(null);
     void fetchNotifications();
   };
 
@@ -153,6 +156,25 @@ export default function CustomerNotificationsScreen() {
 
   const renderEmpty = () => {
     if (loading) return null;
+    if (loadError && notifications.length === 0) {
+      return (
+        <View style={styles.emptyContainer} accessibilityRole="alert">
+          <View style={styles.emptyIconCircle}>
+            <MaterialCommunityIcons name="wifi-off" size={64} color={colors.muted} />
+          </View>
+          <Text style={styles.emptyTitle}>Không tải được thông báo</Text>
+          <Text style={styles.emptyDesc}>{loadError}</Text>
+          <TouchableOpacity
+            onPress={onRefresh}
+            disabled={refreshing}
+            accessibilityRole="button"
+            style={styles.retryBtn}
+          >
+            <Text style={styles.retryText}>Thử lại</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
     return (
       <View style={styles.emptyContainer}>
         <View style={styles.emptyIconCircle}>
@@ -193,6 +215,16 @@ export default function CustomerNotificationsScreen() {
           data={notifications}
           keyExtractor={(item, index) => item.id?.toString() || index.toString()}
           renderItem={renderItem}
+          ListHeaderComponent={
+            loadError && notifications.length > 0 ? (
+              <View style={styles.errorBanner} accessibilityRole="alert">
+                <Text style={styles.errorText}>{loadError}</Text>
+                <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button">
+                  <Text style={styles.retryText}>Thử lại</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null
+          }
           ListEmptyComponent={renderEmpty}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
@@ -345,6 +377,29 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     textAlign: 'center',
     paddingHorizontal: 32,
     lineHeight: 20,
+  },
+  errorBanner: {
+    padding: 12,
+    marginBottom: 12,
+    gap: 8,
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+  },
+  errorText: {
+    fontSize: 13,
+    color: colors.primary,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  retryBtn: {
+    padding: 12,
+    marginTop: 8,
+  },
+  retryText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary,
   },
 });
 

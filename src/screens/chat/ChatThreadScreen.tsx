@@ -18,8 +18,6 @@ import { useKeyboardInset } from '../../hooks/useKeyboardInset';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
-import { BottomSheetModal, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
-//import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
 import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store/auth.store';
 import {
@@ -81,10 +79,6 @@ export default function ChatThreadScreen() {
   const typingSentAt = useRef(0);
   const typingStopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const peerTypingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  
-  // Gorhom Bottom Sheet Refs
-  const attachmentSheetRef = useRef<BottomSheetModal>(null);
-  const snapPoints = useMemo(() => ['30%', '50%'], []);
 
   const canSend = conversation?.canSend ?? true;
 
@@ -273,13 +267,6 @@ export default function ChatThreadScreen() {
 
 
 
-  // Action menu is handled by react-native-popup-menu inline
-
-  const openAttachmentMenu = useCallback(() => {
-    Haptics.selectionAsync();
-    attachmentSheetRef.current?.present();
-  }, []);
-
   // ----------------------------------------------------------------- render
 
   const renderItem = useCallback(
@@ -392,15 +379,6 @@ export default function ChatThreadScreen() {
             )}
           </View>
         </View>
-
-        <TouchableOpacity
-          style={styles.headerIconBtn}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-          accessibilityRole="button"
-          accessibilityLabel="Tuỳ chọn thêm"
-        >
-          <Ionicons name="ellipsis-vertical" size={22} color={colors.text} />
-        </TouchableOpacity>
       </View>
 
       {/* Same reason as the assistant screen: KeyboardAvoidingView needs the
@@ -462,15 +440,6 @@ export default function ChatThreadScreen() {
 
         {canSend ? (
           <View style={[styles.inputContainer, { paddingBottom: isKeyboardVisible ? 0 : Math.max(insets.bottom, 5) }]}>
-            <TouchableOpacity
-              style={styles.attachBtn}
-              onPress={openAttachmentMenu}
-              accessibilityRole="button"
-              accessibilityLabel="Đính kèm tệp"
-            >
-              <Ionicons name="attach" size={26} color={colors.textSecondary} />
-            </TouchableOpacity>
-
             <TextInput
               style={styles.input}
               placeholder="Tin nhắn..."
@@ -490,7 +459,7 @@ export default function ChatThreadScreen() {
               accessibilityLabel={editing ? 'Lưu chỉnh sửa' : 'Gửi tin nhắn'}
             >
               <Ionicons
-                name={editing ? 'checkmark' : (draft.trim() ? 'send' : 'mic')}
+                name={editing ? 'checkmark' : 'send'}
                 size={22}
                 color={draft.trim() ? colors.primary : colors.textSecondary}
               />
@@ -505,38 +474,6 @@ export default function ChatThreadScreen() {
           </View>
         )}
       </View>
-
-      {/* Attachment Menu Dummy */}
-      <BottomSheetModal
-        ref={attachmentSheetRef}
-        snapPoints={snapPoints}
-        backdropComponent={(props) => (
-          <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} />
-        )}
-      >
-        <View style={styles.sheet}>
-          <View style={styles.attachmentGrid}>
-            <TouchableOpacity style={styles.attachOption}>
-              <View style={[styles.attachIconBg, { backgroundColor: colors.primary }]}>
-                 <Ionicons name="image" size={24} color={colors.surface} />
-              </View>
-              <Text style={styles.attachOptionText}>Thư viện</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.attachOption}>
-              <View style={[styles.attachIconBg, { backgroundColor: '#10B981' }]}>
-                 <Ionicons name="document-text" size={24} color={colors.surface} />
-              </View>
-              <Text style={styles.attachOptionText}>Tài liệu</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.attachOption}>
-              <View style={[styles.attachIconBg, { backgroundColor: '#F59E0B' }]}>
-                 <Ionicons name="location" size={24} color={colors.surface} />
-              </View>
-              <Text style={styles.attachOptionText}>Vị trí</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </BottomSheetModal>
     </SafeAreaView>
   );
 }

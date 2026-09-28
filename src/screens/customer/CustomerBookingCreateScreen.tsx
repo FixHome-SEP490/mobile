@@ -58,15 +58,15 @@ function dateLabel(offset: number): string {
 
 function definitiveCreateMessage(status?: number): string {
   if (status === 401) {
-    return 'Phiên đăng nhập không hợp lệ nên Backend chưa tạo yêu cầu. Hãy đăng nhập lại rồi chủ động gửi lại.';
+    return 'Phiên đăng nhập không hợp lệ nên hệ thống chưa tạo yêu cầu. Hãy đăng nhập lại rồi chủ động gửi lại.';
   }
   if (status === 403) {
-    return 'Backend đã từ chối trước khi tạo yêu cầu. Hãy kiểm tra quyền hoặc trạng thái tài khoản trước khi thử lại.';
+    return 'Hệ thống đã từ chối trước khi tạo yêu cầu. Hãy kiểm tra quyền hoặc trạng thái tài khoản trước khi thử lại.';
   }
   if (status === 404) {
     return 'Dịch vụ hoặc địa chỉ đã lưu không còn hợp lệ. Hãy tải lại và chọn dữ liệu hiện có trước khi thử lại.';
   }
-  return 'Backend đã từ chối dữ liệu trước khi tạo yêu cầu. Hãy sửa thông tin rồi chủ động gửi lại.';
+  return 'Hệ thống đã từ chối dữ liệu trước khi tạo yêu cầu. Hãy sửa thông tin rồi chủ động gửi lại.';
 }
 
 export default function CustomerBookingCreateScreen() {
@@ -98,6 +98,8 @@ export default function CustomerBookingCreateScreen() {
   const [pickerCategories, setPickerCategories] = useState<CategoryItem[]>([]);
   const pickerSheetRef = useRef<BottomSheetModal>(null);
   const pickerSnapPoints = useMemo(() => ['80%'], []);
+  const addressSheetRef = useRef<BottomSheetModal>(null);
+  const addressSnapPoints = useMemo(() => ['60%'], []);
 
   const loadOptions = useCallback(async () => {
     const generation = ++loadGenerationRef.current;
@@ -230,6 +232,10 @@ export default function CustomerBookingCreateScreen() {
     rootNavigation.navigate('CustomerMain', { screen: 'Profile' });
   };
 
+  const openAddressSheet = () => {
+    addressSheetRef.current?.present();
+  };
+
   const submit = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (
@@ -244,7 +250,7 @@ export default function CustomerBookingCreateScreen() {
     if (!isAuthenticated || userRole !== UserRole.CUSTOMER || !userId) {
       Alert.alert(
         'Cần tài khoản khách hàng',
-        'Hãy đăng nhập bằng tài khoản khách hàng trước khi đặt thợ.',
+        'Hãy đăng nhập bằng tài khoản khách hàng trước khi đặt lịch.',
       );
       return;
     }
@@ -317,7 +323,7 @@ export default function CustomerBookingCreateScreen() {
           urgency: 'NORMAL',
         });
         if (!booking.id) {
-          throw new Error('Backend chưa xác nhận mã Booking.');
+          throw new Error('Hệ thống chưa xác nhận mã yêu cầu.');
         }
         if (useAuthStore.getState().user?.id !== ownerUserId) return;
         setCreatedBooking({ ownerUserId, id: booking.id });
@@ -335,7 +341,7 @@ export default function CustomerBookingCreateScreen() {
         setUncertainAttempt(attempt);
         Alert.alert(
           'Chưa xác minh được kết quả',
-          'POST có thể đã được Backend ghi nhận. Không gửi lại. Hãy dùng kiểm tra lịch sử bên dưới để đối chiếu bằng GET.',
+          'Yêu cầu có thể đã được hệ thống ghi nhận. Không gửi lại. Hãy dùng kiểm tra lịch sử bên dưới để đối chiếu.',
         );
       }
     } finally {
@@ -362,7 +368,7 @@ export default function CustomerBookingCreateScreen() {
         setUncertainAttempt(null);
         Alert.alert(
           'Đã xác minh yêu cầu',
-          'Lịch sử của chính tài khoản này có một Booking mới khớp chính xác. Không cần gửi POST lại.',
+          'Lịch sử của chính tài khoản này có một yêu cầu mới khớp chính xác. Không cần gửi lại.',
         );
         return;
       }
@@ -370,14 +376,14 @@ export default function CustomerBookingCreateScreen() {
       Alert.alert(
         'Chưa có bằng chứng đủ chắc chắn',
         attempt.baselineIds
-          ? 'GET lịch sử chưa cho thấy duy nhất một Booking mới khớp yêu cầu. Giữ nguyên khóa và không gửi lại POST.'
-          : 'Không có mốc lịch sử trước khi gửi nên không thể tự xác nhận an toàn. Giữ nguyên khóa và không gửi lại POST.',
+          ? 'Lịch sử chưa cho thấy duy nhất một yêu cầu mới khớp. Giữ nguyên khóa và không gửi lại.'
+          : 'Không có mốc lịch sử trước khi gửi nên không thể tự xác nhận an toàn. Giữ nguyên khóa và không gửi lại.',
       );
     } catch {
       if (useAuthStore.getState().user?.id !== attempt.ownerUserId) return;
       Alert.alert(
         'Không kiểm tra được lịch sử',
-        'GET lịch sử thất bại. Giữ nguyên khóa và không gửi lại POST.',
+        'Kiểm tra lịch sử thất bại. Giữ nguyên khóa và không gửi lại.',
       );
     } finally {
       setReconciling(false);
@@ -407,7 +413,7 @@ export default function CustomerBookingCreateScreen() {
     return (
       <SafeAreaView style={[styles.page, { backgroundColor: colors.background }]}>
         {backBtn}
-        <Text style={[styles.title, { color: colors.text }]}>Đăng nhập bằng tài khoản khách hàng để đặt thợ.</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Đăng nhập bằng tài khoản khách hàng để đặt lịch.</Text>
         {action('Đăng nhập', () => navigation.navigate('Auth'))}
       </SafeAreaView>
     );
@@ -489,44 +495,39 @@ export default function CustomerBookingCreateScreen() {
                 {action('Mở Hồ sơ để thêm địa chỉ', openAddressEditor)}
               </View>
             )}
-            {addresses.map((address) => {
-              const ready = addressReadyForBooking(address);
-              return (
-                <TouchableOpacity
-                  key={address.id}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: addressId === address.id }}
-                  style={[
-                    styles.option,
-                    {
-                      borderColor: addressId === address.id ? colors.primary : colors.border,
-                      backgroundColor: colors.surface,
-                    },
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setAddressId(address.id);
-                  }}
-                >
-                  <Text style={{ color: colors.text }}>
-                    {address.label || 'Địa chỉ'}
-                    {addressId === address.id ? ' ✓' : ''}
-                  </Text>
-                  <Text style={{ color: colors.textSecondary }}>
-                    {[address.line1, address.ward, address.district, address.province]
-                      .filter(Boolean)
-                      .join(', ')}
-                  </Text>
-                  <Text style={{ color: ready ? colors.success : colors.error }}>
-                    {ready ? 'Đã có vị trí GPS để đặt lịch' : 'Cần cập nhật vị trí GPS'}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+            {!!selectedAddress ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Đổi địa chỉ sửa chữa"
+                style={[styles.option, { borderColor: colors.primary, backgroundColor: colors.surface }]}
+                onPress={openAddressSheet}
+              >
+                <Text style={{ color: colors.text, fontWeight: '700' }}>
+                  {selectedAddress.label || 'Địa chỉ'}
+                </Text>
+                <Text style={{ color: colors.textSecondary }}>
+                  {[selectedAddress.line1, selectedAddress.ward, selectedAddress.district, selectedAddress.province]
+                    .filter(Boolean)
+                    .join(', ')}
+                </Text>
+                <Text style={{ color: selectedAddressReady ? colors.success : colors.error }}>
+                  {selectedAddressReady ? 'Đã có vị trí GPS để đặt lịch' : 'Cần cập nhật vị trí GPS'}
+                </Text>
+                <Text style={{ color: colors.primary }}>Đổi địa chỉ</Text>
+              </TouchableOpacity>
+            ) : addresses.length > 0 ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                style={[styles.option, { borderColor: colors.border, backgroundColor: colors.surface }]}
+                onPress={openAddressSheet}
+              >
+                <Text style={{ color: colors.textSecondary }}>Chọn địa chỉ...</Text>
+              </TouchableOpacity>
+            ) : null}
             {!!selectedAddress && !selectedAddressReady && (
               <View style={styles.section}>
                 <Text style={{ color: colors.error }}>
-                  Địa chỉ đang chọn chưa có tọa độ hợp lệ nên Backend sẽ không thể tạo Booking an
+                  Địa chỉ đang chọn chưa có tọa độ hợp lệ nên hệ thống không thể tạo yêu cầu an
                   toàn.
                 </Text>
                 {action('Cập nhật địa chỉ trong Hồ sơ', openAddressEditor)}
@@ -604,7 +605,7 @@ export default function CustomerBookingCreateScreen() {
             </View>
 
             <Text style={[styles.note, { color: colors.textSecondary }]}>
-              Ảnh dùng để hỏi trợ lý AI chưa được đính kèm Booking. Bạn vẫn có thể đặt lịch không
+              Ảnh dùng để hỏi trợ lý AI chưa được đính kèm yêu cầu. Bạn vẫn có thể đặt lịch không
               có ảnh.
             </Text>
 
@@ -627,7 +628,7 @@ export default function CustomerBookingCreateScreen() {
                   ? 'Đang gửi yêu cầu...'
                   : visibleUncertainAttempt
                     ? 'Chờ xác minh yêu cầu'
-                    : 'Tạo yêu cầu đặt thợ'}
+                    : 'Tạo yêu cầu đặt lịch'}
               </Text>
             </TouchableOpacity>
 
@@ -637,11 +638,11 @@ export default function CustomerBookingCreateScreen() {
                   Kết quả lần gửi vừa rồi chưa xác định.
                 </Text>
                 <Text style={[styles.note, { color: colors.textSecondary }]}>
-                  Không gửi POST lại. Chỉ kiểm tra lịch sử của chính tài khoản này bằng GET để tìm
-                  một Booking mới khớp chính xác.
+                  Không gửi lại. Chỉ kiểm tra lịch sử của chính tài khoản này để tìm
+                  một yêu cầu mới khớp chính xác.
                 </Text>
                 {action(
-                  reconciling ? 'Đang kiểm tra lịch sử...' : 'Kiểm tra lịch sử bằng GET',
+                  reconciling ? 'Đang kiểm tra lịch sử...' : 'Kiểm tra lịch sử',
                   () => {
                     void reconcileUncertainCreate();
                   },
@@ -655,13 +656,13 @@ export default function CustomerBookingCreateScreen() {
         {!!visibleCreatedBookingId && (
           <View style={[styles.section, { backgroundColor: colors.surface }]}>
             <Text style={[styles.sectionTitle, { color: colors.success }]}>
-              Đã xác minh yêu cầu đặt thợ.
+              Đã xác minh yêu cầu đặt lịch.
             </Text>
             <Text selectable style={{ color: colors.text }}>
-              Mã Booking: {visibleCreatedBookingId}
+              Mã tham chiếu: {visibleCreatedBookingId.slice(0, 8)}
             </Text>
             <Text style={[styles.note, { color: colors.textSecondary }]}>
-              Booking đã được Backend xác nhận hoặc được đối chiếu bằng lịch sử của chính tài khoản.
+              Yêu cầu đã được hệ thống xác nhận hoặc được đối chiếu bằng lịch sử của chính tài khoản.
               Bước tiếp theo là chọn 1 hoặc 2 kỹ thuật viên theo thứ tự ưu tiên.
             </Text>
             {action('Chọn kỹ thuật viên', () =>
@@ -730,6 +731,60 @@ export default function CustomerBookingCreateScreen() {
           )}
           ListEmptyComponent={
             <Text style={{ color: colors.textSecondary, padding: 14 }}>Không tìm thấy dịch vụ phù hợp.</Text>
+          }
+        />
+      </BottomSheetModal>
+
+      <BottomSheetModal
+        ref={addressSheetRef}
+        snapPoints={addressSnapPoints}
+        backdropComponent={(props) => (
+          <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} />
+        )}
+      >
+        <View style={[styles.pickerHeader, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}>Chọn địa chỉ sửa chữa</Text>
+        </View>
+        <BottomSheetFlatList
+          data={addresses}
+          keyExtractor={(address) => address.id}
+          contentContainerStyle={styles.pickerListContent}
+          renderItem={({ item: address }) => {
+            const ready = addressReadyForBooking(address);
+            return (
+              <TouchableOpacity
+                accessibilityRole="radio"
+                accessibilityState={{ checked: addressId === address.id }}
+                style={[
+                  styles.option,
+                  {
+                    borderColor: addressId === address.id ? colors.primary : colors.border,
+                    backgroundColor: colors.surface,
+                  },
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setAddressId(address.id);
+                  addressSheetRef.current?.dismiss();
+                }}
+              >
+                <Text style={{ color: colors.text }}>
+                  {address.label || 'Địa chỉ'}
+                  {addressId === address.id ? ' ✓' : ''}
+                </Text>
+                <Text style={{ color: colors.textSecondary }}>
+                  {[address.line1, address.ward, address.district, address.province]
+                    .filter(Boolean)
+                    .join(', ')}
+                </Text>
+                <Text style={{ color: ready ? colors.success : colors.error }}>
+                  {ready ? 'Đã có vị trí GPS để đặt lịch' : 'Cần cập nhật vị trí GPS'}
+                </Text>
+              </TouchableOpacity>
+            );
+          }}
+          ListEmptyComponent={
+            <Text style={{ color: colors.textSecondary, padding: 14 }}>Chưa có địa chỉ đã lưu.</Text>
           }
         />
       </BottomSheetModal>
