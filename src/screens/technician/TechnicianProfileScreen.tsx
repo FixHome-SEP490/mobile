@@ -596,6 +596,20 @@ export default function TechnicianProfileScreen() {
             )}
           </TouchableOpacity>
 
+          <View style={styles.menuContainer}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => navigation.navigate('TechnicianWallet')}
+            >
+              <Ionicons name="wallet-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
+              <View style={styles.menuContent}>
+                <Text style={styles.menuTitle}>Ví của tôi</Text>
+                <Text style={styles.menuDesc}>Số dư, nạp tiền, rút tiền</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+            </TouchableOpacity>
+          </View>
+
           {/* HỒ SƠ NGHỀ NGHIỆP */}
           <Text style={styles.sectionTitle}>Hồ sơ nghề nghiệp</Text>
           <View style={styles.menuContainer}>
