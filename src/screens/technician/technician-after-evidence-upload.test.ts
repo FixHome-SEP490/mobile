@@ -190,7 +190,7 @@ describe('AFTER evidence upload receipt', () => {
       error: null,
     });
     expect(notify(h).mock.calls.at(-1)?.[0]).toBe(
-      'Đã xác minh ảnh AFTER',
+      'Đã xác minh ảnh sau sửa',
     );
   });
 

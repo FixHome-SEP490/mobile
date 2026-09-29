@@ -131,8 +131,8 @@ export function createCustomerOrderCancelController(
       busy: false,
       needsVerify: ambiguous,
       error: ambiguous
-        ? 'Kết quả lần hủy trước chưa xác định. Không gửi POST lại; hãy kiểm tra trạng thái bằng GET.'
-        : 'Backend chưa hủy đơn theo trạng thái mới nhất. Bạn có thể tạo một yêu cầu hủy mới.',
+        ? 'Kết quả lần hủy trước chưa xác định. Chưa gửi lại để tránh trùng lặp; hãy kiểm tra trạng thái.'
+        : 'Hệ thống chưa hủy đơn theo trạng thái mới nhất. Bạn có thể tạo một yêu cầu hủy mới.',
     });
     return 'still-open';
   }
@@ -160,7 +160,7 @@ export function createCustomerOrderCancelController(
         busy: false,
         needsVerify: ambiguous,
         error: ambiguous
-          ? 'Chưa GET được trạng thái sau lần hủy không rõ kết quả. Không gửi POST lại.'
+          ? 'Chưa lấy được trạng thái sau lần hủy không rõ kết quả. Chưa gửi lại để tránh trùng lặp.'
           : 'Không tải được trạng thái đơn mới nhất.',
       });
       return 'unknown';
@@ -203,7 +203,7 @@ export function createCustomerOrderCancelController(
       if (result === 'cancelled') {
         deps.notify(
           'Đã hủy đơn',
-          'Backend GET đã xác nhận ServiceOrder ở trạng thái CANCELLED.',
+          'Hệ thống đã xác nhận đơn đã hủy.',
         );
       }
     } finally {
@@ -225,7 +225,7 @@ export function createCustomerOrderCancelController(
       publish({
         needsVerify: false,
         error:
-          'GET mới nhất xác nhận đơn vẫn có thể hủy. Nếu cần, hãy tạo một yêu cầu hủy mới.',
+          'kiểm tra mới nhất xác nhận đơn vẫn có thể hủy. Nếu cần, hãy tạo một yêu cầu hủy mới.',
       });
     }
   }

@@ -343,7 +343,7 @@ it('keeps 503 provider uncertainty locked and never reposts', async () => {
     needsVerify: true,
     pending: expect.any(Object),
   });
-  expect(h.state().error).toMatch(/Không gửi POST lại|Không gửi lại/);
+  expect(h.state().error).toMatch(/Chưa gửi lại|Không gửi lại/);
 
   await h.controller.upload();
   expect(uploadBefore(h)).toHaveBeenCalledTimes(1);
@@ -368,7 +368,7 @@ it.each([
     expect(uploadBefore(h)).toHaveBeenCalledTimes(1);
     expect(h.state().needsVerify).toBe(true);
     expect(h.state().pending).not.toBeNull();
-    expect(h.state().error).toMatch(/Không gửi POST lại|Không gửi lại/);
+    expect(h.state().error).toMatch(/Chưa gửi lại|Không gửi lại/);
 
     await h.controller.upload();
     expect(uploadBefore(h)).toHaveBeenCalledTimes(1);

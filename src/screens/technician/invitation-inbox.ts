@@ -417,7 +417,7 @@ export function createInvitationInbox(
               {
                 title: 'Đang xác minh đơn vừa nhận',
                 message:
-                  'Hệ thống đã phản hồi nhưng chưa xác minh được phân công hiện tại. Không gửi ACCEPT lại; hãy làm mới để kiểm tra Công việc.',
+                  'Hệ thống đã phản hồi nhưng chưa xác minh được phân công hiện tại. Không gửi lại; hãy làm mới để kiểm tra Công việc.',
               },
               valid,
             );
@@ -427,7 +427,7 @@ export function createInvitationInbox(
             {
               title: 'Đang xác minh phản hồi',
               message:
-                'Chưa nhận được mã ServiceOrder hợp lệ. Không gửi ACCEPT lại; đang đối chiếu bằng danh sách Công việc.',
+                'Chưa nhận được mã đơn hợp lệ. Không gửi lại; đang đối chiếu bằng danh sách Công việc.',
             },
             valid,
           );
@@ -461,7 +461,7 @@ export function createInvitationInbox(
             message:
               status === 401 || status === 403
                 ? 'Phiên đăng nhập hoặc quyền truy cập không còn hợp lệ.'
-                : 'Backend đã từ chối phản hồi theo trạng thái mới nhất. Không gửi lại lời mời này.',
+                : 'Hệ thống đã từ chối phản hồi theo trạng thái mới nhất. Không gửi lại lời mời này.',
           },
           valid,
         );
@@ -471,7 +471,7 @@ export function createInvitationInbox(
             title: 'Chưa xác nhận phản hồi',
             message:
               action === 'ACCEPT'
-                ? 'Kết quả ACCEPT chưa xác định. Không gửi lại; đang kiểm tra đơn được giao bằng GET.'
+                ? 'Kết quả nhận việc chưa xác định. Không gửi lại; đang kiểm tra đơn được giao.'
                 : 'Kết quả từ chối chưa xác định. Không gửi lại để tránh phản hồi trùng.',
           },
           valid,

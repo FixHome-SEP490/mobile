@@ -203,7 +203,7 @@ export function createCostDecisionController(
         publish({
           busy: false,
           confirming: null,
-          error: `Máy chủ từ chối quyết định (mã ${status}). Vui lòng tải lại chi phí phát sinh và kiểm tra trạng thái yêu cầu.`,
+          error: `Hệ thống từ chối quyết định (mã ${status}). Vui lòng tải lại chi phí phát sinh và kiểm tra trạng thái yêu cầu.`,
         });
         await deps.refreshCosts();
         return;

@@ -268,7 +268,7 @@ export function createCostProposalController(
           busy: false,
           confirming: false,
           proposedTotalText: null,
-          error: `Máy chủ từ chối đề xuất (mã ${status}). Vui lòng tải lại chi phí phát sinh và kiểm tra yêu cầu hiện có.`,
+          error: `Hệ thống từ chối đề xuất (mã ${status}). Vui lòng tải lại chi phí phát sinh và kiểm tra yêu cầu hiện có.`,
         });
         await deps.refreshCosts();
         return;

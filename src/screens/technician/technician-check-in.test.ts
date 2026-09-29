@@ -474,8 +474,8 @@ describe('normalizeCheckInResult (production helper)', () => {
 
 describe('serverDistanceText (production helper)', () => {
   it('rounds safe server distances', () => {
-    expect(serverDistanceText({ distanceMeters: 142.6 })).toBe(' Khoảng cách hiện tại khoảng 143 m (do máy chủ tính).');
-    expect(serverDistanceText({ data: { distanceMeters: 0 } })).toBe(' Khoảng cách hiện tại khoảng 0 m (do máy chủ tính).');
+    expect(serverDistanceText({ distanceMeters: 142.6 })).toBe(' Khoảng cách hiện tại khoảng 143 m (do hệ thống tính).');
+    expect(serverDistanceText({ data: { distanceMeters: 0 } })).toBe(' Khoảng cách hiện tại khoảng 0 m (do hệ thống tính).');
   });
 
   it.each([[null], [undefined], [{}], [{ distanceMeters: -3 }], [{ distanceMeters: NaN }], [{ distanceMeters: 'far' }]])(

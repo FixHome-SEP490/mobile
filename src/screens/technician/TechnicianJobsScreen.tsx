@@ -463,7 +463,7 @@ export default function TechnicianJobsScreen() {
                         <View style={styles.arrivalVerifiedRow}>
                           <Ionicons name="checkmark-circle-outline" size={18} color="#047857" />
                           <Text style={styles.arrivalVerifiedText}>
-                            Đã đến nơi · Backend xác minh. Đơn vẫn EN_ROUTE.
+                            Đã đến nơi. Đơn sẽ chuyển sang đang sửa khi bạn bắt đầu sửa chữa.
                           </Text>
                         </View>
                         <TouchableOpacity
@@ -485,7 +485,7 @@ export default function TechnicianJobsScreen() {
                     {s === 'EN_ROUTE' && arrivalStates[job.id] === 'pending' && (
                       <View style={styles.arrivalPendingBox}>
                         <Text style={styles.arrivalPendingText}>
-                          Check-in đang chờ xác minh. Không gửi POST lại.
+                          Check-in đang chờ xác minh. Chưa gửi lại để tránh trùng lặp.
                         </Text>
                         <TouchableOpacity
                           style={[styles.actionBtn, { backgroundColor: '#D97706' }]}

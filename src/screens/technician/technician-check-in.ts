@@ -139,7 +139,7 @@ export function serverDistanceText(response: unknown): string | null {
   return typeof distance === 'number' &&
     Number.isFinite(distance) &&
     distance >= 0
-    ? ` Khoảng cách hiện tại khoảng ${Math.round(distance)} m (do máy chủ tính).`
+    ? ` Khoảng cách hiện tại khoảng ${Math.round(distance)} m (do hệ thống tính).`
     : null;
 }
 
@@ -272,8 +272,8 @@ export function createCheckInController(deps: CheckInDeps) {
         deps.notify(
           verified ? 'Đã xác minh check-in' : 'Đang xác minh check-in',
           verified
-            ? 'Máy chủ xác nhận bạn đã đến nơi. Đơn vẫn EN_ROUTE cho đến khi bắt đầu sửa chữa.'
-            : 'Không gửi check-in lại. Hãy làm mới để đối chiếu trạng thái từ máy chủ.',
+            ? 'Đã xác nhận bạn đến nơi. Đơn sẽ chuyển sang đang sửa khi bạn bắt đầu sửa chữa.'
+            : 'Không gửi check-in lại. Hãy làm mới để đối chiếu trạng thái từ hệ thống.',
         );
       } finally {
         deps.setBusy(null);
@@ -385,7 +385,7 @@ export function createCheckInController(deps: CheckInDeps) {
           }
           deps.notify(
             'Check-in bị từ chối',
-            `Máy chủ từ chối check-in theo trạng thái hiện tại (mã ${status ?? 'không rõ'}). Hãy làm mới trước khi thử lại.`,
+            `Hệ thống từ chối check-in theo trạng thái hiện tại (mã ${status ?? 'không rõ'}). Hãy làm mới trước khi thử lại.`,
           );
           await deps.refreshJobs();
           return;
@@ -402,8 +402,8 @@ export function createCheckInController(deps: CheckInDeps) {
         deps.notify(
           verified ? 'Đã xác minh check-in' : 'Chưa xác nhận check-in',
           verified
-            ? 'Máy chủ xác nhận bạn đã đến nơi. Đơn vẫn EN_ROUTE cho đến khi bắt đầu sửa chữa.'
-            : 'Kết quả POST chưa xác định. Không gửi lại; hãy làm mới để kiểm tra arrivalVerified từ máy chủ.',
+            ? 'Đã xác nhận bạn đến nơi. Đơn sẽ chuyển sang đang sửa khi bạn bắt đầu sửa chữa.'
+            : 'Kết quả chưa xác định. Không gửi lại; hãy làm mới để kiểm tra trạng thái đến nơi.',
         );
         await deps.refreshJobs();
         return;
@@ -451,14 +451,14 @@ export function createCheckInController(deps: CheckInDeps) {
       if (verified) {
         deps.notify(
           'Đã xác minh check-in',
-          'Máy chủ xác nhận bạn đã đến nơi. Đơn vẫn EN_ROUTE cho đến khi bắt đầu sửa chữa.',
+          'Đã xác nhận bạn đến nơi. Đơn sẽ chuyển sang đang sửa khi bạn bắt đầu sửa chữa.',
         );
       } else {
         deps.notify(
           result === 'valid'
             ? 'Đang xác minh check-in'
             : 'Kết quả check-in chưa rõ',
-          'Không gửi check-in lại. Hãy làm mới để đối chiếu arrivalVerified từ máy chủ.',
+          'Không gửi check-in lại. Hãy làm mới để đối chiếu arrivalVerified từ hệ thống.',
         );
       }
       await deps.refreshJobs();

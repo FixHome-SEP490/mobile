@@ -26,7 +26,7 @@ describe('customerUnderRepairTask', () => {
 
     expect(task?.kind).toBe('work_confirmed');
     expect(task?.detail).toMatch(/Thanh toán vẫn là bước riêng/i);
-    expect(task?.detail).toMatch(/COMPLETED/);
+    expect(task?.detail).toMatch(/Hoàn thành/);
   });
 
   it('prioritizes a technician completion request before pending cost copy', () => {
@@ -40,7 +40,7 @@ describe('customerUnderRepairTask', () => {
 
     expect(task?.kind).toBe('completion_requested');
     expect(task?.detail).toMatch(/hai bước riêng/i);
-    expect(task?.detail).toMatch(/COMPLETED/);
+    expect(task?.detail).toMatch(/Hoàn thành/);
   });
 
   it('makes pending additional cost the next customer action', () => {
@@ -51,7 +51,7 @@ describe('customerUnderRepairTask', () => {
 
     expect(task?.kind).toBe('additional_cost_pending');
     expect(task?.detail).toMatch(/không đồng nghĩa/i);
-    expect(task?.detail).toMatch(/hủy ServiceOrder/i);
+    expect(task?.detail).toMatch(/hủy đơn/i);
   });
 
   it('surfaces an inconsistent SENT quote without inventing a transition', () => {

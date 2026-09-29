@@ -180,7 +180,7 @@ export function createAfterEvidenceUploadController(
         publish({
           needsVerify: true,
           error:
-            'Có ảnh AFTER đang chờ xác minh. Không chọn hoặc gửi ảnh mới.',
+            'Có ảnh sau sửa đang chờ xác minh. Không chọn hoặc gửi ảnh mới.',
         });
         return;
       }
@@ -276,11 +276,11 @@ export function createAfterEvidenceUploadController(
           busy: false,
           needsVerify: true,
           error:
-            'GET chưa đủ bằng chứng để xác nhận lần tải ảnh AFTER trước. Không gửi POST lại.',
+            'Chưa đủ bằng chứng để xác nhận lần tải ảnh sau sửa trước. Chưa gửi lại để tránh trùng lặp.',
         });
         if (notifyResult) {
           deps.notify(
-            'Chưa xác minh ảnh AFTER',
+            'Chưa xác minh ảnh sau sửa',
             'Không gửi lại ảnh. Hãy kiểm tra bằng chứng hiện tại.',
           );
         }
@@ -306,8 +306,8 @@ export function createAfterEvidenceUploadController(
         needsVerify: false,
       });
       deps.notify(
-        'Đã xác minh ảnh AFTER',
-        'GET bằng chứng đã xác nhận ảnh sau sửa chữa mới trên đúng ServiceOrder.',
+        'Đã xác minh ảnh sau sửa',
+        'Hệ thống đã xác nhận ảnh sau sửa mới trên đúng đơn.',
       );
       return true;
     } catch (error) {
@@ -320,12 +320,12 @@ export function createAfterEvidenceUploadController(
         busy: false,
         needsVerify: true,
         error:
-          'Chưa thể đối chiếu bằng chứng AFTER từ máy chủ. Không gửi POST lại.',
+          'Chưa thể đối chiếu bằng chứng sau sửa từ hệ thống. Chưa gửi lại để tránh trùng lặp.',
       });
       if (notifyResult) {
         deps.notify(
-          'Chưa xác minh ảnh AFTER',
-          'Không gửi lại ảnh. Hãy kiểm tra kết nối rồi thử GET lại.',
+          'Chưa xác minh ảnh sau sửa',
+          'Không gửi lại ảnh. Hãy kiểm tra kết nối rồi thử kiểm tra lại.',
         );
       }
       return false;
@@ -366,7 +366,7 @@ export function createAfterEvidenceUploadController(
       publish({
         needsVerify: true,
         error:
-          'Lần tải ảnh AFTER trước đang chờ xác minh. Không gửi POST lại.',
+          'Lần tải ảnh sau sửa trước đang chờ xác minh. Chưa gửi lại để tránh trùng lặp.',
       });
       await reconcileAttempt(
         owner.technicianId,
@@ -409,7 +409,7 @@ export function createAfterEvidenceUploadController(
           busy: false,
           needsVerify: false,
           error:
-            'Chưa tải được bằng chứng hiện tại nên chưa gửi ảnh AFTER.',
+            'Chưa tải được bằng chứng hiện tại nên chưa gửi ảnh sau sửa.',
         });
         return;
       }
@@ -453,7 +453,7 @@ export function createAfterEvidenceUploadController(
             busy: false,
             needsVerify: false,
             error:
-              'Máy chủ từ chối tải ảnh AFTER' +
+              'Hệ thống từ chối tải ảnh sau sửa' +
               (typeof status === 'number'
                 ? ' (mã ' + status + ')'
                 : '') +
@@ -475,11 +475,11 @@ export function createAfterEvidenceUploadController(
             busy: false,
             needsVerify: true,
             error:
-              'Kết quả tải ảnh AFTER chưa xác định. Không gửi POST lại.',
+              'Kết quả tải ảnh sau sửa chưa xác định. Chưa gửi lại để tránh trùng lặp.',
           });
           deps.notify(
-            'Chưa xác minh ảnh AFTER',
-            'Không gửi lại; chỉ đối chiếu bằng GET.',
+            'Chưa xác minh ảnh sau sửa',
+            'Không gửi lại; chỉ đối chiếu.',
           );
         }
         return;
@@ -504,11 +504,11 @@ export function createAfterEvidenceUploadController(
           busy: false,
           needsVerify: true,
           error:
-            'POST đã phản hồi nhưng GET chưa xác nhận ảnh AFTER mới. Không gửi POST lại.',
+            'Hệ thống đã phản hồi nhưng chưa xác nhận ảnh sau sửa mới. Chưa gửi lại để tránh trùng lặp.',
         });
         deps.notify(
-          'Đang xác minh ảnh AFTER',
-          'HTTP thành công chưa đủ; cần GET bằng chứng xác nhận.',
+          'Đang xác minh ảnh sau sửa',
+          'HTTP thành công chưa đủ; cần kiểm tra bằng chứng xác nhận.',
         );
       }
     } finally {

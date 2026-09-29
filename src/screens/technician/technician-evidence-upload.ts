@@ -387,7 +387,7 @@ export function createEvidenceUploadController(
           busy: false,
           needsVerify: true,
           error:
-            'GET chưa đủ bằng chứng để xác nhận lần tải ảnh trước. Không gửi POST lại.',
+            'Chưa đủ bằng chứng để xác nhận lần tải ảnh trước. Chưa gửi lại để tránh trùng lặp.',
         });
         if (notifyResult) {
           deps.notify(
@@ -418,7 +418,7 @@ export function createEvidenceUploadController(
       });
       deps.notify(
         'Đã xác minh ảnh',
-        'GET bằng chứng đã xác nhận ảnh trước sửa chữa mới trên đúng ServiceOrder.',
+        'Hệ thống đã xác nhận ảnh trước sửa mới trên đúng đơn.',
       );
       return true;
     } catch (error) {
@@ -431,7 +431,7 @@ export function createEvidenceUploadController(
         busy: false,
         needsVerify: true,
         error:
-          'Chưa thể đối chiếu bằng chứng từ máy chủ. Không gửi POST lại.',
+          'Chưa thể đối chiếu bằng chứng từ hệ thống. Chưa gửi lại để tránh trùng lặp.',
       });
       if (notifyResult) {
         deps.notify(
@@ -478,7 +478,7 @@ export function createEvidenceUploadController(
       publish({
         needsVerify: true,
         error:
-          'Lần tải ảnh trước đang chờ xác minh. Không gửi POST lại.',
+          'Lần tải ảnh trước đang chờ xác minh. Chưa gửi lại để tránh trùng lặp.',
       });
       await reconcileAttempt(
         owner.technicianId,
@@ -565,7 +565,7 @@ export function createEvidenceUploadController(
             busy: false,
             needsVerify: false,
             error:
-              'Máy chủ từ chối tải ảnh' +
+              'Hệ thống từ chối tải ảnh' +
               (typeof status === 'number'
                 ? ' (mã ' + status + ')'
                 : '') +
@@ -588,11 +588,11 @@ export function createEvidenceUploadController(
             busy: false,
             needsVerify: true,
             error:
-              'Chưa xác nhận ảnh đã được lưu. Không gửi POST lại; hãy dùng Kiểm tra bằng chứng.',
+              'Chưa xác nhận ảnh đã được lưu. Chưa gửi lại để tránh trùng lặp; hãy dùng Kiểm tra bằng chứng.',
           });
           deps.notify(
             'Chưa xác minh ảnh',
-            'Kết quả tải ảnh chưa xác định. Không gửi lại; chỉ đối chiếu bằng GET.',
+            'Kết quả tải ảnh chưa xác định. Không gửi lại; chỉ đối chiếu.',
           );
         }
         return;
@@ -618,11 +618,11 @@ export function createEvidenceUploadController(
           busy: false,
           needsVerify: true,
           error:
-            'POST đã phản hồi nhưng GET chưa xác nhận ảnh mới. Không gửi POST lại.',
+            'Hệ thống đã phản hồi nhưng chưa xác nhận ảnh mới. Chưa gửi lại để tránh trùng lặp.',
         });
         deps.notify(
           'Đang xác minh ảnh',
-          'Chưa có bằng chứng GET đủ để gọi lần tải ảnh này là thành công.',
+          'Chưa có bằng chứng kiểm tra đủ để gọi lần tải ảnh này là thành công.',
         );
       }
     } finally {

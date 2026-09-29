@@ -25,7 +25,7 @@ export const initialCustomerConfirmCompletionState: CustomerConfirmCompletionSta
 };
 
 export const CUSTOMER_CONFIRM_COMPLETION_COPY =
-  'Xác nhận công việc đã hoàn tất không đồng nghĩa đã thanh toán. Thanh toán là bước riêng và trạng thái COMPLETED chỉ do Backend xác nhận khi đủ điều kiện.';
+  'Xác nhận công việc đã hoàn tất không đồng nghĩa đã thanh toán. Thanh toán là bước riêng và trạng thái Hoàn thành chỉ do Hệ thống xác nhận khi đủ điều kiện.';
 
 export interface CustomerConfirmCompletionDeps {
   getOrder: () => CustomerCompletionGate | null;
@@ -127,7 +127,7 @@ export function createCustomerConfirmCompletionController(
       confirmed: false,
       needsVerify: keepUnknownLock,
       error: keepUnknownLock
-        ? 'Chưa xác minh được kết quả. Không gửi xác nhận lại; hãy kiểm tra trạng thái bằng GET.'
+        ? 'Chưa xác minh được kết quả. Không gửi xác nhận lại; hãy kiểm tra trạng thái.'
         : null,
     });
     return false;
@@ -201,7 +201,7 @@ export function createCustomerConfirmCompletionController(
           markFromFreshOrder(fresh, false);
           publish({
             error:
-              'Backend đã từ chối xác nhận' +
+              'Hệ thống đã từ chối xác nhận' +
               (typeof status === 'number' ? ' (mã ' + status + ')' : '') +
               '. Hãy kiểm tra trạng thái mới nhất.',
           });
@@ -220,7 +220,7 @@ export function createCustomerConfirmCompletionController(
         if (!confirmed) {
           deps.notify(
             'Chưa xác minh nghiệm thu',
-            'Không gửi lại xác nhận. Hãy kiểm tra trạng thái đơn bằng GET.',
+            'Không gửi lại xác nhận. Hãy kiểm tra trạng thái đơn.',
           );
         }
         return;
@@ -248,7 +248,7 @@ export function createCustomerConfirmCompletionController(
       } else {
         deps.notify(
           'Đang xác minh nghiệm thu',
-          'POST đã phản hồi nhưng GET chưa xác nhận. Không gửi lại.',
+          'Hệ thống đã phản hồi nhưng chưa xác nhận. Không gửi lại.',
         );
       }
     } finally {

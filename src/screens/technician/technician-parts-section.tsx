@@ -239,7 +239,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
 
   const confirmReceive = async (requestId: string, token: string) => {
     if (!token.trim()) {
-      setActionError('Vui lòng nhập hoặc quét mã QR token.');
+      setActionError('Vui lòng nhập hoặc quét mã QR.');
       return;
     }
     setActionError(null);
@@ -538,7 +538,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                         style={styles.fieldInput}
                         value={qrTokenInput}
                         onChangeText={setQrTokenInput}
-                        placeholder="Nhập mã QR token (VD: FH-PR-...)"
+                        placeholder="Nhập mã QR (VD: FH-PR-...)"
                         placeholderTextColor={colors.muted}
                         autoCapitalize="none"
                       />
