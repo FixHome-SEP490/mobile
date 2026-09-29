@@ -1,17 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import {
   Image,
+  Modal,
+  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  BottomSheetBackdrop,
-  BottomSheetModal,
-  BottomSheetScrollView,
-} from '@gorhom/bottom-sheet';
 import Animated, {
   cancelAnimation,
   FadeInDown,
@@ -167,24 +165,42 @@ export function MatchingTechnicianCard({
     <Animated.View
       entering={reduceMotion ? undefined : FadeInDown.delay(Math.min(entranceIndex, 4) * 45).duration(220)}
     >
-      <View style={[
-        styles.candidateCard,
-        { backgroundColor: colors.surface, borderColor: priority ? colors.primary : colors.border },
-      ]}>
+      <View
+        testID={`matching-candidate-card-${candidate.userId}`}
+        style={[
+          styles.candidateCard,
+          {
+            backgroundColor: colors.surface,
+            borderColor: priority ? colors.primary : colors.border,
+          },
+          priority > 0 && styles.candidateCardSelected,
+        ]}
+      >
         <TouchableOpacity
           testID={`matching-candidate-details-${candidate.userId}`}
           accessibilityRole="button"
           accessibilityLabel={`Xem chi tiết kỹ thuật viên ${name}`}
-          accessibilityHint="Mở thông tin kỹ thuật viên an toàn cho khách hàng"
+          accessibilityHint="Chạm vào thẻ để mở thông tin kỹ thuật viên"
           accessibilityState={{ selected: priority > 0 }}
           onPress={onOpenDetails}
+          activeOpacity={0.78}
           style={styles.candidateBody}
         >
-          <TechnicianAvatar candidate={candidate} />
+          <View style={styles.candidateAvatarWrap}>
+            <TechnicianAvatar candidate={candidate} />
+            {priority > 0 && (
+              <View
+                testID={`matching-candidate-priority-${candidate.userId}`}
+                style={[styles.priorityBadge, { backgroundColor: colors.primary }]}
+              >
+                <Text style={styles.priorityBadgeText}>#{priority}</Text>
+              </View>
+            )}
+          </View>
           <View style={styles.candidateInfo}>
             <Text style={[styles.candidateName, { color: colors.text }]}>{name}</Text>
             <Text style={[styles.priorityLabel, { color: priority ? colors.primaryStrong : colors.textSecondary }]}>
-              {priority === 1 ? 'Ưu tiên 1 · Mời trước' : priority === 2 ? 'Ưu tiên 2 · Dự phòng' : 'Chạm để xem thông tin'}
+              {priority === 1 ? 'Ưu tiên 1 · Mời trước' : priority === 2 ? 'Ưu tiên 2 · Dự phòng' : 'Chạm thẻ để xem thông tin'}
             </Text>
             <View style={styles.candidateMetadata}>
               {rating && (
@@ -195,7 +211,6 @@ export function MatchingTechnicianCard({
               )}
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
         </TouchableOpacity>
         <TouchableOpacity
           testID={`matching-candidate-select-${candidate.userId}`}
@@ -204,14 +219,20 @@ export function MatchingTechnicianCard({
           accessibilityState={{ checked: priority > 0, disabled: selectionDisabled }}
           disabled={selectionDisabled}
           onPress={onToggleSelection}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           style={[
             styles.selectControl,
-            { borderColor: priority ? colors.primary : colors.border, backgroundColor: priority ? colors.primarySoft : colors.surface },
-            selectionDisabled && { opacity: 0.55 },
+            {
+              borderColor: priority ? colors.primary : colors.border,
+              backgroundColor: priority ? colors.primary : colors.surface,
+            },
+            selectionDisabled && { opacity: 0.45 },
           ]}
         >
-          <Ionicons name={priority ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={priority ? colors.primaryStrong : colors.textSecondary} />
-          <Text style={[styles.selectText, { color: colors.text }]}>{priority ? 'Đã chọn' : 'Chọn'}</Text>
+          {priority > 0 && <Ionicons name="checkmark" size={15} color="#FFFFFF" />}
+          <Text style={[styles.selectText, { color: priority ? '#FFFFFF' : colors.primaryStrong }]}>
+            {priority ? `#${priority}` : 'Chọn'}
+          </Text>
         </TouchableOpacity>
       </View>
     </Animated.View>
@@ -219,14 +240,12 @@ export function MatchingTechnicianCard({
 }
 
 export function MatchingTechnicianDetailSheet({
-  modalRef,
   candidate,
   priority,
   selectionDisabled,
   onToggleSelection,
   onClose,
 }: {
-  modalRef: React.RefObject<BottomSheetModal | null>;
   candidate: TechnicianCandidate | null;
   priority: number;
   selectionDisabled: boolean;
@@ -242,55 +261,71 @@ export function MatchingTechnicianDetailSheet({
   const warranty = candidate ? displayWarranty(candidate) : null;
 
   return (
-    <BottomSheetModal
-      ref={modalRef}
-      snapPoints={['64%', '88%']}
-      enableDynamicSizing={false}
-      onDismiss={onClose}
-      backdropComponent={(props) => (
-        <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.42} pressBehavior="close" />
-      )}
+    <Modal
+      visible={candidate != null}
+      transparent
+      animationType="slide"
+      statusBarTranslucent
+      onRequestClose={onClose}
     >
-      {candidate && (
-        <BottomSheetScrollView
-          testID="matching-technician-detail"
-          contentContainerStyle={[styles.detailContent, { backgroundColor: colors.surface }]}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.detailHeader}>
-            <TechnicianAvatar candidate={candidate} size={64} />
-            <View style={styles.detailTitleGroup}>
-              <Text style={[styles.detailTitle, { color: colors.text }]}>Thông tin kỹ thuật viên</Text>
-              <Text style={[styles.candidateName, { color: colors.text }]}>{name}</Text>
-              <Text style={[styles.availability, { color: colors.success }]}>Có thể nhận lời mời</Text>
-            </View>
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Đóng thông tin kỹ thuật viên" onPress={onClose} hitSlop={12}>
-              <Ionicons name="close" size={22} color={colors.textSecondary} />
-            </TouchableOpacity>
+      <View style={styles.detailModalRoot}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Đóng thông tin kỹ thuật viên"
+          style={styles.detailBackdrop}
+          onPress={onClose}
+        />
+        {candidate && (
+          <View testID="matching-technician-detail" style={[styles.detailSheet, { backgroundColor: colors.surface }]}>
+            <View style={[styles.detailHandle, { backgroundColor: colors.border }]} />
+            <ScrollView
+              contentContainerStyle={styles.detailContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.detailHeader}>
+                <View style={styles.candidateAvatarWrap}>
+                  <TechnicianAvatar candidate={candidate} size={64} />
+                  {priority > 0 && (
+                    <View testID="matching-detail-priority" style={[styles.priorityBadge, { backgroundColor: colors.primary }]}>
+                      <Text style={styles.priorityBadgeText}>#{priority}</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.detailTitleGroup}>
+                  <Text style={[styles.detailTitle, { color: colors.text }]}>Thông tin kỹ thuật viên</Text>
+                  <Text style={[styles.candidateName, { color: colors.text }]}>{name}</Text>
+                  <Text style={[styles.availability, { color: colors.success }]}>Có thể nhận lời mời</Text>
+                </View>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Đóng thông tin kỹ thuật viên" onPress={onClose} hitSlop={12}>
+                  <Ionicons name="close" size={22} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+              <View style={[styles.detailCard, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                {rating && <DetailRow label="Đánh giá" value={rating} colors={colors} />}
+                {distance && candidate.distanceKm != null && <DetailRow label="Khoảng cách tham khảo" value={`${numberFormat.format(candidate.distanceKm)} km`} colors={colors} />}
+                {experience && <DetailRow label="Kinh nghiệm" value={experience} colors={colors} />}
+                {listedPrice && <DetailRow label="Giá niêm yết" value={listedPrice} colors={colors} />}
+                {warranty && <DetailRow label="Bảo hành tham khảo" value={warranty} colors={colors} />}
+              </View>
+              <TouchableOpacity
+                testID="matching-detail-select"
+                accessibilityRole="button"
+                accessibilityLabel={priority ? `Bỏ chọn ${name}` : `Chọn ${name}`}
+                accessibilityState={{ selected: priority > 0, disabled: selectionDisabled }}
+                disabled={selectionDisabled}
+                onPress={onToggleSelection}
+                style={[styles.detailAction, { backgroundColor: selectionDisabled ? colors.border : colors.primary }]}
+              >
+                <Text style={styles.actionText}>
+                  {priority ? `Bỏ chọn · Ưu tiên ${priority}` : selectionDisabled ? 'Đã chọn đủ 2 kỹ thuật viên' : 'Chọn kỹ thuật viên này'}
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
-          <View style={[styles.detailCard, { borderColor: colors.border, backgroundColor: colors.background }]}>
-            {rating && <DetailRow label="Đánh giá" value={rating} colors={colors} />}
-            {distance && candidate.distanceKm != null && <DetailRow label="Khoảng cách tham khảo" value={`${numberFormat.format(candidate.distanceKm)} km`} colors={colors} />}
-            {experience && <DetailRow label="Kinh nghiệm" value={experience} colors={colors} />}
-            {listedPrice && <DetailRow label="Giá niêm yết" value={listedPrice} colors={colors} />}
-            {warranty && <DetailRow label="Bảo hành tham khảo" value={warranty} colors={colors} />}
-          </View>
-          <TouchableOpacity
-            testID="matching-detail-select"
-            accessibilityRole="button"
-            accessibilityLabel={priority ? `Bỏ chọn ${name}` : `Chọn ${name}`}
-            accessibilityState={{ selected: priority > 0, disabled: selectionDisabled }}
-            disabled={selectionDisabled}
-            onPress={onToggleSelection}
-            style={[styles.detailAction, { backgroundColor: selectionDisabled ? colors.border : colors.primary }]}
-          >
-            <Text style={styles.actionText}>
-              {priority ? `Bỏ chọn · Ưu tiên ${priority}` : selectionDisabled ? 'Đã chọn đủ 2 kỹ thuật viên' : 'Chọn kỹ thuật viên này'}
-            </Text>
-          </TouchableOpacity>
-        </BottomSheetScrollView>
-      )}
-    </BottomSheetModal>
+        )}
+      </View>
+    </Modal>
   );
 }
 
@@ -315,16 +350,64 @@ const styles = StyleSheet.create({
   skeletonMeta: { flexDirection: 'row', gap: 8 },
   skeletonChip: { width: 82, height: 20, borderRadius: 10 },
   skeletonCaption: { paddingTop: 4, fontSize: 14, lineHeight: 20, fontWeight: '500' },
-  candidateCard: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 8 },
-  candidateBody: { flexDirection: 'row', alignItems: 'center', gap: 11, minHeight: 52 },
+  candidateCard: {
+    minHeight: 94,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  candidateCardSelected: { borderWidth: 2 },
+  candidateBody: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 11, minHeight: 68 },
+  candidateAvatarWrap: { position: 'relative' },
+  priorityBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -7,
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  priorityBadgeText: { color: '#FFFFFF', fontSize: 10, lineHeight: 12, fontWeight: '900' },
   candidateInfo: { flex: 1, gap: 3 },
   candidateName: { fontSize: 16, lineHeight: 21, fontWeight: '700' },
   priorityLabel: { fontSize: 12, lineHeight: 17, fontWeight: '600' },
   candidateMetadata: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingTop: 1 },
   metadataText: { fontSize: 12, lineHeight: 17 },
-  selectControl: { minHeight: 36, borderWidth: 1, borderRadius: 18, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, alignSelf: 'flex-end' },
-  selectText: { fontSize: 14, lineHeight: 20, fontWeight: '600' },
-  detailContent: { flexGrow: 1, padding: 20, paddingBottom: 30, gap: 18 },
+  selectControl: {
+    minWidth: 62,
+    minHeight: 36,
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  selectText: { fontSize: 13, lineHeight: 18, fontWeight: '800' },
+  detailModalRoot: { flex: 1, justifyContent: 'flex-end' },
+  detailBackdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(15, 23, 42, 0.45)' },
+  detailSheet: {
+    maxHeight: '78%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    elevation: 16,
+  },
+  detailHandle: { width: 42, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 10 },
+  detailContent: { padding: 20, paddingTop: 14, paddingBottom: 30, gap: 18 },
   detailHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   detailTitleGroup: { flex: 1, gap: 3 },
   detailTitle: { fontSize: 20, lineHeight: 28, fontWeight: '700' },
