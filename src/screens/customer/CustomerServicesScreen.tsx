@@ -14,6 +14,7 @@ import {
   resolveServicePrice,
 } from './service-catalog';
 import CategoryPills from '../../components/CategoryPills';
+import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 
 type ServicesRoute = RouteProp<RootStackParamList, 'CustomerServices'>;
 
@@ -125,9 +126,11 @@ export default function CustomerServicesScreen() {
       </View>
 
       {loading && services.length === 0 ? (
-        <View style={styles.centerState}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.stateText}>Đang tải danh sách dịch vụ...</Text>
+        <View style={styles.loadingState}>
+          <CustomerSkeleton variant="service" rows={4} />
+          <Text style={styles.loadingText} accessibilityLiveRegion="polite">
+            Đang tải danh sách dịch vụ...
+          </Text>
         </View>
       ) : error && services.length === 0 ? (
         <View style={styles.centerState}>
@@ -242,6 +245,16 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     alignItems: 'center',
     padding: 32,
     gap: 12,
+  },
+  loadingState: {
+    flex: 1,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: colors.muted,
+    textAlign: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   stateText: {
     fontSize: 14,

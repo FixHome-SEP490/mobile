@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Image } from 'react-native';
 import { User } from 'lucide-react-native';
 
@@ -42,13 +42,19 @@ export function AvatarTabIcon({
     return () => clearTimeout(timer);
   }, [uri, state.uri, state.failed, state.loaded]);
 
+  // react-native-web's Image treats a new `source` object as a new image and
+  // re-decodes it; an inline `{ uri }` literal here is a fresh object every
+  // render (tab bar re-renders on every navigation state change), which loops
+  // decode -> onLoad setState -> re-render -> new object forever on web.
+  const source = useMemo(() => ({ uri }), [uri]);
+
   if (state.failed) {
     return <User size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
   }
 
   return (
     <Image
-      source={{ uri }}
+      source={source}
       onLoad={() => setState((s) => (s.uri === uri ? { ...s, loaded: true } : s))}
       onError={() => setState((s) => (s.uri === uri ? { ...s, failed: true } : s))}
       style={{ width: size + 5, height: size + 5, borderRadius: (size + 5) / 2, borderColor: '#FFFFFF' }}

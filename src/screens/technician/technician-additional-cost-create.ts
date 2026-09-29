@@ -94,6 +94,21 @@ function hasPendingCosts(getCostStatuses: () => unknown[]): boolean {
   return getCostStatuses().some((status) => String(status ?? '').toUpperCase() === 'PENDING_APPROVAL');
 }
 
+/**
+ * Full proposal total: the labor line plus any FixHome part lines and delivery
+ * shipping fee — everything the payload actually sends and the customer must
+ * approve, not just the labor line (a proposal with parts previously showed
+ * only the labor amount in the confirmation banner).
+ */
+function proposedTotal(lineTotal: number, deps: CostProposalDeps): number {
+  const extraParts = deps.getExtraPartItems?.() ?? [];
+  const partsTotal = extraParts.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  const hasFixHomeParts = extraParts.some((item) => item.partSource === 'fixhome');
+  const fulfillment = hasFixHomeParts ? deps.getFulfillment?.() ?? null : null;
+  const shippingFee = fulfillment?.method === 'delivery' ? fulfillment.shippingFee : 0;
+  return lineTotal + partsTotal + shippingFee;
+}
+
 /** Proposal gate: same tech/focus/real order, UNDER_REPAIR, open, no live pending. */
 export function costProposalTarget(
   order: CostProposalOrderGate | null,
@@ -179,7 +194,7 @@ export function createCostProposalController(
     publish({
       fieldErrors: {},
       confirming: true,
-      proposedTotalText: `${line.total.toLocaleString('vi-VN')}đ`,
+      proposedTotalText: `${proposedTotal(line.total, deps).toLocaleString('vi-VN')}đ`,
       error: null,
     });
   }

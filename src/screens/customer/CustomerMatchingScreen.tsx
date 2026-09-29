@@ -1,6 +1,7 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BottomSheetModal } from '@gorhom/bottom-sheet';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
@@ -12,6 +13,11 @@ import { useAppTheme } from '../../constants/theme';
 import { useAuthStore } from '../../store';
 import { UserRole, type RootStackParamList } from '../../types';
 import { canChooseTechnicians, mayRequestLinkedReplacement, orderedCandidateIds, toggleCandidate } from '../../utils/booking-candidate-selection';
+import {
+  MatchingTechnicianCard,
+  MatchingTechnicianDetailSheet,
+  MatchingTechnicianSkeleton,
+} from './MatchingTechnicianPresentation';
 import {
   classifyLinkedShortlistPostError,
   hasPositiveNewInvitations,
@@ -37,6 +43,33 @@ import {
 } from './customer-initial-shortlist-attempt';
 
 type MatchingRoute = RouteProp<RootStackParamList, 'CustomerMatching'>;
+type CandidateDetailTarget = { bookingId: string; ownerId: string; candidateUserId: string };
+
+function matchingSessionKey(
+  bookingId: string,
+  userId: string | null | undefined,
+  role: string | null | undefined,
+  sessionGeneration: number,
+): string {
+  return `${bookingId}::${userId ?? ''}::${role ?? ''}::${sessionGeneration}`;
+}
+
+function isTransientMatchingReadFailure(problem: unknown): boolean {
+  if (!problem || typeof problem !== 'object') return false;
+  const failure = problem as {
+    code?: unknown;
+    request?: unknown;
+    response?: { status?: unknown } | null;
+  };
+  if (failure.response) {
+    const status = failure.response.status;
+    return typeof status === 'number'
+      && (status === 408 || status === 425 || status === 429 || status >= 500);
+  }
+  return failure.request != null
+    || ['ERR_NETWORK', 'ECONNABORTED', 'ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN'].includes(String(failure.code));
+}
+
 function describeBooking(booking: BookingItem): string {
   if (booking.serviceOrderId && booking.status === 'CLOSED') return 'Lượt mời trước đã kết thúc. Thử yêu cầu chọn kỹ thuật viên mới; hệ thống kiểm tra trước khi gửi.';
   if (booking.serviceOrderId && booking.status === 'MATCHING') return 'Đang tìm kỹ thuật viên thay thế; đơn vẫn chờ kỹ thuật viên phản hồi lời mời còn lại. Làm mới để cập nhật, không cần gửi lại.';
@@ -73,17 +106,22 @@ export default function CustomerMatchingScreen() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const role = useAuthStore((state) => state.user?.role);
   const userId = useAuthStore((state) => state.user?.id);
+  const sessionGeneration = useAuthStore((state) => state.sessionGeneration);
   const [booking, setBooking] = useState<BookingItem | null>(null);
   const [linkedOrder, setLinkedOrder] = useState<ServiceOrderItem | null>(null);
   const [candidates, setCandidates] = useState<TechnicianCandidate[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [sentConfirmed, setSentConfirmed] = useState(false);
   const [uncertainSend, setUncertainSend] = useState(false);
   const [attemptLocked, setAttemptLocked] = useState(false);
   const [rejectedDefinitive, setRejectedDefinitive] = useState(false);
+  const [detailTarget, setDetailTarget] = useState<CandidateDetailTarget | null>(null);
+  const [loadedContextKey, setLoadedContextKey] = useState('');
+  const detailSheetRef = useRef<BottomSheetModal>(null);
   const sendingRef = useRef(false);
   // A shortlist POST is never repeated because a timeout may follow a successful write.
   const shortlistRequestLockedRef = useRef(false);
@@ -91,47 +129,85 @@ export default function CustomerMatchingScreen() {
   const rejectedDefinitiveRef = useRef(false);
   const baselineInvitationIdsRef = useRef<string[]>([]);
   const sessionKeyRef = useRef('');
+  const loadedContextKeyRef = useRef('');
   const loadGeneration = useRef(0);
+
+  const clearCandidateView = useCallback(() => {
+    setCandidates([]);
+    setSelected([]);
+    setDetailTarget(null);
+  }, []);
+
+  const publishCandidates = useCallback((list: TechnicianCandidate[]) => {
+    const available = list.filter((candidate) => candidate.isAvailable);
+    const candidateIds = new Set(available.map((candidate) => candidate.userId));
+    setCandidates(available);
+    setSelected((previous) => previous.filter((candidateUserId) => candidateIds.has(candidateUserId)));
+    setDetailTarget((current) => current && !candidateIds.has(current.candidateUserId) ? null : current);
+  }, []);
 
   const loadCurrent = useCallback(async () => {
     // P1a: hook values drive effect identity (an A->B switch refires the load); live
     // store values are re-verified after every await because they may change mid-flight.
     const hookUserId = userId ?? null;
     const hookRole = role ?? null;
+    const hookSessionGeneration = sessionGeneration;
     const liveUserId = useAuthStore.getState().user?.id ?? null;
     const liveRole = useAuthStore.getState().user?.role ?? null;
-    if (liveUserId !== hookUserId || liveRole !== hookRole) return;
+    const liveSessionGeneration = useAuthStore.getState().sessionGeneration;
+    if (liveUserId !== hookUserId
+      || liveRole !== hookRole
+      || liveSessionGeneration !== hookSessionGeneration) return;
     const currentUserId = liveUserId;
     const currentRole = liveRole;
+    const currentSessionGeneration = liveSessionGeneration;
     // Revisit/focus/auth/account/booking change invalidates stale GETs, selection and locks.
-    const sessionKey = `${bookingId}::${currentUserId ?? ''}::${currentRole ?? ''}`;
+    const sessionKey = matchingSessionKey(
+      bookingId,
+      currentUserId,
+      currentRole,
+      currentSessionGeneration,
+    );
     if (sessionKeyRef.current !== sessionKey) {
       sessionKeyRef.current = sessionKey;
+      loadedContextKeyRef.current = '';
+      setLoadedContextKey('');
       shortlistRequestLockedRef.current = false;
+      sendingRef.current = false;
       uncertainSendRef.current = false;
       rejectedDefinitiveRef.current = false;
       baselineInvitationIdsRef.current = [];
       setUncertainSend(false);
+      setSending(false);
       setSentConfirmed(false);
       setAttemptLocked(false);
       setRejectedDefinitive(false);
+      setBooking(null);
+      setLinkedOrder(null);
+      clearCandidateView();
+      setLoading(true);
+      setRefreshing(false);
     }
     if (!isAuthenticated || role !== UserRole.CUSTOMER || !currentUserId) {
       // Logged out / wrong role: never keep the previous account's private state visible.
       shortlistRequestLockedRef.current = false;
+      sendingRef.current = false;
       uncertainSendRef.current = false;
       rejectedDefinitiveRef.current = false;
       baselineInvitationIdsRef.current = [];
+      loadedContextKeyRef.current = '';
+      setLoadedContextKey('');
       setBooking(null);
       setLinkedOrder(null);
-      setCandidates([]);
-      setSelected([]);
+      clearCandidateView();
       setUncertainSend(false);
+      setSending(false);
       setSentConfirmed(false);
       setAttemptLocked(false);
       setRejectedDefinitive(false);
       setError('');
       setLoading(false);
+      setRefreshing(false);
       return;
     }
     const generation = ++loadGeneration.current;
@@ -139,21 +215,28 @@ export default function CustomerMatchingScreen() {
     const sessionAlive = () =>
       loadGeneration.current === generation
       && useAuthStore.getState().user?.id === currentUserId
-      && useAuthStore.getState().user?.role === currentRole;
-    setLoading(true);
+      && useAuthStore.getState().user?.role === currentRole
+      && useAuthStore.getState().sessionGeneration === currentSessionGeneration;
+    const isOwnerBoundRefresh = loadedContextKeyRef.current === sessionKey;
+    let ownerBoundSnapshotValidated = false;
+    setLoading(!isOwnerBoundRefresh);
+    setRefreshing(isOwnerBoundRefresh);
     setError('');
-    setLinkedOrder(null);
-    setAttemptLocked(false);
+    if (!isOwnerBoundRefresh) {
+      setLinkedOrder(null);
+      setAttemptLocked(false);
+    }
     try {
       const nextBooking = await bookingsApi.getBooking(bookingId);
       if (!sessionAlive()) return;
       if (nextBooking.id !== bookingId) throw new Error('Thông tin trả về không khớp yêu cầu.');
       // Owner binding including the unlinked flow; a missing customerId fails closed.
       if (nextBooking.customerId !== currentUserId) {
+        loadedContextKeyRef.current = '';
+        setLoadedContextKey('');
         setBooking(null);
         setLinkedOrder(null);
-        setCandidates([]);
-        setSelected([]);
+        clearCandidateView();
         setUncertainSend(false);
         setSentConfirmed(false);
         setAttemptLocked(false);
@@ -161,9 +244,8 @@ export default function CustomerMatchingScreen() {
         setError('Yêu cầu này không thuộc tài khoản đang đăng nhập. Hãy kiểm tra lại tài khoản.');
         return;
       }
+      ownerBoundSnapshotValidated = true;
       setBooking(nextBooking);
-      setCandidates([]);
-      setSelected([]);
 
       // K03: the FIRST shortlist uses its own durable owner+Booking marker.
       // It is deliberately separate from the existing linked-reselect marker.
@@ -210,7 +292,7 @@ export default function CustomerMatchingScreen() {
       if (!nextBooking.serviceOrderId) {
         if (initialAttempt || initialAttemptBlocked) {
           setAttemptLocked(true);
-          setCandidates([]);
+          clearCandidateView();
           return;
         }
 
@@ -224,11 +306,20 @@ export default function CustomerMatchingScreen() {
           uncertainSendRef.current = false;
           setUncertainSend(false);
           setSentConfirmed(true);
+          clearCandidateView();
         }
         if (canChooseTechnicians(nextBooking) && !shortlistRequestLockedRef.current) {
-          const list = await bookingsApi.getCandidates(bookingId);
-          if (!sessionAlive()) return;
-          setCandidates(list.filter((candidate) => candidate.isAvailable));
+          try {
+            const list = await bookingsApi.getCandidates(bookingId);
+            if (!sessionAlive()) return;
+            publishCandidates(list);
+          } catch (candidateError) {
+            if (!sessionAlive()) return;
+            if (!isTransientMatchingReadFailure(candidateError)) clearCandidateView();
+            setError('Không thể tải danh sách kỹ thuật viên. Kiểm tra kết nối và thử lại.');
+          }
+        } else {
+          clearCandidateView();
         }
         return;
       }
@@ -239,8 +330,10 @@ export default function CustomerMatchingScreen() {
       } catch (orderError) {
         if (!sessionAlive()) return;
         const kind = classifyLinkedShortlistPostError(orderError);
-        setLinkedOrder(null);
-        setCandidates([]);
+        if (!isTransientMatchingReadFailure(orderError)) {
+          setLinkedOrder(null);
+          clearCandidateView();
+        }
         setError(kind === 'denied'
           ? 'Không có quyền xem đơn sửa chữa liên kết. Hãy kiểm tra lại tài khoản và thử lại.'
           : 'Không thể tải đơn sửa chữa liên kết. Kiểm tra kết nối và thử lại.');
@@ -249,7 +342,7 @@ export default function CustomerMatchingScreen() {
       if (!sessionAlive()) return;
       if (nextOrder.id !== nextBooking.serviceOrderId || nextOrder.bookingId !== nextBooking.id) {
         setLinkedOrder(null);
-        setCandidates([]);
+        clearCandidateView();
         setError('Thông tin liên kết yêu cầu–đơn sửa chữa không khớp. Hãy làm mới hoặc liên hệ hỗ trợ.');
         return;
       }
@@ -270,7 +363,7 @@ export default function CustomerMatchingScreen() {
       }
       if (initialAttemptBlocked) {
         // Keep read-only order visibility, but fail closed for any new mutation.
-        setCandidates([]);
+        clearCandidateView();
         return;
       }
 
@@ -283,14 +376,14 @@ export default function CustomerMatchingScreen() {
         if (!sessionAlive()) return;
         if (markerRead.state === 'invalid') {
           setAttemptLocked(true);
-          setCandidates([]);
+          clearCandidateView();
           return;
         }
         if (markerRead.state === 'valid') markerAttempt = markerRead.attempt;
       } catch {
         if (!sessionAlive()) return;
         setAttemptLocked(true);
-        setCandidates([]);
+        clearCandidateView();
         setError('Chưa thể kiểm tra trạng thái yêu cầu trước đó. Không gửi lại để tránh trùng; hãy thử lại hoặc liên hệ hỗ trợ.');
         return;
       }
@@ -302,7 +395,7 @@ export default function CustomerMatchingScreen() {
           setSentConfirmed(true);
         } else {
           setAttemptLocked(true);
-          setCandidates([]);
+          clearCandidateView();
           return;
         }
       }
@@ -311,36 +404,50 @@ export default function CustomerMatchingScreen() {
         uncertainSendRef.current = false;
         setUncertainSend(false);
         setSentConfirmed(true);
+        clearCandidateView();
       }
       if (mayRequestLinkedReplacement(nextBooking, nextOrder, currentUserId)
         && !shortlistRequestLockedRef.current && !uncertainSendRef.current && !rejectedDefinitiveRef.current) {
         try {
           const list = await bookingsApi.getCandidates(bookingId);
           if (!sessionAlive()) return;
-          setCandidates(list.filter((candidate) => candidate.isAvailable));
-        } catch {
+          publishCandidates(list);
+        } catch (candidateError) {
           if (!sessionAlive()) return;
-          // Invalid/unauthorized candidate reads must not leak technician details.
-          setCandidates([]);
+          // Denied/invalid reads fail closed; a transient refresh keeps last-good owner-bound data.
+          if (!isTransientMatchingReadFailure(candidateError)) clearCandidateView();
           setError('Không thể tải danh sách kỹ thuật viên. Kiểm tra kết nối và thử lại.');
         }
+      } else {
+        clearCandidateView();
       }
     } catch (problem) {
       if (sessionAlive()) {
-        // Error/denied reads clear private data; A's content must never linger for B.
-        setBooking(null);
-        setLinkedOrder(null);
-        setCandidates([]);
-        setSelected([]);
         const kind = classifyLinkedShortlistPostError(problem);
+        const preserveLastGood = loadedContextKeyRef.current === sessionKey
+          && isTransientMatchingReadFailure(problem);
+        if (!preserveLastGood) {
+          loadedContextKeyRef.current = '';
+          setLoadedContextKey('');
+          setBooking(null);
+          setLinkedOrder(null);
+          clearCandidateView();
+        }
         setError(kind === 'denied'
           ? 'Phiên đăng nhập đã hết hạn hoặc không có quyền xem yêu cầu này. Hãy đăng nhập lại.'
           : 'Không thể tải trạng thái yêu cầu hoặc danh sách kỹ thuật viên. Kiểm tra kết nối và thử lại.');
       }
     } finally {
-      if (sessionAlive()) setLoading(false);
+      if (sessionAlive()) {
+        if (ownerBoundSnapshotValidated) {
+          loadedContextKeyRef.current = sessionKey;
+          setLoadedContextKey(sessionKey);
+        }
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  }, [bookingId, isAuthenticated, role, userId]);
+  }, [bookingId, clearCandidateView, isAuthenticated, publishCandidates, role, sessionGeneration, userId]);
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -352,7 +459,9 @@ export default function CustomerMatchingScreen() {
     && mayRequestLinkedReplacement(booking, linkedOrder, userId);
 
   const choose = (candidateUserId: string) => {
-    if (!booking || sending || loading || uncertainSend || sentConfirmed || attemptLocked || rejectedDefinitive) return;
+    if (!booking || booking.id !== bookingId || sending || loading || refreshing || !!error
+      || uncertainSend || sentConfirmed || attemptLocked || rejectedDefinitive
+      || !candidates.some((candidate) => candidate.userId === candidateUserId)) return;
     const currentUserId = useAuthStore.getState().user?.id ?? null;
     // P1a: selection requires the CURRENT session to own the visible booking.
     if (!isVisibleBookingOwner(booking, currentUserId)) return;
@@ -363,6 +472,16 @@ export default function CustomerMatchingScreen() {
   };
 
   const sendShortlist = async () => {
+    const dispatchSession = useAuthStore.getState();
+    const dispatchUserId = dispatchSession.user?.id ?? null;
+    const dispatchSessionGeneration = dispatchSession.sessionGeneration;
+    const isCurrentCustomerSession = () => {
+      const currentSession = useAuthStore.getState();
+      return currentSession.isAuthenticated
+        && currentSession.user?.role === UserRole.CUSTOMER
+        && currentSession.user?.id === dispatchUserId
+        && currentSession.sessionGeneration === dispatchSessionGeneration;
+    };
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (booking?.serviceOrderId && linkedOrder) {
       await sendLinkedReselect();
@@ -372,6 +491,8 @@ export default function CustomerMatchingScreen() {
       sendingRef.current ||
       shortlistRequestLockedRef.current ||
       loading ||
+      refreshing ||
+      !!error ||
       sentConfirmed ||
       uncertainSend ||
       attemptLocked ||
@@ -402,15 +523,15 @@ export default function CustomerMatchingScreen() {
       return;
     }
 
-    const dispatchUserId = useAuthStore.getState().user?.id ?? null;
-    if (!dispatchUserId || !isVisibleBookingOwner(booking, dispatchUserId)) {
+    if (!dispatchSession.isAuthenticated
+      || dispatchSession.user?.role !== UserRole.CUSTOMER
+      || !dispatchUserId
+      || !isVisibleBookingOwner(booking, dispatchUserId)) {
       setError(
         'Tài khoản đăng nhập đã thay đổi. Hãy làm mới và kiểm tra lại trước khi gửi.',
       );
       return;
     }
-    const stillOwner = () =>
-      useAuthStore.getState().user?.id === dispatchUserId;
     const baselineInvitationIds = invitationIds(booking.invitations);
 
     shortlistRequestLockedRef.current = true;
@@ -429,7 +550,9 @@ export default function CustomerMatchingScreen() {
           selectedTechnicianUserIds: orderedIds,
         });
         markerSaved = true;
+        if (!isCurrentCustomerSession()) return;
       } catch (saveError) {
+        if (!isCurrentCustomerSession()) return;
         // Persistence failed before dispatch, so there is provably no POST to
         // reconcile. Release only the in-memory request lock and let a later
         // explicit user retry persist a fresh marker first.
@@ -449,18 +572,13 @@ export default function CustomerMatchingScreen() {
       try {
         freshBooking = await bookingsApi.getBooking(bookingId);
       } catch {
+        if (!isCurrentCustomerSession()) return;
         setError(
           'Chưa thể xác nhận trạng thái yêu cầu mới nhất. Chưa gửi lời mời; hãy làm mới rồi thử lại.',
         );
         return;
       }
-      if (!stillOwner()) {
-        setSelected([]);
-        setError(
-          'Tài khoản đăng nhập đã thay đổi. Chưa gửi lời mời; hãy kiểm tra lại tài khoản.',
-        );
-        return;
-      }
+      if (!isCurrentCustomerSession()) return;
 
       const freshInvitationIds = invitationIds(freshBooking.invitations);
       const sortedFreshInvitationIds = [...freshInvitationIds].sort();
@@ -477,6 +595,7 @@ export default function CustomerMatchingScreen() {
         !canChooseTechnicians(freshBooking) ||
         !sameInvitations
       ) {
+        if (!isCurrentCustomerSession()) return;
         setBooking(freshBooking);
         setSelected([]);
         setError(
@@ -485,10 +604,12 @@ export default function CustomerMatchingScreen() {
         return;
       }
 
+      if (!isCurrentCustomerSession()) return;
       postDispatched = true;
       try {
         await bookingsApi.sendShortlist(bookingId, orderedIds);
       } catch (postError) {
+        if (!isCurrentCustomerSession()) return;
         const kind = classifyInitialShortlistPostError(postError);
 
         if (kind === 'denied' || kind === 'definitive') {
@@ -500,10 +621,13 @@ export default function CustomerMatchingScreen() {
               dispatchUserId,
               bookingId,
             );
+            if (!isCurrentCustomerSession()) return;
             markerSaved = false;
           } catch {
+            if (!isCurrentCustomerSession()) return;
             setAttemptLocked(true);
           }
+          if (!isCurrentCustomerSession()) return;
           shortlistRequestLockedRef.current = false;
           uncertainSendRef.current = false;
           setUncertainSend(false);
@@ -519,16 +643,18 @@ export default function CustomerMatchingScreen() {
 
           try {
             const reconciled = await bookingsApi.getBooking(bookingId);
+            if (!isCurrentCustomerSession()) return;
             if (
               reconciled.id === bookingId &&
-              stillOwner() &&
               reconciled.customerId === dispatchUserId
             ) {
               setBooking(reconciled);
             }
           } catch {
+            if (!isCurrentCustomerSession()) return;
             // The server rejection itself is decisive; GET is for fresh UX only.
           }
+          if (!isCurrentCustomerSession()) return;
           const status = (
             postError as { response?: { status?: unknown } }
           )?.response?.status;
@@ -549,9 +675,9 @@ export default function CustomerMatchingScreen() {
         );
         try {
           const reconciled = await bookingsApi.getBooking(bookingId);
+          if (!isCurrentCustomerSession()) return;
           if (
             reconciled.id === bookingId &&
-            stillOwner() &&
             reconciled.customerId === dispatchUserId
           ) {
             setBooking(reconciled);
@@ -566,6 +692,7 @@ export default function CustomerMatchingScreen() {
                 dispatchUserId,
                 bookingId,
               ).catch(() => undefined);
+              if (!isCurrentCustomerSession()) return;
               markerSaved = false;
               uncertainSendRef.current = false;
               setUncertainSend(false);
@@ -576,53 +703,69 @@ export default function CustomerMatchingScreen() {
             }
           }
         } catch {
+          if (!isCurrentCustomerSession()) return;
           // Keep the durable lock; absence of GET proof never means POST failed.
         }
         return;
       }
 
       // A 201 confirms invitation creation, not technician acceptance.
+      if (!isCurrentCustomerSession()) return;
       await clearInitialShortlistAttempt(
         AsyncStorage,
         dispatchUserId,
         bookingId,
       ).catch(() => undefined);
+      if (!isCurrentCustomerSession()) return;
       markerSaved = false;
       setAttemptLocked(false);
       setSentConfirmed(true);
       setSelected([]);
       try {
         const updated = await bookingsApi.getBooking(bookingId);
+        if (!isCurrentCustomerSession()) return;
         if (
           updated.id === bookingId &&
-          stillOwner() &&
           updated.customerId === dispatchUserId
         ) {
           setBooking(updated);
         }
       } catch {
+        if (!isCurrentCustomerSession()) return;
         setError(
           'Lời mời đã được hệ thống xác nhận nhưng chưa tải được trạng thái mới. Hãy bấm làm mới.',
         );
       }
     } finally {
-      if (markerSaved && !postDispatched) {
+      if (markerSaved && !postDispatched && isCurrentCustomerSession()) {
         // Nothing was dispatched, so this exact marker is safe to remove.
         await clearInitialShortlistAttempt(
           AsyncStorage,
           dispatchUserId,
           bookingId,
         ).catch(() => undefined);
-        shortlistRequestLockedRef.current = false;
+        if (isCurrentCustomerSession()) shortlistRequestLockedRef.current = false;
       }
-      sendingRef.current = false;
-      setSending(false);
+      if (isCurrentCustomerSession()) {
+        sendingRef.current = false;
+        setSending(false);
+      }
     }
   };
 
   const sendLinkedReselect = async () => {
-    const currentUserId = useAuthStore.getState().user?.id ?? null;
-    if (sendingRef.current || shortlistRequestLockedRef.current || loading || sentConfirmed
+    const dispatchSession = useAuthStore.getState();
+    const currentUserId = dispatchSession.user?.id ?? null;
+    const dispatchSessionGeneration = dispatchSession.sessionGeneration;
+    const isCurrentCustomerSession = () => {
+      const currentSession = useAuthStore.getState();
+      return currentSession.isAuthenticated
+        && currentSession.user?.role === UserRole.CUSTOMER
+        && currentSession.user?.id === currentUserId
+        && currentSession.sessionGeneration === dispatchSessionGeneration;
+    };
+    if (!dispatchSession.isAuthenticated || dispatchSession.user?.role !== UserRole.CUSTOMER) return;
+    if (sendingRef.current || shortlistRequestLockedRef.current || loading || refreshing || !!error || sentConfirmed
       || uncertainSend || attemptLocked || rejectedDefinitive
       || !booking || !linkedOrder || !currentUserId) return;
     if (!mayRequestLinkedReplacement(booking, linkedOrder, currentUserId)) return;
@@ -661,7 +804,9 @@ export default function CustomerMatchingScreen() {
           customerId: currentUserId, bookingId, baselineInvitationIds: snapshot.invitationIds,
         });
         markerSaved = true;
+        if (!isCurrentCustomerSession()) return;
       } catch (saveError) {
+        if (!isCurrentCustomerSession()) return;
         // P2: an existing (valid or corrupt) lock or unreadable storage — fail closed,
         // lock the UI, and never dispatch. A refresh re-evaluates from durable state.
         setAttemptLocked(true);
@@ -674,44 +819,46 @@ export default function CustomerMatchingScreen() {
       let freshOrder: ServiceOrderItem;
       try {
         freshBooking = await bookingsApi.getBooking(bookingId);
+        if (!isCurrentCustomerSession()) return;
         if (freshBooking.id !== bookingId) throw new Error('stale');
         freshOrder = await ordersApi.getOrder(snapshot.serviceOrderId);
+        if (!isCurrentCustomerSession()) return;
       } catch {
+        if (!isCurrentCustomerSession()) return;
         setError('Chưa thể xác nhận trạng thái mới nhất. Không gửi lại để tránh trùng; hãy làm mới yêu cầu hoặc liên hệ hỗ trợ.');
         return;
       }
       // P1a, directly before dispatch: the session that built the snapshot must still
       // own it. Publish nothing on identity change; the render gate hides stale content.
-      const dispatchUserId = useAuthStore.getState().user?.id ?? null;
-      const stillOwner = () => useAuthStore.getState().user?.id === dispatchUserId;
-      if (dispatchUserId !== currentUserId || dispatchUserId !== snapshot.customerId) {
-        setSelected([]);
-        setError('Tài khoản đăng nhập đã thay đổi. Đã làm mới; hãy kiểm tra lại trước khi gửi.');
-        return;
-      }
+      if (!isCurrentCustomerSession() || currentUserId !== snapshot.customerId) return;
       // P1b: dispatch-time end-of-window is rechecked inside (now defaults to dispatch time).
       if (!validateLinkedReselectPrePost(
         snapshot, freshBooking, freshOrder, currentUserId, [...selected],
         candidates.map((candidate) => candidate.userId),
       )) {
-        if (stillOwner()) {
+        if (isCurrentCustomerSession()) {
           setBooking(freshBooking);
           setLinkedOrder(freshOrder);
         }
-        setSelected([]);
-        setError('Trạng thái yêu cầu hoặc đơn sửa chữa vừa thay đổi. Đã làm mới; hãy kiểm tra lại trước khi gửi.');
+        if (isCurrentCustomerSession()) {
+          setSelected([]);
+          setError('Trạng thái yêu cầu hoặc đơn sửa chữa vừa thay đổi. Đã làm mới; hãy kiểm tra lại trước khi gửi.');
+        }
         return;
       }
       // Only the Backend locked POST decides eligibility, assignment, and concurrency.
+      if (!isCurrentCustomerSession()) return;
+      posted = true;
       try {
         await bookingsApi.sendShortlist(bookingId, orderedIds);
-        posted = true;
+        if (!isCurrentCustomerSession()) return;
       } catch (postError) {
-        posted = true;
+        if (!isCurrentCustomerSession()) return;
         const kind = classifyLinkedShortlistPostError(postError);
         if (kind === 'denied') {
           // Auth guards run before the Backend transaction, so nothing was written.
           await clearLinkedReselectAttempt(AsyncStorage, currentUserId, bookingId).catch(() => undefined);
+          if (!isCurrentCustomerSession()) return;
           setCandidates([]);
           setSelected([]);
           setError('Phiên đăng nhập đã hết hạn hoặc không có quyền gửi yêu cầu. Hãy đăng nhập lại.');
@@ -724,11 +871,17 @@ export default function CustomerMatchingScreen() {
           setRejectedDefinitive(true);
           try {
             const reconciled = await bookingsApi.getBooking(bookingId);
-            if (reconciled.id === bookingId) {
-              if (stillOwner()) setBooking(reconciled);
+            if (!isCurrentCustomerSession()) return;
+            if (reconciled.id === bookingId && reconciled.customerId === currentUserId) {
+              setBooking(reconciled);
               await clearLinkedReselectAttempt(AsyncStorage, currentUserId, bookingId).catch(() => undefined);
+              if (!isCurrentCustomerSession()) return;
             }
-          } catch { /* Keep the lock; the marker stays until a successful adjudicating GET. */ }
+          } catch {
+            if (!isCurrentCustomerSession()) return;
+            /* Keep the lock; the marker stays until a successful adjudicating GET. */
+          }
+          if (!isCurrentCustomerSession()) return;
           const status = (postError as { response?: { status?: unknown } })?.response?.status;
           setError(`Hệ thống đã kiểm tra và từ chối yêu cầu chọn lại theo trạng thái mới nhất${typeof status === 'number' ? ` (mã ${status})` : ''}. Không gửi lại; hãy làm mới để xem trạng thái hiện tại hoặc liên hệ hỗ trợ.`);
           return;
@@ -739,38 +892,49 @@ export default function CustomerMatchingScreen() {
         setError('Chưa xác định được kết quả gửi yêu cầu chọn lại. Không gửi lại để tránh trùng; hãy làm mới yêu cầu hoặc liên hệ hỗ trợ.');
         try {
           const reconciled = await bookingsApi.getBooking(bookingId);
-          if (reconciled.id === bookingId && stillOwner()) {
+          if (!isCurrentCustomerSession()) return;
+          if (reconciled.id === bookingId && reconciled.customerId === currentUserId) {
             setBooking(reconciled);
             if (hasPositiveNewInvitations(snapshot.invitationIds, reconciled.invitations)) {
               await clearLinkedReselectAttempt(AsyncStorage, currentUserId, bookingId).catch(() => undefined);
+              if (!isCurrentCustomerSession()) return;
               uncertainSendRef.current = false;
               setUncertainSend(false);
               setSentConfirmed(true);
               setError('');
             }
           }
-        } catch { /* Keep the ambiguous POST locked; no blind retry. */ }
+        } catch {
+          if (!isCurrentCustomerSession()) return;
+          /* Keep the ambiguous POST locked; no blind retry. */
+        }
         return;
       }
       // Positive 201 confirms a new round only — never a technician acceptance.
+      if (!isCurrentCustomerSession()) return;
       await clearLinkedReselectAttempt(AsyncStorage, currentUserId, bookingId).catch(() => undefined);
+      if (!isCurrentCustomerSession()) return;
       setSentConfirmed(true);
       setSelected([]);
       try {
         const updated = await bookingsApi.getBooking(bookingId);
-        if (updated.id === bookingId && stillOwner()) setBooking(updated);
+        if (!isCurrentCustomerSession()) return;
+        if (updated.id === bookingId) setBooking(updated);
       } catch {
+        if (!isCurrentCustomerSession()) return;
         setError('Yêu cầu chọn lại đã được gửi nhưng chưa tải được trạng thái mới. Hãy bấm làm mới.');
       }
     } finally {
-      if (markerSaved && !posted) {
+      if (markerSaved && !posted && isCurrentCustomerSession()) {
         // P2: only a marker saved by THIS attempt may be released here, and only
         // because nothing was dispatched. A failed clear keeps the safe direction.
         await clearLinkedReselectAttempt(AsyncStorage, currentUserId, bookingId).catch(() => undefined);
-        shortlistRequestLockedRef.current = false;
+        if (isCurrentCustomerSession()) shortlistRequestLockedRef.current = false;
       }
-      sendingRef.current = false;
-      setSending(false);
+      if (isCurrentCustomerSession()) {
+        sendingRef.current = false;
+        setSending(false);
+      }
     }
   };
 
@@ -778,16 +942,42 @@ export default function CustomerMatchingScreen() {
   // P1a hard render guard: private Booking content renders ONLY for the currently
   // signed-in owner, so an A->B switch can never flash A's card/candidates to B —
   // not even for one frame before the refired load clears state.
-  const ownsVisibleBooking = isVisibleBookingOwner(booking, userId);
+  const currentContextKey = matchingSessionKey(bookingId, userId, role, sessionGeneration);
+  const ownsVisibleBooking = booking?.id === bookingId
+    && loadedContextKey === currentContextKey
+    && isVisibleBookingOwner(booking, userId);
   const waiting = ownsVisibleBooking && (booking?.status === 'MATCHING' || booking?.status === 'MATCHED'
     || (!!booking?.serviceOrderId && !linkedTentative) || sentConfirmed || uncertainSend
     || attemptLocked || rejectedDefinitive);
-  const selectable = ownsVisibleBooking && !!booking && canChooseTechnicians(booking) && !waiting && !loading && !error;
-  const linkedSelectable = ownsVisibleBooking && linkedTentative && !waiting && !loading && !error;
-  const pickerVisible = selectable || linkedSelectable;
+  const candidateFlowAvailable = ownsVisibleBooking && !!booking
+    && (canChooseTechnicians(booking) || linkedTentative) && !waiting;
+  const pickerActionsEnabled = candidateFlowAvailable && !loading && !refreshing && !error;
+  const pickerVisible = candidateFlowAvailable;
   const linkedMode = !!booking?.serviceOrderId;
   const candidateState = candidateAvailabilityState(candidates.length);
   const verifiedOrderId = verifiedLinkedOrderId(booking, linkedOrder, userId);
+  const detailCandidate = detailTarget
+    && isAuthenticated
+    && role === UserRole.CUSTOMER
+    && ownsVisibleBooking
+    && !waiting
+    && detailTarget.bookingId === bookingId
+    && detailTarget.bookingId === booking?.id
+    && detailTarget.ownerId === userId
+    ? candidates.find((candidate) => candidate.userId === detailTarget.candidateUserId) ?? null
+    : null;
+  const detailCandidateUserId = detailCandidate?.userId ?? null;
+
+  useEffect(() => {
+    if (detailCandidateUserId) detailSheetRef.current?.present();
+    else detailSheetRef.current?.dismiss();
+  }, [detailCandidateUserId]);
+
+  const openDetails = (candidate: TechnicianCandidate) => {
+    if (!userId || !ownsVisibleBooking || waiting || booking?.id !== bookingId
+      || !candidates.some((item) => item.userId === candidate.userId)) return;
+    setDetailTarget({ bookingId, ownerId: userId, candidateUserId: candidate.userId });
+  };
 
   return (
     <SafeAreaView style={[styles.page, { backgroundColor: colors.background }]}>
@@ -802,12 +992,21 @@ export default function CustomerMatchingScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.text }]}>Chọn kỹ thuật viên</Text>
-        <Text style={[styles.note, { color: colors.textSecondary }]}>Mã tham chiếu: {bookingId.slice(0, 8)}</Text>
+        {loadedContextKey === currentContextKey && (
+          <Text style={[styles.note, { color: colors.textSecondary }]}>Mã tham chiếu: {bookingId.slice(0, 8)}</Text>
+        )}
         {!isAuthenticated || role !== UserRole.CUSTOMER ? (
           <Text style={{ color: colors.error }}>Hãy đăng nhập bằng tài khoản khách hàng để xem yêu cầu này.</Text>
         ) : (
           <>
-            {loading && <ActivityIndicator accessibilityLabel="Đang tải yêu cầu và danh sách kỹ thuật viên" color={colors.primary} />}
+            {loading && !refreshing && candidates.length === 0 && !waiting && (
+              <MatchingTechnicianSkeleton />
+            )}
+            {refreshing && ownsVisibleBooking && (
+              <Text testID="matching-refresh-status" style={[styles.note, { color: colors.textSecondary }]}>
+                Đang cập nhật trạng thái…
+              </Text>
+            )}
             {!!error && <Text style={[styles.note, { color: colors.error }]}>{error}</Text>}
             {!!booking && ownsVisibleBooking && (
               <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -818,19 +1017,6 @@ export default function CustomerMatchingScreen() {
                   <Text selectable style={{ color: colors.success }}>
                     Mã tham chiếu đơn: {booking.serviceOrderId.slice(0, 8)}
                   </Text>
-                )}
-                {!!verifiedOrderId && (
-                  <TouchableOpacity
-                    accessibilityRole="button"
-                    onPress={() =>
-                      navigation.navigate('CustomerOrderDetail', {
-                        serviceOrderId: verifiedOrderId,
-                      })
-                    }
-                    style={[styles.action, { backgroundColor: colors.primary }]}
-                  >
-                    <Text style={styles.actionText}>Xem đơn</Text>
-                  </TouchableOpacity>
                 )}
               </View>
             )}
@@ -883,7 +1069,7 @@ export default function CustomerMatchingScreen() {
                     })}
                 </View>
               )}
-            {!!booking && !ownsVisibleBooking && (
+            {!!booking && loadedContextKey === currentContextKey && !ownsVisibleBooking && (
               <Text style={[styles.note, { color: colors.textSecondary }]}>Tài khoản hiện tại không sở hữu yêu cầu này. Hãy đăng nhập đúng tài khoản khách hàng.</Text>
             )}
             {pickerVisible && (
@@ -898,7 +1084,7 @@ export default function CustomerMatchingScreen() {
                     ? 'Thử yêu cầu chọn kỹ thuật viên mới; hệ thống kiểm tra trước khi gửi. Chỉ hệ thống mới quyết định lời mời có được tạo hay không.'
                     : 'Bạn có thể chọn 1 người để mời ngay, hoặc chọn thêm người thứ hai làm dự phòng. Thứ tự chọn là thứ tự ưu tiên.'}
                 </Text>
-                {candidateState === 'none' && (
+                {!loading && !refreshing && !error && candidateState === 'none' && (
                   <View style={styles.card}>
                     <Text style={{ color: colors.textSecondary }}>
                       Hiện chưa có kỹ thuật viên phù hợp với dịch vụ, khu vực và khung giờ này.
@@ -910,7 +1096,7 @@ export default function CustomerMatchingScreen() {
                     </Text>
                   </View>
                 )}
-                {candidateState === 'one' && (
+                {!loading && !refreshing && !error && candidateState === 'one' && (
                   <View style={styles.card}>
                     <Text style={{ color: colors.textSecondary }}>
                       Hiện có 1 kỹ thuật viên phù hợp. Bạn có thể chọn người này và gửi lời mời ngay.
@@ -923,27 +1109,64 @@ export default function CustomerMatchingScreen() {
                 {candidates.map((candidate) => {
                   const priority = selected.indexOf(candidate.userId) + 1;
                   return (
-                    <TouchableOpacity key={candidate.userId} accessibilityRole="button"
-                      accessibilityState={{ selected: priority > 0, disabled: selected.length === 2 && priority === 0 }}
-                      onPress={() => choose(candidate.userId)}
-                      disabled={selected.length === 2 && priority === 0}
-                      style={[styles.card, { borderColor: priority ? colors.primary : colors.border, backgroundColor: colors.surface }]}>
-                      <Text style={[styles.heading, { color: colors.text }]}>{candidate.fullName || 'Kỹ thuật viên'}</Text>
-                      <Text style={[styles.note, { color: colors.textSecondary }]}>{priority === 1 ? 'Ưu tiên 1 · Mời trước' : priority === 2 ? 'Ưu tiên 2 · Dự phòng' : 'Chạm để chọn'}</Text>
-                      {Number.isFinite(candidate.averageRating) && <Text style={{ color: colors.textSecondary }}>Đánh giá: {candidate.averageRating}/5 ({candidate.ratingCount} lượt)</Text>}
-                      {candidate.distanceKm != null && Number.isFinite(candidate.distanceKm) && <Text style={{ color: colors.textSecondary }}>Khoảng cách tham khảo: {candidate.distanceKm} km</Text>}
-                    </TouchableOpacity>
+                    <MatchingTechnicianCard
+                      key={candidate.userId}
+                      candidate={candidate}
+                      priority={priority}
+                      selectionDisabled={!pickerActionsEnabled || sending || (selected.length === 2 && priority === 0)}
+                      onOpenDetails={() => openDetails(candidate)}
+                      onToggleSelection={() => choose(candidate.userId)}
+                      entranceIndex={candidates.indexOf(candidate)}
+                    />
                   );
                 })}
-                <TouchableOpacity accessibilityRole="button" onPress={sendShortlist} disabled={selected.length < 1 || sending}
-                  style={[styles.action, { backgroundColor: selected.length >= 1 ? colors.primary : colors.border }]}>
+                <TouchableOpacity accessibilityRole="button" onPress={sendShortlist} disabled={!pickerActionsEnabled || selected.length < 1 || sending}
+                  style={[styles.action, { backgroundColor: pickerActionsEnabled && selected.length >= 1 ? colors.primary : colors.border }]}
+                  accessibilityState={{ disabled: !pickerActionsEnabled || selected.length < 1 || sending }}>
                   <Text style={styles.actionText}>
                     {sending ? 'Đang gửi...' : linkedMode ? 'Gửi yêu cầu chọn ' + selected.length + ' kỹ thuật viên mới' : 'Xác nhận mời ' + selected.length + ' kỹ thuật viên'}
                   </Text>
                 </TouchableOpacity>
               </>
             )}
-            {waiting && <Text style={[styles.note, { color: colors.textSecondary }]}>Chỉ trạng thái trên hệ thống mới xác nhận kỹ thuật viên nhận đơn. Không cần gửi lại danh sách mời.</Text>}
+            {waiting && ownsVisibleBooking && (
+              <>
+                <Text style={[styles.note, { color: colors.textSecondary }]}>
+                  Chỉ trạng thái trên hệ thống mới xác nhận kỹ thuật viên nhận đơn. Không cần gửi lại danh sách mời.
+                  {' '}Rời màn hình không hủy lời mời.
+                </Text>
+                <TouchableOpacity
+                  testID="matching-waiting-primary"
+                  accessibilityRole="button"
+                  onPress={() => verifiedOrderId
+                    ? navigation.navigate('CustomerOrderDetail', { serviceOrderId: verifiedOrderId })
+                    : navigation.navigate('CustomerMain')}
+                  style={[styles.action, { backgroundColor: colors.primary }]}
+                >
+                  <Text style={styles.actionText}>{verifiedOrderId ? 'Xem đơn sửa chữa' : 'Về trang chủ'}</Text>
+                </TouchableOpacity>
+                {verifiedOrderId && (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    onPress={() => navigation.navigate('CustomerMain')}
+                    style={[styles.secondaryAction, { borderColor: colors.border }]}
+                  >
+                    <Text style={[styles.secondaryActionText, { color: colors.text }]}>Về trang chủ</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  testID="matching-waiting-refresh"
+                  accessibilityRole="button"
+                  onPress={refresh}
+                  disabled={loading || refreshing || sending}
+                  style={[styles.secondaryAction, { borderColor: colors.border }]}
+                >
+                  <Text style={[styles.secondaryActionText, { color: colors.text }]}>
+                    {loading || refreshing ? 'Đang cập nhật…' : 'Làm mới trạng thái'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
             {ownsVisibleBooking && uncertainSend && <Text style={[styles.note, { color: colors.error }]}>Chưa thể xác nhận kết quả gửi. Không gửi lại khi chưa kiểm tra yêu cầu trên hệ thống.</Text>}
             {ownsVisibleBooking && attemptLocked && (
               <Text style={[styles.note, { color: colors.error }]}>
@@ -952,13 +1175,29 @@ export default function CustomerMatchingScreen() {
               </Text>
             )}
             {ownsVisibleBooking && rejectedDefinitive && <Text style={[styles.note, { color: colors.textSecondary }]}>Hệ thống đã từ chối yêu cầu chọn lại theo trạng thái mới nhất. Hãy làm mới để xem trạng thái hiện tại.</Text>}
-            <TouchableOpacity accessibilityRole="button" onPress={refresh} disabled={loading || sending}
-              style={[styles.action, { backgroundColor: colors.primary }]}>
-              <Text style={styles.actionText}>{loading ? 'Đang tải...' : 'Làm mới trạng thái'}</Text>
-            </TouchableOpacity>
+            {!waiting && (
+              <TouchableOpacity accessibilityRole="button" onPress={refresh} disabled={loading || refreshing || sending}
+                style={[styles.secondaryAction, { borderColor: colors.border }]}
+                accessibilityState={{ disabled: loading || refreshing || sending }}>
+                <Text style={[styles.secondaryActionText, { color: colors.text }]}>
+                  {loading || refreshing ? 'Đang cập nhật…' : 'Làm mới trạng thái'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </>
         )}
       </ScrollView>
+      <MatchingTechnicianDetailSheet
+        modalRef={detailSheetRef}
+        candidate={detailCandidate}
+        priority={detailCandidate ? selected.indexOf(detailCandidate.userId) + 1 : 0}
+        selectionDisabled={!pickerActionsEnabled || sending || (!!detailCandidate && selected.length === 2 && !selected.includes(detailCandidate.userId))}
+        onToggleSelection={() => { if (detailCandidate) choose(detailCandidate.userId); }}
+        onClose={() => {
+          setDetailTarget(null);
+          detailSheetRef.current?.dismiss();
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -972,5 +1211,7 @@ const styles = StyleSheet.create({
   note: { fontSize: 13, lineHeight: 21 },
   card: { padding: 15, borderWidth: 1, borderRadius: 12, gap: 7 },
   action: { padding: 15, borderRadius: 12, alignItems: 'center' },
+  secondaryAction: { minHeight: 44, paddingHorizontal: 15, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  secondaryActionText: { fontSize: 14, lineHeight: 20, fontWeight: '600' },
   actionText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
 });

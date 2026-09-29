@@ -22,6 +22,7 @@ import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'ex
 import { useAppTheme } from '../../constants/theme';
 import { partRequestsApi, type PartRequest, type FulfillmentMethod } from '../../api/part-requests.api';
 import { partsCatalogApi, type FixHomePart } from '../../api/parts-catalog.api';
+import { extractApiErrorMessage } from '../../utils/input-validation';
 
 const CATEGORY_TABS = [
   { label: 'Tất cả', value: '' },
@@ -75,8 +76,8 @@ function statusColor(status: PartRequest['status'], colors: any): string {
   }
 }
 
-function errorMessage(err: any, fallback: string): string {
-  return err?.response?.data?.message || fallback;
+function errorMessage(err: unknown, fallback: string): string {
+  return extractApiErrorMessage(err, fallback);
 }
 
 export default function TechnicianPartsSection({ orderId, orderStatus }: { orderId: string; orderStatus: string }) {
@@ -289,7 +290,22 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
 
   return (
     <View style={styles.jobCard}>
-      <Text style={styles.sectionTitle}>Linh kiện sửa chữa</Text>
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.sectionTitle}>Linh kiện sửa chữa</Text>
+        <TouchableOpacity
+          onPress={() => void loadPartRequests()}
+          disabled={loading}
+          accessibilityRole="button"
+          accessibilityLabel="Làm mới trạng thái linh kiện"
+          style={styles.refreshIconBtn}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <Ionicons name="refresh-outline" size={18} color={colors.primary} />
+          )}
+        </TouchableOpacity>
+      </View>
 
       {!!actionSuccess && (
         <View style={styles.successBanner}>
@@ -385,11 +401,23 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                     {selectedPart.sellingPrice.toLocaleString('vi-VN')}đ · {warrantyBadge(selectedPart.warrantyDays)}
                   </Text>
                   <View style={styles.qtyRow}>
-                    <TouchableOpacity style={styles.qtyBtn} onPress={() => setSelectedQuantity((q) => Math.max(1, q - 1))}>
+                    <TouchableOpacity
+                      style={styles.qtyBtn}
+                      onPress={() => setSelectedQuantity((q) => Math.max(1, q - 1))}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Giảm số lượng"
+                    >
                       <Ionicons name="remove" size={14} color={colors.text} />
                     </TouchableOpacity>
                     <Text style={styles.qtyText}>{selectedQuantity}</Text>
-                    <TouchableOpacity style={styles.qtyBtn} onPress={() => setSelectedQuantity((q) => q + 1)}>
+                    <TouchableOpacity
+                      style={styles.qtyBtn}
+                      onPress={() => setSelectedQuantity((q) => q + 1)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Tăng số lượng"
+                    >
                       <Ionicons name="add" size={14} color={colors.text} />
                     </TouchableOpacity>
                   </View>
@@ -417,15 +445,33 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                         <Text style={styles.jobMeta}>{item.price.toLocaleString('vi-VN')}đ × {item.quantity}</Text>
                       </View>
                       <View style={styles.qtyRow}>
-                        <TouchableOpacity style={styles.qtyBtn} onPress={() => adjustQuantity(item.partCatalogId, -1)}>
+                        <TouchableOpacity
+                          style={styles.qtyBtn}
+                          onPress={() => adjustQuantity(item.partCatalogId, -1)}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          accessibilityRole="button"
+                          accessibilityLabel="Giảm số lượng"
+                        >
                           <Ionicons name="remove" size={14} color={colors.text} />
                         </TouchableOpacity>
                         <Text style={styles.qtyText}>{item.quantity}</Text>
-                        <TouchableOpacity style={styles.qtyBtn} onPress={() => adjustQuantity(item.partCatalogId, 1)}>
+                        <TouchableOpacity
+                          style={styles.qtyBtn}
+                          onPress={() => adjustQuantity(item.partCatalogId, 1)}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          accessibilityRole="button"
+                          accessibilityLabel="Tăng số lượng"
+                        >
                           <Ionicons name="add" size={14} color={colors.text} />
                         </TouchableOpacity>
                       </View>
-                      <TouchableOpacity onPress={() => removeItem(item.partCatalogId)} style={{ marginLeft: 8 }}>
+                      <TouchableOpacity
+                        onPress={() => removeItem(item.partCatalogId)}
+                        style={{ marginLeft: 8 }}
+                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Xóa linh kiện"
+                      >
                         <Ionicons name="trash" size={16} color={colors.error} />
                       </TouchableOpacity>
                     </View>
@@ -574,7 +620,12 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
               onBarcodeScanned={scanningFor ? onBarcodeScanned : undefined}
             />
           )}
-          <TouchableOpacity style={styles.scanCloseBtn} onPress={() => setScanningFor(null)}>
+          <TouchableOpacity
+            style={styles.scanCloseBtn}
+            onPress={() => setScanningFor(null)}
+            accessibilityRole="button"
+            accessibilityLabel="Đóng quét mã"
+          >
             <Ionicons name="close" size={28} color="#fff" />
           </TouchableOpacity>
           <View style={styles.scanHintBox}>
@@ -588,7 +639,9 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
 
 const getStyles = (colors: any) => StyleSheet.create({
   jobCard: { backgroundColor: colors.surface, borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: colors.border },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 8 },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
+  refreshIconBtn: { padding: 6, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   jobMeta: { fontSize: 12, color: colors.textSecondary, lineHeight: 17 },
   successBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#ECFDF5', borderColor: '#A7F3D0', borderWidth: 1, borderRadius: 8, padding: 8, marginBottom: 8 },
   errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: 1, borderRadius: 8, padding: 8, marginBottom: 8 },

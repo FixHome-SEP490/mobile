@@ -10,3 +10,4 @@ export { technicianProfileApi } from './technician-profile.api';
 export { messagingApi } from './messaging.api';
 export { partRequestsApi } from './part-requests.api';
 export { partsCatalogApi } from './parts-catalog.api';
+export { walletApi } from './wallet.api';

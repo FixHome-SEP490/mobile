@@ -36,6 +36,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { usersApi, type AddressData } from '../../api/users.api';
 import { geoApi, type PlaceSuggestion } from '../../api/geo.api';
 import { useAppTheme } from '../../constants/theme';
+import { extractApiErrorMessage } from '../../utils/input-validation';
 
 export default function CustomerProfileScreen() {
   const { user, token, setAuth, logout } = useAuthStore();
@@ -179,8 +180,8 @@ export default function CustomerProfileScreen() {
       }
       profileSheetRef.current?.dismiss();
       Alert.alert('Thành công', 'Cập nhật thông tin thành công!');
-    } catch (err: any) {
-      Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể cập nhật thông tin.');
+    } catch (err: unknown) {
+      Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể cập nhật thông tin.'));
     } finally {
       setSavingProfile(false);
     }
@@ -232,8 +233,8 @@ export default function CustomerProfileScreen() {
       setAddressSuggestions([]);
       setEditAddressId(null);
       addressSheetRef.current?.dismiss();
-    } catch (err: any) {
-      Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể lưu địa chỉ.');
+    } catch (err: unknown) {
+      Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể lưu địa chỉ.'));
     } finally {
       setSavingAddress(false);
     }
@@ -344,8 +345,8 @@ export default function CustomerProfileScreen() {
           try {
             await usersApi.deleteAddress(id);
             await refreshAddresses();
-          } catch (err: any) {
-            Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể xóa địa chỉ.');
+          } catch (err: unknown) {
+            Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể xóa địa chỉ.'));
           }
         },
       },

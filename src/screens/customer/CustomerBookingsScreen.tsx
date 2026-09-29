@@ -20,6 +20,7 @@ import type { RootStackParamList } from '../../types';
 import { useAppTheme } from '../../constants/theme';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { useAuthStore } from '../../store/auth.store';
+import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import { bookingsApi, type BookingItem } from '../../api/bookings.api';
 import { ordersApi, type ServiceOrderItem, type CanonicalOrderStatus } from '../../api/orders.api';
 import {
@@ -683,9 +684,9 @@ export default function CustomerBookingsScreen() {
 
       {/* Content List */}
       {loading ? (
-        <View style={styles.centerLoading}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Đang tải đơn của tôi...</Text>
+        <View style={styles.loadingState}>
+          <CustomerSkeleton variant="booking" rows={3} />
+          <Text style={styles.loadingText} accessibilityLiveRegion="polite">Đang tải đơn của tôi...</Text>
         </View>
       ) : showList ? (
         <ScrollView
@@ -887,15 +888,15 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     padding: 16,
     paddingTop: 0,
   },
-  centerLoading: {
+  loadingState: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
   },
   loadingText: {
     fontSize: 14,
     color: colors.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   emptyContainer: {
     flex: 1,
