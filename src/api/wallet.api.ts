@@ -1,6 +1,8 @@
 // src/api/wallet.api.ts
 import apiClient from './client';
 import type {
+  BankAccount,
+  BankOption,
   PaginationMeta,
   TopUpResult,
   WalletSummary,
@@ -61,14 +63,35 @@ export const walletApi = {
     };
   },
 
-  async requestWithdrawal(dto: {
-    amount: number;
-    bankName: string;
-    bankAccountNumber: string;
-    bankAccountName: string;
-  }): Promise<WithdrawalRequest> {
+  async listBanks(): Promise<BankOption[]> {
+    return unwrap<BankOption[]>((await apiClient.get('/technician/wallet/banks')).data);
+  },
+
+  /** Null until the technician has saved one. */
+  async getMyBankAccount(): Promise<BankAccount | null> {
+    const res = await apiClient.get<{ data: BankAccount | null }>(
+      '/technician/wallet/bank-account',
+    );
+    return res.data?.data ?? null;
+  },
+
+  async saveMyBankAccount(dto: {
+    bankBin: string;
+    accountNumber: string;
+    accountName: string;
+  }): Promise<BankAccount> {
+    return unwrap<BankAccount>(
+      (await apiClient.put('/technician/wallet/bank-account', dto)).data,
+    );
+  },
+
+  /**
+   * Only the amount travels: the money always goes to the saved account, which
+   * is the one the server checked against the KYC name.
+   */
+  async requestWithdrawal(amount: number): Promise<WithdrawalRequest> {
     return unwrap<WithdrawalRequest>(
-      (await apiClient.post('/technician/wallet/withdrawals', dto)).data,
+      (await apiClient.post('/technician/wallet/withdrawals', { amount })).data,
     );
   },
 
