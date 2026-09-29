@@ -192,7 +192,7 @@ export default function TechnicianInvitationsScreen() {
           <View style={{ flex: 1 }}>
             <Text style={styles.acceptedTitle}>Đã xác minh đơn vừa nhận</Text>
             <Text style={styles.acceptedText}>
-              Đây là ServiceOrder đang được giao cho tài khoản kỹ thuật viên hiện tại.
+              Đây là đơn đang được giao cho tài khoản kỹ thuật viên hiện tại.
             </Text>
           </View>
           <TouchableOpacity
@@ -213,7 +213,7 @@ export default function TechnicianInvitationsScreen() {
         <View style={styles.recoveryBanner}>
           <Ionicons name="sync-outline" size={16} color="#92400E" />
           <Text style={styles.recoveryText}>
-            Có phản hồi ACCEPT chưa xác định. Không gửi lại; ứng dụng chỉ đối chiếu bằng danh sách Công việc.
+            Có phản hồi nhận việc chưa xác định. Không gửi lại; ứng dụng chỉ đối chiếu bằng danh sách Công việc.
           </Text>
         </View>
       ) : null}

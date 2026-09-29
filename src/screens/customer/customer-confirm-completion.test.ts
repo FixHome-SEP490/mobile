@@ -95,7 +95,7 @@ describe('customerConfirmCompletionTarget', () => {
 describe('customer confirm completion controller', () => {
   it('keeps work confirmation explicitly separate from payment', () => {
     expect(CUSTOMER_CONFIRM_COMPLETION_COPY).toMatch(/không đồng nghĩa.*thanh toán/i);
-    expect(CUSTOMER_CONFIRM_COMPLETION_COPY).toMatch(/COMPLETED/);
+    expect(CUSTOMER_CONFIRM_COMPLETION_COPY).toMatch(/Hoàn thành/);
   });
 
   it('requires explicit confirm before one POST', async () => {

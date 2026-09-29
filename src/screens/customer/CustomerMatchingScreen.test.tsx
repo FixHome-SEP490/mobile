@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Text, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 import type { BookingItem, TechnicianCandidate } from '../../api/bookings.api';
 import type { ServiceOrderItem } from '../../api/orders.api';
@@ -123,23 +123,6 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 
-jest.mock('@gorhom/bottom-sheet', () => {
-  const ReactActual = jest.requireActual('react');
-  const { ScrollView, View } = jest.requireActual('react-native');
-  const BottomSheetModal = ReactActual.forwardRef(
-    ({ children, testID }: { children: React.ReactNode; testID?: string }, ref: React.Ref<unknown>) => {
-      ReactActual.useImperativeHandle(ref, () => ({ present: jest.fn(), dismiss: jest.fn() }), []);
-      return ReactActual.createElement(View, { testID }, children);
-    },
-  );
-  return {
-    BottomSheetModal,
-    BottomSheetBackdrop: () => null,
-    BottomSheetScrollView: ScrollView,
-    BottomSheetView: View,
-  };
-});
-
 function makeBooking(overrides: Partial<BookingItem> = {}): BookingItem {
   return {
     id: BOOKING_ID,
@@ -226,6 +209,11 @@ function findText(tree: ReactTestRenderer, value: string): ReactTestInstance | u
     const child = node.props.children;
     return (Array.isArray(child) ? child.join('') : String(child ?? '')).includes(value);
   });
+}
+
+function textOf(node: ReactTestInstance): string {
+  const child = node.props.children;
+  return Array.isArray(child) ? child.join('') : String(child ?? '');
 }
 
 function findPressableAncestor(node: ReactTestInstance | undefined): ReactTestInstance | undefined {
@@ -410,6 +398,25 @@ describe('Customer Matching presentation and privacy', () => {
     expect(hasText(tree, 'Thông tin kỹ thuật viên')).toBe(true);
   });
 
+  it('keeps candidate cards compact and moves secondary details into the detail sheet', async () => {
+    const tree = await mountLoadedScreen();
+    const compactText = texts(tree).join('\n');
+
+    expect(compactText).toContain('4,8/5 · 12 lượt đánh giá');
+    expect(compactText).toContain('2,4 km');
+    expect(compactText).not.toContain('6 năm kinh nghiệm');
+    expect(compactText).not.toContain('150.000 ₫');
+    expect(compactText).not.toContain('30 ngày');
+
+    const candidateName = findText(tree, 'Kỹ thuật viên A');
+    await act(async () => findPressableAncestor(candidateName)?.props.onPress());
+
+    const detailText = texts(tree).join('\n');
+    expect(detailText).toContain('6 năm kinh nghiệm');
+    expect(detailText).toContain('150.000 ₫');
+    expect(detailText).toContain('30 ngày');
+  });
+
   it('shows only customer-safe candidate details with known units', async () => {
     const tree = await mountLoadedScreen();
     const candidateName = findText(tree, 'Kỹ thuật viên A');
@@ -547,6 +554,38 @@ describe('Customer Matching presentation and privacy', () => {
     );
     expect(selectC?.props.disabled).toBe(true);
     expect(selectC?.props.accessibilityState).toEqual({ checked: false, disabled: true });
+  });
+
+  it('uses compact right-side selection, blue selected outline, priority badges, and detail-sheet selection', async () => {
+    const tree = await mountLoadedScreen();
+    const cardA = tree.root.findByProps({ testID: `matching-candidate-card-${TECHNICIAN_A}` });
+    const detailsA = tree.root.findByProps({ testID: `matching-candidate-details-${TECHNICIAN_A}` });
+    const selectA = tree.root.findByProps({ testID: `matching-candidate-select-${TECHNICIAN_A}` });
+
+    expect(detailsA.props.testID).toBe(`matching-candidate-details-${TECHNICIAN_A}`);
+    expect(selectA.props.testID).toBe(`matching-candidate-select-${TECHNICIAN_A}`);
+    expect(cardA.findAllByProps({ testID: `matching-candidate-priority-${TECHNICIAN_A}` })).toHaveLength(0);
+    expect(selectA.findAllByType(Text).map((node) => String(node.props.children ?? '')).join(' ')).toContain('Chọn');
+
+    await act(async () => detailsA.props.onPress());
+    const detailSelect = tree.root.findByProps({ testID: 'matching-detail-select' });
+    expect(detailSelect.props.accessibilityLabel).toBe('Chọn Kỹ thuật viên A');
+    await act(async () => detailSelect.props.onPress());
+
+    const selectedCardA = tree.root.findByProps({ testID: `matching-candidate-card-${TECHNICIAN_A}` });
+    const selectedControlA = tree.root.findByProps({ testID: `matching-candidate-select-${TECHNICIAN_A}` });
+    const badgeA = tree.root.findByProps({ testID: `matching-candidate-priority-${TECHNICIAN_A}` });
+    expect(StyleSheet.flatten(selectedCardA.props.style)).toMatchObject({ borderColor: '#2563EB', borderWidth: 2 });
+    expect(textOf(badgeA.findByType(Text))).toBe('#1');
+    expect(selectedControlA.findAllByType(Text).map(textOf).join(' ')).toContain('#1');
+    expect(textOf(tree.root.findByProps({ testID: 'matching-detail-priority' }).findByType(Text))).toBe('#1');
+
+    const selectB = tree.root.findByProps({ testID: `matching-candidate-select-${TECHNICIAN_B}` });
+    await act(async () => selectB.props.onPress());
+    const selectedCardB = tree.root.findByProps({ testID: `matching-candidate-card-${TECHNICIAN_B}` });
+    const badgeB = tree.root.findByProps({ testID: `matching-candidate-priority-${TECHNICIAN_B}` });
+    expect(StyleSheet.flatten(selectedCardB.props.style)).toMatchObject({ borderColor: '#2563EB', borderWidth: 2 });
+    expect(textOf(badgeB.findByType(Text))).toBe('#2');
   });
 
   it('provides Home and secondary refresh while waiting without a verified order', async () => {

@@ -174,7 +174,7 @@ export function createTechnicianCashController(
         busy: false,
         needsVerify: true,
         error:
-          'Chưa xác minh được lần khai báo tiền mặt trước. Không gửi POST lại.',
+          'Chưa xác minh được lần khai báo tiền mặt trước. Chưa gửi lại để tránh trùng lặp.',
       });
       return false;
     } catch {
@@ -183,7 +183,7 @@ export function createTechnicianCashController(
         busy: false,
         needsVerify: true,
         error:
-          'Chưa thể đối chiếu khai báo tiền mặt bằng GET. Không gửi POST lại.',
+          'Chưa thể đối chiếu khai báo tiền mặt. Chưa gửi lại để tránh trùng lặp.',
       });
       return false;
     }
@@ -218,7 +218,7 @@ export function createTechnicianCashController(
       if (!verified) {
         deps.notify(
           'Chưa xác minh khai báo tiền mặt',
-          'Không gửi lại; hãy kiểm tra trạng thái bằng GET.',
+          'Không gửi lại; hãy kiểm tra trạng thái.',
         );
       }
     } finally {

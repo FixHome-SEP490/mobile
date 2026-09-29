@@ -252,7 +252,11 @@ export default function CustomerBookingsScreen() {
   const view = resolveBookingsView(historyState, searchQuery, activeTab);
   const { cards, filtered: filteredCards, showList, emptyNote, showLoadMore, showLoadMoreOrders, ordersCoverageText } = view;
 
-  const renderOrderSummary = (order: ServiceOrderItem, bookingId: string | null) => {
+  const renderOrderSummary = (
+    order: ServiceOrderItem,
+    bookingId: string | null,
+    showDetailAffordance = false,
+  ) => {
     const badge = getStatusBadge(order.status);
     const totalText = orderTotalText(order);
     const dateStr = order.createdAt
@@ -285,6 +289,15 @@ export default function CustomerBookingsScreen() {
               <Text style={styles.meta}>Thuộc yêu cầu #{bookingId.slice(0, 8)}</Text>
             )}
           </View>
+          {showDetailAffordance && (
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={colors.textSecondary}
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+            />
+          )}
         </View>
       </View>
     );
@@ -299,7 +312,14 @@ export default function CustomerBookingsScreen() {
     const waiting = String(booking.status).toUpperCase() === 'MATCHING';
     return (
       <View style={styles.card}>
-        <View style={styles.cardHeader}>
+        <TouchableOpacity
+          testID={`booking-card-detail-${booking.id}`}
+          style={styles.cardHeader}
+          onPress={() => navigation.navigate('CustomerBookingDetail', { bookingId: booking.id })}
+          accessibilityRole="button"
+          accessibilityLabel="Xem chi tiết yêu cầu đặt lịch"
+          activeOpacity={0.8}
+        >
           <View style={styles.iconContainer}>
             <Ionicons name="calendar-outline" size={24} color={colors.primary} />
           </View>
@@ -336,7 +356,8 @@ export default function CustomerBookingsScreen() {
               </View>
             )}
           </View>
-        </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+        </TouchableOpacity>
         {/* K09_B_BOOKING_MANAGE */}
         {(canCancelBookingConservative(booking) ||
           canRescheduleBookingConservative(booking)) && (
@@ -574,7 +595,14 @@ export default function CustomerBookingsScreen() {
       : 'Lượt mời kỹ thuật viên thay thế đã kết thúc. Xem khả năng chọn lại; hệ thống sẽ kiểm tra trước khi gửi.';
     return (
       <View style={styles.card}>
-        <View style={styles.cardHeader}>
+        <TouchableOpacity
+          testID={`booking-card-detail-${booking.id}`}
+          style={styles.cardHeader}
+          onPress={() => navigation.navigate('CustomerBookingDetail', { bookingId: booking.id })}
+          accessibilityRole="button"
+          accessibilityLabel="Xem chi tiết yêu cầu đặt lịch"
+          activeOpacity={0.8}
+        >
           <View style={styles.iconContainer}>
             <Ionicons name="calendar-outline" size={24} color={colors.primary} />
           </View>
@@ -610,7 +638,8 @@ export default function CustomerBookingsScreen() {
               {`Đơn lịch sử ${order.code || order.id.slice(0, 8)} — kỹ thuật viên trước đây chưa được xác nhận là kỹ thuật viên hiện tại.`}
             </Text>
           </View>
-        </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+        </TouchableOpacity>
         <TouchableOpacity
           style={[styles.resumeBtn, { backgroundColor: colors.primary }]}
           onPress={() => navigation.navigate('CustomerMatching', { bookingId: booking.id })}
@@ -751,7 +780,7 @@ export default function CustomerBookingsScreen() {
                 accessibilityLabel="Xem chi tiết đơn sửa chữa"
                 activeOpacity={0.8}
               >
-                {renderOrderSummary(order, bookingId)}
+                {renderOrderSummary(order, bookingId, true)}
               </TouchableOpacity>
             );
           })}

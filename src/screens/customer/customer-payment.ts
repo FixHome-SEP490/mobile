@@ -168,7 +168,7 @@ export function createCustomerPaymentController(
       }
       publish({
         loading: false,
-        error: 'KhÃ´ng thá»ƒ táº£i tráº¡ng thÃ¡i thanh toÃ¡n tiá»n máº·t.',
+        error: 'Không thể tải trạng thái thanh toán tiền mặt.',
       });
     }
   }
@@ -216,7 +216,7 @@ export function createCustomerPaymentController(
         cashBusy: false,
         cashNeedsVerify: true,
         error:
-          'ChÆ°a xÃ¡c minh Ä‘Æ°á»£c káº¿t quáº£ xÃ¡c nháº­n tiá»n máº·t. KhÃ´ng gá»­i POST láº¡i.',
+          'Chưa xác minh được kết quả xác nhận tiền mặt. Chưa gửi lại để tránh trùng lặp.',
       });
       return false;
     } catch {
@@ -225,7 +225,7 @@ export function createCustomerPaymentController(
         cashBusy: false,
         cashNeedsVerify: true,
         error:
-          'ChÆ°a thá»ƒ Ä‘á»‘i chiáº¿u thanh toÃ¡n tiá»n máº·t báº±ng GET. KhÃ´ng gá»­i POST láº¡i.',
+          'Chưa thể đối chiếu thanh toán tiền mặt. Chưa gửi lại để tránh trùng lặp.',
       });
       return false;
     }
@@ -259,7 +259,7 @@ export function createCustomerPaymentController(
             : {
                 disputeReason:
                   disputeReason?.trim() ||
-                  'Sá»‘ tiá»n khÃ¡ch xÃ¡c nháº­n khÃ´ng khá»›p vá»›i khai bÃ¡o cá»§a ká»¹ thuáº­t viÃªn',
+                  'Số tiền khách xác nhận không khớp với khai báo của kỹ thuật viên',
               }),
         });
       } catch (error) {
@@ -303,7 +303,7 @@ export function createCustomerPaymentController(
         onlinePending: !paid,
         error: paid
           ? null
-          : 'Backend chưa xác nhận PAID. Không coi việc quay lại từ VNPay là thanh toán thành công.',
+          : 'Hệ thống chưa xác nhận đã thanh toán. Không coi việc quay lại từ VNPay là thanh toán thành công.',
       });
     } catch {
       if (!same(customerId, orderId)) return;
@@ -311,7 +311,7 @@ export function createCustomerPaymentController(
         onlineBusy: false,
         onlinePending: true,
         error:
-          'Chưa kiểm tra được trạng thái thanh toán mới nhất từ Backend.',
+          'Chưa kiểm tra được trạng thái thanh toán mới nhất từ Hệ thống.',
       });
     }
   }
@@ -340,7 +340,7 @@ export function createCustomerPaymentController(
           onlineBusy: false,
           onlinePending: true,
           error:
-            'Káº¿t quáº£ táº¡o liÃªn káº¿t VNPay chÆ°a xÃ¡c Ä‘á»‹nh. KhÃ´ng gá»­i POST táº¡o liÃªn káº¿t láº§n ná»¯a trong phiÃªn nÃ y.',
+            'Kết quả tạo liên kết VNPay chưa xác định. Không tạo lại liên kết trong phiên này.',
         });
         return;
       }
@@ -350,7 +350,7 @@ export function createCustomerPaymentController(
         publish({
           onlineBusy: false,
           onlinePending: true,
-          error: 'Backend tráº£ vá» liÃªn káº¿t thanh toÃ¡n khÃ´ng há»£p lá»‡.',
+          error: 'Hệ thống trả về liên kết thanh toán không hợp lệ.',
         });
         return;
       }
@@ -363,7 +363,7 @@ export function createCustomerPaymentController(
         publish({
           onlinePending: true,
           error:
-            'KhÃ´ng má»Ÿ Ä‘Æ°á»£c VNPay. KhÃ´ng táº¡o liÃªn káº¿t má»›i tá»± Ä‘á»™ng; hÃ£y kiá»ƒm tra tráº¡ng thÃ¡i trÆ°á»›c.',
+            'Không mở được VNPay. Không tự tạo liên kết mới; hãy kiểm tra trạng thái trước.',
         });
       }
     } finally {

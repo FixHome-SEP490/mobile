@@ -1,7 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { BottomSheetModal } from '@gorhom/bottom-sheet';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
@@ -121,7 +120,6 @@ export default function CustomerMatchingScreen() {
   const [rejectedDefinitive, setRejectedDefinitive] = useState(false);
   const [detailTarget, setDetailTarget] = useState<CandidateDetailTarget | null>(null);
   const [loadedContextKey, setLoadedContextKey] = useState('');
-  const detailSheetRef = useRef<BottomSheetModal>(null);
   const sendingRef = useRef(false);
   // A shortlist POST is never repeated because a timeout may follow a successful write.
   const shortlistRequestLockedRef = useRef(false);
@@ -966,13 +964,6 @@ export default function CustomerMatchingScreen() {
     && detailTarget.ownerId === userId
     ? candidates.find((candidate) => candidate.userId === detailTarget.candidateUserId) ?? null
     : null;
-  const detailCandidateUserId = detailCandidate?.userId ?? null;
-
-  useEffect(() => {
-    if (detailCandidateUserId) detailSheetRef.current?.present();
-    else detailSheetRef.current?.dismiss();
-  }, [detailCandidateUserId]);
-
   const openDetails = (candidate: TechnicianCandidate) => {
     if (!userId || !ownsVisibleBooking || waiting || booking?.id !== bookingId
       || !candidates.some((item) => item.userId === candidate.userId)) return;
@@ -1188,15 +1179,11 @@ export default function CustomerMatchingScreen() {
         )}
       </ScrollView>
       <MatchingTechnicianDetailSheet
-        modalRef={detailSheetRef}
         candidate={detailCandidate}
         priority={detailCandidate ? selected.indexOf(detailCandidate.userId) + 1 : 0}
         selectionDisabled={!pickerActionsEnabled || sending || (!!detailCandidate && selected.length === 2 && !selected.includes(detailCandidate.userId))}
         onToggleSelection={() => { if (detailCandidate) choose(detailCandidate.userId); }}
-        onClose={() => {
-          setDetailTarget(null);
-          detailSheetRef.current?.dismiss();
-        }}
+        onClose={() => setDetailTarget(null)}
       />
     </SafeAreaView>
   );

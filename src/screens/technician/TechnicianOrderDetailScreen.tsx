@@ -874,7 +874,7 @@ export default function TechnicianOrderDetailScreen() {
     Alert.alert(
       'Khai báo đã nhận tiền mặt',
       'Xác nhận bạn đã nhận đúng ' + order.grandTotal.toLocaleString('vi-VN') +
-        'đ theo tổng tiền Backend. Khách hàng vẫn phải xác nhận riêng trước khi hóa đơn PAID.',
+        'đ theo tổng tiền Hệ thống. Khách hàng vẫn phải xác nhận riêng trước khi hóa đơn đã thanh toán.',
       [
         { text: 'Hủy', style: 'cancel' },
         {
@@ -1143,7 +1143,7 @@ export default function TechnicianOrderDetailScreen() {
                 <>
                   <Text style={styles.sectionTitle}>Tải ảnh trước sửa chữa</Text>
                   <Text style={styles.jobMeta}>
-                    Backend đã xác minh check-in. Hãy tải bằng chứng BEFORE; số lượng tối thiểu cấu hình và đúng người tải vẫn do Backend kiểm tra khi bắt đầu sửa.
+                    Hệ thống đã xác minh check-in. Hãy tải bằng chứng trước sửa; số lượng tối thiểu cấu hình và đúng người tải vẫn do Hệ thống kiểm tra khi bắt đầu sửa.
                   </Text>
                   <TouchableOpacity
                     style={[styles.uploadBtn, styles.nextStepAction]}
@@ -1152,7 +1152,7 @@ export default function TechnicianOrderDetailScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Chụp ảnh trước sửa chữa ngay"
                   >
-                    <Text style={styles.uploadBtnText}>Chụp ảnh BEFORE</Text>
+                    <Text style={styles.uploadBtnText}>Chụp ảnh trước sửa</Text>
                   </TouchableOpacity>
                 </>
               ) : String(order.pricingMode ?? '').toLowerCase() === 'inspection_required' &&
@@ -1160,7 +1160,7 @@ export default function TechnicianOrderDetailScreen() {
                 <>
                   <Text style={styles.sectionTitle}>Báo giá khảo sát</Text>
                   <Text style={styles.jobMeta}>
-                    Ảnh BEFORE đã có trên dữ liệu chi tiết. Dịch vụ khảo sát chỉ được bắt đầu sửa sau khi khách APPROVE báo giá.
+                    Ảnh trước sửa đã có trên dữ liệu chi tiết. Dịch vụ khảo sát chỉ được bắt đầu sửa sau khi khách duyệt báo giá.
                   </Text>
                   {String(order.quotation?.status ?? '').toUpperCase() === 'SENT' ? (
                     <Text style={styles.nextStepWait}>Đang chờ khách duyệt báo giá.</Text>
@@ -1173,8 +1173,8 @@ export default function TechnicianOrderDetailScreen() {
                   <Text style={styles.sectionTitle}>Bắt đầu sửa chữa</Text>
                   <Text style={styles.jobMeta}>
                     {String(order.pricingMode ?? '').toLowerCase() === 'fixed_price'
-                      ? 'Dịch vụ giá cố định — không cần báo giá. Backend vẫn kiểm tra toàn bộ điều kiện khi gửi.'
-                      : 'Báo giá khảo sát đã được khách duyệt. Backend vẫn là nguồn quyết định cuối cùng.'}
+                      ? 'Dịch vụ giá cố định — không cần báo giá. Hệ thống vẫn kiểm tra toàn bộ điều kiện khi gửi.'
+                      : 'Báo giá khảo sát đã được khách duyệt. Hệ thống vẫn là nguồn quyết định cuối cùng.'}
                   </Text>
                   <TouchableOpacity
                     style={[styles.uploadBtn, styles.nextStepAction]}
@@ -1205,28 +1205,28 @@ export default function TechnicianOrderDetailScreen() {
                 <>
                   <Text style={styles.sectionTitle}>Đã yêu cầu hoàn thành</Text>
                   <Text style={styles.jobMeta}>
-                    Chờ khách nghiệm thu. Yêu cầu hoàn thành không đồng nghĩa PAID hoặc COMPLETED.
+                    Chờ khách nghiệm thu. Yêu cầu hoàn thành không đồng nghĩa đã thanh toán hoặc Hoàn thành.
                   </Text>
                 </>
               ) : hasPendingCosts ? (
                 <>
                   <Text style={styles.sectionTitle}>Chờ phản hồi chi phí phát sinh</Text>
                   <Text style={styles.jobMeta}>
-                    Khách cần duyệt hoặc từ chối khoản phát sinh. Từ chối khoản này không đồng nghĩa từ chối báo giá ban đầu hay hủy ServiceOrder.
+                    Khách cần duyệt hoặc từ chối khoản phát sinh. Từ chối khoản này không đồng nghĩa từ chối báo giá ban đầu hay hủy đơn.
                   </Text>
                 </>
               ) : afterUploadState.needsVerify ? (
                 <>
-                  <Text style={styles.sectionTitle}>Xác minh ảnh AFTER</Text>
+                  <Text style={styles.sectionTitle}>Xác minh ảnh sau sửa</Text>
                   <Text style={styles.jobMeta}>
-                    Không gửi ảnh lại. Chỉ GET bằng chứng mới được gỡ khóa lần tải trước.
+                    Không gửi ảnh lại. Chỉ kiểm tra bằng chứng mới được gỡ khóa lần tải trước.
                   </Text>
                   <TouchableOpacity
                     style={[styles.uploadBtn, styles.nextStepAction]}
                     onPress={onReconcileAfter}
                     disabled={afterUploadState.busy}
                     accessibilityRole="button"
-                    accessibilityLabel="Kiểm tra ảnh AFTER"
+                    accessibilityLabel="Kiểm tra ảnh sau sửa"
                   >
                     <Text style={styles.uploadBtnText}>Kiểm tra bằng chứng</Text>
                   </TouchableOpacity>
@@ -1235,23 +1235,23 @@ export default function TechnicianOrderDetailScreen() {
                 <>
                   <Text style={styles.sectionTitle}>Tải ảnh sau sửa chữa</Text>
                   <Text style={styles.jobMeta}>
-                    Hãy tải bằng chứng AFTER. Số lượng tối thiểu thật vẫn do Backend cấu hình và kiểm tra khi yêu cầu hoàn thành.
+                    Hãy tải bằng chứng sau sửa. Số lượng tối thiểu thật vẫn do Hệ thống cấu hình và kiểm tra khi yêu cầu hoàn thành.
                   </Text>
                   <TouchableOpacity
                     style={[styles.uploadBtn, styles.nextStepAction]}
                     onPress={onPickAfterCamera}
                     disabled={afterUploadState.busy}
                     accessibilityRole="button"
-                    accessibilityLabel="Chụp ảnh AFTER từ bước tiếp theo"
+                    accessibilityLabel="Chụp ảnh sau sửa từ bước tiếp theo"
                   >
-                    <Text style={styles.uploadBtnText}>Chụp ảnh AFTER</Text>
+                    <Text style={styles.uploadBtnText}>Chụp ảnh sau sửa</Text>
                   </TouchableOpacity>
                 </>
               ) : completionEligible ? (
                 <>
                   <Text style={styles.sectionTitle}>Đủ điều kiện sơ bộ để yêu cầu hoàn thành</Text>
                   <Text style={styles.jobMeta}>
-                    Backend vẫn kiểm tra số ảnh AFTER cấu hình, báo giá và mọi chi phí đang chờ.
+                    Hệ thống vẫn kiểm tra số ảnh sau sửa cấu hình, báo giá và mọi chi phí đang chờ.
                   </Text>
                   <Text style={styles.nextStepWait}>
                     Gửi yêu cầu nghiệm thu ở mục &quot;6. Khách hàng nghiệm thu & thanh toán&quot; bên dưới.
@@ -1271,13 +1271,13 @@ export default function TechnicianOrderDetailScreen() {
           <Text style={styles.groupHeading}>THAO TÁC</Text>
 
           <View style={styles.jobCard}>
-            <Text style={styles.sectionTitle}>3. Bằng chứng hiện trạng lỗi (BEFORE)</Text>
+            <Text style={styles.sectionTitle}>3. Bằng chứng hiện trạng lỗi (trước sửa)</Text>
             {!canUploadBefore ? (
               <Text style={styles.jobMeta}>Check-in hợp lệ trước khi tải ảnh.</Text>
             ) : uploadState.needsVerify ? (
               <View style={styles.evidenceError}>
                 <Text style={styles.jobMeta}>
-                  Lần tải ảnh trước đang chờ Backend xác minh. Không gửi POST lại.
+                  Lần tải ảnh trước đang chờ Hệ thống xác minh. Chưa gửi lại để tránh trùng lặp.
                 </Text>
                 <TouchableOpacity
                   onPress={onReconcileBefore}
@@ -1393,7 +1393,7 @@ export default function TechnicianOrderDetailScreen() {
 
             {isFixedPriceOrder ? null : !canCreateQuote ? (
               <Text style={styles.jobMeta}>
-                Đơn chưa đủ điều kiện tạo báo giá (cần EN_ROUTE, đã check-in hợp lệ,
+                Đơn chưa đủ điều kiện tạo báo giá (cần đang di chuyển, đã xác nhận đến nơi,
                 chưa có báo giá chờ/duyệt).
               </Text>
             ) : quoteState.sent ? (
@@ -2025,7 +2025,7 @@ export default function TechnicianOrderDetailScreen() {
           </View>
 
           <View style={styles.jobCard}>
-            <Text style={styles.sectionTitle}>5. Ảnh hoàn tất AFTER & Yêu cầu nghiệm thu</Text>
+            <Text style={styles.sectionTitle}>5. Ảnh hoàn tất sau sửa & Yêu cầu nghiệm thu</Text>
             {!canUploadAfter ? (
               <Text style={styles.jobMeta}>
                 Ảnh sau sửa chữa chỉ tải được khi đơn đang sửa và chưa yêu cầu hoàn thành.
@@ -2033,7 +2033,7 @@ export default function TechnicianOrderDetailScreen() {
             ) : afterUploadState.needsVerify ? (
               <View style={styles.evidenceError}>
                 <Text style={styles.jobMeta}>
-                  Lần tải ảnh AFTER trước đang chờ Backend xác minh. Không gửi POST lại.
+                  Lần tải ảnh sau sửa trước đang chờ Hệ thống xác minh. Chưa gửi lại để tránh trùng lặp.
                 </Text>
                 <TouchableOpacity
                   onPress={onReconcileAfter}
@@ -2400,7 +2400,7 @@ export default function TechnicianOrderDetailScreen() {
               {/* K08_TECHNICIAN_CASH_SETTLEMENT */}
               <Text style={styles.sectionTitle}>Thanh toán tiền mặt</Text>
               <Text style={styles.jobMeta}>
-                Chỉ khai báo đúng tổng tiền Backend. Khai báo của kỹ thuật viên chưa phải PAID; khách hàng phải xác nhận riêng.
+                Chỉ khai báo đúng tổng tiền Hệ thống. Khai báo của kỹ thuật viên chưa phải đã thanh toán; khách hàng phải xác nhận riêng.
               </Text>
               {cashState.loading ? (
                 <Text style={styles.jobMeta}>Đang kiểm tra đối soát tiền mặt...</Text>
@@ -2426,7 +2426,7 @@ export default function TechnicianOrderDetailScreen() {
                 </Text>
               ) : cashState.status === 'CONFIRMED' ? (
                 <Text style={[styles.jobMeta, { color: '#047857', fontWeight: '700' }]}>
-                  Backend đã xác nhận đối soát tiền mặt.
+                  Hệ thống đã xác nhận đối soát tiền mặt.
                 </Text>
               ) : (
                 <Text style={[styles.jobMeta, { color: '#B91C1C', fontWeight: '700' }]}>
@@ -2435,7 +2435,7 @@ export default function TechnicianOrderDetailScreen() {
               )}
               {cashState.needsVerify && (
                 <TouchableOpacity onPress={onCashReconcile} disabled={cashState.busy} accessibilityRole="button">
-                  <Text style={styles.retryText}>Kiểm tra đối soát bằng GET</Text>
+                  <Text style={styles.retryText}>Kiểm tra đối soát</Text>
                 </TouchableOpacity>
               )}
               {!!cashState.error && (

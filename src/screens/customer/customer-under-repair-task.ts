@@ -40,7 +40,7 @@ export function customerUnderRepairTask(
       kind: 'work_confirmed',
       title: 'Đã xác nhận công việc hoàn tất',
       detail:
-        'Nghiệm thu công việc đã được Backend ghi nhận. Thanh toán vẫn là bước riêng; đơn chỉ chuyển COMPLETED khi Backend xác nhận đủ điều kiện.',
+        'Nghiệm thu công việc đã được Hệ thống ghi nhận. Thanh toán vẫn là bước riêng; đơn chỉ chuyển Hoàn thành khi Hệ thống xác nhận đủ điều kiện.',
     };
   }
 
@@ -49,7 +49,7 @@ export function customerUnderRepairTask(
       kind: 'completion_requested',
       title: 'Kỹ thuật viên đã yêu cầu hoàn thành',
       detail:
-        'Bạn đang chờ bước nghiệm thu. Xác nhận công việc và thanh toán là hai bước riêng; trạng thái COMPLETED chỉ đến từ Backend.',
+        'Bạn đang chờ bước nghiệm thu. Xác nhận công việc và thanh toán là hai bước riêng; trạng thái Hoàn thành chỉ đến từ Hệ thống.',
     };
   }
 
@@ -63,7 +63,7 @@ export function customerUnderRepairTask(
       kind: 'additional_cost_pending',
       title: 'Cần phản hồi chi phí phát sinh',
       detail:
-        'Duyệt chỉ cộng khoản đề xuất vào đơn; từ chối khoản phát sinh không đồng nghĩa từ chối báo giá ban đầu hoặc hủy ServiceOrder.',
+        'Duyệt chỉ cộng khoản đề xuất vào đơn; từ chối khoản phát sinh không đồng nghĩa từ chối báo giá ban đầu hoặc hủy đơn.',
     };
   }
 
@@ -72,7 +72,7 @@ export function customerUnderRepairTask(
       kind: 'quote_inconsistent',
       title: 'Báo giá vẫn đang chờ quyết định',
       detail:
-        'Đơn đang sửa nhưng báo giá vẫn ở trạng thái SENT. Hãy làm mới dữ liệu; ứng dụng không tự suy diễn hoặc đổi trạng thái.',
+        'Đơn đang sửa nhưng báo giá vẫn ở trạng thái đã gửi. Hãy làm mới dữ liệu; ứng dụng không tự suy diễn hoặc đổi trạng thái.',
     };
   }
 

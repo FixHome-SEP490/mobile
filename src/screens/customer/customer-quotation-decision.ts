@@ -242,7 +242,7 @@ export function createQuotationDecisionController(
         publish({
           busy: false,
           confirming: null,
-          error: `Máy chủ từ chối quyết định (mã ${status}). Vui lòng tải lại chi tiết đơn và kiểm tra trạng thái báo giá.`,
+          error: `Hệ thống từ chối quyết định (mã ${status}). Vui lòng tải lại chi tiết đơn và kiểm tra trạng thái báo giá.`,
         });
         await deps.refreshDetail();
         return;

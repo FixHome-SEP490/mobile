@@ -83,7 +83,7 @@ it('exposes only the request-completion surface: no complete/pay/approve', () =>
 });
 
 it('pins the exact two-tap confirmation copy (UNPAID invoice, not COMPLETED)', () => {
-  expect(REQUEST_COMPLETION_CONFIRM_COPY).toContain('UNPAID');
+  expect(REQUEST_COMPLETION_CONFIRM_COPY).toContain('chưa thanh toán');
   expect(REQUEST_COMPLETION_CONFIRM_COPY).not.toMatch(/đã thanh toán|\bPAID\b|\bCOMPLETED\b|đã hoàn thành đơn/i);
 });
 

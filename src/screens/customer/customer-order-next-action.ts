@@ -30,6 +30,23 @@ export interface OrderNextAction {
   kind: OrderNextActionKind;
 }
 
+export function orderNextActionButtonLabel(kind: OrderNextActionKind): string | null {
+  switch (kind) {
+    case 'decide_quote':
+      return 'Xem báo giá';
+    case 'decide_cost':
+      return 'Xem chi phí phát sinh';
+    case 'confirm_completion':
+      return 'Nghiệm thu công việc';
+    case 'pay':
+      return 'Đi đến thanh toán';
+    case 'review':
+      return 'Đánh giá dịch vụ';
+    default:
+      return null;
+  }
+}
+
 export function orderStatusLabel(status: string): string {
   switch (String(status).toUpperCase()) {
     case 'ACCEPTED':

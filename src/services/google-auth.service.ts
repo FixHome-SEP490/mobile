@@ -78,7 +78,7 @@ export async function startGoogleSignIn(): Promise<string> {
 
   const code = queryParams?.code;
   if (typeof code !== 'string' || !code) {
-    throw new Error('Không nhận được mã đăng nhập từ máy chủ');
+    throw new Error('Không nhận được mã đăng nhập từ hệ thống');
   }
   return code;
 }

@@ -194,7 +194,7 @@ export function createCustomerOrderReviewController(
         busy: false,
         needsVerify: true,
         error:
-          'Chưa tìm thấy đánh giá để xác minh lần gửi trước. Không gửi POST lại.',
+          'Chưa tìm thấy đánh giá để xác minh lần gửi trước. Chưa gửi lại để tránh trùng lặp.',
       });
     }
   }
@@ -300,7 +300,7 @@ export function createCustomerOrderReviewController(
             busy: false,
             needsVerify: false,
             error:
-              'Backend đã từ chối đánh giá' +
+              'Hệ thống đã từ chối đánh giá' +
               (typeof status === 'number'
                 ? ' (mã ' + status + ')'
                 : '') +
@@ -333,7 +333,7 @@ export function createCustomerOrderReviewController(
             busy: false,
             needsVerify: true,
             error:
-              'Kết quả gửi đánh giá chưa xác định. Không gửi POST lại; hãy kiểm tra đánh giá bằng GET.',
+              'Kết quả gửi đánh giá chưa xác định. Chưa gửi lại để tránh trùng lặp; hãy kiểm tra đánh giá.',
           });
         }
         return;
@@ -362,14 +362,14 @@ export function createCustomerOrderReviewController(
         });
         deps.notify(
           'Đã gửi đánh giá',
-          'Backend đã xác nhận đánh giá cho đúng ServiceOrder.',
+          'Hệ thống đã xác nhận đánh giá cho đúng đơn.',
         );
       } else {
         publish({
           busy: false,
           needsVerify: true,
           error:
-            'POST đã phản hồi nhưng GET chưa xác nhận đánh giá. Không gửi POST lại.',
+            'Hệ thống đã phản hồi nhưng chưa xác nhận đánh giá. Chưa gửi lại để tránh trùng lặp.',
         });
       }
     } finally {

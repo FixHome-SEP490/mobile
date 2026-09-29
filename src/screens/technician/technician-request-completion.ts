@@ -14,7 +14,7 @@ import { orderDetailTarget } from '../customer/customer-order-detail';
 
 /** Explicit two-tap confirmation copy; screen renders this verbatim. */
 export const REQUEST_COMPLETION_CONFIRM_COPY =
-  'Yêu cầu hoàn thành sẽ tạo hóa đơn UNPAID và chốt tạm tính theo cấu hình hệ thống. Đơn KHÔNG chuyển sang Hoàn thành và KHÔNG trừ tiền — chờ khách nghiệm thu và thanh toán. Sau khi yêu cầu, không thể đề xuất chi phí phát sinh thêm.';
+  'Yêu cầu hoàn thành sẽ tạo hóa đơn chưa thanh toán và chốt tạm tính theo cấu hình hệ thống. Đơn KHÔNG chuyển sang Hoàn thành và KHÔNG trừ tiền — chờ khách nghiệm thu và thanh toán. Sau khi yêu cầu, không thể đề xuất chi phí phát sinh thêm.';
 
 export interface RequestCompletionOrderGate {
   id: string;
@@ -202,7 +202,7 @@ export function createRequestCompletionController(
         publish({
           busy: false,
           confirming: false,
-          error: `Máy chủ từ chối yêu cầu hoàn thành (mã ${status}). Vui lòng tải lại chi tiết đơn và kiểm tra điều kiện.`,
+          error: `Hệ thống từ chối yêu cầu hoàn thành (mã ${status}). Vui lòng tải lại chi tiết đơn và kiểm tra điều kiện.`,
         });
         await deps.refreshDetail();
         return;

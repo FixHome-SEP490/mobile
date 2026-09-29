@@ -429,7 +429,7 @@ export function createQuotationCreateController(
     if (!deps.getTechnicianId() || !deps.isFocused()) return;
     const target = quoteCreateTarget(deps.getOrder());
     if (!target) {
-      deps.notify('Chưa thể tạo báo giá', 'Đơn chưa đủ điều kiện tạo báo giá (cần EN_ROUTE, đã check-in hợp lệ, báo giá theo khảo sát).');
+      deps.notify('Chưa thể tạo báo giá', 'Đơn chưa đủ điều kiện tạo báo giá (cần đang di chuyển, đã xác nhận đến nơi, báo giá theo khảo sát).');
       return;
     }
     const validated = validateQuoteRows(state.rows, state.note);
@@ -459,7 +459,7 @@ export function createQuotationCreateController(
     if (!technicianId || !deps.isFocused()) return;
     const target = quoteCreateTarget(deps.getOrder());
     if (!target || deps.getOrder()?.id !== target) {
-      deps.notify('Chưa thể tạo báo giá', 'Đơn chưa đủ điều kiện tạo báo giá (cần EN_ROUTE, đã check-in hợp lệ, báo giá theo khảo sát).');
+      deps.notify('Chưa thể tạo báo giá', 'Đơn chưa đủ điều kiện tạo báo giá (cần đang di chuyển, đã xác nhận đến nơi, báo giá theo khảo sát).');
       return;
     }
     const validated = validateQuoteRows(state.rows, state.note);
@@ -515,7 +515,7 @@ export function createQuotationCreateController(
           confirming: false,
           quotedCostText: null,
           quotedTotalText: null,
-          error: `Máy chủ từ chối báo giá (mã ${status}). Vui lòng tải lại chi tiết đơn và kiểm tra báo giá hiện có.`,
+          error: `Hệ thống từ chối báo giá (mã ${status}). Vui lòng tải lại chi tiết đơn và kiểm tra báo giá hiện có.`,
         });
         await deps.refreshDetail();
         return;

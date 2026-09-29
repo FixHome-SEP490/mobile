@@ -215,7 +215,7 @@ export function createStartRepairController(
           busy: false,
           confirming: false,
           pricing: null,
-          error: `Máy chủ từ chối bắt đầu sửa chữa (mã ${status}). Vui lòng tải lại chi tiết đơn và kiểm tra điều kiện.`,
+          error: `Hệ thống từ chối bắt đầu sửa chữa (mã ${status}). Vui lòng tải lại chi tiết đơn và kiểm tra điều kiện.`,
         });
         await deps.refreshDetail();
         return;
