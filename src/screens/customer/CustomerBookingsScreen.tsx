@@ -252,7 +252,11 @@ export default function CustomerBookingsScreen() {
   const view = resolveBookingsView(historyState, searchQuery, activeTab);
   const { cards, filtered: filteredCards, showList, emptyNote, showLoadMore, showLoadMoreOrders, ordersCoverageText } = view;
 
-  const renderOrderSummary = (order: ServiceOrderItem, bookingId: string | null) => {
+  const renderOrderSummary = (
+    order: ServiceOrderItem,
+    bookingId: string | null,
+    showDetailAffordance = false,
+  ) => {
     const badge = getStatusBadge(order.status);
     const totalText = orderTotalText(order);
     const dateStr = order.createdAt
@@ -285,6 +289,15 @@ export default function CustomerBookingsScreen() {
               <Text style={styles.meta}>Thuộc yêu cầu #{bookingId.slice(0, 8)}</Text>
             )}
           </View>
+          {showDetailAffordance && (
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={colors.textSecondary}
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+            />
+          )}
         </View>
       </View>
     );
@@ -767,7 +780,7 @@ export default function CustomerBookingsScreen() {
                 accessibilityLabel="Xem chi tiết đơn sửa chữa"
                 activeOpacity={0.8}
               >
-                {renderOrderSummary(order, bookingId)}
+                {renderOrderSummary(order, bookingId, true)}
               </TouchableOpacity>
             );
           })}
