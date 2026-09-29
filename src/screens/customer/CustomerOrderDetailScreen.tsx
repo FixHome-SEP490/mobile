@@ -1251,6 +1251,7 @@ export default function CustomerOrderDetailScreen() {
             ) : (
               evidenceState.photos.map((photo) => (
                 <View key={photo.id} style={styles.evidenceItem}>
+                  <Text style={styles.evidenceTypeTitle}>{evidenceTypeLabel(photo.type)}</Text>
                   {evidenceState.failed[photo.id] ? (
                     <View style={styles.evidencePlaceholder}>
                       <Text style={styles.meta}>Không tải được ảnh. Nhấn “Tải lại ảnh” để lấy đường dẫn mới.</Text>
@@ -1259,11 +1260,11 @@ export default function CustomerOrderDetailScreen() {
                     <Image
                       source={{ uri: photo.uri }}
                       style={styles.evidenceThumb}
+                      resizeMode="contain"
                       accessibilityLabel={`Ảnh ${evidenceTypeLabel(photo.type)}`}
                       onError={() => evidenceRef.current?.markImageFailed(photo.id)}
                     />
                   )}
-                  <Text style={styles.meta}>{evidenceTypeLabel(photo.type)}</Text>
                   {!!photo.note && <Text style={styles.meta}>{photo.note}</Text>}
                 </View>
               ))
@@ -1913,12 +1914,23 @@ const getStyles = (colors: any) => StyleSheet.create({
     fontWeight: '700',
   },
   evidenceItem: {
-    gap: 4,
+    gap: 8,
+    marginTop: 8,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    backgroundColor: colors.background,
+  },
+  evidenceTypeTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.text,
   },
   evidenceThumb: {
     width: '100%',
-    height: 180,
-    borderRadius: 12,
+    height: 260,
+    borderRadius: 10,
     backgroundColor: colors.divider,
   },
   evidencePlaceholder: {

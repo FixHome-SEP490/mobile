@@ -48,9 +48,9 @@ it('exposes a strictly read-only surface: no upload/post/gps affordance', () => 
 
 it('fetches once per authorized focus and renders sanitized photos with labels', async () => {
   const { getEvidence, controller, isReadable, state } = setup([
-    row(),
     row({ id: 'ev-2', type: 'AFTER', mediaUrl: 'https://storage.example/signed/ev-2?sig=def', note: undefined }),
     row({ id: 'ev-3', type: 'ADDITIONAL', mediaUrl: 'https://storage.example/signed/ev-3?sig=ghi', note: '' }),
+    row(),
   ]);
   await controller.focusEvidence(ORDER_ID, isReadable);
   expect(getEvidence).toHaveBeenCalledTimes(1);

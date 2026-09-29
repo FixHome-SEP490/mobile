@@ -31,6 +31,11 @@ export const initialEvidenceState: EvidenceState = {
 const deniedMessage = 'Không có quyền xem ảnh bằng chứng.';
 const unavailableMessage = 'Dịch vụ ảnh tạm thời không khả dụng. Vui lòng thử lại.';
 const failedMessage = 'Không thể tải ảnh bằng chứng. Vui lòng thử lại.';
+const evidenceDisplayRank: Record<EvidenceKind, number> = {
+  BEFORE: 0,
+  AFTER: 1,
+  ADDITIONAL: 2,
+};
 
 /** Display-only Vietnamese label for a known evidence type. */
 export function evidenceTypeLabel(type: EvidenceKind): string {
@@ -78,7 +83,7 @@ export function sanitizeEvidenceRows(
         : null;
     photos.push({ id, type, uri, note });
   }
-  return photos;
+  return photos.sort((left, right) => evidenceDisplayRank[left.type] - evidenceDisplayRank[right.type]);
 }
 
 /**
