@@ -31,7 +31,7 @@ export default function TechnicianNavigator() {
 
   return (
     <Tab.Navigator
-      tabBar={(props) => <GlassTabBar {...props} />}
+      tabBar={(props) => <GlassTabBar {...props} showAssistant={false} />}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarIcon: ({ focused, color, size }) => {

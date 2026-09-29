@@ -96,7 +96,12 @@ function useSyncTabState(
   }, [currentIndex, tabWidth, activeIndex, translateX]);
 }
 
-export const GlassTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
+export const GlassTabBar = ({
+  state,
+  descriptors,
+  navigation,
+  showAssistant = true,
+}: BottomTabBarProps & { showAssistant?: boolean }) => {
   const insets = useSafeAreaInsets();
   const tabCount = state.routes.length;
   const tabWidth = PILL_WIDTH / tabCount;
@@ -261,19 +266,21 @@ export const GlassTabBar = ({ state, descriptors, navigation }: BottomTabBarProp
         </View>
       </GestureDetector>
 
-      {/* 2. KHỐI ACTION CIRCLE */}
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={() => navigation.navigate('CustomerAIChat')}
-        accessibilityRole="button"
-        accessibilityLabel="Mở trợ lý AI"
-      >
-        <View style={styles.actionCircleContainer}>
-          <BlurView intensity={70} tint="light" style={styles.actionCircle}>
-            <FontAwesome5 name="robot" size={24} color="#2563EB" />
-          </BlurView>
-        </View>
-      </TouchableOpacity>
+      {/* 2. KHỐI ACTION CIRCLE (chỉ role customer có trợ lý AI chẩn đoán) */}
+      {showAssistant && (
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('CustomerAIChat')}
+          accessibilityRole="button"
+          accessibilityLabel="Mở trợ lý AI"
+        >
+          <View style={styles.actionCircleContainer}>
+            <BlurView intensity={70} tint="light" style={styles.actionCircle}>
+              <FontAwesome5 name="robot" size={24} color="#2563EB" />
+            </BlurView>
+          </View>
+        </TouchableOpacity>
+      )}
     </Animated.View>
   );
 };

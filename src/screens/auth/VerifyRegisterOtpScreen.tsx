@@ -21,6 +21,7 @@ import type { RouteProp } from '@react-navigation/native';
 import type { AuthStackParamList, RootStackParamList } from '../../types';
 import { authApi } from '../../api/auth.api';
 import { useAuthStore } from '../../store';
+import { extractApiErrorMessage } from '../../utils/input-validation';
 
 export default function VerifyRegisterOtpScreen() {
   const { colors, spacing, fontSize } = useAppTheme();
@@ -80,11 +81,7 @@ export default function VerifyRegisterOtpScreen() {
       } catch {
         // Fall through to surfacing the original OTP error below.
       }
-      const message =
-        err?.response?.data?.message ||
-        err?.message ||
-        'Xác thực OTP thất bại. Vui lòng thử lại.';
-      setError(Array.isArray(message) ? message.join(', ') : message);
+      setError(extractApiErrorMessage(err, 'Xác thực OTP thất bại. Vui lòng thử lại.'));
     } finally {
       setLoading(false);
     }
@@ -99,12 +96,8 @@ export default function VerifyRegisterOtpScreen() {
       const resendAt = new Date(result.resendAvailableAt).getTime();
       const seconds = Math.max(0, Math.ceil((resendAt - Date.now()) / 1000));
       setCooldown(seconds || 60);
-    } catch (err: any) {
-      const message =
-        err?.response?.data?.message ||
-        err?.message ||
-        'Không thể gửi lại mã OTP. Vui lòng thử lại sau.';
-      setError(Array.isArray(message) ? message.join(', ') : message);
+    } catch (err: unknown) {
+      setError(extractApiErrorMessage(err, 'Không thể gửi lại mã OTP. Vui lòng thử lại sau.'));
     } finally {
       setResending(false);
     }

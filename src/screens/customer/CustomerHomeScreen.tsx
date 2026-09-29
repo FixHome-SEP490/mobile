@@ -9,9 +9,9 @@ import {
   TouchableOpacity,
   TextInput,
   Image,
-  Dimensions,
   StatusBar,
   FlatList,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -28,14 +28,19 @@ import { usersApi, AddressData } from '../../api/users.api';
 import { bookingsApi } from '../../api/bookings.api';
 import { ordersApi } from '../../api/orders.api';
 import { homeResumeTarget, type HomeResumeItem } from './customer-bookings-history';
+import {
+  HOME_POPULAR_SERVICES_PAGE_SIZE,
+  HOME_POPULAR_SERVICE_TARGETS,
+  chunkHomePopularServices,
+  getHomePopularPagerLayout,
+  getHomePopularPagerPage,
+} from './customer-home-pager';
 import { orderDetailTarget } from './customer-order-detail';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { useChatUnreadCount } from '../../hooks/useChatUnreadCount';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomSheetModal, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import * as Haptics from 'expo-haptics';
-
-const { width } = Dimensions.get('window');
 
 interface ServiceItem {
   id: string;
@@ -55,99 +60,124 @@ interface ServiceItem {
 
 const getPopularServices = (colors: any): ServiceItem[] => [
   {
-    id: 'ac_clean',
+    ...HOME_POPULAR_SERVICE_TARGETS[0],
     name: 'Vệ sinh\nmáy lạnh',
     iconName: 'snowflake',
     iconType: 'fa5',
     iconColor: '#0284C7',
     pedestalColor: '#E0F2FE',
     imageSource: require('../../../assets/air-conditioner.png'),
-    categoryCode: 'DIEN_LANH',
   },
   {
-    id: 'plumbing',
+    ...HOME_POPULAR_SERVICE_TARGETS[1],
     name: 'Sửa ống\nnước',
     iconName: 'pipe-wrench',
     iconType: 'material',
     iconColor: '#0D9488',
     pedestalColor: '#CCFBF1',
     imageSource: require('../../../assets/water-pipeline.png'),
-    categoryCode: 'DIEN_NUOC',
-    query: 'nước',
   },
   {
-    id: 'electricity',
+    ...HOME_POPULAR_SERVICE_TARGETS[2],
     name: 'Lắp đặt hệ\nthống điện',
     iconName: 'bolt',
     iconType: 'fa5',
     iconColor: '#EAB308',
     pedestalColor: '#FEF9C3',
     imageSource: require('../../../assets/voltage-cabinet.png'),
-    categoryCode: 'DIEN_NUOC',
-    query: 'điện',
   },
   {
-    id: 'drainage',
+    ...HOME_POPULAR_SERVICE_TARGETS[3],
     name: 'Thông nghẹt\ncống',
     iconName: 'water-pump',
     iconType: 'material',
     iconColor: '#4F46E5',
     pedestalColor: '#E0E7FF',
     imageSource: require('../../../assets/unclogging-drains.png'),
-    categoryCode: 'DIEN_NUOC',
   },
   {
-    id: 'ac_repair',
+    ...HOME_POPULAR_SERVICE_TARGETS[4],
     name: 'Sửa Tivi',
     iconName: 'tv',
     iconType: 'material',
     iconColor: colors.primary,
     pedestalColor: '#DBEAFE',
     imageSource: require('../../../assets/tv-repair.png'),
-    query: 'tivi',
   },
   {
-    id: 'ac_install',
+    ...HOME_POPULAR_SERVICE_TARGETS[5],
     name: 'Điện tử\ngia dụng',
     iconName: 'tools',
     iconType: 'fa5',
     iconColor: '#059669',
     pedestalColor: '#D1FAE5',
     imageSource: require('../../../assets/home-appliance-repair.png'),
-    categoryCode: 'BEP_GIA_DUNG',
   },
   {
-    id: 'washer_repair',
+    ...HOME_POPULAR_SERVICE_TARGETS[6],
     name: 'Sửa máy\ngiặt',
     iconName: 'washing-machine',
     iconType: 'material',
     iconColor: '#7C3AED',
     pedestalColor: '#EDE9FE',
     imageSource: require('../../../assets/washing-machine.png'),
-    categoryCode: 'DIEN_LANH',
-    query: 'máy giặt',
   },
   {
-    id: 'fridge_repair',
+    ...HOME_POPULAR_SERVICE_TARGETS[7],
     name: 'Sửa tủ\nlạnh',
     iconName: 'fridge-outline',
     iconType: 'material',
     iconColor: '#EA580C',
     pedestalColor: '#FFEDD5',
     imageSource: require('../../../assets/refrigerator.png'),
-    categoryCode: 'DIEN_LANH',
-    query: 'tủ lạnh',
   },
 ];
 
 export default function CustomerHomeScreen() {
   const { colors, spacing, fontSize, isDark } = useAppTheme();
-  const styles = getStyles(colors, spacing, fontSize);
+  const { width: windowWidth } = useWindowDimensions();
+  const pagerLayout = useMemo(
+    () => getHomePopularPagerLayout(windowWidth),
+    [windowWidth],
+  );
+  const styles = getStyles(colors, spacing, fontSize, pagerLayout.pageWidth);
   const POPULAR_SERVICES = useMemo(() => getPopularServices(colors), [colors]);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const handleScroll = useScrollHideTabBar();
   const chatUnread = useChatUnreadCount();
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeServicePage, setActiveServicePage] = useState(0);
+  const popularPagerRef = useRef<FlatList<ServiceItem[]>>(null);
+  const popularServicePages = useMemo(
+    () => chunkHomePopularServices(POPULAR_SERVICES, HOME_POPULAR_SERVICES_PAGE_SIZE),
+    [POPULAR_SERVICES],
+  );
+
+  const handleServicePageMomentumEnd = useCallback(
+    (event: { nativeEvent: { contentOffset: { x: number } } }) => {
+      setActiveServicePage((previous) => {
+        const next = getHomePopularPagerPage(
+          event.nativeEvent.contentOffset.x,
+          windowWidth,
+          popularServicePages.length,
+        );
+        return next === previous ? previous : next;
+      });
+    },
+    [popularServicePages.length, windowWidth],
+  );
+
+  useEffect(() => {
+    if (popularServicePages.length === 0) return;
+    const clampedPage = Math.min(
+      Math.max(activeServicePage, 0),
+      popularServicePages.length - 1,
+    );
+    popularPagerRef.current?.scrollToOffset({
+      offset: clampedPage * windowWidth,
+      animated: false,
+    });
+  }, [windowWidth, activeServicePage, popularServicePages.length]);
 
   const handleSearch = () => {
     navigation.navigate('CustomerServices', { query: searchQuery });
@@ -415,42 +445,68 @@ export default function CustomerHomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Grid 2 hàng 4 cột */}
-        <View style={styles.servicesGrid}>
-          {POPULAR_SERVICES.map((service) => (
-            <TouchableOpacity
-              key={service.id}
-              style={styles.serviceItem}
-              onPress={() => handleServicePress(service)}
-              activeOpacity={0.75}
-            >
-              {/* 3D Isometric Pedestal Effect */}
-              <View style={styles.pedestalOuter}>
-                <View
-                  style={[
-                    styles.pedestalPlate,
-                    { backgroundColor: service.pedestalColor },
-                  ]}
+        {/* Popular-services pager: 2 pages x 4 tiles */}
+        <FlatList
+          ref={popularPagerRef}
+          data={popularServicePages}
+          keyExtractor={(_, index) => `popular-services-page-${index}`}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          snapToInterval={windowWidth}
+          snapToAlignment="start"
+          decelerationRate="fast"
+          disableIntervalMomentum
+          getItemLayout={(_, index) => ({
+            length: windowWidth,
+            offset: windowWidth * index,
+            index,
+          })}
+          onMomentumScrollEnd={handleServicePageMomentumEnd}
+          testID="popular-services-pager"
+          renderItem={({ item: page }) => (
+            <View style={styles.servicesPage}>
+              {page.map((service) => (
+                <TouchableOpacity
+                  key={service.id}
+                  style={styles.serviceItem}
+                  onPress={() => handleServicePress(service)}
+                  activeOpacity={0.75}
                 >
-                  {renderServiceIcon(service)}
-                </View>
-                <View style={styles.pedestalBaseShadow} />
-                {service.isHot && (
-                  <View style={styles.hotBadge}>
-                    <Text style={styles.hotBadgeText}>HOT</Text>
+                  {/* 3D Isometric Pedestal Effect */}
+                  <View style={styles.pedestalOuter}>
+                    <View
+                      style={[
+                        styles.pedestalPlate,
+                        { backgroundColor: service.pedestalColor },
+                      ]}
+                    >
+                      {renderServiceIcon(service)}
+                    </View>
+                    <View style={styles.pedestalBaseShadow} />
+                    {service.isHot && (
+                      <View style={styles.hotBadge}>
+                        <Text style={styles.hotBadgeText}>HOT</Text>
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
 
-              <Text style={styles.serviceName}>{service.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+                  <Text style={styles.serviceName}>{service.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        />
 
-        {/* Pagination Dots Indicator (Như trong Hình 1) */}
+        {/* Pagination indicator reflects the actual page */}
         <View style={styles.paginationIndicator}>
-          <View style={styles.activeDotPill} />
-          <View style={styles.inactiveDot} />
+          {popularServicePages.map((_, index) => (
+            <View
+              key={`popular-services-dot-${index}`}
+              testID={`popular-services-dot-${index}`}
+              style={index === activeServicePage ? styles.activeDotPill : styles.inactiveDot}
+            />
+          ))}
         </View>
 
         {/* 7. Promotional Campaign Banner (Chân trang phong cách Hình 1 & 2) */}
@@ -574,7 +630,7 @@ export default function CustomerHomeScreen() {
   );
 }
 
-const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
+const getStyles = (colors: any, spacing: any, fontSize: any, pagerWidth: number) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -871,13 +927,13 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontWeight: '600',
     color: colors.primary,
   },
-  servicesGrid: {
+  servicesPage: {
+    width: pagerWidth,
     flexDirection: 'row',
-    flexWrap: 'wrap',
     paddingHorizontal: 12,
   },
   serviceItem: {
-    width: (width - 24) / 4,
+    width: (pagerWidth - 24) / 4,
     alignItems: 'center',
     marginVertical: 8,
     paddingHorizontal: 2,

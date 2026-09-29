@@ -1,18 +1,18 @@
 import { useAppTheme } from '../../constants/theme';
 import React, { useEffect, useState, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
-  TouchableOpacity, 
-  ActivityIndicator,
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
   RefreshControl,
   StatusBar
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
+import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import { notificationsApi, NotificationItem } from '../../api/notifications.api';
 
 export default function CustomerNotificationsScreen() {
@@ -207,9 +207,7 @@ export default function CustomerNotificationsScreen() {
       </View>
 
       {loading && !refreshing ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <CustomerSkeleton variant="notification" rows={4} />
       ) : (
         <FlatList
           data={notifications}
