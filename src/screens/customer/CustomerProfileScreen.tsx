@@ -64,7 +64,7 @@ export default function CustomerProfileScreen() {
   const [isAvatarModalVisible, setAvatarModalVisible] = useState(false);
   const profileSheetRef = useRef<BottomSheetModal>(null);
   const addressSheetRef = useRef<BottomSheetModal>(null);
-  const profileSnapPoints = useMemo(() => ['60%'], []);
+  const profileSnapPoints = useMemo(() => ['62%'], []);
   const addressSnapPoints = useMemo(() => ['90%'], []);
 
   const handlePickImage = async () => {
@@ -77,7 +77,6 @@ export default function CustomerProfileScreen() {
     if (!result.canceled) {
       const uri = result.assets[0].uri;
       setAvatarUrl(uri);
-      setEditAvatar(uri);
       try {
         await usersApi.updateProfile({ avatarUrl: uri });
       } catch (e) {
@@ -91,7 +90,11 @@ export default function CustomerProfileScreen() {
   // Temp states for editing profile
   const [editName, setEditName] = useState(name);
   const [editPhone, setEditPhone] = useState(phone);
-  const [editAvatar, setEditAvatar] = useState(avatarUrl || '');
+  const [focusedProfileField, setFocusedProfileField] = useState<'name' | 'phone' | null>(null);
+
+  const hasProfileChanges = editName.trim() !== name.trim() || editPhone.trim() !== phone.trim();
+  const isProfileSaveReady = editName.trim().length > 0 && hasProfileChanges;
+  const canSaveProfile = isProfileSaveReady && !savingProfile;
 
   const [editAddressId, setEditAddressId] = useState<string | null>(null);
   const [addressName, setAddressName] = useState('');
@@ -160,23 +163,23 @@ export default function CustomerProfileScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSavingProfile(true);
     try {
-      // Gộp payload edit avatar theo UI v2
-      const payload: any = {
+      const payload = {
         fullName: editName.trim(),
         phoneNumber: editPhone.trim() || undefined,
       };
-      if (editAvatar && editAvatar.trim()) {
-        payload.avatarUrl = editAvatar.trim();
-      }
 
       const updated = await usersApi.updateProfile(payload);
-      
-      setName(updated.fullName || editName);
-      setPhone(updated.phoneNumber || editPhone);
-      setAvatarUrl(payload.avatarUrl || null); // Cập nhật lại UI Avatar
-      
+
+      setName(updated.fullName || editName.trim());
+      setPhone(updated.phoneNumber || editPhone.trim());
+
       if (token && user) {
-        setAuth(token, { ...user, fullName: updated.fullName, phoneNumber: updated.phoneNumber, avatarUrl: payload.avatarUrl });
+        setAuth(token, {
+          ...user,
+          fullName: updated.fullName,
+          phoneNumber: updated.phoneNumber,
+          avatarUrl: avatarUrl || undefined,
+        });
       }
       profileSheetRef.current?.dismiss();
       Alert.alert('Thành công', 'Cập nhật thông tin thành công!');
@@ -445,7 +448,7 @@ export default function CustomerProfileScreen() {
               onPress={() => {
                 setEditName(name);
                 setEditPhone(phone);
-                setEditAvatar(avatarUrl || '');
+                setFocusedProfileField(null);
                 profileSheetRef.current?.present();
               }}
             >
@@ -527,64 +530,145 @@ export default function CustomerProfileScreen() {
         </View>
       </Modal>
 
-      {/* Profile Edit Sheet (Thêm input URL Avatar của v2 + Nút Loading của bản thường) */}
+      {/* Profile Edit Sheet */}
       <BottomSheetModal
         ref={profileSheetRef}
         snapPoints={profileSnapPoints}
         keyboardBehavior="interactive"
         keyboardBlurBehavior="restore"
+        onDismiss={() => setFocusedProfileField(null)}
         backdropComponent={(props) => (
-          <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} />
+          <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.45} />
         )}
       >
-        <BottomSheetView style={[styles.modalContent, isDarkMode && styles.cardDark]}>
-          <Text style={[styles.modalTitle, isDarkMode && styles.textDark]}>Chỉnh sửa thông tin</Text>
-          <BottomSheetTextInput
-            style={[styles.input, isDarkMode && styles.inputDark]}
-            placeholder="Họ và tên"
-            placeholderTextColor={colors.muted}
-            value={editName}
-            onChangeText={setEditName}
-          />
-          <BottomSheetTextInput
-            style={[styles.input, isDarkMode && styles.inputDark, { opacity: 0.6 }]}
-            placeholder="Email"
-            placeholderTextColor={colors.muted}
-            value={email}
-            editable={false}
-          />
-          <BottomSheetTextInput
-            style={[styles.input, isDarkMode && styles.inputDark]}
-            placeholder="Số điện thoại"
-            placeholderTextColor={colors.muted}
-            value={editPhone}
-            onChangeText={setEditPhone}
-            keyboardType="phone-pad"
-          />
-          <BottomSheetTextInput
-            style={[styles.input, isDarkMode && styles.inputDark]}
-            placeholder="Link Avatar URL (Tùy chọn)"
-            placeholderTextColor={colors.muted}
-            value={editAvatar}
-            onChangeText={setEditAvatar}
-          />
-          <View style={styles.modalActions}>
+        <BottomSheetView style={[styles.profileSheetContent, { backgroundColor: colors.surface }]}>
+          <View style={styles.profileSheetHeader}>
+            <View style={styles.profileHeaderCopy}>
+              <Text style={[styles.profileSheetTitle, { color: colors.text }]}>Chỉnh sửa thông tin</Text>
+              <Text style={[styles.profileSheetSubtitle, { color: colors.textSecondary }]}>
+                Cập nhật thông tin cá nhân dùng cho tài khoản FixHome.
+              </Text>
+            </View>
             <TouchableOpacity
-              style={styles.cancelBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Đóng chỉnh sửa thông tin"
+              style={[styles.profileCloseButton, { backgroundColor: colors.background }]}
+              onPress={() => profileSheetRef.current?.dismiss()}
+              disabled={savingProfile}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.profileFieldGroup}>
+            <Text style={[styles.profileFieldLabel, { color: colors.text }]}>Họ và tên</Text>
+            <View
+              style={[
+                styles.profileInputShell,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: focusedProfileField === 'name' ? colors.primary : colors.border,
+                },
+              ]}
+            >
+              <Ionicons name="person-outline" size={18} color={focusedProfileField === 'name' ? colors.primary : colors.textSecondary} />
+              <BottomSheetTextInput
+                style={[styles.profileInput, { color: colors.text }]}
+                placeholder="Nhập họ và tên"
+                placeholderTextColor={colors.muted}
+                value={editName}
+                onChangeText={setEditName}
+                onFocus={() => setFocusedProfileField('name')}
+                onBlur={() => setFocusedProfileField(null)}
+                autoCapitalize="words"
+                returnKeyType="next"
+              />
+            </View>
+          </View>
+
+          <View style={styles.profileFieldGroup}>
+            <Text style={[styles.profileFieldLabel, { color: colors.text }]}>Số điện thoại</Text>
+            <View
+              style={[
+                styles.profileInputShell,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: focusedProfileField === 'phone' ? colors.primary : colors.border,
+                },
+              ]}
+            >
+              <Ionicons name="call-outline" size={18} color={focusedProfileField === 'phone' ? colors.primary : colors.textSecondary} />
+              <BottomSheetTextInput
+                style={[styles.profileInput, { color: colors.text }]}
+                placeholder="Nhập số điện thoại"
+                placeholderTextColor={colors.muted}
+                value={editPhone}
+                onChangeText={setEditPhone}
+                onFocus={() => setFocusedProfileField('phone')}
+                onBlur={() => setFocusedProfileField(null)}
+                keyboardType="phone-pad"
+                returnKeyType="done"
+              />
+            </View>
+          </View>
+
+          <View style={styles.profileFieldGroup}>
+            <Text style={[styles.profileFieldLabel, { color: colors.text }]}>Email</Text>
+            <View
+              style={[
+                styles.profileInputShell,
+                styles.profileReadonlyShell,
+                { backgroundColor: colors.background, borderColor: colors.border },
+              ]}
+            >
+              <Ionicons name="mail-outline" size={18} color={colors.muted} />
+              <Text style={[styles.profileReadonlyValue, { color: colors.textSecondary }]} numberOfLines={1}>
+                {email}
+              </Text>
+              <Ionicons name="lock-closed-outline" size={16} color={colors.muted} />
+            </View>
+            <View style={styles.profileHelperRow}>
+              <Ionicons name="information-circle-outline" size={14} color={colors.muted} />
+              <Text style={[styles.profileHelperText, { color: colors.textSecondary }]}>
+                Email đăng nhập không thể thay đổi tại đây.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.profileActions}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              style={[styles.profileCancelButton, { borderColor: colors.border, backgroundColor: colors.surface }]}
               onPress={() => profileSheetRef.current?.dismiss()}
               disabled={savingProfile}
             >
-              <Text style={styles.cancelBtnText}>Hủy</Text>
+              <Text style={[styles.profileCancelText, { color: colors.textSecondary }]}>Hủy</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.saveBtn, savingProfile && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canSaveProfile, busy: savingProfile }}
+              style={[
+                styles.profileSaveButton,
+                { backgroundColor: isProfileSaveReady ? colors.primary : colors.border },
+              ]}
               onPress={handleSaveProfile}
-              disabled={savingProfile}
+              disabled={!canSaveProfile}
             >
               {savingProfile ? (
-                <ActivityIndicator size="small" color={colors.surface} />
+                <>
+                  <ActivityIndicator size="small" color={colors.surface} />
+                  <Text style={styles.profileSaveText}>Đang lưu...</Text>
+                </>
               ) : (
-                <Text style={styles.saveBtnText}>Lưu</Text>
+                <Text
+                  style={[
+                    styles.profileSaveText,
+                    { color: isProfileSaveReady ? colors.surface : colors.muted },
+                  ]}
+                >
+                  Lưu thay đổi
+                </Text>
               )}
             </TouchableOpacity>
           </View>
@@ -826,6 +910,69 @@ const getStyles = (colors: any) => StyleSheet.create({
   logoutBtn: { paddingVertical: 12, paddingHorizontal: 24 },
   logoutText: { fontSize: 14, fontWeight: '600', color: colors.error },
 
+  profileSheetContent: {
+    width: '100%',
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 24,
+  },
+  profileSheetHeader: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 22,
+  },
+  profileHeaderCopy: { flex: 1, gap: 4 },
+  profileSheetTitle: { fontSize: 20, lineHeight: 28, fontWeight: '700' },
+  profileSheetSubtitle: { fontSize: 13, lineHeight: 19 },
+  profileCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileFieldGroup: { width: '100%', marginBottom: 16 },
+  profileFieldLabel: { fontSize: 13, lineHeight: 18, fontWeight: '600', marginBottom: 7 },
+  profileInputShell: {
+    minHeight: 50,
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+  },
+  profileReadonlyShell: { opacity: 0.92 },
+  profileInput: { flex: 1, minHeight: 48, paddingVertical: 0, fontSize: 15, lineHeight: 21 },
+  profileReadonlyValue: { flex: 1, fontSize: 14, lineHeight: 20 },
+  profileHelperRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginTop: 7, paddingHorizontal: 2 },
+  profileHelperText: { flex: 1, fontSize: 12, lineHeight: 17 },
+  profileActions: { width: '100%', flexDirection: 'row', gap: 10, marginTop: 4 },
+  profileCancelButton: {
+    minHeight: 48,
+    minWidth: 92,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileCancelText: { fontSize: 14, lineHeight: 20, fontWeight: '600' },
+  profileSaveButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 14,
+    paddingHorizontal: 18,
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileSaveText: { color: '#FFFFFF', fontSize: 14, lineHeight: 20, fontWeight: '700' },
   modalContent: { width: '100%', backgroundColor: colors.surface, borderRadius: 20, padding: 20, alignItems: 'center' },
   modalTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 16 },
   input: { width: '100%', backgroundColor: colors.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, color: colors.text, marginBottom: 12 },
