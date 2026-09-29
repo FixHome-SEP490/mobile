@@ -59,7 +59,7 @@ export function createTechOrderDetailLoader(
   });
 }
 
-export type JobsTab = 'all' | 'pending' | 'in_progress';
+export type JobsTab = 'all' | 'pending' | 'in_progress' | 'completed';
 export type JobsEmptyNote = 'no-match' | 'more-pages';
 
 export interface JobsView {
@@ -83,6 +83,7 @@ export function resolveJobsView(
     const s = String(job.status).toUpperCase();
     if (activeTab === 'pending') return ['ACCEPTED', 'EN_ROUTE'].includes(s);
     if (activeTab === 'in_progress') return ['UNDER_REPAIR', 'IN_PROGRESS'].includes(s);
+    if (activeTab === 'completed') return s === 'COMPLETED';
     return true;
   });
   const showLoadMoreJobs = state.jobs.length < state.jobsTotal;

@@ -113,6 +113,31 @@ it('confirms an honest proposed total and submits the exact labor payload', asyn
   expect(refreshed(h)).toHaveBeenCalledTimes(1);
 });
 
+it('proposed total includes FixHome part lines and pickup shipping, not just labor', () => {
+  const h = setup();
+  h.deps.getExtraPartItems = () => [
+    { type: 'parts_equipment', description: 'Co đồng 90° Ø10', quantity: 1, unitPrice: 25000, partSource: 'fixhome' },
+    { type: 'parts_equipment', description: 'Combo ống đồng 10/16', quantity: 1, unitPrice: 300000, partSource: 'fixhome' },
+  ];
+  h.deps.getFulfillment = () => ({ method: 'pickup', shippingFee: 0 });
+  h.controller.setField('reason', 'Ống đồng hư bị lủng');
+  h.controller.setField('description', 'Thay ống đồng');
+  h.controller.setField('quantity', '1');
+  h.controller.setField('unitPrice', '200000');
+  h.controller.requestConfirm();
+  expect(h.state().proposedTotalText).toBe('525.000đ');
+});
+
+it('proposed total adds delivery shipping fee when a FixHome part ships', () => {
+  const h = setup();
+  h.deps.getExtraPartItems = () => [
+    { type: 'parts_equipment', description: 'Combo ống đồng 10/16', quantity: 1, unitPrice: 300000, partSource: 'fixhome' },
+  ];
+  h.deps.getFulfillment = () => ({ method: 'delivery', shippingFee: 20000 });
+  fillValid(h);
+  expect(h.state().proposedTotalText).toBe('440.000đ');
+});
+
 it('forwards a trimmed note within limit and omits it when blank', async () => {
   const h = setup();
   h.controller.setField('reason', 'Hở mối hàn');

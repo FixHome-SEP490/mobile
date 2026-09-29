@@ -21,6 +21,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { AuthStackParamList } from '../../types';
 import { authApi } from '../../api/auth.api';
+import { extractApiErrorMessage } from '../../utils/input-validation';
 
 const PASSWORD_RULE_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
 
@@ -75,12 +76,8 @@ export default function ResetPasswordScreen() {
       Alert.alert('Thành công', 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.', [
         { text: 'Đăng nhập', onPress: () => navigation.reset({ index: 0, routes: [{ name: 'Login' }] }) },
       ]);
-    } catch (err: any) {
-      const message =
-        err?.response?.data?.message ||
-        err?.message ||
-        'Đặt lại mật khẩu thất bại. Vui lòng thử lại.';
-      setError(Array.isArray(message) ? message.join(', ') : message);
+    } catch (err: unknown) {
+      setError(extractApiErrorMessage(err, 'Đặt lại mật khẩu thất bại. Vui lòng thử lại.'));
     } finally {
       setLoading(false);
     }
@@ -93,12 +90,8 @@ export default function ResetPasswordScreen() {
     try {
       await authApi.forgotPassword(email);
       setCooldown(60);
-    } catch (err: any) {
-      const message =
-        err?.response?.data?.message ||
-        err?.message ||
-        'Không thể gửi lại mã OTP. Vui lòng thử lại sau.';
-      setError(Array.isArray(message) ? message.join(', ') : message);
+    } catch (err: unknown) {
+      setError(extractApiErrorMessage(err, 'Không thể gửi lại mã OTP. Vui lòng thử lại sau.'));
     } finally {
       setResending(false);
     }

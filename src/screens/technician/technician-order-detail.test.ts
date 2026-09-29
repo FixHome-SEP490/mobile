@@ -221,6 +221,8 @@ describe('jobs list view-model (resolveJobsView production helper)', () => {
     const repairing = resolveJobsView({ jobs: [job('a', 'ACCEPTED')], jobsTotal: 1, loading: false, error: null }, 'in_progress');
     expect(repairing.filtered).toHaveLength(0);
     expect(repairing.emptyNote).toBe('no-match');
+    const completed = resolveJobsView({ jobs, jobsTotal: 3, loading: false, error: null }, 'completed');
+    expect(completed.filtered.map((row) => row.id)).toEqual(['c']);
   });
 
   it('never claims empty while an error banner is present', () => {

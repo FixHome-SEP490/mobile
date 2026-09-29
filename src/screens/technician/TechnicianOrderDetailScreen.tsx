@@ -25,6 +25,7 @@ import * as Location from 'expo-location';
 import { ordersApi, type CanonicalOrderStatus, type ServiceOrderItem, type CreateAdditionalCostItem } from '../../api/orders.api';
 import { partsCatalogApi, type FixHomePart } from '../../api/parts-catalog.api';
 import { technicianJobsUserId } from './technician-jobs-loader';
+import { extractApiErrorMessage } from '../../utils/input-validation';
 import { createCheckInController, type PermissionDecision } from './technician-check-in';
 import {
   quotationItemsList,
@@ -54,6 +55,8 @@ import {
 import {
   createQuotationCreateController,
   initialQuoteState,
+  QUOTE_QUANTITY_MIN,
+  QUOTE_QUANTITY_MAX,
 } from './technician-quotation-create';
 import {
   createStartRepairController,
@@ -285,8 +288,8 @@ export default function TechnicianOrderDetailScreen() {
     try {
       await ordersApi.enRoute(order.id);
       await loaderRef.current?.refresh(true);
-    } catch (err: any) {
-      Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể bắt đầu di chuyển. Vui lòng thử lại.');
+    } catch (err: unknown) {
+      Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể bắt đầu di chuyển. Vui lòng thử lại.'));
     } finally {
       setEnRouteBusy(false);
     }
@@ -845,8 +848,8 @@ export default function TechnicianOrderDetailScreen() {
           try {
             await ordersApi.deleteEvidence(target, photoId);
             await evidenceRef.current?.refreshEvidence(() => isEvidenceReadable(target));
-          } catch (err: any) {
-            Alert.alert('Lỗi', err?.response?.data?.message || 'Không thể xóa ảnh. Vui lòng thử lại.');
+          } catch (err: unknown) {
+            Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể xóa ảnh. Vui lòng thử lại.'));
           } finally {
             setDeletingEvidenceId(null);
           }
@@ -1401,19 +1404,29 @@ export default function TechnicianOrderDetailScreen() {
                   const rowErrors = quoteState.rowErrors[row.key] ?? {};
                   const readOnly = quoteState.busy || quoteState.needsVerify;
                   return (
-                    <View key={row.key} style={styles.quoteRow}>
-                      <View style={styles.row}>
-                        <Text style={styles.jobMeta}>
-                          {row.kind === 'labor' ? `Nhân công ${index + 1}` : `Linh kiện kỹ thuật ${index + 1}`}
-                        </Text>
+                    <View key={row.key} style={styles.acItemCard}>
+                      <View style={styles.acItemBadgeRow}>
+                        <View style={row.kind === 'labor' ? styles.acBadgeLabor : styles.acBadgeParts}>
+                          <Text style={styles.acBadgeText}>
+                            {row.kind === 'labor' ? `CÔNG THỢ ${index + 1}` : `LINH KIỆN ${index + 1}`}
+                          </Text>
+                        </View>
+                        {row.kind === 'part' && row.warrantyOption === 'paid_warranty' && !!row.warrantyTermDays && (
+                          <View style={styles.acWarrantyBadge}>
+                            <Ionicons name="shield-checkmark" size={11} color={colors.success} />
+                            <Text style={styles.acWarrantyBadgeText}>{row.warrantyTermDays} ngày</Text>
+                          </View>
+                        )}
                         {quoteState.rows.length > 1 && (
                           <TouchableOpacity
+                            style={{ marginLeft: 'auto' }}
                             onPress={() => onQuoteRemoveRow(row.key)}
                             disabled={readOnly}
+                            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                             accessibilityRole="button"
                             accessibilityLabel="Xóa dòng báo giá"
                           >
-                            <Text style={styles.retryText}>Xóa</Text>
+                            <Ionicons name="trash" size={16} color={colors.error} />
                           </TouchableOpacity>
                         )}
                       </View>
@@ -1505,34 +1518,61 @@ export default function TechnicianOrderDetailScreen() {
                         </View>
                       )}
 
-                      {row.kind === 'part' && (
-                        <>
-                          <Text style={styles.fieldLabel}>Số lượng (1–1000)</Text>
+                      <View style={styles.acItemFieldsRow}>
+                        {row.kind === 'part' && (
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.acItemFieldLabel}>Số lượng (1–1000)</Text>
+                            <View style={styles.qtyRow}>
+                              <TouchableOpacity
+                                style={styles.qtyBtnSmall}
+                                onPress={() => {
+                                  const current = parseInt(row.quantity, 10);
+                                  const next = Math.max(QUOTE_QUANTITY_MIN, (Number.isFinite(current) ? current : 1) - 1);
+                                  quoteRef.current?.setRowField(row.key, 'quantity', String(next));
+                                }}
+                                disabled={readOnly}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Giảm số lượng dòng ${index + 1}`}
+                              >
+                                <Ionicons name="remove" size={13} color={colors.text} />
+                              </TouchableOpacity>
+                              <Text style={styles.qtyTextSmall}>{row.quantity || '0'}</Text>
+                              <TouchableOpacity
+                                style={styles.qtyBtnSmall}
+                                onPress={() => {
+                                  const current = parseInt(row.quantity, 10);
+                                  const next = Math.min(QUOTE_QUANTITY_MAX, (Number.isFinite(current) ? current : 0) + 1);
+                                  quoteRef.current?.setRowField(row.key, 'quantity', String(next));
+                                }}
+                                disabled={readOnly}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Tăng số lượng dòng ${index + 1}`}
+                              >
+                                <Ionicons name="add" size={13} color={colors.text} />
+                              </TouchableOpacity>
+                            </View>
+                            {!!rowErrors.quantity && (
+                              <Text style={styles.fieldError}>{rowErrors.quantity}</Text>
+                            )}
+                          </View>
+                        )}
+                        <View style={{ flex: row.kind === 'part' ? 2 : 1 }}>
+                          <Text style={styles.acItemFieldLabel}>Đơn giá (đ)</Text>
                           <TextInput
                             style={styles.fieldInput}
-                            value={row.quantity}
-                            onChangeText={(value) => quoteRef.current?.setRowField(row.key, 'quantity', value)}
+                            value={row.unitPrice}
+                            onChangeText={(value) => quoteRef.current?.setRowField(row.key, 'unitPrice', value)}
                             editable={!readOnly}
                             keyboardType="numeric"
-                            accessibilityLabel={`Số lượng dòng ${index + 1}`}
+                            accessibilityLabel={`Đơn giá dòng ${index + 1}`}
                           />
-                          {!!rowErrors.quantity && (
-                            <Text style={styles.fieldError}>{rowErrors.quantity}</Text>
+                          {!!rowErrors.unitPrice && (
+                            <Text style={styles.fieldError}>{rowErrors.unitPrice}</Text>
                           )}
-                        </>
-                      )}
-                      <Text style={styles.fieldLabel}>Đơn giá (đ)</Text>
-                      <TextInput
-                        style={styles.fieldInput}
-                        value={row.unitPrice}
-                        onChangeText={(value) => quoteRef.current?.setRowField(row.key, 'unitPrice', value)}
-                        editable={!readOnly}
-                        keyboardType="numeric"
-                        accessibilityLabel={`Đơn giá dòng ${index + 1}`}
-                      />
-                      {!!rowErrors.unitPrice && (
-                        <Text style={styles.fieldError}>{rowErrors.unitPrice}</Text>
-                      )}
+                        </View>
+                      </View>
                       {row.kind === 'part' && (
                         <>
                           <Text style={styles.fieldLabel}>Thời hạn bảo hành (ngày, để trống nếu không bảo hành)</Text>
@@ -1791,6 +1831,9 @@ export default function TechnicianOrderDetailScreen() {
                       <TouchableOpacity
                         style={{ marginLeft: 'auto' }}
                         onPress={() => setAcExtraParts((prev) => prev.filter((i) => i.partCatalogId !== item.partCatalogId))}
+                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Xóa linh kiện"
                       >
                         <Ionicons name="trash" size={16} color={colors.error} />
                       </TouchableOpacity>
@@ -1803,6 +1846,9 @@ export default function TechnicianOrderDetailScreen() {
                           <TouchableOpacity
                             style={styles.qtyBtnSmall}
                             onPress={() => setAcExtraParts((prev) => prev.map((i) => i.partCatalogId === item.partCatalogId && i.quantity > 1 ? { ...i, quantity: i.quantity - 1 } : i))}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            accessibilityRole="button"
+                            accessibilityLabel="Giảm số lượng"
                           >
                             <Ionicons name="remove" size={13} color={colors.text} />
                           </TouchableOpacity>
@@ -1810,6 +1856,9 @@ export default function TechnicianOrderDetailScreen() {
                           <TouchableOpacity
                             style={styles.qtyBtnSmall}
                             onPress={() => setAcExtraParts((prev) => prev.map((i) => i.partCatalogId === item.partCatalogId ? { ...i, quantity: i.quantity + 1 } : i))}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            accessibilityRole="button"
+                            accessibilityLabel="Tăng số lượng"
                           >
                             <Ionicons name="add" size={13} color={colors.text} />
                           </TouchableOpacity>
@@ -2688,12 +2737,6 @@ const getStyles = (colors: any) => StyleSheet.create({
   fieldError: {
     fontSize: 12,
     color: colors.error,
-  },
-  quoteRow: {
-    gap: 4,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: colors.divider,
   },
   quoteInfoNote: { color: colors.primaryStrong, fontWeight: '600' },
   fixedPriceBox: { backgroundColor: colors.background, borderRadius: 10, padding: 12, gap: 4, marginTop: 8 },
