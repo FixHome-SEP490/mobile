@@ -410,6 +410,25 @@ describe('Customer Matching presentation and privacy', () => {
     expect(hasText(tree, 'Thông tin kỹ thuật viên')).toBe(true);
   });
 
+  it('keeps candidate cards compact and moves secondary details into the detail sheet', async () => {
+    const tree = await mountLoadedScreen();
+    const compactText = texts(tree).join('\n');
+
+    expect(compactText).toContain('4,8/5 · 12 lượt đánh giá');
+    expect(compactText).toContain('2,4 km');
+    expect(compactText).not.toContain('6 năm kinh nghiệm');
+    expect(compactText).not.toContain('150.000 ₫');
+    expect(compactText).not.toContain('30 ngày');
+
+    const candidateName = findText(tree, 'Kỹ thuật viên A');
+    await act(async () => findPressableAncestor(candidateName)?.props.onPress());
+
+    const detailText = texts(tree).join('\n');
+    expect(detailText).toContain('6 năm kinh nghiệm');
+    expect(detailText).toContain('150.000 ₫');
+    expect(detailText).toContain('30 ngày');
+  });
+
   it('shows only customer-safe candidate details with known units', async () => {
     const tree = await mountLoadedScreen();
     const candidateName = findText(tree, 'Kỹ thuật viên A');

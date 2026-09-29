@@ -1,5 +1,6 @@
 import {
   orderNextAction,
+  orderNextActionButtonLabel,
   orderStatusLabel,
   timelineEntryLabel,
 } from './customer-order-next-action';
@@ -84,6 +85,20 @@ describe('orderNextAction', () => {
   it('prioritizes awaiting quotation decision', () => {
     const action = orderNextAction({ ...base, status: 'EN_ROUTE', quoteAwaitingDecision: true });
     expect(action.kind).toBe('decide_quote');
+  });
+});
+
+describe('orderNextActionButtonLabel', () => {
+  it.each([
+    ['decide_quote', 'Xem báo giá'],
+    ['decide_cost', 'Xem chi phí phát sinh'],
+    ['confirm_completion', 'Nghiệm thu công việc'],
+    ['pay', 'Đi đến thanh toán'],
+    ['review', 'Đánh giá dịch vụ'],
+    ['track', null],
+    ['none', null],
+  ] as const)('maps %s to the action-first CTA', (kind, label) => {
+    expect(orderNextActionButtonLabel(kind)).toBe(label);
   });
 });
 
