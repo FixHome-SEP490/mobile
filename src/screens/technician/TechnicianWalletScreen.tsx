@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -26,17 +26,14 @@ import type { RootStackParamList } from '../../types';
 import type { WalletTransaction, WalletTxType, WithdrawalRequest } from '../../types/wallet.types';
 import {
   MIN_TOP_UP,
-  MIN_WITHDRAWAL,
   createWalletController,
   initialWalletState,
+  minimumWithdrawalOf,
+  openWithdrawalOf,
   type WalletUiState,
 } from './technician-wallet';
 
 const TOP_UP_PRESETS = [100_000, 200_000, 500_000, 1_000_000];
-const BANKS = [
-  'Vietcombank', 'Techcombank', 'MB Bank', 'BIDV',
-  'VietinBank', 'ACB', 'VPBank', 'TPBank',
-];
 
 const TX_FILTERS: { value: WalletTxType | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'Tất cả' },
@@ -44,22 +41,27 @@ const TX_FILTERS: { value: WalletTxType | 'ALL'; label: string }[] = [
   { value: 'PLATFORM_FEE', label: 'Phí nền tảng' },
   { value: 'TOP_UP', label: 'Nạp tiền' },
   { value: 'WITHDRAW', label: 'Rút tiền' },
+  { value: 'WITHDRAW_REFUND', label: 'Hoàn tiền rút' },
   { value: 'ADJUSTMENT', label: 'Điều chỉnh' },
 ];
 
 const TX_TYPE_LABELS: Record<WalletTxType, string> = {
   TOP_UP: 'Nạp tiền',
   WITHDRAW: 'Rút tiền',
+  WITHDRAW_REFUND: 'Hoàn tiền rút không thành công',
   ONLINE_EARNING: 'Thu nhập đơn online',
   PLATFORM_FEE: 'Phí nền tảng (đơn tiền mặt)',
   ADJUSTMENT: 'Điều chỉnh bởi Admin',
 };
 
+// Same words as the web technician wallet, so one person on two devices reads
+// the same status.
 const WITHDRAWAL_STATUS_LABELS: Record<WithdrawalRequest['status'], string> = {
-  PENDING: 'Đang chờ duyệt',
-  SUCCESS: 'Đã chuyển khoản',
+  PENDING: 'Chờ duyệt',
+  PROCESSING: 'Đang chuyển tiền',
+  SUCCESS: 'Đã chi tiền',
   REJECTED: 'Đã từ chối',
-  FAILED: 'Thất bại',
+  FAILED: 'Chuyển thất bại',
 };
 
 function formatVND(amount: number): string {
@@ -70,6 +72,11 @@ function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString('vi-VN', {
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
   });
+}
+
+/** Only the last four digits are shown outside the edit form. */
+function maskAccountNumber(number: string): string {
+  return number.length > 4 ? `•••• ${number.slice(-4)}` : number;
 }
 
 export default function TechnicianWalletScreen() {
@@ -93,7 +100,10 @@ export default function TechnicianWalletScreen() {
           walletApi.getMyTransactions({ page, limit: 15, type }),
         getWithdrawals: (page) => walletApi.getMyWithdrawals({ page, limit: 15 }),
         topUp: (amount) => walletApi.topUp(amount),
-        requestWithdrawal: (dto) => walletApi.requestWithdrawal(dto),
+        getBankAccount: () => walletApi.getMyBankAccount(),
+        listBanks: () => walletApi.listBanks(),
+        saveBankAccount: (dto) => walletApi.saveMyBankAccount(dto),
+        requestWithdrawal: (amount) => walletApi.requestWithdrawal(amount),
         openExternalUrl: (url) => Linking.openURL(url),
         onAccessDenied: () => {
           Alert.alert('Phiên đăng nhập hết hạn', 'Vui lòng đăng nhập lại.');
@@ -134,12 +144,32 @@ export default function TechnicianWalletScreen() {
   const [topUpAmount, setTopUpAmount] = useState('');
   const [withdrawVisible, setWithdrawVisible] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [withdrawBank, setWithdrawBank] = useState(BANKS[0]);
-  const [withdrawAccountNumber, setWithdrawAccountNumber] = useState('');
-  const [withdrawAccountName, setWithdrawAccountName] = useState('');
+
+  const [bankVisible, setBankVisible] = useState(false);
+  /** Set when the account form was opened on the way to withdrawing. */
+  const [bankForWithdraw, setBankForWithdraw] = useState(false);
+  const [bankBin, setBankBin] = useState('');
+  const [bankSearch, setBankSearch] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [accountName, setAccountName] = useState('');
 
   const summary = state.summary;
-  const hasPendingWithdrawal = state.withdrawals.some((w) => w.status === 'PENDING');
+  const openWithdrawal = openWithdrawalOf(state);
+  const minimumWithdrawal = minimumWithdrawalOf(summary);
+  const canWithdraw =
+    !!summary && !openWithdrawal && summary.withdrawableBalance >= minimumWithdrawal;
+
+  const selectedBank = state.banks.find((b) => b.bin === bankBin) ?? null;
+  const visibleBanks = useMemo(() => {
+    const query = bankSearch.trim().toLowerCase();
+    if (!query) return state.banks;
+    return state.banks.filter(
+      (b) =>
+        b.shortName.toLowerCase().includes(query) ||
+        b.code.toLowerCase().includes(query) ||
+        b.name.toLowerCase().includes(query),
+    );
+  }, [bankSearch, state.banks]);
 
   const onRefresh = () => {
     void controllerRef.current?.refreshAll();
@@ -153,19 +183,65 @@ export default function TechnicianWalletScreen() {
     }
   };
 
-  const submitWithdraw = async () => {
-    const ok = await controllerRef.current?.submitWithdrawal({
-      amount: Number(withdrawAmount.replace(/\D/g, '')) || 0,
-      bankName: withdrawBank,
-      bankAccountNumber: withdrawAccountNumber.trim(),
-      bankAccountName: withdrawAccountName.trim().toUpperCase(),
+  const openBankForm = (forWithdraw: boolean) => {
+    setBankForWithdraw(forWithdraw);
+    setBankBin(state.bankAccount?.bankBin ?? '');
+    setAccountNumber(state.bankAccount?.accountNumber ?? '');
+    setAccountName(state.bankAccount?.accountName ?? '');
+    setBankSearch('');
+    setBankVisible(true);
+    void controllerRef.current?.loadBanks();
+  };
+
+  const openWithdraw = () => {
+    if (!canWithdraw) return;
+    if (!state.bankAccount) {
+      openBankForm(true);
+      return;
+    }
+    setWithdrawAmount('');
+    setWithdrawVisible(true);
+  };
+
+  const submitBank = async () => {
+    const ok = await controllerRef.current?.submitBankAccount({
+      bankBin,
+      accountNumber,
+      accountName,
     });
+    if (!ok) return;
+    setBankVisible(false);
+    // They came here on the way to withdrawing: carry on to where they meant to go.
+    if (bankForWithdraw) {
+      setWithdrawAmount('');
+      setWithdrawVisible(true);
+    }
+  };
+
+  const submitWithdraw = async () => {
+    const ok = await controllerRef.current?.submitWithdrawal(
+      Number(withdrawAmount.replace(/\D/g, '')) || 0,
+    );
     if (ok) {
       setWithdrawVisible(false);
       setWithdrawAmount('');
-      setWithdrawAccountNumber('');
-      setWithdrawAccountName('');
-      Alert.alert('Thành công', 'Đã gửi yêu cầu rút tiền, chờ Quản lý dịch vụ duyệt.');
+      Alert.alert(
+        'Đã gửi yêu cầu',
+        'Quản lý dịch vụ duyệt xong, hệ thống tự chuyển khoản về tài khoản của bạn.',
+      );
+    }
+  };
+
+  const pillColors = (status: WithdrawalRequest['status']) => {
+    switch (status) {
+      case 'SUCCESS':
+        return { bg: '#DCFCE7', fg: colors.success };
+      case 'PENDING':
+        return { bg: '#FEF3C7', fg: colors.warning };
+      case 'PROCESSING':
+        return { bg: colors.primaryTint, fg: colors.primaryStrong };
+      default:
+        return { bg: '#FEE2E2', fg: colors.error };
     }
   };
 
@@ -214,9 +290,11 @@ export default function TechnicianWalletScreen() {
                   <Text style={styles.heroBtnText}>Nạp tiền</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.heroBtn, (summary.withdrawableBalance <= 0 || hasPendingWithdrawal) && styles.heroBtnDisabled]}
-                  disabled={summary.withdrawableBalance <= 0 || hasPendingWithdrawal}
-                  onPress={() => setWithdrawVisible(true)}
+                  style={[styles.heroBtn, !canWithdraw && styles.heroBtnDisabled]}
+                  disabled={!canWithdraw}
+                  onPress={openWithdraw}
+                  accessibilityLabel="Rút tiền"
+                  accessibilityState={{ disabled: !canWithdraw }}
                 >
                   <Ionicons name="arrow-down-circle-outline" size={18} color={colors.primaryStrong} />
                   <Text style={styles.heroBtnText}>Rút tiền</Text>
@@ -246,6 +324,14 @@ export default function TechnicianWalletScreen() {
                 <Text style={styles.infoText}>Đang chờ xác nhận thanh toán VNPay. Mở lại app để cập nhật số dư.</Text>
               </View>
             )}
+            {openWithdrawal === 'PROCESSING' && (
+              <View style={styles.infoBanner}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={styles.infoText}>
+                  Lệnh rút đã được duyệt, hệ thống đang chuyển khoản về ngân hàng của bạn.
+                </Text>
+              </View>
+            )}
 
             <View style={styles.statRow}>
               <View style={styles.statCard}>
@@ -257,9 +343,43 @@ export default function TechnicianWalletScreen() {
                 <Text style={styles.statValue}>{formatVND(summary.minimumBalance)}</Text>
               </View>
               <View style={styles.statCard}>
-                <Text style={styles.statLabel}>Đang chờ rút</Text>
-                <Text style={styles.statValue}>{formatVND(summary.pendingWithdrawal)}</Text>
+                <Text style={styles.statLabel}>
+                  {openWithdrawal === 'PROCESSING' ? 'Đang chuyển' : 'Đang chờ rút'}
+                </Text>
+                <Text style={styles.statValue}>
+                  {formatVND(summary.pendingWithdrawal + (summary.processingWithdrawal ?? 0))}
+                </Text>
               </View>
+            </View>
+
+            {/* Receiving bank account */}
+            <View style={styles.bankCard}>
+              <View style={styles.bankIcon}>
+                <Ionicons name="business-outline" size={20} color={colors.primaryStrong} />
+              </View>
+              <View style={{ flex: 1 }}>
+                {state.bankAccount ? (
+                  <>
+                    <Text style={styles.statLabel}>Tài khoản nhận tiền rút</Text>
+                    <Text style={styles.txTitle}>
+                      {state.bankAccount.bankName} · {maskAccountNumber(state.bankAccount.accountNumber)}
+                    </Text>
+                    <Text style={styles.txDesc}>{state.bankAccount.accountName}</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.txTitle}>Chưa khai báo tài khoản nhận tiền</Text>
+                    <Text style={styles.txDesc}>Tên chủ tài khoản phải trùng tên đã xác minh danh tính</Text>
+                  </>
+                )}
+              </View>
+              <TouchableOpacity
+                style={styles.bankEditBtn}
+                onPress={() => openBankForm(false)}
+                accessibilityLabel={state.bankAccount ? 'Đổi tài khoản nhận tiền' : 'Khai báo tài khoản nhận tiền'}
+              >
+                <Text style={styles.bankEditText}>{state.bankAccount ? 'Đổi' : 'Khai báo'}</Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.tabRow}>
@@ -307,7 +427,7 @@ export default function TechnicianWalletScreen() {
                     return (
                       <View key={tx.id} style={styles.txRow}>
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.txTitle}>{TX_TYPE_LABELS[tx.type]}</Text>
+                          <Text style={styles.txTitle}>{TX_TYPE_LABELS[tx.type] ?? tx.type}</Text>
                           {!!tx.description && <Text style={styles.txDesc}>{tx.description}</Text>}
                           <Text style={styles.txDate}>{formatDateTime(tx.createdAt)}</Text>
                         </View>
@@ -350,39 +470,40 @@ export default function TechnicianWalletScreen() {
             ) : state.withdrawals.length === 0 ? (
               <Text style={styles.emptyText}>Chưa có yêu cầu rút tiền nào.</Text>
             ) : (
-              state.withdrawals.map((w: WithdrawalRequest) => (
-                <View key={w.id} style={styles.txRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.txTitle}>{w.bankName} · {w.bankAccountNumber}</Text>
-                    <Text style={styles.txDesc}>{w.bankAccountName}</Text>
-                    <Text style={styles.txDate}>{formatDateTime(w.requestedAt)}</Text>
-                    {w.status === 'REJECTED' && !!w.rejectReason && (
-                      <Text style={styles.rejectReason}>Lý do từ chối: {w.rejectReason}</Text>
-                    )}
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.txAmount}>{formatVND(w.amount)}</Text>
-                    <View
-                      style={[
-                        styles.statusPill,
-                        {
-                          backgroundColor:
-                            w.status === 'SUCCESS' ? '#DCFCE7' : w.status === 'PENDING' ? '#FEF3C7' : '#FEE2E2',
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.statusPillText,
-                          { color: w.status === 'SUCCESS' ? colors.success : w.status === 'PENDING' ? colors.warning : colors.error },
-                        ]}
-                      >
-                        {WITHDRAWAL_STATUS_LABELS[w.status]}
-                      </Text>
+              state.withdrawals.map((w: WithdrawalRequest) => {
+                const pill = pillColors(w.status);
+                return (
+                  <View key={w.id} style={styles.txRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.txTitle}>{w.bankName} · {w.bankAccountNumber}</Text>
+                      <Text style={styles.txDesc}>{w.bankAccountName}</Text>
+                      <Text style={styles.txDate}>{formatDateTime(w.requestedAt)}</Text>
+                      {w.status === 'REJECTED' && !!w.rejectReason && (
+                        <Text style={styles.rejectReason}>Lý do từ chối: {w.rejectReason}</Text>
+                      )}
+                      {w.status === 'FAILED' && (
+                        <Text style={styles.rejectReason}>
+                          Không chuyển được{w.failureReason ? `: ${w.failureReason}` : ''}. Tiền đã được hoàn lại vào ví.
+                        </Text>
+                      )}
+                      {w.status === 'SUCCESS' && !!w.payoutBankReference && (
+                        <Text style={styles.txDesc}>Mã giao dịch ngân hàng: {w.payoutBankReference}</Text>
+                      )}
+                      {w.status === 'PROCESSING' && (
+                        <Text style={styles.txDesc}>Đã duyệt, đang chuyển về ngân hàng</Text>
+                      )}
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.txAmount}>{formatVND(w.amount)}</Text>
+                      <View style={[styles.statusPill, { backgroundColor: pill.bg }]}>
+                        <Text style={[styles.statusPillText, { color: pill.fg }]}>
+                          {WITHDRAWAL_STATUS_LABELS[w.status] ?? w.status}
+                        </Text>
+                      </View>
                     </View>
                   </View>
-                </View>
-              ))
+                );
+              })
             )}
           </>
         ) : null}
@@ -451,37 +572,30 @@ export default function TechnicianWalletScreen() {
               value={withdrawAmount}
               onChangeText={setWithdrawAmount}
               keyboardType="numeric"
-              placeholder={`Số tiền (tối thiểu ${MIN_WITHDRAWAL.toLocaleString('vi-VN')}đ)`}
+              placeholder={`Số tiền (tối thiểu ${minimumWithdrawal.toLocaleString('vi-VN')}đ)`}
               placeholderTextColor={colors.muted}
               style={styles.input}
             />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-              {BANKS.map((b) => (
+            {state.bankAccount && (
+              <View style={styles.destinationBox}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.statLabel}>Chuyển về tài khoản</Text>
+                  <Text style={styles.txTitle}>
+                    {state.bankAccount.bankName} · {state.bankAccount.accountNumber}
+                  </Text>
+                  <Text style={styles.txDesc}>{state.bankAccount.accountName}</Text>
+                </View>
                 <TouchableOpacity
-                  key={b}
-                  style={[styles.presetChip, withdrawBank === b && styles.presetChipActive]}
-                  onPress={() => setWithdrawBank(b)}
+                  onPress={() => { setWithdrawVisible(false); openBankForm(false); }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Text style={[styles.presetChipText, withdrawBank === b && styles.presetChipTextActive]}>{b}</Text>
+                  <Text style={styles.bankEditText}>Đổi</Text>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <TextInput
-              value={withdrawAccountNumber}
-              onChangeText={setWithdrawAccountNumber}
-              keyboardType="number-pad"
-              placeholder="Số tài khoản"
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-            />
-            <TextInput
-              value={withdrawAccountName}
-              onChangeText={(v) => setWithdrawAccountName(v.toUpperCase())}
-              autoCapitalize="characters"
-              placeholder="Chủ tài khoản (VIẾT HOA KHÔNG DẤU)"
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-            />
+              </View>
+            )}
+            <Text style={styles.hintText}>
+              Quản lý dịch vụ duyệt xong, hệ thống tự chuyển khoản. Nếu chuyển không thành công, tiền được hoàn lại vào ví.
+            </Text>
             {!!state.withdrawError && <Text style={styles.modalError}>{state.withdrawError}</Text>}
             <View style={styles.modalActions}>
               <TouchableOpacity
@@ -500,6 +614,93 @@ export default function TechnicianWalletScreen() {
                   <ActivityIndicator size="small" color={colors.surface} />
                 ) : (
                   <Text style={styles.saveBtnText}>Gửi yêu cầu</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Tài khoản nhận tiền */}
+      <Modal visible={bankVisible} transparent animationType="fade" onRequestClose={() => setBankVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Tài khoản nhận tiền rút</Text>
+            {bankForWithdraw && (
+              <Text style={styles.hintText}>
+                Bạn cần khai báo tài khoản nhận tiền trước khi rút. Khai một lần, lần sau hệ thống điền sẵn.
+              </Text>
+            )}
+
+            <Text style={styles.fieldLabel}>
+              Ngân hàng{selectedBank ? `: ${selectedBank.shortName}` : ''}
+            </Text>
+            <TextInput
+              value={bankSearch}
+              onChangeText={setBankSearch}
+              placeholder="Tìm ngân hàng (VD: Vietcombank, MB)"
+              placeholderTextColor={colors.muted}
+              style={styles.input}
+            />
+            <ScrollView style={styles.bankList} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+              {state.banks.length === 0 ? (
+                <ActivityIndicator color={colors.primary} style={{ marginVertical: 12 }} />
+              ) : (
+                visibleBanks.map((b) => (
+                  <TouchableOpacity
+                    key={b.bin}
+                    style={[styles.bankOption, bankBin === b.bin && styles.bankOptionActive]}
+                    onPress={() => setBankBin(b.bin)}
+                    accessibilityState={{ selected: bankBin === b.bin }}
+                  >
+                    <Text style={[styles.txTitle, bankBin === b.bin && { color: colors.primaryStrong }]}>
+                      {b.shortName}
+                    </Text>
+                    <Text style={styles.txDesc} numberOfLines={1}>{b.name}</Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+
+            <TextInput
+              value={accountNumber}
+              onChangeText={setAccountNumber}
+              keyboardType="number-pad"
+              maxLength={19}
+              placeholder="Số tài khoản"
+              placeholderTextColor={colors.muted}
+              style={styles.input}
+            />
+            <TextInput
+              value={accountName}
+              onChangeText={setAccountName}
+              autoCapitalize="characters"
+              maxLength={128}
+              placeholder="Tên chủ tài khoản"
+              placeholderTextColor={colors.muted}
+              style={styles.input}
+            />
+            <Text style={styles.hintText}>
+              Phải trùng họ tên đã xác minh danh tính. Gõ có dấu hay không dấu đều được.
+            </Text>
+            {!!state.bankError && <Text style={styles.modalError}>{state.bankError}</Text>}
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setBankVisible(false)}
+                disabled={state.bankBusy}
+              >
+                <Text style={styles.cancelBtnText}>Huỷ</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveBtn, state.bankBusy && { opacity: 0.7 }]}
+                onPress={submitBank}
+                disabled={state.bankBusy}
+              >
+                {state.bankBusy ? (
+                  <ActivityIndicator size="small" color={colors.surface} />
+                ) : (
+                  <Text style={styles.saveBtnText}>Lưu tài khoản</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -536,10 +737,20 @@ const getStyles = (colors: any) => StyleSheet.create({
   infoBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.primaryTint, borderRadius: 12, padding: 12, marginBottom: 12 },
   infoText: { flex: 1, color: colors.primaryStrong, fontSize: 12, fontWeight: '500' },
 
-  statRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  statRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   statCard: { flex: 1, backgroundColor: colors.surface, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: colors.border },
   statLabel: { fontSize: 11, color: colors.textSecondary, marginBottom: 4 },
   statValue: { fontSize: 13, fontWeight: '700', color: colors.text },
+
+  bankCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface, borderRadius: 14, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: colors.border },
+  bankIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center' },
+  bankEditBtn: { paddingVertical: 8, paddingHorizontal: 12, minHeight: 44, justifyContent: 'center' },
+  bankEditText: { color: colors.primaryStrong, fontWeight: '700', fontSize: 13 },
+  bankList: { maxHeight: 200, borderWidth: 1, borderColor: colors.border, borderRadius: 12, marginBottom: 12 },
+  bankOption: { paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
+  bankOptionActive: { backgroundColor: colors.primaryTint },
+  destinationBox: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginBottom: 12 },
+  hintText: { fontSize: 12, color: colors.textSecondary, marginBottom: 12 },
 
   tabRow: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: 12, padding: 4, marginBottom: 12, borderWidth: 1, borderColor: colors.border },
   tabBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 10 },
