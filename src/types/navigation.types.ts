@@ -41,6 +41,7 @@ export type RootStackParamList = {
       }
     | undefined;
   CustomerMatching: { bookingId: string };
+  CustomerBookingDetail: { bookingId: string };
   CustomerOrderDetail: { serviceOrderId: string };
   TechnicianOrderDetail: { serviceOrderId: string };
   CustomerTechFound: undefined;

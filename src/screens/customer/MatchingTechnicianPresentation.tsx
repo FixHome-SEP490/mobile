@@ -159,10 +159,9 @@ export function MatchingTechnicianCard({
   const reduceMotion = useReduceMotion(true);
   const name = displayName(candidate);
   const rating = displayRating(candidate);
-  const distance = displayDistance(candidate);
-  const experience = displayExperience(candidate);
-  const listedPrice = displayListedPrice(candidate);
-  const warranty = displayWarranty(candidate);
+  const distance = candidate.distanceKm != null && Number.isFinite(candidate.distanceKm) && candidate.distanceKm >= 0
+    ? `${numberFormat.format(candidate.distanceKm)} km`
+    : null;
 
   return (
     <Animated.View
@@ -188,11 +187,12 @@ export function MatchingTechnicianCard({
               {priority === 1 ? 'Ưu tiên 1 · Mời trước' : priority === 2 ? 'Ưu tiên 2 · Dự phòng' : 'Chạm để xem thông tin'}
             </Text>
             <View style={styles.candidateMetadata}>
-              {rating && <Text style={[styles.metadataText, { color: colors.textSecondary }]}>Đánh giá {rating}</Text>}
-              {distance && <Text style={[styles.metadataText, { color: colors.textSecondary }]}>{distance}</Text>}
-              {experience && <Text style={[styles.metadataText, { color: colors.textSecondary }]}>{experience}</Text>}
-              {listedPrice && <Text style={[styles.metadataText, { color: colors.textSecondary }]}>Giá niêm yết: {listedPrice}</Text>}
-              {warranty && <Text style={[styles.metadataText, { color: colors.textSecondary }]}>Bảo hành tham khảo: {warranty}</Text>}
+              {rating && (
+                <Text style={[styles.metadataText, { color: colors.textSecondary }]}>★ {rating}</Text>
+              )}
+              {distance && (
+                <Text style={[styles.metadataText, { color: colors.textSecondary }]}>• {distance}</Text>
+              )}
             </View>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
@@ -315,14 +315,14 @@ const styles = StyleSheet.create({
   skeletonMeta: { flexDirection: 'row', gap: 8 },
   skeletonChip: { width: 82, height: 20, borderRadius: 10 },
   skeletonCaption: { paddingTop: 4, fontSize: 14, lineHeight: 20, fontWeight: '500' },
-  candidateCard: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 10 },
-  candidateBody: { flexDirection: 'row', alignItems: 'flex-start', gap: 11, minHeight: 52 },
-  candidateInfo: { flex: 1, gap: 4 },
-  candidateName: { fontSize: 16, lineHeight: 22, fontWeight: '700' },
-  priorityLabel: { fontSize: 13, lineHeight: 18, fontWeight: '600' },
-  candidateMetadata: { gap: 3, paddingTop: 3 },
-  metadataText: { fontSize: 13, lineHeight: 19 },
-  selectControl: { minHeight: 44, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  candidateCard: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 8 },
+  candidateBody: { flexDirection: 'row', alignItems: 'center', gap: 11, minHeight: 52 },
+  candidateInfo: { flex: 1, gap: 3 },
+  candidateName: { fontSize: 16, lineHeight: 21, fontWeight: '700' },
+  priorityLabel: { fontSize: 12, lineHeight: 17, fontWeight: '600' },
+  candidateMetadata: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingTop: 1 },
+  metadataText: { fontSize: 12, lineHeight: 17 },
+  selectControl: { minHeight: 36, borderWidth: 1, borderRadius: 18, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, alignSelf: 'flex-end' },
   selectText: { fontSize: 14, lineHeight: 20, fontWeight: '600' },
   detailContent: { flexGrow: 1, padding: 20, paddingBottom: 30, gap: 18 },
   detailHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },

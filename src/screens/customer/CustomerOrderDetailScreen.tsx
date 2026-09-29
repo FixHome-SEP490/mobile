@@ -13,6 +13,7 @@ import {
   TextInput,
   Linking,
   AppState,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,7 +26,12 @@ import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import { useAuthStore } from '../../store/auth.store';
 import { ordersApi, type CanonicalOrderStatus } from '../../api/orders.api';
 import { customerBookingsUserId } from './customer-bookings-history';
-import { orderNextAction, timelineEntryLabel } from './customer-order-next-action';
+import {
+  orderNextAction,
+  orderNextActionButtonLabel,
+  timelineEntryLabel,
+  type OrderNextActionKind,
+} from './customer-order-next-action';
 import {
   createOrderDetailLoader,
   initialOrderDetailState,
@@ -101,6 +107,16 @@ export default function CustomerOrderDetailScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<DetailRoute>();
   const serviceOrderId = route.params.serviceOrderId;
+  const detailScrollRef = useRef<ScrollView | null>(null);
+  const actionSectionYRef = useRef<Partial<Record<OrderNextActionKind, number>>>({});
+  const markActionSection = useCallback((kind: OrderNextActionKind) => (event: LayoutChangeEvent) => {
+    actionSectionYRef.current[kind] = event.nativeEvent.layout.y;
+  }, []);
+  const scrollToActionSection = useCallback((kind: OrderNextActionKind) => {
+    const y = actionSectionYRef.current[kind];
+    if (typeof y !== 'number') return;
+    detailScrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+  }, []);
   const [detailState, setDetailState] = useState(initialOrderDetailState);
   const { order, loading, refreshing, error } = detailState;
   const [evidenceState, setEvidenceState] = useState(initialEvidenceState);
@@ -851,6 +867,7 @@ export default function CustomerOrderDetailScreen() {
         </View>
       ) : (
         <ScrollView
+          ref={detailScrollRef}
           contentContainerStyle={styles.scrollContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
@@ -902,16 +919,33 @@ export default function CustomerOrderDetailScreen() {
               ]}
               accessibilityRole="summary"
             >
-              <Text style={[styles.meta, { fontWeight: '800', color: colors.primary }]}>
-                TRẠNG THÁI · VIỆC CẦN LÀM
+              <Text style={[styles.meta, { fontWeight: '900', color: colors.primaryStrong }]}>
+                BẠN CẦN LÀM GÌ?
               </Text>
-              <Text style={styles.sectionTitle}>{orderSummaryAction.title}</Text>
-              <Text style={styles.meta}>{orderSummaryAction.detail}</Text>
+              <Text style={styles.actionSummaryTitle}>{orderSummaryAction.title}</Text>
+              <Text style={styles.actionSummaryDetail}>{orderSummaryAction.detail}</Text>
+              {!!orderNextActionButtonLabel(orderSummaryAction.kind) && (
+                <TouchableOpacity
+                  testID="order-detail-primary-next-action"
+                  onPress={() => scrollToActionSection(orderSummaryAction.kind)}
+                  accessibilityRole="button"
+                  accessibilityLabel={orderNextActionButtonLabel(orderSummaryAction.kind) ?? undefined}
+                  style={[styles.actionPrimaryButton, { backgroundColor: colors.primaryStrong }]}
+                >
+                  <Text style={styles.actionPrimaryButtonText}>
+                    {orderNextActionButtonLabel(orderSummaryAction.kind)}
+                  </Text>
+                  <Ionicons name="arrow-down" size={17} color={colors.surface} />
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
           {underRepairTask && (
             <View
+              onLayout={underRepairTask.kind === 'completion_requested'
+                ? markActionSection('confirm_completion')
+                : undefined}
               style={[
                 styles.card,
                 {
@@ -1052,7 +1086,7 @@ export default function CustomerOrderDetailScreen() {
           </View>
 
           {sections.hasQuotation && order.quotation && (
-            <View style={styles.card}>
+            <View onLayout={markActionSection('decide_quote')} style={styles.card}>
               <Text style={styles.sectionTitle}>Báo giá</Text>
               <Text style={styles.meta}>Trạng thái: {quoteStatusLabel(sections.quotationStatus)}</Text>
               {quotationItemsList(order).length === 0 ? (
@@ -1401,7 +1435,7 @@ export default function CustomerOrderDetailScreen() {
           )}
 
           {paymentEligible && (
-            <View style={styles.card}>
+            <View onLayout={markActionSection('pay')} style={styles.card}>
               {/* K08_CUSTOMER_PAYMENT */}
               <Text style={styles.sectionTitle}>Thanh toán</Text>
               <Text style={styles.meta}>
@@ -1487,7 +1521,7 @@ export default function CustomerOrderDetailScreen() {
           )}
 
           {reviewEligible && (
-            <View style={styles.card}>
+            <View onLayout={markActionSection('review')} style={styles.card}>
               {/* K09_A_SERVER_REVIEW */}
               <Text style={styles.sectionTitle}>Đánh giá dịch vụ</Text>
               {reviewState.loading && !reviewState.review ? (
@@ -1598,7 +1632,7 @@ export default function CustomerOrderDetailScreen() {
             </View>
           )}
 
-          <View style={styles.card}>
+          <View onLayout={markActionSection('decide_cost')} style={styles.card}>
             <Text style={styles.sectionTitle}>Chi phí phát sinh</Text>
             {costsState.loading && costsState.requests.length === 0 && !costsState.error ? (
               <Text style={styles.meta}>Đang tải chi phí phát sinh...</Text>
@@ -1819,6 +1853,33 @@ const getStyles = (colors: any) => StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: colors.text,
+  },
+  actionSummaryTitle: {
+    fontSize: 18,
+    lineHeight: 25,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  actionSummaryDetail: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: colors.textSecondary,
+  },
+  actionPrimaryButton: {
+    alignSelf: 'flex-start',
+    minHeight: 42,
+    marginTop: 4,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+  },
+  actionPrimaryButtonText: {
+    color: colors.surface,
+    fontSize: 13,
+    fontWeight: '800',
   },
   sectionTitle: {
     fontSize: 15,
