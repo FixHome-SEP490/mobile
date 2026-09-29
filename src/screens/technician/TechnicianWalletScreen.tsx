@@ -150,6 +150,8 @@ export default function TechnicianWalletScreen() {
   const [bankForWithdraw, setBankForWithdraw] = useState(false);
   const [bankBin, setBankBin] = useState('');
   const [bankSearch, setBankSearch] = useState('');
+  /** The list is only open while choosing; once a bank is picked it folds away. */
+  const [bankListOpen, setBankListOpen] = useState(false);
   const [accountNumber, setAccountNumber] = useState('');
   const [accountName, setAccountName] = useState('');
 
@@ -189,8 +191,17 @@ export default function TechnicianWalletScreen() {
     setAccountNumber(state.bankAccount?.accountNumber ?? '');
     setAccountName(state.bankAccount?.accountName ?? '');
     setBankSearch('');
+    // Nothing chosen yet: start with the list open. Editing a saved account:
+    // start folded on the bank already chosen.
+    setBankListOpen(!state.bankAccount?.bankBin);
     setBankVisible(true);
     void controllerRef.current?.loadBanks();
+  };
+
+  const chooseBank = (bin: string) => {
+    setBankBin(bin);
+    setBankSearch('');
+    setBankListOpen(false);
   };
 
   const openWithdraw = () => {
@@ -632,35 +643,52 @@ export default function TechnicianWalletScreen() {
               </Text>
             )}
 
-            <Text style={styles.fieldLabel}>
-              Ngân hàng{selectedBank ? `: ${selectedBank.shortName}` : ''}
-            </Text>
-            <TextInput
-              value={bankSearch}
-              onChangeText={setBankSearch}
-              placeholder="Tìm ngân hàng (VD: Vietcombank, MB)"
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-            />
-            <ScrollView style={styles.bankList} nestedScrollEnabled keyboardShouldPersistTaps="handled">
-              {state.banks.length === 0 ? (
-                <ActivityIndicator color={colors.primary} style={{ marginVertical: 12 }} />
-              ) : (
-                visibleBanks.map((b) => (
-                  <TouchableOpacity
-                    key={b.bin}
-                    style={[styles.bankOption, bankBin === b.bin && styles.bankOptionActive]}
-                    onPress={() => setBankBin(b.bin)}
-                    accessibilityState={{ selected: bankBin === b.bin }}
-                  >
-                    <Text style={[styles.txTitle, bankBin === b.bin && { color: colors.primaryStrong }]}>
-                      {b.shortName}
-                    </Text>
-                    <Text style={styles.txDesc} numberOfLines={1}>{b.name}</Text>
-                  </TouchableOpacity>
-                ))
-              )}
-            </ScrollView>
+            <Text style={styles.fieldLabel}>Ngân hàng</Text>
+            {bankListOpen || !selectedBank ? (
+              <>
+                <TextInput
+                  value={bankSearch}
+                  onChangeText={setBankSearch}
+                  placeholder="Tìm ngân hàng (VD: Vietcombank, MB)"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                />
+                <ScrollView style={styles.bankList} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                  {state.banks.length === 0 ? (
+                    <ActivityIndicator color={colors.primary} style={{ marginVertical: 12 }} />
+                  ) : visibleBanks.length === 0 ? (
+                    <Text style={[styles.txDesc, { padding: 12 }]}>Không tìm thấy ngân hàng phù hợp.</Text>
+                  ) : (
+                    visibleBanks.map((b) => (
+                      <TouchableOpacity
+                        key={b.bin}
+                        style={[styles.bankOption, bankBin === b.bin && styles.bankOptionActive]}
+                        onPress={() => chooseBank(b.bin)}
+                        accessibilityState={{ selected: bankBin === b.bin }}
+                      >
+                        <Text style={[styles.txTitle, bankBin === b.bin && { color: colors.primaryStrong }]}>
+                          {b.shortName}
+                        </Text>
+                        <Text style={styles.txDesc} numberOfLines={1}>{b.name}</Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </ScrollView>
+              </>
+            ) : (
+              // Chosen: one row with the bank and a way back into the list.
+              <TouchableOpacity
+                style={styles.selectedBank}
+                onPress={() => setBankListOpen(true)}
+                accessibilityLabel={`Ngân hàng đã chọn: ${selectedBank.shortName}. Bấm để đổi`}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.txTitle}>{selectedBank.shortName}</Text>
+                  <Text style={styles.txDesc} numberOfLines={1}>{selectedBank.name}</Text>
+                </View>
+                <Text style={styles.bankEditText}>Đổi</Text>
+              </TouchableOpacity>
+            )}
 
             <TextInput
               value={accountNumber}
@@ -747,6 +775,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   bankEditBtn: { paddingVertical: 8, paddingHorizontal: 12, minHeight: 44, justifyContent: 'center' },
   bankEditText: { color: colors.primaryStrong, fontWeight: '700', fontSize: 13 },
   bankList: { maxHeight: 200, borderWidth: 1, borderColor: colors.border, borderRadius: 12, marginBottom: 12 },
+  selectedBank: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 56, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.primaryTint, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12 },
   bankOption: { paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
   bankOptionActive: { backgroundColor: colors.primaryTint },
   destinationBox: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginBottom: 12 },
