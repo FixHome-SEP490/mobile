@@ -7,6 +7,7 @@ import type {
   TopUpResult,
   WalletSummary,
   WalletTransaction,
+  WithdrawalDecision,
   WithdrawalRequest,
 } from '../types';
 
@@ -86,11 +87,12 @@ export const walletApi = {
   },
 
   /**
-   * Only the amount travels: the money always goes to the saved account, which
-   * is the one the server checked against the KYC name.
+   * Withdraw and pay out at once, with no approval step; resolves with where
+   * the payout ended up. Only the amount travels: the money always goes to the
+   * saved account, which is the one the server checked against the KYC name.
    */
-  async requestWithdrawal(amount: number): Promise<WithdrawalRequest> {
-    return unwrap<WithdrawalRequest>(
+  async requestWithdrawal(amount: number): Promise<WithdrawalDecision> {
+    return unwrap<WithdrawalDecision>(
       (await apiClient.post('/technician/wallet/withdrawals', { amount })).data,
     );
   },
