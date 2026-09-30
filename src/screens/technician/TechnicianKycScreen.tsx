@@ -1,5 +1,5 @@
 // src/screens/technician/TechnicianKycScreen.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -15,9 +15,9 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import { Ionicons } from '@expo/vector-icons';
+import { AlertTriangle, Camera, ChevronLeft, Clock, ShieldCheck, XCircle, type LucideIcon } from 'lucide-react-native';
 import type { RootStackParamList } from '../../types';
-import { useAppTheme } from '../../constants/theme';
+import { useAppTheme, type Tone } from '../../constants/theme';
 import {
   technicianVerificationApi,
   type KycDocumentType,
@@ -82,30 +82,49 @@ const INITIAL_SLOTS: KycSlot[] = [
 ];
 
 export default function TechnicianKycScreen() {
-  const { colors, spacing, fontSize } = useAppTheme();
+  const { colors } = useAppTheme();
+  const styles = getStyles(colors);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [verification, setVerification] = useState<MyVerification | null>(null);
   const [slots, setSlots] = useState<KycSlot[]>(INITIAL_SLOTS);
 
+  const aliveRef = useRef(true);
   useEffect(() => {
-    let mounted = true;
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+
+  const loadVerification = useCallback(() => {
     technicianVerificationApi
       .getMyVerification()
       .then((result) => {
-        if (mounted) setVerification(result);
+        if (!aliveRef.current) return;
+        setVerification(result);
+        setLoadError(false);
       })
       .catch(() => {
-        if (mounted) Alert.alert('Lỗi', 'Không thể tải trạng thái xác minh. Vui lòng thử lại.');
+        // A failed load must not fall through to the upload form as if nothing was submitted.
+        if (aliveRef.current) setLoadError(true);
       })
       .finally(() => {
-        if (mounted) setLoading(false);
+        if (aliveRef.current) setLoading(false);
       });
-    return () => {
-      mounted = false;
-    };
   }, []);
+
+  useEffect(() => {
+    loadVerification();
+  }, [loadVerification]);
+
+  const retryLoad = () => {
+    setLoadError(false);
+    setLoading(true);
+    loadVerification();
+  };
 
   const applyAsset = (key: KycSlot['key'], asset: ImagePicker.ImagePickerAsset) => {
     const mimeType = inferMimeType(asset);
@@ -203,8 +222,7 @@ export default function TechnicianKycScreen() {
     }
   };
 
-  const showUploadForm = !verification || verification.status === 'REJECTED';
-  const styles = getStyles(colors, spacing, fontSize);
+  const showUploadForm = !loadError && (!verification || verification.status === 'REJECTED');
 
   return (
     <SafeAreaView style={styles.container}>
@@ -214,110 +232,116 @@ export default function TechnicianKycScreen() {
           style={styles.backBtn}
           accessibilityRole="button"
           accessibilityLabel="Quay lại"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <ChevronLeft size={26} color={colors.text} strokeWidth={1.75} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Xác minh danh tính (KYC)</Text>
+        <Text style={styles.headerTitle} accessibilityRole="header">Xác minh danh tính</Text>
         <View style={styles.backBtn} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         {loading ? (
-          <ActivityIndicator style={{ marginTop: spacing.xxl }} color={colors.primary} />
+          <View style={styles.centerBlock}>
+            <ActivityIndicator color={colors.primaryStrong} />
+            <Text style={styles.bodySmall}>Đang tải…</Text>
+          </View>
+        ) : loadError ? (
+          <View style={styles.centerBlock}>
+            <AlertTriangle size={40} color={colors.error} strokeWidth={1.5} />
+            <Text style={styles.errorText}>Không thể tải trạng thái xác minh. Vui lòng thử lại.</Text>
+            <TouchableOpacity style={styles.secondaryBtn} onPress={retryLoad} accessibilityRole="button">
+              <Text style={styles.secondaryBtnText}>Thử lại</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <>
             {verification?.status === 'PENDING' && (
-              <View style={[styles.statusCard, { borderColor: colors.warning }]}>
-                <Ionicons name="time-outline" size={22} color={colors.warning} />
-                <View style={styles.statusTextWrap}>
-                  <Text style={styles.statusTitle}>Đang chờ duyệt</Text>
-                  <Text style={styles.statusBody}>
-                    Hồ sơ của bạn đã được nộp và đang chờ quản trị viên xác minh.
-                  </Text>
-                </View>
-              </View>
+              <StatusCard
+                styles={styles}
+                tone={colors.tone.warning}
+                Icon={Clock}
+                title="Đang chờ duyệt"
+                body="Hồ sơ của bạn đã được nộp và đang chờ quản trị viên xác minh."
+              />
             )}
 
             {verification?.status === 'VERIFIED' && (
-              <View style={[styles.statusCard, { borderColor: colors.success }]}>
-                <Ionicons name="shield-checkmark" size={22} color={colors.success} />
-                <View style={styles.statusTextWrap}>
-                  <Text style={styles.statusTitle}>Đã xác minh danh tính</Text>
-                  <Text style={styles.statusBody}>Bạn có thể nhận việc bình thường.</Text>
-                </View>
-              </View>
+              <StatusCard
+                styles={styles}
+                tone={colors.tone.success}
+                Icon={ShieldCheck}
+                title="Đã xác minh danh tính"
+                body="Bạn có thể nhận việc bình thường."
+              />
             )}
 
             {verification?.status === 'REJECTED' && (
-              <View style={[styles.statusCard, { borderColor: colors.error }]}>
-                <Ionicons name="close-circle-outline" size={22} color={colors.error} />
-                <View style={styles.statusTextWrap}>
-                  <Text style={styles.statusTitle}>Hồ sơ bị từ chối</Text>
-                  <Text style={styles.statusBody}>
-                    {verification.rejectionReason || 'Ảnh không hợp lệ. Vui lòng nộp lại.'}
-                  </Text>
-                </View>
-              </View>
+              <StatusCard
+                styles={styles}
+                tone={colors.tone.danger}
+                Icon={XCircle}
+                title="Hồ sơ bị từ chối"
+                body={verification.rejectionReason || 'Ảnh không hợp lệ. Vui lòng nộp lại.'}
+              />
             )}
 
             {showUploadForm && (
               <View style={styles.form}>
                 <Text style={styles.formTitle}>Nộp ảnh xác minh</Text>
-                <View style={styles.slotRow}>
-                  {slots.map((slot) => (
-                    <TouchableOpacity
-                      key={slot.key}
-                      style={[styles.slotBox, slot.asset && styles.slotBoxFilled]}
-                      onPress={() => handleSlotPress(slot)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${slot.label}${slot.asset ? ', đã chọn ảnh' : ', ' + slot.hint}`}
-                    >
-                      {slot.asset ? (
-                        <Image source={{ uri: slot.asset.uri }} style={styles.slotImage} />
-                      ) : (
-                        <>
-                          <Ionicons name="camera-outline" size={26} color={colors.textSecondary} />
-                          <Text style={styles.slotHint}>{slot.hint}</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <View style={styles.slotLabelRow}>
-                  {slots.map((slot) => (
-                    <Text key={slot.key} style={styles.slotLabel}>
-                      {slot.label}
-                    </Text>
-                  ))}
-                </View>
+                <Text style={styles.bodySmall}>Ảnh JPEG, PNG hoặc WebP, tối đa 10MB mỗi ảnh.</Text>
 
-                <Text style={styles.helperText}>
-                  Ảnh JPEG, PNG hoặc WebP, tối đa 10MB mỗi ảnh.
-                </Text>
+                {slots.map((slot) => (
+                  <TouchableOpacity
+                    key={slot.key}
+                    style={[styles.slotCard, slot.asset && styles.slotCardFilled]}
+                    onPress={() => handleSlotPress(slot)}
+                    disabled={submitting}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${slot.label}${slot.asset ? ', đã chọn ảnh. Bấm để đổi ảnh' : ', ' + slot.hint}`}
+                  >
+                    <View style={styles.slotThumb}>
+                      {slot.asset ? (
+                        <Image source={{ uri: slot.asset.uri }} style={styles.slotImage} accessibilityIgnoresInvertColors />
+                      ) : (
+                        <Camera size={26} color={colors.textSecondary} strokeWidth={1.75} />
+                      )}
+                    </View>
+                    <View style={styles.flex1}>
+                      <Text style={styles.slotLabel}>{slot.label}</Text>
+                      <Text style={styles.bodySmall}>{slot.asset ? 'Đã chọn ảnh · bấm để đổi' : slot.hint}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
 
                 <View style={styles.actionRow}>
                   {hasAnySelection && (
                     <TouchableOpacity
-                      style={styles.resetBtn}
+                      style={[styles.secondaryBtn, styles.flex1]}
                       disabled={submitting}
                       onPress={resetSlots}
+                      accessibilityRole="button"
                     >
-                      <Text style={styles.resetBtnText}>Chọn lại</Text>
+                      <Text style={styles.secondaryBtnText}>Chọn lại</Text>
                     </TouchableOpacity>
                   )}
                   <TouchableOpacity
                     style={[
-                      styles.submitBtn,
+                      styles.primaryBtn,
+                      styles.flex2,
                       (!canSubmit || submitting) && styles.submitBtnDisabled,
                     ]}
                     disabled={!canSubmit || submitting}
                     onPress={handleSubmit}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !canSubmit || submitting, busy: submitting }}
                   >
                     {submitting ? (
-                      <ActivityIndicator color={colors.surface} />
+                      <>
+                        <ActivityIndicator color={colors.surface} />
+                        <Text style={styles.primaryBtnText}>Đang gửi hồ sơ…</Text>
+                      </>
                     ) : (
-                      <Text style={styles.submitBtnText}>Nộp hồ sơ xác minh</Text>
+                      <Text style={styles.primaryBtnText}>Nộp hồ sơ xác minh</Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -330,77 +354,100 @@ export default function TechnicianKycScreen() {
   );
 }
 
-const SLOT_SIZE = 96;
+type KycStyles = ReturnType<typeof getStyles>;
 
-const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
+function StatusCard({ styles, tone, Icon, title, body }: {
+  styles: KycStyles;
+  tone: Tone;
+  Icon: LucideIcon;
+  title: string;
+  body: string;
+}) {
+  return (
+    <View style={[styles.statusCard, { backgroundColor: tone.bg }]}>
+      <Icon size={22} color={tone.fg} strokeWidth={1.75} />
+      <View style={styles.flex1}>
+        <Text style={[styles.statusTitle, { color: tone.text }]}>{title}</Text>
+        <Text style={[styles.statusBody, { color: tone.text }]}>{body}</Text>
+      </View>
+    </View>
+  );
+}
+
+const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  flex1: { flex: 1 },
+  flex2: { flex: 2 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
-  backBtn: { width: 32, height: 32, justifyContent: 'center' },
-  headerTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text },
-  content: { padding: spacing.md, paddingBottom: spacing.xxl },
-  statusCard: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  statusTextWrap: { flex: 1 },
-  statusTitle: { fontSize: fontSize.md, fontWeight: '700', color: colors.text, marginBottom: 2 },
-  statusBody: { fontSize: fontSize.sm, color: colors.textSecondary },
+  backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text },
+  content: { padding: 16, paddingBottom: 48, gap: 12 },
+  centerBlock: { alignItems: 'center', gap: 12, marginTop: 40 },
+  bodySmall: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
+  errorText: { fontSize: 14, lineHeight: 20, color: colors.error, textAlign: 'center' },
+  statusCard: { flexDirection: 'row', gap: 12, borderRadius: 14, padding: 16 },
+  statusTitle: { fontSize: 16, lineHeight: 24, fontWeight: '700' },
+  statusBody: { fontSize: 14, lineHeight: 20 },
   form: {
     backgroundColor: colors.surface,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: spacing.md,
+    padding: 16,
+    gap: 12,
   },
-  formTitle: { fontSize: fontSize.md, fontWeight: '700', color: colors.text, marginBottom: spacing.md },
-  slotRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
-  slotLabelRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm, marginTop: spacing.xs },
-  slotBox: {
-    width: SLOT_SIZE,
-    height: SLOT_SIZE,
-    borderRadius: 12,
-    borderWidth: 2,
+  formTitle: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text },
+  slotCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 88,
+    padding: 8,
+    borderRadius: 14,
+    borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: colors.border,
+    borderColor: colors.textSecondary,
+  },
+  slotCardFilled: { borderStyle: 'solid', borderColor: colors.tone.success.fg },
+  slotThumb: {
+    width: 72,
+    height: 72,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
-    flex: 1,
   },
-  slotBoxFilled: { borderStyle: 'solid', borderColor: colors.success },
   slotImage: { width: '100%', height: '100%' },
-  slotHint: { fontSize: 10, fontWeight: '600', color: colors.textSecondary, marginTop: 4, textAlign: 'center' },
-  slotLabel: { flex: 1, fontSize: fontSize.xs, fontWeight: '600', color: colors.text, textAlign: 'center' },
-  helperText: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: spacing.md },
-  actionRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
-  resetBtn: {
-    flex: 1,
-    borderRadius: 12,
-    paddingVertical: 14,
+  slotLabel: { fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.text },
+  actionRow: { flexDirection: 'row', gap: 12, marginTop: 4 },
+  primaryBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    justifyContent: 'center',
+    gap: 8,
+    minHeight: 48,
+    borderRadius: 14,
+    backgroundColor: colors.primaryStrong,
+    paddingHorizontal: 16,
+  },
+  primaryBtnText: { color: colors.surface, fontSize: 16, lineHeight: 24, fontWeight: '600' },
+  secondaryBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.primaryStrong,
     backgroundColor: colors.surface,
+    paddingHorizontal: 16,
   },
-  resetBtnText: { color: colors.text, fontSize: fontSize.md, fontWeight: '700' },
-  submitBtn: {
-    flex: 2,
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  submitBtnDisabled: { backgroundColor: colors.border },
-  submitBtnText: { color: colors.surface, fontSize: fontSize.md, fontWeight: '700' },
+  secondaryBtnText: { color: colors.primaryStrong, fontSize: 16, lineHeight: 24, fontWeight: '600' },
+  submitBtnDisabled: { opacity: 0.5 },
 });
