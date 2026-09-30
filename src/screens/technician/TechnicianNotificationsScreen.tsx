@@ -1,60 +1,117 @@
-import { useAppTheme } from '../../constants/theme';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  SectionList,
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
   StatusBar,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { notificationsApi, NotificationItem } from '../../api/notifications.api';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AlertTriangle, Bell, BellOff, Briefcase, CheckCheck, Tag, Wallet } from 'lucide-react-native';
+import { useAppTheme, type ToneName } from '../../constants/theme';
+import { notificationsApi, type NotificationItem } from '../../api/notifications.api';
+import { useBadgeStore } from '../../store/badge.store';
+import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
+import {
+  formatNotificationTime,
+  groupNotificationsByDay,
+  mergeNotificationPage,
+} from './technician-notifications';
+
+const PAGE_SIZE = 20;
+// Floating GlassTabBar: 64pt pill + breathing room, plus the bottom inset (min 16).
+const TAB_BAR_CLEARANCE = 64 + 16;
+const LOAD_ERROR = 'Không thể tải thông báo. Kiểm tra kết nối rồi thử lại.';
+
+const TYPE_VIEW: Record<string, { tone: ToneName; Icon: typeof Bell }> = {
+  BOOKING: { tone: 'repair', Icon: Briefcase },
+  PAYMENT: { tone: 'success', Icon: Wallet },
+  PROMOTION: { tone: 'neutral', Icon: Tag },
+};
+const DEFAULT_VIEW = { tone: 'info' as ToneName, Icon: Bell };
+
+function pageItems(res: Awaited<ReturnType<typeof notificationsApi.getNotifications>>): NotificationItem[] | null {
+  if (!res.success) return null;
+  if (res.data && Array.isArray(res.data.data)) return res.data.data;
+  if (Array.isArray(res.data)) return res.data;
+  return [];
+}
 
 export default function TechnicianNotificationsScreen() {
   const { colors, isDark } = useAppTheme();
   const styles = getStyles(colors);
+  const insets = useSafeAreaInsets();
+  const unreadCount = useBadgeStore((s) => s.unreadNotifications);
+  const setUnreadCount = useBadgeStore((s) => s.setUnreadNotifications);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // Day grouping is evaluated at fetch time (render must stay pure).
+  const [loadedAt, setLoadedAt] = useState(0);
+  const pageRef = useRef(1);
 
-  const fetchNotifications = useCallback(async () => {
+  const syncUnreadCount = useCallback(() => {
+    notificationsApi.getCountUnread().then(setUnreadCount).catch(() => {});
+  }, [setUnreadCount]);
+
+  const fetchFirstPage = useCallback(async () => {
     try {
-      const res = await notificationsApi.getNotifications(1, 20);
-      if (res.success) {
-        if (res.data && Array.isArray(res.data.data)) {
-          setNotifications(res.data.data);
-        } else if (Array.isArray(res.data)) {
-          setNotifications(res.data);
-        } else {
-          setNotifications([]);
-        }
+      const items = pageItems(await notificationsApi.getNotifications(1, PAGE_SIZE));
+      if (items === null) {
+        setLoadError(LOAD_ERROR);
       } else {
-        setNotifications([]);
+        pageRef.current = 1;
+        setNotifications(items);
+        setHasMore(items.length >= PAGE_SIZE);
+        setLoadedAt(Date.now());
+        setLoadError(null);
+        syncUnreadCount();
       }
-    } catch (error) {
-      console.error('Lỗi khi tải thông báo:', error);
-      setNotifications([]);
+    } catch {
+      // A failed load is not an empty inbox: keep the last list and show retry.
+      setLoadError(LOAD_ERROR);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [syncUnreadCount]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount
-    void fetchNotifications();
-  }, [fetchNotifications]);
+    void fetchFirstPage();
+  }, [fetchFirstPage]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    void fetchNotifications();
+    void fetchFirstPage();
+  };
+
+  const onEndReached = async () => {
+    if (!hasMore || loadingMore || loading || refreshing) return;
+    setLoadingMore(true);
+    try {
+      const next = pageRef.current + 1;
+      const items = pageItems(await notificationsApi.getNotifications(next, PAGE_SIZE));
+      if (items === null) return;
+      pageRef.current = next;
+      setNotifications((prev) => mergeNotificationPage(prev, items));
+      setHasMore(items.length >= PAGE_SIZE);
+    } catch {
+      // Keep what is loaded; scrolling to the end again retries.
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   const [markingAll, setMarkingAll] = useState(false);
+  const localUnread = notifications.filter((n) => n.isRead === false).length;
+  const totalUnread = Math.max(unreadCount, localUnread);
 
   const onMarkAllRead = async () => {
     if (markingAll) return;
@@ -62,96 +119,80 @@ export default function TechnicianNotificationsScreen() {
     try {
       await notificationsApi.readAll();
       setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
-    } catch (error) {
-      console.error('Lỗi khi đánh dấu đã đọc tất cả:', error);
+      setUnreadCount(0);
+    } catch {
+      setLoadError('Không thể đánh dấu đã đọc. Vui lòng thử lại.');
     } finally {
       setMarkingAll(false);
     }
   };
 
+  const setRead = (id: string, isRead: boolean) =>
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead } : n)));
+
   const onNotificationPress = (item: NotificationItem) => {
     if (item.isRead !== false || !item.id) return;
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n)),
-    );
-    notificationsApi.readNotification(item.id).catch((error) => {
-      console.error('Lỗi khi đánh dấu đã đọc:', error);
+    const id = item.id;
+    setRead(id, true);
+    setUnreadCount(unreadCount - 1);
+    notificationsApi.readNotification(id).catch(() => {
+      // Roll back so the badge never claims something the server has not recorded.
+      setRead(id, false);
+      syncUnreadCount();
     });
   };
 
-  const formatNotificationTime = (iso: string): string => {
-    const date = new Date(iso);
-    const now = new Date();
-    const time = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-    const sameDay = date.toDateString() === now.toDateString();
-    if (sameDay) return time;
-    const day = date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
-    return `${day} ${time}`;
-  };
-
-  const renderNotificationIcon = (type?: string) => {
-    switch (type) {
-      case 'BOOKING':
-        return <Ionicons name="briefcase-outline" size={24} color={colors.primary} />;
-      case 'PAYMENT':
-        return <Ionicons name="cash-outline" size={24} color={colors.success} />;
-      case 'PROMOTION':
-        return <Ionicons name="pricetag-outline" size={24} color="#EA580C" />;
-      default:
-        return <Ionicons name="notifications-outline" size={24} color="#7C3AED" />;
-    }
-  };
-
-  const renderIconBackground = (type?: string) => {
-    switch (type) {
-      case 'BOOKING':
-        return colors.primaryTint;
-      case 'PAYMENT':
-        return '#D1FAE5';
-      case 'PROMOTION':
-        return '#FFEDD5';
-      default:
-        return '#EDE9FE';
-    }
-  };
+  const sections = useMemo(() => groupNotificationsByDay(notifications, loadedAt), [notifications, loadedAt]);
 
   const renderItem = ({ item }: { item: NotificationItem }) => {
     const isUnread = item.isRead === false;
-
+    const { tone, Icon } = TYPE_VIEW[item.type ?? ''] ?? DEFAULT_VIEW;
+    const title = item.title || 'Thông báo mới';
+    const body = item.body || item.message || 'Bạn có một thông báo từ FixHome.';
     return (
       <TouchableOpacity
-        style={[styles.card, isUnread && styles.unreadCard]}
+        style={[styles.row, isUnread && styles.rowUnread]}
         activeOpacity={0.7}
         onPress={() => onNotificationPress(item)}
+        accessibilityRole="button"
+        accessibilityLabel={`${isUnread ? 'Chưa đọc. ' : ''}${title}. ${body}`}
       >
-        <View style={[styles.iconContainer, { backgroundColor: renderIconBackground(item.type) }]}>
-          {renderNotificationIcon(item.type)}
-          {isUnread && <View style={styles.unreadDot} />}
+        <View style={[styles.iconTile, { backgroundColor: colors.tone[tone].bg }]}>
+          <Icon size={20} color={colors.tone[tone].fg} strokeWidth={1.75} />
         </View>
-        <View style={styles.cardContent}>
-          <View style={styles.cardTopRow}>
-            <Text style={[styles.title, isUnread && styles.unreadText]} numberOfLines={1}>
-              {item.title || 'Thông báo mới'}
+        <View style={styles.rowContent}>
+          <View style={styles.rowTop}>
+            <Text style={[styles.title, isUnread && styles.titleUnread]} numberOfLines={1}>
+              {title}
             </Text>
             {!!item.createdAt && (
-              <Text style={styles.timeText}>{formatNotificationTime(item.createdAt)}</Text>
+              <Text style={styles.timeText}>{formatNotificationTime(item.createdAt, loadedAt)}</Text>
             )}
           </View>
-          <Text style={styles.desc} numberOfLines={2}>
-            {item.body || item.message || 'Bạn có một thông báo từ FixHome.'}
-          </Text>
+          <Text style={styles.desc} numberOfLines={2}>{body}</Text>
         </View>
+        {isUnread && <View style={styles.unreadDot} />}
       </TouchableOpacity>
     );
   };
 
   const renderEmpty = () => {
     if (loading) return null;
-    return (
-      <View style={styles.emptyContainer}>
-        <View style={styles.emptyIconCircle}>
-          <MaterialCommunityIcons name="bell-sleep-outline" size={64} color={colors.muted} />
+    if (loadError) {
+      return (
+        <View style={styles.empty}>
+          <AlertTriangle size={48} color={colors.error} strokeWidth={1.5} />
+          <Text style={styles.emptyTitle}>Không thể tải thông báo</Text>
+          <Text style={styles.emptyDesc}>{loadError}</Text>
+          <TouchableOpacity onPress={onRefresh} style={styles.textBtn} accessibilityRole="button">
+            <Text style={styles.textBtnLabel}>Thử lại</Text>
+          </TouchableOpacity>
         </View>
+      );
+    }
+    return (
+      <View style={styles.empty}>
+        <BellOff size={56} color={colors.muted} strokeWidth={1.5} />
         <Text style={styles.emptyTitle}>Chưa có thông báo nào</Text>
         <Text style={styles.emptyDesc}>
           Khi có lời mời nhận việc hoặc cập nhật đơn, thông báo sẽ hiển thị tại đây.
@@ -165,32 +206,58 @@ export default function TechnicianNotificationsScreen() {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
 
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Thông báo</Text>
-        <TouchableOpacity
-          style={[styles.markAllBtn, markingAll && { opacity: 0.6 }]}
-          activeOpacity={0.7}
-          onPress={onMarkAllRead}
-          disabled={markingAll}
-        >
-          <Ionicons name="checkmark-done-outline" size={18} color={colors.primary} />
-          <Text style={styles.markAllText}>Đã đọc tất cả</Text>
-        </TouchableOpacity>
+        <View style={styles.headerText}>
+          <Text style={styles.headerTitle} accessibilityRole="header">Thông báo</Text>
+          {!loading && totalUnread > 0 && (
+            <Text style={styles.headerSubtitle}>{totalUnread} chưa đọc</Text>
+          )}
+        </View>
+        {totalUnread > 0 && (
+          <TouchableOpacity
+            style={[styles.markAllBtn, markingAll && styles.disabled]}
+            activeOpacity={0.7}
+            onPress={onMarkAllRead}
+            disabled={markingAll}
+            accessibilityRole="button"
+            accessibilityLabel="Đánh dấu đã đọc tất cả"
+          >
+            <CheckCheck size={18} color={colors.primaryStrong} strokeWidth={1.75} />
+            <Text style={styles.markAllText}>Đã đọc tất cả</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
+      {loadError && notifications.length > 0 && (
+        <View style={[styles.errorBanner, { backgroundColor: colors.tone.warning.bg }]} accessibilityRole="alert">
+          <Text style={[styles.errorBannerText, { color: colors.tone.warning.text }]}>{loadError}</Text>
+          <TouchableOpacity onPress={onRefresh} style={styles.textBtn} accessibilityRole="button">
+            <Text style={[styles.textBtnLabel, { color: colors.tone.warning.text }]}>Thử lại</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {loading && !refreshing ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+        <View style={styles.skeletonWrap}>
+          <CustomerSkeleton variant="notification" />
         </View>
       ) : (
-        <FlatList
-          data={notifications}
+        <SectionList
+          sections={sections}
           keyExtractor={(item, index) => item.id?.toString() || index.toString()}
           renderItem={renderItem}
+          renderSectionHeader={({ section }) => <Text style={styles.sectionTitle}>{section.title}</Text>}
+          stickySectionHeadersEnabled={false}
           ListEmptyComponent={renderEmpty}
-          contentContainerStyle={styles.listContent}
+          ListFooterComponent={loadingMore ? <ActivityIndicator style={styles.footerSpinner} color={colors.primaryStrong} /> : null}
+          onEndReached={onEndReached}
+          onEndReachedThreshold={0.4}
+          contentContainerStyle={[
+            sections.length === 0 && styles.emptyFlex,
+            { paddingBottom: TAB_BAR_CLEARANCE + Math.max(insets.bottom, 16) },
+          ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primaryStrong]} />
           }
         />
       )}
@@ -198,95 +265,80 @@ export default function TechnicianNotificationsScreen() {
   );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 12,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingTop: 16,
+    paddingBottom: 12,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.divider,
   },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: colors.text },
+  headerText: { flex: 1 },
+  headerTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
+  headerSubtitle: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, marginTop: 2 },
   markAllBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    borderRadius: 22,
     backgroundColor: colors.primarySoft,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 4,
   },
-  markAllText: { fontSize: 12, fontWeight: '600', color: colors.primary },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  listContent: { padding: 16, paddingBottom: 100 },
-  card: {
+  markAllText: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.primaryStrong },
+  disabled: { opacity: 0.6 },
+  errorBanner: {
     flexDirection: 'row',
-    backgroundColor: colors.surface,
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  unreadCard: { backgroundColor: colors.background, borderColor: colors.divider },
-  iconContainer: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-    position: 'relative',
-  },
-  unreadDot: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: colors.error,
-    borderWidth: 2,
-    borderColor: colors.surface,
-  },
-  cardContent: { flex: 1 },
-  cardTopRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
     gap: 8,
-    marginBottom: 4,
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingLeft: 12,
+    borderRadius: 14,
   },
-  title: { flex: 1, fontSize: 15, fontWeight: '600', color: '#334155' },
-  unreadText: { fontWeight: '800', color: colors.text },
-  desc: { fontSize: 13, color: colors.textSecondary, lineHeight: 18 },
-  timeText: { fontSize: 11, color: colors.muted, fontWeight: '500' },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60 },
-  emptyIconCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: colors.divider,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#334155', marginBottom: 8 },
-  emptyDesc: {
-    fontSize: 14,
+  errorBannerText: { flex: 1, fontSize: 14, lineHeight: 20 },
+  skeletonWrap: { flex: 1, padding: 16 },
+  sectionTitle: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
     color: colors.textSecondary,
-    textAlign: 'center',
-    paddingHorizontal: 32,
-    lineHeight: 20,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+    backgroundColor: colors.surface,
   },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 72,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  rowUnread: { backgroundColor: colors.primarySoft },
+  iconTile: { width: 40, height: 40, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  rowContent: { flex: 1, gap: 2 },
+  rowTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
+  title: { flex: 1, fontSize: 14, lineHeight: 20, fontWeight: '500', color: colors.text },
+  titleUnread: { fontWeight: '700' },
+  desc: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
+  timeText: { fontSize: 12, lineHeight: 16, fontWeight: '500', color: colors.textSecondary },
+  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primaryStrong },
+  emptyFlex: { flexGrow: 1 },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 8 },
+  emptyTitle: { fontSize: 18, lineHeight: 26, fontWeight: '700', color: colors.text, marginTop: 8 },
+  emptyDesc: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
+  textBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12 },
+  textBtnLabel: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong },
+  footerSpinner: { paddingVertical: 16 },
 });
