@@ -443,6 +443,22 @@ export default function CustomerProfileScreen() {
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.muted} />
             </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => navigation.navigate('CustomerSecurity')}
+              accessibilityRole="button"
+              accessibilityLabel="Mở bảo mật tài khoản"
+            >
+              <Ionicons name="shield-checkmark-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
+              <View style={styles.menuContent}>
+                <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Bảo mật tài khoản</Text>
+                <Text style={styles.menuDesc}>Đổi mật khẩu và quản lý phiên đăng nhập</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+            </TouchableOpacity>
           </View>
 
           <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Dịch vụ của tôi</Text>
