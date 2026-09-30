@@ -24,6 +24,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   CalendarDays,
   CalendarOff,
+  CalendarRange,
+  ChartColumn,
   Camera,
   CheckSquare,
   ChevronRight,
@@ -627,6 +629,24 @@ export default function TechnicianProfileScreen() {
         </View>
 
         <View style={styles.group}>
+          <MenuRow
+            styles={styles}
+            colors={colors}
+            Icon={ChartColumn}
+            title="Thống kê thu nhập"
+            desc="Theo tuần, theo tháng"
+            onPress={() => navigation.navigate('TechnicianEarnings')}
+          />
+          <View style={styles.divider} />
+          <MenuRow
+            styles={styles}
+            colors={colors}
+            Icon={CalendarRange}
+            title="Lịch làm việc"
+            desc="Đơn theo ngày và ngày nghỉ"
+            onPress={() => navigation.navigate('TechnicianSchedule')}
+          />
+          <View style={styles.divider} />
           <MenuRow
             styles={styles}
             colors={colors}
