@@ -20,6 +20,7 @@ import TechnicianOrderDetailScreen from '../screens/technician/TechnicianOrderDe
 import TechnicianKycScreen from '../screens/technician/TechnicianKycScreen';
 import TechnicianOnboardingScreen from '../screens/technician/TechnicianOnboardingScreen';
 import TechnicianWalletScreen from '../screens/technician/TechnicianWalletScreen';
+import TechnicianReviewsScreen from '../screens/technician/TechnicianReviewsScreen';
 import ChatListScreen from '../screens/chat/ChatListScreen';
 import ChatThreadScreen from '../screens/chat/ChatThreadScreen';
 
@@ -47,6 +48,7 @@ export default function AppNavigator() {
             <Stack.Screen name="TechnicianKyc" component={TechnicianKycScreen} />
             <Stack.Screen name="TechnicianOnboarding" component={TechnicianOnboardingScreen} />
             <Stack.Screen name="TechnicianWallet" component={TechnicianWalletScreen} />
+            <Stack.Screen name="TechnicianReviews" component={TechnicianReviewsScreen} />
             <Stack.Screen name="ChatList" component={ChatListScreen} />
             <Stack.Screen name="ChatThread" component={ChatThreadScreen} />
             <Stack.Screen name="Auth" component={AuthNavigator} />

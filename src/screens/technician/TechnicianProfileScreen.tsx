@@ -30,6 +30,7 @@ import {
   LocateFixed,
   LogOut,
   MapPin,
+  MessageSquareText,
   ShieldCheck,
   Square,
   Star,
@@ -622,6 +623,23 @@ export default function TechnicianProfileScreen() {
             title="Ví của tôi"
             desc="Số dư, nạp tiền, rút tiền"
             onPress={() => navigation.navigate('TechnicianWallet')}
+          />
+        </View>
+
+        <View style={styles.group}>
+          <MenuRow
+            styles={styles}
+            colors={colors}
+            Icon={MessageSquareText}
+            title="Đánh giá từ khách hàng"
+            desc={
+              technicianProfile
+                ? technicianProfile.ratingCount > 0
+                  ? `${technicianProfile.averageRating.toFixed(2).replace('.', ',')} sao · ${technicianProfile.ratingCount} đánh giá`
+                  : 'Chưa có đánh giá nào'
+                : undefined
+            }
+            onPress={() => navigation.navigate('TechnicianReviews')}
           />
         </View>
 
