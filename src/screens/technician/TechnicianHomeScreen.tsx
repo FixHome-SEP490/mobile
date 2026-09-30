@@ -14,7 +14,12 @@ import { useAuthStore } from '../../store';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ordersApi, type ServiceOrderItem } from '../../api/orders.api';
 import { technicianProfileApi } from '../../api/technician-profile.api';
-import { useNavigation } from '@react-navigation/native';
+import {
+  technicianOnboardingApi,
+  type OnboardingStatusResponse,
+} from '../../api/technician-onboarding.api';
+import { resolveOnboardingView } from './technician-onboarding';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList, TechnicianTabParamList } from '../../types';
@@ -37,6 +42,15 @@ export default function TechnicianHomeScreen() {
   const [recentCompleted, setRecentCompleted] = useState<ServiceOrderItem[]>([]);
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [onboarding, setOnboarding] = useState<OnboardingStatusResponse | null>(null);
+  const onboardingView = onboarding ? resolveOnboardingView(onboarding) : 'approved';
+
+  // Hồ sơ chưa được duyệt thì nhắc hoàn tất, giống banner ở bản web.
+  useFocusEffect(
+    React.useCallback(() => {
+      technicianOnboardingApi.getStatus().then(setOnboarding).catch(() => {});
+    }, []),
+  );
 
   const loadStats = async () => {
     try {
@@ -145,6 +159,32 @@ export default function TechnicianHomeScreen() {
         onScroll={handleScroll}
         scrollEventThrottle={16}
       >
+        {onboardingView !== 'approved' && (
+          <TouchableOpacity
+            style={styles.onboardingBanner}
+            onPress={() => rootNavigation.navigate('TechnicianOnboarding')}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+          >
+            <Ionicons name="shield-outline" size={22} color={colors.warning} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.onboardingBannerTitle}>
+                {onboardingView === 'submitted'
+                  ? 'Hồ sơ đang chờ xét duyệt'
+                  : onboardingView === 'rejected'
+                    ? 'Hồ sơ cần bổ sung'
+                    : 'Hồ sơ kỹ thuật viên chưa hoàn tất'}
+              </Text>
+              <Text style={styles.onboardingBannerBody}>
+                {onboardingView === 'submitted'
+                  ? 'Xem trạng thái xét duyệt.'
+                  : 'Hoàn tất hồ sơ để nhận việc.'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+        )}
+
         {/* Tổng quan tuần này */}
         <View style={styles.sectionHeader}>
           <Ionicons name="bar-chart" size={20} color={colors.primaryStrong} />
@@ -355,6 +395,19 @@ const getStyles = (colors: any) => StyleSheet.create({
   scrollContent: {
     padding: 16,
   },
+  onboardingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    backgroundColor: colors.surface,
+  },
+  onboardingBannerTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
+  onboardingBannerBody: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',

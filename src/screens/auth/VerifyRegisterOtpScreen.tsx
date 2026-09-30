@@ -21,6 +21,7 @@ import type { RouteProp } from '@react-navigation/native';
 import type { AuthStackParamList, RootStackParamList } from '../../types';
 import { authApi } from '../../api/auth.api';
 import { useAuthStore } from '../../store';
+import { UserRole } from '../../types';
 import { extractApiErrorMessage } from '../../utils/input-validation';
 
 export default function VerifyRegisterOtpScreen() {
@@ -46,6 +47,13 @@ export default function VerifyRegisterOtpScreen() {
     return () => clearInterval(timer);
   }, [cooldown]);
 
+  // Kỹ thuật viên mới chưa được duyệt nên vào thẳng luồng đăng ký hồ sơ.
+  const enterApp = (role: UserRole) =>
+    navigation.reset({
+      index: 0,
+      routes: [{ name: role === UserRole.TECHNICIAN ? 'TechnicianOnboarding' : 'CustomerMain' }],
+    });
+
   const handleVerify = async (otpOverride?: string) => {
     const finalOtp = (typeof otpOverride === 'string' ? otpOverride : otp).trim();
     setError(null);
@@ -59,13 +67,12 @@ export default function VerifyRegisterOtpScreen() {
     try {
       const result = await authApi.verifyRegisterOtp(email, finalOtp);
       setAuth(result.accessToken, result.user);
-      // Self-service OTP registration is Customer-only (Backend rejects any
-      // other role at /auth/register), and 'CustomerMain' is registered in
-      // every branch of AppNavigator regardless of auth state — so it's
-      // always safe to navigate there directly instead of hoping the state
-      // update alone moves the user off this screen (it won't: the screens
-      // list doesn't change for a Customer, so nothing auto-navigates them).
-      navigation.reset({ index: 0, routes: [{ name: 'CustomerMain' }] });
+      // Self-service registration is Customer or Technician. Both targets are
+      // registered in every branch of AppNavigator regardless of auth state, so
+      // it's safe to navigate directly instead of hoping the state update alone
+      // moves the user off this screen (it won't for a Customer: their screens
+      // list doesn't change, so nothing auto-navigates them).
+      enterApp(result.user.role);
     } catch (err: any) {
       // A slow/dropped connection can mean the OTP was actually verified and
       // the account activated on the Backend, but the response never made it
@@ -76,7 +83,7 @@ export default function VerifyRegisterOtpScreen() {
       try {
         const loginResult = await authApi.login({ email, password });
         setAuth(loginResult.accessToken, loginResult.user);
-        navigation.reset({ index: 0, routes: [{ name: 'CustomerMain' }] });
+        enterApp(loginResult.user.role);
         return;
       } catch {
         // Fall through to surfacing the original OTP error below.

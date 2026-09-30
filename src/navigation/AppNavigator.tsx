@@ -18,6 +18,7 @@ import CustomerBookingDetailScreen from '../screens/customer/CustomerBookingDeta
 import CustomerOrderDetailScreen from '../screens/customer/CustomerOrderDetailScreen';
 import TechnicianOrderDetailScreen from '../screens/technician/TechnicianOrderDetailScreen';
 import TechnicianKycScreen from '../screens/technician/TechnicianKycScreen';
+import TechnicianOnboardingScreen from '../screens/technician/TechnicianOnboardingScreen';
 import TechnicianWalletScreen from '../screens/technician/TechnicianWalletScreen';
 import TechnicianInvitationsScreen from '../screens/technician/TechnicianInvitationsScreen';
 import ChatListScreen from '../screens/chat/ChatListScreen';
@@ -45,6 +46,7 @@ export default function AppNavigator() {
             <Stack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
             <Stack.Screen name="TechnicianOrderDetail" component={TechnicianOrderDetailScreen} />
             <Stack.Screen name="TechnicianKyc" component={TechnicianKycScreen} />
+            <Stack.Screen name="TechnicianOnboarding" component={TechnicianOnboardingScreen} />
             <Stack.Screen name="TechnicianWallet" component={TechnicianWalletScreen} />
             <Stack.Screen name="TechnicianInvitations" component={TechnicianInvitationsScreen} />
             <Stack.Screen name="ChatList" component={ChatListScreen} />
@@ -57,6 +59,8 @@ export default function AppNavigator() {
             <Stack.Screen name="Auth" component={AuthNavigator} />
             <Stack.Screen name="CustomerMain" component={CustomerNavigator} />
             <Stack.Screen name="TechnicianMain" component={TechnicianNavigator} />
+            {/* Đăng ký/đăng nhập reset về màn này ngay sau setAuth, lúc nhánh vẫn là chưa đăng nhập. */}
+            <Stack.Screen name="TechnicianOnboarding" component={TechnicianOnboardingScreen} />
             <Stack.Screen name="CustomerServices" component={CustomerServicesScreen} />
             <Stack.Screen name="CustomerServiceDetail" component={CustomerServiceDetailScreen} />
             <Stack.Screen name="CustomerAIDiagnosis" component={CustomerAIDiagnosisScreen} />

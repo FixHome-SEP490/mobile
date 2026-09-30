@@ -22,6 +22,17 @@ export interface PlaceLocation {
   districtCode?: string;
 }
 
+export interface District {
+  code: number;
+  name: string;
+}
+
+export interface Province {
+  code: number;
+  name: string;
+  districts?: District[];
+}
+
 export const geoApi = {
   async autocomplete(input: string): Promise<PlaceSuggestion[]> {
     if (!input.trim()) return [];
@@ -32,5 +43,11 @@ export const geoApi = {
   async reverse(lat: number, lng: number): Promise<PlaceLocation> {
     const res = await apiClient.get<{ data: PlaceLocation }>('/geo/reverse', { params: { lat, lng } });
     return res.data.data;
+  },
+
+  /** Tỉnh/thành kèm quận/huyện (backend proxy provinces.open-api.vn, có cache). */
+  async getProvinces(): Promise<Province[]> {
+    const res = await apiClient.get<{ data: Province[] }>('/geo/provinces', { params: { depth: 2 } });
+    return res.data?.data || [];
   },
 };
