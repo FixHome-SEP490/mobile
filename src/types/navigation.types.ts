@@ -47,12 +47,6 @@ export type RootStackParamList = {
   CustomerWarranties: { orderId?: string } | undefined;
   CustomerSecurity: undefined;
   TechnicianOrderDetail: { serviceOrderId: string };
-  CustomerTechFound: undefined;
-  CustomerTracking: undefined;
-  CustomerQuotation: undefined;
-  CustomerUnderRepair: undefined;
-  CustomerCompleted: undefined;
-  CustomerReview: undefined;
   TechnicianKyc: undefined;
   TechnicianInvitations: undefined;
   TechnicianWallet: undefined;
