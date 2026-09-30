@@ -29,6 +29,7 @@ import {
   startGoogleSignIn,
 } from '../../services/google-auth.service';
 import { extractApiErrorMessage } from '../../utils/input-validation';
+import { technicianLandingRoute } from '../technician/technician-onboarding';
 
 export default function LoginScreen() {
   const { colors, spacing, fontSize, isDark } = useAppTheme();
@@ -58,11 +59,7 @@ export default function LoginScreen() {
     try {
       const result = await authApi.login({ email: finalEmail, password: finalPassword });
       setAuth(result.accessToken, result.user);
-      if (result.user.role === UserRole.CUSTOMER) {
-        navigation.reset({ index: 0, routes: [{ name: 'CustomerMain' }] });
-      }else{
-        navigation.reset({ index: 0, routes: [{ name: 'TechnicianMain' }] });
-      }
+      await goAfterLogin(result.user.role);
     } catch (err: unknown) {
       // `data.message` không tồn tại trong phong bì lỗi của backend, nên nhánh
       // cũ luôn rơi xuống `err.message` của axios và hiện ra cho người dùng câu
@@ -78,13 +75,10 @@ export default function LoginScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   /** Sau khi có phiên thì đi tiếp y hệt đăng nhập bằng mật khẩu. */
-  const goAfterLogin = (role: UserRole) => {
-    navigation.reset({
-      index: 0,
-      routes: [
-        { name: role === UserRole.CUSTOMER ? 'CustomerMain' : 'TechnicianMain' },
-      ],
-    });
+  const goAfterLogin = async (role: UserRole) => {
+    const name =
+      role === UserRole.CUSTOMER ? 'CustomerMain' : await technicianLandingRoute();
+    navigation.reset({ index: 0, routes: [{ name }] });
   };
 
   const handleGoogleSignIn = async () => {
@@ -95,7 +89,7 @@ export default function LoginScreen() {
       const code = await startGoogleSignIn();
       const result = await authApi.exchangeGoogleCode(code);
       setAuth(result.accessToken, result.user);
-      goAfterLogin(result.user.role);
+      await goAfterLogin(result.user.role);
     } catch (err: unknown) {
       // Người dùng tự bấm quay lại thì không phải lỗi, đừng doạ họ bằng thông
       // báo đỏ.
