@@ -21,6 +21,31 @@ const semantic = {
   info: '#175CD3', // info-600
 };
 
+// Status/tone palette, DS §5.3. `bg` = badge fill, `fg` = icon/dot, `text` = badge label
+// (darker than `fg` so small text clears 4.5:1). Dark values are new, measured separately.
+export type Tone = { bg: string; fg: string; text: string };
+export type ToneName = 'success' | 'warning' | 'danger' | 'info' | 'violet' | 'repair' | 'neutral';
+
+const lightTones: Record<ToneName, Tone> = {
+  success: { bg: '#E7F6F0', fg: '#0E8A5F', text: '#08734F' },
+  warning: { bg: '#FEF6E0', fg: '#B07D00', text: '#805B00' },
+  danger: { bg: '#FEECEB', fg: '#D92D20', text: '#B42318' },
+  info: { bg: '#EAF1FE', fg: '#175CD3', text: '#175CD3' },
+  violet: { bg: '#F3EEFE', fg: '#6335D9', text: '#6335D9' },
+  repair: { bg: '#EFF6FF', fg: '#2563EB', text: '#1D4ED8' },
+  neutral: { bg: '#EFECE7', fg: '#7D7468', text: '#5C554C' },
+};
+
+const darkTones: Record<ToneName, Tone> = {
+  success: { bg: '#0F2E24', fg: '#34D399', text: '#6EE7B7' },
+  warning: { bg: '#33280A', fg: '#FBBF24', text: '#FCD34D' },
+  danger: { bg: '#3B1512', fg: '#F87171', text: '#FCA5A5' },
+  info: { bg: '#13294B', fg: '#60A5FA', text: '#93C5FD' },
+  violet: { bg: '#251A47', fg: '#A78BFA', text: '#C4B5FD' },
+  repair: { bg: '#1E3A5F', fg: '#60A5FA', text: '#93C5FD' },
+  neutral: { bg: '#334155', fg: '#94A3B8', text: '#CBD5E1' },
+};
+
 // Neutrals aligned to the slate palette most screens already hardcode
 // (not the unused warm `ink` scale below), so referencing these tokens
 // is a no-visual-change swap for the majority of existing screens.
@@ -38,6 +63,7 @@ export const lightTheme = {
   muted: '#94A3B8', // placeholders, disabled text, inactive icons
   border: '#E2E8F0',
   divider: '#F1F5F9', // hairline separators, lighter than border
+  tone: lightTones,
   ...semantic,
 };
 
@@ -56,6 +82,7 @@ export const darkTheme = {
   muted: '#64748B',
   border: '#334155',
   divider: '#334155',
+  tone: darkTones,
   ...semantic,
 };
 
