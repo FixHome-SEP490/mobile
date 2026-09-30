@@ -248,11 +248,9 @@ export default function TechnicianWalletScreen() {
           : 'Đang chuyển tiền';
     const detail =
       result.status === 'SUCCESS' && result.payoutBankReference
-        ? `
-Mã giao dịch ngân hàng: ${result.payoutBankReference}`
+        ? `\nMã giao dịch ngân hàng: ${result.payoutBankReference}`
         : result.status === 'FAILED' && result.failureReason
-          ? `
-Lý do: ${result.failureReason}`
+          ? `\nLý do: ${result.failureReason}`
           : '';
     Alert.alert(title, `${result.message}${detail}`);
   };
