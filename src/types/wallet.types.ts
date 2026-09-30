@@ -60,6 +60,13 @@ export interface WithdrawalRequest {
   failureReason?: string | null;
 }
 
+/**
+ * What withdrawing answers with. There is no approval step, so this is the
+ * payout itself: SUCCESS, PROCESSING (bank still working) or FAILED (money
+ * back in the wallet), plus a sentence to show the technician.
+ */
+export type WithdrawalDecision = WithdrawalRequest & { message: string };
+
 /** A bank that can receive payouts, keyed by the BIN payOS routes on. */
 export interface BankOption {
   bin: string;

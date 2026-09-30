@@ -57,7 +57,8 @@ const TX_TYPE_LABELS: Record<WalletTxType, string> = {
 // Same words as the web technician wallet, so one person on two devices reads
 // the same status.
 const WITHDRAWAL_STATUS_LABELS: Record<WithdrawalRequest['status'], string> = {
-  PENDING: 'Chờ duyệt',
+  // Only a request made before automatic payouts can still be waiting.
+  PENDING: 'Chờ xử lý',
   PROCESSING: 'Đang chuyển tiền',
   SUCCESS: 'Đã chi tiền',
   REJECTED: 'Đã từ chối',
@@ -230,17 +231,26 @@ export default function TechnicianWalletScreen() {
   };
 
   const submitWithdraw = async () => {
-    const ok = await controllerRef.current?.submitWithdrawal(
+    const result = await controllerRef.current?.submitWithdrawal(
       Number(withdrawAmount.replace(/\D/g, '')) || 0,
     );
-    if (ok) {
-      setWithdrawVisible(false);
-      setWithdrawAmount('');
-      Alert.alert(
-        'Đã gửi yêu cầu',
-        'Quản lý dịch vụ duyệt xong, hệ thống tự chuyển khoản về tài khoản của bạn.',
-      );
-    }
+    if (!result) return;
+    setWithdrawVisible(false);
+    setWithdrawAmount('');
+    // No approval step: the answer is the payout itself.
+    const title =
+      result.status === 'SUCCESS'
+        ? 'Đã chuyển tiền'
+        : result.status === 'FAILED'
+          ? 'Chuyển tiền không thành công'
+          : 'Đang chuyển tiền';
+    const detail =
+      result.status === 'SUCCESS' && result.payoutBankReference
+        ? `\nMã giao dịch ngân hàng: ${result.payoutBankReference}`
+        : result.status === 'FAILED' && result.failureReason
+          ? `\nLý do: ${result.failureReason}`
+          : '';
+    Alert.alert(title, `${result.message}${detail}`);
   };
 
   const pillColors = (status: WithdrawalRequest['status']) => {
@@ -339,7 +349,7 @@ export default function TechnicianWalletScreen() {
               <View style={styles.infoBanner}>
                 <ActivityIndicator size="small" color={colors.primary} />
                 <Text style={styles.infoText}>
-                  Lệnh rút đã được duyệt, hệ thống đang chuyển khoản về ngân hàng của bạn.
+                  Ngân hàng đang xử lý lệnh chuyển, bạn sẽ nhận thông báo khi tiền về.
                 </Text>
               </View>
             )}
@@ -355,7 +365,7 @@ export default function TechnicianWalletScreen() {
               </View>
               <View style={styles.statCard}>
                 <Text style={styles.statLabel}>
-                  {openWithdrawal === 'PROCESSING' ? 'Đang chuyển' : 'Đang chờ rút'}
+                  Đang chuyển
                 </Text>
                 <Text style={styles.statValue}>
                   {formatVND(summary.pendingWithdrawal + (summary.processingWithdrawal ?? 0))}
@@ -501,7 +511,7 @@ export default function TechnicianWalletScreen() {
                         <Text style={styles.txDesc}>Mã giao dịch ngân hàng: {w.payoutBankReference}</Text>
                       )}
                       {w.status === 'PROCESSING' && (
-                        <Text style={styles.txDesc}>Đã duyệt, đang chuyển về ngân hàng</Text>
+                        <Text style={styles.txDesc}>Ngân hàng đang xử lý lệnh chuyển</Text>
                       )}
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
@@ -605,7 +615,7 @@ export default function TechnicianWalletScreen() {
               </View>
             )}
             <Text style={styles.hintText}>
-              Quản lý dịch vụ duyệt xong, hệ thống tự chuyển khoản. Nếu chuyển không thành công, tiền được hoàn lại vào ví.
+              Tiền được chuyển ngay về tài khoản trên, không cần chờ duyệt. Nếu chuyển không thành công, tiền được hoàn lại vào ví.
             </Text>
             {!!state.withdrawError && <Text style={styles.modalError}>{state.withdrawError}</Text>}
             <View style={styles.modalActions}>
@@ -624,7 +634,7 @@ export default function TechnicianWalletScreen() {
                 {state.withdrawBusy ? (
                   <ActivityIndicator size="small" color={colors.surface} />
                 ) : (
-                  <Text style={styles.saveBtnText}>Gửi yêu cầu</Text>
+                  <Text style={styles.saveBtnText}>Rút tiền ngay</Text>
                 )}
               </TouchableOpacity>
             </View>

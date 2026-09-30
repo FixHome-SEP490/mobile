@@ -6,6 +6,7 @@ import type {
   WalletSummary,
   WalletTransaction,
   WalletTxType,
+  WithdrawalDecision,
   WithdrawalRequest,
 } from '../../types/wallet.types';
 import { extractApiErrorMessage } from '../../utils/input-validation';
@@ -99,8 +100,11 @@ export interface WalletDeps {
   getBankAccount: () => Promise<BankAccount | null>;
   listBanks: () => Promise<BankOption[]>;
   saveBankAccount: (dto: BankAccountInput) => Promise<BankAccount>;
-  /** Only the amount: where the money goes is the saved, KYC-checked account. */
-  requestWithdrawal: (amount: number) => Promise<WithdrawalRequest>;
+  /**
+   * Only the amount: where the money goes is the saved, KYC-checked account.
+   * Answers with the payout result — there is no approval step.
+   */
+  requestWithdrawal: (amount: number) => Promise<WithdrawalDecision>;
   openExternalUrl: (url: string) => Promise<void>;
   onAccessDenied: () => void;
 }
@@ -374,18 +378,22 @@ export function createWalletController(
     }
   }
 
-  async function submitWithdrawal(amount: number): Promise<boolean> {
-    if (withdrawSubmitting || state.withdrawBusy) return false;
+  /**
+   * Withdraw and get the payout result back at once, or null when nothing was
+   * sent (a validation error, or the server refused before moving money).
+   */
+  async function submitWithdrawal(amount: number): Promise<WithdrawalDecision | null> {
+    if (withdrawSubmitting || state.withdrawBusy) return null;
     const technicianId = deps.getTechnicianId();
-    if (!technicianId || !state.summary) return false;
+    if (!technicianId || !state.summary) return null;
     if (!state.bankAccount) {
       publish({ withdrawError: 'Bạn cần khai báo tài khoản ngân hàng nhận tiền trước khi rút.' });
-      return false;
+      return null;
     }
     const open = openWithdrawalOf(state);
     if (open) {
       publish({ withdrawError: OPEN_WITHDRAWAL_MESSAGE[open] });
-      return false;
+      return null;
     }
     const validationError = validateWithdrawal(
       amount,
@@ -394,30 +402,30 @@ export function createWalletController(
     );
     if (validationError) {
       publish({ withdrawError: validationError });
-      return false;
+      return null;
     }
     withdrawSubmitting = true;
     publish({ withdrawBusy: true, withdrawError: null });
     try {
-      await deps.requestWithdrawal(amount);
-      if (!same(technicianId)) return false;
+      const result = await deps.requestWithdrawal(amount);
+      if (!same(technicianId)) return null;
       publish({ withdrawBusy: false });
       await refreshAll();
-      return true;
+      return result;
     } catch (error) {
-      if (!same(technicianId)) return false;
+      if (!same(technicianId)) return null;
       if (statusOf(error) === 401 || statusOf(error) === 403) {
         denyAccess();
-        return false;
+        return null;
       }
       const message = extractApiErrorMessage(
         error,
         statusOf(error) === 409
           ? OPEN_WITHDRAWAL_MESSAGE.PENDING
-          : 'Không thể tạo yêu cầu rút tiền. Vui lòng thử lại.',
+          : 'Rút tiền không thành công. Vui lòng thử lại.',
       );
       publish({ withdrawBusy: false, withdrawError: message });
-      return false;
+      return null;
     } finally {
       withdrawSubmitting = false;
     }
