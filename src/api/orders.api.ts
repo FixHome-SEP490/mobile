@@ -180,6 +180,7 @@ export interface RepairHistoryItem {
   status: string;
   serviceName?: string;
   technicianName?: string;
+  addressSummary?: string;
   laborTotal: number;
   partsTotal: number;
   grandTotal: number;
@@ -404,9 +405,10 @@ export const ordersApi = {
   async getRepairHistory(
     page = 1,
     pageSize = 20,
+    status?: 'completed' | 'cancelled',
   ): Promise<{ data: RepairHistoryItem[]; total: number }> {
     const res = await apiClient.get('/repair-history', {
-      params: { page, pageSize },
+      params: { page, pageSize, status },
     });
     return { data: unwrap(res.data), total: res.data.meta?.total ?? 0 };
   },

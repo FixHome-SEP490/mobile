@@ -135,6 +135,21 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
     },
   );
 
+  it('requests completed-only repair history with authoritative server pagination', async () => {
+    api.get.mockResolvedValue({ data: { data: [{
+      orderId: 'order-history-1', bookingId: 'booking-history-1', code: 'FH-001',
+      status: 'completed', serviceName: 'Vệ sinh máy lạnh', technicianName: 'Nguyễn Văn A',
+      laborTotal: 100000, partsTotal: 50000, grandTotal: 150000,
+      completedAt: '2026-09-29T02:30:00.000Z',
+    }], meta: { total: 7 } } });
+    const page = await ordersApi.getRepairHistory(2, 20, 'completed');
+    expect(api.get).toHaveBeenCalledWith('/repair-history', {
+      params: { page: 2, pageSize: 20, status: 'completed' },
+    });
+    expect(page.total).toBe(7);
+    expect(page.data).toMatchObject([{ orderId: 'order-history-1', status: 'completed' }]);
+  });
+
   it('fetches an assigned-orders page with pagination params and server total', async () => {
     api.get.mockResolvedValue({ data: { data: [{
       id: 'order-1', code: 'SO-1', bookingId: 'booking-1', status: 'accepted',

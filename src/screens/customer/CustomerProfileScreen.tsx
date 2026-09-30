@@ -32,7 +32,6 @@ import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store';
 import { authApi } from '../../api/auth.api';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
-import { LinearGradient } from 'expo-linear-gradient';
 import { usersApi, type AddressData } from '../../api/users.api';
 import { geoApi, type PlaceSuggestion } from '../../api/geo.api';
 import { useAppTheme } from '../../constants/theme';
@@ -413,33 +412,6 @@ export default function CustomerProfileScreen() {
             <Text style={styles.phone}>{phone || 'Chưa cập nhật SĐT'}</Text>
           </View>
 
-          <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Ví & Điểm thưởng</Text>
-          <View style={styles.overviewRow}>
-            <LinearGradient colors={['#E0F2FE', '#F0F9FF']} style={styles.overviewCard}>
-              <View style={styles.cardTopRow}>
-                <View style={[styles.iconCircle, { backgroundColor: '#BAE6FD' }]}>
-                  <Ionicons name="wallet" size={16} color="#0284C7" />
-                </View>
-                <Text style={styles.cardLabel}>Số dư</Text>
-              </View>
-              <Text style={styles.cardValue}>
-                0 <Text style={styles.cardUnit}>đ</Text>
-              </Text>
-            </LinearGradient>
-
-            <LinearGradient colors={['#FEF3C7', '#FFFBEB']} style={styles.overviewCard}>
-              <View style={styles.cardTopRow}>
-                <View style={[styles.iconCircle, { backgroundColor: '#FDE68A' }]}>
-                  <Ionicons name="gift" size={16} color="#D97706" />
-                </View>
-                <Text style={styles.cardLabel}>F-Point</Text>
-              </View>
-              <Text style={styles.cardValue}>
-                0 <Text style={styles.cardUnit}>điểm</Text>
-              </Text>
-            </LinearGradient>
-          </View>
-
           <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Quản lý tài khoản</Text>
 
           <View style={[styles.menuContainer, isDarkMode && styles.cardDark]}>
@@ -471,31 +443,26 @@ export default function CustomerProfileScreen() {
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.muted} />
             </TouchableOpacity>
-            <View style={styles.divider} />
+          </View>
 
+          <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Dịch vụ của tôi</Text>
+          <View style={[styles.menuContainer, isDarkMode && styles.cardDark]}>
             <TouchableOpacity
               style={styles.menuItem}
-              onPress={() => Alert.alert('Thông báo', 'Hỗ trợ thanh toán tiền mặt và VNPay khi hoàn tất.')}
+              onPress={() => navigation.navigate('CustomerRepairHistory')}
+              accessibilityRole="button"
+              accessibilityLabel="Mở lịch sử sửa chữa"
             >
-              <Ionicons name="card-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
+              <Ionicons name="time-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
               <View style={styles.menuContent}>
-                <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Phương thức thanh toán</Text>
-                <Text style={styles.menuDesc}>Tiền mặt, VNPay</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
-            </TouchableOpacity>
-            <View style={styles.divider} />
-
-            <TouchableOpacity style={styles.menuItem} onPress={() => Alert.alert('Tính năng đang phát triển')}>
-              <Ionicons name="shield-checkmark-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
-              <View style={styles.menuContent}>
-                <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Bảo mật & phiên đăng nhập</Text>
+                <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Lịch sử sửa chữa</Text>
+                <Text style={styles.menuDesc}>Xem các đơn đã sửa chữa và hoàn tất</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.muted} />
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.sectionTitle}>Tùy chọn</Text>
+          <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Tùy chọn</Text>
           <View style={styles.menuContainer}>
             <View style={styles.menuItem}>
               <Ionicons name="moon-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
@@ -857,10 +824,10 @@ export default function CustomerProfileScreen() {
 
 const getStyles = (colors: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  containerDark: { backgroundColor: colors.text },
+  containerDark: { backgroundColor: colors.background },
   cardDark: { backgroundColor: '#1E293B' },
   name: { fontSize: 20, fontWeight: '700', color: colors.text, marginBottom: 4 },
-  textDark: { color: colors.background },
+  textDark: { color: colors.text },
 
   // Giao diện Main Wrapper & Avatar của v2
   mainWrapperCard: {
@@ -994,13 +961,6 @@ const getStyles = (colors: any) => StyleSheet.create({
   suggestionItem: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
   suggestionText: { fontSize: 13, color: colors.text },
   defaultRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: 8 },
-  overviewRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
-  overviewCard: { flex: 1, borderRadius: 16, padding: 16 },
-  cardTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  iconCircle: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginRight: 8 },
-  cardLabel: { fontSize: 14, color: '#475569', fontWeight: '500' },
-  cardValue: { fontSize: 22, fontWeight: '800', color: colors.text },
-  cardUnit: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
   cameraIconBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: colors.primary, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: colors.surface },
   avatarModalContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
   closeAvatarModalBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 8 },
