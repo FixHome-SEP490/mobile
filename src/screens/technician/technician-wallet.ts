@@ -1,15 +1,22 @@
 import type { PaginationMeta } from '../../types';
 import type {
+  BankAccount,
+  BankOption,
   TopUpResult,
   WalletSummary,
   WalletTransaction,
   WalletTxType,
   WithdrawalRequest,
 } from '../../types/wallet.types';
+import { extractApiErrorMessage } from '../../utils/input-validation';
 
 export const MIN_TOP_UP = 10_000;
 export const MAX_TOP_UP = 50_000_000;
-export const MIN_WITHDRAWAL = 50_000;
+/**
+ * PO decision (29/09/2026). The backend sends its own figure as
+ * minimumWithdrawal; this is only the fallback for an older backend.
+ */
+export const MIN_WITHDRAWAL = 10_000;
 
 export interface WalletUiState {
   loading: boolean;
@@ -34,6 +41,12 @@ export interface WalletUiState {
 
   withdrawBusy: boolean;
   withdrawError: string | null;
+
+  /** The one account withdrawals are paid to; null until saved. */
+  bankAccount: BankAccount | null;
+  banks: BankOption[];
+  bankBusy: boolean;
+  bankError: string | null;
 }
 
 export const initialWalletState: WalletUiState = {
@@ -55,10 +68,20 @@ export const initialWalletState: WalletUiState = {
   topUpError: null,
   withdrawBusy: false,
   withdrawError: null,
+  bankAccount: null,
+  banks: [],
+  bankBusy: false,
+  bankError: null,
 };
 
 function statusOf(error: unknown): number | undefined {
   return (error as { response?: { status?: number } } | null)?.response?.status;
+}
+
+export interface BankAccountInput {
+  bankBin: string;
+  accountNumber: string;
+  accountName: string;
 }
 
 export interface WalletDeps {
@@ -73,12 +96,11 @@ export interface WalletDeps {
     page: number,
   ) => Promise<{ data: WithdrawalRequest[]; meta: PaginationMeta }>;
   topUp: (amount: number) => Promise<TopUpResult>;
-  requestWithdrawal: (dto: {
-    amount: number;
-    bankName: string;
-    bankAccountNumber: string;
-    bankAccountName: string;
-  }) => Promise<WithdrawalRequest>;
+  getBankAccount: () => Promise<BankAccount | null>;
+  listBanks: () => Promise<BankOption[]>;
+  saveBankAccount: (dto: BankAccountInput) => Promise<BankAccount>;
+  /** Only the amount: where the money goes is the saved, KYC-checked account. */
+  requestWithdrawal: (amount: number) => Promise<WithdrawalRequest>;
   openExternalUrl: (url: string) => Promise<void>;
   onAccessDenied: () => void;
 }
@@ -90,21 +112,60 @@ export function validateTopUp(amount: number): string | null {
   return null;
 }
 
+export function minimumWithdrawalOf(summary: WalletSummary | null): number {
+  return summary?.minimumWithdrawal ?? MIN_WITHDRAWAL;
+}
+
 export function validateWithdrawal(
-  dto: { amount: number; bankName: string; bankAccountNumber: string; bankAccountName: string },
+  amount: number,
   withdrawableBalance: number,
+  minimum: number = MIN_WITHDRAWAL,
 ): string | null {
-  if (!Number.isSafeInteger(dto.amount) || dto.amount < MIN_WITHDRAWAL) {
-    return `Số tiền rút tối thiểu ${MIN_WITHDRAWAL.toLocaleString('vi-VN')}đ`;
+  if (!Number.isSafeInteger(amount) || amount < minimum) {
+    return `Số tiền rút tối thiểu ${minimum.toLocaleString('vi-VN')}đ`;
   }
-  if (dto.amount > withdrawableBalance) {
+  if (amount > withdrawableBalance) {
     return 'Số tiền vượt quá số dư có thể rút';
-  }
-  if (!dto.bankName.trim() || !dto.bankAccountNumber.trim() || !dto.bankAccountName.trim()) {
-    return 'Vui lòng nhập đầy đủ thông tin ngân hàng';
   }
   return null;
 }
+
+/**
+ * The same shape the server enforces, checked first so a typo never costs a
+ * round trip. Whether the name matches KYC only the server can say.
+ */
+export function validateBankAccount(dto: BankAccountInput): string | null {
+  if (!dto.bankBin) return 'Vui lòng chọn ngân hàng';
+  if (!/^\d{6,19}$/.test(dto.accountNumber.trim())) {
+    return 'Số tài khoản chỉ gồm chữ số, từ 6 đến 19 số';
+  }
+  if (!dto.accountName.trim()) return 'Vui lòng nhập tên chủ tài khoản';
+  return null;
+}
+
+/** One withdrawal at a time: waiting for approval, or still moving to the bank. */
+export function openWithdrawalOf(
+  state: Pick<WalletUiState, 'summary' | 'withdrawals'>,
+): 'PENDING' | 'PROCESSING' | null {
+  if (
+    (state.summary?.processingWithdrawal ?? 0) > 0 ||
+    state.withdrawals.some((w) => w.status === 'PROCESSING')
+  ) {
+    return 'PROCESSING';
+  }
+  if (
+    (state.summary?.pendingWithdrawal ?? 0) > 0 ||
+    state.withdrawals.some((w) => w.status === 'PENDING')
+  ) {
+    return 'PENDING';
+  }
+  return null;
+}
+
+const OPEN_WITHDRAWAL_MESSAGE = {
+  PENDING: 'Bạn đang có một yêu cầu rút tiền chờ xử lý.',
+  PROCESSING: 'Bạn đang có một lệnh rút đang được chuyển về ngân hàng.',
+} as const;
 
 export function createWalletController(
   deps: WalletDeps,
@@ -113,6 +174,7 @@ export function createWalletController(
   let state = { ...initialWalletState };
   let topUpSubmitting = false;
   let withdrawSubmitting = false;
+  let bankSubmitting = false;
 
   const publish = (patch: Partial<WalletUiState>) => {
     state = { ...state, ...patch };
@@ -186,6 +248,28 @@ export function createWalletController(
     }
   }
 
+  async function loadBankAccount(): Promise<void> {
+    const technicianId = deps.getTechnicianId();
+    if (!technicianId || !deps.isFocused()) return;
+    try {
+      const bankAccount = await deps.getBankAccount();
+      if (!same(technicianId)) return;
+      publish({ bankAccount });
+    } catch {
+      // Not fatal: the withdraw flow asks for an account again if it is missing.
+    }
+  }
+
+  /** The bank list only matters once the form opens, so it loads lazily. */
+  async function loadBanks(): Promise<void> {
+    if (state.banks.length > 0) return;
+    try {
+      publish({ banks: await deps.listBanks() });
+    } catch {
+      publish({ bankError: 'Không tải được danh sách ngân hàng. Vui lòng thử lại.' });
+    }
+  }
+
   function setTxFilter(filter: WalletTxType | 'ALL'): void {
     publish({ txFilter: filter });
     void loadTransactions(1);
@@ -196,6 +280,7 @@ export function createWalletController(
       loadSummary(true),
       loadTransactions(state.transactionsPage || 1),
       loadWithdrawals(state.withdrawalsPage || 1),
+      loadBankAccount(),
     ]);
   }
 
@@ -252,20 +337,61 @@ export function createWalletController(
     publish({ topUpPending: false });
   }
 
-  async function submitWithdrawal(dto: {
-    amount: number;
-    bankName: string;
-    bankAccountNumber: string;
-    bankAccountName: string;
-  }): Promise<boolean> {
+  async function submitBankAccount(dto: BankAccountInput): Promise<boolean> {
+    if (bankSubmitting || state.bankBusy) return false;
+    const technicianId = deps.getTechnicianId();
+    if (!technicianId) return false;
+    const validationError = validateBankAccount(dto);
+    if (validationError) {
+      publish({ bankError: validationError });
+      return false;
+    }
+    bankSubmitting = true;
+    publish({ bankBusy: true, bankError: null });
+    try {
+      const bankAccount = await deps.saveBankAccount({
+        bankBin: dto.bankBin,
+        accountNumber: dto.accountNumber.trim(),
+        accountName: dto.accountName.trim(),
+      });
+      if (!same(technicianId)) return false;
+      publish({ bankBusy: false, bankAccount });
+      return true;
+    } catch (error) {
+      if (!same(technicianId)) return false;
+      if (statusOf(error) === 401 || statusOf(error) === 403) {
+        denyAccess();
+        return false;
+      }
+      // The server's reason matters here: it names the KYC name to match.
+      publish({
+        bankBusy: false,
+        bankError: extractApiErrorMessage(error, 'Không lưu được tài khoản ngân hàng'),
+      });
+      return false;
+    } finally {
+      bankSubmitting = false;
+    }
+  }
+
+  async function submitWithdrawal(amount: number): Promise<boolean> {
     if (withdrawSubmitting || state.withdrawBusy) return false;
     const technicianId = deps.getTechnicianId();
     if (!technicianId || !state.summary) return false;
-    if (state.withdrawals.some((w) => w.status === 'PENDING')) {
-      publish({ withdrawError: 'Bạn đang có một yêu cầu rút tiền chờ xử lý.' });
+    if (!state.bankAccount) {
+      publish({ withdrawError: 'Bạn cần khai báo tài khoản ngân hàng nhận tiền trước khi rút.' });
       return false;
     }
-    const validationError = validateWithdrawal(dto, state.summary.withdrawableBalance);
+    const open = openWithdrawalOf(state);
+    if (open) {
+      publish({ withdrawError: OPEN_WITHDRAWAL_MESSAGE[open] });
+      return false;
+    }
+    const validationError = validateWithdrawal(
+      amount,
+      state.summary.withdrawableBalance,
+      minimumWithdrawalOf(state.summary),
+    );
     if (validationError) {
       publish({ withdrawError: validationError });
       return false;
@@ -273,7 +399,7 @@ export function createWalletController(
     withdrawSubmitting = true;
     publish({ withdrawBusy: true, withdrawError: null });
     try {
-      await deps.requestWithdrawal(dto);
+      await deps.requestWithdrawal(amount);
       if (!same(technicianId)) return false;
       publish({ withdrawBusy: false });
       await refreshAll();
@@ -284,10 +410,12 @@ export function createWalletController(
         denyAccess();
         return false;
       }
-      const message =
+      const message = extractApiErrorMessage(
+        error,
         statusOf(error) === 409
-          ? 'Bạn đang có một yêu cầu rút tiền chờ xử lý.'
-          : 'Không thể tạo yêu cầu rút tiền. Vui lòng thử lại.';
+          ? OPEN_WITHDRAWAL_MESSAGE.PENDING
+          : 'Không thể tạo yêu cầu rút tiền. Vui lòng thử lại.',
+      );
       publish({ withdrawBusy: false, withdrawError: message });
       return false;
     } finally {
@@ -298,9 +426,12 @@ export function createWalletController(
   function focus(): Promise<void> {
     state = { ...initialWalletState };
     write(state);
-    return Promise.all([loadSummary(), loadTransactions(1), loadWithdrawals(1)]).then(
-      () => undefined,
-    );
+    return Promise.all([
+      loadSummary(),
+      loadTransactions(1),
+      loadWithdrawals(1),
+      loadBankAccount(),
+    ]).then(() => undefined);
   }
 
   return {
@@ -308,9 +439,11 @@ export function createWalletController(
     refreshAll,
     loadTransactions,
     loadWithdrawals,
+    loadBanks,
     setTxFilter,
     startTopUp,
     reconcileTopUp,
+    submitBankAccount,
     submitWithdrawal,
   };
 }
