@@ -31,7 +31,7 @@ import {
   orderTotalText,
   resolveBookingsView,
   resumeTargetFor,
-  type BookingsTab,
+  type HistoryCard,
 } from './customer-bookings-history';
 import { orderDetailTarget } from './customer-order-detail';
 import { buildBookingWindow } from '../../utils/booking-window';
@@ -55,8 +55,6 @@ export default function CustomerBookingsScreen() {
   const { colors, spacing, fontSize, isDark } = useAppTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const styles = getStyles(colors, spacing, fontSize);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<BookingsTab>('all');
   const [manageBookingId, setManageBookingId] = useState<string | null>(null);
   const [manageMode, setManageMode] = useState<'cancel' | 'reschedule' | null>(null);
   const [cancelReason, setCancelReason] = useState('');
@@ -249,8 +247,8 @@ export default function CustomerBookingsScreen() {
     }
   };
 
-  const view = resolveBookingsView(historyState, searchQuery, activeTab);
-  const { cards, filtered: filteredCards, showList, emptyNote, showLoadMore, showLoadMoreOrders, ordersCoverageText } = view;
+  const view = resolveBookingsView(historyState, '', 'in_progress');
+  const { filtered: filteredCards, showList, emptyNote, showLoadMore, showLoadMoreOrders } = view;
 
   const renderOrderSummary = (
     order: ServiceOrderItem,
@@ -330,18 +328,10 @@ export default function CustomerBookingsScreen() {
             <Text style={styles.title} numberOfLines={1}>
               {booking.serviceName || `Yêu cầu #${booking.id.slice(0, 8)}`}
             </Text>
-            {!!booking.description && (
-              <View style={styles.metaRow}>
-                <Ionicons name="document-text-outline" size={14} color={colors.textSecondary} />
-                <Text style={[styles.metaRowText, styles.noteText]} numberOfLines={2}>
-                  {booking.description}
-                </Text>
-              </View>
-            )}
             {!!booking.addressSummary && (
               <View style={styles.metaRow}>
                 <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
-                <Text style={styles.metaRowText} numberOfLines={2}>{booking.addressSummary}</Text>
+                <Text style={styles.metaRowText} numberOfLines={1}>{booking.addressSummary}</Text>
               </View>
             )}
             <View style={styles.metaRow}>
@@ -613,18 +603,10 @@ export default function CustomerBookingsScreen() {
             <Text style={styles.title} numberOfLines={1}>
               {booking.serviceName || order.serviceName || `Yêu cầu #${booking.id.slice(0, 8)}`}
             </Text>
-            {!!booking.description && (
-              <View style={styles.metaRow}>
-                <Ionicons name="document-text-outline" size={14} color={colors.textSecondary} />
-                <Text style={[styles.metaRowText, styles.noteText]} numberOfLines={2}>
-                  {booking.description}
-                </Text>
-              </View>
-            )}
             {!!booking.addressSummary && (
               <View style={styles.metaRow}>
                 <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
-                <Text style={styles.metaRowText} numberOfLines={2}>{booking.addressSummary}</Text>
+                <Text style={styles.metaRowText} numberOfLines={1}>{booking.addressSummary}</Text>
               </View>
             )}
             <View style={styles.metaRow}>
@@ -634,9 +616,6 @@ export default function CustomerBookingsScreen() {
             <View style={styles.waitingNote}>
               <Text style={styles.waitingNoteText}>{message}</Text>
             </View>
-            <Text style={styles.meta}>
-              {`Đơn lịch sử ${order.code || order.id.slice(0, 8)} — kỹ thuật viên trước đây chưa được xác nhận là kỹ thuật viên hiện tại.`}
-            </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
         </TouchableOpacity>
@@ -662,52 +641,58 @@ export default function CustomerBookingsScreen() {
     );
   };
 
+  const renderActiveCard = (card: HistoryCard) => {
+    const key = card.kind === 'booking' ? `booking-${card.booking.id}` : `order-${card.order.id}`;
+    if (card.kind === 'booking' && !card.order) {
+      return <View key={key}>{renderBookingCard(card.booking)}</View>;
+    }
+    if (card.kind === 'booking' && card.order) {
+      const replacement = linkedReplacementState(card.booking, card.order);
+      if (replacement) {
+        return <View key={key}>{renderLinkedReplacementCard(card.booking, card.order, replacement)}</View>;
+      }
+    }
+    const order = card.kind === 'booking' ? card.order! : card.order;
+    const bookingId = card.kind === 'booking' ? card.booking.id : order.bookingId ?? null;
+    const detailId = orderDetailTarget(order.id);
+    if (!detailId) return <View key={key}>{renderOrderSummary(order, bookingId)}</View>;
+    return (
+      <TouchableOpacity
+        key={key}
+        onPress={() => navigation.navigate('CustomerOrderDetail', { serviceOrderId: detailId })}
+        accessibilityRole="button"
+        accessibilityLabel="Xem chi tiết đơn sửa chữa"
+        activeOpacity={0.8}
+      >
+        {renderOrderSummary(order, bookingId, true)}
+      </TouchableOpacity>
+    );
+  };
+
+  const actionRequiredCards = filteredCards.filter((card) =>
+    card.kind === 'booking'
+    && !card.order
+    && resumeTargetFor(card.booking, !view.ordersCoverageComplete) !== null,
+  );
+  const ongoingCards = filteredCards.filter((card) => !actionRequiredCards.includes(card));
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Đơn của tôi</Text>
-      </View>
-      {/* Search & Filter */}
-      <View style={styles.searchFilterContainer}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color={colors.textSecondary} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Tìm theo mã đơn, dịch vụ, kỹ thuật viên..."
-            placeholderTextColor={colors.textSecondary}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
+        <View style={styles.headerCopy}>
+          <Text style={styles.headerTitle}>Đơn của tôi</Text>
+          <Text style={styles.headerSubtitle}>Theo dõi những yêu cầu và đơn sửa chữa đang diễn ra</Text>
         </View>
-      </View>
-
-      {/* Segment Tabs */}
-      <View style={styles.segmentContainer}>
         <TouchableOpacity
-          style={[styles.segmentBtn, activeTab === 'all' && styles.segmentActive]}
-          onPress={() => { Haptics.selectionAsync(); setActiveTab('all'); }}
+          style={styles.historyButton}
+          onPress={() => navigation.navigate('CustomerRepairHistory')}
+          accessibilityRole="button"
+          accessibilityLabel="Mở lịch sử sửa chữa"
         >
-          <Text style={activeTab === 'all' ? styles.segmentTextActive : styles.segmentText}>
-            Tất cả ({cards.length})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.segmentBtn, activeTab === 'in_progress' && styles.segmentActive]}
-          onPress={() => { Haptics.selectionAsync(); setActiveTab('in_progress'); }}
-        >
-          <Text style={activeTab === 'in_progress' ? styles.segmentTextActive : styles.segmentText}>
-            Đang xử lý
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.segmentBtn, activeTab === 'completed' && styles.segmentActive]}
-          onPress={() => { Haptics.selectionAsync(); setActiveTab('completed'); }}
-        >
-          <Text style={activeTab === 'completed' ? styles.segmentTextActive : styles.segmentText}>
-            Hoàn tất
-          </Text>
+          <Ionicons name="time-outline" size={18} color={colors.primary} />
+          <Text style={styles.historyButtonText}>Lịch sử</Text>
         </TouchableOpacity>
       </View>
 
@@ -742,48 +727,44 @@ export default function CustomerBookingsScreen() {
           )}
           {filteredCards.length === 0 && emptyNote === 'more-pages' && (
             <View style={styles.emptyContainer}>
-              <Ionicons name="layers-outline" size={56} color="#CBD5E1" />
-              <Text style={styles.emptyTitle}>Chưa thấy mục phù hợp ở trang này</Text>
-              <Text style={styles.emptyDesc}>Còn trang lịch sử chưa tải. Bấm Tải thêm để xem tiếp.</Text>
+              <Ionicons name="layers-outline" size={56} color={colors.muted} />
+              <Text style={styles.emptyTitle}>Chưa thấy đơn đang diễn ra trong phần đã tải</Text>
+              <Text style={styles.emptyDesc}>Còn dữ liệu ở các trang tiếp theo. Tải thêm để kiểm tra.</Text>
             </View>
           )}
           {filteredCards.length === 0 && emptyNote === 'no-match' && (
             <View style={styles.emptyContainer}>
-              <Ionicons name="search-outline" size={56} color="#CBD5E1" />
-              <Text style={styles.emptyTitle}>Không tìm thấy mục phù hợp</Text>
-              <Text style={styles.emptyDesc}>Không có mục nào phù hợp với tìm kiếm/bộ lọc hiện tại.</Text>
-              {!!searchQuery.trim() && (
-                <TouchableOpacity onPress={() => setSearchQuery('')} accessibilityRole="button" style={styles.retryBtn}>
-                  <Text style={styles.retryText}>Xóa tìm kiếm</Text>
-                </TouchableOpacity>
-              )}
+              <Ionicons name="checkmark-done-outline" size={56} color={colors.muted} />
+              <Text style={styles.emptyTitle}>Không có đơn đang diễn ra</Text>
+              <Text style={styles.emptyDesc}>Khi có yêu cầu hoặc đơn sửa chữa đang xử lý, chúng sẽ xuất hiện tại đây.</Text>
+              <TouchableOpacity
+                style={[styles.bookNowBtn, { backgroundColor: colors.primary }]}
+                onPress={() => navigation.navigate('CustomerServices')}
+                accessibilityRole="button"
+              >
+                <Ionicons name="add-circle-outline" size={18} color={colors.surface} />
+                <Text style={styles.bookNowText}>Đặt dịch vụ mới</Text>
+              </TouchableOpacity>
             </View>
           )}
-          {filteredCards.map((card) => {
-            const key = card.kind === 'booking' ? `booking-${card.booking.id}` : `order-${card.order.id}`;
-            if (card.kind === 'booking' && !card.order) return <View key={key}>{renderBookingCard(card.booking)}</View>;
-            if (card.kind === 'booking' && card.order) {
-              const replacement = linkedReplacementState(card.booking, card.order);
-              if (replacement) {
-                return <View key={key}>{renderLinkedReplacementCard(card.booking, card.order, replacement)}</View>;
-              }
-            }
-            const order = card.kind === 'booking' ? card.order! : card.order;
-            const bookingId = card.kind === 'booking' ? card.booking.id : order.bookingId ?? null;
-            const detailId = orderDetailTarget(order.id);
-            if (!detailId) return <View key={key}>{renderOrderSummary(order, bookingId)}</View>;
-            return (
-              <TouchableOpacity
-                key={key}
-                onPress={() => navigation.navigate('CustomerOrderDetail', { serviceOrderId: detailId })}
-                accessibilityRole="button"
-                accessibilityLabel="Xem chi tiết đơn sửa chữa"
-                activeOpacity={0.8}
-              >
-                {renderOrderSummary(order, bookingId, true)}
-              </TouchableOpacity>
-            );
-          })}
+          {actionRequiredCards.length > 0 && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Cần bạn xử lý</Text>
+                <Text style={styles.sectionCount}>{actionRequiredCards.length}</Text>
+              </View>
+              {actionRequiredCards.map(renderActiveCard)}
+            </>
+          )}
+          {ongoingCards.length > 0 && (
+            <>
+              <View style={[styles.sectionHeader, actionRequiredCards.length > 0 && styles.sectionHeaderSpaced]}>
+                <Text style={styles.sectionTitle}>Đang diễn ra</Text>
+                <Text style={styles.sectionCount}>{ongoingCards.length}</Text>
+              </View>
+              {ongoingCards.map(renderActiveCard)}
+            </>
+          )}
           {showLoadMore && (
             <TouchableOpacity
               onPress={onLoadMore}
@@ -798,9 +779,6 @@ export default function CustomerBookingsScreen() {
                 <Text style={styles.retryText}>Tải thêm ({bookings.length}/{total})</Text>
               )}
             </TouchableOpacity>
-          )}
-          {!!ordersCoverageText && (
-            <Text style={styles.coverageText}>{ordersCoverageText}</Text>
           )}
           {showLoadMoreOrders && (
             <TouchableOpacity
@@ -859,6 +837,35 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontWeight: '800',
     color: colors.text,
   },
+  headerCopy: { flex: 1, paddingRight: 12 },
+  headerSubtitle: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textSecondary,
+    marginTop: 3,
+  },
+  historyButton: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  historyButtonText: { fontSize: 13, fontWeight: '700', color: colors.primary },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  sectionHeaderSpaced: { marginTop: 8 },
+  sectionTitle: { fontSize: 14, fontWeight: '800', color: colors.text },
+  sectionCount: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
   searchFilterContainer: {
     flexDirection: 'row',
     paddingHorizontal: 16,
@@ -915,7 +922,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   scrollContent: {
     padding: 16,
-    paddingTop: 0,
+    paddingTop: 16,
   },
   loadingState: {
     flex: 1,

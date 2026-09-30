@@ -81,6 +81,9 @@ export interface TechnicianCandidate {
   isAvailable: boolean;
   listedLaborPrice?: number | null;
   typicalWarrantyDays?: number;
+  bio?: string | null;
+  completedOrdersCount?: number;
+  completionRate?: number;
 }
 
 export interface DiagnosisResult {

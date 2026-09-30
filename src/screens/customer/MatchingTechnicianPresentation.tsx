@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   Modal,
   Pressable,
@@ -19,6 +20,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import type { TechnicianCandidate } from '../../api/bookings.api';
+import { technicianReviewsApi, type TechnicianReview } from '../../api/technician-reviews.api';
 import { useAppTheme } from '../../constants/theme';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 
@@ -259,6 +261,109 @@ export function MatchingTechnicianDetailSheet({
   const experience = candidate ? displayExperience(candidate) : null;
   const listedPrice = candidate ? displayListedPrice(candidate) : null;
   const warranty = candidate ? displayWarranty(candidate) : null;
+  const bio = candidate?.bio?.trim() || null;
+  const completedOrders = candidate
+    && Number.isInteger(candidate.completedOrdersCount)
+    && (candidate.completedOrdersCount ?? -1) >= 0
+    ? candidate.completedOrdersCount
+    : null;
+  const completionRate = candidate
+    && completedOrders != null
+    && completedOrders > 0
+    && Number.isFinite(candidate.completionRate)
+    && (candidate.completionRate ?? -1) >= 0
+    && (candidate.completionRate ?? 101) <= 100
+    ? candidate.completionRate
+    : null;
+
+  const [reviewState, setReviewState] = useState<{
+    ownerId: string | null;
+    status: 'idle' | 'loading' | 'loaded' | 'error';
+    data: TechnicianReview[];
+    total: number;
+  }>({ ownerId: null, status: 'idle', data: [], total: 0 });
+  const reviewRequestId = useRef(0);
+  const activeReviewState = reviewState.ownerId === (candidate?.userId ?? null)
+    ? reviewState
+    : {
+        ownerId: candidate?.userId ?? null,
+        status: candidate ? 'loading' as const : 'idle' as const,
+        data: [] as TechnicianReview[],
+        total: 0,
+      };
+  const reviews = activeReviewState.data;
+  const reviewsTotal = activeReviewState.total;
+  const reviewsLoading = activeReviewState.status === 'loading';
+  const reviewsError = activeReviewState.status === 'error'
+    ? 'Không thể tải đánh giá lúc này.'
+    : null;
+
+  const retryReviews = useCallback(() => {
+    const technicianUserId = candidate?.userId;
+    if (!technicianUserId) return;
+    const requestId = ++reviewRequestId.current;
+    setReviewState({
+      ownerId: technicianUserId,
+      status: 'loading',
+      data: [],
+      total: 0,
+    });
+    void technicianReviewsApi.listByTechnician(technicianUserId, 1, 20).then(
+      (result) => {
+        if (requestId !== reviewRequestId.current) return;
+        setReviewState({
+          ownerId: technicianUserId,
+          status: 'loaded',
+          data: result.data,
+          total: result.total,
+        });
+      },
+      () => {
+        if (requestId !== reviewRequestId.current) return;
+        setReviewState({
+          ownerId: technicianUserId,
+          status: 'error',
+          data: [],
+          total: 0,
+        });
+      },
+    );
+  }, [candidate?.userId]);
+
+  useEffect(() => {
+    const technicianUserId = candidate?.userId;
+    const requestId = ++reviewRequestId.current;
+    if (!technicianUserId) {
+      return () => {
+        reviewRequestId.current += 1;
+      };
+    }
+
+    void technicianReviewsApi.listByTechnician(technicianUserId, 1, 20).then(
+      (result) => {
+        if (requestId !== reviewRequestId.current) return;
+        setReviewState({
+          ownerId: technicianUserId,
+          status: 'loaded',
+          data: result.data,
+          total: result.total,
+        });
+      },
+      () => {
+        if (requestId !== reviewRequestId.current) return;
+        setReviewState({
+          ownerId: technicianUserId,
+          status: 'error',
+          data: [],
+          total: 0,
+        });
+      },
+    );
+
+    return () => {
+      reviewRequestId.current += 1;
+    };
+  }, [candidate?.userId]);
 
   return (
     <Modal
@@ -295,30 +400,141 @@ export function MatchingTechnicianDetailSheet({
                 <View style={styles.detailTitleGroup}>
                   <Text style={[styles.detailTitle, { color: colors.text }]}>Thông tin kỹ thuật viên</Text>
                   <Text style={[styles.candidateName, { color: colors.text }]}>{name}</Text>
-                  <Text style={[styles.availability, { color: colors.success }]}>Có thể nhận lời mời</Text>
+                  <Text style={[styles.availability, { color: colors.success }]}>
+                    {candidate.isAvailable ? 'Có thể nhận lời mời' : 'Hiện chưa thể nhận lời mời'}
+                  </Text>
                 </View>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel="Đóng thông tin kỹ thuật viên" onPress={onClose} hitSlop={12}>
                   <Ionicons name="close" size={22} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
-              <View style={[styles.detailCard, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                {rating && <DetailRow label="Đánh giá" value={rating} colors={colors} />}
-                {distance && candidate.distanceKm != null && <DetailRow label="Khoảng cách tham khảo" value={`${numberFormat.format(candidate.distanceKm)} km`} colors={colors} />}
-                {experience && <DetailRow label="Kinh nghiệm" value={experience} colors={colors} />}
-                {listedPrice && <DetailRow label="Giá niêm yết" value={listedPrice} colors={colors} />}
-                {warranty && <DetailRow label="Bảo hành tham khảo" value={warranty} colors={colors} />}
+
+              <View style={styles.metricGrid}>
+                {rating && (
+                  <View style={[styles.metricCard, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                    <Text style={[styles.metricValue, { color: colors.text }]}>
+                      {numberFormat.format(candidate.averageRating)} ★
+                    </Text>
+                    <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
+                      {candidate.ratingCount} lượt đánh giá
+                    </Text>
+                  </View>
+                )}
+                {completedOrders != null && (
+                  <View style={[styles.metricCard, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                    <Text style={[styles.metricValue, { color: colors.text }]}>{completedOrders}</Text>
+                    <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Đơn đã hoàn tất</Text>
+                  </View>
+                )}
+                {completionRate != null && (
+                  <View style={[styles.metricCard, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                    <Text style={[styles.metricValue, { color: colors.text }]}>
+                      {numberFormat.format(completionRate)}%
+                    </Text>
+                    <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Tỷ lệ hoàn tất</Text>
+                  </View>
+                )}
               </View>
+
+              {bio && (
+                <View style={[styles.bioCard, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                  <View style={styles.sectionTitleRow}>
+                    <Ionicons name="person-circle-outline" size={18} color={colors.primaryStrong} />
+                    <Text style={[styles.sectionTitle, { color: colors.text }]}>Giới thiệu</Text>
+                  </View>
+                  <Text style={[styles.bioText, { color: colors.textSecondary }]}>{bio}</Text>
+                </View>
+              )}
+
+              <View>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>Thông tin dịch vụ</Text>
+                <View style={[styles.detailCard, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                  {distance && candidate.distanceKm != null && <DetailRow label="Khoảng cách tham khảo" value={numberFormat.format(candidate.distanceKm) + ' km'} colors={colors} />}
+                  {experience && <DetailRow label="Kinh nghiệm" value={experience} colors={colors} />}
+                  {listedPrice && <DetailRow label="Giá công tham khảo" value={listedPrice} colors={colors} />}
+                  {warranty && <DetailRow label="Bảo hành tham khảo" value={warranty} colors={colors} />}
+                </View>
+              </View>
+
+              <View testID="matching-technician-reviews" style={styles.reviewsSection}>
+                <View style={styles.sectionHeaderRow}>
+                  <View style={styles.sectionTitleRow}>
+                    <Ionicons name="star-outline" size={18} color={colors.primaryStrong} />
+                    <Text style={[styles.sectionTitle, { color: colors.text }]}>Đánh giá từ khách hàng</Text>
+                  </View>
+                  {!reviewsLoading && !reviewsError && (
+                    <Text style={[styles.reviewCountText, { color: colors.textSecondary }]}>
+                      {reviewsTotal} đánh giá
+                    </Text>
+                  )}
+                </View>
+
+                {reviewsLoading ? (
+                  <View accessibilityRole="progressbar" accessibilityLabel="Đang tải đánh giá kỹ thuật viên" style={styles.reviewState}>
+                    <ActivityIndicator color={colors.primary} />
+                    <Text style={[styles.reviewStateText, { color: colors.textSecondary }]}>Đang tải đánh giá…</Text>
+                  </View>
+                ) : reviewsError ? (
+                  <View style={[styles.reviewStateCard, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                    <Text style={[styles.reviewStateText, { color: colors.textSecondary }]}>{reviewsError}</Text>
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel="Thử tải lại đánh giá"
+                      onPress={retryReviews}
+                      style={[styles.retryButton, { borderColor: colors.primary }]}
+                    >
+                      <Text style={[styles.retryText, { color: colors.primaryStrong }]}>Thử lại</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : reviews.length === 0 ? (
+                  <View style={[styles.reviewStateCard, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                    <Text style={[styles.reviewEmptyTitle, { color: colors.text }]}>Chưa có đánh giá nào</Text>
+                    <Text style={[styles.reviewStateText, { color: colors.textSecondary }]}>
+                      Chưa có nhận xét được ghi nhận cho kỹ thuật viên này.
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.reviewList}>
+                    {reviews.map((review) => (
+                      <View key={review.id} style={[styles.reviewCard, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                        <View style={styles.reviewTopRow}>
+                          <View style={[styles.reviewAvatar, { backgroundColor: colors.primarySoft }]}>
+                            <Text style={[styles.reviewAvatarText, { color: colors.primaryStrong }]}>
+                              {(review.customerName || 'K').charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                          <View style={styles.reviewIdentity}>
+                            <Text style={[styles.reviewCustomer, { color: colors.text }]}>
+                              {review.customerName || 'Khách hàng FixHome'}
+                            </Text>
+                            <Text style={[styles.reviewDate, { color: colors.textSecondary }]}>
+                              {new Date(review.createdAt).toLocaleDateString('vi-VN')}
+                            </Text>
+                          </View>
+                          <View style={[styles.reviewRatingPill, { borderColor: colors.border }]}>
+                            <Text style={[styles.reviewRatingText, { color: colors.text }]}>★ {review.rating}/5</Text>
+                          </View>
+                        </View>
+                        <Text style={[styles.reviewComment, { color: review.comment ? colors.textSecondary : colors.muted }]}>
+                          {review.comment || ('Khách hàng đánh giá ' + review.rating + ' sao và không để lại nhận xét.')}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+
               <TouchableOpacity
                 testID="matching-detail-select"
                 accessibilityRole="button"
-                accessibilityLabel={priority ? `Bỏ chọn ${name}` : `Chọn ${name}`}
+                accessibilityLabel={priority ? 'Bỏ chọn ' + name : 'Chọn ' + name}
                 accessibilityState={{ selected: priority > 0, disabled: selectionDisabled }}
                 disabled={selectionDisabled}
                 onPress={onToggleSelection}
                 style={[styles.detailAction, { backgroundColor: selectionDisabled ? colors.border : colors.primary }]}
               >
                 <Text style={styles.actionText}>
-                  {priority ? `Bỏ chọn · Ưu tiên ${priority}` : selectionDisabled ? 'Đã chọn đủ 2 kỹ thuật viên' : 'Chọn kỹ thuật viên này'}
+                  {priority ? 'Bỏ chọn · Ưu tiên ' + priority : selectionDisabled ? 'Đã chọn đủ 2 kỹ thuật viên' : 'Chọn kỹ thuật viên này'}
                 </Text>
               </TouchableOpacity>
             </ScrollView>
@@ -328,7 +544,6 @@ export function MatchingTechnicianDetailSheet({
     </Modal>
   );
 }
-
 function DetailRow({ label, value, colors }: { label: string; value: string; colors: ReturnType<typeof useAppTheme>['colors'] }) {
   return (
     <View style={[styles.detailRow, { borderBottomColor: colors.border }]}>
@@ -415,6 +630,34 @@ const styles = StyleSheet.create({
   detailCard: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 14 },
   detailRow: { minHeight: 54, borderBottomWidth: StyleSheet.hairlineWidth, justifyContent: 'center', gap: 2 },
   detailValue: { fontSize: 16, lineHeight: 23, fontWeight: '600' },
+  metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  metricCard: { minWidth: '30%', flexGrow: 1, borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 12, gap: 2 },
+  metricValue: { fontSize: 18, lineHeight: 24, fontWeight: '800' },
+  metricLabel: { fontSize: 11, lineHeight: 16, fontWeight: '600' },
+  bioCard: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 8 },
+  bioText: { fontSize: 13, lineHeight: 20 },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  sectionTitle: { fontSize: 15, lineHeight: 21, fontWeight: '800', marginBottom: 8 },
+  reviewCountText: { fontSize: 12, lineHeight: 17, fontWeight: '600' },
+  reviewsSection: { gap: 10 },
+  reviewState: { minHeight: 84, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  reviewStateCard: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 9, alignItems: 'flex-start' },
+  reviewStateText: { fontSize: 12, lineHeight: 18 },
+  reviewEmptyTitle: { fontSize: 13, lineHeight: 18, fontWeight: '800' },
+  retryButton: { minHeight: 36, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
+  retryText: { fontSize: 12, lineHeight: 17, fontWeight: '800' },
+  reviewList: { gap: 10 },
+  reviewCard: { borderWidth: 1, borderRadius: 14, padding: 13, gap: 9 },
+  reviewTopRow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  reviewAvatar: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  reviewAvatarText: { fontSize: 13, lineHeight: 17, fontWeight: '800' },
+  reviewIdentity: { flex: 1, gap: 1 },
+  reviewCustomer: { fontSize: 13, lineHeight: 18, fontWeight: '700' },
+  reviewDate: { fontSize: 10, lineHeight: 14 },
+  reviewRatingPill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 },
+  reviewRatingText: { fontSize: 11, lineHeight: 15, fontWeight: '800' },
+  reviewComment: { fontSize: 12, lineHeight: 19 },
   detailAction: { minHeight: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 },
   actionText: { color: '#FFFFFF', fontSize: 15, lineHeight: 22, fontWeight: '700', textAlign: 'center' },
 });
