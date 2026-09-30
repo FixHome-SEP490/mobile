@@ -17,6 +17,7 @@ import CustomerMatchingScreen from '../screens/customer/CustomerMatchingScreen';
 import CustomerBookingDetailScreen from '../screens/customer/CustomerBookingDetailScreen';
 import CustomerOrderDetailScreen from '../screens/customer/CustomerOrderDetailScreen';
 import CustomerRepairHistoryScreen from '../screens/customer/CustomerRepairHistoryScreen';
+import CustomerWarrantiesScreen from '../screens/customer/CustomerWarrantiesScreen';
 import TechnicianOrderDetailScreen from '../screens/technician/TechnicianOrderDetailScreen';
 import TechnicianKycScreen from '../screens/technician/TechnicianKycScreen';
 import TechnicianWalletScreen from '../screens/technician/TechnicianWalletScreen';
@@ -45,6 +46,7 @@ export default function AppNavigator() {
             <Stack.Screen name="CustomerBookingDetail" component={CustomerBookingDetailScreen} />
             <Stack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
             <Stack.Screen name="CustomerRepairHistory" component={CustomerRepairHistoryScreen} />
+            <Stack.Screen name="CustomerWarranties" component={CustomerWarrantiesScreen} />
             <Stack.Screen name="TechnicianOrderDetail" component={TechnicianOrderDetailScreen} />
             <Stack.Screen name="TechnicianKyc" component={TechnicianKycScreen} />
             <Stack.Screen name="TechnicianWallet" component={TechnicianWalletScreen} />
@@ -68,6 +70,7 @@ export default function AppNavigator() {
             <Stack.Screen name="CustomerBookingDetail" component={CustomerBookingDetailScreen} />
             <Stack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
             <Stack.Screen name="CustomerRepairHistory" component={CustomerRepairHistoryScreen} />
+            <Stack.Screen name="CustomerWarranties" component={CustomerWarrantiesScreen} />
             <Stack.Screen name="TechnicianOrderDetail" component={TechnicianOrderDetailScreen} />
             <Stack.Screen name="ChatList" component={ChatListScreen} />
             <Stack.Screen name="ChatThread" component={ChatThreadScreen} />

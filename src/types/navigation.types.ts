@@ -44,6 +44,7 @@ export type RootStackParamList = {
   CustomerBookingDetail: { bookingId: string };
   CustomerOrderDetail: { serviceOrderId: string };
   CustomerRepairHistory: undefined;
+  CustomerWarranties: { orderId?: string } | undefined;
   TechnicianOrderDetail: { serviceOrderId: string };
   CustomerTechFound: undefined;
   CustomerTracking: undefined;

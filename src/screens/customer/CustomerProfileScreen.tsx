@@ -449,6 +449,22 @@ export default function CustomerProfileScreen() {
           <View style={[styles.menuContainer, isDarkMode && styles.cardDark]}>
             <TouchableOpacity
               style={styles.menuItem}
+              onPress={() => navigation.navigate('CustomerWarranties')}
+              accessibilityRole="button"
+              accessibilityLabel="Mở bảo hành"
+            >
+              <Ionicons name="shield-checkmark-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
+              <View style={styles.menuContent}>
+                <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Bảo hành</Text>
+                <Text style={styles.menuDesc}>Xem hạng mục bảo hành và yêu cầu hỗ trợ</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            <TouchableOpacity
+              style={styles.menuItem}
               onPress={() => navigation.navigate('CustomerRepairHistory')}
               accessibilityRole="button"
               accessibilityLabel="Mở lịch sử sửa chữa"

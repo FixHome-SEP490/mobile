@@ -941,6 +941,28 @@ export default function CustomerOrderDetailScreen() {
             </View>
           )}
 
+          {String(order.status).toUpperCase() === 'COMPLETED' && (
+            <View style={styles.card}>
+              <View style={[styles.row, { alignItems: 'flex-start' }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sectionTitle}>Bảo hành sau sửa chữa</Text>
+                  <Text style={styles.meta}>
+                    Xem các hạng mục bảo hành của đơn này, theo dõi yêu cầu đã gửi hoặc gửi yêu cầu mới khi có sự cố.
+                  </Text>
+                </View>
+                <Ionicons name="shield-checkmark-outline" size={24} color={colors.success} />
+              </View>
+              <TouchableOpacity
+                style={[styles.decisionBtn, { backgroundColor: colors.primaryStrong, alignSelf: 'flex-start' }]}
+                onPress={() => navigation.navigate('CustomerWarranties', { orderId: serviceOrderId })}
+                accessibilityRole="button"
+                accessibilityLabel="Mở bảo hành của đơn sửa chữa"
+              >
+                <Text style={styles.decisionBtnText}>Xem bảo hành</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {underRepairTask && (
             <View
               onLayout={underRepairTask.kind === 'completion_requested'

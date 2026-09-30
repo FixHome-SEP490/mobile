@@ -195,6 +195,49 @@ export interface ReviewItem {
   createdAt?: string;
 }
 
+export type WarrantyClaimStatus =
+  | 'submitted'
+  | 'accepted'
+  | 'inspected'
+  | 'in_progress'
+  | 'awaiting_customer'
+  | 'disputed'
+  | 'resolved'
+  | 'rejected';
+
+export interface WarrantyCoverageItem {
+  id: string;
+  serviceOrderId?: string;
+  invoiceItemId?: string | null;
+  warrantyDaysSnapshot: number;
+  note?: string | null;
+  startsAt: string;
+  expiresAt: string;
+  status: string;
+}
+
+export interface WarrantyClaimView {
+  id: string;
+  serviceOrderId: string;
+  warrantyCoverageId: string;
+  status: WarrantyClaimStatus | string;
+  description: string;
+  evidenceRefs: string[] | null;
+  submittedAfterExpiry: boolean;
+  customerResponse: 'agreed' | 'disputed' | null;
+  awaitingPrompt: 'conclusion' | 'completion' | null;
+  resolutionNotes: string | null;
+  submittedAt: string;
+  resolvedAt: string | null;
+  technician: { id: string; fullName: string } | null;
+}
+
+export interface CreateWarrantyClaimPayload {
+  warrantyCoverageId: string;
+  description: string;
+  evidenceRefs?: string[];
+}
+
 const normalizeOrder = (order: ServiceOrderItem): ServiceOrderItem => ({
   ...order,
   status: (order.status?.toUpperCase?.() || order.status) as CanonicalOrderStatus,
@@ -417,8 +460,40 @@ export const ordersApi = {
     return get(`/service-orders/${id}/status-history`);
   },
 
-  async getWarranties(id: string) {
-    return get(`/service-orders/${id}/warranties`);
+  async getOrderWarranties(id: string): Promise<WarrantyCoverageItem[]> {
+    return get<WarrantyCoverageItem[]>(`/service-orders/${id}/warranties`);
+  },
+
+  async getWarranties(id: string): Promise<WarrantyCoverageItem[]> {
+    return this.getOrderWarranties(id);
+  },
+
+  async getOrderWarrantyClaims(id: string): Promise<WarrantyClaimView[]> {
+    return get<WarrantyClaimView[]>(`/service-orders/${id}/warranty-claims`);
+  },
+
+  async createWarrantyClaim(
+    id: string,
+    payload: CreateWarrantyClaimPayload,
+  ): Promise<WarrantyClaimView> {
+    return unwrap<WarrantyClaimView>(
+      (await apiClient.post(`/service-orders/${id}/warranty-claims`, payload)).data,
+    );
+  },
+
+  async respondWarrantyClaim(
+    id: string,
+    claimId: string,
+    payload: { decision: 'agree' | 'dispute'; note?: string },
+  ): Promise<WarrantyClaimView> {
+    return unwrap<WarrantyClaimView>(
+      (
+        await apiClient.post(
+          `/service-orders/${id}/warranty-claims/${claimId}/respond`,
+          payload,
+        )
+      ).data,
+    );
   },
 
   async declareCashSettlement(

@@ -11,8 +11,10 @@ describe('Mobile Booking routes never expose the legacy mock completion/review c
     expect(navigatorSource).not.toContain(`<Stack.Screen name="${route}"`);
   });
 
-  it('keeps the server-backed order detail routes registered', () => {
+  it('keeps the server-backed order detail and customer service-history routes registered', () => {
     expect(navigatorSource).toContain('<Stack.Screen name="CustomerOrderDetail"');
+    expect(navigatorSource).toContain('<Stack.Screen name="CustomerRepairHistory"');
+    expect(navigatorSource).toContain('<Stack.Screen name="CustomerWarranties"');
     expect(navigatorSource).toContain('<Stack.Screen name="TechnicianOrderDetail"');
   });
 });
