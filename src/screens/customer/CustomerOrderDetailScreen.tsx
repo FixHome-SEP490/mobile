@@ -23,6 +23,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAppTheme } from '../../constants/theme';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
+import CustomerSupportCasesSection from './CustomerSupportCasesSection';
 import { useAuthStore } from '../../store/auth.store';
 import { ordersApi, type CanonicalOrderStatus } from '../../api/orders.api';
 import { customerBookingsUserId } from './customer-bookings-history';
@@ -1772,6 +1773,12 @@ export default function CustomerOrderDetailScreen() {
               </View>
             )}
           </View>
+
+          <CustomerSupportCasesSection
+            orderId={serviceOrderId}
+            orderStatus={order.status}
+            completedAt={order.completedAt ?? null}
+          />
         </ScrollView>
       )}
     </SafeAreaView>

@@ -126,10 +126,12 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
     async (items) => {
       api.get.mockResolvedValue({ data: { data: {
         id: 'order-1', status: 'en_route', paymentStatus: 'unpaid',
+        completedAt: '2026-09-30T01:00:00.000Z',
         quotation: { id: 'quote-1', status: 'sent', laborTotal: 100000, partsTotal: 0, items },
       } } });
       const detail = await ordersApi.getOrder('order-1');
       expect(api.get).toHaveBeenCalledWith('/service-orders/order-1');
+      expect(detail.completedAt).toBe('2026-09-30T01:00:00.000Z');
       expect(detail.quotation?.status).toBe('SENT');
       expect(detail.quotation?.items).toEqual([]);
     },

@@ -63,6 +63,7 @@ export interface ServiceOrderItem {
   grandTotal: number;
   paymentStatus: 'UNPAID' | 'PAID' | 'REFUNDED';
   createdAt: string;
+  completedAt?: string;
   timeline?: {
     status: string;
     title: string;
