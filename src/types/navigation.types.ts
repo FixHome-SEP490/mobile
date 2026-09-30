@@ -52,7 +52,6 @@ export type RootStackParamList = {
   CustomerReview: undefined;
   TechnicianKyc: undefined;
   TechnicianOnboarding: undefined;
-  TechnicianInvitations: undefined;
   TechnicianWallet: undefined;
   ChatList: undefined;
   ChatThread: {
@@ -79,6 +78,7 @@ export type CustomerTabParamList = {
 
 export type TechnicianTabParamList = {
   Home: undefined;
+  Invitations: undefined;
   Jobs: undefined;
   Notifications: undefined;
   Profile: undefined;
