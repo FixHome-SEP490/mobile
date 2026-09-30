@@ -13,7 +13,24 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import {
+  Briefcase,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronUp,
+  Circle,
+  CircleDot,
+  Clock,
+  MapPin,
+  MessageCircle,
+  Minus,
+  Package,
+  Plus,
+  ShieldCheck,
+  Trash2,
+  User,
+} from 'lucide-react-native';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
@@ -22,7 +39,7 @@ import { useAuthStore } from '../../store/auth.store';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { ordersApi, type CanonicalOrderStatus, type ServiceOrderItem, type CreateAdditionalCostItem } from '../../api/orders.api';
+import { ordersApi, type ServiceOrderItem, type CreateAdditionalCostItem } from '../../api/orders.api';
 import { partsCatalogApi, type FixHomePart } from '../../api/parts-catalog.api';
 import { technicianJobsUserId } from './technician-jobs-loader';
 import { extractApiErrorMessage } from '../../utils/input-validation';
@@ -74,6 +91,10 @@ import {
 } from './technician-request-completion';
 import { createTechOrderDetailLoader } from './technician-order-detail';
 import TechnicianPartsSection from './technician-parts-section';
+import StatusBadge from '../../components/StatusBadge';
+import { serviceOrderStatusView } from './technician-status';
+import { jobProgress, type StepState } from './technician-job-progress';
+import { formatDateTime, formatVnd, vndText } from '../../utils/format';
 import { findChatForBooking } from './technician-chat-shortcut';
 import {
   createTechnicianCashController,
@@ -84,11 +105,77 @@ import {
 type DetailRoute = RouteProp<RootStackParamList, 'TechnicianOrderDetail'>;
 
 function amountOrNull(value: unknown): string | null {
-  return typeof value === 'number' ? `${value.toLocaleString('vi-VN')}đ` : null;
+  return typeof value === 'number' ? formatVnd(value) : null;
+}
+
+type DetailStyles = ReturnType<typeof getStyles>;
+type DetailColors = ReturnType<typeof useAppTheme>['colors'];
+
+/** Where the job is in its lifecycle (display only). */
+function JobStepper({ styles, colors, steps }: {
+  styles: DetailStyles;
+  colors: DetailColors;
+  steps: { label: string; state: StepState }[];
+}) {
+  const current = steps.find((step) => step.state === 'current');
+  return (
+    <View
+      style={styles.stepper}
+      accessible
+      accessibilityLabel={current ? `Tiến độ công việc, bước hiện tại: ${current.label}` : 'Tiến độ công việc, đã hoàn thành các bước'}
+    >
+      {steps.map((step, index) => (
+        <View key={step.label} style={styles.stepItem}>
+          <View style={styles.stepDotRow}>
+            <View style={[styles.stepLine, index === 0 && { opacity: 0 }, step.state !== 'todo' && styles.stepLineDone]} />
+            <View style={[styles.stepDot, step.state === 'done' && styles.stepDotDone, step.state === 'current' && styles.stepDotCurrent]}>
+              {step.state === 'done' ? (
+                <Check size={14} color={colors.surface} strokeWidth={3} />
+              ) : step.state === 'current' ? (
+                <View style={styles.stepDotInner} />
+              ) : null}
+            </View>
+            <View style={[styles.stepLine, index === steps.length - 1 && { opacity: 0 }, step.state === 'done' && styles.stepLineDone]} />
+          </View>
+          <Text style={[styles.stepLabel, step.state === 'current' && styles.stepLabelCurrent]}>{step.label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** Action card that opens on the step the technician is on and folds away otherwise. */
+function CollapsibleCard({ styles, colors, title, defaultOpen, children }: {
+  styles: DetailStyles;
+  colors: DetailColors;
+  title: string;
+  defaultOpen: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <View style={styles.jobCard}>
+      <TouchableOpacity
+        style={styles.collapseHeader}
+        onPress={() => setOpen((value) => !value)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={title}
+      >
+        <Text style={styles.collapseTitle}>{title}</Text>
+        {open ? (
+          <ChevronUp size={20} color={colors.textSecondary} strokeWidth={1.75} />
+        ) : (
+          <ChevronDown size={20} color={colors.textSecondary} strokeWidth={1.75} />
+        )}
+      </TouchableOpacity>
+      {open && <View style={styles.collapseBody}>{children}</View>}
+    </View>
+  );
 }
 
 export default function TechnicianOrderDetailScreen() {
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const styles = getStyles(colors);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<DetailRoute>();
@@ -873,8 +960,8 @@ export default function TechnicianOrderDetailScreen() {
     if (!order) return;
     Alert.alert(
       'Khai báo đã nhận tiền mặt',
-      'Xác nhận bạn đã nhận đúng ' + order.grandTotal.toLocaleString('vi-VN') +
-        'đ theo tổng tiền Hệ thống. Khách hàng vẫn phải xác nhận riêng trước khi hóa đơn đã thanh toán.',
+      'Xác nhận bạn đã nhận đúng ' + formatVnd(order.grandTotal) +
+        ' theo tổng tiền Hệ thống. Khách hàng vẫn phải xác nhận riêng trước khi hóa đơn đã thanh toán.',
       [
         { text: 'Hủy', style: 'cancel' },
         {
@@ -983,63 +1070,55 @@ export default function TechnicianOrderDetailScreen() {
   const completionEligible = requestCompletionTarget(completionGate);
   const completionBlockers = completionGate ? describeCompletionBlockers(completionGate) : [];
 
-  const getStatusBadge = (status: CanonicalOrderStatus) => {
-    const s = String(status).toUpperCase();
-    switch (s) {
-      case 'ACCEPTED':
-        return { label: 'Chờ di chuyển', bg: '#FEF3C7', color: '#D97706' };
-      case 'EN_ROUTE':
-        return { label: 'Đang trên đường', bg: '#DCFCE7', color: '#16A34A' };
-      case 'UNDER_REPAIR':
-      case 'IN_PROGRESS':
-        return { label: 'Đang sửa chữa', bg: colors.primaryTint, color: colors.primaryStrong };
-      case 'COMPLETED':
-        return { label: 'Hoàn tất', bg: colors.divider, color: colors.textSecondary };
-      default:
-        return { label: s, bg: colors.divider, color: colors.textSecondary };
-    }
-  };
+  // Action cards open on the step the technician is on; everything stays reachable.
+  const st = order ? String(order.status).toUpperCase() : '';
+  const beforeOpen = st === 'EN_ROUTE' && (typeof order?.beforeEvidenceCount !== 'number' || order.beforeEvidenceCount < 1);
+  const quoteOpen = st === 'EN_ROUTE' && order?.arrivalVerified === true;
+  const repairOpen = st === 'UNDER_REPAIR' && !order?.completionRequestedAt;
+  const completionOpen = st === 'COMPLETED' ||
+    (st === 'UNDER_REPAIR' && (!!completionEligible || !!order?.completionRequestedAt || completionState.requested));
+  const progress = order ? jobProgress(order) : null;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
       <View style={styles.header}>
         <TouchableOpacity
+          style={styles.headerBtn}
           onPress={() => navigation.goBack()}
           accessibilityRole="button"
           accessibilityLabel="Quay lại"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <ChevronLeft size={26} color={colors.text} strokeWidth={1.75} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chi tiết công việc</Text>
+        <Text style={styles.headerTitle} accessibilityRole="header">Chi tiết công việc</Text>
         {order?.bookingId ? (
           <TouchableOpacity
+            style={styles.headerBtn}
             onPress={() => handleOpenChat(order.bookingId)}
             disabled={openingChat}
             accessibilityRole="button"
-            accessibilityLabel="Nhắn tin với khách"
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Nhắn tin với khách hàng"
           >
             {openingChat ? (
               <ActivityIndicator size="small" color={colors.text} />
             ) : (
-              <Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.text} />
+              <MessageCircle size={22} color={colors.text} strokeWidth={1.75} />
             )}
           </TouchableOpacity>
         ) : (
-          <View style={styles.headerSpacer} />
+          <View style={styles.headerBtn} />
         )}
       </View>
 
       {loading ? (
         <View style={styles.centerLoading}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Đang tải chi tiết công việc...</Text>
+          <Text style={styles.loadingText}>Đang tải chi tiết công việc…</Text>
         </View>
       ) : !order ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="briefcase-outline" size={56} color="#CBD5E1" />
+          <Briefcase size={56} color={colors.muted} strokeWidth={1.5} />
           <Text style={styles.emptyTitle}>Không xem được công việc</Text>
           {!!error && <Text style={styles.emptyDesc}>{error}</Text>}
           <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button" style={styles.retryBtn}>
@@ -1061,25 +1140,30 @@ export default function TechnicianOrderDetailScreen() {
           )}
 
           <View style={styles.jobCard}>
-            <View style={[styles.badge, { backgroundColor: getStatusBadge(order.status).bg }]}>
-              <Text style={[styles.badgeText, { color: getStatusBadge(order.status).color }]}>
-                {getStatusBadge(order.status).label}
-              </Text>
+            <View style={styles.summaryTop}>
+              <StatusBadge view={serviceOrderStatusView(order.status)} />
+              <Text style={styles.caption}>#{order.code || order.id.slice(0, 8)}</Text>
             </View>
-            <Text style={styles.jobTitle}>Đơn #{order.code || order.id.slice(0, 8)}</Text>
-            <Text style={styles.jobMeta}>{order.serviceName || 'Dịch vụ sửa chữa'}</Text>
+            <Text style={styles.jobTitle}>{order.serviceName || 'Dịch vụ sửa chữa'}</Text>
             {!!order.scheduledAt && (
-              <Text style={styles.jobMeta}>
-                Lịch hẹn: {new Date(order.scheduledAt).toLocaleString('vi-VN')}
-              </Text>
+              <View style={styles.iconRow}>
+                <Clock size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                <Text style={styles.iconRowText}>Lịch hẹn: {formatDateTime(order.scheduledAt)}</Text>
+              </View>
             )}
             {!!order.addressSummary && (
-              <Text style={styles.jobMeta}>📍 {order.addressSummary}</Text>
+              <View style={styles.iconRow}>
+                <MapPin size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                <Text style={styles.iconRowText}>{order.addressSummary}</Text>
+              </View>
             )}
             {!!order.customerName && (
-              <Text style={styles.jobMeta}>
-                Khách: {order.customerName}{order.customerPhone ? ` (${order.customerPhone})` : ''}
-              </Text>
+              <View style={styles.iconRow}>
+                <User size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                <Text style={styles.iconRowText}>
+                  Khách: {order.customerName}{order.customerPhone ? ` · ${order.customerPhone}` : ''}
+                </Text>
+              </View>
             )}
             {sections.quantity !== null && (
               <Text style={styles.jobMeta}>Số lượng: {sections.quantity}</Text>
@@ -1087,6 +1171,7 @@ export default function TechnicianOrderDetailScreen() {
             {!!order.scopeDescription && (
               <Text style={styles.jobMeta}>Phạm vi: {order.scopeDescription}</Text>
             )}
+            {progress && <JobStepper styles={styles} colors={colors} steps={progress} />}
           </View>
 
           {order.historical !== true && (
@@ -1095,8 +1180,8 @@ export default function TechnicianOrderDetailScreen() {
 
           {String(order.status).toUpperCase() === 'ACCEPTED' && (
             <View style={[styles.jobCard, styles.nextStepCard]}>
-              <Text style={styles.nextStepEyebrow}>BƯỚC TIẾP THEO</Text>
-              <Text style={styles.sectionTitle}>1. Khởi hành đến nhà khách (En Route)</Text>
+              <Text style={styles.nextStepEyebrow}>Bước tiếp theo</Text>
+              <Text style={styles.sectionTitle}>Bắt đầu di chuyển</Text>
               <Text style={styles.jobMeta}>
                 Báo cho hệ thống biết bạn đang trên đường đến địa chỉ khách hàng.
               </Text>
@@ -1118,12 +1203,12 @@ export default function TechnicianOrderDetailScreen() {
 
           {String(order.status).toUpperCase() === 'EN_ROUTE' && (
             <View style={[styles.jobCard, styles.nextStepCard]}>
-              <Text style={styles.nextStepEyebrow}>BƯỚC TIẾP THEO</Text>
+              <Text style={styles.nextStepEyebrow}>Bước tiếp theo</Text>
               {order.arrivalVerified !== true ? (
                 <>
-                  <Text style={styles.sectionTitle}>2. Xác nhận có mặt tại hiện trường (GPS Check-in)</Text>
+                  <Text style={styles.sectionTitle}>Check-in tại nhà khách</Text>
                   <Text style={styles.jobMeta}>
-                    Bấm nút bên dưới khi đã có mặt tại địa chỉ khách hàng để check-in bằng GPS.
+                    Bấm nút bên dưới khi bạn đã có mặt tại địa chỉ khách hàng để check-in bằng GPS.
                   </Text>
                   <TouchableOpacity
                     style={[styles.uploadBtn, styles.nextStepAction]}
@@ -1200,7 +1285,7 @@ export default function TechnicianOrderDetailScreen() {
           {String(order.status).toUpperCase() === 'UNDER_REPAIR' && (
             <View style={[styles.jobCard, styles.nextStepCard]}>
               {/* K06_UNDER_REPAIR_NEXT_STEP */}
-              <Text style={styles.nextStepEyebrow}>BƯỚC TIẾP THEO</Text>
+              <Text style={styles.nextStepEyebrow}>Bước tiếp theo</Text>
               {order.completionRequestedAt ? (
                 <>
                   <Text style={styles.sectionTitle}>Đã yêu cầu hoàn thành</Text>
@@ -1254,7 +1339,7 @@ export default function TechnicianOrderDetailScreen() {
                     Hệ thống vẫn kiểm tra số ảnh sau sửa cấu hình, báo giá và mọi chi phí đang chờ.
                   </Text>
                   <Text style={styles.nextStepWait}>
-                    Gửi yêu cầu nghiệm thu ở mục &quot;6. Khách hàng nghiệm thu & thanh toán&quot; bên dưới.
+                    Gửi yêu cầu nghiệm thu ở mục &quot;Nghiệm thu và thanh toán&quot; bên dưới.
                   </Text>
                 </>
               ) : (
@@ -1268,10 +1353,9 @@ export default function TechnicianOrderDetailScreen() {
             </View>
           )}
 
-          <Text style={styles.groupHeading}>THAO TÁC</Text>
+          <Text style={styles.groupHeading}>Thao tác</Text>
 
-          <View style={styles.jobCard}>
-            <Text style={styles.sectionTitle}>3. Bằng chứng hiện trạng lỗi (trước sửa)</Text>
+          <CollapsibleCard key={`before-${beforeOpen}`} styles={styles} colors={colors} title="Ảnh trước sửa chữa" defaultOpen={beforeOpen}>
             {!canUploadBefore ? (
               <Text style={styles.jobMeta}>Check-in hợp lệ trước khi tải ảnh.</Text>
             ) : uploadState.needsVerify ? (
@@ -1286,7 +1370,7 @@ export default function TechnicianOrderDetailScreen() {
                   accessibilityLabel="Kiểm tra bằng chứng trước sửa chữa"
                 >
                   <Text style={styles.retryText}>
-                    {uploadState.busy ? 'Đang kiểm tra...' : 'Kiểm tra bằng chứng'}
+                    {uploadState.busy ? 'Đang kiểm tra…' : 'Kiểm tra bằng chứng'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1302,7 +1386,7 @@ export default function TechnicianOrderDetailScreen() {
                 </Text>
                 <View style={styles.uploadBtnRow}>
                   <TouchableOpacity
-                    style={[styles.uploadBtn, { backgroundColor: colors.success }]}
+                    style={[styles.uploadBtn, { backgroundColor: colors.tone.success.text }]}
                     onPress={onUploadBefore}
                     disabled={uploadState.busy}
                     accessibilityRole="button"
@@ -1321,7 +1405,7 @@ export default function TechnicianOrderDetailScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Hủy ảnh đã chọn"
                   >
-                    <Text style={[styles.uploadBtnText, { color: '#334155' }]}>Hủy</Text>
+                    <Text style={[styles.uploadBtnText, { color: colors.text }]}>Hủy</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -1360,28 +1444,25 @@ export default function TechnicianOrderDetailScreen() {
                 )}
               </View>
             )}
-          </View>
+          </CollapsibleCard>
 
-          <View style={styles.jobCard}>
-            <Text style={styles.sectionTitle}>
-              {isFixedPriceOrder ? '4. Giá cố định theo Booking' : '4. Lập báo giá (nhân công + linh kiện kỹ thuật)'}
-            </Text>
+          <CollapsibleCard key={`quote-${quoteOpen}`} styles={styles} colors={colors} title={isFixedPriceOrder ? 'Giá cố định và bắt đầu sửa chữa' : 'Báo giá và bắt đầu sửa chữa'} defaultOpen={quoteOpen}>
 
             {isFixedPriceOrder && (
               <>
                 <Text style={[styles.jobMeta, styles.quoteInfoNote]}>
-                  Dịch vụ có giá cố định theo Booking đã đặt; không lập báo giá kiểm tra hiện trường lần nữa.
+                  Dịch vụ có giá cố định theo yêu cầu đặt lịch đã gửi; không lập báo giá kiểm tra hiện trường lần nữa.
                 </Text>
                 {!!order.scopeDescription && (
                   <Text style={styles.jobMeta}>Phạm vi đã đặt: {order.scopeDescription}</Text>
                 )}
                 <View style={styles.fixedPriceBox}>
-                  <Text style={styles.jobMeta}>Đơn giá đã lưu: {sections.fixedUnitPriceText ?? '—'}</Text>
+                  <Text style={styles.jobMeta}>Đơn giá đã lưu: {vndText(sections.fixedUnitPriceText ?? '—')}</Text>
                   <Text style={styles.jobMeta}>Số lượng đã đặt: {sections.quantity ?? 1}</Text>
                   <Text style={[styles.jobMeta, styles.fixedPriceTotalText]}>
-                    Giá công theo Booking:{' '}
+                    Giá công theo yêu cầu đặt lịch:{' '}
                     {order.fixedUnitPrice != null
-                      ? `${(order.fixedUnitPrice * (sections.quantity ?? 1)).toLocaleString('vi-VN')}đ`
+                      ? formatVnd(order.fixedUnitPrice * (sections.quantity ?? 1))
                       : '—'}
                   </Text>
                   <Text style={[styles.jobMeta, { fontSize: 11 }]}>
@@ -1413,20 +1494,19 @@ export default function TechnicianOrderDetailScreen() {
                         </View>
                         {row.kind === 'part' && row.warrantyOption === 'paid_warranty' && !!row.warrantyTermDays && (
                           <View style={styles.acWarrantyBadge}>
-                            <Ionicons name="shield-checkmark" size={11} color={colors.success} />
+                            <ShieldCheck size={12} color={colors.tone.success.fg} strokeWidth={2} />
                             <Text style={styles.acWarrantyBadgeText}>{row.warrantyTermDays} ngày</Text>
                           </View>
                         )}
                         {quoteState.rows.length > 1 && (
                           <TouchableOpacity
-                            style={{ marginLeft: 'auto' }}
+                            style={styles.iconBtn}
                             onPress={() => onQuoteRemoveRow(row.key)}
                             disabled={readOnly}
-                            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                             accessibilityRole="button"
                             accessibilityLabel="Xóa dòng báo giá"
                           >
-                            <Ionicons name="trash" size={16} color={colors.error} />
+                            <Trash2 size={18} color={colors.error} strokeWidth={1.75} />
                           </TouchableOpacity>
                         )}
                       </View>
@@ -1450,7 +1530,7 @@ export default function TechnicianOrderDetailScreen() {
                               onPress={() => { setQuotePartSearchRowKey(row.key); setQuotePartQuery(''); setQuotePartResults([]); }}
                               disabled={readOnly}
                             >
-                              <Text style={styles.acAddPartLink}>🔍 Tìm giá trong kho FixHome</Text>
+                              <Text style={styles.acAddPartLink}>Tìm giá trong kho FixHome</Text>
                             </TouchableOpacity>
                           ) : (
                             <View style={styles.acItemCard}>
@@ -1473,7 +1553,7 @@ export default function TechnicianOrderDetailScreen() {
                                     }
                                   }, 250);
                                 }}
-                                placeholder="Tìm tên linh kiện, SKU..."
+                                placeholder="Tìm tên linh kiện, SKU…"
                                 placeholderTextColor={colors.muted}
                                 autoFocus
                               />
@@ -1493,7 +1573,7 @@ export default function TechnicianOrderDetailScreen() {
                                       ...prev,
                                       [row.key]: part.warrantyDays
                                         ? `Đã điền bảo hành ${part.warrantyDays} ngày theo kho FixHome.`
-                                        : `Tham khảo kho FixHome: ${part.sellingPrice.toLocaleString('vi-VN')}đ${part.sku ? ` · SKU ${part.sku}` : ''}`,
+                                        : `Tham khảo kho FixHome: ${formatVnd(part.sellingPrice)}${part.sku ? ` · SKU ${part.sku}` : ''}`,
                                     }));
                                     setQuotePartSearchRowKey(null);
                                     setQuotePartQuery('');
@@ -1504,7 +1584,7 @@ export default function TechnicianOrderDetailScreen() {
                                     <Text style={styles.resultNameText}>{part.name}{part.sku ? ` (${part.sku})` : ''}</Text>
                                     {!!part.warrantyDays && <Text style={styles.jobMeta}>BH {part.warrantyDays} ngày</Text>}
                                   </View>
-                                  <Text style={styles.acPriceText}>{part.sellingPrice.toLocaleString('vi-VN')}đ</Text>
+                                  <Text style={styles.acPriceText}>{formatVnd(part.sellingPrice)}</Text>
                                 </TouchableOpacity>
                               ))}
                               <TouchableOpacity onPress={() => setQuotePartSearchRowKey(null)}>
@@ -1535,7 +1615,7 @@ export default function TechnicianOrderDetailScreen() {
                                 accessibilityRole="button"
                                 accessibilityLabel={`Giảm số lượng dòng ${index + 1}`}
                               >
-                                <Ionicons name="remove" size={13} color={colors.text} />
+                                <Minus size={16} color={colors.text} strokeWidth={2} />
                               </TouchableOpacity>
                               <Text style={styles.qtyTextSmall}>{row.quantity || '0'}</Text>
                               <TouchableOpacity
@@ -1550,7 +1630,7 @@ export default function TechnicianOrderDetailScreen() {
                                 accessibilityRole="button"
                                 accessibilityLabel={`Tăng số lượng dòng ${index + 1}`}
                               >
-                                <Ionicons name="add" size={13} color={colors.text} />
+                                <Plus size={16} color={colors.text} strokeWidth={2} />
                               </TouchableOpacity>
                             </View>
                             {!!rowErrors.quantity && (
@@ -1630,11 +1710,11 @@ export default function TechnicianOrderDetailScreen() {
                 {quoteState.confirming && quoteState.quotedCostText ? (
                   <View style={styles.evidenceError}>
                     <Text style={styles.jobMeta}>
-                      Chi phí dự kiến: {quoteState.quotedCostText} (đề xuất, chưa thanh toán).
+                      Chi phí dự kiến: {vndText(quoteState.quotedCostText)} (đề xuất, chưa thanh toán).
                     </Text>
                     <View style={styles.uploadBtnRow}>
                       <TouchableOpacity
-                        style={[styles.uploadBtn, { backgroundColor: colors.success }]}
+                        style={[styles.uploadBtn, { backgroundColor: colors.tone.success.text }]}
                         onPress={onQuoteSubmit}
                         disabled={quoteState.busy}
                         accessibilityRole="button"
@@ -1653,7 +1733,7 @@ export default function TechnicianOrderDetailScreen() {
                         accessibilityRole="button"
                         accessibilityLabel="Sửa lại báo giá"
                       >
-                        <Text style={[styles.uploadBtnText, { color: '#334155' }]}>Sửa lại</Text>
+                        <Text style={[styles.uploadBtnText, { color: colors.text }]}>Sửa lại</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1682,7 +1762,7 @@ export default function TechnicianOrderDetailScreen() {
             ) : startRepairEligible ? (
               !startRepairState.confirming ? (
                 <TouchableOpacity
-                  style={[styles.uploadBtn, { backgroundColor: colors.success }]}
+                  style={[styles.uploadBtn, { backgroundColor: colors.tone.success.text }]}
                   onPress={onStartRepairConfirm}
                   disabled={startRepairState.busy || startRepairState.needsVerify}
                   accessibilityRole="button"
@@ -1700,7 +1780,7 @@ export default function TechnicianOrderDetailScreen() {
                   </Text>
                   <View style={styles.uploadBtnRow}>
                     <TouchableOpacity
-                      style={[styles.uploadBtn, { backgroundColor: colors.success }]}
+                      style={[styles.uploadBtn, { backgroundColor: colors.tone.success.text }]}
                       onPress={onStartRepairSubmit}
                       disabled={startRepairState.busy}
                       accessibilityRole="button"
@@ -1719,7 +1799,7 @@ export default function TechnicianOrderDetailScreen() {
                       accessibilityRole="button"
                       accessibilityLabel="Hủy bắt đầu sửa chữa"
                     >
-                      <Text style={[styles.uploadBtnText, { color: '#334155' }]}>Hủy</Text>
+                      <Text style={[styles.uploadBtnText, { color: colors.text }]}>Hủy</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -1734,10 +1814,9 @@ export default function TechnicianOrderDetailScreen() {
               <Text style={styles.jobMeta}>{startRepairState.error}</Text>
             </View>
           )}
-        </View>
+        </CollapsibleCard>
 
-          <View style={styles.jobCard}>
-            <Text style={styles.sectionTitle}>Chi phí phát sinh ngoài phạm vi ban đầu</Text>
+          <CollapsibleCard key={`proposal-${repairOpen}`} styles={styles} colors={colors} title="Đề xuất chi phí phát sinh" defaultOpen={repairOpen}>
             <Text style={styles.jobMeta}>
               Đề xuất thêm một dòng nhân công khi phát sinh ngoài dự kiến.
               Đây là đề xuất, khách cần duyệt, chưa thanh toán.
@@ -1824,18 +1903,17 @@ export default function TechnicianOrderDetailScreen() {
                       </View>
                       {!!item.warrantyDays && (
                         <View style={styles.acWarrantyBadge}>
-                          <Ionicons name="shield-checkmark" size={11} color={colors.success} />
+                          <ShieldCheck size={12} color={colors.tone.success.fg} strokeWidth={2} />
                           <Text style={styles.acWarrantyBadgeText}>{item.warrantyDays} ngày</Text>
                         </View>
                       )}
                       <TouchableOpacity
-                        style={{ marginLeft: 'auto' }}
+                        style={styles.iconBtn}
                         onPress={() => setAcExtraParts((prev) => prev.filter((i) => i.partCatalogId !== item.partCatalogId))}
-                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                         accessibilityRole="button"
                         accessibilityLabel="Xóa linh kiện"
                       >
-                        <Ionicons name="trash" size={16} color={colors.error} />
+                        <Trash2 size={18} color={colors.error} strokeWidth={1.75} />
                       </TouchableOpacity>
                     </View>
                     <Text style={styles.resultNameText}>{item.description}</Text>
@@ -1850,7 +1928,7 @@ export default function TechnicianOrderDetailScreen() {
                             accessibilityRole="button"
                             accessibilityLabel="Giảm số lượng"
                           >
-                            <Ionicons name="remove" size={13} color={colors.text} />
+                            <Minus size={16} color={colors.text} strokeWidth={2} />
                           </TouchableOpacity>
                           <Text style={styles.qtyTextSmall}>{item.quantity}</Text>
                           <TouchableOpacity
@@ -1860,13 +1938,13 @@ export default function TechnicianOrderDetailScreen() {
                             accessibilityRole="button"
                             accessibilityLabel="Tăng số lượng"
                           >
-                            <Ionicons name="add" size={13} color={colors.text} />
+                            <Plus size={16} color={colors.text} strokeWidth={2} />
                           </TouchableOpacity>
                         </View>
                       </View>
                       <View style={{ flex: 2, alignItems: 'flex-end' }}>
                         <Text style={styles.acItemFieldLabel}>Đơn giá kho</Text>
-                        <Text style={styles.acPriceText}>{item.unitPrice.toLocaleString('vi-VN')}đ</Text>
+                        <Text style={styles.acPriceText}>{formatVnd(item.unitPrice)}</Text>
                       </View>
                     </View>
                   </View>
@@ -1893,7 +1971,7 @@ export default function TechnicianOrderDetailScreen() {
                           }
                         }, 250);
                       }}
-                      placeholder="Tìm linh kiện FixHome, SKU..."
+                      placeholder="Tìm linh kiện FixHome, SKU…"
                       placeholderTextColor={colors.muted}
                       autoFocus
                     />
@@ -1925,7 +2003,7 @@ export default function TechnicianOrderDetailScreen() {
                         }}
                       >
                         <Text style={[styles.jobMeta, { flex: 1 }]}>{part.name}{part.sku ? ` (${part.sku})` : ''}</Text>
-                        <Text style={styles.jobMeta}>{part.sellingPrice.toLocaleString('vi-VN')}đ</Text>
+                        <Text style={styles.jobMeta}>{formatVnd(part.sellingPrice)}</Text>
                       </TouchableOpacity>
                     ))}
                     <TouchableOpacity onPress={() => { setAcShowPartSearch(false); setAcPartQuery(''); setAcPartResults([]); }}>
@@ -1937,15 +2015,15 @@ export default function TechnicianOrderDetailScreen() {
                 {acExtraParts.length > 0 && (
                   <View style={styles.acFulfillmentBox}>
                     <View style={styles.acItemBadgeRow}>
-                      <Ionicons name="cube" size={14} color={colors.primaryStrong} />
+                      <Package size={16} color={colors.primaryStrong} strokeWidth={1.75} />
                       <Text style={[styles.fieldLabel, { marginTop: 0 }]}>Phương thức nhận linh kiện FixHome:</Text>
                     </View>
                     <TouchableOpacity style={styles.radioRow} onPress={() => setAcFulfillment('pickup')}>
-                      <Ionicons name={acFulfillment === 'pickup' ? 'radio-button-on' : 'radio-button-off'} size={18} color={colors.primaryStrong} />
+                      {acFulfillment === 'pickup' ? <CircleDot size={20} color={colors.primaryStrong} strokeWidth={1.75} /> : <Circle size={20} color={colors.primaryStrong} strokeWidth={1.75} />}
                       <Text style={styles.jobMeta}>Nhận tại kho FixHome (Tự đến lấy — 0đ)</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.radioRow} onPress={() => setAcFulfillment('delivery')}>
-                      <Ionicons name={acFulfillment === 'delivery' ? 'radio-button-on' : 'radio-button-off'} size={18} color={colors.primaryStrong} />
+                      {acFulfillment === 'delivery' ? <CircleDot size={20} color={colors.primaryStrong} strokeWidth={1.75} /> : <Circle size={20} color={colors.primaryStrong} strokeWidth={1.75} />}
                       <Text style={styles.jobMeta}>Giao đến tận nơi</Text>
                     </TouchableOpacity>
                     {acFulfillment === 'delivery' && (
@@ -1977,11 +2055,11 @@ export default function TechnicianOrderDetailScreen() {
                 {proposalState.confirming && proposalState.proposedTotalText ? (
                   <View style={styles.evidenceError}>
                     <Text style={styles.jobMeta}>
-                      Đề xuất thêm: {proposalState.proposedTotalText} — khách cần duyệt, chưa thanh toán.
+                      Đề xuất thêm: {vndText(proposalState.proposedTotalText)} — khách cần duyệt, chưa thanh toán.
                     </Text>
                     <View style={styles.uploadBtnRow}>
                       <TouchableOpacity
-                        style={[styles.uploadBtn, { backgroundColor: colors.success }]}
+                        style={[styles.uploadBtn, { backgroundColor: colors.tone.success.text }]}
                         onPress={onProposalSubmit}
                         disabled={proposalState.busy}
                         accessibilityRole="button"
@@ -2000,7 +2078,7 @@ export default function TechnicianOrderDetailScreen() {
                         accessibilityRole="button"
                         accessibilityLabel="Sửa lại đề xuất chi phí"
                       >
-                        <Text style={[styles.uploadBtnText, { color: '#334155' }]}>Sửa lại</Text>
+                        <Text style={[styles.uploadBtnText, { color: colors.text }]}>Sửa lại</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -2022,10 +2100,9 @@ export default function TechnicianOrderDetailScreen() {
                 <Text style={styles.jobMeta}>{proposalState.error}</Text>
               </View>
             )}
-          </View>
+          </CollapsibleCard>
 
-          <View style={styles.jobCard}>
-            <Text style={styles.sectionTitle}>5. Ảnh hoàn tất sau sửa & Yêu cầu nghiệm thu</Text>
+          <CollapsibleCard key={`after-${repairOpen}`} styles={styles} colors={colors} title="Ảnh sau sửa chữa" defaultOpen={repairOpen}>
             {!canUploadAfter ? (
               <Text style={styles.jobMeta}>
                 Ảnh sau sửa chữa chỉ tải được khi đơn đang sửa và chưa yêu cầu hoàn thành.
@@ -2042,7 +2119,7 @@ export default function TechnicianOrderDetailScreen() {
                   accessibilityLabel="Kiểm tra bằng chứng sau sửa chữa"
                 >
                   <Text style={styles.retryText}>
-                    {afterUploadState.busy ? 'Đang kiểm tra...' : 'Kiểm tra bằng chứng'}
+                    {afterUploadState.busy ? 'Đang kiểm tra…' : 'Kiểm tra bằng chứng'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -2058,7 +2135,7 @@ export default function TechnicianOrderDetailScreen() {
                 </Text>
                 <View style={styles.uploadBtnRow}>
                   <TouchableOpacity
-                    style={[styles.uploadBtn, { backgroundColor: colors.success }]}
+                    style={[styles.uploadBtn, { backgroundColor: colors.tone.success.text }]}
                     onPress={onUploadAfter}
                     disabled={afterUploadState.busy}
                     accessibilityRole="button"
@@ -2077,7 +2154,7 @@ export default function TechnicianOrderDetailScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Hủy ảnh đã chọn"
                   >
-                    <Text style={[styles.uploadBtnText, { color: '#334155' }]}>Hủy</Text>
+                    <Text style={[styles.uploadBtnText, { color: colors.text }]}>Hủy</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -2116,16 +2193,15 @@ export default function TechnicianOrderDetailScreen() {
                 )}
               </View>
             )}
-          </View>
+          </CollapsibleCard>
 
-          <View style={styles.jobCard}>
-            <Text style={styles.sectionTitle}>6. Khách hàng nghiệm thu & thanh toán</Text>
+          <CollapsibleCard key={`completion-${completionOpen}`} styles={styles} colors={colors} title="Nghiệm thu và thanh toán" defaultOpen={completionOpen}>
             <Text style={styles.jobMeta}>
               Quy trình: Khách nghiệm thu dịch vụ đạt chuẩn → Thanh toán (tiền mặt hoặc online) → Hệ thống tự hoàn tất đơn.
             </Text>
             {String(order.status).toUpperCase() === 'COMPLETED' ? (
               <View style={styles.evidenceError}>
-                <Text style={[styles.jobMeta, { color: colors.success, fontWeight: '700' }]}>
+                <Text style={[styles.jobMeta, { color: colors.tone.success.text, fontWeight: '700' }]}>
                   Đơn hàng đã hoàn tất thành công. Nghiệm thu, thanh toán và tiền công đã được ghi nhận.
                 </Text>
               </View>
@@ -2137,7 +2213,7 @@ export default function TechnicianOrderDetailScreen() {
                     style={[
                       styles.jobMeta,
                       styles.completionStepStatus,
-                      { color: order.customerConfirmed ? colors.success : '#B45309' },
+                      { color: order.customerConfirmed ? colors.tone.success.text : colors.tone.warning.text },
                     ]}
                   >
                     {order.customerConfirmed ? 'Đã nghiệm thu' : 'Chờ khách bấm nghiệm thu'}
@@ -2149,7 +2225,7 @@ export default function TechnicianOrderDetailScreen() {
                     style={[
                       styles.jobMeta,
                       styles.completionStepStatus,
-                      { color: String(order.paymentStatus).toUpperCase() === 'PAID' ? colors.success : '#B45309' },
+                      { color: String(order.paymentStatus).toUpperCase() === 'PAID' ? colors.tone.success.text : colors.tone.warning.text },
                     ]}
                   >
                     {String(order.paymentStatus).toUpperCase() === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}
@@ -2159,13 +2235,13 @@ export default function TechnicianOrderDetailScreen() {
                   Có thu tiền mặt: khai báo ở thẻ &quot;Thanh toán tiền mặt&quot; bên dưới. Khách trả online: chỉ cần chờ khách thanh toán qua app.
                 </Text>
                 <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button">
-                  <Text style={styles.retryText}>{refreshing ? 'Đang kiểm tra...' : 'Kiểm tra trạng thái nghiệm thu/thanh toán'}</Text>
+                  <Text style={styles.retryText}>{refreshing ? 'Đang kiểm tra…' : 'Kiểm tra trạng thái nghiệm thu/thanh toán'}</Text>
                 </TouchableOpacity>
               </View>
             ) : completionEligible ? (
               !completionState.confirming ? (
                 <TouchableOpacity
-                  style={[styles.uploadBtn, { backgroundColor: '#7C3AED' }]}
+                  style={[styles.uploadBtn, { backgroundColor: colors.primaryStrong }]}
                   onPress={onCompletionConfirm}
                   disabled={completionState.busy || completionState.needsVerify}
                   accessibilityRole="button"
@@ -2178,7 +2254,7 @@ export default function TechnicianOrderDetailScreen() {
                   <Text style={styles.jobMeta}>{REQUEST_COMPLETION_CONFIRM_COPY}</Text>
                   <View style={styles.uploadBtnRow}>
                     <TouchableOpacity
-                      style={[styles.uploadBtn, { backgroundColor: colors.success }]}
+                      style={[styles.uploadBtn, { backgroundColor: colors.tone.success.text }]}
                       onPress={onCompletionSubmit}
                       disabled={completionState.busy}
                       accessibilityRole="button"
@@ -2197,7 +2273,7 @@ export default function TechnicianOrderDetailScreen() {
                       accessibilityRole="button"
                       accessibilityLabel="Hủy yêu cầu hoàn thành"
                     >
-                      <Text style={[styles.uploadBtnText, { color: '#334155' }]}>Hủy</Text>
+                      <Text style={[styles.uploadBtnText, { color: colors.text }]}>Hủy</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -2212,28 +2288,28 @@ export default function TechnicianOrderDetailScreen() {
                 <Text style={styles.jobMeta}>{completionState.error}</Text>
               </View>
             )}
-          </View>
+          </CollapsibleCard>
 
-          <Text style={styles.groupHeading}>CHI TIẾT & LỊCH SỬ ĐƠN</Text>
+          <Text style={styles.groupHeading}>Chi tiết và lịch sử đơn</Text>
 
           <View style={styles.jobCard}>
             <Text style={styles.sectionTitle}>Chi phí</Text>
             {sections.laborText !== null && (
               <View style={styles.row}>
                 <Text style={styles.jobMeta}>Nhân công</Text>
-                <Text style={styles.jobMeta}>{sections.laborText}</Text>
+                <Text style={styles.jobMeta}>{vndText(sections.laborText)}</Text>
               </View>
             )}
             {sections.partsText !== null && (
               <View style={styles.row}>
                 <Text style={styles.jobMeta}>Vật tư</Text>
-                <Text style={styles.jobMeta}>{sections.partsText}</Text>
+                <Text style={styles.jobMeta}>{vndText(sections.partsText)}</Text>
               </View>
             )}
             {sections.totalText !== null ? (
               <View style={styles.row}>
                 <Text style={styles.totalLabel}>Tổng cộng</Text>
-                <Text style={styles.totalValue}>{sections.totalText}</Text>
+                <Text style={styles.totalValue}>{vndText(sections.totalText)}</Text>
               </View>
             ) : (
               <Text style={styles.jobMeta}>Chưa có thông tin giá</Text>
@@ -2268,7 +2344,7 @@ export default function TechnicianOrderDetailScreen() {
               {order.timeline!.map((entry, index) => (
                 <View key={`${entry.status}-${entry.timestamp}-${index}`} style={styles.row}>
                   <Text style={styles.jobMeta}>{entry.title || entry.status}</Text>
-                  <Text style={styles.jobMeta}>{new Date(entry.timestamp).toLocaleString('vi-VN')}</Text>
+                  <Text style={styles.jobMeta}>{formatDateTime(entry.timestamp)}</Text>
                 </View>
               ))}
             </View>
@@ -2289,7 +2365,7 @@ export default function TechnicianOrderDetailScreen() {
           <View style={styles.jobCard}>
             <Text style={styles.sectionTitle}>Ảnh thực tế</Text>
             {evidenceState.loading && evidenceState.photos.length === 0 && !evidenceState.error ? (
-              <Text style={styles.jobMeta}>Đang tải ảnh bằng chứng...</Text>
+              <Text style={styles.jobMeta}>Đang tải ảnh bằng chứng…</Text>
             ) : evidenceState.photos.length === 0 && !evidenceState.error ? (
               <Text style={styles.jobMeta}>Chưa có ảnh bằng chứng cho đơn này.</Text>
             ) : (
@@ -2342,7 +2418,7 @@ export default function TechnicianOrderDetailScreen() {
           <View style={styles.jobCard}>
             <Text style={styles.sectionTitle}>Hóa đơn</Text>
             {invoiceState.loading && !invoiceState.invoice && !invoiceState.error ? (
-              <Text style={styles.jobMeta}>Đang tải hóa đơn...</Text>
+              <Text style={styles.jobMeta}>Đang tải hóa đơn…</Text>
             ) : invoiceState.invoice ? (
               <>
                 <View style={styles.row}>
@@ -2352,19 +2428,19 @@ export default function TechnicianOrderDetailScreen() {
                 {invoiceState.invoice.laborText !== null && (
                   <View style={styles.row}>
                     <Text style={styles.jobMeta}>Nhân công</Text>
-                    <Text style={styles.jobMeta}>{invoiceState.invoice.laborText}</Text>
+                    <Text style={styles.jobMeta}>{vndText(invoiceState.invoice.laborText)}</Text>
                   </View>
                 )}
                 {invoiceState.invoice.partsText !== null && (
                   <View style={styles.row}>
                     <Text style={styles.jobMeta}>Vật tư</Text>
-                    <Text style={styles.jobMeta}>{invoiceState.invoice.partsText}</Text>
+                    <Text style={styles.jobMeta}>{vndText(invoiceState.invoice.partsText)}</Text>
                   </View>
                 )}
                 {invoiceState.invoice.totalText !== null ? (
                   <View style={styles.row}>
                     <Text style={styles.totalLabel}>Tổng cộng</Text>
-                    <Text style={styles.totalValue}>{invoiceState.invoice.totalText}</Text>
+                    <Text style={styles.totalValue}>{vndText(invoiceState.invoice.totalText)}</Text>
                   </View>
                 ) : (
                   <Text style={styles.jobMeta}>Chưa rõ tổng tiền.</Text>
@@ -2373,12 +2449,12 @@ export default function TechnicianOrderDetailScreen() {
                   <Text style={styles.jobMeta}>Phát hành: {invoiceState.invoice.issuedText}</Text>
                 )}
                 {!!invoiceState.invoice.paidText && (
-                  <Text style={styles.jobMeta}>Đã thanh toán: {invoiceState.invoice.paidText}</Text>
+                  <Text style={styles.jobMeta}>Đã thanh toán: {vndText(invoiceState.invoice.paidText)}</Text>
                 )}
                 {invoiceState.invoice.items.map((item) => (
                   <View key={item.id} style={styles.row}>
                     <Text style={styles.jobMeta}>{item.description} × {item.quantity}</Text>
-                    <Text style={styles.jobMeta}>{item.lineTotalText ?? '—'}</Text>
+                    <Text style={styles.jobMeta}>{vndText(item.lineTotalText) ?? '—'}</Text>
                   </View>
                 ))}
               </>
@@ -2403,7 +2479,7 @@ export default function TechnicianOrderDetailScreen() {
                 Chỉ khai báo đúng tổng tiền Hệ thống. Khai báo của kỹ thuật viên chưa phải đã thanh toán; khách hàng phải xác nhận riêng.
               </Text>
               {cashState.loading ? (
-                <Text style={styles.jobMeta}>Đang kiểm tra đối soát tiền mặt...</Text>
+                <Text style={styles.jobMeta}>Đang kiểm tra đối soát tiền mặt…</Text>
               ) : cashState.status === 'NONE' ? (
                 <TouchableOpacity
                   style={[styles.uploadBtn, { backgroundColor: colors.primaryStrong, alignSelf: 'flex-start' }]}
@@ -2416,21 +2492,21 @@ export default function TechnicianOrderDetailScreen() {
                     <ActivityIndicator size="small" color={colors.surface} />
                   ) : (
                     <Text style={styles.uploadBtnText}>
-                      Đã nhận {cashEligible.amount.toLocaleString('vi-VN')}đ tiền mặt
+                      Đã nhận {formatVnd(cashEligible.amount)} tiền mặt
                     </Text>
                   )}
                 </TouchableOpacity>
               ) : cashState.status === 'PENDING_CONFIRMATION' ? (
-                <Text style={[styles.jobMeta, { color: '#92400E', fontWeight: '700' }]}>
-                  Đã khai báo {cashState.declaredAmount?.toLocaleString('vi-VN') ?? '—'}đ; đang chờ khách xác nhận.
+                <Text style={[styles.jobMeta, { color: colors.tone.warning.text, fontWeight: '700' }]}>
+                  Đã khai báo {formatVnd(cashState.declaredAmount)}; đang chờ khách xác nhận.
                 </Text>
               ) : cashState.status === 'CONFIRMED' ? (
-                <Text style={[styles.jobMeta, { color: '#047857', fontWeight: '700' }]}>
+                <Text style={[styles.jobMeta, { color: colors.tone.success.text, fontWeight: '700' }]}>
                   Hệ thống đã xác nhận đối soát tiền mặt.
                 </Text>
               ) : (
-                <Text style={[styles.jobMeta, { color: '#B91C1C', fontWeight: '700' }]}>
-                  Đối soát DISPUTED; cần Support Case xử lý.
+                <Text style={[styles.jobMeta, { color: colors.tone.danger.text, fontWeight: '700' }]}>
+                  Đối soát tiền mặt đang có tranh chấp. Cần xử lý qua yêu cầu hỗ trợ.
                 </Text>
               )}
               {cashState.needsVerify && (
@@ -2439,7 +2515,7 @@ export default function TechnicianOrderDetailScreen() {
                 </TouchableOpacity>
               )}
               {!!cashState.error && (
-                <Text style={[styles.jobMeta, { color: '#B91C1C' }]}>{cashState.error}</Text>
+                <Text style={[styles.jobMeta, { color: colors.tone.danger.text }]}>{cashState.error}</Text>
               )}
             </View>
           )}
@@ -2447,7 +2523,7 @@ export default function TechnicianOrderDetailScreen() {
           <View style={styles.jobCard}>
             <Text style={styles.sectionTitle}>Chi phí phát sinh</Text>
             {costsState.loading && costsState.requests.length === 0 && !costsState.error ? (
-              <Text style={styles.jobMeta}>Đang tải chi phí phát sinh...</Text>
+              <Text style={styles.jobMeta}>Đang tải chi phí phát sinh…</Text>
             ) : costsState.requests.length === 0 && !costsState.error ? (
               <Text style={styles.jobMeta}>Chưa có yêu cầu chi phí phát sinh.</Text>
             ) : (
@@ -2458,13 +2534,13 @@ export default function TechnicianOrderDetailScreen() {
                   {request.laborText !== null && (
                     <View style={styles.row}>
                       <Text style={styles.jobMeta}>Nhân công đề xuất</Text>
-                      <Text style={styles.jobMeta}>{request.laborText}</Text>
+                      <Text style={styles.jobMeta}>{vndText(request.laborText)}</Text>
                     </View>
                   )}
                   {request.partsText !== null && (
                     <View style={styles.row}>
                       <Text style={styles.jobMeta}>Vật tư đề xuất</Text>
-                      <Text style={styles.jobMeta}>{request.partsText}</Text>
+                      <Text style={styles.jobMeta}>{vndText(request.partsText)}</Text>
                     </View>
                   )}
                   {!!request.expiresText && (
@@ -2473,7 +2549,7 @@ export default function TechnicianOrderDetailScreen() {
                   {request.items.map((item) => (
                     <View key={item.id} style={styles.row}>
                       <Text style={styles.jobMeta}>{item.description} × {item.quantity}</Text>
-                      <Text style={styles.jobMeta}>{item.lineTotalText ?? '—'}</Text>
+                      <Text style={styles.jobMeta}>{vndText(item.lineTotalText) ?? '—'}</Text>
                     </View>
                   ))}
                 </View>
@@ -2494,262 +2570,118 @@ export default function TechnicianOrderDetailScreen() {
   );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.surface,
-  },
+const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.surface },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.divider,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  headerSpacer: {
-    width: 24,
-  },
-  scrollContent: {
-    padding: 16,
-    gap: 12,
-    backgroundColor: colors.background,
-    flexGrow: 1,
-  },
-  centerLoading: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-    gap: 8,
-  },
-  emptyTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.text,
-    marginTop: 16,
-  },
-  emptyDesc: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  retryBtn: {
-    padding: 12,
-    marginTop: 8,
-  },
-  retryText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  acPartRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors.divider },
-  acAddPartBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, backgroundColor: colors.primaryTint, marginTop: 4 },
-  acAddPartBtnText: { fontSize: 12, fontWeight: '700', color: colors.primaryStrong },
-  acPartResultItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.divider },
-  acFulfillmentBox: { marginTop: 4, marginBottom: 4, gap: 4, backgroundColor: colors.primaryTint, borderRadius: 10, padding: 12 },
-  chipBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
-  chipBtnActive: { backgroundColor: colors.primaryStrong, borderColor: colors.primaryStrong },
+  headerTitle: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text },
+  headerBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  scrollContent: { padding: 16, paddingBottom: 48, gap: 12, backgroundColor: colors.background, flexGrow: 1 },
+  centerLoading: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
+  loadingText: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 8 },
+  emptyTitle: { fontSize: 18, lineHeight: 26, fontWeight: '700', color: colors.text, marginTop: 8 },
+  emptyDesc: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
+  retryBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, marginTop: 8 },
+  retryText: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong, paddingVertical: 10 },
+
+  acPartResultItem: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  acFulfillmentBox: { marginTop: 4, marginBottom: 4, gap: 4, backgroundColor: colors.primarySoft, borderRadius: 14, padding: 12 },
   acItemsHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
-  acAddPartLink: { fontSize: 12, fontWeight: '700', color: colors.primaryStrong },
-  acItemCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginTop: 8, gap: 6, backgroundColor: colors.background },
-  acItemBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  acBadgeLabor: { backgroundColor: colors.primaryTint, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  acBadgeParts: { backgroundColor: '#DBEAFE', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  acBadgeText: { fontSize: 10, fontWeight: '800', color: colors.primaryStrong, letterSpacing: 0.4 },
-  acWarrantyBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#DCFCE7', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
-  acWarrantyBadgeText: { fontSize: 10, fontWeight: '700', color: colors.success },
-  resultNameText: { fontSize: 13, fontWeight: '700', color: colors.text },
-  acItemFieldsRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-end' },
-  acItemFieldLabel: { fontSize: 11, color: colors.textSecondary, marginBottom: 3 },
-  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  qtyBtnSmall: { width: 24, height: 24, borderRadius: 5, backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' },
-  qtyTextSmall: { fontSize: 13, fontWeight: '700', color: colors.text, minWidth: 16, textAlign: 'center' },
-  acPriceText: { fontSize: 14, fontWeight: '800', color: colors.text },
-  radioRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
-  errorBanner: {
-    padding: 16,
-    gap: 8,
-    alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    borderRadius: 8,
-  },
+  acAddPartLink: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong, paddingVertical: 12 },
+  acItemCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 12, marginTop: 8, gap: 8, backgroundColor: colors.background },
+  acItemBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  acBadgeLabor: { backgroundColor: colors.tone.repair.bg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
+  acBadgeParts: { backgroundColor: colors.tone.info.bg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
+  acBadgeText: { fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.tone.repair.text },
+  acWarrantyBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.tone.success.bg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
+  acWarrantyBadgeText: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.tone.success.text },
+  resultNameText: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.text },
+  acItemFieldsRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-end' },
+  acItemFieldLabel: { fontSize: 12, lineHeight: 16, color: colors.textSecondary, marginBottom: 4 },
+  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  qtyBtnSmall: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  qtyTextSmall: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: colors.text, minWidth: 24, textAlign: 'center' },
+  acPriceText: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.text },
+  radioRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
+  iconBtn: { minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center', marginLeft: 'auto' },
+  errorBanner: { padding: 16, gap: 8, alignItems: 'center', backgroundColor: colors.tone.warning.bg, borderRadius: 14 },
+
   jobCard: {
     backgroundColor: colors.surface,
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 16,
-    gap: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  nextStepCard: {
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    backgroundColor: colors.primarySoft,
-  },
-  nextStepEyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#1D4ED8',
-    letterSpacing: 0.6,
-  },
-  groupHeading: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.textSecondary,
-    letterSpacing: 0.6,
-    marginTop: 8,
-    marginBottom: -4,
-  },
-  nextStepAction: {
-    flex: 0,
-    alignSelf: 'stretch',
-    backgroundColor: colors.primaryStrong,
-    marginTop: 6,
-  },
-  nextStepWait: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: '#92400E',
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    marginBottom: 6,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  jobTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  jobMeta: {
-    fontSize: 13,
-    color: '#334155',
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  completionStepRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 4,
-  },
-  completionStepStatus: {
-    fontWeight: '700',
-    textAlign: 'right',
-  },
-  evidenceItem: {
-    gap: 4,
-  },
-  evidenceThumb: {
-    width: '100%',
-    height: 180,
-    borderRadius: 12,
-    backgroundColor: colors.divider,
-  },
-  evidencePlaceholder: {
-    height: 120,
-    borderRadius: 12,
-    backgroundColor: colors.divider,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 12,
-  },
-  evidenceError: {
     gap: 8,
-    alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    borderRadius: 8,
-    padding: 12,
-  },
-  uploadBtnRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  uploadBtn: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  uploadBtnText: {
-    color: colors.surface,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.text,
-    marginTop: 4,
-  },
-  fieldInput: {
-    fontSize: 13,
-    color: colors.text,
-    backgroundColor: colors.background,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  fieldError: {
-    fontSize: 12,
-    color: colors.error,
+  summaryTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  caption: { fontSize: 12, lineHeight: 16, fontWeight: '500', color: colors.textSecondary },
+  iconRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  rowIcon: { marginTop: 2 },
+  iconRowText: { flex: 1, fontSize: 14, lineHeight: 20, color: colors.textSecondary },
+
+  stepper: { flexDirection: 'row', alignItems: 'flex-start', paddingTop: 4 },
+  stepItem: { flex: 1, alignItems: 'center', gap: 4 },
+  stepDotRow: { flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch' },
+  stepLine: { flex: 1, height: 2, backgroundColor: colors.border },
+  stepLineDone: { backgroundColor: colors.primaryStrong },
+  stepDot: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.border, backgroundColor: colors.surface },
+  stepDotDone: { backgroundColor: colors.primaryStrong, borderColor: colors.primaryStrong },
+  stepDotCurrent: { borderColor: colors.primaryStrong },
+  stepDotInner: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primaryStrong },
+  stepLabel: { fontSize: 12, lineHeight: 16, color: colors.textSecondary, textAlign: 'center' },
+  stepLabelCurrent: { color: colors.text, fontWeight: '700' },
+
+  nextStepCard: { borderColor: colors.primaryTint, backgroundColor: colors.primarySoft },
+  nextStepEyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.primaryStrong },
+  groupHeading: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.textSecondary, marginTop: 8 },
+  nextStepAction: { flex: 0, alignSelf: 'stretch', backgroundColor: colors.primaryStrong, marginTop: 6 },
+  nextStepWait: { fontSize: 14, lineHeight: 20, color: colors.tone.warning.text, fontWeight: '600', marginTop: 4 },
+
+  jobTitle: { fontSize: 18, lineHeight: 26, fontWeight: '700', color: colors.text },
+  sectionTitle: { fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.text },
+  jobMeta: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
+  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  completionStepRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 4, marginBottom: 4 },
+  completionStepStatus: { fontWeight: '700', textAlign: 'right' },
+
+  collapseHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 44 },
+  collapseTitle: { flex: 1, fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.text },
+  collapseBody: { gap: 8, marginTop: 4 },
+
+  evidenceItem: { gap: 4 },
+  evidenceThumb: { width: '100%', height: 180, borderRadius: 14, backgroundColor: colors.divider },
+  evidencePlaceholder: { height: 120, borderRadius: 14, backgroundColor: colors.divider, justifyContent: 'center', alignItems: 'center', padding: 12 },
+  evidenceError: { gap: 8, alignItems: 'center', backgroundColor: colors.tone.warning.bg, borderRadius: 14, padding: 12 },
+  uploadBtnRow: { flexDirection: 'row', gap: 12 },
+  uploadBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 48, paddingHorizontal: 12, borderRadius: 14 },
+  uploadBtnText: { color: colors.surface, fontSize: 14, lineHeight: 20, fontWeight: '700' },
+  fieldLabel: { fontSize: 14, lineHeight: 20, fontWeight: '500', color: colors.text, marginTop: 4 },
+  fieldInput: {
+    fontSize: 16,
+    color: colors.text,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    minHeight: 48,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: colors.textSecondary,
   },
+  fieldError: { fontSize: 12, lineHeight: 16, color: colors.error },
   quoteInfoNote: { color: colors.primaryStrong, fontWeight: '600' },
-  fixedPriceBox: { backgroundColor: colors.background, borderRadius: 10, padding: 12, gap: 4, marginTop: 8 },
+  fixedPriceBox: { backgroundColor: colors.background, borderRadius: 14, padding: 12, gap: 4, marginTop: 8 },
   fixedPriceTotalText: { fontWeight: '700', color: colors.text },
   startRepairDivider: { height: 1, backgroundColor: colors.divider, marginVertical: 12 },
-  totalLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  totalValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.primary,
-  },
+  totalLabel: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.text },
+  totalValue: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong },
 });

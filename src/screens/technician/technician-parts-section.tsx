@@ -16,13 +16,14 @@ import {
   Modal,
   Alert,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { AlertCircle, CheckCircle2, Minus, Plus, QrCode, RefreshCw, Send, Trash2, X, Package } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { useAppTheme } from '../../constants/theme';
 import { partRequestsApi, type PartRequest, type FulfillmentMethod } from '../../api/part-requests.api';
 import { partsCatalogApi, type FixHomePart } from '../../api/parts-catalog.api';
 import { extractApiErrorMessage } from '../../utils/input-validation';
+import { formatDateTime, formatVnd } from '../../utils/format';
 
 const CATEGORY_TABS = [
   { label: 'Tất cả', value: '' },
@@ -59,20 +60,18 @@ function statusLabel(status: PartRequest['status']): string {
     case 'delivering': return 'Đang giao hàng';
     case 'received': return 'Đã nhận linh kiện';
     case 'completed': return 'Đã hoàn thành';
-    case 'cancelled': return 'Đã huỷ';
+    case 'cancelled': return 'Đã hủy';
     default: return status;
   }
 }
 
 function statusColor(status: PartRequest['status'], colors: any): string {
   switch (status) {
-    case 'requested': return '#D97706';
-    case 'ready': return '#2563EB';
-    case 'delivering': return '#7C3AED';
-    case 'received': return colors.success;
-    case 'completed': return colors.textSecondary;
-    case 'cancelled': return colors.error;
-    default: return colors.textSecondary;
+    case 'requested': return colors.tone.warning.text;
+    case 'ready': return colors.tone.repair.text;
+    case 'delivering': return colors.tone.violet.text;
+    case 'received': return colors.tone.success.text;
+    default: return colors.tone.neutral.text;
   }
 }
 
@@ -302,36 +301,36 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
           {loading ? (
             <ActivityIndicator size="small" color={colors.primary} />
           ) : (
-            <Ionicons name="refresh-outline" size={18} color={colors.primary} />
+            <RefreshCw size={18} color={colors.primaryStrong} strokeWidth={1.75} />
           )}
         </TouchableOpacity>
       </View>
 
       {!!actionSuccess && (
         <View style={styles.successBanner}>
-          <Ionicons name="checkmark-circle" size={15} color={colors.success} />
+          <CheckCircle2 size={16} color={colors.tone.success.fg} strokeWidth={1.75} />
           <Text style={[styles.jobMeta, { flex: 1 }]}>{actionSuccess}</Text>
         </View>
       )}
       {!!actionError && (
         <View style={styles.errorBanner}>
-          <Ionicons name="alert-circle" size={15} color={colors.error} />
+          <AlertCircle size={16} color={colors.tone.danger.fg} strokeWidth={1.75} />
           <Text style={[styles.jobMeta, { flex: 1 }]}>{actionError}</Text>
         </View>
       )}
 
       <View style={styles.ruleBanner}>
-        <Text style={styles.ruleBannerTitle}>Quy tắc quản lý linh kiện FixHome:</Text>
+        <Text style={styles.ruleBannerTitle}>Quy tắc quản lý linh kiện FixHome</Text>
         <Text style={styles.jobMeta}>• Linh kiện dự kiến: lấy trước từ kho, chưa tính tiền khách.</Text>
-        <Text style={styles.jobMeta}>• Khách chỉ trả cho linh kiện thực tế ĐÃ DÙNG và đã duyệt qua báo giá/chi phí phát sinh.</Text>
-        <Text style={styles.jobMeta}>• Linh kiện không dùng: đánh dấu HOÀN TRẢ, không tính chi phí.</Text>
+        <Text style={styles.jobMeta}>• Khách chỉ trả cho linh kiện thực tế đã dùng và đã duyệt qua báo giá hoặc chi phí phát sinh.</Text>
+        <Text style={styles.jobMeta}>• Linh kiện không dùng: đánh dấu hoàn trả, không tính chi phí.</Text>
       </View>
 
       {isAccepted && !hasActivePreRepair && (
         <View style={styles.createBox}>
           {!showCreateForm ? (
             <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowCreateForm(true)}>
-              <Ionicons name="add" size={16} color={colors.surface} />
+              <Plus size={16} color={colors.surface} strokeWidth={2} />
               <Text style={styles.primaryBtnText}>Tạo yêu cầu linh kiện</Text>
             </TouchableOpacity>
           ) : (
@@ -342,7 +341,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                   style={[styles.chip, fulfillmentMethod === 'pickup' && styles.chipActive]}
                   onPress={() => setFulfillmentMethod('pickup')}
                 >
-                  <Text style={[styles.chipText, fulfillmentMethod === 'pickup' && styles.chipTextActive]}>🏪 Tự lấy tại kho</Text>
+                  <Text style={[styles.chipText, fulfillmentMethod === 'pickup' && styles.chipTextActive]}>Tự lấy tại kho</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.chip, fulfillmentMethod === 'delivery' && styles.chipActive]}
@@ -388,7 +387,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                       <View style={{ flex: 1 }}>
                         <Text style={styles.resultName}>{part.name}{part.sku ? ` (${part.sku})` : ''}</Text>
                       </View>
-                      <Text style={styles.resultPrice}>{part.sellingPrice.toLocaleString('vi-VN')}đ</Text>
+                      <Text style={styles.resultPrice}>{formatVnd(part.sellingPrice)}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -398,7 +397,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                 <View style={styles.spotlightCard}>
                   <Text style={styles.resultName}>{selectedPart.name}</Text>
                   <Text style={styles.jobMeta}>
-                    {selectedPart.sellingPrice.toLocaleString('vi-VN')}đ · {warrantyBadge(selectedPart.warrantyDays)}
+                    {formatVnd(selectedPart.sellingPrice)} · {warrantyBadge(selectedPart.warrantyDays)}
                   </Text>
                   <View style={styles.qtyRow}>
                     <TouchableOpacity
@@ -408,7 +407,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                       accessibilityRole="button"
                       accessibilityLabel="Giảm số lượng"
                     >
-                      <Ionicons name="remove" size={14} color={colors.text} />
+                      <Minus size={16} color={colors.text} strokeWidth={2} />
                     </TouchableOpacity>
                     <Text style={styles.qtyText}>{selectedQuantity}</Text>
                     <TouchableOpacity
@@ -418,7 +417,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                       accessibilityRole="button"
                       accessibilityLabel="Tăng số lượng"
                     >
-                      <Ionicons name="add" size={14} color={colors.text} />
+                      <Plus size={16} color={colors.text} strokeWidth={2} />
                     </TouchableOpacity>
                   </View>
                   <TextInput
@@ -429,7 +428,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                     placeholderTextColor={colors.muted}
                   />
                   <TouchableOpacity style={styles.primaryBtn} onPress={addItemToForm}>
-                    <Ionicons name="add" size={16} color={colors.surface} />
+                    <Plus size={16} color={colors.surface} strokeWidth={2} />
                     <Text style={styles.primaryBtnText}>Thêm vào danh sách</Text>
                   </TouchableOpacity>
                 </View>
@@ -442,7 +441,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                     <View key={item.partCatalogId} style={styles.selectedRow}>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.resultName}>{item.partName}</Text>
-                        <Text style={styles.jobMeta}>{item.price.toLocaleString('vi-VN')}đ × {item.quantity}</Text>
+                        <Text style={styles.jobMeta}>{formatVnd(item.price)} × {item.quantity}</Text>
                       </View>
                       <View style={styles.qtyRow}>
                         <TouchableOpacity
@@ -452,7 +451,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                           accessibilityRole="button"
                           accessibilityLabel="Giảm số lượng"
                         >
-                          <Ionicons name="remove" size={14} color={colors.text} />
+                          <Minus size={16} color={colors.text} strokeWidth={2} />
                         </TouchableOpacity>
                         <Text style={styles.qtyText}>{item.quantity}</Text>
                         <TouchableOpacity
@@ -462,7 +461,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                           accessibilityRole="button"
                           accessibilityLabel="Tăng số lượng"
                         >
-                          <Ionicons name="add" size={14} color={colors.text} />
+                          <Plus size={16} color={colors.text} strokeWidth={2} />
                         </TouchableOpacity>
                       </View>
                       <TouchableOpacity
@@ -472,7 +471,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                         accessibilityRole="button"
                         accessibilityLabel="Xóa linh kiện"
                       >
-                        <Ionicons name="trash" size={16} color={colors.error} />
+                        <Trash2 size={18} color={colors.error} strokeWidth={1.75} />
                       </TouchableOpacity>
                     </View>
                   ))}
@@ -492,7 +491,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                     <ActivityIndicator size="small" color={colors.surface} />
                   ) : (
                     <>
-                      <Ionicons name="send" size={14} color={colors.surface} />
+                      <Send size={16} color={colors.surface} strokeWidth={1.75} />
                       <Text style={styles.primaryBtnText}>Gửi yêu cầu tới Quản lý</Text>
                     </>
                   )}
@@ -508,7 +507,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
       ) : partRequests.length === 0 ? (
         !showCreateForm && (
           <View style={styles.emptyBox}>
-            <Ionicons name="cube-outline" size={28} color={colors.muted} />
+            <Package size={28} color={colors.muted} strokeWidth={1.5} />
             <Text style={styles.emptyTitle}>Chưa có yêu cầu linh kiện nào cho đơn này.</Text>
             <Text style={styles.jobMeta}>Nếu cần linh kiện dự kiến trước khi đi hoặc phát sinh khi sửa, hãy bấm &quot;Tạo yêu cầu linh kiện&quot; ở trên.</Text>
           </View>
@@ -526,10 +525,10 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                     <Text style={[styles.statusBadgeText, { color: statusColor(pr.status, colors) }]}>{statusLabel(pr.status)}</Text>
                   </View>
                   <Text style={styles.typeTag}>{pr.requestType === 'pre_repair' ? 'Trước sửa chữa' : 'Phát sinh khi sửa'}</Text>
-                  <Text style={styles.jobMeta}>{pr.fulfillmentMethod === 'delivery' ? '🚚 Giao hàng' : '📦 Tự lấy'}</Text>
+                  <Text style={styles.jobMeta}>{pr.fulfillmentMethod === 'delivery' ? 'Giao hàng' : 'Tự lấy'}</Text>
                 </View>
                 {!!pr.reason && <Text style={styles.jobMeta}>Lý do: {pr.reason}</Text>}
-                {pr.shippingFee > 0 && <Text style={styles.jobMeta}>Phí giao hàng: {pr.shippingFee.toLocaleString('vi-VN')}đ</Text>}
+                {pr.shippingFee > 0 && <Text style={styles.jobMeta}>Phí giao hàng: {formatVnd(pr.shippingFee)}</Text>}
 
                 {showReceive && (
                   receivingId === pr.id ? (
@@ -554,7 +553,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                   ) : (
                     <View style={styles.formActionsRow}>
                       <TouchableOpacity style={styles.primaryBtn} onPress={() => openScanner(pr.id)}>
-                        <Ionicons name="qr-code" size={16} color={colors.surface} />
+                        <QrCode size={16} color={colors.surface} strokeWidth={1.75} />
                         <Text style={styles.primaryBtnText}>Quét mã QR nhận hàng</Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={styles.ghostBtn} onPress={() => setReceivingId(pr.id)}>
@@ -565,8 +564,8 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                 )}
 
                 {!!pr.receivedAt && (
-                  <Text style={[styles.jobMeta, { color: colors.success }]}>
-                    Đã nhận lúc: {new Date(pr.receivedAt).toLocaleString('vi-VN')}
+                  <Text style={[styles.jobMeta, { color: colors.tone.success.text }]}>
+                    Đã nhận lúc: {formatDateTime(pr.receivedAt)}
                   </Text>
                 )}
 
@@ -576,7 +575,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                       <Text style={styles.resultName}>{item.partNameSnapshot}</Text>
                       <Text style={styles.jobMeta}>
                         {warrantyBadge(item.partCatalogId ? partsMap[item.partCatalogId]?.warrantyDays : null)} · SL {item.quantity} ·{' '}
-                        {item.unitPriceSnapshot.toLocaleString('vi-VN')}đ
+                        {formatVnd(item.unitPriceSnapshot)}
                       </Text>
                       {!!item.note && <Text style={styles.jobMeta}>{item.note}</Text>}
                     </View>
@@ -599,7 +598,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                       </View>
                     ) : (
                       <Text style={styles.usageStatusText}>
-                        {item.usageStatus === 'used' ? 'ĐÃ DÙNG' : item.usageStatus === 'returned' ? 'HOÀN TRẢ' : 'Chưa ghi nhận'}
+                        {item.usageStatus === 'used' ? 'Đã dùng' : item.usageStatus === 'returned' ? 'Hoàn trả' : 'Chưa ghi nhận'}
                       </Text>
                     )}
                   </View>
@@ -626,7 +625,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
             accessibilityRole="button"
             accessibilityLabel="Đóng quét mã"
           >
-            <Ionicons name="close" size={28} color="#fff" />
+            <X size={28} color="#FFFFFF" strokeWidth={1.75} />
           </TouchableOpacity>
           <View style={styles.scanHintBox}>
             <Text style={styles.scanHintText}>Đưa camera vào mã QR trên màn hình/phiếu của Quản lý kho</Text>
@@ -638,53 +637,53 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
 }
 
 const getStyles = (colors: any) => StyleSheet.create({
-  jobCard: { backgroundColor: colors.surface, borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: colors.border },
+  jobCard: { backgroundColor: colors.surface, borderRadius: 14, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: colors.border },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
+  sectionTitle: { fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.text },
   refreshIconBtn: { padding: 6, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  jobMeta: { fontSize: 12, color: colors.textSecondary, lineHeight: 17 },
-  successBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#ECFDF5', borderColor: '#A7F3D0', borderWidth: 1, borderRadius: 8, padding: 8, marginBottom: 8 },
-  errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: 1, borderRadius: 8, padding: 8, marginBottom: 8 },
-  ruleBanner: { backgroundColor: colors.primaryTint, borderRadius: 8, padding: 10, marginBottom: 10, gap: 2 },
-  ruleBannerTitle: { fontSize: 12, fontWeight: '700', color: colors.primaryStrong, marginBottom: 2 },
+  jobMeta: { fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
+  successBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.tone.success.bg, borderRadius: 14, padding: 12, marginBottom: 8 },
+  errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.tone.danger.bg, borderRadius: 14, padding: 12, marginBottom: 8 },
+  ruleBanner: { backgroundColor: colors.primarySoft, borderRadius: 14, padding: 12, marginBottom: 10, gap: 2 },
+  ruleBannerTitle: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong, marginBottom: 2 },
   createBox: { marginBottom: 10, gap: 8 },
-  fieldLabel: { fontSize: 12, fontWeight: '700', color: colors.text, marginTop: 6, marginBottom: 4 },
-  fieldInput: { height: 40, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, color: colors.text, fontSize: 13 },
+  fieldLabel: { fontSize: 14, lineHeight: 20, fontWeight: '500', color: colors.text, marginTop: 6, marginBottom: 4 },
+  fieldInput: { minHeight: 48, borderWidth: 1, borderColor: colors.textSecondary, borderRadius: 14, paddingHorizontal: 14, color: colors.text, fontSize: 16, backgroundColor: colors.surface },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { fontSize: 12, color: colors.text },
+  chip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 22, borderWidth: 1, borderColor: colors.border },
+  chipActive: { backgroundColor: colors.primaryStrong, borderColor: colors.primaryStrong },
+  chipText: { fontSize: 14, lineHeight: 20, color: colors.text },
   chipTextActive: { color: colors.surface, fontWeight: '700' },
   resultsBox: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, maxHeight: 220, overflow: 'hidden' },
-  resultItem: { flexDirection: 'row', alignItems: 'center', padding: 10, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 8 },
-  resultName: { fontSize: 13, fontWeight: '600', color: colors.text },
-  resultPrice: { fontSize: 12, fontWeight: '700', color: colors.primaryStrong },
-  spotlightCard: { borderWidth: 2, borderColor: colors.primary, backgroundColor: colors.primaryTint, borderRadius: 10, padding: 10, gap: 6 },
+  resultItem: { flexDirection: 'row', alignItems: 'center', minHeight: 48, padding: 10, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 8 },
+  resultName: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.text },
+  resultPrice: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong },
+  spotlightCard: { borderWidth: 2, borderColor: colors.primaryStrong, backgroundColor: colors.primarySoft, borderRadius: 14, padding: 10, gap: 6 },
   qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  qtyBtn: { width: 28, height: 28, borderRadius: 6, backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' },
-  qtyText: { fontSize: 14, fontWeight: '700', color: colors.text, minWidth: 20, textAlign: 'center' },
+  qtyBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  qtyText: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: colors.text, minWidth: 24, textAlign: 'center' },
   selectedRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
   formActionsRow: { flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' },
-  primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: colors.primary, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10 },
-  primaryBtnText: { color: colors.surface, fontWeight: '700', fontSize: 13 },
-  ghostBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, backgroundColor: colors.border },
-  ghostBtnText: { color: colors.textSecondary, fontWeight: '700', fontSize: 13 },
+  primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primaryStrong, minHeight: 48, paddingHorizontal: 16, borderRadius: 14 },
+  primaryBtnText: { color: colors.surface, fontWeight: '700', fontSize: 14, lineHeight: 20 },
+  ghostBtn: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 16, borderRadius: 14, backgroundColor: colors.border },
+  ghostBtnText: { color: colors.text, fontWeight: '700', fontSize: 14, lineHeight: 20 },
   emptyBox: { alignItems: 'center', paddingVertical: 20, gap: 4, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', borderRadius: 12 },
-  emptyTitle: { fontSize: 13, fontWeight: '700', color: colors.text },
-  requestCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, gap: 6 },
+  emptyTitle: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  requestCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 12, gap: 6 },
   requestHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  statusBadge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  statusBadgeText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
-  typeTag: { fontSize: 11, color: colors.textSecondary, fontWeight: '600' },
-  receiveBox: { backgroundColor: colors.background, borderRadius: 8, padding: 10, gap: 8 },
+  statusBadge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
+  statusBadgeText: { fontSize: 12, lineHeight: 16, fontWeight: '700' },
+  typeTag: { fontSize: 12, lineHeight: 16, color: colors.textSecondary, fontWeight: '600' },
+  receiveBox: { backgroundColor: colors.background, borderRadius: 14, padding: 10, gap: 8 },
   itemRow: { flexDirection: 'row', alignItems: 'center', paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border, gap: 8 },
   usageBtnRow: { flexDirection: 'row', gap: 6 },
-  usageBtn: { paddingHorizontal: 8, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: colors.border },
-  usageBtnActiveGreen: { backgroundColor: colors.success, borderColor: colors.success },
-  usageBtnActiveAmber: { backgroundColor: '#D97706', borderColor: '#D97706' },
-  usageBtnText: { fontSize: 11, fontWeight: '700', color: colors.text },
-  usageStatusText: { fontSize: 11, fontWeight: '700', color: colors.textSecondary },
-  scanCloseBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20 },
+  usageBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
+  usageBtnActiveGreen: { backgroundColor: colors.tone.success.text, borderColor: colors.tone.success.text },
+  usageBtnActiveAmber: { backgroundColor: colors.tone.warning.text, borderColor: colors.tone.warning.text },
+  usageBtnText: { fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.text },
+  usageStatusText: { fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.textSecondary },
+  scanCloseBtn: { position: 'absolute', top: 50, right: 12, zIndex: 10, width: 44, height: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20 },
   scanHintBox: { position: 'absolute', bottom: 60, left: 20, right: 20, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 10, padding: 12 },
   scanHintText: { color: '#fff', fontSize: 13, textAlign: 'center' },
 });
