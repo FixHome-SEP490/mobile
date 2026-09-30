@@ -69,7 +69,8 @@ const TX_TYPE_LABELS: Record<WalletTxType, string> = {
 // Same words as the web technician wallet, so one person on two devices reads
 // the same status.
 const WITHDRAWAL_STATUS_VIEW: Record<WithdrawalRequest['status'], StatusView> = {
-  PENDING: { label: 'Chờ duyệt', tone: 'warning', icon: 'Clock' },
+  // Only a request made before automatic payouts can still be waiting.
+  PENDING: { label: 'Chờ xử lý', tone: 'warning', icon: 'Clock' },
   PROCESSING: { label: 'Đang chuyển tiền', tone: 'info', icon: 'Clock' },
   SUCCESS: { label: 'Đã chi tiền', tone: 'success', icon: 'CheckCircle2' },
   REJECTED: { label: 'Đã từ chối', tone: 'danger', icon: 'XCircle' },
@@ -232,17 +233,28 @@ export default function TechnicianWalletScreen() {
   };
 
   const submitWithdraw = async () => {
-    const ok = await controllerRef.current?.submitWithdrawal(
+    const result = await controllerRef.current?.submitWithdrawal(
       Number(withdrawAmount.replace(/\D/g, '')) || 0,
     );
-    if (ok) {
-      setWithdrawVisible(false);
-      setWithdrawAmount('');
-      Alert.alert(
-        'Đã gửi yêu cầu',
-        'Quản lý dịch vụ duyệt xong, hệ thống tự chuyển khoản về tài khoản của bạn.',
-      );
-    }
+    if (!result) return;
+    setWithdrawVisible(false);
+    setWithdrawAmount('');
+    // No approval step: the answer is the payout itself.
+    const title =
+      result.status === 'SUCCESS'
+        ? 'Đã chuyển tiền'
+        : result.status === 'FAILED'
+          ? 'Chuyển tiền không thành công'
+          : 'Đang chuyển tiền';
+    const detail =
+      result.status === 'SUCCESS' && result.payoutBankReference
+        ? `
+Mã giao dịch ngân hàng: ${result.payoutBankReference}`
+        : result.status === 'FAILED' && result.failureReason
+          ? `
+Lý do: ${result.failureReason}`
+          : '';
+    Alert.alert(title, `${result.message}${detail}`);
   };
 
   const balanceNegative = !!summary && summary.balance < 0;
@@ -349,7 +361,7 @@ export default function TechnicianWalletScreen() {
                 styles={styles}
                 tone={colors.tone.info}
                 busy
-                text="Lệnh rút đã được duyệt, hệ thống đang chuyển khoản về ngân hàng của bạn."
+                text="Ngân hàng đang xử lý lệnh chuyển, bạn sẽ nhận thông báo khi tiền về."
               />
             )}
 
@@ -363,9 +375,7 @@ export default function TechnicianWalletScreen() {
                 <Text style={styles.statValue}>{formatVnd(summary.minimumBalance)}</Text>
               </View>
               <View style={styles.statCard}>
-                <Text style={styles.caption}>
-                  {openWithdrawal === 'PROCESSING' ? 'Đang chuyển' : 'Đang chờ rút'}
-                </Text>
+                <Text style={styles.caption}>Đang chuyển</Text>
                 <Text style={styles.statValue}>
                   {formatVnd(summary.pendingWithdrawal + (summary.processingWithdrawal ?? 0))}
                 </Text>
@@ -524,7 +534,7 @@ export default function TechnicianWalletScreen() {
                       <Text style={styles.bodySmall}>Mã giao dịch ngân hàng: {w.payoutBankReference}</Text>
                     )}
                     {w.status === 'PROCESSING' && (
-                      <Text style={styles.bodySmall}>Đã duyệt, đang chuyển về ngân hàng.</Text>
+                      <Text style={styles.bodySmall}>Ngân hàng đang xử lý lệnh chuyển.</Text>
                     )}
                   </View>
                   <View style={styles.amountCol}>
@@ -641,7 +651,7 @@ export default function TechnicianWalletScreen() {
           </View>
         )}
         <Text style={styles.hintText}>
-          Quản lý dịch vụ duyệt xong, hệ thống tự chuyển khoản. Nếu chuyển không thành công, tiền được hoàn lại vào ví.
+          Tiền được chuyển ngay về tài khoản trên, không cần chờ duyệt. Nếu chuyển không thành công, tiền được hoàn lại vào ví.
         </Text>
         {!!state.withdrawError && <Text style={styles.modalError} accessibilityRole="alert">{state.withdrawError}</Text>}
         <View style={styles.modalActions}>
@@ -662,7 +672,7 @@ export default function TechnicianWalletScreen() {
             {state.withdrawBusy ? (
               <ActivityIndicator size="small" color={colors.surface} />
             ) : (
-              <Text style={styles.primaryBtnText}>Gửi yêu cầu</Text>
+              <Text style={styles.primaryBtnText}>Rút tiền ngay</Text>
             )}
           </TouchableOpacity>
         </View>

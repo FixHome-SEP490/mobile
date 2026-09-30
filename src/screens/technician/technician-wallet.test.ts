@@ -76,7 +76,10 @@ function setup(overrides: Partial<WalletDeps> = {}) {
       { bin: '970436', code: 'VCB', shortName: 'Vietcombank', name: 'Ngân hàng TMCP Ngoại Thương Việt Nam' },
     ]),
     saveBankAccount: jest.fn().mockResolvedValue({ ...ACCOUNT }),
-    requestWithdrawal: jest.fn().mockResolvedValue(withdrawal()),
+    requestWithdrawal: jest.fn().mockResolvedValue({
+      ...withdrawal({ status: 'SUCCESS', payoutBankReference: 'FT123' }),
+      message: 'Đã chuyển tiền về tài khoản ngân hàng của bạn',
+    }),
     openExternalUrl: jest.fn().mockResolvedValue(undefined),
     onAccessDenied: jest.fn(),
     ...overrides,
@@ -327,11 +330,11 @@ describe('wallet controller: bank account', () => {
 });
 
 describe('wallet controller: withdrawal', () => {
-  it('sends only the amount and refreshes wallet + lists', async () => {
+  it('sends only the amount and hands back the payout result', async () => {
     const { controller, deps, state } = setup();
     await controller.focus();
-    const ok = await controller.submitWithdrawal(100_000);
-    expect(ok).toBe(true);
+    const result = await controller.submitWithdrawal(100_000);
+    expect(result?.status).toBe('SUCCESS');
     expect(deps.requestWithdrawal).toHaveBeenCalledWith(100_000);
     expect(state()?.withdrawBusy).toBe(false);
   });
@@ -339,8 +342,8 @@ describe('wallet controller: withdrawal', () => {
   it('refuses to withdraw before a bank account is saved', async () => {
     const { controller, deps, state } = setup({ getBankAccount: jest.fn().mockResolvedValue(null) });
     await controller.focus();
-    const ok = await controller.submitWithdrawal(100_000);
-    expect(ok).toBe(false);
+    const result = await controller.submitWithdrawal(100_000);
+    expect(result).toBeNull();
     expect(deps.requestWithdrawal).not.toHaveBeenCalled();
     expect(state()?.withdrawError).toMatch(/tài khoản ngân hàng/);
   });
@@ -350,8 +353,8 @@ describe('wallet controller: withdrawal', () => {
       getWithdrawals: jest.fn().mockResolvedValue(page([withdrawal({ status: 'PENDING' })])),
     });
     await controller.focus();
-    const ok = await controller.submitWithdrawal(100_000);
-    expect(ok).toBe(false);
+    const result = await controller.submitWithdrawal(100_000);
+    expect(result).toBeNull();
     expect(deps.requestWithdrawal).not.toHaveBeenCalled();
     expect(state()?.withdrawError).toMatch(/chờ xử lý/);
   });
@@ -361,8 +364,8 @@ describe('wallet controller: withdrawal', () => {
       getWallet: jest.fn().mockResolvedValue(summary({ processingWithdrawal: 100_000 })),
     });
     await controller.focus();
-    const ok = await controller.submitWithdrawal(50_000);
-    expect(ok).toBe(false);
+    const result = await controller.submitWithdrawal(50_000);
+    expect(result).toBeNull();
     expect(deps.requestWithdrawal).not.toHaveBeenCalled();
     expect(state()?.withdrawError).toMatch(/đang được chuyển/);
   });
@@ -370,8 +373,8 @@ describe('wallet controller: withdrawal', () => {
   it('holds the 10.000đ minimum client-side', async () => {
     const { controller, deps, state } = setup();
     await controller.focus();
-    const ok = await controller.submitWithdrawal(9_999);
-    expect(ok).toBe(false);
+    const result = await controller.submitWithdrawal(9_999);
+    expect(result).toBeNull();
     expect(deps.requestWithdrawal).not.toHaveBeenCalled();
     expect(state()?.withdrawError).toMatch(/tối thiểu/);
   });
@@ -381,8 +384,8 @@ describe('wallet controller: withdrawal', () => {
       getWallet: jest.fn().mockResolvedValue(summary({ withdrawableBalance: 50_000 })),
     });
     await controller.focus();
-    const ok = await controller.submitWithdrawal(100_000);
-    expect(ok).toBe(false);
+    const result = await controller.submitWithdrawal(100_000);
+    expect(result).toBeNull();
     expect(deps.requestWithdrawal).not.toHaveBeenCalled();
   });
 
@@ -417,5 +420,28 @@ describe('wallet controller: withdrawal', () => {
     await controller.submitWithdrawal(100_000);
     expect(deps.onAccessDenied).toHaveBeenCalledTimes(1);
     expect(state()?.summary).toBeNull();
+  });
+});
+
+describe('wallet controller: no approval step', () => {
+  it('passes a failed payout back so the screen can say the money returned', async () => {
+    const { controller } = setup({
+      requestWithdrawal: jest.fn().mockResolvedValue({
+        ...withdrawal({ status: 'FAILED', failureReason: 'Số tài khoản không tồn tại' }),
+        message: 'Chuyển tiền không thành công, số tiền đã được hoàn lại vào ví của bạn',
+      }),
+    });
+    await controller.focus();
+    const result = await controller.submitWithdrawal(100_000);
+    expect(result?.status).toBe('FAILED');
+    expect(result?.failureReason).toBe('Số tài khoản không tồn tại');
+  });
+
+  it('refreshes the wallet after a payout so the balance is current', async () => {
+    const { controller, deps } = setup();
+    await controller.focus();
+    (deps.getWallet as jest.Mock).mockClear();
+    await controller.submitWithdrawal(100_000);
+    expect(deps.getWallet).toHaveBeenCalledTimes(1);
   });
 });
