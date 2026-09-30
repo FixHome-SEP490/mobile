@@ -1,3 +1,4 @@
+import { vnDateTimeString } from '../../utils/vn-time';
 /**
  * S2 invoice READ-ONLY controller. Fetches `GET /service-orders/:id/invoice`
  * only after the caller confirms an authorized full order detail for the same
@@ -77,7 +78,7 @@ function dateText(value: unknown): string | null {
   if (typeof value !== 'string' || value.length === 0) return null;
   const time = Date.parse(value);
   if (!Number.isFinite(time)) return null;
-  return new Date(time).toLocaleString('vi-VN');
+  return vnDateTimeString(time);
 }
 
 function paymentStatusOf(value: unknown): InvoicePaymentStatus {

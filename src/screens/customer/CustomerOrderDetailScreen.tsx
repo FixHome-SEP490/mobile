@@ -94,6 +94,7 @@ import {
   customerOrderCancelTarget,
   initialCustomerOrderCancelState,
 } from './customer-order-cancel';
+import { vnDateTimeString } from '../../utils/vn-time';
 
 type DetailRoute = RouteProp<RootStackParamList, 'CustomerOrderDetail'>;
 
@@ -890,7 +891,7 @@ export default function CustomerOrderDetailScreen() {
             <Text style={styles.meta}>{order.serviceName || 'Dịch vụ sửa chữa'}</Text>
             {!!order.scheduledAt && (
               <Text style={styles.meta}>
-                Lịch hẹn: {new Date(order.scheduledAt).toLocaleString('vi-VN')}
+                Lịch hẹn: {vnDateTimeString(order.scheduledAt)}
               </Text>
             )}
             {!!order.addressSummary && (
@@ -1224,7 +1225,7 @@ export default function CustomerOrderDetailScreen() {
               {order.timeline!.map((entry, index) => (
                 <View key={`${entry.status}-${entry.timestamp}-${index}`} style={styles.row}>
                   <Text style={styles.meta}>{timelineEntryLabel(entry.title, entry.status)}</Text>
-                  <Text style={styles.meta}>{new Date(entry.timestamp).toLocaleString('vi-VN')}</Text>
+                  <Text style={styles.meta}>{vnDateTimeString(entry.timestamp)}</Text>
                 </View>
               ))}
             </View>
@@ -1537,7 +1538,7 @@ export default function CustomerOrderDetailScreen() {
                   )}
                   {!!reviewState.review.createdAt && (
                     <Text style={styles.meta}>
-                      Gửi lúc: {new Date(reviewState.review.createdAt).toLocaleString('vi-VN')}
+                      Gửi lúc: {vnDateTimeString(reviewState.review.createdAt)}
                     </Text>
                   )}
                 </>

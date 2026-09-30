@@ -29,6 +29,7 @@ import { createInvitationInbox, initialInboxState, isActionable } from './invita
 import { bookingsApi, type InvitationItem } from '../../api/bookings.api';
 import { ordersApi } from '../../api/orders.api';
 import { useAppTheme } from '../../constants/theme';
+import { vnDateTimeString } from '../../utils/vn-time';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -46,7 +47,7 @@ function formatUrgency(urgency: string): string {
 function formatTime(iso: string | null | undefined): string {
   if (!iso) return '—';
   try {
-    return new Date(iso).toLocaleString('vi-VN', {
+    return vnDateTimeString(iso, {
       day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
     });
   } catch {

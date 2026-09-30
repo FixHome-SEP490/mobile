@@ -24,6 +24,7 @@ import {
   createBookingDetailLoader,
   initialBookingDetailState,
 } from './customer-booking-detail';
+import { vnDateTimeString, vnTimeString } from '../../utils/vn-time';
 
 type BookingDetailRoute = RouteProp<RootStackParamList, 'CustomerBookingDetail'>;
 
@@ -44,11 +45,11 @@ function formatWindow(start?: string, end?: string): string {
   if (!start) return 'Chưa có lịch hẹn';
   const startDate = new Date(start);
   if (!Number.isFinite(startDate.getTime())) return 'Chưa có lịch hẹn';
-  const startText = startDate.toLocaleString('vi-VN');
+  const startText = vnDateTimeString(startDate);
   if (!end) return startText;
   const endDate = new Date(end);
   if (!Number.isFinite(endDate.getTime())) return startText;
-  return `${startText} – ${endDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+  return `${startText} – ${vnTimeString(endDate, { hour: '2-digit', minute: '2-digit' })}`;
 }
 
 export default function CustomerBookingDetailScreen() {
