@@ -188,3 +188,15 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
     expect(page.data[0].status).toBe('MATCHING');
   });
 });
+describe('service order money normalisation', () => {
+  it('turns Postgres bigint strings from /service-orders/my into numbers', async () => {
+    api.get.mockResolvedValue({ data: { data: [
+      { id: 'o1', status: 'completed', laborTotal: '150000', partsTotal: '0', grandTotal: '150000' },
+      { id: 'o2', status: 'completed', historical: true },
+    ] } });
+    const [full, archived] = await ordersApi.getMyOrders();
+    expect(full.laborTotal).toBe(150000);
+    expect(full.grandTotal).toBe(150000);
+    expect(archived.laborTotal).toBeUndefined();
+  });
+});

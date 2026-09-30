@@ -194,8 +194,22 @@ export interface ReviewItem {
   createdAt?: string;
 }
 
-const normalizeOrder = (order: ServiceOrderItem): ServiceOrderItem => ({
+// Backend stores money as bigint and Postgres serialises it as a string ("150000"); coerce
+// so sums add instead of concatenating and `typeof === 'number'` checks hold.
+const money = (value: unknown): number => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
+export const normalizeOrder = (order: ServiceOrderItem): ServiceOrderItem => ({
   ...order,
+  ...(order.historical
+    ? {}
+    : {
+        laborTotal: money(order.laborTotal),
+        partsTotal: money(order.partsTotal),
+        grandTotal: money(order.grandTotal),
+      }),
   status: (order.status?.toUpperCase?.() || order.status) as CanonicalOrderStatus,
   paymentStatus: (order.paymentStatus?.toUpperCase?.() ||
     order.paymentStatus) as ServiceOrderItem['paymentStatus'],
