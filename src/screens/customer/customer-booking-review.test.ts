@@ -1,6 +1,7 @@
 import type { ServiceItem } from '../../api/services.api';
 import type { AddressData } from '../../api/users.api';
 import { buildBookingReviewSnapshot } from './customer-booking-review';
+import { vnWallClockToDate } from '../../utils/vn-time';
 
 jest.mock('./service-catalog', () => ({
   resolveServicePrice: () => ({ text: '250.000đ' }),
@@ -43,7 +44,7 @@ describe('customer booking review snapshot', () => {
       description: '  Máy lạnh chảy nước  ',
       date: new Date(2026, 8, 27),
       time: '09:00',
-      now: new Date(2026, 8, 27, 8, 0),
+      now: vnWallClockToDate(2026, 9, 27, 8, 0),
     });
 
     expect(Object.isFrozen(snapshot)).toBe(true);
@@ -52,8 +53,8 @@ describe('customer booking review snapshot', () => {
       serviceId: service.id,
       addressId: address.id,
       description: 'Máy lạnh chảy nước',
-      preferredStartAt: new Date(2026, 8, 27, 9, 0).toISOString(),
-      preferredEndAt: new Date(2026, 8, 27, 11, 0).toISOString(),
+      preferredStartAt: vnWallClockToDate(2026, 9, 27, 9, 0).toISOString(),
+      preferredEndAt: vnWallClockToDate(2026, 9, 27, 11, 0).toISOString(),
       quantity: 1,
       urgency: 'NORMAL',
     });
@@ -71,7 +72,7 @@ describe('customer booking review snapshot', () => {
         description: 'Máy lạnh chảy nước',
         date: new Date(2026, 8, 27),
         time: '09:00',
-        now: new Date(2026, 8, 27, 8, 0),
+        now: vnWallClockToDate(2026, 9, 27, 8, 0),
       }),
     ).toThrow('Vui lòng chọn địa chỉ đã lưu của tài khoản này.');
   });
