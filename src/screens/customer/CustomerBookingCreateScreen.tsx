@@ -46,7 +46,6 @@ import {
 import { usersApi, type AddressData } from '../../api/users.api';
 import { useAuthStore } from '../../store';
 import { UserRole, type RootStackParamList } from '../../types';
-import { BOOKING_START_TIMES } from '../../utils/booking-window';
 import BookingSchedulePicker from '../../components/BookingSchedulePicker';
 import BookingReviewSheet, { BookingReviewSummary } from '../../components/BookingReviewSheet';
 import {
@@ -106,7 +105,7 @@ export default function CustomerBookingCreateScreen() {
   const [bookingDate, setBookingDate] = useState(() => {
     return vnTodayCalendarDate();
   });
-  const [startTime, setStartTime] = useState<(typeof BOOKING_START_TIMES)[number]>('09:00');
+  const [startTime, setStartTime] = useState<string>('09:00');
   const [descriptionTouched, setDescriptionTouched] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
