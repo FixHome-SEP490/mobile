@@ -374,6 +374,7 @@ export default function CustomerBookingCreateScreen() {
         description,
         date: bookingDate,
         time: startTime,
+        aiSessionId: prefill?.aiSessionId ?? null,
       });
       setReviewSnapshot(snapshot);
     } catch (error) {

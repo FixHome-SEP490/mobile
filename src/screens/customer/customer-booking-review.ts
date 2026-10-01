@@ -15,7 +15,11 @@ export interface BookingReviewSnapshot {
   readonly addressDescription: string;
   readonly scheduleLabel: string;
   readonly pricingLabel: string;
+  /** The booking carries an assistant conversation the technician will see. */
+  readonly hasAiSummary: boolean;
 }
+
+const AI_SESSION_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
 export function formatBookingDate(date: Date): string {
   const weekday = WEEKDAY_LABELS[date.getDay()];
@@ -32,6 +36,7 @@ export function buildBookingReviewSnapshot({
   date,
   time,
   now,
+  aiSessionId,
 }: {
   ownerUserId: string;
   service: ServiceItem;
@@ -40,6 +45,7 @@ export function buildBookingReviewSnapshot({
   date: Date;
   time: string;
   now?: Date;
+  aiSessionId?: string | null;
 }): BookingReviewSnapshot {
   if (!ownerUserId || address.userId !== ownerUserId) {
     throw new Error('Vui lòng chọn địa chỉ đã lưu của tài khoản này.');
@@ -61,10 +67,14 @@ export function buildBookingReviewSnapshot({
   }
 
   const window = buildCustomerBookingWindow({ date, time, now });
+  // Only a session id the assistant could have issued; anything else is dropped
+  // and the booking goes through as a plain one.
+  const session = aiSessionId && AI_SESSION_PATTERN.test(aiSessionId) ? aiSessionId : null;
   const request: Readonly<CreateBookingDto> = Object.freeze({
     ...fields,
     ...window,
     urgency: 'NORMAL',
+    ...(session ? { aiSessionId: session } : {}),
   });
   const price = resolveServicePrice(service);
   const pricingLabel =
@@ -87,5 +97,6 @@ export function buildBookingReviewSnapshot({
       .join(', '),
     scheduleLabel: `${formatBookingDate(date)} · ${time}–${endHour}:${endMinute}`,
     pricingLabel,
+    hasAiSummary: session !== null,
   });
 }

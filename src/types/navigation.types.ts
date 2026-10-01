@@ -16,6 +16,8 @@ export type RootStackParamList = {
           serviceCode?: string;
           serviceName?: string;
           description?: string;
+          /** Assistant session; the technician who accepts gets a summary of it. */
+          aiSessionId?: string;
         };
       }
     | undefined;
@@ -37,6 +39,8 @@ export type RootStackParamList = {
           serviceCode?: string;
           serviceName?: string;
           description?: string;
+          /** Assistant session; the technician who accepts gets a summary of it. */
+          aiSessionId?: string;
         };
       }
     | undefined;
