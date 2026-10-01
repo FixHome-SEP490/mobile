@@ -92,6 +92,8 @@ import {
 import { createTechOrderDetailLoader } from './technician-order-detail';
 import TechnicianPartsSection from './technician-parts-section';
 import StatusBadge from '../../components/StatusBadge';
+import ContactActions from '../../components/ContactActions';
+import OrderNoteCard from '../../components/OrderNoteCard';
 import { serviceOrderStatusView } from './technician-status';
 import { jobProgress, type StepState } from './technician-job-progress';
 import { formatDateTime, formatVnd, vndText } from '../../utils/format';
@@ -1170,6 +1172,9 @@ export default function TechnicianOrderDetailScreen() {
             )}
             {!!order.scopeDescription && (
               <Text style={styles.jobMeta}>Phạm vi: {order.scopeDescription}</Text>
+            )}
+            {order.historical !== true && st !== 'COMPLETED' && st !== 'CANCELLED' && (
+              <ContactActions phone={order.customerPhone} address={order.addressSummary} />
             )}
             {progress && <JobStepper styles={styles} colors={colors} steps={progress} />}
           </View>
@@ -2289,6 +2294,8 @@ export default function TechnicianOrderDetailScreen() {
               </View>
             )}
           </CollapsibleCard>
+
+          {order.historical !== true && <OrderNoteCard orderId={order.id} />}
 
           <Text style={styles.groupHeading}>Chi tiết và lịch sử đơn</Text>
 

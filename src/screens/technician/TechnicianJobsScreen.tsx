@@ -42,6 +42,7 @@ import {
 } from './technician-check-in';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import StatusBadge from '../../components/StatusBadge';
+import ContactActions from '../../components/ContactActions';
 import { serviceOrderStatusView } from './technician-status';
 import { formatDateTime, formatVnd } from '../../utils/format';
 
@@ -363,6 +364,12 @@ export default function TechnicianJobsScreen() {
                       info
                     )}
 
+                    {(s === 'ACCEPTED' || s === 'EN_ROUTE') && (
+                      <View style={styles.contactRow}>
+                        <ContactActions phone={job.customerPhone} address={job.addressSummary} />
+                      </View>
+                    )}
+
                     {/* Actions depending on status */}
                     {hasActions && (
                       <View style={styles.actionsRow}>
@@ -564,6 +571,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
     borderTopWidth: 1,
     borderTopColor: colors.divider,
   },
+  contactRow: { marginTop: 12 },
   primaryRow: { gap: 8 },
   primaryCol: { gap: 8 },
   stateBox: { gap: 8, padding: 12, borderRadius: 14 },
