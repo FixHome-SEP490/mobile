@@ -126,14 +126,31 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
     async (items) => {
       api.get.mockResolvedValue({ data: { data: {
         id: 'order-1', status: 'en_route', paymentStatus: 'unpaid',
+        completedAt: '2026-09-30T01:00:00.000Z',
         quotation: { id: 'quote-1', status: 'sent', laborTotal: 100000, partsTotal: 0, items },
       } } });
       const detail = await ordersApi.getOrder('order-1');
       expect(api.get).toHaveBeenCalledWith('/service-orders/order-1');
+      expect(detail.completedAt).toBe('2026-09-30T01:00:00.000Z');
       expect(detail.quotation?.status).toBe('SENT');
       expect(detail.quotation?.items).toEqual([]);
     },
   );
+
+  it('requests completed-only repair history with authoritative server pagination', async () => {
+    api.get.mockResolvedValue({ data: { data: [{
+      orderId: 'order-history-1', bookingId: 'booking-history-1', code: 'FH-001',
+      status: 'completed', serviceName: 'Vệ sinh máy lạnh', technicianName: 'Nguyễn Văn A',
+      laborTotal: 100000, partsTotal: 50000, grandTotal: 150000,
+      completedAt: '2026-09-29T02:30:00.000Z',
+    }], meta: { total: 7 } } });
+    const page = await ordersApi.getRepairHistory(2, 20, 'completed');
+    expect(api.get).toHaveBeenCalledWith('/repair-history', {
+      params: { page: 2, pageSize: 20, status: 'completed' },
+    });
+    expect(page.total).toBe(7);
+    expect(page.data).toMatchObject([{ orderId: 'order-history-1', status: 'completed' }]);
+  });
 
   it('fetches an assigned-orders page with pagination params and server total', async () => {
     api.get.mockResolvedValue({ data: { data: [{
@@ -144,6 +161,17 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
     expect(api.get).toHaveBeenCalledWith('/service-orders/my', { params: { page: 2, pageSize: 20 } });
     expect(page.total).toBe(40);
     expect(page.data).toMatchObject([{ id: 'order-1', status: 'ACCEPTED' }]);
+  });
+
+  it('turns money sent as numeric strings into numbers, so totals add up', async () => {
+    api.get.mockResolvedValue({ data: { data: [
+      { id: 'a', status: 'completed', paymentStatus: 'paid', laborTotal: '220000.00', partsTotal: '0', grandTotal: '220000.00' },
+      { id: 'b', status: 'completed', paymentStatus: 'paid', laborTotal: '650000.00', partsTotal: null, grandTotal: '650000.00' },
+    ] } });
+    const orders = await ordersApi.getMyOrders();
+    expect(orders.map((o) => o.laborTotal)).toEqual([220000, 650000]);
+    expect(orders[1].partsTotal).toBe(0);
+    expect(orders.reduce((sum, o) => sum + o.laborTotal, 0)).toBe(870000);
   });
 
   it('clamps invalid order page bounds and keeps the legacy list call param-free', async () => {
@@ -186,17 +214,5 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
     const page = await bookingsApi.getMyBookingsPage(1, 20);
     expect(page.total).toBe(1);
     expect(page.data[0].status).toBe('MATCHING');
-  });
-});
-describe('service order money normalisation', () => {
-  it('turns Postgres bigint strings from /service-orders/my into numbers', async () => {
-    api.get.mockResolvedValue({ data: { data: [
-      { id: 'o1', status: 'completed', laborTotal: '150000', partsTotal: '0', grandTotal: '150000' },
-      { id: 'o2', status: 'completed', historical: true },
-    ] } });
-    const [full, archived] = await ordersApi.getMyOrders();
-    expect(full.laborTotal).toBe(150000);
-    expect(full.grandTotal).toBe(150000);
-    expect(archived.laborTotal).toBeUndefined();
   });
 });

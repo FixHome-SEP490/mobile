@@ -25,6 +25,7 @@ let mockGetBooking = jest.fn();
 let mockGetCandidates = jest.fn();
 let mockSendShortlist = jest.fn();
 let mockGetOrder = jest.fn();
+let mockGetTechnicianReviews = jest.fn();
 let mockStorage = {
   getItem: jest.fn(),
   setItem: jest.fn(),
@@ -67,6 +68,12 @@ jest.mock('../../api/orders.api', () => ({
   ordersApi: { getOrder: (...args: unknown[]) => mockGetOrder(...args) },
 }));
 
+jest.mock('../../api/technician-reviews.api', () => ({
+  technicianReviewsApi: {
+    listByTechnician: (...args: unknown[]) => mockGetTechnicianReviews(...args),
+  },
+}));
+
 jest.mock('../../store', () => {
   const useAuthStore = (selector: (state: typeof mockAuthState) => unknown) => selector(mockAuthState);
   Object.assign(useAuthStore, { getState: () => mockAuthState });
@@ -76,8 +83,9 @@ jest.mock('../../store', () => {
 jest.mock('../../constants/theme', () => ({
   useAppTheme: () => ({
     colors: {
-      primary: '#2563EB', background: '#F8FAFC', surface: '#FFFFFF', text: '#0F172A',
-      textSecondary: '#64748B', border: '#E2E8F0', error: '#DC2626', success: '#059669',
+      primary: '#2563EB', primaryStrong: '#1D4ED8', primarySoft: '#EFF6FF',
+      background: '#F8FAFC', surface: '#FFFFFF', text: '#0F172A',
+      textSecondary: '#64748B', muted: '#94A3B8', border: '#E2E8F0', error: '#DC2626', success: '#059669',
     },
   }),
 }));
@@ -157,6 +165,9 @@ function makeCandidate(userId: string, fullName: string): TechnicianCandidate {
     isAvailable: true,
     listedLaborPrice: 150000,
     typicalWarrantyDays: 30,
+    bio: 'Chuyên sửa điều hòa dân dụng.',
+    completedOrdersCount: 24,
+    completionRate: 96.5,
     phoneNumber: PRIVATE_PHONE_SENTINEL,
     email: PRIVATE_EMAIL_SENTINEL,
   } as TechnicianCandidate;
@@ -286,6 +297,7 @@ beforeEach(() => {
   mockStorage.getItem.mockResolvedValue(null);
   mockStorage.setItem.mockResolvedValue(undefined);
   mockStorage.removeItem.mockResolvedValue(undefined);
+  mockGetTechnicianReviews.mockResolvedValue({ data: [], total: 0 });
 });
 
 describe('Customer Matching presentation and privacy', () => {
@@ -415,6 +427,9 @@ describe('Customer Matching presentation and privacy', () => {
     expect(detailText).toContain('6 năm kinh nghiệm');
     expect(detailText).toContain('150.000 ₫');
     expect(detailText).toContain('30 ngày');
+    expect(detailText).toContain('Chuyên sửa điều hòa dân dụng.');
+    expect(detailText).toContain('24');
+    expect(detailText).toContain('96,5%');
   });
 
   it('shows only customer-safe candidate details with known units', async () => {
@@ -433,6 +448,132 @@ describe('Customer Matching presentation and privacy', () => {
     expect(visibleText).not.toContain(PRIVATE_PHONE_SENTINEL);
     expect(visibleText).not.toContain(PRIVATE_EMAIL_SENTINEL);
     expect(visibleText).not.toContain(TECHNICIAN_A);
+  });
+
+  it('loads real technician reviews by USER id and renders the safe review view model', async () => {
+    mockGetTechnicianReviews.mockResolvedValueOnce({
+      data: [{
+        id: 'review-1',
+        rating: 5,
+        comment: 'Làm việc gọn gàng, đúng giờ.',
+        customerName: 'Khách A',
+        createdAt: '2026-09-29T03:00:00.000Z',
+      }],
+      total: 3,
+    });
+    const tree = await mountLoadedScreen();
+    const candidateName = findText(tree, 'Kỹ thuật viên A');
+
+    await act(async () => {
+      findPressableAncestor(candidateName)?.props.onPress();
+      await flushPromises();
+    });
+
+    expect(mockGetTechnicianReviews).toHaveBeenCalledWith(TECHNICIAN_A, 1, 20);
+    const visibleText = texts(tree).join('\n');
+    expect(visibleText).toContain('Đánh giá từ khách hàng');
+    expect(visibleText).toContain('3 đánh giá');
+    expect(visibleText).toContain('Khách A');
+    expect(visibleText).toContain('★ 5/5');
+    expect(visibleText).toContain('Làm việc gọn gàng, đúng giờ.');
+    expect(visibleText).not.toContain(PRIVATE_PHONE_SENTINEL);
+    expect(visibleText).not.toContain(PRIVATE_EMAIL_SENTINEL);
+  });
+
+  it('shows a review error state and retries without changing matching selection', async () => {
+    mockGetTechnicianReviews
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({
+        data: [{
+          id: 'review-retry',
+          rating: 4,
+          comment: null,
+          customerName: null,
+          createdAt: '2026-09-28T03:00:00.000Z',
+        }],
+        total: 1,
+      });
+    const tree = await mountLoadedScreen();
+    const candidateName = findText(tree, 'Kỹ thuật viên A');
+
+    await act(async () => {
+      findPressableAncestor(candidateName)?.props.onPress();
+      await flushPromises();
+    });
+    expect(hasText(tree, 'Không thể tải đánh giá lúc này.')).toBe(true);
+    expect(hasText(tree, '(0/2)')).toBe(true);
+
+    const retry = tree.root.findAllByType(TouchableOpacity).find(
+      (button) => button.props.accessibilityLabel === 'Thử tải lại đánh giá',
+    );
+    expect(retry).toBeDefined();
+    await act(async () => {
+      retry?.props.onPress();
+      await flushPromises();
+    });
+
+    expect(mockGetTechnicianReviews).toHaveBeenCalledTimes(2);
+    expect(hasText(tree, 'Khách hàng đánh giá 4 sao và không để lại nhận xét.')).toBe(true);
+    expect(hasText(tree, '(0/2)')).toBe(true);
+  });
+
+  it('ignores a stale review response after the detail candidate changes', async () => {
+    let resolveOldReviews: ((value: {
+      data: { id: string; rating: number; comment: string | null; customerName: string | null; createdAt: string }[];
+      total: number;
+    }) => void) | undefined;
+    mockGetTechnicianReviews.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveOldReviews = resolve;
+    }));
+
+    const tree = await mountLoadedScreen();
+    const candidateAButton = tree.root.findByProps({ testID: 'matching-candidate-details-' + TECHNICIAN_A });
+    await act(async () => {
+      candidateAButton.props.onPress();
+      await Promise.resolve();
+    });
+
+    const close = tree.root.findAllByType(TouchableOpacity).find(
+      (button) => button.props.accessibilityLabel === 'Đóng thông tin kỹ thuật viên',
+    );
+    await act(async () => {
+      close?.props.onPress();
+      await Promise.resolve();
+    });
+
+    mockGetTechnicianReviews.mockResolvedValueOnce({
+      data: [{
+        id: 'review-new',
+        rating: 5,
+        comment: 'Đánh giá của kỹ thuật viên B',
+        customerName: 'Khách B',
+        createdAt: '2026-09-30T03:00:00.000Z',
+      }],
+      total: 1,
+    });
+    const candidateBButton = tree.root.findByProps({ testID: 'matching-candidate-details-' + TECHNICIAN_B });
+    await act(async () => {
+      candidateBButton.props.onPress();
+      await flushPromises();
+    });
+    expect(hasText(tree, 'Đánh giá của kỹ thuật viên B')).toBe(true);
+
+    await act(async () => {
+      resolveOldReviews?.({
+        data: [{
+          id: 'review-old',
+          rating: 1,
+          comment: 'Đánh giá cũ không được xuất hiện',
+          customerName: 'Phiên cũ',
+          createdAt: '2026-09-20T03:00:00.000Z',
+        }],
+        total: 1,
+      });
+      await flushPromises();
+    });
+
+    expect(hasText(tree, 'Đánh giá của kỹ thuật viên B')).toBe(true);
+    expect(hasText(tree, 'Đánh giá cũ không được xuất hiện')).toBe(false);
   });
 
   it('clears the detail sheet when owner changes or the candidate disappears', async () => {

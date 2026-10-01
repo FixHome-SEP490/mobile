@@ -135,6 +135,12 @@ export const authApi = {
     return result;
   },
 
+  /** Revoke every refresh-token session for the currently authenticated account. */
+  async revokeAllSessions(): Promise<void> {
+    await apiClient.post('/auth/logout', {});
+  },
+
+
   async logout(): Promise<void> {
     useAuthStore.getState().beginSessionTransition();
     try {

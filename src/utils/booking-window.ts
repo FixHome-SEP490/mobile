@@ -1,4 +1,6 @@
-/** Allowed customer arrival-window start times, in local device time. */
+import { vnTodayCalendarDate, vnWallClockToDate } from './vn-time';
+
+/** Allowed customer arrival-window start times, in Vietnam time. */
 export const BOOKING_START_TIMES = [
   '09:00',
   '10:00',
@@ -11,7 +13,10 @@ export const BOOKING_START_TIMES = [
 export type BookingStartTime = (typeof BOOKING_START_TIMES)[number];
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Return local-midnight bounds for today and three days from today. */
+/**
+ * Bounds for today and three days from today, where today is today in Vietnam.
+ * Returned as calendar Dates (local midnight), the shape the date picker uses.
+ */
 export function getBookingDateRange(now = new Date()): {
   minimumDate: Date;
   maximumDate: Date;
@@ -20,13 +25,16 @@ export function getBookingDateRange(now = new Date()): {
     throw new Error('Vui lòng chọn ngày hẹn hợp lệ.');
   }
 
-  const minimumDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const maximumDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 3);
+  const minimumDate = vnTodayCalendarDate(now);
+  const maximumDate = vnTodayCalendarDate(now, 3);
   maximumDate.setHours(23, 59, 59, 999);
   return { minimumDate, maximumDate };
 }
 
-/** Build the customer-create window from its selected local calendar date. */
+/**
+ * Build the customer-create window from the selected calendar date. The time is
+ * a Vietnam clock time, whatever zone the phone is set to.
+ */
 export function buildCustomerBookingWindow({
   date,
   time,
@@ -51,16 +59,13 @@ export function buildCustomerBookingWindow({
   }
 
   const [hours, minutes] = time.split(':').map(Number);
-  const start = new Date(
+  const start = vnWallClockToDate(
     calendarDate.getFullYear(),
-    calendarDate.getMonth(),
+    calendarDate.getMonth() + 1,
     calendarDate.getDate(),
     hours,
     minutes,
   );
-  if (start.getHours() !== hours || start.getMinutes() !== minutes) {
-    throw new Error('Khung giờ này không tồn tại trong múi giờ hiện tại.');
-  }
 
   const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
   if (start.getTime() <= now.getTime() || end.getTime() <= start.getTime()) {
@@ -92,10 +97,8 @@ export function buildBookingWindow({
   }
   const hours = Number(match[1]);
   const minutes = Number(match[2]);
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset, hours, minutes);
-  if (start.getHours() !== hours || start.getMinutes() !== minutes) {
-    throw new Error('Khung giờ này không tồn tại trong múi giờ hiện tại.');
-  }
+  const day = vnTodayCalendarDate(now, dayOffset);
+  const start = vnWallClockToDate(day.getFullYear(), day.getMonth() + 1, day.getDate(), hours, minutes);
   const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
   if (start.getTime() <= now.getTime() || end.getTime() <= start.getTime()) {
     throw new Error('Vui lòng chọn thời gian hẹn trong tương lai.');

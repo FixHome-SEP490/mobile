@@ -23,6 +23,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAppTheme } from '../../constants/theme';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
+import CustomerSupportCasesSection from './CustomerSupportCasesSection';
 import { useAuthStore } from '../../store/auth.store';
 import { ordersApi, type CanonicalOrderStatus } from '../../api/orders.api';
 import { customerBookingsUserId } from './customer-bookings-history';
@@ -94,6 +95,7 @@ import {
   customerOrderCancelTarget,
   initialCustomerOrderCancelState,
 } from './customer-order-cancel';
+import { vnDateTimeString } from '../../utils/vn-time';
 
 type DetailRoute = RouteProp<RootStackParamList, 'CustomerOrderDetail'>;
 
@@ -890,7 +892,7 @@ export default function CustomerOrderDetailScreen() {
             <Text style={styles.meta}>{order.serviceName || 'Dịch vụ sửa chữa'}</Text>
             {!!order.scheduledAt && (
               <Text style={styles.meta}>
-                Lịch hẹn: {new Date(order.scheduledAt).toLocaleString('vi-VN')}
+                Lịch hẹn: {vnDateTimeString(order.scheduledAt)}
               </Text>
             )}
             {!!order.addressSummary && (
@@ -938,6 +940,28 @@ export default function CustomerOrderDetailScreen() {
                   <Ionicons name="arrow-down" size={17} color={colors.surface} />
                 </TouchableOpacity>
               )}
+            </View>
+          )}
+
+          {String(order.status).toUpperCase() === 'COMPLETED' && (
+            <View style={styles.card}>
+              <View style={[styles.row, { alignItems: 'flex-start' }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sectionTitle}>Bảo hành sau sửa chữa</Text>
+                  <Text style={styles.meta}>
+                    Xem các hạng mục bảo hành của đơn này, theo dõi yêu cầu đã gửi hoặc gửi yêu cầu mới khi có sự cố.
+                  </Text>
+                </View>
+                <Ionicons name="shield-checkmark-outline" size={24} color={colors.success} />
+              </View>
+              <TouchableOpacity
+                style={[styles.decisionBtn, { backgroundColor: colors.primaryStrong, alignSelf: 'flex-start' }]}
+                onPress={() => navigation.navigate('CustomerWarranties', { orderId: serviceOrderId })}
+                accessibilityRole="button"
+                accessibilityLabel="Mở bảo hành của đơn sửa chữa"
+              >
+                <Text style={styles.decisionBtnText}>Xem bảo hành</Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -1224,7 +1248,7 @@ export default function CustomerOrderDetailScreen() {
               {order.timeline!.map((entry, index) => (
                 <View key={`${entry.status}-${entry.timestamp}-${index}`} style={styles.row}>
                   <Text style={styles.meta}>{timelineEntryLabel(entry.title, entry.status)}</Text>
-                  <Text style={styles.meta}>{new Date(entry.timestamp).toLocaleString('vi-VN')}</Text>
+                  <Text style={styles.meta}>{vnDateTimeString(entry.timestamp)}</Text>
                 </View>
               ))}
             </View>
@@ -1537,7 +1561,7 @@ export default function CustomerOrderDetailScreen() {
                   )}
                   {!!reviewState.review.createdAt && (
                     <Text style={styles.meta}>
-                      Gửi lúc: {new Date(reviewState.review.createdAt).toLocaleString('vi-VN')}
+                      Gửi lúc: {vnDateTimeString(reviewState.review.createdAt)}
                     </Text>
                   )}
                 </>
@@ -1750,6 +1774,12 @@ export default function CustomerOrderDetailScreen() {
               </View>
             )}
           </View>
+
+          <CustomerSupportCasesSection
+            orderId={serviceOrderId}
+            orderStatus={order.status}
+            completedAt={order.completedAt ?? null}
+          />
         </ScrollView>
       )}
     </SafeAreaView>

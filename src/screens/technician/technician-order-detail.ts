@@ -5,6 +5,7 @@ import {
   type OrderDetailState,
 } from '../customer/customer-order-detail';
 import type { JobsState } from './technician-jobs-loader';
+import { vnDateString } from '../../utils/vn-time';
 
 const historicalMessage = 'Đơn này chỉ còn tóm tắt lưu trữ, không xem được chi tiết đầy đủ.';
 
@@ -27,7 +28,7 @@ function isoDate(value: unknown): string | null {
   if (typeof value !== 'string' || value.length === 0) return null;
   const time = Date.parse(value);
   if (!Number.isFinite(time)) return null;
-  return new Date(time).toLocaleDateString('vi-VN');
+  return vnDateString(time);
 }
 
 /** Display-only dates for a sanitized historical card; never private fields. */

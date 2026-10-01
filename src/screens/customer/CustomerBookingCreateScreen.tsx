@@ -52,6 +52,7 @@ import {
   buildBookingReviewSnapshot,
   type BookingReviewSnapshot,
 } from './customer-booking-review';
+import { vnTodayCalendarDate } from '../../utils/vn-time';
 
 type CreateRoute = RouteProp<RootStackParamList, 'CustomerBookingCreate'>;
 type UncertainBookingCreate = {
@@ -102,8 +103,7 @@ export default function CustomerBookingCreateScreen() {
   const [addressId, setAddressId] = useState('');
   const [description, setDescription] = useState(prefill?.description ?? '');
   const [bookingDate, setBookingDate] = useState(() => {
-    const today = new Date();
-    return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    return vnTodayCalendarDate();
   });
   const [startTime, setStartTime] = useState<(typeof BOOKING_START_TIMES)[number]>('09:00');
   const [descriptionTouched, setDescriptionTouched] = useState(false);
@@ -172,8 +172,7 @@ export default function CustomerBookingCreateScreen() {
     setDescription('');
     setDescriptionTouched(false);
     setBookingDate(() => {
-      const today = new Date();
-      return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      return vnTodayCalendarDate();
     });
     setStartTime('09:00');
     setLoadError('');

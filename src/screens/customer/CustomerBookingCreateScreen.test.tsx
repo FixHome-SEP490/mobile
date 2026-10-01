@@ -4,6 +4,7 @@ import CustomerBookingCreateScreen from './CustomerBookingCreateScreen';
 import type { BookingItem } from '../../api/bookings.api';
 import type { ServiceItem } from '../../api/services.api';
 import type { AddressData } from '../../api/users.api';
+import { vnWallClockToDate } from '../../utils/vn-time';
 
 const SERVICE_ID = '11111111-1111-4111-8111-111111111111';
 const ADDRESS_ID = '22222222-2222-4222-8222-222222222222';
@@ -247,7 +248,7 @@ async function renderScreen(): Promise<TestRenderer> {
 }
 
 beforeEach(() => {
-  jest.useFakeTimers().setSystemTime(new Date(2026, 8, 27, 8, 0));
+  jest.useFakeTimers().setSystemTime(vnWallClockToDate(2026, 9, 27, 8, 0));
   jest.clearAllMocks();
   mockAuthState.user.id = 'customer-a';
   mockGetServices.mockResolvedValue({ data: [service], total: 1 });
@@ -333,8 +334,8 @@ it('keeps review local, then creates exactly the immutable reviewed request on c
     serviceId: SERVICE_ID,
     addressId: ADDRESS_ID,
     description: 'Máy lạnh chảy nước',
-    preferredStartAt: new Date(2026, 8, 27, 9, 0).toISOString(),
-    preferredEndAt: new Date(2026, 8, 27, 11, 0).toISOString(),
+    preferredStartAt: vnWallClockToDate(2026, 9, 27, 9, 0).toISOString(),
+    preferredEndAt: vnWallClockToDate(2026, 9, 27, 11, 0).toISOString(),
     quantity: 1,
     urgency: 'NORMAL',
   });

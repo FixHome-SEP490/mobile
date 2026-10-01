@@ -40,6 +40,7 @@ import {
   verifiedLinkedOrderId,
   type InitialShortlistAttempt,
 } from './customer-initial-shortlist-attempt';
+import { vnDateTimeString } from '../../utils/vn-time';
 
 type MatchingRoute = RouteProp<RootStackParamList, 'CustomerMatching'>;
 type CandidateDetailTarget = { bookingId: string; ownerId: string; candidateUserId: string };
@@ -1052,7 +1053,7 @@ export default function CustomerMatchingScreen() {
                           {Number.isFinite(expiresAt) && (
                             <Text style={[styles.note, { color: colors.textSecondary }]}>
                               Hết hạn dự kiến:{' '}
-                              {new Date(expiresAt).toLocaleString('vi-VN')}
+                              {vnDateTimeString(expiresAt)}
                             </Text>
                           )}
                         </View>

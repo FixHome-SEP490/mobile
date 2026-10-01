@@ -63,6 +63,7 @@ export interface ServiceOrderItem {
   grandTotal: number;
   paymentStatus: 'UNPAID' | 'PAID' | 'REFUNDED';
   createdAt: string;
+  completedAt?: string;
   timeline?: {
     status: string;
     title: string;
@@ -180,6 +181,7 @@ export interface RepairHistoryItem {
   status: string;
   serviceName?: string;
   technicianName?: string;
+  addressSummary?: string;
   laborTotal: number;
   partsTotal: number;
   grandTotal: number;
@@ -194,22 +196,63 @@ export interface ReviewItem {
   createdAt?: string;
 }
 
-// Backend stores money as bigint and Postgres serialises it as a string ("150000"); coerce
-// so sums add instead of concatenating and `typeof === 'number'` checks hold.
-const money = (value: unknown): number => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
+export type WarrantyClaimStatus =
+  | 'submitted'
+  | 'accepted'
+  | 'inspected'
+  | 'in_progress'
+  | 'awaiting_customer'
+  | 'disputed'
+  | 'resolved'
+  | 'rejected';
+
+export interface WarrantyCoverageItem {
+  id: string;
+  serviceOrderId?: string;
+  invoiceItemId?: string | null;
+  warrantyDaysSnapshot: number;
+  note?: string | null;
+  startsAt: string;
+  expiresAt: string;
+  status: string;
+}
+
+export interface WarrantyClaimView {
+  id: string;
+  serviceOrderId: string;
+  warrantyCoverageId: string;
+  status: WarrantyClaimStatus | string;
+  description: string;
+  evidenceRefs: string[] | null;
+  submittedAfterExpiry: boolean;
+  customerResponse: 'agreed' | 'disputed' | null;
+  awaitingPrompt: 'conclusion' | 'completion' | null;
+  resolutionNotes: string | null;
+  submittedAt: string;
+  resolvedAt: string | null;
+  technician: { id: string; fullName: string } | null;
+}
+
+export interface CreateWarrantyClaimPayload {
+  warrantyCoverageId: string;
+  description: string;
+  evidenceRefs?: string[];
+}
+
+/**
+ * The API sends Postgres numerics as strings ("220000.00"). Adding those
+ * concatenates them, so totals are turned into numbers once, here.
+ */
+const toMoney = (value: unknown): number => {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : 0;
 };
 
-export const normalizeOrder = (order: ServiceOrderItem): ServiceOrderItem => ({
+const normalizeOrder = (order: ServiceOrderItem): ServiceOrderItem => ({
   ...order,
-  ...(order.historical
-    ? {}
-    : {
-        laborTotal: money(order.laborTotal),
-        partsTotal: money(order.partsTotal),
-        grandTotal: money(order.grandTotal),
-      }),
+  laborTotal: toMoney(order.laborTotal),
+  partsTotal: toMoney(order.partsTotal),
+  grandTotal: toMoney(order.grandTotal),
   status: (order.status?.toUpperCase?.() || order.status) as CanonicalOrderStatus,
   paymentStatus: (order.paymentStatus?.toUpperCase?.() ||
     order.paymentStatus) as ServiceOrderItem['paymentStatus'],
@@ -418,9 +461,10 @@ export const ordersApi = {
   async getRepairHistory(
     page = 1,
     pageSize = 20,
+    status?: 'completed' | 'cancelled',
   ): Promise<{ data: RepairHistoryItem[]; total: number }> {
     const res = await apiClient.get('/repair-history', {
-      params: { page, pageSize },
+      params: { page, pageSize, status },
     });
     return { data: unwrap(res.data), total: res.data.meta?.total ?? 0 };
   },
@@ -429,8 +473,40 @@ export const ordersApi = {
     return get(`/service-orders/${id}/status-history`);
   },
 
-  async getWarranties(id: string) {
-    return get(`/service-orders/${id}/warranties`);
+  async getOrderWarranties(id: string): Promise<WarrantyCoverageItem[]> {
+    return get<WarrantyCoverageItem[]>(`/service-orders/${id}/warranties`);
+  },
+
+  async getWarranties(id: string): Promise<WarrantyCoverageItem[]> {
+    return this.getOrderWarranties(id);
+  },
+
+  async getOrderWarrantyClaims(id: string): Promise<WarrantyClaimView[]> {
+    return get<WarrantyClaimView[]>(`/service-orders/${id}/warranty-claims`);
+  },
+
+  async createWarrantyClaim(
+    id: string,
+    payload: CreateWarrantyClaimPayload,
+  ): Promise<WarrantyClaimView> {
+    return unwrap<WarrantyClaimView>(
+      (await apiClient.post(`/service-orders/${id}/warranty-claims`, payload)).data,
+    );
+  },
+
+  async respondWarrantyClaim(
+    id: string,
+    claimId: string,
+    payload: { decision: 'agree' | 'dispute'; note?: string },
+  ): Promise<WarrantyClaimView> {
+    return unwrap<WarrantyClaimView>(
+      (
+        await apiClient.post(
+          `/service-orders/${id}/warranty-claims/${claimId}/respond`,
+          payload,
+        )
+      ).data,
+    );
   },
 
   async declareCashSettlement(
