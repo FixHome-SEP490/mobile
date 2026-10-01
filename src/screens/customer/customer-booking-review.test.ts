@@ -77,3 +77,34 @@ describe('customer booking review snapshot', () => {
     ).toThrow('Vui lòng chọn địa chỉ đã lưu của tài khoản này.');
   });
 });
+
+describe('booking from the assistant', () => {
+  const base = {
+    ownerUserId: 'customer-a',
+    service,
+    address,
+    description: 'Máy lạnh kêu lạch cạch',
+    date: new Date(2026, 8, 27),
+    time: '09:00',
+    now: vnWallClockToDate(2026, 9, 27, 8, 0),
+  };
+
+  it('sends the assistant session so the technician gets a summary, and says so', () => {
+    const snapshot = buildBookingReviewSnapshot({ ...base, aiSessionId: '25a67259319c492bb68fd414778b8ce0' });
+    expect(snapshot.request.aiSessionId).toBe('25a67259319c492bb68fd414778b8ce0');
+    expect(snapshot.hasAiSummary).toBe(true);
+  });
+
+  it.each([
+    ['no session', undefined],
+    ['null', null],
+    ['empty', ''],
+    ['spaces and emoji', 'phiên 😀'],
+    ['injection', "x'; drop table bookings;--"],
+    ['too long', 'a'.repeat(129)],
+  ])('books normally with %s', (_label, aiSessionId) => {
+    const snapshot = buildBookingReviewSnapshot({ ...base, aiSessionId });
+    expect(snapshot.request).not.toHaveProperty('aiSessionId');
+    expect(snapshot.hasAiSummary).toBe(false);
+  });
+});

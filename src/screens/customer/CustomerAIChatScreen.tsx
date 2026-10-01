@@ -375,6 +375,7 @@ export default function CustomerAIChatScreen() {
           serviceCode: service.serviceCode,
           serviceName: service.nameVi,
           description: lastCustomerWords.current,
+          aiSessionId: sessionId.current ?? undefined,
         },
       });
     },

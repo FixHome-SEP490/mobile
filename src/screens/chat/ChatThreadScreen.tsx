@@ -291,6 +291,14 @@ export default function ChatThreadScreen() {
             {item.isDeleted ? 'Tin nhắn đã được gỡ' : item.content}
           </Text>
           <View style={styles.metaRow}>
+            {!!item.isAutomated && !item.isDeleted && (
+              <Text
+                testID="message-automated"
+                style={[styles.metaText, mine ? styles.metaTextMine : styles.metaTextTheirs]}
+              >
+                {'Tin nhắn tự động · '}
+              </Text>
+            )}
             <Text style={[styles.metaText, mine ? styles.metaTextMine : styles.metaTextTheirs]}>
               {clockOf(item.createdAt)}
             </Text>

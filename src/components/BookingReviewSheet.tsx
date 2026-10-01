@@ -15,6 +15,7 @@ type BookingColors = {
   surface: string;
   text: string;
   textSecondary: string;
+  tone?: { warning: { bg: string; text: string } };
 };
 
 export function BookingReviewSummary({
@@ -58,6 +59,16 @@ export function BookingReviewSummary({
       <Text style={[styles.quantity, { color: colors.text }]}>
         Số lượng: {snapshot.request.quantity ?? 1}
       </Text>
+      {snapshot.hasAiSummary ? (
+        <View
+          testID="booking-ai-summary-note"
+          style={[styles.note, { backgroundColor: colors.tone?.warning.bg ?? '#FEF6E0' }]}
+        >
+          <Text style={[styles.noteText, { color: colors.tone?.warning.text ?? '#805B00' }]}>
+            Kỹ thuật viên nhận việc sẽ thấy tóm tắt phần bạn trao đổi với trợ lý AI, nên bạn không cần kể lại từ đầu.
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -167,6 +178,8 @@ const styles = StyleSheet.create({
   label: { fontSize: 12 },
   value: { fontSize: 14, lineHeight: 20, fontWeight: '500' },
   quantity: { paddingLeft: 32, fontSize: 14, fontWeight: '600' },
+  note: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  noteText: { fontSize: 13, lineHeight: 19 },
   primaryAction: {
     minHeight: 48,
     borderRadius: 12,
