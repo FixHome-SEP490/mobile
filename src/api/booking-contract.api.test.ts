@@ -163,6 +163,17 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
     expect(page.data).toMatchObject([{ id: 'order-1', status: 'ACCEPTED' }]);
   });
 
+  it('turns money sent as numeric strings into numbers, so totals add up', async () => {
+    api.get.mockResolvedValue({ data: { data: [
+      { id: 'a', status: 'completed', paymentStatus: 'paid', laborTotal: '220000.00', partsTotal: '0', grandTotal: '220000.00' },
+      { id: 'b', status: 'completed', paymentStatus: 'paid', laborTotal: '650000.00', partsTotal: null, grandTotal: '650000.00' },
+    ] } });
+    const orders = await ordersApi.getMyOrders();
+    expect(orders.map((o) => o.laborTotal)).toEqual([220000, 650000]);
+    expect(orders[1].partsTotal).toBe(0);
+    expect(orders.reduce((sum, o) => sum + o.laborTotal, 0)).toBe(870000);
+  });
+
   it('clamps invalid order page bounds and keeps the legacy list call param-free', async () => {
     api.get.mockResolvedValue({ data: { data: [], meta: { total: 0 } } });
     await ordersApi.getMyOrdersPage(0, 500);
