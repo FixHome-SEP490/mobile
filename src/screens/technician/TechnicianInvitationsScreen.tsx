@@ -1,12 +1,12 @@
 // src/screens/technician/TechnicianInvitationsScreen.tsx
 //
-// Technician PENDING invitation inbox — P2.
+// Technician PENDING invitation inbox — P2. Main tab ("Lời mời").
 // Shows only live PENDING invitations from GET /invitations/my.
 // Privacy: only allowed preview fields (province/district/service/quantity/urgency/time) are rendered.
 // Accept/Decline: single in-flight lock per invitation to prevent duplicate POST on tap or retry.
 // On ACCEPT: offer the existing Technician area only after a real order id is returned.
 // Ambiguous responses remain locked while GET reconciliation cannot resolve them.
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -18,47 +18,50 @@ import {
   RefreshControl,
   StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AlertTriangle, CheckCircle2, Clock, MailOpen, MapPin, RefreshCw } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { UserRole, type RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store/auth.store';
+import { useBadgeStore } from '../../store/badge.store';
 import { createInvitationInbox, initialInboxState, isActionable } from './invitation-inbox';
+import { invitationClosedLabel, invitationCountdown, sortInvitationsForDisplay } from './invitation-view';
+import { urgencyView, type StatusView } from './technician-status';
 import { bookingsApi, type InvitationItem } from '../../api/bookings.api';
 import { ordersApi } from '../../api/orders.api';
 import { useAppTheme } from '../../constants/theme';
-import { vnDateTimeString } from '../../utils/vn-time';
+import { useTechnicianAvailability } from '../../hooks/useTechnicianAvailability';
+import { isSameVnDay, vnDateTimeString, vnTimeString } from '../../utils/vn-time';
+import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
+import StatusBadge from '../../components/StatusBadge';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
-function formatUrgency(urgency: string): string {
-  switch (urgency.toUpperCase()) {
-    case 'EMERGENCY': return '🚨 Khẩn cấp';
-    case 'HIGH':      return '🔴 Cao';
-    case 'NORMAL':
-    case 'MEDIUM':    return '🟡 Bình thường';
-    case 'LOW':       return '🟢 Thấp';
-    default:          return urgency;
-  }
-}
+// Floating GlassTabBar: 64pt pill + breathing room, plus the bottom inset (min 16).
+const TAB_BAR_CLEARANCE = 64 + 16;
+const TICK_MS = 30000;
 
-function formatTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  try {
-    return vnDateTimeString(iso, {
-      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
-    });
-  } catch {
-    return iso;
-  }
+const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
+const VN_TIME = { hour: '2-digit', minute: '2-digit' } as const;
+
+function formatWindow(start: string | null | undefined, end: string | null | undefined): string {
+  if (!start && !end) return '';
+  if (!end) return vnDateTimeString(start!, VN_DATETIME);
+  if (!start) return vnDateTimeString(end, VN_DATETIME);
+  return isSameVnDay(start, end)
+    ? `${vnDateTimeString(start, VN_DATETIME)} – ${vnTimeString(end, VN_TIME)}`
+    : `${vnDateTimeString(start, VN_DATETIME)} – ${vnDateTimeString(end, VN_DATETIME)}`;
 }
 
 export default function TechnicianInvitationsScreen() {
   const { colors, isDark } = useAppTheme();
   const styles = getStyles(colors);
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavProp>();
+  const availability = useTechnicianAvailability();
+  const setPendingInvitations = useBadgeStore((s) => s.setPendingInvitations);
   const [state, setState] = useState(initialInboxState);
   const controllerRef = useRef<ReturnType<typeof createInvitationInbox> | null>(null);
   if (controllerRef.current === null) {
@@ -91,72 +94,97 @@ export default function TechnicianInvitationsScreen() {
     void controller.focus();
     return () => controller.blur();
   }, [controller]));
+
+  // Re-evaluate countdowns/expiry while focused. Deadlines come from the server (`expiresAt`).
+  const [now, setNow] = useState(() => Date.now());
+  useFocusEffect(useCallback(() => {
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), TICK_MS);
+    return () => clearInterval(timer);
+  }, []));
+
+  // `now` is a dependency on purpose: re-sort/re-count when a deadline passes.
+  const sorted = useMemo(
+    () => (now > 0 ? sortInvitationsForDisplay(invitations) : invitations),
+    [invitations, now],
+  );
+  const liveCount = useMemo(
+    () => (now > 0 ? invitations.filter(isActionable).length : 0),
+    [invitations, now],
+  );
+  // Keep the tab badge in step with what this screen shows (only once a real load finished).
+  useEffect(() => {
+    if (!loading && !error) setPendingInvitations(liveCount);
+  }, [loading, error, liveCount, setPendingInvitations]);
+
   const onRefresh = () => { void controller.load(); };
-  const handleRespond = (inv: InvitationItem, action: 'ACCEPT' | 'DECLINE') => {
+  const respond = (inv: InvitationItem, action: 'ACCEPT' | 'DECLINE') => {
     Haptics.impactAsync(
       action === 'ACCEPT' ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Heavy
     );
     void controller.respond(inv.id, action);
+  };
+  const handleDecline = (inv: InvitationItem) => {
+    Alert.alert('Từ chối lời mời?', 'Bạn sẽ không nhận đơn này.', [
+      { text: 'Giữ lại lời mời', style: 'cancel' },
+      { text: 'Từ chối', style: 'destructive', onPress: () => respond(inv, 'DECLINE') },
+    ]);
   };
 
   const renderItem = ({ item: inv }: { item: InvitationItem }) => {
     const actionable = isActionable(inv);
     const inFlight = actionInFlight[inv.id];
     const b = inv.booking;
+    const serviceName = b?.serviceName ?? 'Dịch vụ sửa chữa';
+    const countdown = actionable ? invitationCountdown(inv.expiresAt, now) : null;
+    const closedView: StatusView = { label: invitationClosedLabel(inv.status), tone: 'neutral', icon: 'XCircle' };
+    const countdownView: StatusView | null = countdown
+      ? { label: countdown.label, tone: countdown.urgent ? 'danger' : 'warning', icon: 'Clock' }
+      : null;
+    const location = [b?.district, b?.province].filter(Boolean).join(', ');
+    const timeWindow = formatWindow(b?.preferredStartAt, b?.preferredEndAt);
 
     return (
+      // Privacy: only allowlisted preview fields are rendered.
       <View style={styles.card}>
-        {/* Privacy: only allowlisted preview fields */}
-        <View style={styles.cardHeader}>
-          <View style={styles.serviceIconBox}>
-            <Ionicons name="construct-outline" size={22} color={colors.primaryStrong} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.serviceName}>{b?.serviceName ?? 'Dịch vụ sửa chữa'}</Text>
-            {b?.province || b?.district ? (
-              <Text style={styles.locationText}>
-                📍 {[b.district, b.province].filter(Boolean).join(', ')}
-              </Text>
-            ) : null}
-          </View>
+        <View style={styles.badgeRow}>
+          {b?.urgency ? <StatusBadge view={urgencyView(b.urgency)} /> : <View />}
+          {!actionable ? <StatusBadge view={closedView} /> : countdownView ? <StatusBadge view={countdownView} /> : null}
         </View>
 
-        <View style={styles.metaRow}>
-          {b?.urgency ? (
-            <Text style={styles.metaChip}>{formatUrgency(b.urgency)}</Text>
-          ) : null}
-          {b?.quantity != null ? (
-            <Text style={styles.metaChip}>SL: {b.quantity}</Text>
-          ) : null}
-        </View>
+        <Text style={styles.serviceName}>
+          {serviceName}
+          {b?.quantity != null ? ` · SL ${b.quantity}` : ''}
+        </Text>
 
-        {(b?.preferredStartAt || b?.preferredEndAt) ? (
-          <Text style={styles.timeText}>
-            🕐 {formatTime(b?.preferredStartAt)} – {formatTime(b?.preferredEndAt)}
-          </Text>
-        ) : null}
-
-        {!actionable && (
-          <View style={styles.expiredBanner}>
-            <Ionicons name="time-outline" size={14} color="#92400E" />
-            <Text style={styles.expiredText}>Lời mời đã hết hạn</Text>
+        {!!location && (
+          <View style={styles.metaRow}>
+            <MapPin size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+            <Text style={styles.metaText}>{location}</Text>
+          </View>
+        )}
+        {!!timeWindow && (
+          <View style={styles.metaRow}>
+            <Clock size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+            <Text style={styles.metaText}>{timeWindow}</Text>
           </View>
         )}
 
         {!!inFlight && (
-          <Text style={styles.timeText}>
+          <Text style={styles.lockText}>
             Đã gửi phản hồi. Nếu chờ lâu, kéo xuống để kiểm tra lại; lời mời tạm khóa để tránh gửi trùng.
           </Text>
         )}
 
-        {/* Action buttons — guarded single in-flight per invitation */}
+        {/* Guarded single in-flight per invitation */}
         {actionable && (
           <View style={styles.actionRow}>
             <TouchableOpacity
               style={[styles.btnDecline, inFlight ? styles.btnDisabled : null]}
               disabled={!!inFlight}
-              onPress={() => handleRespond(inv, 'DECLINE')}
-              accessibilityLabel="Từ chối lời mời"
+              onPress={() => handleDecline(inv)}
+              accessibilityRole="button"
+              accessibilityLabel={`Từ chối lời mời ${serviceName}`}
             >
               {inFlight === 'DECLINE' ? (
                 <ActivityIndicator size="small" color={colors.error} />
@@ -168,8 +196,9 @@ export default function TechnicianInvitationsScreen() {
             <TouchableOpacity
               style={[styles.btnAccept, inFlight ? styles.btnDisabled : null]}
               disabled={!!inFlight}
-              onPress={() => handleRespond(inv, 'ACCEPT')}
-              accessibilityLabel="Nhận lời mời"
+              onPress={() => respond(inv, 'ACCEPT')}
+              accessibilityRole="button"
+              accessibilityLabel={`Nhận việc ${serviceName}`}
             >
               {inFlight === 'ACCEPT' ? (
                 <ActivityIndicator size="small" color={colors.surface} />
@@ -187,15 +216,46 @@ export default function TechnicianInvitationsScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
 
+      <View style={styles.header}>
+        <Text style={styles.headerTitle} accessibilityRole="header">Lời mời nhận việc</Text>
+        {!loading && !error && (
+          <Text style={styles.headerSubtitle}>
+            {liveCount > 0 ? `${liveCount} lời mời chờ xác nhận` : 'Không có lời mời chờ xác nhận'}
+          </Text>
+        )}
+      </View>
+
+      {availability.isAvailable === false && (
+        <View style={[styles.banner, { backgroundColor: colors.tone.warning.bg }]}>
+          <AlertTriangle size={18} color={colors.tone.warning.fg} strokeWidth={1.75} />
+          <Text style={[styles.bannerText, { color: colors.tone.warning.text }]}>
+            Bạn đang tạm dừng nhận đơn mới.
+          </Text>
+          <TouchableOpacity
+            onPress={availability.toggle}
+            disabled={availability.toggling}
+            style={styles.bannerAction}
+            accessibilityRole="button"
+            accessibilityLabel="Bật lại nhận đơn mới"
+          >
+            {availability.toggling ? (
+              <ActivityIndicator size="small" color={colors.tone.warning.text} />
+            ) : (
+              <Text style={[styles.bannerActionText, { color: colors.tone.warning.text }]}>Bật lại</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
 
       {acceptedOrderId ? (
-        <View style={styles.acceptedCard}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.acceptedTitle}>Đã xác minh đơn vừa nhận</Text>
-            <Text style={styles.acceptedText}>
-              Đây là đơn đang được giao cho tài khoản kỹ thuật viên hiện tại.
-            </Text>
+        <View style={[styles.acceptedCard, { backgroundColor: colors.tone.success.bg }]}>
+          <View style={styles.acceptedTitleRow}>
+            <CheckCircle2 size={18} color={colors.tone.success.fg} strokeWidth={1.75} />
+            <Text style={[styles.acceptedTitle, { color: colors.tone.success.text }]}>Đã xác minh đơn vừa nhận</Text>
           </View>
+          <Text style={[styles.acceptedText, { color: colors.tone.success.text }]}>
+            Đây là đơn đang được giao cho tài khoản kỹ thuật viên hiện tại.
+          </Text>
           <TouchableOpacity
             accessibilityRole="button"
             style={styles.acceptedButton}
@@ -211,54 +271,47 @@ export default function TechnicianInvitationsScreen() {
       ) : null}
 
       {recoveryPending ? (
-        <View style={styles.recoveryBanner}>
-          <Ionicons name="sync-outline" size={16} color="#92400E" />
-          <Text style={styles.recoveryText}>
+        <View style={[styles.banner, { backgroundColor: colors.tone.warning.bg }]}>
+          <RefreshCw size={18} color={colors.tone.warning.fg} strokeWidth={1.75} />
+          <Text style={[styles.bannerText, { color: colors.tone.warning.text }]}>
             Có phản hồi nhận việc chưa xác định. Không gửi lại; ứng dụng chỉ đối chiếu bằng danh sách Công việc.
           </Text>
         </View>
       ) : null}
 
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Quay lại"
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Lời mời chờ xác nhận</Text>
-      </View>
-
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primaryStrong} />
-          <Text style={styles.loadingText}>Đang tải lời mời...</Text>
+        <View style={styles.skeletonWrap}>
+          <CustomerSkeleton variant="booking" />
         </View>
       ) : error ? (
         <View style={styles.center}>
-          <Ionicons name="warning-outline" size={48} color={colors.error} />
+          <AlertTriangle size={48} color={colors.error} strokeWidth={1.5} />
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={onRefresh}>
+          <TouchableOpacity style={styles.retryBtn} onPress={onRefresh} accessibilityRole="button">
             <Text style={styles.retryBtnText}>Thử lại</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <FlatList
-          data={invitations}
+          data={sorted}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          contentContainerStyle={invitations.length === 0 ? styles.emptyFlex : styles.listContent}
+          extraData={now}
+          contentContainerStyle={[
+            sorted.length === 0 ? styles.emptyFlex : styles.listContent,
+            { paddingBottom: TAB_BAR_CLEARANCE + Math.max(insets.bottom, 16) },
+          ]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={
             <View style={styles.center}>
-              <Ionicons name="mail-open-outline" size={56} color="#CBD5E1" />
-              <Text style={styles.emptyTitle}>Không có lời mời nào</Text>
+              <MailOpen size={56} color={colors.muted} strokeWidth={1.5} />
+              <Text style={styles.emptyTitle}>Chưa có lời mời nào</Text>
               <Text style={styles.emptyDesc}>
                 Khi khách hàng gửi lời mời, bạn sẽ thấy ở đây. Kéo xuống để làm mới.
               </Text>
+              <TouchableOpacity style={styles.refreshBtn} onPress={onRefresh} accessibilityRole="button">
+                <Text style={styles.refreshBtnText}>Làm mới</Text>
+              </TouchableOpacity>
             </View>
           }
         />
@@ -267,188 +320,83 @@ export default function TechnicianInvitationsScreen() {
   );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
-  safeArea: {
-    flex: 1,
+const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
     backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
   },
+  headerTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
+  headerSubtitle: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, marginTop: 2 },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 14,
+  },
+  bannerText: { flex: 1, fontSize: 14, lineHeight: 20, fontWeight: '500' },
+  bannerAction: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center' },
+  bannerActionText: { fontSize: 14, lineHeight: 20, fontWeight: '700' },
   acceptedCard: {
     marginHorizontal: 16,
     marginTop: 12,
     padding: 14,
     borderRadius: 14,
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    gap: 10,
+    gap: 8,
   },
-  acceptedTitle: { fontSize: 15, fontWeight: '700', color: '#065F46' },
-  acceptedText: { fontSize: 13, color: '#047857', lineHeight: 19 },
+  acceptedTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  acceptedTitle: { fontSize: 16, lineHeight: 24, fontWeight: '700' },
+  acceptedText: { fontSize: 14, lineHeight: 20 },
   acceptedButton: {
     alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
     backgroundColor: colors.success,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  acceptedButtonText: { color: colors.surface, fontWeight: '700' },
-  recoveryBanner: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'flex-start',
-  },
-  recoveryText: { flex: 1, fontSize: 13, lineHeight: 19, color: '#92400E' },
-
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
-    gap: 12,
+    borderRadius: 14,
   },
-  backBtn: {
-    width: 36,
-    height: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: colors.text,
-    flex: 1,
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  errorText: {
-    fontSize: 14,
-    color: colors.error,
-    textAlign: 'center',
-  },
+  acceptedButtonText: { color: colors.surface, fontSize: 14, lineHeight: 20, fontWeight: '700' },
+  skeletonWrap: { flex: 1, padding: 16 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 12 },
+  errorText: { fontSize: 14, lineHeight: 20, color: colors.error, textAlign: 'center' },
   retryBtn: {
-    marginTop: 8,
+    minHeight: 48,
+    justifyContent: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 10,
     backgroundColor: colors.primaryStrong,
-    borderRadius: 8,
+    borderRadius: 14,
   },
-  retryBtnText: {
-    color: colors.surface,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  emptyFlex: {
-    flex: 1,
-  },
-  emptyTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.text,
-    marginTop: 4,
-  },
-  emptyDesc: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  listContent: {
-    padding: 16,
-    gap: 12,
-  },
+  retryBtnText: { color: colors.surface, fontWeight: '700', fontSize: 14, lineHeight: 20 },
+  emptyFlex: { flexGrow: 1 },
+  emptyTitle: { fontSize: 18, lineHeight: 26, fontWeight: '700', color: colors.text },
+  emptyDesc: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
+  refreshBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16 },
+  refreshBtnText: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong },
+  listContent: { padding: 16, gap: 12 },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
     borderWidth: 1,
-    borderColor: colors.divider,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 10,
-  },
-  serviceIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: colors.primarySoft,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  serviceName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 2,
-  },
-  locationText: {
-    fontSize: 13,
-    color: '#475569',
-  },
-  metaRow: {
-    flexDirection: 'row',
+    borderColor: colors.border,
     gap: 8,
-    flexWrap: 'wrap',
-    marginBottom: 8,
   },
-  metaChip: {
-    fontSize: 12,
-    color: '#475569',
-    backgroundColor: colors.divider,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    fontWeight: '600',
-  },
-  timeText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 10,
-  },
-  expiredBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  expiredText: {
-    fontSize: 12,
-    color: '#92400E',
-    fontWeight: '600',
-  },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  serviceName: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: colors.text },
+  metaRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  rowIcon: { marginTop: 2 },
+  metaText: { flex: 1, fontSize: 14, lineHeight: 20, color: colors.textSecondary },
+  lockText: { fontSize: 12, lineHeight: 16, color: colors.textSecondary },
   actionRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
     marginTop: 4,
     paddingTop: 12,
     borderTopWidth: 1,
@@ -456,32 +404,22 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   btnDecline: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
+    minHeight: 48,
+    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: colors.error,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  btnDeclineText: {
-    color: colors.error,
-    fontWeight: '700',
-    fontSize: 14,
-  },
+  btnDeclineText: { color: colors.error, fontWeight: '700', fontSize: 14, lineHeight: 20 },
   btnAccept: {
     flex: 2,
-    paddingVertical: 10,
-    borderRadius: 8,
+    minHeight: 48,
+    borderRadius: 14,
     backgroundColor: colors.primaryStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  btnAcceptText: {
-    color: colors.surface,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  btnDisabled: {
-    opacity: 0.5,
-  },
+  btnAcceptText: { color: colors.surface, fontWeight: '700', fontSize: 16, lineHeight: 24 },
+  btnDisabled: { opacity: 0.5 },
 });

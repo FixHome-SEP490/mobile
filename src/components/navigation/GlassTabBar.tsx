@@ -26,7 +26,9 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MARGIN_HORIZONTAL = 16;
 const GAP = 12;
 const ACTION_CIRCLE_SIZE = 64;
-const PILL_WIDTH = SCREEN_WIDTH - (MARGIN_HORIZONTAL * 2) - GAP - ACTION_CIRCLE_SIZE;
+// Without the AI action circle the pill takes the whole row (5 technician tabs need the room).
+const pillWidthFor = (showAssistant: boolean) =>
+  SCREEN_WIDTH - MARGIN_HORIZONTAL * 2 - (showAssistant ? GAP + ACTION_CIRCLE_SIZE : 0);
 
 // Sub-component for Icon Color Interpolation
 const AnimatedTabIcon = ({ 
@@ -70,7 +72,7 @@ const AnimatedTabIcon = ({
         {options.tabBarIcon ? options.tabBarIcon({ focused: true, color: '#FFFFFF', size: 26 }) : null}
       </Animated.View>
       {options.tabBarBadge !== undefined && options.tabBarBadge > 0 && (
-        <View style={styles.badge}>
+        <View style={[styles.badge, options.tabBarBadgeStyle?.backgroundColor ? { backgroundColor: options.tabBarBadgeStyle.backgroundColor } : null]}>
           <Text style={styles.badgeText}>
             {options.tabBarBadge > 99 ? '99+' : options.tabBarBadge}
           </Text>
@@ -104,7 +106,8 @@ export const GlassTabBar = ({
 }: BottomTabBarProps & { showAssistant?: boolean }) => {
   const insets = useSafeAreaInsets();
   const tabCount = state.routes.length;
-  const tabWidth = PILL_WIDTH / tabCount;
+  const pillWidth = pillWidthFor(showAssistant);
+  const tabWidth = pillWidth / tabCount;
 
   // Shared Values cho Liquid Glass Physics
   const translateX = useSharedValue(state.index * tabWidth);
@@ -160,7 +163,7 @@ export const GlassTabBar = ({
     .onUpdate((event) => {
       // 1. Follow finger
       const newX = event.x - (tabWidth / 2);
-      const maxTranslateX = PILL_WIDTH - tabWidth;
+      const maxTranslateX = pillWidth - tabWidth;
       translateX.value = Math.max(0, Math.min(newX, maxTranslateX));
 
       // 2. Liquid Stretch (Velocity based)
@@ -236,7 +239,7 @@ export const GlassTabBar = ({
       
       {/* 1. KHỐI MAIN PILL */}
       <GestureDetector gesture={composedGesture}>
-        <View style={styles.mainPillContainer}>
+        <View style={[styles.mainPillContainer, { width: pillWidth }]}>
           <BlurView intensity={70} tint="light" style={styles.mainPill}>
             
             {/* Liquid Glass Indicator */}
@@ -250,9 +253,18 @@ export const GlassTabBar = ({
             </Animated.View>
 
             {/* Hàng Icon Overlay */}
-            <View style={styles.iconsRow} pointerEvents="none">
+            <View style={styles.iconsRow} pointerEvents="none" accessibilityRole="tablist">
               {state.routes.map((route, index) => (
-                <View key={route.key} style={styles.tabSlot}>
+                <View
+                  key={route.key}
+                  style={styles.tabSlot}
+                  accessible
+                  accessibilityRole="tab"
+                  accessibilityLabel={descriptors[route.key].options.tabBarAccessibilityLabel ?? descriptors[route.key].options.title ?? route.name}
+                  accessibilityState={{ selected: state.index === index }}
+                  accessibilityActions={[{ name: 'activate' }]}
+                  onAccessibilityAction={() => navigateToTab(index)}
+                >
                   <AnimatedTabIcon 
                     index={index} 
                     translateX={translateX} 
@@ -299,7 +311,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   mainPillContainer: {
-    width: PILL_WIDTH,
     height: 64,
     borderRadius: 32,
     ...Platform.select({
@@ -374,7 +385,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     color: '#FFFFFF',
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: 'bold',
   },
   actionCircleContainer: {

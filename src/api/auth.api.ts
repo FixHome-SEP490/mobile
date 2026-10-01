@@ -20,7 +20,7 @@ export interface RegisterRequest {
   email: string;
   password: string;
   phoneNumber?: string;
-  role: 'customer';
+  role: 'customer' | 'technician';
 }
 
 export interface AuthResponse {

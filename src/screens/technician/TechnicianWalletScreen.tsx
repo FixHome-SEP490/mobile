@@ -12,16 +12,28 @@ import {
   ActivityIndicator,
   Alert,
   AppState,
+  KeyboardAvoidingView,
   Linking,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import {
+  AlertCircle,
+  AlertTriangle,
+  ArrowDownToLine,
+  ChevronLeft,
+  Landmark,
+  Plus,
+  type LucideIcon,
+} from 'lucide-react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuthStore } from '../../store';
 import { walletApi } from '../../api/wallet.api';
-import { useAppTheme } from '../../constants/theme';
+import { useAppTheme, type Tone } from '../../constants/theme';
+import StatusBadge from '../../components/StatusBadge';
+import type { StatusView } from './technician-status';
+import { formatVnd } from '../../utils/format';
 import type { RootStackParamList } from '../../types';
 import type { WalletTransaction, WalletTxType, WithdrawalRequest } from '../../types/wallet.types';
 import {
@@ -34,6 +46,7 @@ import {
 } from './technician-wallet';
 import { vnDateTimeString } from '../../utils/vn-time';
 
+const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 const TOP_UP_PRESETS = [100_000, 200_000, 500_000, 1_000_000];
 
 const TX_FILTERS: { value: WalletTxType | 'ALL'; label: string }[] = [
@@ -57,24 +70,14 @@ const TX_TYPE_LABELS: Record<WalletTxType, string> = {
 
 // Same words as the web technician wallet, so one person on two devices reads
 // the same status.
-const WITHDRAWAL_STATUS_LABELS: Record<WithdrawalRequest['status'], string> = {
+const WITHDRAWAL_STATUS_VIEW: Record<WithdrawalRequest['status'], StatusView> = {
   // Only a request made before automatic payouts can still be waiting.
-  PENDING: 'Chờ xử lý',
-  PROCESSING: 'Đang chuyển tiền',
-  SUCCESS: 'Đã chi tiền',
-  REJECTED: 'Đã từ chối',
-  FAILED: 'Chuyển thất bại',
+  PENDING: { label: 'Chờ xử lý', tone: 'warning', icon: 'Clock' },
+  PROCESSING: { label: 'Đang chuyển tiền', tone: 'info', icon: 'Clock' },
+  SUCCESS: { label: 'Đã chi tiền', tone: 'success', icon: 'CheckCircle2' },
+  REJECTED: { label: 'Đã từ chối', tone: 'danger', icon: 'XCircle' },
+  FAILED: { label: 'Chuyển thất bại', tone: 'danger', icon: 'AlertTriangle' },
 };
-
-function formatVND(amount: number): string {
-  return `${amount.toLocaleString('vi-VN')}đ`;
-}
-
-function formatDateTime(iso: string): string {
-  return vnDateTimeString(iso, {
-    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
-}
 
 /** Only the last four digits are shown outside the edit form. */
 function maskAccountNumber(number: string): string {
@@ -254,29 +257,23 @@ export default function TechnicianWalletScreen() {
     Alert.alert(title, `${result.message}${detail}`);
   };
 
-  const pillColors = (status: WithdrawalRequest['status']) => {
-    switch (status) {
-      case 'SUCCESS':
-        return { bg: '#DCFCE7', fg: colors.success };
-      case 'PENDING':
-        return { bg: '#FEF3C7', fg: colors.warning };
-      case 'PROCESSING':
-        return { bg: colors.primaryTint, fg: colors.primaryStrong };
-      default:
-        return { bg: '#FEE2E2', fg: colors.error };
-    }
-  };
+  const balanceNegative = !!summary && summary.balance < 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="chevron-back" size={26} color={colors.text} />
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Quay lại"
+        >
+          <ChevronLeft size={26} color={colors.text} strokeWidth={1.75} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Ví của tôi</Text>
-        <View style={{ width: 26 }} />
+        <Text style={styles.headerTitle} accessibilityRole="header">Ví của tôi</Text>
+        <View style={styles.backBtn} />
       </View>
 
       <ScrollView
@@ -285,162 +282,182 @@ export default function TechnicianWalletScreen() {
         refreshControl={<RefreshControl refreshing={state.refreshing} onRefresh={onRefresh} />}
       >
         {state.loading ? (
-          <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
+          <View style={styles.centerBlock}>
+            <ActivityIndicator color={colors.primaryStrong} />
+            <Text style={styles.mutedText}>Đang tải…</Text>
+          </View>
         ) : state.error ? (
-          <Text style={styles.errorText}>{state.error}</Text>
+          <View style={styles.centerBlock}>
+            <AlertTriangle size={40} color={colors.error} strokeWidth={1.5} />
+            <Text style={styles.errorText}>{state.error}</Text>
+            <TouchableOpacity style={styles.textBtn} onPress={onRefresh} accessibilityRole="button">
+              <Text style={styles.textBtnLabel}>Thử lại</Text>
+            </TouchableOpacity>
+          </View>
         ) : summary ? (
           <>
-            <LinearGradient colors={[colors.primaryStrong, colors.primary]} style={styles.heroCard}>
-              <View style={styles.heroTopRow}>
-                <Text style={styles.heroLabel}>Số dư ví</Text>
-                <View
-                  style={[
-                    styles.eligibilityBadge,
-                    { backgroundColor: summary.eligibleForJobs ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.25)' },
-                  ]}
-                >
-                  <Text style={[styles.eligibilityText, { color: summary.eligibleForJobs ? '#A7F3D0' : '#FECACA' }]}>
-                    {summary.eligibleForJobs ? 'Đủ điều kiện nhận việc' : 'Dưới mức ký quỹ'}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.heroBalance}>{formatVND(summary.balance)}</Text>
-              <Text style={styles.heroSub}>Mức tối thiểu để nhận việc: {formatVND(summary.minimumBalance)}</Text>
+            <View style={styles.heroCard}>
+              <Text style={styles.caption}>Số dư ví</Text>
+              <Text style={[styles.heroBalance, balanceNegative && { color: colors.error }]}>
+                {formatVnd(summary.balance)}
+              </Text>
+              <StatusBadge
+                view={
+                  summary.eligibleForJobs
+                    ? { label: 'Đủ điều kiện nhận việc', tone: 'success', icon: 'CheckCircle2' }
+                    : { label: 'Dưới mức ký quỹ', tone: 'danger', icon: 'AlertTriangle' }
+                }
+              />
+              <Text style={styles.bodySmall}>Mức tối thiểu để nhận việc: {formatVnd(summary.minimumBalance)}</Text>
               <View style={styles.heroActions}>
-                <TouchableOpacity style={styles.heroBtn} onPress={() => setTopUpVisible(true)}>
-                  <Ionicons name="add-circle-outline" size={18} color={colors.primaryStrong} />
-                  <Text style={styles.heroBtnText}>Nạp tiền</Text>
+                <TouchableOpacity
+                  style={[styles.primaryBtn, styles.flex1]}
+                  onPress={() => setTopUpVisible(true)}
+                  accessibilityRole="button"
+                >
+                  <Plus size={18} color={colors.surface} strokeWidth={2} />
+                  <Text style={styles.primaryBtnText}>Nạp tiền</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.heroBtn, !canWithdraw && styles.heroBtnDisabled]}
+                  style={[styles.secondaryBtn, styles.flex1, !canWithdraw && styles.disabled]}
                   disabled={!canWithdraw}
                   onPress={openWithdraw}
+                  accessibilityRole="button"
                   accessibilityLabel="Rút tiền"
                   accessibilityState={{ disabled: !canWithdraw }}
                 >
-                  <Ionicons name="arrow-down-circle-outline" size={18} color={colors.primaryStrong} />
-                  <Text style={styles.heroBtnText}>Rút tiền</Text>
+                  <ArrowDownToLine size={18} color={colors.primaryStrong} strokeWidth={2} />
+                  <Text style={styles.secondaryBtnText}>Rút tiền</Text>
                 </TouchableOpacity>
               </View>
-            </LinearGradient>
+            </View>
 
-            {!summary.eligibleForJobs && (
-              <View style={styles.warningBanner}>
-                <Ionicons name="warning" size={18} color={colors.warning} />
-                <Text style={styles.warningText}>
-                  Số dư dưới mức tối thiểu, bạn sẽ không nhận được việc mới. Hãy nạp thêm tiền vào ví.
-                </Text>
-              </View>
+            {!summary.eligibleForJobs && !balanceNegative && (
+              <Banner
+                styles={styles}
+                tone={colors.tone.warning}
+                Icon={AlertTriangle}
+                text="Số dư dưới mức tối thiểu, bạn sẽ không nhận được việc mới. Hãy nạp thêm tiền vào ví."
+              />
             )}
-            {summary.balance < 0 && (
-              <View style={styles.criticalBanner}>
-                <Ionicons name="alert-circle" size={18} color={colors.error} />
-                <Text style={styles.criticalText}>
-                  Ví đang âm (công nợ với nền tảng từ đơn tiền mặt). Vui lòng nạp tiền để thanh toán công nợ.
-                </Text>
-              </View>
+            {balanceNegative && (
+              <Banner
+                styles={styles}
+                tone={colors.tone.danger}
+                Icon={AlertCircle}
+                text="Ví đang âm (công nợ với nền tảng từ đơn tiền mặt). Vui lòng nạp tiền để thanh toán công nợ."
+              />
             )}
             {state.topUpPending && (
-              <View style={styles.infoBanner}>
-                <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={styles.infoText}>Đang chờ xác nhận thanh toán VNPay. Mở lại app để cập nhật số dư.</Text>
-              </View>
+              <Banner
+                styles={styles}
+                tone={colors.tone.info}
+                busy
+                text="Đang chờ xác nhận thanh toán VNPay. Mở lại ứng dụng để cập nhật số dư."
+              />
             )}
             {openWithdrawal === 'PROCESSING' && (
-              <View style={styles.infoBanner}>
-                <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={styles.infoText}>
-                  Ngân hàng đang xử lý lệnh chuyển, bạn sẽ nhận thông báo khi tiền về.
-                </Text>
-              </View>
+              <Banner
+                styles={styles}
+                tone={colors.tone.info}
+                busy
+                text="Ngân hàng đang xử lý lệnh chuyển, bạn sẽ nhận thông báo khi tiền về."
+              />
             )}
 
             <View style={styles.statRow}>
               <View style={styles.statCard}>
-                <Text style={styles.statLabel}>Có thể rút</Text>
-                <Text style={styles.statValue}>{formatVND(summary.withdrawableBalance)}</Text>
+                <Text style={styles.caption}>Có thể rút</Text>
+                <Text style={styles.statValue}>{formatVnd(summary.withdrawableBalance)}</Text>
               </View>
               <View style={styles.statCard}>
-                <Text style={styles.statLabel}>Giữ tối thiểu</Text>
-                <Text style={styles.statValue}>{formatVND(summary.minimumBalance)}</Text>
+                <Text style={styles.caption}>Giữ tối thiểu</Text>
+                <Text style={styles.statValue}>{formatVnd(summary.minimumBalance)}</Text>
               </View>
               <View style={styles.statCard}>
-                <Text style={styles.statLabel}>
-                  Đang chuyển
-                </Text>
+                <Text style={styles.caption}>Đang chuyển</Text>
                 <Text style={styles.statValue}>
-                  {formatVND(summary.pendingWithdrawal + (summary.processingWithdrawal ?? 0))}
+                  {formatVnd(summary.pendingWithdrawal + (summary.processingWithdrawal ?? 0))}
                 </Text>
               </View>
             </View>
 
             {/* Receiving bank account */}
             <View style={styles.bankCard}>
-              <View style={styles.bankIcon}>
-                <Ionicons name="business-outline" size={20} color={colors.primaryStrong} />
+              <View style={styles.iconTile}>
+                <Landmark size={20} color={colors.primaryStrong} strokeWidth={1.75} />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={styles.flex1}>
                 {state.bankAccount ? (
                   <>
-                    <Text style={styles.statLabel}>Tài khoản nhận tiền rút</Text>
-                    <Text style={styles.txTitle}>
+                    <Text style={styles.caption}>Tài khoản nhận tiền rút</Text>
+                    <Text style={styles.rowTitle}>
                       {state.bankAccount.bankName} · {maskAccountNumber(state.bankAccount.accountNumber)}
                     </Text>
-                    <Text style={styles.txDesc}>{state.bankAccount.accountName}</Text>
+                    <Text style={styles.bodySmall}>{state.bankAccount.accountName}</Text>
                   </>
                 ) : (
                   <>
-                    <Text style={styles.txTitle}>Chưa khai báo tài khoản nhận tiền</Text>
-                    <Text style={styles.txDesc}>Tên chủ tài khoản phải trùng tên đã xác minh danh tính</Text>
+                    <Text style={styles.rowTitle}>Chưa khai báo tài khoản nhận tiền</Text>
+                    <Text style={styles.bodySmall}>Tên chủ tài khoản phải trùng tên đã xác minh danh tính.</Text>
                   </>
                 )}
               </View>
               <TouchableOpacity
-                style={styles.bankEditBtn}
+                style={styles.textBtn}
                 onPress={() => openBankForm(false)}
+                accessibilityRole="button"
                 accessibilityLabel={state.bankAccount ? 'Đổi tài khoản nhận tiền' : 'Khai báo tài khoản nhận tiền'}
               >
-                <Text style={styles.bankEditText}>{state.bankAccount ? 'Đổi' : 'Khai báo'}</Text>
+                <Text style={styles.textBtnLabel}>{state.bankAccount ? 'Đổi' : 'Khai báo'}</Text>
               </TouchableOpacity>
             </View>
 
-            <View style={styles.tabRow}>
-              <TouchableOpacity
-                style={[styles.tabBtn, activeTab === 'transactions' && styles.tabBtnActive]}
-                onPress={() => setActiveTab('transactions')}
-              >
-                <Text style={[styles.tabText, activeTab === 'transactions' && styles.tabTextActive]}>
-                  Biến động số dư
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.tabBtn, activeTab === 'withdrawals' && styles.tabBtnActive]}
-                onPress={() => setActiveTab('withdrawals')}
-              >
-                <Text style={[styles.tabText, activeTab === 'withdrawals' && styles.tabTextActive]}>
-                  Lịch sử rút tiền
-                </Text>
-              </TouchableOpacity>
+            <View style={styles.segment}>
+              {(['transactions', 'withdrawals'] as const).map((tab) => {
+                const active = activeTab === tab;
+                return (
+                  <TouchableOpacity
+                    key={tab}
+                    style={[styles.segmentBtn, active && styles.segmentBtnActive]}
+                    onPress={() => setActiveTab(tab)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                  >
+                    <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                      {tab === 'transactions' ? 'Biến động số dư' : 'Lịch sử rút tiền'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
             {activeTab === 'transactions' ? (
               <>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
-                  {TX_FILTERS.map((f) => (
-                    <TouchableOpacity
-                      key={f.value}
-                      style={[styles.filterChip, state.txFilter === f.value && styles.filterChipActive]}
-                      onPress={() => controllerRef.current?.setTxFilter(f.value)}
-                    >
-                      <Text style={[styles.filterChipText, state.txFilter === f.value && styles.filterChipTextActive]}>
-                        {f.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.filterScroll}
+                  contentContainerStyle={styles.filterRow}
+                >
+                  {TX_FILTERS.map((f) => {
+                    const active = state.txFilter === f.value;
+                    return (
+                      <TouchableOpacity
+                        key={f.value}
+                        style={[styles.filterChip, active && styles.filterChipActive]}
+                        onPress={() => controllerRef.current?.setTxFilter(f.value)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                      >
+                        <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{f.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </ScrollView>
 
                 {state.transactionsLoading ? (
-                  <ActivityIndicator color={colors.primary} style={{ marginTop: 16 }} />
+                  <ActivityIndicator color={colors.primaryStrong} style={styles.listSpinner} />
                 ) : state.transactions.length === 0 ? (
                   <Text style={styles.emptyText}>Chưa có giao dịch nào.</Text>
                 ) : (
@@ -448,13 +465,16 @@ export default function TechnicianWalletScreen() {
                     const isCredit = tx.balanceAfter >= tx.balanceBefore;
                     return (
                       <View key={tx.id} style={styles.txRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.txTitle}>{TX_TYPE_LABELS[tx.type] ?? tx.type}</Text>
-                          {!!tx.description && <Text style={styles.txDesc}>{tx.description}</Text>}
-                          <Text style={styles.txDate}>{formatDateTime(tx.createdAt)}</Text>
+                        <View style={styles.flex1}>
+                          <Text style={styles.rowTitle}>{TX_TYPE_LABELS[tx.type] ?? tx.type}</Text>
+                          {!!tx.description && <Text style={styles.bodySmall}>{tx.description}</Text>}
+                          <Text style={styles.caption}>{vnDateTimeString(tx.createdAt, VN_DATETIME)}</Text>
                         </View>
-                        <Text style={[styles.txAmount, { color: isCredit ? colors.success : colors.error }]}>
-                          {isCredit ? '+' : '-'}{formatVND(tx.amount)}
+                        <Text
+                          style={[styles.txAmount, { color: isCredit ? colors.tone.success.text : colors.error }]}
+                          accessibilityLabel={`${isCredit ? 'Cộng' : 'Trừ'} ${formatVnd(tx.amount)}`}
+                        >
+                          {isCredit ? '+' : '-'}{formatVnd(tx.amount)}
                         </Text>
                       </View>
                     );
@@ -465,19 +485,23 @@ export default function TechnicianWalletScreen() {
                     <TouchableOpacity
                       disabled={state.transactionsPage <= 1}
                       onPress={() => controllerRef.current?.loadTransactions(state.transactionsPage - 1)}
-                      style={styles.pagerBtn}
+                      style={styles.textBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel="Trang trước"
                     >
-                      <Text style={[styles.pagerText, state.transactionsPage <= 1 && styles.pagerTextDisabled]}>Trước</Text>
+                      <Text style={[styles.textBtnLabel, state.transactionsPage <= 1 && styles.pagerTextDisabled]}>Trước</Text>
                     </TouchableOpacity>
-                    <Text style={styles.pagerLabel}>Trang {state.transactionsPage}</Text>
+                    <Text style={styles.bodySmall}>Trang {state.transactionsPage}</Text>
                     <TouchableOpacity
                       disabled={state.transactionsPage * 15 >= state.transactionsTotal}
                       onPress={() => controllerRef.current?.loadTransactions(state.transactionsPage + 1)}
-                      style={styles.pagerBtn}
+                      style={styles.textBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel="Trang sau"
                     >
                       <Text
                         style={[
-                          styles.pagerText,
+                          styles.textBtnLabel,
                           state.transactionsPage * 15 >= state.transactionsTotal && styles.pagerTextDisabled,
                         ]}
                       >
@@ -488,353 +512,403 @@ export default function TechnicianWalletScreen() {
                 )}
               </>
             ) : state.withdrawalsLoading ? (
-              <ActivityIndicator color={colors.primary} style={{ marginTop: 16 }} />
+              <ActivityIndicator color={colors.primaryStrong} style={styles.listSpinner} />
             ) : state.withdrawals.length === 0 ? (
               <Text style={styles.emptyText}>Chưa có yêu cầu rút tiền nào.</Text>
             ) : (
-              state.withdrawals.map((w: WithdrawalRequest) => {
-                const pill = pillColors(w.status);
-                return (
-                  <View key={w.id} style={styles.txRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.txTitle}>{w.bankName} · {w.bankAccountNumber}</Text>
-                      <Text style={styles.txDesc}>{w.bankAccountName}</Text>
-                      <Text style={styles.txDate}>{formatDateTime(w.requestedAt)}</Text>
-                      {w.status === 'REJECTED' && !!w.rejectReason && (
-                        <Text style={styles.rejectReason}>Lý do từ chối: {w.rejectReason}</Text>
-                      )}
-                      {w.status === 'FAILED' && (
-                        <Text style={styles.rejectReason}>
-                          Không chuyển được{w.failureReason ? `: ${w.failureReason}` : ''}. Tiền đã được hoàn lại vào ví.
-                        </Text>
-                      )}
-                      {w.status === 'SUCCESS' && !!w.payoutBankReference && (
-                        <Text style={styles.txDesc}>Mã giao dịch ngân hàng: {w.payoutBankReference}</Text>
-                      )}
-                      {w.status === 'PROCESSING' && (
-                        <Text style={styles.txDesc}>Ngân hàng đang xử lý lệnh chuyển</Text>
-                      )}
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.txAmount}>{formatVND(w.amount)}</Text>
-                      <View style={[styles.statusPill, { backgroundColor: pill.bg }]}>
-                        <Text style={[styles.statusPillText, { color: pill.fg }]}>
-                          {WITHDRAWAL_STATUS_LABELS[w.status] ?? w.status}
-                        </Text>
-                      </View>
-                    </View>
+              state.withdrawals.map((w: WithdrawalRequest) => (
+                <View key={w.id} style={styles.txRow}>
+                  <View style={styles.flex1}>
+                    <Text style={styles.rowTitle}>{w.bankName} · {w.bankAccountNumber}</Text>
+                    <Text style={styles.bodySmall}>{w.bankAccountName}</Text>
+                    <Text style={styles.caption}>{vnDateTimeString(w.requestedAt, VN_DATETIME)}</Text>
+                    {w.status === 'REJECTED' && !!w.rejectReason && (
+                      <Text style={styles.reasonText}>Lý do từ chối: {w.rejectReason}</Text>
+                    )}
+                    {w.status === 'FAILED' && (
+                      <Text style={styles.reasonText}>
+                        Không chuyển được{w.failureReason ? `: ${w.failureReason}` : ''}. Tiền đã được hoàn lại vào ví.
+                      </Text>
+                    )}
+                    {w.status === 'SUCCESS' && !!w.payoutBankReference && (
+                      <Text style={styles.bodySmall}>Mã giao dịch ngân hàng: {w.payoutBankReference}</Text>
+                    )}
+                    {w.status === 'PROCESSING' && (
+                      <Text style={styles.bodySmall}>Ngân hàng đang xử lý lệnh chuyển.</Text>
+                    )}
                   </View>
-                );
-              })
+                  <View style={styles.amountCol}>
+                    <Text style={styles.txAmount}>{formatVnd(w.amount)}</Text>
+                    <StatusBadge
+                      view={
+                        WITHDRAWAL_STATUS_VIEW[w.status] ?? {
+                          label: 'Trạng thái chưa xác định',
+                          tone: 'neutral',
+                          icon: 'HelpCircle',
+                        }
+                      }
+                    />
+                  </View>
+                </View>
+              ))
             )}
           </>
         ) : null}
       </ScrollView>
 
       {/* Nạp tiền */}
-      <Modal visible={topUpVisible} transparent animationType="fade" onRequestClose={() => setTopUpVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Nạp tiền vào ví</Text>
-            <View style={styles.presetRow}>
-              {TOP_UP_PRESETS.map((p) => (
-                <TouchableOpacity
-                  key={p}
-                  style={[styles.presetChip, topUpAmount === String(p) && styles.presetChipActive]}
-                  onPress={() => setTopUpAmount(String(p))}
-                >
-                  <Text style={[styles.presetChipText, topUpAmount === String(p) && styles.presetChipTextActive]}>
-                    {p.toLocaleString('vi-VN')}đ
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TextInput
-              value={topUpAmount}
-              onChangeText={setTopUpAmount}
-              keyboardType="numeric"
-              placeholder={`Số tiền khác (tối thiểu ${MIN_TOP_UP.toLocaleString('vi-VN')}đ)`}
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-            />
-            {!!state.topUpError && <Text style={styles.modalError}>{state.topUpError}</Text>}
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => { setTopUpVisible(false); setTopUpAmount(''); }}
-                disabled={state.topUpBusy}
-              >
-                <Text style={styles.cancelBtnText}>Huỷ</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveBtn, state.topUpBusy && { opacity: 0.7 }]}
-                onPress={submitTopUp}
-                disabled={state.topUpBusy}
-              >
-                {state.topUpBusy ? (
-                  <ActivityIndicator size="small" color={colors.surface} />
-                ) : (
-                  <Text style={styles.saveBtnText}>Nạp tiền</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
+      <FormModal
+        styles={styles}
+        visible={topUpVisible}
+        title="Nạp tiền vào ví"
+        onClose={() => { setTopUpVisible(false); setTopUpAmount(''); }}
+      >
+        <View style={styles.presetRow}>
+          {TOP_UP_PRESETS.map((p) => (
+            <TouchableOpacity
+              key={p}
+              style={[styles.presetChip, topUpAmount === String(p) && styles.presetChipActive]}
+              onPress={() => setTopUpAmount(String(p))}
+              accessibilityRole="button"
+              accessibilityState={{ selected: topUpAmount === String(p) }}
+            >
+              <Text style={[styles.presetChipText, topUpAmount === String(p) && styles.presetChipTextActive]}>
+                {formatVnd(p)}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
-      </Modal>
+        <Text style={styles.fieldLabel}>Số tiền khác</Text>
+        <TextInput
+          value={topUpAmount}
+          onChangeText={setTopUpAmount}
+          keyboardType="numeric"
+          placeholder={`Tối thiểu ${formatVnd(MIN_TOP_UP)}`}
+          placeholderTextColor={colors.textSecondary}
+          accessibilityLabel="Số tiền nạp"
+          style={styles.input}
+        />
+        {!!state.topUpError && <Text style={styles.modalError} accessibilityRole="alert">{state.topUpError}</Text>}
+        <View style={styles.modalActions}>
+          <TouchableOpacity
+            style={[styles.secondaryBtn, styles.flex1]}
+            onPress={() => { setTopUpVisible(false); setTopUpAmount(''); }}
+            disabled={state.topUpBusy}
+            accessibilityRole="button"
+          >
+            <Text style={styles.secondaryBtnText}>Hủy</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.primaryBtn, styles.flex1, state.topUpBusy && styles.disabled]}
+            onPress={submitTopUp}
+            disabled={state.topUpBusy}
+            accessibilityRole="button"
+          >
+            {state.topUpBusy ? (
+              <ActivityIndicator size="small" color={colors.surface} />
+            ) : (
+              <Text style={styles.primaryBtnText}>Nạp tiền</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </FormModal>
 
       {/* Rút tiền */}
-      <Modal visible={withdrawVisible} transparent animationType="fade" onRequestClose={() => setWithdrawVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Rút tiền về ngân hàng</Text>
-            <Text style={styles.fieldLabel}>
-              Có thể rút: {formatVND(summary?.withdrawableBalance ?? 0)}
-            </Text>
-            <TextInput
-              value={withdrawAmount}
-              onChangeText={setWithdrawAmount}
-              keyboardType="numeric"
-              placeholder={`Số tiền (tối thiểu ${minimumWithdrawal.toLocaleString('vi-VN')}đ)`}
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-            />
-            {state.bankAccount && (
-              <View style={styles.destinationBox}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.statLabel}>Chuyển về tài khoản</Text>
-                  <Text style={styles.txTitle}>
-                    {state.bankAccount.bankName} · {state.bankAccount.accountNumber}
-                  </Text>
-                  <Text style={styles.txDesc}>{state.bankAccount.accountName}</Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => { setWithdrawVisible(false); openBankForm(false); }}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Text style={styles.bankEditText}>Đổi</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            <Text style={styles.hintText}>
-              Tiền được chuyển ngay về tài khoản trên, không cần chờ duyệt. Nếu chuyển không thành công, tiền được hoàn lại vào ví.
-            </Text>
-            {!!state.withdrawError && <Text style={styles.modalError}>{state.withdrawError}</Text>}
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setWithdrawVisible(false)}
-                disabled={state.withdrawBusy}
-              >
-                <Text style={styles.cancelBtnText}>Huỷ</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveBtn, state.withdrawBusy && { opacity: 0.7 }]}
-                onPress={submitWithdraw}
-                disabled={state.withdrawBusy}
-              >
-                {state.withdrawBusy ? (
-                  <ActivityIndicator size="small" color={colors.surface} />
-                ) : (
-                  <Text style={styles.saveBtnText}>Rút tiền ngay</Text>
-                )}
-              </TouchableOpacity>
+      <FormModal
+        styles={styles}
+        visible={withdrawVisible}
+        title="Rút tiền về ngân hàng"
+        onClose={() => setWithdrawVisible(false)}
+      >
+        <Text style={styles.bodySmall}>Có thể rút: {formatVnd(summary?.withdrawableBalance ?? 0)}</Text>
+        <Text style={styles.fieldLabel}>Số tiền rút</Text>
+        <TextInput
+          value={withdrawAmount}
+          onChangeText={setWithdrawAmount}
+          keyboardType="numeric"
+          placeholder={`Tối thiểu ${formatVnd(minimumWithdrawal)}`}
+          placeholderTextColor={colors.textSecondary}
+          accessibilityLabel="Số tiền rút"
+          style={styles.input}
+        />
+        {state.bankAccount && (
+          <View style={styles.destinationBox}>
+            <View style={styles.flex1}>
+              <Text style={styles.caption}>Chuyển về tài khoản</Text>
+              <Text style={styles.rowTitle}>
+                {state.bankAccount.bankName} · {state.bankAccount.accountNumber}
+              </Text>
+              <Text style={styles.bodySmall}>{state.bankAccount.accountName}</Text>
             </View>
+            <TouchableOpacity
+              style={styles.textBtn}
+              onPress={() => { setWithdrawVisible(false); openBankForm(false); }}
+              accessibilityRole="button"
+              accessibilityLabel="Đổi tài khoản nhận tiền"
+            >
+              <Text style={styles.textBtnLabel}>Đổi</Text>
+            </TouchableOpacity>
           </View>
+        )}
+        <Text style={styles.hintText}>
+          Tiền được chuyển ngay về tài khoản trên, không cần chờ duyệt. Nếu chuyển không thành công, tiền được hoàn lại vào ví.
+        </Text>
+        {!!state.withdrawError && <Text style={styles.modalError} accessibilityRole="alert">{state.withdrawError}</Text>}
+        <View style={styles.modalActions}>
+          <TouchableOpacity
+            style={[styles.secondaryBtn, styles.flex1]}
+            onPress={() => setWithdrawVisible(false)}
+            disabled={state.withdrawBusy}
+            accessibilityRole="button"
+          >
+            <Text style={styles.secondaryBtnText}>Hủy</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.primaryBtn, styles.flex1, state.withdrawBusy && styles.disabled]}
+            onPress={submitWithdraw}
+            disabled={state.withdrawBusy}
+            accessibilityRole="button"
+          >
+            {state.withdrawBusy ? (
+              <ActivityIndicator size="small" color={colors.surface} />
+            ) : (
+              <Text style={styles.primaryBtnText}>Rút tiền ngay</Text>
+            )}
+          </TouchableOpacity>
         </View>
-      </Modal>
+      </FormModal>
 
       {/* Tài khoản nhận tiền */}
-      <Modal visible={bankVisible} transparent animationType="fade" onRequestClose={() => setBankVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Tài khoản nhận tiền rút</Text>
-            {bankForWithdraw && (
-              <Text style={styles.hintText}>
-                Bạn cần khai báo tài khoản nhận tiền trước khi rút. Khai một lần, lần sau hệ thống điền sẵn.
-              </Text>
-            )}
+      <FormModal
+        styles={styles}
+        visible={bankVisible}
+        title="Tài khoản nhận tiền rút"
+        onClose={() => setBankVisible(false)}
+      >
+        {bankForWithdraw && (
+          <Text style={styles.hintText}>
+            Bạn cần khai báo tài khoản nhận tiền trước khi rút. Khai một lần, lần sau hệ thống điền sẵn.
+          </Text>
+        )}
 
-            <Text style={styles.fieldLabel}>Ngân hàng</Text>
-            {bankListOpen || !selectedBank ? (
-              <>
-                <TextInput
-                  value={bankSearch}
-                  onChangeText={setBankSearch}
-                  placeholder="Tìm ngân hàng (VD: Vietcombank, MB)"
-                  placeholderTextColor={colors.muted}
-                  style={styles.input}
-                />
-                <ScrollView style={styles.bankList} nestedScrollEnabled keyboardShouldPersistTaps="handled">
-                  {state.banks.length === 0 ? (
-                    <ActivityIndicator color={colors.primary} style={{ marginVertical: 12 }} />
-                  ) : visibleBanks.length === 0 ? (
-                    <Text style={[styles.txDesc, { padding: 12 }]}>Không tìm thấy ngân hàng phù hợp.</Text>
-                  ) : (
-                    visibleBanks.map((b) => (
-                      <TouchableOpacity
-                        key={b.bin}
-                        style={[styles.bankOption, bankBin === b.bin && styles.bankOptionActive]}
-                        onPress={() => chooseBank(b.bin)}
-                        accessibilityState={{ selected: bankBin === b.bin }}
-                      >
-                        <Text style={[styles.txTitle, bankBin === b.bin && { color: colors.primaryStrong }]}>
-                          {b.shortName}
-                        </Text>
-                        <Text style={styles.txDesc} numberOfLines={1}>{b.name}</Text>
-                      </TouchableOpacity>
-                    ))
-                  )}
-                </ScrollView>
-              </>
-            ) : (
-              // Chosen: one row with the bank and a way back into the list.
-              <TouchableOpacity
-                style={styles.selectedBank}
-                onPress={() => setBankListOpen(true)}
-                accessibilityLabel={`Ngân hàng đã chọn: ${selectedBank.shortName}. Bấm để đổi`}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.txTitle}>{selectedBank.shortName}</Text>
-                  <Text style={styles.txDesc} numberOfLines={1}>{selectedBank.name}</Text>
-                </View>
-                <Text style={styles.bankEditText}>Đổi</Text>
-              </TouchableOpacity>
-            )}
-
+        <Text style={styles.fieldLabel}>Ngân hàng</Text>
+        {bankListOpen || !selectedBank ? (
+          <>
             <TextInput
-              value={accountNumber}
-              onChangeText={setAccountNumber}
-              keyboardType="number-pad"
-              maxLength={19}
-              placeholder="Số tài khoản"
-              placeholderTextColor={colors.muted}
+              value={bankSearch}
+              onChangeText={setBankSearch}
+              placeholder="Tìm ngân hàng (VD: Vietcombank, MB)"
+              placeholderTextColor={colors.textSecondary}
+              accessibilityLabel="Tìm ngân hàng"
               style={styles.input}
             />
-            <TextInput
-              value={accountName}
-              onChangeText={setAccountName}
-              autoCapitalize="characters"
-              maxLength={128}
-              placeholder="Tên chủ tài khoản"
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-            />
-            <Text style={styles.hintText}>
-              Phải trùng họ tên đã xác minh danh tính. Gõ có dấu hay không dấu đều được.
-            </Text>
-            {!!state.bankError && <Text style={styles.modalError}>{state.bankError}</Text>}
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setBankVisible(false)}
-                disabled={state.bankBusy}
-              >
-                <Text style={styles.cancelBtnText}>Huỷ</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveBtn, state.bankBusy && { opacity: 0.7 }]}
-                onPress={submitBank}
-                disabled={state.bankBusy}
-              >
-                {state.bankBusy ? (
-                  <ActivityIndicator size="small" color={colors.surface} />
-                ) : (
-                  <Text style={styles.saveBtnText}>Lưu tài khoản</Text>
-                )}
-              </TouchableOpacity>
+            <ScrollView style={styles.bankList} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+              {state.banks.length === 0 ? (
+                <ActivityIndicator color={colors.primaryStrong} style={styles.listSpinner} />
+              ) : visibleBanks.length === 0 ? (
+                <Text style={[styles.bodySmall, styles.pad12]}>Không tìm thấy ngân hàng phù hợp.</Text>
+              ) : (
+                visibleBanks.map((b) => (
+                  <TouchableOpacity
+                    key={b.bin}
+                    style={[styles.bankOption, bankBin === b.bin && styles.bankOptionActive]}
+                    onPress={() => chooseBank(b.bin)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: bankBin === b.bin }}
+                  >
+                    <Text style={[styles.rowTitle, bankBin === b.bin && { color: colors.primaryStrong }]}>
+                      {b.shortName}
+                    </Text>
+                    <Text style={styles.bodySmall} numberOfLines={1}>{b.name}</Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+          </>
+        ) : (
+          // Chosen: one row with the bank and a way back into the list.
+          <TouchableOpacity
+            style={styles.selectedBank}
+            onPress={() => setBankListOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Ngân hàng đã chọn: ${selectedBank.shortName}. Bấm để đổi`}
+          >
+            <View style={styles.flex1}>
+              <Text style={styles.rowTitle}>{selectedBank.shortName}</Text>
+              <Text style={styles.bodySmall} numberOfLines={1}>{selectedBank.name}</Text>
             </View>
-          </View>
+            <Text style={styles.textBtnLabel}>Đổi</Text>
+          </TouchableOpacity>
+        )}
+
+        <Text style={styles.fieldLabel}>Số tài khoản</Text>
+        <TextInput
+          value={accountNumber}
+          onChangeText={setAccountNumber}
+          keyboardType="number-pad"
+          maxLength={19}
+          placeholder="Nhập số tài khoản"
+          placeholderTextColor={colors.textSecondary}
+          accessibilityLabel="Số tài khoản"
+          style={styles.input}
+        />
+        <Text style={styles.fieldLabel}>Tên chủ tài khoản</Text>
+        <TextInput
+          value={accountName}
+          onChangeText={setAccountName}
+          autoCapitalize="characters"
+          maxLength={128}
+          placeholder="Nhập tên chủ tài khoản"
+          placeholderTextColor={colors.textSecondary}
+          accessibilityLabel="Tên chủ tài khoản"
+          style={styles.input}
+        />
+        <Text style={styles.hintText}>
+          Phải trùng họ tên đã xác minh danh tính. Gõ có dấu hay không dấu đều được.
+        </Text>
+        {!!state.bankError && <Text style={styles.modalError} accessibilityRole="alert">{state.bankError}</Text>}
+        <View style={styles.modalActions}>
+          <TouchableOpacity
+            style={[styles.secondaryBtn, styles.flex1]}
+            onPress={() => setBankVisible(false)}
+            disabled={state.bankBusy}
+            accessibilityRole="button"
+          >
+            <Text style={styles.secondaryBtnText}>Hủy</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.primaryBtn, styles.flex1, state.bankBusy && styles.disabled]}
+            onPress={submitBank}
+            disabled={state.bankBusy}
+            accessibilityRole="button"
+          >
+            {state.bankBusy ? (
+              <ActivityIndicator size="small" color={colors.surface} />
+            ) : (
+              <Text style={styles.primaryBtnText}>Lưu tài khoản</Text>
+            )}
+          </TouchableOpacity>
         </View>
-      </Modal>
+      </FormModal>
     </SafeAreaView>
   );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
+type WalletStyles = ReturnType<typeof getStyles>;
+
+function Banner({ styles, tone, Icon, busy, text }: {
+  styles: WalletStyles;
+  tone: Tone;
+  Icon?: LucideIcon;
+  busy?: boolean;
+  text: string;
+}) {
+  return (
+    <View style={[styles.banner, { backgroundColor: tone.bg }]} accessibilityRole="alert">
+      {busy ? <ActivityIndicator size="small" color={tone.fg} /> : Icon ? <Icon size={18} color={tone.fg} strokeWidth={1.75} /> : null}
+      <Text style={[styles.bannerText, { color: tone.text }]}>{text}</Text>
+    </View>
+  );
+}
+
+/** Centered dialog that keeps its fields above the keyboard and scrolls when content is tall. */
+function FormModal({ styles, visible, title, onClose, children }: {
+  styles: WalletStyles;
+  visible: boolean;
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.modalCard}>
+          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <Text style={styles.modalTitle} accessibilityRole="header">{title}</Text>
+            {children}
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
-  scrollContent: { paddingHorizontal: 16, paddingBottom: 40 },
-  errorText: { color: colors.error, textAlign: 'center', marginTop: 40 },
+  flex1: { flex: 1 },
+  pad12: { padding: 12 },
+  disabled: { opacity: 0.5 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, paddingVertical: 4 },
+  backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40, gap: 12 },
+  centerBlock: { alignItems: 'center', gap: 12, marginTop: 40 },
+  mutedText: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
+  errorText: { fontSize: 14, lineHeight: 20, color: colors.error, textAlign: 'center' },
 
-  heroCard: { borderRadius: 20, padding: 20, marginBottom: 16 },
-  heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  heroLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 14, fontWeight: '600' },
-  eligibilityBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  eligibilityText: { fontSize: 11, fontWeight: '700' },
-  heroBalance: { color: '#fff', fontSize: 32, fontWeight: '800', marginBottom: 4 },
-  heroSub: { color: 'rgba(255,255,255,0.85)', fontSize: 12, marginBottom: 16 },
-  heroActions: { flexDirection: 'row', gap: 10 },
-  heroBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#fff', borderRadius: 12, paddingVertical: 10 },
-  heroBtnDisabled: { opacity: 0.5 },
-  heroBtnText: { color: colors.primaryStrong, fontWeight: '700', fontSize: 13 },
+  caption: { fontSize: 12, lineHeight: 16, fontWeight: '500', color: colors.textSecondary },
+  bodySmall: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
+  rowTitle: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.text },
+  hintText: { fontSize: 12, lineHeight: 16, color: colors.textSecondary, marginBottom: 12 },
 
-  warningBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FEF3C7', borderRadius: 12, padding: 12, marginBottom: 12 },
-  warningText: { flex: 1, color: '#92400E', fontSize: 12, fontWeight: '500' },
-  criticalBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FEE2E2', borderRadius: 12, padding: 12, marginBottom: 12 },
-  criticalText: { flex: 1, color: '#991B1B', fontSize: 12, fontWeight: '500' },
-  infoBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.primaryTint, borderRadius: 12, padding: 12, marginBottom: 12 },
-  infoText: { flex: 1, color: colors.primaryStrong, fontSize: 12, fontWeight: '500' },
+  heroCard: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 16, gap: 8 },
+  heroBalance: { fontSize: 32, lineHeight: 40, fontWeight: '700', color: colors.text },
+  heroActions: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48, borderRadius: 14, backgroundColor: colors.primaryStrong, paddingHorizontal: 16 },
+  primaryBtnText: { color: colors.surface, fontSize: 16, lineHeight: 24, fontWeight: '600' },
+  secondaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48, borderRadius: 14, borderWidth: 1.5, borderColor: colors.primaryStrong, backgroundColor: colors.surface, paddingHorizontal: 16 },
+  secondaryBtnText: { color: colors.primaryStrong, fontSize: 16, lineHeight: 24, fontWeight: '600' },
+  textBtn: { minHeight: 44, minWidth: 44, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8 },
+  textBtnLabel: { color: colors.primaryStrong, fontSize: 14, lineHeight: 20, fontWeight: '700' },
 
-  statRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
-  statCard: { flex: 1, backgroundColor: colors.surface, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: colors.border },
-  statLabel: { fontSize: 11, color: colors.textSecondary, marginBottom: 4 },
-  statValue: { fontSize: 13, fontWeight: '700', color: colors.text },
+  banner: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, padding: 12 },
+  bannerText: { flex: 1, fontSize: 14, lineHeight: 20, fontWeight: '500' },
 
-  bankCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface, borderRadius: 14, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: colors.border },
-  bankIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center' },
-  bankEditBtn: { paddingVertical: 8, paddingHorizontal: 12, minHeight: 44, justifyContent: 'center' },
-  bankEditText: { color: colors.primaryStrong, fontWeight: '700', fontSize: 13 },
-  bankList: { maxHeight: 200, borderWidth: 1, borderColor: colors.border, borderRadius: 12, marginBottom: 12 },
-  selectedBank: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 56, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.primaryTint, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12 },
-  bankOption: { paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
-  bankOptionActive: { backgroundColor: colors.primaryTint },
-  destinationBox: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginBottom: 12 },
-  hintText: { fontSize: 12, color: colors.textSecondary, marginBottom: 12 },
+  statRow: { flexDirection: 'row', gap: 8 },
+  statCard: { flex: 1, backgroundColor: colors.surface, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: colors.border, gap: 4 },
+  statValue: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.text },
 
-  tabRow: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: 12, padding: 4, marginBottom: 12, borderWidth: 1, borderColor: colors.border },
-  tabBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 10 },
-  tabBtnActive: { backgroundColor: colors.primaryTint },
-  tabText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
-  tabTextActive: { color: colors.primaryStrong },
+  bankCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: colors.border },
+  iconTile: { width: 40, height: 40, borderRadius: 8, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  bankList: { maxHeight: 200, borderWidth: 1, borderColor: colors.border, borderRadius: 14, marginBottom: 12 },
+  selectedBank: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 56, borderWidth: 1, borderColor: colors.primaryStrong, backgroundColor: colors.primarySoft, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8, marginBottom: 12 },
+  bankOption: { minHeight: 56, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  bankOptionActive: { backgroundColor: colors.primarySoft },
+  destinationBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 12, marginBottom: 12 },
 
-  filterRow: { marginBottom: 12 },
-  filterChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: colors.border, marginRight: 8 },
-  filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  filterChipText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
-  filterChipTextActive: { color: colors.surface },
+  segment: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: 14, padding: 4, borderWidth: 1, borderColor: colors.border },
+  segmentBtn: { flex: 1, minHeight: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 10 },
+  segmentBtnActive: { backgroundColor: colors.primarySoft },
+  segmentText: { fontSize: 14, lineHeight: 20, fontWeight: '500', color: colors.textSecondary },
+  segmentTextActive: { color: colors.primaryStrong, fontWeight: '700' },
 
-  emptyText: { textAlign: 'center', color: colors.muted, marginTop: 20 },
-  txRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', backgroundColor: colors.surface, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: colors.border, gap: 10 },
-  txTitle: { fontSize: 13, fontWeight: '700', color: colors.text },
-  txDesc: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  txDate: { fontSize: 11, color: colors.muted, marginTop: 4 },
-  txAmount: { fontSize: 14, fontWeight: '800' },
-  rejectReason: { fontSize: 11, color: colors.error, marginTop: 4 },
+  filterScroll: { flexGrow: 0 },
+  filterRow: { gap: 8 },
+  filterChip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: 22, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  filterChipActive: { backgroundColor: colors.primaryStrong, borderColor: colors.primaryStrong },
+  filterChipText: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, fontWeight: '500' },
+  filterChipTextActive: { color: colors.surface, fontWeight: '700' },
 
-  statusPill: { marginTop: 6, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  statusPillText: { fontSize: 10, fontWeight: '700' },
+  listSpinner: { marginVertical: 16 },
+  emptyText: { textAlign: 'center', fontSize: 14, lineHeight: 20, color: colors.textSecondary, marginTop: 16 },
+  txRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', backgroundColor: colors.surface, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: colors.border, gap: 12 },
+  txAmount: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: colors.text },
+  amountCol: { alignItems: 'flex-end', gap: 6 },
+  reasonText: { fontSize: 12, lineHeight: 16, color: colors.error, marginTop: 4 },
 
-  pagerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 20, marginTop: 8 },
-  pagerBtn: { paddingVertical: 8, paddingHorizontal: 4 },
-  pagerText: { color: colors.primaryStrong, fontWeight: '700', fontSize: 13 },
+  pagerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16 },
   pagerTextDisabled: { color: colors.muted },
-  pagerLabel: { color: colors.textSecondary, fontSize: 12 },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
-  modalCard: { backgroundColor: colors.surface, borderRadius: 20, padding: 20 },
-  modalTitle: { fontSize: 17, fontWeight: '700', color: colors.text, marginBottom: 16 },
-  fieldLabel: { fontSize: 13, color: colors.textSecondary, marginBottom: 8, fontWeight: '500' },
-  presetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  presetChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: colors.border, marginRight: 8 },
-  presetChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  presetChipText: { fontSize: 13, color: colors.text, fontWeight: '600' },
+  modalCard: { backgroundColor: colors.surface, borderRadius: 20, padding: 20, maxHeight: '90%' },
+  modalTitle: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text, marginBottom: 16 },
+  fieldLabel: { fontSize: 14, lineHeight: 20, color: colors.text, marginBottom: 8, fontWeight: '500' },
+  presetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  presetChip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
+  presetChipActive: { backgroundColor: colors.primaryStrong, borderColor: colors.primaryStrong },
+  presetChipText: { fontSize: 14, lineHeight: 20, color: colors.text, fontWeight: '600' },
   presetChipTextActive: { color: colors.surface },
-  input: { width: '100%', backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: colors.text, marginBottom: 12 },
-  modalError: { color: colors.error, fontSize: 12, marginBottom: 8 },
-  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 4 },
-  cancelBtn: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, backgroundColor: colors.border },
-  cancelBtnText: { color: colors.textSecondary, fontWeight: '600', fontSize: 14 },
-  saveBtn: { paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
-  saveBtnText: { color: colors.surface, fontWeight: '600', fontSize: 14 },
+  input: { width: '100%', minHeight: 48, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.textSecondary, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 16, color: colors.text, marginBottom: 12 },
+  modalError: { color: colors.error, fontSize: 14, lineHeight: 20, marginBottom: 8 },
+  modalActions: { flexDirection: 'row', gap: 12, marginTop: 4 },
 });

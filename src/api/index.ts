@@ -6,6 +6,7 @@ export { servicesApi } from './services.api';
 export { aiApi } from './ai.api';
 export { usersApi } from './users.api';
 export { technicianVerificationApi } from './technician-verification.api';
+export { technicianOnboardingApi } from './technician-onboarding.api';
 export { technicianProfileApi } from './technician-profile.api';
 export { messagingApi } from './messaging.api';
 export { partRequestsApi } from './part-requests.api';

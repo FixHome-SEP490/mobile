@@ -41,6 +41,8 @@ export default function RegisterScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList & RootStackParamList>>();
   
   const [email, setEmail] = useState('');
+  const [role, setRole] = useState<'customer' | 'technician'>('customer');
+  const isTechnician = role === 'technician';
   
   const renderRuleItem = (met: boolean, text: string) => (
     <View style={styles.ruleItem}>
@@ -165,7 +167,7 @@ export default function RegisterScreen() {
         email: trimmedEmail,
         password,
         phoneNumber: phone.trim() || undefined,
-        role: 'customer',
+        role,
       });
       navigation.reset({ index: 0, routes: [{ name: 'VerifyRegisterOtp', params: { email: trimmedEmail, password } }] });
     } catch (error: unknown) {
@@ -199,8 +201,44 @@ export default function RegisterScreen() {
             </View>
             <Text style={styles.title}>ĐĂNG KÝ HỘI VIÊN</Text>
             <View style={styles.divider} />
-            <Text style={styles.subtitle}>GIA NHẬP HỆ THỐNG FIXHOME</Text>
+            <Text style={styles.subtitle}>
+              {isTechnician ? 'GIA NHẬP ĐỘI NGŨ KỸ THUẬT VIÊN FIXHOME' : 'GIA NHẬP HỆ THỐNG FIXHOME'}
+            </Text>
           </View>
+
+          <View style={styles.roleRow}>
+            {([
+              { value: 'customer', title: 'Khách hàng', sub: 'Đặt lịch sửa chữa' },
+              { value: 'technician', title: 'Kỹ thuật viên', sub: 'Gia nhập FixHome' },
+            ] as const).map((option) => {
+              const selected = role === option.value;
+              return (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[styles.roleBtn, selected && styles.roleBtnActive]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setRole(option.value);
+                  }}
+                  disabled={isLoading}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                >
+                  <Text style={[styles.roleTitle, selected && styles.roleTitleActive]}>{option.title}</Text>
+                  <Text style={styles.roleSub}>{option.sub}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {isTechnician && (
+            <View style={styles.roleNotice}>
+              <Ionicons name="shield-checkmark-outline" size={18} color={colors.primaryStrong} />
+              <Text style={styles.roleNoticeText}>
+                Đăng ký kỹ thuật viên gồm 2 giai đoạn: (1) đăng ký và xác thực email bằng OTP; (2) điền thông tin cá nhân, nộp ảnh CCCD và ảnh chân dung, chọn kỹ năng và khu vực hoạt động để quản trị viên xét duyệt.
+              </Text>
+            </View>
+          )}
 
           <View style={styles.formContainer}>
             <View style={styles.inputGroup}>
@@ -371,18 +409,23 @@ export default function RegisterScreen() {
               <Text style={styles.registerBtnText}>{isLoading ? 'ĐANG ĐĂNG KÝ...' : 'ĐĂNG KÝ'}</Text>
             </TouchableOpacity>
 
-            <View style={styles.googleDividerRow}>
-              <View style={styles.googleDividerLine} />
-              <Text style={styles.googleDividerText}>HOẶC</Text>
-              <View style={styles.googleDividerLine} />
-            </View>
+            {/* Google chỉ tạo tài khoản khách hàng, nên ẩn khi đang đăng ký kỹ thuật viên. */}
+            {!isTechnician && (
+              <>
+                <View style={styles.googleDividerRow}>
+                  <View style={styles.googleDividerLine} />
+                  <Text style={styles.googleDividerText}>HOẶC</Text>
+                  <View style={styles.googleDividerLine} />
+                </View>
 
-            <GoogleSignInButton
-              onPress={() => void handleGoogleSignIn()}
-              loading={googleLoading}
-              disabled={isLoading}
-              label="Đăng ký với Google"
-            />
+                <GoogleSignInButton
+                  onPress={() => void handleGoogleSignIn()}
+                  loading={googleLoading}
+                  disabled={isLoading}
+                  label="Đăng ký với Google"
+                />
+              </>
+            )}
 
             <View style={[styles.loginRow, { marginTop: 20 }]}>
               <Text style={styles.loginText}>Đã có tài khoản? </Text>
@@ -459,6 +502,56 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     color: '#6B7280',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
+  },
+  roleRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  roleBtn: {
+    flex: 1,
+    minHeight: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    paddingVertical: 8,
+  },
+  roleBtnActive: {
+    borderColor: colors.primaryStrong,
+    backgroundColor: colors.primarySoft,
+  },
+  roleTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  roleTitleActive: {
+    color: colors.primaryStrong,
+    fontWeight: '700',
+  },
+  roleSub: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  roleNotice: {
+    flexDirection: 'row',
+    gap: 8,
+    padding: 12,
+    marginBottom: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.primaryTint,
+    backgroundColor: colors.primarySoft,
+  },
+  roleNoticeText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.text,
   },
   formContainer: {
     width: '100%',

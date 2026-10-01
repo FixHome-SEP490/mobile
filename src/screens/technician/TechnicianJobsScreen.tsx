@@ -10,10 +10,21 @@ import {
   Alert,
   StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  Archive,
+  ArrowRight,
+  Briefcase,
+  CheckCircle2,
+  Clock,
+  MapPin,
+  MessageCircle,
+  User,
+  Navigation,
+  RefreshCw,
+} from 'lucide-react-native';
 import { useAppTheme } from '../../constants/theme';
-import { ordersApi, type CanonicalOrderStatus } from '../../api/orders.api';
+import { ordersApi } from '../../api/orders.api';
 import { createJobsLoader, getCachedJobsState, technicianJobsUserId } from './technician-jobs-loader';
 import { historicalSummaryDates, isHistoricalOrder, resolveJobsView, techOrderDetailTarget } from './technician-order-detail';
 import { findChatForBooking } from './technician-chat-shortcut';
@@ -29,14 +40,24 @@ import {
   type ArrivalVerificationState,
   type PermissionDecision,
 } from './technician-check-in';
-import { useInvitationCount } from '../../hooks/useInvitationCount';
-import { vnDateString } from '../../utils/vn-time';
+import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
+import StatusBadge from '../../components/StatusBadge';
+import ContactActions from '../../components/ContactActions';
+import { serviceOrderStatusView } from './technician-status';
+import { formatVnd } from '../../utils/format';
 
+import { vnDateTimeString } from '../../utils/vn-time';
+
+const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 type JobTab = 'all' | 'pending' | 'in_progress' | 'completed';
 
+// Floating GlassTabBar: 64pt pill + breathing room, plus the bottom inset (min 16).
+const TAB_BAR_CLEARANCE = 64 + 16;
+
 export default function TechnicianJobsScreen() {
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const styles = getStyles(colors);
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [activeTab, setActiveTab] = useState<JobTab>('all');
   const [jobsState, setJobsState] = useState(getCachedJobsState);
@@ -44,7 +65,6 @@ export default function TechnicianJobsScreen() {
   const [checkInBusy, setCheckInBusy] = useState<string | null>(null);
   const [arrivalStates, setArrivalStates] = useState<Record<string, Exclude<ArrivalVerificationState, 'clear'>>>({});
   const technicianUserId = useAuthStore(technicianJobsUserId);
-  const invitationCount = useInvitationCount();
   const jobsRef = useRef(jobsState.jobs);
   useEffect(() => {
     jobsRef.current = jobsState.jobs;
@@ -181,695 +201,405 @@ export default function TechnicianJobsScreen() {
     }
   };
 
-  const getStatusBadge = (status: CanonicalOrderStatus) => {
-    const s = String(status).toUpperCase();
-    switch (s) {
-      case 'ACCEPTED':
-        return { label: 'Chờ di chuyển', bg: '#FEF3C7', color: '#D97706' };
-      case 'EN_ROUTE':
-        return { label: 'Đang trên đường', bg: '#DCFCE7', color: '#16A34A' };
-      case 'UNDER_REPAIR':
-      case 'IN_PROGRESS':
-        return { label: 'Đang sửa chữa', bg: colors.primaryTint, color: colors.primaryStrong };
-      case 'COMPLETED':
-        return { label: 'Hoàn tất', bg: colors.divider, color: colors.textSecondary };
-      default:
-        return { label: s, bg: colors.divider, color: colors.textSecondary };
-    }
-  };
-
   const jobsView = resolveJobsView(jobsState, activeTab);
   const { filtered: filteredJobs, showLoadMoreJobs, jobsCoverageText, emptyNote } = jobsView;
-  const completedCount = jobs.filter((job) => String(job.status).toUpperCase() === 'COMPLETED').length;
+  // Counts only mean something once every page is loaded (filtering is loaded-only).
+  const showCounts = !showLoadMoreJobs && !loading;
+  const tabCount = (tab: JobTab) => (showCounts ? ` ${resolveJobsView(jobsState, tab).filtered.length}` : '');
+  const tabs: { key: JobTab; label: string }[] = [
+    { key: 'all', label: 'Tất cả' },
+    { key: 'pending', label: 'Chờ thực hiện' },
+    { key: 'in_progress', label: 'Đang sửa chữa' },
+    { key: 'completed', label: 'Hoàn thành' },
+  ];
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
-      {/* Header */}
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Công việc</Text>
-        <TouchableOpacity
-          style={styles.invitationsBtn}
-          onPress={() => navigation.navigate('TechnicianInvitations')}
-          disabled={!technicianUserId}
-          accessibilityRole="button"
-          accessibilityLabel={
-            invitationCount > 0 ? `Xem lời mời chờ xác nhận, ${invitationCount} lời mời mới` : 'Xem lời mời chờ xác nhận'
-          }
-        >
-          <Ionicons name="mail-outline" size={18} color={colors.primaryStrong} />
-          <Text style={styles.invitationsBtnText}>Lời mời</Text>
-          {invitationCount > 0 && (
-            <View style={styles.invitationsBtnBadge}>
-              <Text style={styles.invitationsBtnBadgeText}>{invitationCount > 9 ? '9+' : invitationCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        <Text style={styles.headerTitle} accessibilityRole="header">Công việc</Text>
       </View>
 
       <View style={styles.container}>
-
-      {invitationCount > 0 && (
-        <TouchableOpacity
-          style={styles.invitationBanner}
-          onPress={() => navigation.navigate('TechnicianInvitations')}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel={`Bạn có ${invitationCount} lời mời nhận việc mới, xem ngay`}
-        >
-          <View style={styles.invitationBannerIcon}>
-            <Ionicons name="mail-unread" size={20} color="#D97706" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.invitationBannerTitle}>
-              {invitationCount} lời mời nhận việc mới
-            </Text>
-            <Text style={styles.invitationBannerSubtitle}>Xác nhận sớm để không bỏ lỡ đơn</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#D97706" />
-        </TouchableOpacity>
-      )}
-
-      {/* Tabs */}
-      <View style={styles.tabRow}>
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'all' && styles.tabBtnActive]}
-          onPress={() => setActiveTab('all')}
-        >
-          <Text
-            style={activeTab === 'all' ? styles.tabTextActive : styles.tabText}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.8}
-          >
-            Tất cả ({jobs.length})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'pending' && styles.tabBtnActive]}
-          onPress={() => setActiveTab('pending')}
-        >
-          <Text
-            style={activeTab === 'pending' ? styles.tabTextActive : styles.tabText}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.8}
-          >
-            Cần di chuyển
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'in_progress' && styles.tabBtnActive]}
-          onPress={() => setActiveTab('in_progress')}
-        >
-          <Text
-            style={activeTab === 'in_progress' ? styles.tabTextActive : styles.tabText}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.8}
-          >
-            Đang sửa
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'completed' && styles.tabBtnActive]}
-          onPress={() => setActiveTab('completed')}
-        >
-          <Text
-            style={activeTab === 'completed' ? styles.tabTextActive : styles.tabText}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.8}
-          >
-            Hoàn thành ({completedCount})
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {loading ? (
-        <View style={styles.centerLoading}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Đang tải danh sách công việc...</Text>
-        </View>
-      ) : (
+        {/* Filter chips */}
         <ScrollView
-          contentContainerStyle={[styles.scrollContent, filteredJobs.length === 0 && styles.emptyScroll]}
-          alwaysBounceVertical
-          refreshControl={<RefreshControl refreshing={manualRefreshing} onRefresh={onRefresh} />}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.chipScroll}
+          contentContainerStyle={styles.chipRow}
         >
-          {error && (
-            <View style={styles.errorBanner} accessibilityRole="alert">
-              <Text style={styles.emptyDesc}>{error}</Text>
-              {jobs.length > 0 && <Text style={styles.emptyDesc}>Đang hiển thị danh sách đã tải trước đó.</Text>}
-              <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button">
-                <Text style={styles.invitationsBtnText}>Thử lại</Text>
+          {tabs.map(({ key, label }) => {
+            const active = activeTab === key;
+            return (
+              <TouchableOpacity
+                key={key}
+                style={[styles.chip, active && styles.chipActive]}
+                onPress={() => setActiveTab(key)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={`${label}${tabCount(key)}`}
+              >
+                <Text style={active ? styles.chipTextActive : styles.chipText}>
+                  {label}
+                  {tabCount(key)}
+                </Text>
               </TouchableOpacity>
-            </View>
-          )}
-          {filteredJobs.length === 0 && !error && (
-            <View style={styles.emptyContainer}>
-              <Ionicons name="briefcase-outline" size={56} color="#CBD5E1" />
-              <Text style={styles.emptyTitle}>Chưa có công việc nào</Text>
-              <Text style={styles.emptyDesc}>
-                {emptyNote === 'more-pages'
-                  ? 'Tab này chưa có công việc phù hợp ở trang đã tải. Bấm Tải thêm công việc để xem tiếp.'
-                  : 'Các công việc mới từ khách hàng sẽ hiển thị ở đây.'}
-              </Text>
-              <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button" style={styles.refreshBtn}>
-                <Text style={styles.invitationsBtnText}>Làm mới</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          <View style={styles.list}>
-            {filteredJobs.map((job) => {
-              if (isHistoricalOrder(job)) {
-                const badge = getStatusBadge(job.status);
-                const dates = historicalSummaryDates(job);
-                return (
-                  <View key={job.id || job.code} style={styles.jobCard}>
-                    <View style={styles.cardHeader}>
-                      <View style={styles.iconMap}>
-                        <Ionicons name="archive-outline" size={24} color={colors.primary} />
-                      </View>
-                      <View style={styles.cardContent}>
-                        <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-                          <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
-                        </View>
-                        <Text style={styles.jobTitle}>
-                          #{job.code || (typeof job.id === 'string' ? job.id.slice(0, 8) : '—')}
-                        </Text>
-                        {!!dates.created && (
-                          <Text style={styles.jobMeta}>Tạo: {dates.created}</Text>
-                        )}
-                        {!!dates.ended && (
-                          <Text style={styles.jobMeta}>Kết thúc: {dates.ended}</Text>
-                        )}
-                        <Text style={styles.jobMeta}>Đơn lưu trữ — chỉ xem tóm tắt.</Text>
-                      </View>
-                    </View>
-                  </View>
-                );
-              }
-              const badge = getStatusBadge(job.status);
-              const s = String(job.status).toUpperCase();
-              const isActioning = actionLoading === job.id;
-              const detailId = techOrderDetailTarget(job);
+            );
+          })}
+        </ScrollView>
 
-              return (
-                <View key={job.id || job.code} style={styles.jobCard}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.iconMap}>
-                      <Ionicons name="construct-outline" size={24} color={colors.primary} />
-                    </View>
-                    <View style={styles.cardContent}>
-                      <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-                        <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
+        {loading ? (
+          <View style={styles.skeletonWrap}>
+            <CustomerSkeleton variant="booking" />
+          </View>
+        ) : (
+          <ScrollView
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingBottom: TAB_BAR_CLEARANCE + Math.max(insets.bottom, 16) },
+              filteredJobs.length === 0 && styles.emptyScroll,
+            ]}
+            alwaysBounceVertical
+            refreshControl={<RefreshControl refreshing={manualRefreshing} onRefresh={onRefresh} />}
+          >
+            {error && (
+              <View style={[styles.errorBanner, { backgroundColor: colors.tone.warning.bg }]} accessibilityRole="alert">
+                <Text style={[styles.errorText, { color: colors.tone.warning.text }]}>{error}</Text>
+                {jobs.length > 0 && (
+                  <Text style={[styles.errorText, { color: colors.tone.warning.text }]}>
+                    Đang hiển thị danh sách đã tải trước đó.
+                  </Text>
+                )}
+                <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button" style={styles.textBtn}>
+                  <Text style={styles.textBtnLabel}>Thử lại</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {filteredJobs.length === 0 && !error && (
+              <View style={styles.emptyContainer}>
+                <Briefcase size={56} color={colors.muted} strokeWidth={1.5} />
+                <Text style={styles.emptyTitle}>Chưa có công việc nào</Text>
+                <Text style={styles.emptyDesc}>
+                  {emptyNote === 'more-pages'
+                    ? 'Mục này chưa có công việc phù hợp trong phần đã tải. Chọn “Tải thêm công việc” để xem tiếp.'
+                    : 'Các công việc mới từ khách hàng sẽ hiển thị ở đây.'}
+                </Text>
+                <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button" style={styles.textBtn}>
+                  <Text style={styles.textBtnLabel}>Làm mới</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            <View style={styles.list}>
+              {filteredJobs.map((job) => {
+                const statusView = serviceOrderStatusView(job.status);
+                if (isHistoricalOrder(job)) {
+                  const dates = historicalSummaryDates(job);
+                  return (
+                    <View key={job.id || job.code} style={[styles.jobCard, styles.jobCardMuted]}>
+                      <View style={styles.badgeRow}>
+                        <StatusBadge view={statusView} />
+                        <Archive size={18} color={colors.muted} strokeWidth={1.75} />
                       </View>
                       <Text style={styles.jobTitle}>
-                        #{job.code || job.id.slice(0, 8)} · {job.serviceName || 'Dịch vụ sửa chữa'}
+                        #{job.code || (typeof job.id === 'string' ? job.id.slice(0, 8) : '—')}
                       </Text>
-                      <View style={styles.jobMetaRow}>
-                        {!!job.scheduledAt && (
-                          <Text style={styles.jobMeta}>{vnDateString(job.scheduledAt)}</Text>
-                        )}
-                        {typeof job.grandTotal === 'number' && (
-                          <Text style={styles.jobAmount}>Dự kiến thu: {job.grandTotal.toLocaleString('vi-VN')}đ</Text>
-                        )}
-                      </View>
-                      {job.customerName && (
-                        <Text style={styles.jobMeta}>Khách: {job.customerName} {job.customerPhone ? `(${job.customerPhone})` : ''}</Text>
+                      {!!dates.created && <Text style={styles.jobMeta}>Tạo: {dates.created}</Text>}
+                      {!!dates.ended && <Text style={styles.jobMeta}>Kết thúc: {dates.ended}</Text>}
+                      <Text style={styles.jobMeta}>Đơn lưu trữ — chỉ xem tóm tắt.</Text>
+                    </View>
+                  );
+                }
+                const s = String(job.status).toUpperCase();
+                const isActioning = actionLoading === job.id;
+                const detailId = techOrderDetailTarget(job);
+                const code = job.code || job.id.slice(0, 8);
+                const hasActions =
+                  !!job.bookingId || s === 'ACCEPTED' || s === 'EN_ROUTE';
+
+                const info = (
+                  <View style={styles.info}>
+                    <View style={styles.badgeRow}>
+                      <StatusBadge view={statusView} />
+                      <Text style={styles.jobCode}>#{code}</Text>
+                    </View>
+                    <Text style={styles.jobTitle}>{job.serviceName || 'Dịch vụ sửa chữa'}</Text>
+                    <View style={styles.jobMetaRow}>
+                      {!!job.scheduledAt && (
+                        <View style={styles.iconRow}>
+                          <Clock size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                          <Text style={styles.jobMeta}>{vnDateTimeString(job.scheduledAt, VN_DATETIME)}</Text>
+                        </View>
                       )}
-                      {job.addressSummary && (
-                        <Text style={styles.jobAddress} numberOfLines={2}>
-                          📍 {job.addressSummary}
-                        </Text>
+                      {typeof job.grandTotal === 'number' && (
+                        <Text style={styles.jobAmount}>Dự kiến thu: {formatVnd(job.grandTotal)}</Text>
                       )}
                     </View>
-                  </View>
-
-                  {/* Actions depending on status */}
-                  <View style={styles.actionsRow}>
-                    {(!!detailId || !!job.bookingId) && (
-                      <View style={styles.secondaryRow}>
-                        {!!detailId && (
-                          <TouchableOpacity
-                            style={styles.detailBtn}
-                            onPress={() => navigation.navigate('TechnicianOrderDetail', { serviceOrderId: detailId })}
-                            accessibilityRole="button"
-                            accessibilityLabel="Xem chi tiết đơn"
-                          >
-                            <Ionicons name="document-text-outline" size={16} color={colors.primaryStrong} />
-                            <Text style={styles.detailBtnText}>Chi tiết đơn</Text>
-                          </TouchableOpacity>
-                        )}
-                        {!!job.bookingId && (
-                          <TouchableOpacity
-                            style={styles.detailBtn}
-                            onPress={() => handleOpenChat(job.bookingId)}
-                            disabled={openingChatFor === job.bookingId}
-                            accessibilityRole="button"
-                            accessibilityLabel="Nhắn tin với khách"
-                          >
-                            {openingChatFor === job.bookingId ? (
-                              <ActivityIndicator size="small" color={colors.primaryStrong} />
-                            ) : (
-                              <>
-                                <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.primaryStrong} />
-                                <Text style={styles.detailBtnText}>Nhắn tin</Text>
-                              </>
-                            )}
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    )}
-                    {s === 'ACCEPTED' && (
-                      <TouchableOpacity
-                        style={[styles.actionBtn, { backgroundColor: colors.primaryStrong }]}
-                        onPress={() => handleEnRoute(job.id)}
-                        disabled={isActioning || blockedOrderIds.includes(job.id) || checkInBusy === job.id}
-                      >
-                        {isActioning ? (
-                          <ActivityIndicator size="small" color={colors.surface} />
-                        ) : (
-                          <>
-                            <Ionicons name="navigate-outline" size={16} color={colors.surface} />
-                            <Text style={styles.actionBtnText}>{blockedOrderIds.includes(job.id) ? 'Đã gửi · kéo xuống để kiểm tra' : 'Bắt đầu di chuyển'}</Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
-                    )}
-
-                    {s === 'EN_ROUTE' && arrivalStates[job.id] === 'verified' && (
-                      <View style={styles.arrivalVerifiedBox}>
-                        <View style={styles.arrivalVerifiedRow}>
-                          <Ionicons name="checkmark-circle-outline" size={18} color="#047857" />
-                          <Text style={styles.arrivalVerifiedText}>
-                            Đã đến nơi. Đơn sẽ chuyển sang đang sửa khi bạn bắt đầu sửa chữa.
-                          </Text>
-                        </View>
-                        <TouchableOpacity
-                          style={[styles.actionBtn, { backgroundColor: colors.success }]}
-                          onPress={() =>
-                            navigation.navigate('TechnicianOrderDetail', {
-                              serviceOrderId: job.id,
-                            })
-                          }
-                          accessibilityRole="button"
-                          accessibilityLabel="Tiếp tục công việc"
-                        >
-                          <Ionicons name="arrow-forward-outline" size={16} color={colors.surface} />
-                          <Text style={styles.actionBtnText}>Tiếp tục công việc</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-
-                    {s === 'EN_ROUTE' && arrivalStates[job.id] === 'pending' && (
-                      <View style={styles.arrivalPendingBox}>
-                        <Text style={styles.arrivalPendingText}>
-                          Check-in đang chờ xác minh. Chưa gửi lại để tránh trùng lặp.
+                    {!!job.customerName && (
+                      <View style={styles.iconRow}>
+                        <User size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                        <Text style={styles.jobMeta}>
+                          Khách: {job.customerName}
+                          {job.customerPhone ? ` · ${job.customerPhone}` : ''}
                         </Text>
-                        <TouchableOpacity
-                          style={[styles.actionBtn, { backgroundColor: '#D97706' }]}
-                          onPress={() => handleReconcileCheckIn(job.id)}
-                          disabled={checkInBusy === job.id}
-                          accessibilityRole="button"
-                          accessibilityLabel="Kiểm tra lại check-in"
-                        >
-                          {checkInBusy === job.id ? (
-                            <ActivityIndicator size="small" color={colors.surface} />
-                          ) : (
-                            <>
-                              <Ionicons name="refresh-outline" size={16} color={colors.surface} />
-                              <Text style={styles.actionBtnText}>Kiểm tra check-in</Text>
-                            </>
-                          )}
-                        </TouchableOpacity>
+                      </View>
+                    )}
+                    {!!job.addressSummary && (
+                      <View style={styles.iconRow}>
+                        <MapPin size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                        <Text style={styles.jobAddress} numberOfLines={2}>{job.addressSummary}</Text>
+                      </View>
+                    )}
+                  </View>
+                );
+
+                return (
+                  <View key={job.id || job.code} style={styles.jobCard}>
+                    {detailId ? (
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => navigation.navigate('TechnicianOrderDetail', { serviceOrderId: detailId })}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Xem chi tiết công việc ${code}`}
+                      >
+                        {info}
+                      </TouchableOpacity>
+                    ) : (
+                      info
+                    )}
+
+                    {(s === 'ACCEPTED' || s === 'EN_ROUTE') && (
+                      <View style={styles.contactRow}>
+                        <ContactActions phone={job.customerPhone} address={job.addressSummary} />
                       </View>
                     )}
 
-                    {s === 'EN_ROUTE' && !arrivalStates[job.id] && (
-                      <TouchableOpacity
-                        style={[styles.actionBtn, { backgroundColor: colors.success }]}
-                        onPress={() => handleCheckIn(job.id)}
-                        disabled={isActioning || checkInBusy === job.id}
-                      >
-                        {isActioning || checkInBusy === job.id ? (
-                          <ActivityIndicator size="small" color={colors.surface} />
-                        ) : (
-                          <>
-                            <Ionicons name="location-outline" size={16} color={colors.surface} />
-                            <Text style={styles.actionBtnText}>Check-in tại nhà khách</Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
+                    {/* Actions depending on status */}
+                    {hasActions && (
+                      <View style={styles.actionsRow}>
+                        <View style={styles.primaryRow}>
+                          <View style={styles.primaryCol}>
+                            {s === 'ACCEPTED' && (
+                              <TouchableOpacity
+                                style={[styles.actionBtn, { backgroundColor: colors.primaryStrong }]}
+                                onPress={() => handleEnRoute(job.id)}
+                                disabled={isActioning || blockedOrderIds.includes(job.id) || checkInBusy === job.id}
+                                accessibilityRole="button"
+                              >
+                                {isActioning ? (
+                                  <ActivityIndicator size="small" color={colors.surface} />
+                                ) : (
+                                  <>
+                                    <Navigation size={18} color={colors.surface} strokeWidth={1.75} />
+                                    <Text style={styles.actionBtnText}>
+                                      {blockedOrderIds.includes(job.id) ? 'Đã gửi · kéo xuống để kiểm tra' : 'Bắt đầu di chuyển'}
+                                    </Text>
+                                  </>
+                                )}
+                              </TouchableOpacity>
+                            )}
+
+                            {s === 'EN_ROUTE' && arrivalStates[job.id] === 'verified' && (
+                              <View style={[styles.stateBox, { backgroundColor: colors.tone.success.bg }]}>
+                                <View style={styles.stateBoxRow}>
+                                  <CheckCircle2 size={18} color={colors.tone.success.fg} strokeWidth={1.75} style={styles.rowIcon} />
+                                  <Text style={[styles.stateBoxText, { color: colors.tone.success.text }]}>
+                                    Đã đến nơi. Đơn sẽ chuyển sang đang sửa khi bạn bắt đầu sửa chữa.
+                                  </Text>
+                                </View>
+                                <TouchableOpacity
+                                  style={[styles.actionBtn, { backgroundColor: colors.success }]}
+                                  onPress={() =>
+                                    navigation.navigate('TechnicianOrderDetail', {
+                                      serviceOrderId: job.id,
+                                    })
+                                  }
+                                  accessibilityRole="button"
+                                  accessibilityLabel="Tiếp tục công việc"
+                                >
+                                  <ArrowRight size={18} color={colors.surface} strokeWidth={1.75} />
+                                  <Text style={styles.actionBtnText}>Tiếp tục công việc</Text>
+                                </TouchableOpacity>
+                              </View>
+                            )}
+
+                            {s === 'EN_ROUTE' && arrivalStates[job.id] === 'pending' && (
+                              <View style={[styles.stateBox, { backgroundColor: colors.tone.warning.bg }]}>
+                                <Text style={[styles.stateBoxText, { color: colors.tone.warning.text }]}>
+                                  Check-in đang chờ xác minh. Chưa gửi lại để tránh trùng lặp.
+                                </Text>
+                                <TouchableOpacity
+                                  style={[styles.actionBtn, { backgroundColor: colors.tone.warning.text }]}
+                                  onPress={() => handleReconcileCheckIn(job.id)}
+                                  disabled={checkInBusy === job.id}
+                                  accessibilityRole="button"
+                                  accessibilityLabel="Kiểm tra lại check-in"
+                                >
+                                  {checkInBusy === job.id ? (
+                                    <ActivityIndicator size="small" color={colors.surface} />
+                                  ) : (
+                                    <>
+                                      <RefreshCw size={18} color={colors.surface} strokeWidth={1.75} />
+                                      <Text style={styles.actionBtnText}>Kiểm tra check-in</Text>
+                                    </>
+                                  )}
+                                </TouchableOpacity>
+                              </View>
+                            )}
+
+                            {s === 'EN_ROUTE' && !arrivalStates[job.id] && (
+                              <TouchableOpacity
+                                style={[styles.actionBtn, { backgroundColor: colors.success }]}
+                                onPress={() => handleCheckIn(job.id)}
+                                disabled={isActioning || checkInBusy === job.id}
+                                accessibilityRole="button"
+                              >
+                                {isActioning || checkInBusy === job.id ? (
+                                  <ActivityIndicator size="small" color={colors.surface} />
+                                ) : (
+                                  <>
+                                    <MapPin size={18} color={colors.surface} strokeWidth={1.75} />
+                                    <Text style={styles.actionBtnText}>Check-in tại nhà khách</Text>
+                                  </>
+                                )}
+                              </TouchableOpacity>
+                            )}
+                          </View>
+
+                          {!!job.bookingId && (
+                            <TouchableOpacity
+                              style={styles.chatBtn}
+                              onPress={() => handleOpenChat(job.bookingId)}
+                              disabled={openingChatFor === job.bookingId}
+                              accessibilityRole="button"
+                              accessibilityLabel="Nhắn tin với khách hàng"
+                            >
+                              {openingChatFor === job.bookingId ? (
+                                <ActivityIndicator size="small" color={colors.primaryStrong} />
+                              ) : (
+                                <>
+                                  <MessageCircle size={18} color={colors.primaryStrong} strokeWidth={1.75} />
+                                  <Text style={styles.chatBtnText}>Nhắn tin với khách</Text>
+                                </>
+                              )}
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
                     )}
                   </View>
-                </View>
-              );
-            })}
-          </View>
-          {!!jobsCoverageText && (
-            <Text style={styles.coverageText}>{jobsCoverageText}</Text>
-          )}
-          {showLoadMoreJobs && (
-            <TouchableOpacity
-              onPress={onLoadMoreJobs}
-              disabled={loadingMoreJobs}
-              accessibilityRole="button"
-              accessibilityLabel="Tải thêm công việc"
-              style={styles.loadMoreBtn}
-            >
-              {loadingMoreJobs ? (
-                <ActivityIndicator size="small" color={colors.primaryStrong} />
-              ) : (
-                <Text style={styles.loadMoreText}>Tải thêm công việc</Text>
-              )}
-            </TouchableOpacity>
-          )}
-        </ScrollView>
-      )}
+                );
+              })}
+            </View>
+            {!!jobsCoverageText && <Text style={styles.coverageText}>{jobsCoverageText}</Text>}
+            {showLoadMoreJobs && (
+              <TouchableOpacity
+                onPress={onLoadMoreJobs}
+                disabled={loadingMoreJobs}
+                accessibilityRole="button"
+                accessibilityLabel="Tải thêm công việc"
+                style={styles.loadMoreBtn}
+              >
+                {loadingMoreJobs ? (
+                  <ActivityIndicator size="small" color={colors.primaryStrong} />
+                ) : (
+                  <Text style={styles.textBtnLabel}>Tải thêm công việc</Text>
+                )}
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        )}
       </View>
     </SafeAreaView>
   );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.surface,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.surface },
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingTop: 16,
+    paddingBottom: 12,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.divider,
   },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: colors.text,
-    flex: 1,
-  },
-  invitationsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.primarySoft,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-  },
-  invitationsBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.primaryStrong,
-  },
-  invitationsBtnBadge: {
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: 4,
-    borderRadius: 9,
-    backgroundColor: colors.error,
+  headerTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
+  chipScroll: { flexGrow: 0 },
+  chipRow: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
+  chip: {
+    minHeight: 44,
+    paddingHorizontal: 16,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-  invitationsBtnBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: colors.surface,
-  },
-  invitationBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginHorizontal: 16,
-    marginTop: 12,
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: '#FEF3C7',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  invitationBannerIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FDE68A',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  invitationBannerTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#92400E',
-  },
-  invitationBannerSubtitle: {
-    fontSize: 12,
-    color: '#92400E',
-    marginTop: 2,
-  },
-  tabRow: {
-    flexDirection: 'row',
-    backgroundColor: colors.divider,
-    margin: 16,
-    marginBottom: 8,
-    padding: 4,
-    borderRadius: 12,
-  },
-  tabBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  tabBtnActive: {
+    borderRadius: 22,
     backgroundColor: colors.surface,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  tabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  tabTextActive: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  emptyScroll: {
-    flexGrow: 1,
-  },
-  errorBanner: {
-    padding: 16,
-    marginBottom: 12,
-    gap: 8,
-    alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    borderRadius: 8,
-  },
-  refreshBtn: {
-    padding: 12,
-    marginTop: 8,
-  },
-  scrollContent: {
-    padding: 16,
-  },
-  centerLoading: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-  },
-  emptyTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.text,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyDesc: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  list: {
-    gap: 12,
-  },
+  chipActive: { backgroundColor: colors.primaryStrong, borderColor: colors.primaryStrong },
+  chipText: { fontSize: 14, lineHeight: 20, fontWeight: '500', color: colors.textSecondary },
+  chipTextActive: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.surface },
+  skeletonWrap: { flex: 1, paddingHorizontal: 16 },
+  emptyScroll: { flexGrow: 1 },
+  errorBanner: { padding: 16, marginBottom: 12, gap: 8, alignItems: 'center', borderRadius: 14 },
+  errorText: { fontSize: 14, lineHeight: 20, textAlign: 'center' },
+  textBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16 },
+  textBtnLabel: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 4 },
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 8 },
+  emptyTitle: { fontSize: 18, lineHeight: 26, fontWeight: '700', color: colors.text, marginTop: 8 },
+  emptyDesc: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
+  list: { gap: 12 },
   jobCard: {
     backgroundColor: colors.surface,
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  iconMap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: colors.divider,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  cardContent: {
-    flex: 1,
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    marginBottom: 6,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  jobTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  jobMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2,
-  },
-  jobMeta: {
-    fontSize: 13,
-    color: '#334155',
-    marginBottom: 2,
-  },
-  jobAmount: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.primaryStrong,
-  },
-  jobAddress: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  arrivalVerifiedBox: {
-    flex: 1,
-    gap: 8,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: '#ECFDF5',
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: colors.border,
   },
-  arrivalVerifiedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  arrivalVerifiedText: {
-    flex: 1,
-    color: '#047857',
-    fontSize: 12,
-    lineHeight: 18,
-    fontWeight: '600',
-  },
-  arrivalPendingBox: {
-    flex: 1,
-    gap: 8,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  arrivalPendingText: {
-    color: '#92400E',
-    fontSize: 12,
-    lineHeight: 18,
-    fontWeight: '600',
-  },
+  jobCardMuted: { gap: 4 },
+  info: { gap: 6 },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  jobCode: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.textSecondary },
+  jobTitle: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: colors.text },
+  jobMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 },
+  iconRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, flexShrink: 1 },
+  rowIcon: { marginTop: 2 },
+  jobMeta: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
+  jobAmount: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong },
+  jobAddress: { flexShrink: 1, fontSize: 14, lineHeight: 20, color: colors.textSecondary },
   actionsRow: {
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: colors.divider,
-    gap: 10,
   },
-  secondaryRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
+  contactRow: { marginTop: 12 },
+  primaryRow: { gap: 8 },
+  primaryCol: { gap: 8 },
+  stateBox: { gap: 8, padding: 12, borderRadius: 14 },
+  stateBoxRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  stateBoxText: { flex: 1, fontSize: 14, lineHeight: 20, fontWeight: '500' },
   actionBtn: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 8,
+    gap: 8,
+    minHeight: 48,
+    paddingHorizontal: 12,
+    borderRadius: 14,
   },
-  actionBtnText: {
-    color: colors.surface,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  detailBtn: {
-    flex: 1,
+  actionBtnText: { color: colors.surface, fontSize: 14, lineHeight: 20, fontWeight: '700', flexShrink: 1 },
+  chatBtn: {
     flexDirection: 'row',
+    minHeight: 48,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 8,
+    gap: 8,
     backgroundColor: colors.primarySoft,
   },
-  detailBtnText: {
-    color: colors.primaryStrong,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  coverageText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    paddingVertical: 4,
-  },
-  loadMoreBtn: {
-    padding: 14,
-    alignItems: 'center',
-  },
-  loadMoreText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.primaryStrong,
-  },
+  chatBtnText: { color: colors.primaryStrong, fontSize: 14, lineHeight: 20, fontWeight: '700' },
+  coverageText: { fontSize: 12, lineHeight: 16, color: colors.textSecondary, textAlign: 'center', paddingVertical: 8 },
+  loadMoreBtn: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
 });

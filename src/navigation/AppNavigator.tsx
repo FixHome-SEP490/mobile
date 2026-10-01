@@ -21,8 +21,11 @@ import CustomerWarrantiesScreen from '../screens/customer/CustomerWarrantiesScre
 import CustomerSecurityScreen from '../screens/customer/CustomerSecurityScreen';
 import TechnicianOrderDetailScreen from '../screens/technician/TechnicianOrderDetailScreen';
 import TechnicianKycScreen from '../screens/technician/TechnicianKycScreen';
+import TechnicianOnboardingScreen from '../screens/technician/TechnicianOnboardingScreen';
 import TechnicianWalletScreen from '../screens/technician/TechnicianWalletScreen';
-import TechnicianInvitationsScreen from '../screens/technician/TechnicianInvitationsScreen';
+import TechnicianReviewsScreen from '../screens/technician/TechnicianReviewsScreen';
+import TechnicianScheduleScreen from '../screens/technician/TechnicianScheduleScreen';
+import TechnicianEarningsScreen from '../screens/technician/TechnicianEarningsScreen';
 import ChatListScreen from '../screens/chat/ChatListScreen';
 import ChatThreadScreen from '../screens/chat/ChatThreadScreen';
 
@@ -51,8 +54,11 @@ export default function AppNavigator() {
             <Stack.Screen name="CustomerSecurity" component={CustomerSecurityScreen} />
             <Stack.Screen name="TechnicianOrderDetail" component={TechnicianOrderDetailScreen} />
             <Stack.Screen name="TechnicianKyc" component={TechnicianKycScreen} />
+            <Stack.Screen name="TechnicianOnboarding" component={TechnicianOnboardingScreen} />
             <Stack.Screen name="TechnicianWallet" component={TechnicianWalletScreen} />
-            <Stack.Screen name="TechnicianInvitations" component={TechnicianInvitationsScreen} />
+            <Stack.Screen name="TechnicianReviews" component={TechnicianReviewsScreen} />
+            <Stack.Screen name="TechnicianSchedule" component={TechnicianScheduleScreen} />
+            <Stack.Screen name="TechnicianEarnings" component={TechnicianEarningsScreen} />
             <Stack.Screen name="ChatList" component={ChatListScreen} />
             <Stack.Screen name="ChatThread" component={ChatThreadScreen} />
             <Stack.Screen name="Auth" component={AuthNavigator} />
@@ -63,6 +69,8 @@ export default function AppNavigator() {
             <Stack.Screen name="Auth" component={AuthNavigator} />
             <Stack.Screen name="CustomerMain" component={CustomerNavigator} />
             <Stack.Screen name="TechnicianMain" component={TechnicianNavigator} />
+            {/* Đăng ký/đăng nhập reset về màn này ngay sau setAuth, lúc nhánh vẫn là chưa đăng nhập. */}
+            <Stack.Screen name="TechnicianOnboarding" component={TechnicianOnboardingScreen} />
             <Stack.Screen name="CustomerServices" component={CustomerServicesScreen} />
             <Stack.Screen name="CustomerServiceDetail" component={CustomerServiceDetailScreen} />
             <Stack.Screen name="CustomerAIDiagnosis" component={CustomerAIDiagnosisScreen} />
