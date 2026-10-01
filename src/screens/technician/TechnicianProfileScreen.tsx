@@ -64,10 +64,13 @@ import CategoryPills from '../../components/CategoryPills';
 import MapView, { Marker } from '../../components/AddressMap';
 import { useAppTheme } from '../../constants/theme';
 import { extractApiErrorMessage } from '../../utils/input-validation';
-import { formatDate, formatVnd, parseVnDateInput } from '../../utils/format';
+import { formatVnd, parseVnDateInput } from '../../utils/format';
 import StatusBadge from '../../components/StatusBadge';
 import type { StatusView } from './technician-status';
 
+import { vnDateString } from '../../utils/vn-time';
+
+const VN_DATE = { day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 // Floating GlassTabBar: 64pt pill + breathing room, plus the bottom inset (min 16).
 const TAB_BAR_CLEARANCE = 64 + 16;
 
@@ -1054,7 +1057,7 @@ export default function TechnicianProfileScreen() {
                 <View key={t.id} style={styles.timeOffItem}>
                   <View style={styles.flex1}>
                     <Text style={styles.timeOffDates}>
-                      {formatDate(t.startAt)} – {formatDate(t.endAt)}
+                      {vnDateString(t.startAt, VN_DATE)} – {vnDateString(t.endAt, VN_DATE)}
                     </Text>
                     {!!t.reason && <Text style={styles.timeOffReason}>{t.reason}</Text>}
                   </View>
@@ -1062,7 +1065,7 @@ export default function TechnicianProfileScreen() {
                     onPress={() => handleDeleteTimeOff(t.id)}
                     style={styles.iconBtn}
                     accessibilityRole="button"
-                    accessibilityLabel={`Xóa ngày nghỉ ${formatDate(t.startAt)} đến ${formatDate(t.endAt)}`}
+                    accessibilityLabel={`Xóa ngày nghỉ ${vnDateString(t.startAt, VN_DATE)} đến ${vnDateString(t.endAt, VN_DATE)}`}
                   >
                     <Trash2 size={20} color={colors.error} strokeWidth={1.75} />
                   </TouchableOpacity>

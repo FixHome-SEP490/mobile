@@ -17,7 +17,6 @@ import type { RootStackParamList } from '../../types';
 import { useAppTheme } from '../../constants/theme';
 import { reviewsApi, type TechnicianReview } from '../../api/reviews.api';
 import { technicianProfileApi, type TechnicianProfile } from '../../api/technician-profile.api';
-import { formatDate } from '../../utils/format';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import {
   mergeReviewPage,
@@ -26,6 +25,9 @@ import {
   starDistribution,
 } from './technician-reviews';
 
+import { vnDateString } from '../../utils/vn-time';
+
+const VN_DATE = { day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 const PAGE_SIZE = 20;
 const LOAD_ERROR = 'Không thể tải đánh giá. Kiểm tra kết nối rồi thử lại.';
 
@@ -152,7 +154,7 @@ export default function TechnicianReviewsScreen() {
       <View style={styles2.card}>
         <View style={styles2.rowBetween}>
           <Stars value={item.rating} size={16} color={colors.tone.warning.fg} empty={colors.border} />
-          <Text style={styles2.caption}>{formatDate(item.createdAt)}</Text>
+          <Text style={styles2.caption}>{vnDateString(item.createdAt, VN_DATE)}</Text>
         </View>
         <Text style={styles2.customer} accessibilityLabel={`${item.rating} sao từ ${item.customerName}`}>
           {item.customerName || 'Khách hàng FixHome'}

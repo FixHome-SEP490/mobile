@@ -1,8 +1,6 @@
 // Display-only formatters (DS §11). No business rounding: backend owns money math.
 
 const NBSP = ' ';
-// Vietnam has no DST, so a fixed +7h shift is exact and independent of Intl/device timezone.
-const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 /** `1.250.000 ₫`; 0 → `0 ₫`; negative → `-50.000 ₫`; null/invalid → `—` (never 0). */
 export function formatVnd(amount: number | null | undefined): string {
@@ -13,29 +11,6 @@ export function formatVnd(amount: number | null | undefined): string {
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
-
-function vnParts(iso: string | Date | null | undefined) {
-  if (iso == null || iso === '') return null;
-  const time = (iso instanceof Date ? iso : new Date(iso)).getTime();
-  if (Number.isNaN(time)) return null;
-  const d = new Date(time + VN_OFFSET_MS);
-  return {
-    date: `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`,
-    time: `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`,
-  };
-}
-
-/** `dd/MM/yyyy` in Asia/Ho_Chi_Minh, `—` when missing/invalid. */
-export const formatDate = (iso: string | Date | null | undefined) => vnParts(iso)?.date ?? '—';
-
-/** `HH:mm` (24h) in Asia/Ho_Chi_Minh. */
-export const formatTime = (iso: string | Date | null | undefined) => vnParts(iso)?.time ?? '—';
-
-/** `HH:mm, dd/MM/yyyy` in Asia/Ho_Chi_Minh. */
-export function formatDateTime(iso: string | Date | null | undefined): string {
-  const p = vnParts(iso);
-  return p ? `${p.time}, ${p.date}` : '—';
-}
 
 /**
  * Parse a user-typed `dd/MM/yyyy` (also `-` or `.` separators, 1–2 digit day/month) into the

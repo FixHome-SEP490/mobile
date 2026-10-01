@@ -23,8 +23,11 @@ import { useAppTheme } from '../../constants/theme';
 import { partRequestsApi, type PartRequest, type FulfillmentMethod } from '../../api/part-requests.api';
 import { partsCatalogApi, type FixHomePart } from '../../api/parts-catalog.api';
 import { extractApiErrorMessage } from '../../utils/input-validation';
-import { formatDateTime, formatVnd } from '../../utils/format';
+import { formatVnd } from '../../utils/format';
 
+import { vnDateTimeString } from '../../utils/vn-time';
+
+const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 const CATEGORY_TABS = [
   { label: 'Tất cả', value: '' },
   { label: 'Điều hòa / Máy lạnh', value: 'Điều hòa' },
@@ -565,7 +568,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
 
                 {!!pr.receivedAt && (
                   <Text style={[styles.jobMeta, { color: colors.tone.success.text }]}>
-                    Đã nhận lúc: {formatDateTime(pr.receivedAt)}
+                    Đã nhận lúc: {vnDateTimeString(pr.receivedAt, VN_DATETIME)}
                   </Text>
                 )}
 

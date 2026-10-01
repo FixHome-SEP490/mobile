@@ -41,10 +41,14 @@ import { useInvitationCount } from '../../hooks/useInvitationCount';
 import { useTechnicianAvailability } from '../../hooks/useTechnicianAvailability';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { useAppTheme } from '../../constants/theme';
-import { formatDate, formatDateTime, formatVnd } from '../../utils/format';
+import { formatVnd } from '../../utils/format';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import StatusBadge from '../../components/StatusBadge';
 
+import { vnDateTimeString, vnDateString } from '../../utils/vn-time';
+
+const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
+const VN_DATE = { day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 // Floating GlassTabBar: 64pt pill + breathing room, plus the bottom inset (min 16).
 const TAB_BAR_CLEARANCE = 64 + 16;
 const RECENT_LIMIT = 5;
@@ -279,7 +283,7 @@ export default function TechnicianHomeScreen() {
                   {!!priority.scheduledAt && (
                     <View style={styles.iconRow}>
                       <Clock size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
-                      <Text style={styles.rowBody}>{formatDateTime(priority.scheduledAt)}</Text>
+                      <Text style={styles.rowBody}>{vnDateTimeString(priority.scheduledAt, VN_DATETIME)}</Text>
                     </View>
                   )}
                   {!!priority.addressSummary && (
@@ -359,7 +363,7 @@ export default function TechnicianHomeScreen() {
                       <View style={styles.flex1}>
                         <Text style={styles.rowTitle} numberOfLines={1}>{order.serviceName || 'Dịch vụ sửa chữa'}</Text>
                         <Text style={styles.rowBody}>
-                          {formatDate(completedAt(order))} · {formatVnd(orderIncome(order))}
+                          {vnDateString(completedAt(order), VN_DATE)} · {formatVnd(orderIncome(order))}
                         </Text>
                       </View>
                       {canOpen && <ChevronRight size={18} color={colors.muted} strokeWidth={1.75} />}

@@ -44,8 +44,11 @@ import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import StatusBadge from '../../components/StatusBadge';
 import ContactActions from '../../components/ContactActions';
 import { serviceOrderStatusView } from './technician-status';
-import { formatDateTime, formatVnd } from '../../utils/format';
+import { formatVnd } from '../../utils/format';
 
+import { vnDateTimeString } from '../../utils/vn-time';
+
+const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 type JobTab = 'all' | 'pending' | 'in_progress' | 'completed';
 
 // Floating GlassTabBar: 64pt pill + breathing room, plus the bottom inset (min 16).
@@ -324,7 +327,7 @@ export default function TechnicianJobsScreen() {
                       {!!job.scheduledAt && (
                         <View style={styles.iconRow}>
                           <Clock size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
-                          <Text style={styles.jobMeta}>{formatDateTime(job.scheduledAt)}</Text>
+                          <Text style={styles.jobMeta}>{vnDateTimeString(job.scheduledAt, VN_DATETIME)}</Text>
                         </View>
                       )}
                       {typeof job.grandTotal === 'number' && (

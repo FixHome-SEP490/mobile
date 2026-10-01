@@ -1,11 +1,13 @@
 // Pure view logic for the technician Notifications tab.
 import type { NotificationItem } from '../../api/notifications.api';
-import { formatDate, formatTime } from '../../utils/format';
+import { isSameVnDay, vnParts, vnTimeString } from '../../utils/vn-time';
 
 export type NotificationSection = { key: 'today' | 'earlier'; title: string; data: NotificationItem[] };
 
 const isToday = (iso: string | undefined, now: number) =>
-  !!iso && formatDate(iso) !== '—' && formatDate(iso) === formatDate(new Date(now));
+  !!iso && Number.isFinite(Date.parse(iso)) && isSameVnDay(iso, now);
+
+const pad = (n: number) => String(n).padStart(2, '0');
 
 /** "Hôm nay" / "Trước đó" by Asia/Ho_Chi_Minh calendar day; order within a group is preserved. */
 export function groupNotificationsByDay(items: NotificationItem[], now: number): NotificationSection[] {
@@ -19,9 +21,10 @@ export function groupNotificationsByDay(items: NotificationItem[], now: number):
 
 /** `HH:mm` for today, otherwise `dd/MM` (year only when it differs). */
 export function formatNotificationTime(iso: string, now: number): string {
-  if (isToday(iso, now)) return formatTime(iso);
-  const date = formatDate(iso);
-  return date.slice(-4) === formatDate(new Date(now)).slice(-4) ? date.slice(0, 5) : date;
+  if (isToday(iso, now)) return vnTimeString(iso, { hour: '2-digit', minute: '2-digit' });
+  const p = vnParts(iso);
+  const day = `${pad(p.day)}/${pad(p.month)}`;
+  return p.year === vnParts(now).year ? day : `${day}/${p.year}`;
 }
 
 /** Append a fetched page without duplicating items the list already has (ids are optional). */

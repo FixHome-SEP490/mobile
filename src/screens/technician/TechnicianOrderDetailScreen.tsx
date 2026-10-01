@@ -96,7 +96,7 @@ import ContactActions from '../../components/ContactActions';
 import OrderNoteCard from '../../components/OrderNoteCard';
 import { serviceOrderStatusView } from './technician-status';
 import { jobProgress, type StepState } from './technician-job-progress';
-import { formatDateTime, formatVnd, vndText } from '../../utils/format';
+import { formatVnd, vndText } from '../../utils/format';
 import { findChatForBooking } from './technician-chat-shortcut';
 import {
   createTechnicianCashController,
@@ -104,6 +104,9 @@ import {
   technicianCashTarget,
 } from './technician-cash-settlement';
 
+import { vnDateTimeString } from '../../utils/vn-time';
+
+const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 type DetailRoute = RouteProp<RootStackParamList, 'TechnicianOrderDetail'>;
 
 function amountOrNull(value: unknown): string | null {
@@ -1150,7 +1153,7 @@ export default function TechnicianOrderDetailScreen() {
             {!!order.scheduledAt && (
               <View style={styles.iconRow}>
                 <Clock size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
-                <Text style={styles.iconRowText}>Lịch hẹn: {formatDateTime(order.scheduledAt)}</Text>
+                <Text style={styles.iconRowText}>Lịch hẹn: {vnDateTimeString(order.scheduledAt, VN_DATETIME)}</Text>
               </View>
             )}
             {!!order.addressSummary && (
@@ -2351,7 +2354,7 @@ export default function TechnicianOrderDetailScreen() {
               {order.timeline!.map((entry, index) => (
                 <View key={`${entry.status}-${entry.timestamp}-${index}`} style={styles.row}>
                   <Text style={styles.jobMeta}>{entry.title || entry.status}</Text>
-                  <Text style={styles.jobMeta}>{formatDateTime(entry.timestamp)}</Text>
+                  <Text style={styles.jobMeta}>{vnDateTimeString(entry.timestamp, VN_DATETIME)}</Text>
                 </View>
               ))}
             </View>

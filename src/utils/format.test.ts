@@ -1,4 +1,4 @@
-import { formatDate, formatDateTime, formatTime, formatVnd, parseVnDateInput, vndText } from './format';
+import { formatVnd, parseVnDateInput, vndText } from './format';
 
 describe('formatVnd', () => {
   it('groups thousands with dots and a non-breaking ₫', () => {
@@ -13,24 +13,6 @@ describe('formatVnd', () => {
     expect(formatVnd(undefined)).toBe('—');
     expect(formatVnd(NaN)).toBe('—');
     expect(formatVnd('5' as unknown as number)).toBe('—');
-  });
-});
-
-describe('date formatters (Asia/Ho_Chi_Minh)', () => {
-  it('converts UTC to +07:00 regardless of device timezone', () => {
-    expect(formatDateTime('2026-09-30T07:05:00Z')).toBe('14:05, 30/09/2026');
-    expect(formatDate('2026-09-30T07:05:00Z')).toBe('30/09/2026');
-    expect(formatTime('2026-09-30T07:05:00Z')).toBe('14:05');
-  });
-
-  it('rolls the calendar day over at 17:00 UTC', () => {
-    expect(formatDate('2026-09-30T17:30:00Z')).toBe('01/10/2026');
-  });
-
-  it('returns — for missing or invalid input', () => {
-    expect(formatDateTime(null)).toBe('—');
-    expect(formatDate('')).toBe('—');
-    expect(formatTime('not-a-date')).toBe('—');
   });
 });
 

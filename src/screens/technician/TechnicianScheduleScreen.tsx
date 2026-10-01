@@ -17,13 +17,16 @@ import type { RootStackParamList } from '../../types';
 import { useAppTheme } from '../../constants/theme';
 import { ordersApi, type ServiceOrderItem } from '../../api/orders.api';
 import { technicianProfileApi, type TechnicianTimeOff } from '../../api/technician-profile.api';
-import { formatDate, formatTime } from '../../utils/format';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import StatusBadge from '../../components/StatusBadge';
 import { serviceOrderStatusView } from './technician-status';
 import { fetchAllOrders } from './technician-earnings';
 import { buildWeek, dayKeyVn } from './technician-schedule';
 
+import { vnDateString, vnTimeString } from '../../utils/vn-time';
+
+const VN_DATE = { day: '2-digit', month: '2-digit', year: 'numeric' } as const;
+const VN_TIME = { hour: '2-digit', minute: '2-digit' } as const;
 const LOAD_ERROR = 'Không thể tải lịch làm việc. Kiểm tra kết nối rồi thử lại.';
 
 export default function TechnicianScheduleScreen() {
@@ -81,7 +84,8 @@ export default function TechnicianScheduleScreen() {
   );
   const todayKey = loadedAt ? dayKeyVn(loadedAt) : null;
   const selected = week.find((d) => d.key === selectedKey) ?? week.find((d) => d.key === todayKey) ?? week[0];
-  const weekTitle = week.length ? `${formatDate(`${week[0].key}T00:00:00+07:00`).slice(0, 5)} – ${formatDate(`${week[6].key}T00:00:00+07:00`).slice(0, 5)}` : '';
+  const dm = (key: string) => `${key.slice(8, 10)}/${key.slice(5, 7)}`;
+  const weekTitle = week.length ? `${dm(week[0].key)} – ${dm(week[6].key)}` : '';
 
   const changeWeek = (delta: number) => {
     setWeekOffset((w) => w + delta);
@@ -178,7 +182,7 @@ export default function TechnicianScheduleScreen() {
             <View key={t.id} style={[styles.banner, { backgroundColor: colors.tone.warning.bg }]}>
               <CalendarOff size={18} color={colors.tone.warning.fg} strokeWidth={1.75} />
               <Text style={[styles.bannerText, { color: colors.tone.warning.text }]}>
-                Ngày nghỉ {formatDate(t.startAt)} – {formatDate(t.endAt)}{t.reason ? ` · ${t.reason}` : ''}
+                Ngày nghỉ {vnDateString(t.startAt, VN_DATE)} – {vnDateString(t.endAt, VN_DATE)}{t.reason ? ` · ${t.reason}` : ''}
               </Text>
             </View>
           ))}
@@ -206,7 +210,7 @@ export default function TechnicianScheduleScreen() {
                 <Text style={styles.cardTitle}>{order.serviceName || 'Dịch vụ sửa chữa'}</Text>
                 <View style={styles.iconRow}>
                   <Clock size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
-                  <Text style={styles.body}>{formatTime(order.scheduledAt)}</Text>
+                  <Text style={styles.body}>{vnTimeString(order.scheduledAt, VN_TIME)}</Text>
                 </View>
                 {!!order.addressSummary && (
                   <View style={styles.iconRow}>

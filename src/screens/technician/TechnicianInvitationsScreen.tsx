@@ -33,7 +33,7 @@ import { bookingsApi, type InvitationItem } from '../../api/bookings.api';
 import { ordersApi } from '../../api/orders.api';
 import { useAppTheme } from '../../constants/theme';
 import { useTechnicianAvailability } from '../../hooks/useTechnicianAvailability';
-import { formatDate, formatDateTime, formatTime } from '../../utils/format';
+import { isSameVnDay, vnDateTimeString, vnTimeString } from '../../utils/vn-time';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import StatusBadge from '../../components/StatusBadge';
 
@@ -43,13 +43,16 @@ type NavProp = NativeStackNavigationProp<RootStackParamList>;
 const TAB_BAR_CLEARANCE = 64 + 16;
 const TICK_MS = 30000;
 
+const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
+const VN_TIME = { hour: '2-digit', minute: '2-digit' } as const;
+
 function formatWindow(start: string | null | undefined, end: string | null | undefined): string {
   if (!start && !end) return '';
-  if (!end) return formatDateTime(start);
-  if (!start) return formatDateTime(end);
-  return formatDate(start) === formatDate(end)
-    ? `${formatDateTime(start)} – ${formatTime(end)}`
-    : `${formatDateTime(start)} – ${formatDateTime(end)}`;
+  if (!end) return vnDateTimeString(start!, VN_DATETIME);
+  if (!start) return vnDateTimeString(end, VN_DATETIME);
+  return isSameVnDay(start, end)
+    ? `${vnDateTimeString(start, VN_DATETIME)} – ${vnTimeString(end, VN_TIME)}`
+    : `${vnDateTimeString(start, VN_DATETIME)} – ${vnDateTimeString(end, VN_DATETIME)}`;
 }
 
 export default function TechnicianInvitationsScreen() {

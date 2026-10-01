@@ -1,7 +1,7 @@
 // Pure view logic for the technician Home tab (priority job + this-week stats).
 import type { ServiceOrderItem } from '../../api/orders.api';
+import { vnParts, vnWallClockToDate } from '../../utils/vn-time';
 
-const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 const ACTIVE_PRIORITY = ['EN_ROUTE', 'ACCEPTED', 'UNDER_REPAIR', 'IN_PROGRESS'];
@@ -27,9 +27,9 @@ export function pickPriorityJob(orders: ServiceOrderItem[]): ServiceOrderItem | 
 
 /** Monday 00:00 (Asia/Ho_Chi_Minh) of the week containing `now`, as epoch ms. */
 export function startOfWeekVn(now: number): number {
-  const d = new Date(now + VN_OFFSET_MS);
-  const sinceMonday = (d.getUTCDay() + 6) % 7;
-  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - sinceMonday) - VN_OFFSET_MS;
+  const p = vnParts(now);
+  const sinceMonday = (p.weekday + 6) % 7;
+  return vnWallClockToDate(p.year, p.month, p.day - sinceMonday).getTime();
 }
 
 export const completedAt = (o: ServiceOrderItem) => o.completionRequestedAt || o.scheduledAt;

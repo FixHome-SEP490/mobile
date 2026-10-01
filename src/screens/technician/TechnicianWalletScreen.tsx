@@ -33,7 +33,7 @@ import { walletApi } from '../../api/wallet.api';
 import { useAppTheme, type Tone } from '../../constants/theme';
 import StatusBadge from '../../components/StatusBadge';
 import type { StatusView } from './technician-status';
-import { formatDateTime, formatVnd } from '../../utils/format';
+import { formatVnd } from '../../utils/format';
 import type { RootStackParamList } from '../../types';
 import type { WalletTransaction, WalletTxType, WithdrawalRequest } from '../../types/wallet.types';
 import {
@@ -45,6 +45,9 @@ import {
   type WalletUiState,
 } from './technician-wallet';
 
+import { vnDateTimeString } from '../../utils/vn-time';
+
+const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 const TOP_UP_PRESETS = [100_000, 200_000, 500_000, 1_000_000];
 
 const TX_FILTERS: { value: WalletTxType | 'ALL'; label: string }[] = [
@@ -466,7 +469,7 @@ export default function TechnicianWalletScreen() {
                         <View style={styles.flex1}>
                           <Text style={styles.rowTitle}>{TX_TYPE_LABELS[tx.type] ?? tx.type}</Text>
                           {!!tx.description && <Text style={styles.bodySmall}>{tx.description}</Text>}
-                          <Text style={styles.caption}>{formatDateTime(tx.createdAt)}</Text>
+                          <Text style={styles.caption}>{vnDateTimeString(tx.createdAt, VN_DATETIME)}</Text>
                         </View>
                         <Text
                           style={[styles.txAmount, { color: isCredit ? colors.tone.success.text : colors.error }]}
@@ -519,7 +522,7 @@ export default function TechnicianWalletScreen() {
                   <View style={styles.flex1}>
                     <Text style={styles.rowTitle}>{w.bankName} · {w.bankAccountNumber}</Text>
                     <Text style={styles.bodySmall}>{w.bankAccountName}</Text>
-                    <Text style={styles.caption}>{formatDateTime(w.requestedAt)}</Text>
+                    <Text style={styles.caption}>{vnDateTimeString(w.requestedAt, VN_DATETIME)}</Text>
                     {w.status === 'REJECTED' && !!w.rejectReason && (
                       <Text style={styles.reasonText}>Lý do từ chối: {w.rejectReason}</Text>
                     )}
