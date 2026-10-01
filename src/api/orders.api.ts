@@ -239,8 +239,20 @@ export interface CreateWarrantyClaimPayload {
   evidenceRefs?: string[];
 }
 
+/**
+ * The API sends Postgres numerics as strings ("220000.00"). Adding those
+ * concatenates them, so totals are turned into numbers once, here.
+ */
+const toMoney = (value: unknown): number => {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : 0;
+};
+
 const normalizeOrder = (order: ServiceOrderItem): ServiceOrderItem => ({
   ...order,
+  laborTotal: toMoney(order.laborTotal),
+  partsTotal: toMoney(order.partsTotal),
+  grandTotal: toMoney(order.grandTotal),
   status: (order.status?.toUpperCase?.() || order.status) as CanonicalOrderStatus,
   paymentStatus: (order.paymentStatus?.toUpperCase?.() ||
     order.paymentStatus) as ServiceOrderItem['paymentStatus'],
