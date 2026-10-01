@@ -143,6 +143,26 @@ describe('authApi', () => {
     });
   });
 
+  describe('session revocation', () => {
+    it('revokes all Backend sessions with an empty logout body', async () => {
+      mockedClient.post.mockResolvedValue({ data: { data: { loggedOut: true } } });
+
+      await authApi.revokeAllSessions();
+
+      expect(mockedClient.post).toHaveBeenCalledWith('/auth/logout', {});
+      expect(mockedStorage.removeToken).not.toHaveBeenCalled();
+      expect(mockedStorage.removeRefreshToken).not.toHaveBeenCalled();
+    });
+
+    it('propagates revoke-all failure and keeps local credentials intact', async () => {
+      mockedClient.post.mockRejectedValue(new Error('offline'));
+
+      await expect(authApi.revokeAllSessions()).rejects.toThrow('offline');
+      expect(mockedStorage.removeToken).not.toHaveBeenCalled();
+      expect(mockedStorage.removeRefreshToken).not.toHaveBeenCalled();
+    });
+  });
+
   describe('resetPassword', () => {
     it('posts email, otp and newPassword', async () => {
       mockedClient.post.mockResolvedValue({

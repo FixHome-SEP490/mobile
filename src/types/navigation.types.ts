@@ -43,13 +43,10 @@ export type RootStackParamList = {
   CustomerMatching: { bookingId: string };
   CustomerBookingDetail: { bookingId: string };
   CustomerOrderDetail: { serviceOrderId: string };
+  CustomerRepairHistory: undefined;
+  CustomerWarranties: { orderId?: string } | undefined;
+  CustomerSecurity: undefined;
   TechnicianOrderDetail: { serviceOrderId: string };
-  CustomerTechFound: undefined;
-  CustomerTracking: undefined;
-  CustomerQuotation: undefined;
-  CustomerUnderRepair: undefined;
-  CustomerCompleted: undefined;
-  CustomerReview: undefined;
   TechnicianKyc: undefined;
   TechnicianInvitations: undefined;
   TechnicianWallet: undefined;

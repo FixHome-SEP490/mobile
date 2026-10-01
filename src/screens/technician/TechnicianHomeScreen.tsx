@@ -21,6 +21,7 @@ import type { RootStackParamList, TechnicianTabParamList } from '../../types';
 import { useChatUnreadCount } from '../../hooks/useChatUnreadCount';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { useAppTheme } from '../../constants/theme';
+import { vnDateString } from '../../utils/vn-time';
 
 export default function TechnicianHomeScreen() {
   const { colors, isDark } = useAppTheme();
@@ -226,7 +227,7 @@ export default function TechnicianHomeScreen() {
                 <View style={styles.historyItemContent}>
                   <Text style={styles.historyItemTitle}>Hoàn thành: {order.serviceName}</Text>
                   <Text style={styles.historyItemTime}>
-                    {new Date(order.scheduledAt).toLocaleDateString('vi-VN')} • Thu nhập:{' '}
+                    {vnDateString(order.scheduledAt)} • Thu nhập:{' '}
                     {(order.laborTotal || order.grandTotal || 0).toLocaleString('vi-VN')}đ
                   </Text>
                 </View>

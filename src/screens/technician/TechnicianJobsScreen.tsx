@@ -30,6 +30,7 @@ import {
   type PermissionDecision,
 } from './technician-check-in';
 import { useInvitationCount } from '../../hooks/useInvitationCount';
+import { vnDateString } from '../../utils/vn-time';
 
 type JobTab = 'all' | 'pending' | 'in_progress' | 'completed';
 
@@ -389,7 +390,7 @@ export default function TechnicianJobsScreen() {
                       </Text>
                       <View style={styles.jobMetaRow}>
                         {!!job.scheduledAt && (
-                          <Text style={styles.jobMeta}>{new Date(job.scheduledAt).toLocaleDateString('vi-VN')}</Text>
+                          <Text style={styles.jobMeta}>{vnDateString(job.scheduledAt)}</Text>
                         )}
                         {typeof job.grandTotal === 'number' && (
                           <Text style={styles.jobAmount}>Dự kiến thu: {job.grandTotal.toLocaleString('vi-VN')}đ</Text>

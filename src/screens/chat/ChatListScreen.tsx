@@ -20,6 +20,7 @@ import type { RootStackParamList } from '../../types';
 import { messagingApi, type ConversationItem } from '../../api/messaging.api';
 import { useAppTheme } from '../../constants/theme';
 import { chatSocketService } from '../../services/chat-socket.service';
+import { vnDateString } from '../../utils/vn-time';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -40,7 +41,7 @@ function relativeTime(iso: string | null): string {
   if (hours < 24) return `${hours} giờ`;
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days} ngày`;
-  return new Date(iso).toLocaleDateString('vi-VN');
+  return vnDateString(iso);
 }
 export default function ChatListScreen() {
   const { colors, isDark } = useAppTheme();

@@ -23,6 +23,7 @@ import { useAppTheme } from '../../constants/theme';
 import { partRequestsApi, type PartRequest, type FulfillmentMethod } from '../../api/part-requests.api';
 import { partsCatalogApi, type FixHomePart } from '../../api/parts-catalog.api';
 import { extractApiErrorMessage } from '../../utils/input-validation';
+import { vnDateTimeString } from '../../utils/vn-time';
 
 const CATEGORY_TABS = [
   { label: 'Tất cả', value: '' },
@@ -566,7 +567,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
 
                 {!!pr.receivedAt && (
                   <Text style={[styles.jobMeta, { color: colors.success }]}>
-                    Đã nhận lúc: {new Date(pr.receivedAt).toLocaleString('vi-VN')}
+                    Đã nhận lúc: {vnDateTimeString(pr.receivedAt)}
                   </Text>
                 )}
 
