@@ -80,6 +80,7 @@ import {
   initialTechnicianCashState,
   technicianCashTarget,
 } from './technician-cash-settlement';
+import { vnDateTimeString } from '../../utils/vn-time';
 
 type DetailRoute = RouteProp<RootStackParamList, 'TechnicianOrderDetail'>;
 
@@ -1070,7 +1071,7 @@ export default function TechnicianOrderDetailScreen() {
             <Text style={styles.jobMeta}>{order.serviceName || 'Dịch vụ sửa chữa'}</Text>
             {!!order.scheduledAt && (
               <Text style={styles.jobMeta}>
-                Lịch hẹn: {new Date(order.scheduledAt).toLocaleString('vi-VN')}
+                Lịch hẹn: {vnDateTimeString(order.scheduledAt)}
               </Text>
             )}
             {!!order.addressSummary && (
@@ -2268,7 +2269,7 @@ export default function TechnicianOrderDetailScreen() {
               {order.timeline!.map((entry, index) => (
                 <View key={`${entry.status}-${entry.timestamp}-${index}`} style={styles.row}>
                   <Text style={styles.jobMeta}>{entry.title || entry.status}</Text>
-                  <Text style={styles.jobMeta}>{new Date(entry.timestamp).toLocaleString('vi-VN')}</Text>
+                  <Text style={styles.jobMeta}>{vnDateTimeString(entry.timestamp)}</Text>
                 </View>
               ))}
             </View>

@@ -13,6 +13,7 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { notificationsApi, NotificationItem } from '../../api/notifications.api';
+import { isSameVnDay, vnDateString, vnTimeString } from '../../utils/vn-time';
 
 export default function TechnicianNotificationsScreen() {
   const { colors, isDark } = useAppTheme();
@@ -82,10 +83,10 @@ export default function TechnicianNotificationsScreen() {
   const formatNotificationTime = (iso: string): string => {
     const date = new Date(iso);
     const now = new Date();
-    const time = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-    const sameDay = date.toDateString() === now.toDateString();
+    const time = vnTimeString(date, { hour: '2-digit', minute: '2-digit' });
+    const sameDay = isSameVnDay(date, now);
     if (sameDay) return time;
-    const day = date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+    const day = vnDateString(date, { day: '2-digit', month: '2-digit' });
     return `${day} ${time}`;
   };
 

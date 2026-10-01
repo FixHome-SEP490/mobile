@@ -41,6 +41,7 @@ import {
   cancelBookingConservative,
   rescheduleBookingConservative,
 } from './customer-booking-manage';
+import { vnDateString } from '../../utils/vn-time';
 
 const MANAGE_DATE_OFFSETS = [0, 1, 2, 3, 7] as const;
 const MANAGE_START_TIMES = ['08:00', '09:00', '10:00', '13:00', '14:00', '15:00', '16:00'] as const;
@@ -258,7 +259,7 @@ export default function CustomerBookingsScreen() {
     const badge = getStatusBadge(order.status);
     const totalText = orderTotalText(order);
     const dateStr = order.createdAt
-      ? new Date(order.createdAt).toLocaleDateString('vi-VN')
+      ? vnDateString(order.createdAt)
       : 'Gần đây';
     return (
       <View style={styles.card}>
@@ -305,7 +306,7 @@ export default function CustomerBookingsScreen() {
     const badge = getBookingBadge(booking.status);
     const resumeId = resumeTargetFor(booking, !view.ordersCoverageComplete);
     const dateStr = booking.createdAt
-      ? new Date(booking.createdAt).toLocaleDateString('vi-VN')
+      ? vnDateString(booking.createdAt)
       : 'Gần đây';
     const waiting = String(booking.status).toUpperCase() === 'MATCHING';
     return (
@@ -578,7 +579,7 @@ export default function CustomerBookingsScreen() {
     const badge = getBookingBadge(booking.status);
     const detailId = orderDetailTarget(order.id);
     const dateStr = booking.createdAt
-      ? new Date(booking.createdAt).toLocaleDateString('vi-VN')
+      ? vnDateString(booking.createdAt)
       : 'Gần đây';
     const message = replacement === 'waiting'
       ? 'Đang tìm kỹ thuật viên thay thế; đang chờ kỹ thuật viên phản hồi; làm mới để cập nhật'

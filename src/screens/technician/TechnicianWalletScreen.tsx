@@ -32,6 +32,7 @@ import {
   openWithdrawalOf,
   type WalletUiState,
 } from './technician-wallet';
+import { vnDateTimeString } from '../../utils/vn-time';
 
 const TOP_UP_PRESETS = [100_000, 200_000, 500_000, 1_000_000];
 
@@ -70,7 +71,7 @@ function formatVND(amount: number): string {
 }
 
 function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('vi-VN', {
+  return vnDateTimeString(iso, {
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
   });
 }

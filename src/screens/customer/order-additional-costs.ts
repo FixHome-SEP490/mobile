@@ -1,5 +1,6 @@
 import { orderDetailTarget } from './customer-order-detail';
 import type { CostRequest } from '../../api/orders.api';
+import { vnDateTimeString } from '../../utils/vn-time';
 
 /**
  * P3B11 GET-only additional-cost proposals, shared by the customer and
@@ -116,7 +117,7 @@ function dateText(value: unknown): string | null {
   if (typeof value !== 'string' || value.length === 0) return null;
   const time = Date.parse(value);
   if (!Number.isFinite(time)) return null;
-  return new Date(time).toLocaleString('vi-VN');
+  return vnDateTimeString(time);
 }
 
 function costStatusOf(value: unknown): AdditionalCostStatus {

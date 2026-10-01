@@ -28,6 +28,7 @@ import {
 import { chatSocketService } from '../../services/chat-socket.service';
 import TypingDots from './TypingDots';
 import { useAppTheme } from '../../constants/theme';
+import { vnTimeString } from '../../utils/vn-time';
 
 type ThreadRoute = RouteProp<RootStackParamList, 'ChatThread'>;
 
@@ -37,7 +38,7 @@ const TYPING_IDLE_MS = 1800;
 function clockOf(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  return vnTimeString(date, { hour: '2-digit', minute: '2-digit' });
 }
 
 function newClientMessageId(): string {

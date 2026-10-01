@@ -44,6 +44,7 @@ import CategoryPills from '../../components/CategoryPills';
 import MapView, { Marker } from '../../components/AddressMap';
 import { useAppTheme } from '../../constants/theme';
 import { extractApiErrorMessage } from '../../utils/input-validation';
+import { vnDateString } from '../../utils/vn-time';
 
 const DAY_NAMES = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
 const START_TIMES = ['06:00', '07:00', '08:00', '09:00', '10:00', '13:00', '14:00'];
@@ -1034,7 +1035,7 @@ export default function TechnicianProfileScreen() {
                 <View key={t.id} style={styles.timeOffItem}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.timeOffDates}>
-                      {new Date(t.startAt).toLocaleDateString('vi-VN')} – {new Date(t.endAt).toLocaleDateString('vi-VN')}
+                      {vnDateString(t.startAt)} – {vnDateString(t.endAt)}
                     </Text>
                     {!!t.reason && <Text style={styles.timeOffReason}>{t.reason}</Text>}
                   </View>

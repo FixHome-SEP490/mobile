@@ -23,6 +23,7 @@ import type { TechnicianCandidate } from '../../api/bookings.api';
 import { technicianReviewsApi, type TechnicianReview } from '../../api/technician-reviews.api';
 import { useAppTheme } from '../../constants/theme';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
+import { vnDateString } from '../../utils/vn-time';
 
 const numberFormat = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 });
 const priceFormat = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 });
@@ -508,7 +509,7 @@ export function MatchingTechnicianDetailSheet({
                               {review.customerName || 'Khách hàng FixHome'}
                             </Text>
                             <Text style={[styles.reviewDate, { color: colors.textSecondary }]}>
-                              {new Date(review.createdAt).toLocaleDateString('vi-VN')}
+                              {vnDateString(review.createdAt)}
                             </Text>
                           </View>
                           <View style={[styles.reviewRatingPill, { borderColor: colors.border }]}>
