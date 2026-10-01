@@ -19,7 +19,7 @@ import {
   BottomSheetScrollView,
   BottomSheetTextInput,
 } from '@gorhom/bottom-sheet';
-import { useUIStore } from '../../store/ui.store';
+
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
@@ -55,7 +55,7 @@ export default function CustomerProfileScreen() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // State for theme
-  const toggleTheme = useUIStore((state) => state.toggleTheme);
+
 
   // States for addresses & Loading
   const [addresses, setAddresses] = useState<AddressData[]>([]);
@@ -530,16 +530,7 @@ export default function CustomerProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Tùy chọn</Text>
-          <View style={styles.menuContainer}>
-            <View style={styles.menuItem}>
-              <Ionicons name="moon-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
-              <View style={styles.menuContent}>
-                <Text style={styles.menuTitle}>Giao diện tối</Text>
-              </View>
-              <Switch value={isDark} onValueChange={toggleTheme} />
-            </View>
-          </View>
+
 
           <View style={styles.footer}>
             <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>

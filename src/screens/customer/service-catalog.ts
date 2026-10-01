@@ -10,6 +10,16 @@ import { SERVICES_PAGE_SIZE } from '../../api/services.api';
 
 const SERVICE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+export const OTHER_SERVICE_CODE = 'DICH_VU_KHAC';
+export const OTHER_SERVICE_CATEGORY_CODE = 'KHAC';
+
+/** Canonical catalog marker for the customer free-description request. */
+export function isOtherService(
+  service: Pick<ServiceItem, 'code'> | null | undefined,
+): boolean {
+  return service?.code === OTHER_SERVICE_CODE;
+}
+
 /** Route/detail target: a real service UUID only, never a numeric demo id. */
 export function serviceDetailTarget(serviceId: unknown): string | null {
   return typeof serviceId === 'string' && SERVICE_UUID.test(serviceId) ? serviceId : null;
