@@ -1,16 +1,11 @@
 // src/api/notifications.api.ts
 import apiClient from './client';
 
-/**
- * Legacy notification shape used by the Technician notification utilities.
- * Keep fields optional because those pure helpers intentionally accept partial
- * rows in tests and UI grouping.
- */
 export interface NotificationItem {
   id?: string;
   title?: string;
   body?: string;
-  message?: string;
+  message?: string; // Some apis use message instead of body
   createdAt?: string;
   isRead?: boolean;
   type?: string;
@@ -19,7 +14,6 @@ export interface NotificationItem {
   [key: string]: any;
 }
 
-/** Strict, normalized Customer-facing row after validating the Backend payload. */
 export interface CustomerNotificationItem {
   id: string;
   title: string;
@@ -32,11 +26,33 @@ export interface CustomerNotificationItem {
   referenceType: string | null;
 }
 
-/**
- * Legacy screen compatibility surface. TechnicianNotificationsScreen still
- * consumes the raw Backend envelope; Customer uses getNotificationRows below.
- */
-export interface NotificationsResponse { success: boolean; data: any; message?: string }
+export interface NotificationPageMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface CustomerNotificationPage {
+  data: CustomerNotificationItem[];
+  meta: NotificationPageMeta | null;
+}
+
+export interface NotificationsResponse {
+  success: boolean;
+  statusCode: number;
+  message: string;
+  data: {
+    data: NotificationItem[];
+    total: number;
+  } | NotificationItem[] | any;
+  meta?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -80,28 +96,63 @@ function normalizeNotification(value: unknown): CustomerNotificationItem {
   };
 }
 
+function normalizePageMeta(value: unknown): NotificationPageMeta | null {
+  if (!isRecord(value)) return null;
+
+  const page = Number(value.page);
+  const limit = Number(value.limit);
+  const total = Number(value.total);
+  const totalPages = Number(value.totalPages);
+
+  if (
+    !Number.isInteger(page)
+    || page < 1
+    || !Number.isInteger(limit)
+    || limit < 1
+    || limit > 100
+    || !Number.isInteger(total)
+    || total < 0
+    || !Number.isInteger(totalPages)
+    || totalPages < 0
+    || totalPages !== Math.ceil(total / limit)
+  ) {
+    return null;
+  }
+
+  return { page, limit, total, totalPages };
+}
+
 export const notificationsApi = {
-  /** Existing raw-envelope API kept for the Technician screen. */
-  async getNotifications(page = 1, limit = 20): Promise<NotificationsResponse> {
-    const res = await apiClient.get('/notifications', {
-      params: { page, limit },
+  async getNotifications(page = 1, limit = 10): Promise<NotificationsResponse> {
+    const res = await apiClient.get<NotificationsResponse>('/notifications', {
+      params: { page, limit }
     });
     return res.data;
   },
 
-  /**
-   * Customer-safe normalized rows. Intentionally does not invent pagination
-   * metadata while the Backend envelope currently drops sibling total.
-   */
-  async getNotificationRows(page = 1, limit = 20): Promise<CustomerNotificationItem[]> {
+  async getNotificationPage(page = 1, limit = 20): Promise<CustomerNotificationPage> {
     const res = await apiClient.get('/notifications', {
       params: { page, limit },
     });
-    const rows = unwrapData(res.data);
+    const payload = res.data;
+    const rows = unwrapData(payload);
     if (!Array.isArray(rows)) {
       throw new Error('Danh sách thông báo từ máy chủ không hợp lệ.');
     }
-    return rows.map(normalizeNotification);
+
+    const rawMeta = isRecord(payload) ? normalizePageMeta(payload.meta) : null;
+    const meta = rawMeta && rawMeta.page === page && rawMeta.limit === limit
+      ? rawMeta
+      : null;
+
+    return {
+      data: rows.map(normalizeNotification),
+      meta,
+    };
+  },
+
+  async getNotificationRows(page = 1, limit = 20): Promise<CustomerNotificationItem[]> {
+    return (await this.getNotificationPage(page, limit)).data;
   },
 
   async getCountUnread(): Promise<number> {
@@ -118,5 +169,5 @@ export const notificationsApi = {
 
   async readAll(): Promise<void> {
     await apiClient.patch('/notifications/read-all');
-  },
+  }
 };
