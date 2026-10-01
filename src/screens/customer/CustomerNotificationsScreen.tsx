@@ -11,36 +11,32 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
-import { notificationsApi, NotificationItem } from '../../api/notifications.api';
+import { notificationsApi, type CustomerNotificationItem } from '../../api/notifications.api';
+import { supportCasesApi } from '../../api/support-cases.api';
+import type { RootStackParamList } from '../../types';
 import { isSameVnDay, vnDateString, vnTimeString } from '../../utils/vn-time';
+import { prepareCustomerNotificationAction } from './customer-notification-action';
 
 export default function CustomerNotificationsScreen() {
   const { colors, spacing, fontSize, isDark } = useAppTheme();
   const styles = getStyles(colors, spacing, fontSize);
   const handleScroll = useScrollHideTabBar();
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const [notifications, setNotifications] = useState<CustomerNotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [resolvingReferenceId, setResolvingReferenceId] = useState<string | null>(null);
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await notificationsApi.getNotifications(1, 20); // Note: Backend page usually starts at 1, not 0
-      if (res.success) {
-        if (res.data && Array.isArray(res.data.data)) {
-          setNotifications(res.data.data);
-        } else if (Array.isArray(res.data)) {
-          setNotifications(res.data);
-        } else {
-          setNotifications([]);
-        }
-        setLoadError(null);
-      } else {
-        // A failed load is not an empty inbox: keep the last list and show retry.
-        setLoadError('Không thể tải thông báo. Kiểm tra kết nối rồi thử lại.');
-      }
+      const rows = await notificationsApi.getNotificationRows(1, 20);
+      setNotifications(rows);
+      setLoadError(null);
     } catch (error) {
       console.error('Lỗi khi tải thông báo:', error);
       setLoadError('Không thể tải thông báo. Kiểm tra kết nối rồi thử lại.');
@@ -78,14 +74,43 @@ export default function CustomerNotificationsScreen() {
     }
   };
 
-  const onNotificationPress = (item: NotificationItem) => {
-    if (item.isRead !== false || !item.id) return;
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n)),
-    );
-    notificationsApi.readNotification(item.id).catch((error) => {
-      console.error('Lỗi khi đánh dấu đã đọc:', error);
-    });
+  const onNotificationPress = async (item: CustomerNotificationItem) => {
+    if (resolvingReferenceId === item.id) return;
+
+    const mayNeedAsyncResolution = item.referenceType?.trim().toUpperCase() === 'SUPPORT_CASE';
+    if (mayNeedAsyncResolution) setResolvingReferenceId(item.id);
+
+    try {
+      const target = await prepareCustomerNotificationAction(item, {
+        markReadLocal: (id) => {
+          setNotifications((prev) =>
+            prev.map((notification) => (
+              notification.id === id ? { ...notification, isRead: true } : notification
+            )),
+          );
+        },
+        markReadRemote: notificationsApi.readNotification,
+        onMarkReadError: (error) => {
+          console.error('Lỗi khi đánh dấu đã đọc:', error);
+        },
+        getSupportCase: supportCasesApi.getMine,
+      });
+      if (!target) return;
+
+      if (target.name === 'CustomerBookingDetail') {
+        navigation.navigate('CustomerBookingDetail', target.params);
+      } else {
+        navigation.navigate('CustomerOrderDetail', target.params);
+      }
+    } catch (error) {
+      // The reference may have been resolved/removed or may no longer belong to
+      // this Customer. Never guess a destination from an inaccessible record.
+      console.error('Không thể mở nội dung từ thông báo:', error);
+    } finally {
+      if (mayNeedAsyncResolution) {
+        setResolvingReferenceId((current) => current === item.id ? null : current);
+      }
+    }
   };
 
   /** Compact timestamp: same-day drops the date, otherwise skips the year/seconds noise. */
@@ -125,14 +150,22 @@ export default function CustomerNotificationsScreen() {
     }
   };
 
-  const renderItem = ({ item }: { item: NotificationItem }) => {
+  const renderItem = ({ item }: { item: CustomerNotificationItem }) => {
     const isUnread = item.isRead === false;
     
     return (
       <TouchableOpacity
-        style={[styles.card, isUnread && styles.unreadCard]}
+        style={[
+          styles.card,
+          isUnread && styles.unreadCard,
+          resolvingReferenceId === item.id && { opacity: 0.7 },
+        ]}
         activeOpacity={0.7}
-        onPress={() => onNotificationPress(item)}
+        disabled={resolvingReferenceId === item.id}
+        accessibilityRole="button"
+        accessibilityLabel={`Mở thông báo: ${item.title}`}
+        accessibilityState={{ busy: resolvingReferenceId === item.id }}
+        onPress={() => void onNotificationPress(item)}
       >
         <View style={[styles.iconContainer, { backgroundColor: renderIconBackground(item.type) }]}>
           {renderNotificationIcon(item.type)}
