@@ -44,7 +44,6 @@ import {
   openWithdrawalOf,
   type WalletUiState,
 } from './technician-wallet';
-
 import { vnDateTimeString } from '../../utils/vn-time';
 
 const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
