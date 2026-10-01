@@ -61,3 +61,12 @@ describe('vn-time', () => {
     );
   });
 });
+
+describe('vnDateTimeString default', () => {
+  it('shows hours and minutes and a two-digit date, without seconds', () => {
+    const text = vnDateTimeString('2026-10-02T02:00:00Z');
+    expect(text).toContain('09:00');
+    expect(text).toContain('02/10/2026');
+    expect(text).not.toContain('09:00:00');
+  });
+});

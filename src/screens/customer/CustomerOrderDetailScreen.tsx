@@ -1101,7 +1101,7 @@ export default function CustomerOrderDetailScreen() {
               )}
               <TouchableOpacity
                 testID="order-chat-technician"
-                style={[styles.decisionBtn, { backgroundColor: colors.primaryStrong, alignSelf: 'flex-start', marginTop: 10, opacity: openingChat ? 0.6 : 1 }]}
+                style={[styles.decisionBtn, { backgroundColor: colors.primaryStrong, alignSelf: 'flex-start', flex: 0, paddingHorizontal: 16, marginTop: 10, opacity: openingChat ? 0.6 : 1 }]}
                 onPress={() => { void openTechnicianChat(); }}
                 disabled={openingChat}
                 accessibilityRole="button"
