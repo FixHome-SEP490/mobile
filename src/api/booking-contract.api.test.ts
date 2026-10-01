@@ -126,14 +126,31 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
     async (items) => {
       api.get.mockResolvedValue({ data: { data: {
         id: 'order-1', status: 'en_route', paymentStatus: 'unpaid',
+        completedAt: '2026-09-30T01:00:00.000Z',
         quotation: { id: 'quote-1', status: 'sent', laborTotal: 100000, partsTotal: 0, items },
       } } });
       const detail = await ordersApi.getOrder('order-1');
       expect(api.get).toHaveBeenCalledWith('/service-orders/order-1');
+      expect(detail.completedAt).toBe('2026-09-30T01:00:00.000Z');
       expect(detail.quotation?.status).toBe('SENT');
       expect(detail.quotation?.items).toEqual([]);
     },
   );
+
+  it('requests completed-only repair history with authoritative server pagination', async () => {
+    api.get.mockResolvedValue({ data: { data: [{
+      orderId: 'order-history-1', bookingId: 'booking-history-1', code: 'FH-001',
+      status: 'completed', serviceName: 'Vệ sinh máy lạnh', technicianName: 'Nguyễn Văn A',
+      laborTotal: 100000, partsTotal: 50000, grandTotal: 150000,
+      completedAt: '2026-09-29T02:30:00.000Z',
+    }], meta: { total: 7 } } });
+    const page = await ordersApi.getRepairHistory(2, 20, 'completed');
+    expect(api.get).toHaveBeenCalledWith('/repair-history', {
+      params: { page: 2, pageSize: 20, status: 'completed' },
+    });
+    expect(page.total).toBe(7);
+    expect(page.data).toMatchObject([{ orderId: 'order-history-1', status: 'completed' }]);
+  });
 
   it('fetches an assigned-orders page with pagination params and server total', async () => {
     api.get.mockResolvedValue({ data: { data: [{
