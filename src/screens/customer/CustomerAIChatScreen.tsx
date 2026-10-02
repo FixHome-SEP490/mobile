@@ -46,6 +46,7 @@ import {
   type AiReply,
   type RecommendedService,
 } from '../../api/ai.api';
+import { appendCustomerWords } from './ai-chat-words';
 
 /** The AI drops a session after an hour of silence. Told, not discovered. */
 const SESSION_IDLE_MINUTES = 60;
@@ -203,9 +204,7 @@ export default function CustomerAIChatScreen() {
     async (text: string, images: PickedImage[], isQuestion: boolean) => {
       // The acknowledgement is already on screen; the answer waits for both the
       // model and a beat of reading time, so the two do not arrive together.
-      if (text.trim()) {
-        lastCustomerWords.current = text.trim();
-      }
+      lastCustomerWords.current = appendCustomerWords(lastCustomerWords.current, text);
 
       const ask = (payload: string[]) =>
         isQuestion
@@ -353,6 +352,7 @@ export default function CustomerAIChatScreen() {
           onPress: () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
             sessionId.current = null;
+            lastCustomerWords.current = '';
             setPinnedService(null);
             setTurnCount(0);
             setPendingImages([]);
