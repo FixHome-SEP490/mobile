@@ -1,5 +1,5 @@
 // src/constants/theme.ts
-import { useUIStore } from '../store/ui.store';
+
 
 // Base Web Palettes
 const brand = {
@@ -22,7 +22,7 @@ const semantic = {
 };
 
 // Status/tone palette, DS §5.3. `bg` = badge fill, `fg` = icon/dot, `text` = badge label
-// (darker than `fg` so small text clears 4.5:1). Dark values are new, measured separately.
+// `text` stays darker than `fg` so small labels keep readable contrast in the light UI.
 export type Tone = { bg: string; fg: string; text: string };
 export type ToneName = 'success' | 'warning' | 'danger' | 'info' | 'violet' | 'repair' | 'neutral';
 
@@ -36,15 +36,6 @@ const lightTones: Record<ToneName, Tone> = {
   neutral: { bg: '#EFECE7', fg: '#7D7468', text: '#5C554C' },
 };
 
-const darkTones: Record<ToneName, Tone> = {
-  success: { bg: '#0F2E24', fg: '#34D399', text: '#6EE7B7' },
-  warning: { bg: '#33280A', fg: '#FBBF24', text: '#FCD34D' },
-  danger: { bg: '#3B1512', fg: '#F87171', text: '#FCA5A5' },
-  info: { bg: '#13294B', fg: '#60A5FA', text: '#93C5FD' },
-  violet: { bg: '#251A47', fg: '#A78BFA', text: '#C4B5FD' },
-  repair: { bg: '#1E3A5F', fg: '#60A5FA', text: '#93C5FD' },
-  neutral: { bg: '#334155', fg: '#94A3B8', text: '#CBD5E1' },
-};
 
 // Neutrals aligned to the slate palette most screens already hardcode
 // (not the unused warm `ink` scale below), so referencing these tokens
@@ -67,24 +58,6 @@ export const lightTheme = {
   ...semantic,
 };
 
-// Dark theme matches structure but inverted (simplified inversion for now)
-export const darkTheme = {
-  primary: brand[500],
-  primaryDark: brand[400],
-  primaryStrong: brand[300],
-  primarySoft: '#1E3A5F',
-  primaryTint: '#1E3A5F',
-  secondary: ink[400],
-  background: '#0F172A',
-  surface: '#1E293B',
-  text: '#F8FAFC',
-  textSecondary: '#94A3B8',
-  muted: '#64748B',
-  border: '#334155',
-  divider: '#334155',
-  tone: darkTones,
-  ...semantic,
-};
 
 export type ThemeColors = typeof lightTheme;
 
@@ -108,14 +81,9 @@ export const fontSize = {
   xxxl: 32,
 };
 
-export const useAppTheme = () => {
-  const themeMode = useUIStore((state) => state.themeMode);
-  const isDark = themeMode === 'dark';
-  
-  return {
-    colors: isDark ? darkTheme : lightTheme,
-    spacing,
-    fontSize,
-    isDark,
-  };
-};
+export const useAppTheme = () => ({
+  colors: lightTheme,
+  spacing,
+  fontSize,
+  isDark: false as const,
+});

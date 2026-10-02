@@ -1,6 +1,6 @@
 import { vnTodayCalendarDate, vnWallClockToDate } from './vn-time';
 
-/** Allowed customer arrival-window start times, in Vietnam time. */
+/** Suggested customer arrival-window start times, in Vietnam time. */
 export const BOOKING_START_TIMES = [
   '09:00',
   '10:00',
@@ -10,7 +10,21 @@ export const BOOKING_START_TIMES = [
   '16:00',
 ] as const;
 
-export type BookingStartTime = (typeof BOOKING_START_TIMES)[number];
+export type BookingStartTime = string;
+
+export const CUSTOMER_BOOKING_START_MINUTE = 9 * 60;
+export const CUSTOMER_BOOKING_LAST_START_MINUTE = 16 * 60;
+
+export function isCustomerBookingStartTime(time: string): boolean {
+  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time);
+  if (!match) return false;
+  const minutes = Number(match[1]) * 60 + Number(match[2]);
+  return (
+    minutes >= CUSTOMER_BOOKING_START_MINUTE &&
+    minutes <= CUSTOMER_BOOKING_LAST_START_MINUTE
+  );
+}
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -54,8 +68,8 @@ export function buildCustomerBookingWindow({
     throw new Error('Vui lòng chọn ngày hẹn trong hôm nay đến 3 ngày tới.');
   }
 
-  if (!BOOKING_START_TIMES.some((startTime) => startTime === time)) {
-    throw new Error('Vui lòng chọn một trong các khung giờ có sẵn.');
+  if (!isCustomerBookingStartTime(time)) {
+    throw new Error('Vui lòng chọn giờ bắt đầu từ 09:00 đến 16:00.');
   }
 
   const [hours, minutes] = time.split(':').map(Number);

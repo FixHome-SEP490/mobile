@@ -39,13 +39,13 @@ import {
 } from './customer-booking-create';
 
 import {
+  isOtherService,
   resolveServicePrice,
   serviceDetailTarget,
 } from './service-catalog';
 import { usersApi, type AddressData } from '../../api/users.api';
 import { useAuthStore } from '../../store';
 import { UserRole, type RootStackParamList } from '../../types';
-import { BOOKING_START_TIMES } from '../../utils/booking-window';
 import BookingSchedulePicker from '../../components/BookingSchedulePicker';
 import BookingReviewSheet, { BookingReviewSummary } from '../../components/BookingReviewSheet';
 import {
@@ -105,7 +105,7 @@ export default function CustomerBookingCreateScreen() {
   const [bookingDate, setBookingDate] = useState(() => {
     return vnTodayCalendarDate();
   });
-  const [startTime, setStartTime] = useState<(typeof BOOKING_START_TIMES)[number]>('09:00');
+  const [startTime, setStartTime] = useState<string>('09:00');
   const [descriptionTouched, setDescriptionTouched] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -288,6 +288,13 @@ export default function CustomerBookingCreateScreen() {
     addresses.find((address) => address.id === addressId) ?? null;
   const selectedAddressReady = addressReadyForBooking(selectedAddress);
   const selectedPrice = resolveServicePrice(selectedService);
+  const selectedIsOtherService = isOtherService(selectedService);
+  const descriptionLabel = selectedIsOtherService
+    ? 'Mô tả yêu cầu (bắt buộc)'
+    : 'Mô tả sự cố (bắt buộc)';
+  const descriptionPlaceholder = selectedIsOtherService
+    ? 'Ví dụ: Cửa tủ bếp bung bản lề, cần người đến kiểm tra và sửa'
+    : 'Mô tả thiết bị và vấn đề cần sửa';
   const reviewDisabled =
     isSubmitting ||
     Boolean(currentOwnerCreateState) ||
@@ -295,7 +302,9 @@ export default function CustomerBookingCreateScreen() {
     Boolean(loadError);
   const descriptionError =
     descriptionTouched && !description.trim()
-      ? 'Vui lòng mô tả sự cố để tiếp tục.'
+      ? selectedIsOtherService
+        ? 'Vui lòng mô tả công việc bạn cần hỗ trợ để tiếp tục.'
+        : 'Vui lòng mô tả sự cố để tiếp tục.'
       : '';
 
   const openPicker = () => {
@@ -609,15 +618,18 @@ export default function CustomerBookingCreateScreen() {
             {!!selectedService && (
               <View style={[styles.section, { backgroundColor: colors.surface }]}>
                 <Text style={{ color: colors.text, fontWeight: '700' }}>
-                  {selectedService.pricingMode === 'fixed_price'
+                  {selectedIsOtherService
+                    ? 'Yêu cầu ngoài danh sách — kỹ thuật viên sẽ khảo sát và báo giá'
+                    : selectedService.pricingMode === 'fixed_price'
                     ? `Giá cố định: ${selectedPrice.text}`
                     : selectedService.pricingMode === 'inspection_required'
                       ? `Cần khảo sát/báo giá: ${selectedPrice.text}`
                       : selectedPrice.text}
                 </Text>
                 <Text style={[styles.note, { color: colors.textSecondary }]}>
-                  Số lượng đặt hiện tại: 1. Thanh toán và bảo hành được xử lý ở các bước riêng theo
-                  trạng thái thực tế của đơn.
+                  {selectedIsOtherService
+                    ? 'Mô tả càng rõ thiết bị hoặc công việc cần hỗ trợ thì kỹ thuật viên càng dễ đánh giá trước khi nhận yêu cầu.'
+                    : 'Số lượng đặt hiện tại: 1. Thanh toán và bảo hành được xử lý ở các bước riêng theo trạng thái thực tế của đơn.'}
                 </Text>
               </View>
             )}
@@ -678,18 +690,18 @@ export default function CustomerBookingCreateScreen() {
               }}
             >
               <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                Mô tả sự cố (bắt buộc)
+                {descriptionLabel}
               </Text>
               <TextInput
                 ref={descriptionInputRef}
-                accessibilityLabel="Mô tả sự cố"
-                accessibilityHint="Mô tả thiết bị và vấn đề cần sửa"
+                accessibilityLabel={selectedIsOtherService ? 'Mô tả yêu cầu' : 'Mô tả sự cố'}
+                accessibilityHint={descriptionPlaceholder}
                 value={description}
                 onChangeText={setDescription}
                 onBlur={() => setDescriptionTouched(true)}
                 multiline
                 maxLength={5000}
-                placeholder="Mô tả thiết bị và vấn đề cần sửa"
+                placeholder={descriptionPlaceholder}
                 placeholderTextColor={colors.textSecondary}
                 style={[
                   styles.input,

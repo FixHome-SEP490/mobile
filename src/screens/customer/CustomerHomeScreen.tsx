@@ -36,6 +36,7 @@ import {
   getHomePopularPagerPage,
 } from './customer-home-pager';
 import { orderDetailTarget } from './customer-order-detail';
+import { OTHER_SERVICE_CATEGORY_CODE } from './service-catalog';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { useChatUnreadCount } from '../../hooks/useChatUnreadCount';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -508,6 +509,30 @@ export default function CustomerHomeScreen() {
             />
           ))}
         </View>
+
+        <TouchableOpacity
+          style={styles.otherServiceCard}
+          activeOpacity={0.8}
+          onPress={() =>
+            navigation.navigate('CustomerServices', {
+              categoryCode: OTHER_SERVICE_CATEGORY_CODE,
+              query: 'Khác',
+            })
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Đặt dịch vụ khác"
+        >
+          <View style={styles.otherServiceIcon}>
+            <Ionicons name="ellipsis-horizontal" size={24} color={colors.primary} />
+          </View>
+          <View style={styles.otherServiceCopy}>
+            <Text style={styles.otherServiceTitle}>Không thấy dịch vụ bạn cần?</Text>
+            <Text style={styles.otherServiceDesc}>
+              Chọn “Khác” và mô tả công việc để gửi yêu cầu.
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+        </TouchableOpacity>
 
         {/* 7. Promotional Campaign Banner (Chân trang phong cách Hình 1 & 2) */}
         <TouchableOpacity
@@ -1013,6 +1038,32 @@ const getStyles = (colors: any, spacing: any, fontSize: any, pagerWidth: number)
     borderRadius: 3,
     backgroundColor: '#CBD5E1',
   },
+
+  otherServiceCard: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  otherServiceIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otherServiceCopy: { flex: 1, gap: 2 },
+  otherServiceTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
+  otherServiceDesc: { fontSize: 12, lineHeight: 17, color: colors.textSecondary },
 
   // 7. Promo Banner
   promoBannerContainer: {
