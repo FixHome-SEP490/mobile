@@ -96,6 +96,7 @@ import {
   initialCustomerOrderCancelState,
 } from './customer-order-cancel';
 import { vnDateTimeString } from '../../utils/vn-time';
+import { findChatForBooking } from '../technician/technician-chat-shortcut';
 
 type DetailRoute = RouteProp<RootStackParamList, 'CustomerOrderDetail'>;
 
@@ -724,6 +725,28 @@ export default function CustomerOrderDetailScreen() {
     void decisionRef.current?.submit();
   };
   const sections = resolveOrderDetailSections(order);
+  const [openingChat, setOpeningChat] = useState(false);
+  /** The order's thread with the technician, where their first message waits. */
+  const openTechnicianChat = async () => {
+    if (!order?.bookingId || openingChat) return;
+    setOpeningChat(true);
+    try {
+      const target = await findChatForBooking(order.bookingId);
+      if (!target) {
+        Alert.alert('Chưa có cuộc trò chuyện', 'Chưa có cuộc trò chuyện nào cho đơn này.');
+        return;
+      }
+      navigation.navigate('ChatThread', {
+        conversationId: target.conversationId,
+        counterpartName: target.counterpartName,
+        serviceName: target.serviceName,
+      });
+    } catch {
+      Alert.alert('Không mở được', 'Không thể mở cuộc trò chuyện. Vui lòng thử lại.');
+    } finally {
+      setOpeningChat(false);
+    }
+  };
   const orderCancelEligible = customerOrderCancelTarget(
     order && order.id === serviceOrderId ? order : null,
   );
@@ -1076,6 +1099,16 @@ export default function CustomerOrderDetailScreen() {
               {!!attributionNote && (
                 <Text style={styles.meta}>{attributionNote}</Text>
               )}
+              <TouchableOpacity
+                testID="order-chat-technician"
+                style={[styles.decisionBtn, { backgroundColor: colors.primaryStrong, alignSelf: 'flex-start', flex: 0, paddingHorizontal: 16, marginTop: 10, opacity: openingChat ? 0.6 : 1 }]}
+                onPress={() => { void openTechnicianChat(); }}
+                disabled={openingChat}
+                accessibilityRole="button"
+                accessibilityLabel="Nhắn tin với kỹ thuật viên"
+              >
+                <Text style={styles.decisionBtnText}>Nhắn tin với kỹ thuật viên</Text>
+              </TouchableOpacity>
             </View>
           )}
 

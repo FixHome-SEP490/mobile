@@ -1,5 +1,5 @@
 import { useAppTheme } from '../../constants/theme';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,40 +7,51 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  StatusBar
+  StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
-import { notificationsApi, NotificationItem } from '../../api/notifications.api';
+import {
+  notificationsApi,
+  type CustomerNotificationItem,
+  type NotificationPageMeta,
+} from '../../api/notifications.api';
+import { supportCasesApi } from '../../api/support-cases.api';
+import type { RootStackParamList } from '../../types';
 import { isSameVnDay, vnDateString, vnTimeString } from '../../utils/vn-time';
+import {
+  mergeNotificationRows,
+  nextNotificationPage,
+} from './customer-notification-pagination';
+import { prepareCustomerNotificationAction } from './customer-notification-action';
 
 export default function CustomerNotificationsScreen() {
   const { colors, spacing, fontSize, isDark } = useAppTheme();
   const styles = getStyles(colors, spacing, fontSize);
   const handleScroll = useScrollHideTabBar();
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const [notifications, setNotifications] = useState<CustomerNotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [pageMeta, setPageMeta] = useState<NotificationPageMeta | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const [resolvingReferenceId, setResolvingReferenceId] = useState<string | null>(null);
+  const loadingMoreRef = useRef(false);
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await notificationsApi.getNotifications(1, 20); // Note: Backend page usually starts at 1, not 0
-      if (res.success) {
-        if (res.data && Array.isArray(res.data.data)) {
-          setNotifications(res.data.data);
-        } else if (Array.isArray(res.data)) {
-          setNotifications(res.data);
-        } else {
-          setNotifications([]);
-        }
-        setLoadError(null);
-      } else {
-        // A failed load is not an empty inbox: keep the last list and show retry.
-        setLoadError('Không thể tải thông báo. Kiểm tra kết nối rồi thử lại.');
-      }
+      const page = await notificationsApi.getNotificationPage(1, 20);
+      setNotifications(mergeNotificationRows([], page.data, true));
+      setPageMeta(page.meta);
+      setLoadError(null);
+      setLoadMoreError(null);
     } catch (error) {
       console.error('Lỗi khi tải thông báo:', error);
       setLoadError('Không thể tải thông báo. Kiểm tra kết nối rồi thử lại.');
@@ -58,10 +69,32 @@ export default function CustomerNotificationsScreen() {
   }, [fetchNotifications]);
 
   const onRefresh = () => {
+    if (loadingMoreRef.current) return;
     setRefreshing(true);
     setLoadError(null);
+    setLoadMoreError(null);
     void fetchNotifications();
   };
+
+  const onLoadMore = useCallback(async () => {
+    const nextPage = nextNotificationPage(pageMeta);
+    if (!nextPage || loading || refreshing || loadingMoreRef.current) return;
+
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    setLoadMoreError(null);
+    try {
+      const page = await notificationsApi.getNotificationPage(nextPage, 20);
+      setNotifications((current) => mergeNotificationRows(current, page.data));
+      setPageMeta(page.meta);
+    } catch (error) {
+      console.error('Lỗi khi tải thêm thông báo:', error);
+      setLoadMoreError('Không thể tải thêm thông báo.');
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [loading, pageMeta, refreshing]);
 
   const [markingAll, setMarkingAll] = useState(false);
 
@@ -78,14 +111,42 @@ export default function CustomerNotificationsScreen() {
     }
   };
 
-  const onNotificationPress = (item: NotificationItem) => {
-    if (item.isRead !== false || !item.id) return;
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n)),
-    );
-    notificationsApi.readNotification(item.id).catch((error) => {
-      console.error('Lỗi khi đánh dấu đã đọc:', error);
-    });
+  const onNotificationPress = async (item: CustomerNotificationItem) => {
+    if (resolvingReferenceId === item.id) return;
+
+    const mayNeedAsyncResolution = item.referenceType?.trim().toUpperCase() === 'SUPPORT_CASE';
+    if (mayNeedAsyncResolution) setResolvingReferenceId(item.id);
+
+    try {
+      const target = await prepareCustomerNotificationAction(item, {
+        markReadLocal: (id) => {
+          setNotifications((prev) =>
+            prev.map((notification) => (
+              notification.id === id ? { ...notification, isRead: true } : notification
+            )),
+          );
+        },
+        markReadRemote: notificationsApi.readNotification,
+        onMarkReadError: (error) => {
+          console.error('Lỗi khi đánh dấu đã đọc:', error);
+        },
+        getSupportCase: supportCasesApi.getMine,
+      });
+      if (!target) return;
+
+      if (target.name === 'CustomerBookingDetail') {
+        navigation.navigate('CustomerBookingDetail', target.params);
+      } else {
+        navigation.navigate('CustomerOrderDetail', target.params);
+      }
+    } catch (error) {
+      // Never guess a destination from an inaccessible or stale reference.
+      console.error('Không thể mở nội dung từ thông báo:', error);
+    } finally {
+      if (mayNeedAsyncResolution) {
+        setResolvingReferenceId((current) => current === item.id ? null : current);
+      }
+    }
   };
 
   /** Compact timestamp: same-day drops the date, otherwise skips the year/seconds noise. */
@@ -125,14 +186,22 @@ export default function CustomerNotificationsScreen() {
     }
   };
 
-  const renderItem = ({ item }: { item: NotificationItem }) => {
+  const renderItem = ({ item }: { item: CustomerNotificationItem }) => {
     const isUnread = item.isRead === false;
     
     return (
       <TouchableOpacity
-        style={[styles.card, isUnread && styles.unreadCard]}
+        style={[
+          styles.card,
+          isUnread && styles.unreadCard,
+          resolvingReferenceId === item.id && { opacity: 0.7 },
+        ]}
         activeOpacity={0.7}
-        onPress={() => onNotificationPress(item)}
+        disabled={resolvingReferenceId === item.id}
+        accessibilityRole="button"
+        accessibilityLabel={`Mở thông báo: ${item.title}`}
+        accessibilityState={{ busy: resolvingReferenceId === item.id }}
+        onPress={() => void onNotificationPress(item)}
       >
         <View style={[styles.iconContainer, { backgroundColor: renderIconBackground(item.type) }]}>
           {renderNotificationIcon(item.type)}
@@ -189,6 +258,27 @@ export default function CustomerNotificationsScreen() {
     );
   };
 
+  const renderFooter = () => {
+    if (loadingMore) {
+      return (
+        <View style={styles.loadMoreFooter}>
+          <ActivityIndicator size="small" color={colors.primary} />
+        </View>
+      );
+    }
+    if (loadMoreError) {
+      return (
+        <View style={styles.loadMoreFooter} accessibilityRole="alert">
+          <Text style={styles.errorText}>{loadMoreError}</Text>
+          <TouchableOpacity onPress={() => void onLoadMore()} accessibilityRole="button">
+            <Text style={styles.retryText}>Thử tải lại</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return null;
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
@@ -225,6 +315,9 @@ export default function CustomerNotificationsScreen() {
             ) : null
           }
           ListEmptyComponent={renderEmpty}
+          ListFooterComponent={renderFooter}
+          onEndReached={() => void onLoadMore()}
+          onEndReachedThreshold={0.4}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
@@ -399,6 +492,12 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontSize: 13,
     fontWeight: '700',
     color: colors.primary,
+  },
+  loadMoreFooter: {
+    minHeight: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
 });
 

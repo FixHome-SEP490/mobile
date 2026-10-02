@@ -19,7 +19,7 @@ import {
   BottomSheetScrollView,
   BottomSheetTextInput,
 } from '@gorhom/bottom-sheet';
-import { useUIStore } from '../../store/ui.store';
+
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
@@ -33,9 +33,11 @@ import { useAuthStore } from '../../store';
 import { authApi } from '../../api/auth.api';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { usersApi, type AddressData } from '../../api/users.api';
+import { mediaApi } from '../../api/media.api';
 import { geoApi, type PlaceSuggestion } from '../../api/geo.api';
 import { useAppTheme } from '../../constants/theme';
 import { extractApiErrorMessage } from '../../utils/input-validation';
+import { persistCustomerAvatar } from './customer-avatar-upload';
 
 export default function CustomerProfileScreen() {
   const { user, token, setAuth, logout } = useAuthStore();
@@ -50,9 +52,10 @@ export default function CustomerProfileScreen() {
   const [email] = useState(user?.email || 'customer@fixhome.vn');
   const [phone, setPhone] = useState(user?.phoneNumber || '');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatarUrl || null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // State for theme
-  const toggleTheme = useUIStore((state) => state.toggleTheme);
+
 
   // States for addresses & Loading
   const [addresses, setAddresses] = useState<AddressData[]>([]);
@@ -67,20 +70,47 @@ export default function CustomerProfileScreen() {
   const addressSnapPoints = useMemo(() => ['90%'], []);
 
   const handlePickImage = async () => {
+    if (uploadingAvatar) return;
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
     });
-    if (!result.canceled) {
-      const uri = result.assets[0].uri;
-      setAvatarUrl(uri);
-      try {
-        await usersApi.updateProfile({ avatarUrl: uri });
-      } catch (e) {
-        console.error('Failed to update avatar', e);
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+    setUploadingAvatar(true);
+    try {
+      const persisted = await persistCustomerAvatar(
+        {
+          uri: asset.uri,
+          fileName: asset.fileName,
+          mimeType: asset.mimeType,
+        },
+        {
+          uploadImage: mediaApi.uploadPublicImage,
+          updateProfile: usersApi.updateProfile,
+        },
+      );
+
+      setAvatarUrl(persisted.avatarUrl);
+      if (token && user) {
+        setAuth(token, {
+          ...user,
+          ...persisted.user,
+          avatarUrl: persisted.avatarUrl,
+        });
       }
+      Alert.alert('Đã cập nhật ảnh đại diện', 'Ảnh mới đã được lưu vào hồ sơ của bạn.');
+    } catch (err: unknown) {
+      Alert.alert(
+        'Không thể cập nhật ảnh đại diện',
+        extractApiErrorMessage(err, 'Không thể tải ảnh lên. Vui lòng thử lại.'),
+      );
+    } finally {
+      setUploadingAvatar(false);
     }
   };
   const [savingProfile, setSavingProfile] = useState(false);
@@ -398,14 +428,20 @@ export default function CustomerProfileScreen() {
                 )}
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.cameraIconBadge}
+                style={[styles.cameraIconBadge, uploadingAvatar && { opacity: 0.75 }]}
                 onPress={handlePickImage}
+                disabled={uploadingAvatar}
                 activeOpacity={0.8}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 accessibilityRole="button"
-                accessibilityLabel="Đổi ảnh đại diện"
+                accessibilityLabel={uploadingAvatar ? 'Đang tải ảnh đại diện' : 'Đổi ảnh đại diện'}
+                accessibilityState={{ disabled: uploadingAvatar, busy: uploadingAvatar }}
               >
-                 <Ionicons name="camera" size={16} color={colors.surface} />
+                 {uploadingAvatar ? (
+                   <ActivityIndicator size="small" color={colors.surface} />
+                 ) : (
+                   <Ionicons name="camera" size={16} color={colors.surface} />
+                 )}
               </TouchableOpacity>
             </View>
             <Text style={[styles.name, isDarkMode && styles.textDark]}>{name}</Text>
@@ -494,16 +530,7 @@ export default function CustomerProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Tùy chọn</Text>
-          <View style={styles.menuContainer}>
-            <View style={styles.menuItem}>
-              <Ionicons name="moon-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
-              <View style={styles.menuContent}>
-                <Text style={styles.menuTitle}>Giao diện tối</Text>
-              </View>
-              <Switch value={isDark} onValueChange={toggleTheme} />
-            </View>
-          </View>
+
 
           <View style={styles.footer}>
             <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>

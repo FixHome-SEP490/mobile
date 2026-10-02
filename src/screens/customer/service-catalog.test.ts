@@ -1,4 +1,6 @@
 import {
+  OTHER_SERVICE_CODE,
+  isOtherService,
   createServiceCatalogLoader,
   createServiceDetailLoader,
   initialCatalogState,
@@ -37,6 +39,15 @@ function deferred<T>() {
   const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 }
+
+describe('canonical Other service marker', () => {
+  it('recognizes only the backend catalog code reserved for free-description requests', () => {
+    expect(isOtherService({ code: OTHER_SERVICE_CODE })).toBe(true);
+    expect(isOtherService({ code: 'SUA_MAY_GIAT' })).toBe(false);
+    expect(isOtherService({})).toBe(false);
+    expect(isOtherService(null)).toBe(false);
+  });
+});
 
 describe('serviceDetailTarget (real UUID gate)', () => {
   it('accepts only well-formed UUIDs, never fake numeric ids', () => {

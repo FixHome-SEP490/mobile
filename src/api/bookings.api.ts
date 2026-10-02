@@ -65,6 +65,8 @@ export interface CreateBookingDto {
   mediaUrls?: string[];
   photoUploadIds?: string[];
   aiDiagnosisId?: string;
+  /** Session id from the assistant; the technician receives a summary of it. */
+  aiSessionId?: string;
 }
 
 export interface TechnicianCandidate {

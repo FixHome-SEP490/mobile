@@ -7,6 +7,7 @@ import type { AddressData } from '../../api/users.api';
 import { vnWallClockToDate } from '../../utils/vn-time';
 
 const SERVICE_ID = '11111111-1111-4111-8111-111111111111';
+const OTHER_SERVICE_ID = '55555555-5555-4555-8555-555555555555';
 const ADDRESS_ID = '22222222-2222-4222-8222-222222222222';
 const ADDRESS_B_ID = '44444444-4444-4444-8444-444444444444';
 const mockAuthState = {
@@ -165,6 +166,18 @@ const service: ServiceItem = {
   isActive: true,
   sortOrder: 1,
 };
+const otherService: ServiceItem = {
+  ...service,
+  id: OTHER_SERVICE_ID,
+  name: 'Khác',
+  code: 'DICH_VU_KHAC',
+  pricingMode: 'inspection_required',
+  fixedPrice: null,
+  basePrice: 0,
+  minPrice: null,
+  maxPrice: null,
+};
+
 const address: AddressData = {
   id: ADDRESS_ID,
   userId: 'customer-a',
@@ -206,7 +219,9 @@ function findActions(renderer: TestRenderer, label: string): TestNode[] {
 
 function findDescriptionInput(renderer: TestRenderer): TestNode | undefined {
   return renderer.root.findAll(
-    (node) => node.props.accessibilityLabel === 'Mô tả sự cố',
+    (node) =>
+      node.props.accessibilityLabel === 'Mô tả sự cố' ||
+      node.props.accessibilityLabel === 'Mô tả yêu cầu',
   )[0];
 }
 
@@ -251,6 +266,7 @@ beforeEach(() => {
   jest.useFakeTimers().setSystemTime(vnWallClockToDate(2026, 9, 27, 8, 0));
   jest.clearAllMocks();
   mockAuthState.user.id = 'customer-a';
+  mockRoute.params.prefill.serviceId = SERVICE_ID;
   mockGetServices.mockResolvedValue({ data: [service], total: 1 });
   mockGetAddresses.mockImplementation(async () =>
     mockAuthState.user.id === 'customer-b' ? [addressB] : [address],
@@ -282,6 +298,31 @@ it('shows and focuses the required description error when review is requested bl
     'Vui lòng mô tả sự cố để tiếp tục.',
   );
   expect(mockGetMyBookingsPage).not.toHaveBeenCalled();
+  expect(mockCreateBooking).not.toHaveBeenCalled();
+  await act(async () => renderer.unmount());
+});
+
+it('turns the canonical Other service into a free-description request without inventing a price', async () => {
+  mockRoute.params.prefill.serviceId = OTHER_SERVICE_ID;
+  mockGetServices.mockResolvedValue({ data: [otherService], total: 1 });
+
+  const renderer = await renderScreen();
+  expect(textContent(renderer.root)).toContain('Yêu cầu ngoài danh sách');
+  expect(textContent(renderer.root)).toContain('kỹ thuật viên sẽ khảo sát và báo giá');
+
+  const descriptionInput = findDescriptionInput(renderer);
+  expect(descriptionInput?.props.accessibilityLabel).toBe('Mô tả yêu cầu');
+  expect(descriptionInput?.props.placeholder).toContain('Cửa tủ bếp bung bản lề');
+
+  const reviewActions = findActions(renderer, 'Xem lại yêu cầu');
+  await act(async () => {
+    (reviewActions[0].props.onPress as () => void)();
+    await flushPromises();
+  });
+
+  expect(textContent(renderer.root)).toContain(
+    'Vui lòng mô tả công việc bạn cần hỗ trợ để tiếp tục.',
+  );
   expect(mockCreateBooking).not.toHaveBeenCalled();
   await act(async () => renderer.unmount());
 });

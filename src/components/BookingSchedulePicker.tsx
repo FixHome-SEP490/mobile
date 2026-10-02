@@ -2,8 +2,12 @@ import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { DateTimePicker } from '@expo/ui/community/datetime-picker';
 import * as Haptics from 'expo-haptics';
-import { CalendarDays, ChevronDown, Clock3 } from 'lucide-react-native';
-import { BOOKING_START_TIMES, getBookingDateRange } from '../utils/booking-window';
+import { CalendarDays, ChevronDown, Clock3, SlidersHorizontal } from 'lucide-react-native';
+import {
+  BOOKING_START_TIMES,
+  getBookingDateRange,
+  isCustomerBookingStartTime,
+} from '../utils/booking-window';
 import { formatBookingDate } from '../screens/customer/customer-booking-review';
 
 type BookingColors = {
@@ -15,6 +19,25 @@ type BookingColors = {
   textSecondary: string;
 };
 
+function bookingEndTime(time: string): string {
+  const [hours, minutes] = time.split(':').map(Number);
+  const end = hours * 60 + minutes + 2 * 60;
+  const endHour = String(Math.floor(end / 60)).padStart(2, '0');
+  const endMinute = String(end % 60).padStart(2, '0');
+  return `${endHour}:${endMinute}`;
+}
+
+function timePickerValue(time: string): Date {
+  const [hours, minutes] = time.split(':').map(Number);
+  const value = new Date();
+  value.setHours(hours, minutes, 0, 0);
+  return value;
+}
+
+function formatClockValue(value: Date): string {
+  return `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
+}
+
 export default function BookingSchedulePicker({
   colors,
   date,
@@ -24,25 +47,38 @@ export default function BookingSchedulePicker({
 }: {
   colors: BookingColors;
   date: Date;
-  time: (typeof BOOKING_START_TIMES)[number];
+  time: string;
   onDateChange: (date: Date) => void;
-  onTimeChange: (time: (typeof BOOKING_START_TIMES)[number]) => void;
+  onTimeChange: (time: string) => void;
 }) {
   const [dateOpen, setDateOpen] = useState(false);
   const [timeOpen, setTimeOpen] = useState(false);
+  const [customTimeOpen, setCustomTimeOpen] = useState(false);
+  const [customTimeError, setCustomTimeError] = useState('');
   const { minimumDate, maximumDate } = getBookingDateRange();
-  const endHour = String(Number(time.slice(0, 2)) + 2).padStart(2, '0');
-  const endTime = `${endHour}:${time.slice(3)}`;
+  const endTime = bookingEndTime(time);
+  const isSuggestedTime = BOOKING_START_TIMES.some((option) => option === time);
 
   const toggleDate = () => {
-    Haptics.selectionAsync();
+    void Haptics.selectionAsync();
     setTimeOpen(false);
+    setCustomTimeOpen(false);
     setDateOpen((open) => !open);
   };
+
   const toggleTime = () => {
-    Haptics.selectionAsync();
+    void Haptics.selectionAsync();
     setDateOpen(false);
+    setCustomTimeOpen(false);
+    setCustomTimeError('');
     setTimeOpen((open) => !open);
+  };
+
+  const openDetailedTime = () => {
+    void Haptics.selectionAsync();
+    setTimeOpen(false);
+    setCustomTimeError('');
+    setCustomTimeOpen(true);
   };
 
   return (
@@ -73,13 +109,13 @@ export default function BookingSchedulePicker({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Khung giờ dự kiến, ${time} đến ${endTime}`}
-          accessibilityState={{ expanded: timeOpen }}
+          accessibilityState={{ expanded: timeOpen || customTimeOpen }}
           onPress={toggleTime}
           style={({ pressed }) => [
             styles.row,
             {
               backgroundColor: colors.surface,
-              borderColor: timeOpen ? colors.primary : colors.border,
+              borderColor: timeOpen || customTimeOpen ? colors.primary : colors.border,
               opacity: pressed ? 0.76 : 1,
             },
           ]}
@@ -87,7 +123,9 @@ export default function BookingSchedulePicker({
           <Clock3 color={colors.primary} size={20} />
           <View style={styles.rowText}>
             <Text style={[styles.label, { color: colors.textSecondary }]}>Khung giờ dự kiến</Text>
-            <Text style={[styles.value, { color: colors.text }]}>{time}–{endTime}</Text>
+            <Text style={[styles.value, { color: colors.text }]}>
+              {time}–{endTime}
+            </Text>
           </View>
           <ChevronDown color={colors.textSecondary} size={18} />
         </Pressable>
@@ -104,6 +142,7 @@ export default function BookingSchedulePicker({
             maximumDate={maximumDate}
             locale="vi_VN"
             accentColor={colors.primary}
+            themeVariant="light"
             onValueChange={(_event, selectedDate) => {
               onDateChange(
                 new Date(
@@ -112,7 +151,7 @@ export default function BookingSchedulePicker({
                   selectedDate.getDate(),
                 ),
               );
-              Haptics.selectionAsync();
+              void Haptics.selectionAsync();
               setDateOpen(Platform.OS === 'ios');
             }}
             onDismiss={() => setDateOpen(false)}
@@ -122,50 +161,135 @@ export default function BookingSchedulePicker({
 
       {timeOpen && (
         <View
-          accessibilityRole="radiogroup"
-          accessibilityLabel="Chọn giờ bắt đầu"
           style={[
-            styles.timeGrid,
+            styles.timePanel,
             { backgroundColor: colors.surface, borderColor: colors.border },
           ]}
         >
-          {BOOKING_START_TIMES.map((option) => {
-            const selected = option === time;
-            return (
-              <Pressable
-                key={option}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: selected }}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  onTimeChange(option);
-                  setTimeOpen(false);
-                }}
-                style={({ pressed }) => [
-                  styles.timeOption,
+          <Text style={[styles.quickLabel, { color: colors.textSecondary }]}>Gợi ý nhanh</Text>
+          <View
+            accessibilityRole="radiogroup"
+            accessibilityLabel="Chọn giờ bắt đầu gợi ý"
+            style={styles.timeGrid}
+          >
+            {BOOKING_START_TIMES.map((option) => {
+              const selected = option === time;
+              return (
+                <Pressable
+                  key={option}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: selected }}
+                  onPress={() => {
+                    void Haptics.selectionAsync();
+                    onTimeChange(option);
+                    setCustomTimeError('');
+                    setTimeOpen(false);
+                  }}
+                  style={({ pressed }) => [
+                    styles.timeOption,
+                    {
+                      backgroundColor: selected ? colors.primary : colors.background,
+                      borderColor: selected ? colors.primary : colors.border,
+                      opacity: pressed ? 0.76 : 1,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.timeText,
+                      { color: selected ? colors.surface : colors.text },
+                    ]}
+                  >
+                    {option}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Chọn giờ cụ thể"
+            onPress={openDetailedTime}
+            style={({ pressed }) => [
+              styles.customTimeButton,
+              {
+                backgroundColor: !isSuggestedTime ? colors.primary : colors.background,
+                borderColor: !isSuggestedTime ? colors.primary : colors.border,
+                opacity: pressed ? 0.76 : 1,
+              },
+            ]}
+          >
+            <SlidersHorizontal
+              size={18}
+              color={!isSuggestedTime ? colors.surface : colors.primary}
+            />
+            <View style={styles.customTimeCopy}>
+              <Text
+                style={[
+                  styles.customTimeTitle,
+                  { color: !isSuggestedTime ? colors.surface : colors.text },
+                ]}
+              >
+                Chọn giờ cụ thể
+              </Text>
+              <Text
+                style={[
+                  styles.customTimeSubtext,
                   {
-                    backgroundColor: selected ? colors.primary : colors.background,
-                    borderColor: selected ? colors.primary : colors.border,
-                    opacity: pressed ? 0.76 : 1,
+                    color: !isSuggestedTime ? colors.surface : colors.textSecondary,
                   },
                 ]}
               >
-                <Text
-                  style={[
-                    styles.timeText,
-                    { color: selected ? colors.surface : colors.text },
-                  ]}
-                >
-                  {option}
-                </Text>
-              </Pressable>
-            );
-          })}
+                {!isSuggestedTime ? `Đang chọn ${time}` : 'Từ 09:00 đến 16:00'}
+              </Text>
+            </View>
+          </Pressable>
         </View>
       )}
 
+      {customTimeOpen && (
+        <View style={[styles.picker, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.quickLabel, { color: colors.textSecondary }]}>
+            Chọn giờ bắt đầu cụ thể từ 09:00 đến 16:00
+          </Text>
+          <DateTimePicker
+            value={timePickerValue(time)}
+            mode="time"
+            display={Platform.OS === 'ios' ? 'spinner' : 'clock'}
+            presentation={Platform.OS === 'ios' ? 'inline' : 'dialog'}
+            is24Hour
+            locale="vi_VN"
+            accentColor={colors.primary}
+            themeVariant="light"
+            positiveButton={{ label: 'Chọn' }}
+            negativeButton={{ label: 'Hủy' }}
+            onValueChange={(_event, selectedTime) => {
+              const nextTime = formatClockValue(selectedTime);
+              if (!isCustomerBookingStartTime(nextTime)) {
+                setCustomTimeError('Vui lòng chọn giờ bắt đầu từ 09:00 đến 16:00.');
+                setCustomTimeOpen(false);
+                return;
+              }
+              onTimeChange(nextTime);
+              setCustomTimeError('');
+              void Haptics.selectionAsync();
+              setCustomTimeOpen(Platform.OS === 'ios');
+            }}
+            onDismiss={() => setCustomTimeOpen(false)}
+          />
+        </View>
+      )}
+
+      {!!customTimeError && (
+        <Text accessibilityRole="alert" style={[styles.error, { color: '#DC2626' }]}>
+          {customTimeError}
+        </Text>
+      )}
+
       <Text style={[styles.hint, { color: colors.textSecondary }]}>
-        Thời gian tiếp nhận dự kiến trong khoảng 2 giờ.
+        Chọn nhanh một giờ gợi ý hoặc chọn giờ cụ thể. Thời gian tiếp nhận dự kiến kéo dài khoảng 2
+        giờ.
       </Text>
     </View>
   );
@@ -187,11 +311,15 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, gap: 2 },
   label: { fontSize: 12 },
   value: { fontSize: 15, fontWeight: '600' },
-  picker: { borderWidth: 1, borderRadius: 12, padding: 8, overflow: 'hidden' },
-  timeGrid: {
+  picker: { borderWidth: 1, borderRadius: 12, padding: 10, overflow: 'hidden', gap: 8 },
+  timePanel: {
     borderWidth: 1,
     borderRadius: 12,
-    padding: 8,
+    padding: 10,
+    gap: 10,
+  },
+  quickLabel: { fontSize: 12, lineHeight: 18, fontWeight: '600' },
+  timeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
@@ -206,5 +334,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   timeText: { fontWeight: '600', fontSize: 14 },
+  customTimeButton: {
+    minHeight: 54,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  customTimeCopy: { flex: 1, gap: 2 },
+  customTimeTitle: { fontSize: 14, fontWeight: '700' },
+  customTimeSubtext: { fontSize: 12 },
   hint: { fontSize: 12, lineHeight: 18 },
+  error: { fontSize: 12, lineHeight: 18, fontWeight: '600' },
 });

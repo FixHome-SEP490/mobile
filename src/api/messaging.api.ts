@@ -52,6 +52,8 @@ export interface ChatMessage {
   editedAt: string | null;
   isDeleted: boolean;
   clientMessageId: string | null;
+  /** Sent by FixHome on the sender's behalf, e.g. the technician's greeting on accepting a job. */
+  isAutomated?: boolean;
 }
 
 export interface MessagePage {

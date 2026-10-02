@@ -74,6 +74,15 @@ export function vnTimeString(input: DateInput, options?: Intl.DateTimeFormatOpti
   return new Date(input).toLocaleTimeString('vi-VN', withZone(options));
 }
 
+/** Without options: "09:05 30/09/2026", the same as web. Seconds never help a reader. */
+const VN_DATETIME_DEFAULT: Intl.DateTimeFormatOptions = {
+  hour: '2-digit',
+  minute: '2-digit',
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+};
+
 export function vnDateTimeString(input: DateInput, options?: Intl.DateTimeFormatOptions): string {
-  return new Date(input).toLocaleString('vi-VN', withZone(options));
+  return new Date(input).toLocaleString('vi-VN', withZone(options ?? VN_DATETIME_DEFAULT));
 }

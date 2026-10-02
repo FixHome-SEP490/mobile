@@ -34,7 +34,7 @@ describe('Booking request input contract', () => {
   });
 
   it.each(['09:00', '10:00', '13:00', '14:00', '15:00', '16:00'])(
-    'keeps the allowed %s start slot and its two-hour end',
+    'keeps the suggested %s start slot and its two-hour end',
     (time) => {
       const now = vn(2026, 9, 22, 8, 0);
       const result = buildCustomerBookingWindow({
@@ -52,23 +52,43 @@ describe('Booking request input contract', () => {
     },
   );
 
-  it('rejects arbitrary start times outside the six customer slots', () => {
-    expect(() =>
-      buildCustomerBookingWindow({
+  it.each(['09:15', '11:30', '15:45', '16:00'])(
+    'accepts detailed customer start time %s inside the supported day window',
+    (time) => {
+      const now = vn(2026, 9, 22, 8, 0);
+      const result = buildCustomerBookingWindow({
         date: new Date(2026, 8, 23),
-        time: '11:00',
-        now: vn(2026, 9, 22, 8, 0),
-      }),
-    ).toThrow('Vui lòng chọn một trong các khung giờ có sẵn.');
-  });
+        time,
+        now,
+      });
+      const [hours, minutes] = time.split(':').map(Number);
+      expect(result.preferredStartAt).toBe(
+        vn(2026, 9, 23, hours, minutes).toISOString(),
+      );
+      const endMinutes = hours * 60 + minutes + 120;
+      expect(result.preferredEndAt).toBe(
+        vn(2026, 9, 23, Math.floor(endMinutes / 60), endMinutes % 60).toISOString(),
+      );
+    },
+  );
 
-  it('rejects past windows and malformed times before an API call', () => {
+  it.each(['08:59', '16:01', '25:00', 'not-a-time'])(
+    'rejects detailed start time %s outside the supported 09:00–16:00 range',
+    (time) => {
+      expect(() =>
+        buildCustomerBookingWindow({
+          date: new Date(2026, 8, 23),
+          time,
+          now: vn(2026, 9, 22, 8, 0),
+        }),
+      ).toThrow('Vui lòng chọn giờ bắt đầu từ 09:00 đến 16:00.');
+    },
+  );
+
+  it('rejects past windows before an API call', () => {
     const now = vn(2026, 9, 22, 10, 0);
     expect(() =>
       buildCustomerBookingWindow({ date: new Date(2026, 8, 22), time: '09:00', now }),
-    ).toThrow();
-    expect(() =>
-      buildCustomerBookingWindow({ date: new Date(2026, 8, 22), time: '25:00', now }),
     ).toThrow();
   });
 
