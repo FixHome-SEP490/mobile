@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-07 14:43 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: docs/repo-context
+> Cập nhật lần cuối: 2026-10-07 19:31 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: fix/no-fake-data-and-po-decisions
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -104,6 +104,14 @@ Luật nghiệp vụ gốc nằm ở tài liệu dự án (bản chính thức c
 
 Onboarding năm bước (thông tin, KYC tải lên URL ký sẵn, kỹ năng, địa chỉ và khu vực, gửi duyệt), lời mời, công việc (đi đến, check-in GPS có kiểm độ chính xác, ảnh trước và sau, báo giá, chi phí phát sinh, bắt đầu sửa, yêu cầu hoàn tất, tiền mặt, linh kiện có quét QR bằng camera), ví (nạp, tài khoản ngân hàng, rút), hồ sơ (nhận việc, lịch tuần, ngày nghỉ, giá công), thu nhập, đánh giá, ghi chú riêng theo đơn (lưu trên máy).
 
+### Thay đổi 07/10/2026 (nhánh `fix/no-fake-data-and-po-decisions`)
+
+- Bỏ dữ liệu giả: nút đăng nhập thử vai trò ở màn đăng nhập, cộng tiền DEMO ở ví, điểm 5.0★ và bán kính 10 km tự bịa, email giả ở hồ sơ khách.
+- Đánh giá dùng chung `utils/rating.ts`: chưa có đánh giá thì hiện "Chưa có đánh giá" (backend trả `null`).
+- Ảnh đại diện kỹ thuật viên tải lên như của khách qua `services/avatar-upload.ts` (`POST /media/upload` rồi `PATCH /users/me` với URL http(s)), cập nhật ngay trong store.
+- Chẩn đoán và chat AI bắt buộc có mô tả (BRX-064, `screens/customer/ai-diagnosis-input.ts`).
+- Thông báo `ORDER_DEPARTURE_WARNING` (đỏ) và `BOOKING_MATCHING_EXHAUSTED` (vàng) có biểu tượng riêng; thông báo đơn của kỹ thuật viên mở thẳng đơn.
+
 ### Đăng nhập Google
 
 Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng `WebBrowser.openAuthSessionAsync`, nhận mã sống 60 giây rồi đổi ở `/auth/google/exchange`. App không cần Google client id.
@@ -140,12 +148,14 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 - Khách chọn 1 đến 2 kỹ thuật viên (app hiện bắt chọn đúng 2); ví kỹ thuật viên tối thiểu 200.000 ₫ (PO xác nhận 07/10/2026).
 - Hai luồng đặt lịch: thường và có AI; AI chỉ điền sẵn, khách tự bấm đặt.
+- Không có dữ liệu hay luồng giả (PO 07/10/2026): nạp ví chỉ qua VNPay, phản hồi không có `paymentUrl` là lỗi; nạp hay rút bị `backend` từ chối thì hiện đúng thông báo của server.
+- Chẩn đoán AI bắt buộc có mô tả, ảnh không bắt buộc (BRX-064).
 - Giao diện theo `FIXHOME-DESIGN-SYSTEM.md`: thuật ngữ tiếng Việt thống nhất, tiền dạng `1.250.000 ₫`, giờ theo UTC+7 qua `utils/vn-time`, không hiện mã lỗi cho người dùng.
 - Quản lý dịch vụ và admin không có giao diện trên mobile.
 
 ## 8. Việc đang dở và rủi ro đã biết
 
-- Màn hồ sơ kỹ thuật viên đang gửi đường dẫn ảnh trên máy (`file://`) làm ảnh đại diện; phải dùng luồng tải lên như màn của khách. Từ 07/10/2026 `backend` từ chối giá trị này, nên đổi ảnh đại diện kỹ thuật viên sẽ báo lỗi cho tới khi sửa.
+- Thay đổi ngày 07/10/2026 mới chạy gate, CHƯA KIỂM CHỨNG trên thiết bị (ảnh đại diện kỹ thuật viên, nút gửi AI, ví).
 - Mở lại app khi đã có token, khách có thể rơi vào màn đăng nhập vì nhánh không phải kỹ thuật viên bắt đầu ở `Auth`. CHƯA KIỂM CHỨNG trên thiết bị.
 - Chưa có push notification (`expo-notifications` đã cài nhưng chưa dùng); booking thường chưa gửi kèm ảnh; khu vực phục vụ chỉ đặt được trong onboarding.
 - Chưa có cấu hình EAS, bundle id, hay `linking` cho deep link ngoài luồng Google.
@@ -155,4 +165,5 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-07 19:31 (UTC+7) | ToanAltF4 | fix/no-fake-data-and-po-decisions | Ghi việc gỡ dữ liệu giả, ảnh đại diện kỹ thuật viên, BRX-064 và thông báo mới; bỏ rủi ro ảnh file:// đã sửa
 - 2026-10-07 14:43 (UTC+7) | ToanAltF4 | docs/repo-context | Tạo file context theo bộ quy tắc chung của bốn repo, ghi hiện trạng sau đợt sửa lỗi ngày 07/10/2026

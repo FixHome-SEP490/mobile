@@ -38,6 +38,7 @@ import { geoApi, type PlaceSuggestion } from '../../api/geo.api';
 import { useAppTheme } from '../../constants/theme';
 import { extractApiErrorMessage } from '../../utils/input-validation';
 import { persistCustomerAvatar } from './customer-avatar-upload';
+import { avatarErrorMessage, withPersistedAvatar } from '../../services/avatar-upload';
 
 export default function CustomerProfileScreen() {
   const { user, token, setAuth, logout } = useAuthStore();
@@ -49,7 +50,8 @@ export default function CustomerProfileScreen() {
 
   // States for user info
   const [name, setName] = useState(user?.fullName || 'Khách hàng');
-  const [email] = useState(user?.email || 'customer@fixhome.vn');
+  // Chỉ email thật của tài khoản; thiếu thì để trống, không điền email mẫu.
+  const [email] = useState(user?.email ?? '');
   const [phone, setPhone] = useState(user?.phoneNumber || '');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatarUrl || null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -97,17 +99,13 @@ export default function CustomerProfileScreen() {
 
       setAvatarUrl(persisted.avatarUrl);
       if (token && user) {
-        setAuth(token, {
-          ...user,
-          ...persisted.user,
-          avatarUrl: persisted.avatarUrl,
-        });
+        setAuth(token, withPersistedAvatar(user, persisted));
       }
       Alert.alert('Đã cập nhật ảnh đại diện', 'Ảnh mới đã được lưu vào hồ sơ của bạn.');
     } catch (err: unknown) {
       Alert.alert(
         'Không thể cập nhật ảnh đại diện',
-        extractApiErrorMessage(err, 'Không thể tải ảnh lên. Vui lòng thử lại.'),
+        avatarErrorMessage(err),
       );
     } finally {
       setUploadingAvatar(false);
@@ -463,7 +461,7 @@ export default function CustomerProfileScreen() {
               <Ionicons name="person-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
               <View style={styles.menuContent}>
                 <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Thông tin cá nhân</Text>
-                <Text style={styles.menuDesc}>{name} · {phone || email}</Text>
+                <Text style={styles.menuDesc}>{[name, phone || email].filter(Boolean).join(' · ')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.muted} />
             </TouchableOpacity>

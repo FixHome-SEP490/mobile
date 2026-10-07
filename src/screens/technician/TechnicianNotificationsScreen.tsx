@@ -11,6 +11,9 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AlertTriangle, Bell, BellOff, Briefcase, CheckCheck, Tag, Wallet } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../types';
 import { useAppTheme, type ToneName } from '../../constants/theme';
 import { notificationsApi, type NotificationItem } from '../../api/notifications.api';
 import { useBadgeStore } from '../../store/badge.store';
@@ -19,6 +22,7 @@ import {
   formatNotificationTime,
   groupNotificationsByDay,
   mergeNotificationPage,
+  technicianNotificationOrderId,
 } from './technician-notifications';
 
 const PAGE_SIZE = 20;
@@ -30,6 +34,8 @@ const TYPE_VIEW: Record<string, { tone: ToneName; Icon: typeof Bell }> = {
   BOOKING: { tone: 'repair', Icon: Briefcase },
   PAYMENT: { tone: 'success', Icon: Wallet },
   PROMOTION: { tone: 'neutral', Icon: Tag },
+  // Giờ hẹn đã tới mà chưa bấm "Đang đến": cảnh báo, chạm để mở đơn.
+  ORDER_DEPARTURE_WARNING: { tone: 'danger', Icon: AlertTriangle },
 };
 const DEFAULT_VIEW = { tone: 'info' as ToneName, Icon: Bell };
 
@@ -44,6 +50,7 @@ export default function TechnicianNotificationsScreen() {
   const { colors, isDark } = useAppTheme();
   const styles = getStyles(colors);
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const unreadCount = useBadgeStore((s) => s.unreadNotifications);
   const setUnreadCount = useBadgeStore((s) => s.setUnreadNotifications);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -131,15 +138,18 @@ export default function TechnicianNotificationsScreen() {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead } : n)));
 
   const onNotificationPress = (item: NotificationItem) => {
-    if (item.isRead !== false || !item.id) return;
-    const id = item.id;
-    setRead(id, true);
-    setUnreadCount(unreadCount - 1);
-    notificationsApi.readNotification(id).catch(() => {
-      // Roll back so the badge never claims something the server has not recorded.
-      setRead(id, false);
-      syncUnreadCount();
-    });
+    if (item.isRead === false && item.id) {
+      const id = item.id;
+      setRead(id, true);
+      setUnreadCount(unreadCount - 1);
+      notificationsApi.readNotification(id).catch(() => {
+        // Roll back so the badge never claims something the server has not recorded.
+        setRead(id, false);
+        syncUnreadCount();
+      });
+    }
+    const serviceOrderId = technicianNotificationOrderId(item);
+    if (serviceOrderId) navigation.navigate('TechnicianOrderDetail', { serviceOrderId });
   };
 
   const sections = useMemo(() => groupNotificationsByDay(notifications, loadedAt), [notifications, loadedAt]);

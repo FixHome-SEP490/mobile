@@ -26,6 +26,7 @@ import {
 } from './technician-reviews';
 
 import { vnDateString } from '../../utils/vn-time';
+import { NO_RATING_TEXT, formatRating, ratingValue } from '../../utils/rating';
 
 const VN_DATE = { day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 const PAGE_SIZE = 20;
@@ -120,15 +121,18 @@ export default function TechnicianReviewsScreen() {
 
   const distribution = useMemo(() => starDistribution(reviews), [reviews]);
   const styles2 = getStyles(colors);
-  const average = profile?.averageRating;
+  // 0 reviews (or a null average from the server) is "no rating", never 0 or 5 stars.
+  const average = profile ? ratingValue(profile.averageRating, profile.ratingCount) : null;
 
   const header = (
     <View style={styles2.summary}>
       <View style={styles2.summaryTop}>
-        <Text style={styles2.average}>{typeof average === 'number' ? average.toFixed(2).replace('.', ',') : '—'}</Text>
+        <Text style={styles2.average}>{average !== null ? formatRating(average) : '—'}</Text>
         <View style={styles2.flex1}>
           <Stars value={average ?? 0} size={20} color={colors.tone.warning.fg} empty={colors.border} />
-          <Text style={styles2.caption}>{total} đánh giá</Text>
+          <Text style={styles2.caption}>
+            {average === null && total === 0 ? NO_RATING_TEXT : `${total} đánh giá`}
+          </Text>
         </View>
       </View>
       {distribution.map((row) => (

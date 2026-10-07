@@ -47,6 +47,12 @@ import {
   type RecommendedService,
 } from '../../api/ai.api';
 import { appendCustomerWords } from './ai-chat-words';
+import {
+  AI_DESCRIPTION_REQUIRED_HINT,
+  canSendToAssistant,
+  hasDescription,
+  showDescriptionHint,
+} from './ai-diagnosis-input';
 
 /** The AI drops a session after an hour of silence. Told, not discovered. */
 const SESSION_IDLE_MINUTES = 60;
@@ -108,7 +114,9 @@ export default function CustomerAIChatScreen() {
     const opening: ChatMessage = { id: 'greeting', sender: 'bot', text: GREETING };
     const text = handover?.initialDescription?.trim() || '';
     const images = handover?.initialImages || [];
-    if (!text && images.length === 0) return [opening];
+    // BRX-064: without a written description nothing is sent; any photos wait
+    // in the tray until the customer writes one.
+    if (!hasDescription(text)) return [opening];
     // Handed over already encoded; there is no original to shrink, so a weak
     // connection here falls back to the ordinary unavailable message.
     return [
@@ -134,10 +142,12 @@ export default function CustomerAIChatScreen() {
   }, []);
 
   const [input, setInput] = useState('');
-  const [pendingImages, setPendingImages] = useState<PickedImage[]>([]);
-  const [isThinking, setIsThinking] = useState(
-    Boolean(route.params?.initialDescription || route.params?.initialImages?.length),
+  const [pendingImages, setPendingImages] = useState<PickedImage[]>(() =>
+    hasDescription(route.params?.initialDescription)
+      ? []
+      : (route.params?.initialImages ?? []).map((dataUri) => ({ uri: '', dataUri })),
   );
+  const [isThinking, setIsThinking] = useState(hasDescription(route.params?.initialDescription));
 
   /**
    * Server-issued. Null until the first reply, then echoed back on every
@@ -263,7 +273,8 @@ export default function CustomerAIChatScreen() {
   const send = useCallback(
     async (text: string, images: PickedImage[]) => {
       const trimmed = text.trim();
-      if (!trimmed && images.length === 0) return;
+      // BRX-064: a diagnosis needs words; photos only go along with them.
+      if (!hasDescription(trimmed)) return;
 
       const isQuestion = images.length === 0 && looksLikeAQuestion(trimmed);
       const situation: Situation =
@@ -301,7 +312,7 @@ export default function CustomerAIChatScreen() {
     if (initialSendStarted.current) return;
     const text = handover?.initialDescription?.trim() || '';
     const images = handover?.initialImages || [];
-    if (!text && images.length === 0) return;
+    if (!hasDescription(text)) return;
     initialSendStarted.current = true;
     const handedOver: PickedImage[] = images.map((dataUri) => ({ uri: '', dataUri }));
     // The rule cannot see that this is async: awaitReply opens with an await,
@@ -433,7 +444,12 @@ export default function CustomerAIChatScreen() {
     [goToBooking, colors, styles],
   );
 
-  const canSend = (input.trim().length > 0 || pendingImages.length > 0) && !isThinking;
+  const canSend = canSendToAssistant({
+    text: input,
+    imageCount: pendingImages.length,
+    busy: isThinking,
+  });
+  const needsDescription = showDescriptionHint({ text: input, imageCount: pendingImages.length });
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
@@ -543,6 +559,12 @@ export default function CustomerAIChatScreen() {
           </ScrollView>
         )}
 
+        {needsDescription && (
+          <Text testID="ai-chat-description-hint" style={styles.descriptionHint}>
+            {AI_DESCRIPTION_REQUIRED_HINT}
+          </Text>
+        )}
+
         <View style={[styles.composer, { paddingBottom: isKeyboardVisible ? 0 : Math.max(insets.bottom, 10) }]}>
           <TouchableOpacity
             style={styles.composerBtn}
@@ -579,6 +601,8 @@ export default function CustomerAIChatScreen() {
             disabled={!canSend}
             accessibilityRole="button"
             accessibilityLabel="Gửi"
+            accessibilityState={{ disabled: !canSend, busy: isThinking }}
+            accessibilityHint={needsDescription ? AI_DESCRIPTION_REQUIRED_HINT : undefined}
           >
             {isThinking ? (
               <ActivityIndicator size="small" color={colors.surface} />
@@ -963,6 +987,12 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     justifyContent: 'center',
   },
   trayHint: { fontSize: 11, color: colors.textSecondary, marginLeft: 4 },
+  descriptionHint: {
+    fontSize: 12,
+    color: colors.tone.warning.text,
+    paddingHorizontal: 16,
+    paddingTop: 6,
+  },
 
   composer: {
     flexDirection: 'row',

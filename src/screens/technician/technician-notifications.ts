@@ -32,3 +32,17 @@ export function mergeNotificationPage(current: NotificationItem[], page: Notific
   const seen = new Set(current.map((i) => i.id).filter(Boolean));
   return [...current, ...page.filter((i) => !i.id || !seen.has(i.id))];
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The order a notification points at (e.g. ORDER_DEPARTURE_WARNING), or null.
+ * Only a real SERVICE_ORDER reference opens a screen; nothing is guessed.
+ */
+export function technicianNotificationOrderId(
+  item: Pick<NotificationItem, 'referenceId' | 'referenceType'>,
+): string | null {
+  if (item.referenceType?.trim().toUpperCase() !== 'SERVICE_ORDER') return null;
+  const id = item.referenceId?.trim() ?? '';
+  return UUID.test(id) ? id : null;
+}

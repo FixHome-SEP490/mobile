@@ -20,6 +20,11 @@ import type { RootStackParamList } from '../../types';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AI_MAX_IMAGES } from '../../api/ai.api';
 import { pickImagesForAi } from '../../services/image-for-ai';
+import {
+  AI_DESCRIPTION_REQUIRED_HINT,
+  canSendToAssistant,
+  showDescriptionHint,
+} from './ai-diagnosis-input';
 
 type DiagnosisRoute = RouteProp<RootStackParamList, 'CustomerAIDiagnosis'>;
 
@@ -36,6 +41,7 @@ export default function CustomerAIDiagnosisScreen() {
   const [description, setDescription] = useState(prefill?.description || '');
   /** Data URIs, at most three, only used to hand over to the assistant. */
   const [images, setImages] = useState<string[]>([]);
+  const assistantReady = canSendToAssistant({ text: description, imageCount: images.length });
 
   /**
    * Hand the photos and the description to the assistant.
@@ -51,13 +57,9 @@ export default function CustomerAIDiagnosisScreen() {
    * want carries straight on to step two.
    */
   const askTheAssistant = useCallback(() => {
-    if (!description.trim() && images.length === 0) {
-      Alert.alert(
-        'Cần thêm một chút',
-        'Bạn mô tả sự cố hoặc gửi ảnh thiết bị để trợ lý xem giúp nhé.',
-      );
-      return;
-    }
+    // BRX-064: photos alone are not a diagnosis request; the button is
+    // disabled without text, this guards a stale press as well.
+    if (!canSendToAssistant({ text: description, imageCount: images.length })) return;
     Haptics.selectionAsync();
     navigation.navigate('CustomerAIChat', {
       initialDescription: description.trim(),
@@ -164,15 +166,23 @@ export default function CustomerAIDiagnosisScreen() {
       </View>
 
       <TouchableOpacity
-        style={styles.secondaryBtn}
+        testID="ai-diagnosis-ask"
+        style={[styles.secondaryBtn, !assistantReady && styles.secondaryBtnDisabled]}
         onPress={askTheAssistant}
+        disabled={!assistantReady}
         activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: !assistantReady }}
+        accessibilityHint={assistantReady ? undefined : AI_DESCRIPTION_REQUIRED_HINT}
       >
         <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.primary} />
         <Text style={styles.secondaryBtnText}>
           {images.length > 0 ? 'Gửi ảnh cho trợ lý xem giúp' : 'Nhờ trợ lý chẩn đoán'}
         </Text>
       </TouchableOpacity>
+      {showDescriptionHint({ text: description, imageCount: images.length }, true) && (
+        <Text style={styles.requiredHint}>{AI_DESCRIPTION_REQUIRED_HINT}</Text>
+      )}
       <Text style={styles.assistantHint}>
         Trợ lý sẽ xem ảnh, hỏi lại nếu cần và gợi ý dịch vụ. Bạn vẫn có thể
         đặt lịch thẳng bên dưới mà không cần chẩn đoán.
@@ -311,6 +321,8 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     gap: 8,
   },
   secondaryBtnText: { fontSize: 14, fontWeight: '600', color: colors.text },
+  secondaryBtnDisabled: { opacity: 0.5 },
+  requiredHint: { fontSize: 12, color: colors.tone.warning.text, lineHeight: 18, marginTop: 8 },
   aiResultCard: {
     backgroundColor: colors.surface,
     borderWidth: 1,
