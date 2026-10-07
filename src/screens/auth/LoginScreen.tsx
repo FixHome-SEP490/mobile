@@ -44,11 +44,8 @@ export default function LoginScreen() {
 
   const passwordRef = useRef<TextInput>(null);
 
-  const handleLogin = async (loginEmail?: string, loginPassword?: string) => {
-    const finalEmail = loginEmail ?? email;
-    const finalPassword = loginPassword ?? password;
-
-    if (!finalEmail.trim() || !finalPassword) {
+  const handleLogin = async () => {
+    if (!email.trim() || !password) {
       setError('Vui lòng nhập email và mật khẩu.');
       return;
     }
@@ -57,7 +54,7 @@ export default function LoginScreen() {
     setLoading(true);
     setError(null);
     try {
-      const result = await authApi.login({ email: finalEmail, password: finalPassword });
+      const result = await authApi.login({ email, password });
       setAuth(result.accessToken, result.user);
       await goAfterLogin(result.user.role);
     } catch (err: unknown) {
@@ -106,21 +103,6 @@ export default function LoginScreen() {
     } finally {
       setGoogleLoading(false);
     }
-  };
-
-  /** Giống bản web: chỉ điền sẵn email/mật khẩu, người dùng tự bấm ĐĂNG NHẬP. */
-  const fillCustomerRole = () => {
-    Haptics.selectionAsync();
-    setEmail('testlog01@gmail.com');
-    setPassword('Ahihi113@');
-    setError(null);
-  };
-
-  const fillTechnicianRole = () => {
-    Haptics.selectionAsync();
-    setEmail('tech1@fixhome.vn');
-    setPassword('Password123!');
-    setError(null);
   };
 
   return (
@@ -229,31 +211,6 @@ export default function LoginScreen() {
                 <Text style={styles.registerLink}>Đăng ký ngay</Text>
               </TouchableOpacity>
             </View>
-
-            {/* Quick Dev Switcher Buttons */}
-            <View style={styles.dividerRow}>
-              <View style={styles.lineDivider} />
-              <Text style={styles.dividerText}>HOẶC THỬ NGHIỆM VAI TRÒ</Text>
-              <View style={styles.lineDivider} />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.techLoginBtn, { backgroundColor: colors.primary, marginBottom: 12 }]}
-              onPress={fillCustomerRole}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="person" size={16} color={colors.surface} />
-              <Text style={styles.techLoginBtnText}>Vào vai Khách (Customer)</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.techLoginBtn, { backgroundColor: '#111827' }]}
-              onPress={fillTechnicianRole}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="construct" size={16} color={colors.surface} />
-              <Text style={styles.techLoginBtnText}>Vào vai Thợ (Technician)</Text>
-            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -444,25 +401,6 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     color: '#9CA3AF',
     marginHorizontal: 8,
     letterSpacing: 0.5,
-  },
-  techLoginBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#111827',
-    height: 48,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  techLoginBtnText: {
-    color: colors.surface,
-    fontSize: 13,
-    fontWeight: '700',
   },
 });
 

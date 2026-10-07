@@ -166,6 +166,24 @@ export function openWithdrawalOf(
   return null;
 }
 
+const TOP_UP_NO_LINK_MESSAGE = 'Chưa tạo được giao dịch nạp tiền. Vui lòng thử lại sau.';
+
+function errorCodeOf(error: unknown): string | undefined {
+  return (error as { response?: { data?: { error?: { code?: string } } } } | null)?.response
+    ?.data?.error?.code;
+}
+
+/**
+ * A definite "no" from the server: the payment gateway is off
+ * (PAYMENT_PROVIDER_UNAVAILABLE, sent as 503) or the request itself was
+ * rejected (4xx). Only a lost answer leaves the result unknown.
+ */
+function isTopUpRefused(error: unknown): boolean {
+  if (errorCodeOf(error) === 'PAYMENT_PROVIDER_UNAVAILABLE') return true;
+  const status = statusOf(error);
+  return status !== undefined && status >= 400 && status < 500;
+}
+
 const OPEN_WITHDRAWAL_MESSAGE = {
   PENDING: 'Bạn đang có một yêu cầu rút tiền chờ xử lý.',
   PROCESSING: 'Bạn đang có một lệnh rút đang được chuyển về ngân hàng.',
@@ -314,14 +332,23 @@ export function createWalletController(
         }
         return true;
       }
-      // DEMO payment mode: balance is credited instantly, no redirect needed.
-      publish({ topUpBusy: false, topUpPending: false });
-      await refreshAll();
-      return true;
+      // PO 07/10/2026: there is no simulated top-up. Money only moves through
+      // VNPay, so an answer without a payment link credited nothing.
+      publish({ topUpBusy: false, topUpPending: false, topUpError: TOP_UP_NO_LINK_MESSAGE });
+      return false;
     } catch (error) {
       if (!same(technicianId)) return false;
       if (statusOf(error) === 401 || statusOf(error) === 403) {
         denyAccess();
+        return false;
+      }
+      if (isTopUpRefused(error)) {
+        // The server said no before creating a payment: nothing to reconcile.
+        publish({
+          topUpBusy: false,
+          topUpPending: false,
+          topUpError: extractApiErrorMessage(error, TOP_UP_NO_LINK_MESSAGE),
+        });
         return false;
       }
       publish({

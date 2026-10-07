@@ -228,14 +228,52 @@ describe('wallet controller: focus/load', () => {
 });
 
 describe('wallet controller: top-up', () => {
-  it('DEMO mode credits instantly and refreshes wallet', async () => {
+  it('treats a top-up answer without a payment link as an error, never a credit', async () => {
     const { controller, deps, state } = setup();
     await controller.focus();
-    await controller.startTopUp(100_000);
+    (deps.getWallet as jest.Mock).mockClear();
+    const ok = await controller.startTopUp(100_000);
+    expect(ok).toBe(false);
     expect(deps.topUp).toHaveBeenCalledWith(100_000);
     expect(deps.openExternalUrl).not.toHaveBeenCalled();
+    expect(deps.getWallet).not.toHaveBeenCalled();
     expect(state()?.topUpBusy).toBe(false);
     expect(state()?.topUpPending).toBe(false);
+    expect(state()?.topUpError).toMatch(/Chưa tạo được giao dịch nạp tiền/);
+  });
+
+  it('shows the server reason when the payment gateway is off', async () => {
+    const { controller, state } = setup({
+      topUp: jest.fn().mockRejectedValue({
+        response: {
+          status: 503,
+          data: {
+            error: {
+              code: 'PAYMENT_PROVIDER_UNAVAILABLE',
+              message: 'Nạp tiền chưa mở vì cổng thanh toán chưa bật. Vui lòng liên hệ FixHome.',
+            },
+          },
+        },
+      }),
+    });
+    await controller.focus();
+    const ok = await controller.startTopUp(100_000);
+    expect(ok).toBe(false);
+    expect(state()?.topUpPending).toBe(false);
+    expect(state()?.topUpError).toBe(
+      'Nạp tiền chưa mở vì cổng thanh toán chưa bật. Vui lòng liên hệ FixHome.',
+    );
+  });
+
+  it('keeps the result unknown when the answer is lost', async () => {
+    const { controller, state } = setup({
+      topUp: jest.fn().mockRejectedValue(new Error('timeout')),
+    });
+    await controller.focus();
+    const ok = await controller.startTopUp(100_000);
+    expect(ok).toBe(false);
+    expect(state()?.topUpPending).toBe(true);
+    expect(state()?.topUpError).toMatch(/chưa xác định/);
   });
 
   it('LIVE mode opens VNPay and marks top-up pending', async () => {
@@ -410,6 +448,28 @@ describe('wallet controller: withdrawal', () => {
     await controller.focus();
     await controller.submitWithdrawal(100_000);
     expect(state()?.withdrawError).toBe('Số tiền rút tối đa hiện tại là 300.000 ₫');
+  });
+
+  it('shows the server reason when payouts are not configured', async () => {
+    const { controller, state } = setup({
+      requestWithdrawal: jest.fn().mockRejectedValue({
+        response: {
+          status: 503,
+          data: {
+            error: {
+              code: 'PAYMENT_PROVIDER_UNAVAILABLE',
+              message: 'Rút tiền chưa mở vì hệ thống chưa cấu hình cổng chi tiền. Vui lòng liên hệ FixHome.',
+            },
+          },
+        },
+      }),
+    });
+    await controller.focus();
+    const result = await controller.submitWithdrawal(100_000);
+    expect(result).toBeNull();
+    expect(state()?.withdrawError).toBe(
+      'Rút tiền chưa mở vì hệ thống chưa cấu hình cổng chi tiền. Vui lòng liên hệ FixHome.',
+    );
   });
 
   it('denies access on 401', async () => {

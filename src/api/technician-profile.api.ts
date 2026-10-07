@@ -28,10 +28,13 @@ export interface TechnicianProfile {
   bio: string | null;
   yearsExperience: number;
   isAvailable: boolean;
-  averageRating: number;
+  /** null when the server sent nothing usable; screens show "Chưa có đánh giá" for 0 reviews. */
+  averageRating: number | null;
   ratingCount: number;
-  reliabilityScore: number;
-  serviceRadiusKm: number;
+  /** null when the server did not send one; never replaced by a made-up score. */
+  reliabilityScore: number | null;
+  /** null until the technician has set a service radius. */
+  serviceRadiusKm: number | null;
   schedules: TechnicianScheduleSlot[];
 }
 
@@ -56,17 +59,30 @@ function unwrap<T>(payload: { data: T } | T): T {
   return payload as T;
 }
 
-/** Backend may omit rating/reliability fields (e.g. no reviews yet) — default like web does. */
-function normalizeProfile(profile: Partial<TechnicianProfile> | null | undefined): TechnicianProfile {
+/** A number the server really sent (decimals arrive as strings), or null. */
+function numberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+/**
+ * PO 07/10/2026: only real data. A missing rating, reliability score or
+ * radius stays null instead of an invented 5 sao / 100% / 10 km.
+ */
+export function normalizeProfile(
+  profile: Partial<Record<keyof TechnicianProfile, unknown>> | null | undefined,
+): TechnicianProfile {
+  const ratingCount = numberOrNull(profile?.ratingCount);
   return {
-    bio: profile?.bio ?? null,
-    yearsExperience: Number(profile?.yearsExperience ?? 0),
-    isAvailable: Boolean(profile?.isAvailable ?? true),
-    averageRating: Number(profile?.averageRating ?? 5),
-    ratingCount: Number(profile?.ratingCount ?? 0),
-    reliabilityScore: Number(profile?.reliabilityScore ?? 100),
-    serviceRadiusKm: Number(profile?.serviceRadiusKm ?? 10),
-    schedules: Array.isArray(profile?.schedules) ? profile.schedules : [],
+    bio: typeof profile?.bio === 'string' ? profile.bio : null,
+    yearsExperience: numberOrNull(profile?.yearsExperience) ?? 0,
+    isAvailable: profile?.isAvailable === true,
+    averageRating: numberOrNull(profile?.averageRating),
+    ratingCount: ratingCount !== null && Number.isInteger(ratingCount) && ratingCount > 0 ? ratingCount : 0,
+    reliabilityScore: numberOrNull(profile?.reliabilityScore),
+    serviceRadiusKm: numberOrNull(profile?.serviceRadiusKm),
+    schedules: Array.isArray(profile?.schedules) ? (profile.schedules as TechnicianScheduleSlot[]) : [],
   };
 }
 

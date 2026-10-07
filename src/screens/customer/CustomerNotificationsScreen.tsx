@@ -168,6 +168,12 @@ export default function CustomerNotificationsScreen() {
         return <Ionicons name="cash-outline" size={24} color={colors.success} />;
       case 'PROMOTION':
         return <Ionicons name="pricetag-outline" size={24} color="#EA580C" />;
+      // Kỹ thuật viên chưa xuất phát, đơn có thể tự huỷ: cảnh báo, mở đơn.
+      case 'ORDER_DEPARTURE_WARNING':
+        return <Ionicons name="warning-outline" size={24} color={colors.tone.danger.fg} />;
+      // Không ai nhận lời mời: mở yêu cầu đặt lịch để chọn kỹ thuật viên khác.
+      case 'BOOKING_MATCHING_EXHAUSTED':
+        return <Ionicons name="people-outline" size={24} color={colors.tone.warning.fg} />;
       default:
         return <Ionicons name="notifications-outline" size={24} color="#7C3AED" />;
     }
@@ -181,6 +187,10 @@ export default function CustomerNotificationsScreen() {
         return '#D1FAE5'; // Green
       case 'PROMOTION':
         return '#FFEDD5'; // Orange
+      case 'ORDER_DEPARTURE_WARNING':
+        return colors.tone.danger.bg;
+      case 'BOOKING_MATCHING_EXHAUSTED':
+        return colors.tone.warning.bg;
       default:
         return '#EDE9FE'; // Purple
     }

@@ -432,6 +432,22 @@ describe('Customer Matching presentation and privacy', () => {
     expect(detailText).toContain('96,5%');
   });
 
+  it('shows "Chưa có đánh giá" for an unrated technician instead of a score', async () => {
+    const unrated = { ...candidateA, averageRating: null, ratingCount: 0 };
+    const tree = await mountLoadedScreen(makeBooking(), [unrated, candidateB]);
+
+    const compactText = texts(tree).join('\n');
+    expect(compactText).toContain('Chưa có đánh giá');
+    expect(compactText).toContain('4,8/5 · 12 lượt đánh giá');
+
+    const candidateName = findText(tree, 'Kỹ thuật viên A');
+    await act(async () => findPressableAncestor(candidateName)?.props.onPress());
+    const detailText = texts(tree).join('\n');
+    expect(detailText).toContain('Chưa có đánh giá');
+    expect(detailText).not.toContain('0 lượt đánh giá');
+    expect(detailText).not.toMatch(/5,0 ★|0,0 ★/);
+  });
+
   it('shows only customer-safe candidate details with known units', async () => {
     const tree = await mountLoadedScreen();
     const candidateName = findText(tree, 'Kỹ thuật viên A');

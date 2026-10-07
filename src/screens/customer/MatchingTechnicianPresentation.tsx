@@ -22,6 +22,7 @@ import Animated, {
 import type { TechnicianCandidate } from '../../api/bookings.api';
 import { technicianReviewsApi, type TechnicianReview } from '../../api/technician-reviews.api';
 import { useAppTheme } from '../../constants/theme';
+import { NO_RATING_TEXT, formatRating, ratingSummary, ratingValue } from '../../utils/rating';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { vnDateString } from '../../utils/vn-time';
 
@@ -33,13 +34,10 @@ function displayName(candidate: TechnicianCandidate): string {
   return name || 'Kỹ thuật viên';
 }
 
-function displayRating(candidate: TechnicianCandidate): string | null {
-  if (!Number.isFinite(candidate.averageRating)
-    || candidate.averageRating < 0
-    || candidate.averageRating > 5
-    || !Number.isInteger(candidate.ratingCount)
-    || candidate.ratingCount <= 0) return null;
-  return `${numberFormat.format(candidate.averageRating)}/5 · ${candidate.ratingCount} lượt đánh giá`;
+/** Backend sends `averageRating: null` for an unrated technician; never show it as a score. */
+function displayRating(candidate: TechnicianCandidate): { value: number | null; text: string } {
+  const value = ratingValue(candidate.averageRating, candidate.ratingCount);
+  return { value, text: ratingSummary(candidate.averageRating, candidate.ratingCount) };
 }
 
 function displayDistance(candidate: TechnicianCandidate): string | null {
@@ -206,9 +204,9 @@ export function MatchingTechnicianCard({
               {priority === 1 ? 'Ưu tiên 1 · Mời trước' : priority === 2 ? 'Ưu tiên 2 · Dự phòng' : 'Chạm thẻ để xem thông tin'}
             </Text>
             <View style={styles.candidateMetadata}>
-              {rating && (
-                <Text style={[styles.metadataText, { color: colors.textSecondary }]}>★ {rating}</Text>
-              )}
+              <Text style={[styles.metadataText, { color: colors.textSecondary }]}>
+                {rating.value === null ? rating.text : `★ ${rating.text}`}
+              </Text>
               {distance && (
                 <Text style={[styles.metadataText, { color: colors.textSecondary }]}>• {distance}</Text>
               )}
@@ -413,12 +411,18 @@ export function MatchingTechnicianDetailSheet({
               <View style={styles.metricGrid}>
                 {rating && (
                   <View style={[styles.metricCard, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                    <Text style={[styles.metricValue, { color: colors.text }]}>
-                      {numberFormat.format(candidate.averageRating)} ★
-                    </Text>
-                    <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
-                      {candidate.ratingCount} lượt đánh giá
-                    </Text>
+                    {rating.value === null ? (
+                      <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>{NO_RATING_TEXT}</Text>
+                    ) : (
+                      <>
+                        <Text style={[styles.metricValue, { color: colors.text }]}>
+                          {formatRating(rating.value)} ★
+                        </Text>
+                        <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
+                          {candidate?.ratingCount} lượt đánh giá
+                        </Text>
+                      </>
+                    )}
                   </View>
                 )}
                 {completedOrders != null && (

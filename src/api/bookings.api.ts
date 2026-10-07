@@ -75,7 +75,8 @@ export interface TechnicianCandidate {
   userId: string;
   fullName: string;
   avatarUrl?: string;
-  averageRating: number;
+  /** null while the technician has no reviews; never shown as a score. */
+  averageRating: number | null;
   ratingCount: number;
   yearsExperience: number;
   reliabilityScore: number;

@@ -56,7 +56,7 @@ export interface ServiceOrderItem {
     fullName: string;
     phoneNumber: string;
     avatarUrl?: string;
-    averageRating: number;
+    averageRating: number | null;
   };
   laborTotal: number;
   partsTotal: number;
