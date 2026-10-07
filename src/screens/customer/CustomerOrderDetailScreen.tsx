@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { quoteStatusLabel } from '../../utils/quote-status';
 import {
   View,
   Text,
@@ -844,19 +845,6 @@ export default function CustomerOrderDetailScreen() {
         return { label: 'Đã hủy', bg: '#FEE2E2', color: colors.error };
       default:
         return { label: s, bg: colors.divider, color: colors.textSecondary };
-    }
-  };
-
-  const quoteStatusLabel = (status: string | null) => {
-    switch (status) {
-      case 'SENT':
-        return 'Đã gửi (chờ quyết định)';
-      case 'APPROVED':
-        return 'Đã duyệt';
-      case 'REJECTED':
-        return 'Đã từ chối';
-      default:
-        return status ?? 'Không rõ';
     }
   };
 

@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-07 19:31 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: fix/no-fake-data-and-po-decisions
+> Cập nhật lần cuối: 2026-10-07 22:05 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: fix/technician-quote-status-label
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -112,6 +112,10 @@ Onboarding năm bước (thông tin, KYC tải lên URL ký sẵn, kỹ năng, �
 - Chẩn đoán và chat AI bắt buộc có mô tả (BRX-064, `screens/customer/ai-diagnosis-input.ts`).
 - Thông báo `ORDER_DEPARTURE_WARNING` (đỏ) và `BOOKING_MATCHING_EXHAUSTED` (vàng) có biểu tượng riêng; thông báo đơn của kỹ thuật viên mở thẳng đơn.
 
+### Nhãn trạng thái báo giá (07/10/2026, nhánh `fix/technician-quote-status-label`)
+
+Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và của kỹ thuật viên qua `utils/quote-status.ts` (màn của kỹ thuật viên trước đây hiện mã thô SENT/APPROVED). Có thêm nhãn cho báo giá bị thay bằng bản mới.
+
 ### Đăng nhập Google
 
 Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng `WebBrowser.openAuthSessionAsync`, nhận mã sống 60 giây rồi đổi ở `/auth/google/exchange`. App không cần Google client id.
@@ -165,5 +169,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-07 22:05 (UTC+7) | ToanAltF4 | fix/technician-quote-status-label | Trạng thái báo giá hiện bằng chữ ở màn của kỹ thuật viên, dùng chung utils/quote-status.ts.
 - 2026-10-07 19:31 (UTC+7) | ToanAltF4 | fix/no-fake-data-and-po-decisions | Ghi việc gỡ dữ liệu giả, ảnh đại diện kỹ thuật viên, BRX-064 và thông báo mới; bỏ rủi ro ảnh file:// đã sửa
 - 2026-10-07 14:43 (UTC+7) | ToanAltF4 | docs/repo-context | Tạo file context theo bộ quy tắc chung của bốn repo, ghi hiện trạng sau đợt sửa lỗi ngày 07/10/2026

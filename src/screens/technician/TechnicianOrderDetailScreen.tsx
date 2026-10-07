@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { quoteStatusLabel } from '../../utils/quote-status';
 import {
   View,
   Text,
@@ -2328,7 +2329,7 @@ export default function TechnicianOrderDetailScreen() {
           {sections.hasQuotation && order.quotation && (
             <View style={styles.jobCard}>
               <Text style={styles.sectionTitle}>Báo giá</Text>
-              <Text style={styles.jobMeta}>Trạng thái: {sections.quotationStatus}</Text>
+              <Text style={styles.jobMeta}>Trạng thái: {quoteStatusLabel(sections.quotationStatus)}</Text>
               {quotationItemsList(order).length === 0 ? (
                 <Text style={styles.jobMeta}>Chưa có chi tiết báo giá</Text>
               ) : (
