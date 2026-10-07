@@ -52,15 +52,17 @@ export const walletApi = {
         )
       ).data,
     );
+    // Only a VNPay link means a payment was started; the balance never moves
+    // here, so nothing in this answer may read as "credited".
     return {
-      success: true,
+      success: Boolean(payload.paymentUrl),
       paymentId: payload.paymentId ?? '',
       paymentUrl: payload.paymentUrl ?? null,
       balanceAfter:
         payload.balanceAfter !== undefined && payload.balanceAfter !== null
           ? Number(payload.balanceAfter)
           : null,
-      message: payload.message ?? 'Nạp tiền vào ví thành công',
+      message: payload.message ?? '',
     };
   },
 

@@ -28,6 +28,33 @@ function supportCase(
 }
 
 describe('resolveCustomerNotificationTarget', () => {
+  it('opens the order of a departure warning and the booking when no technician accepted', async () => {
+    const getSupportCase = jest.fn();
+
+    // Shapes as the backend creates them on 07/10/2026.
+    const departureWarning = {
+      type: 'ORDER_DEPARTURE_WARNING',
+      referenceType: 'SERVICE_ORDER',
+      referenceId: ORDER_ID,
+    };
+    const matchingExhausted = {
+      type: 'BOOKING_MATCHING_EXHAUSTED',
+      referenceType: 'BOOKING',
+      referenceId: BOOKING_ID,
+    };
+
+    await expect(resolveCustomerNotificationTarget(departureWarning, { getSupportCase })).resolves.toEqual({
+      name: 'CustomerOrderDetail',
+      params: { serviceOrderId: ORDER_ID },
+    });
+    await expect(resolveCustomerNotificationTarget(matchingExhausted, { getSupportCase })).resolves.toEqual({
+      name: 'CustomerBookingDetail',
+      params: { bookingId: BOOKING_ID },
+    });
+
+    expect(getSupportCase).not.toHaveBeenCalled();
+  });
+
   it('routes only real Booking and ServiceOrder UUID references directly', async () => {
     const getSupportCase = jest.fn();
 

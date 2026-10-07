@@ -567,8 +567,8 @@ export default function CustomerHomeScreen() {
         <View style={styles.trustSection}>
           <View style={styles.trustItem}>
             <Ionicons name="shield-checkmark-outline" size={20} color={colors.primary} />
-            <Text style={styles.trustTitle}>Thợ xác minh</Text>
-            <Text style={styles.trustDesc}>Lý lịch 100% rõ ràng</Text>
+            <Text style={styles.trustTitle}>Hồ sơ được duyệt</Text>
+            <Text style={styles.trustDesc}>Xác minh danh tính trước khi nhận việc</Text>
           </View>
           <View style={styles.trustDivider} />
           <View style={styles.trustItem}>

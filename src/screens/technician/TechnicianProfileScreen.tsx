@@ -49,6 +49,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuthStore } from '../../store';
 import type { RootStackParamList } from '../../types';
 import { usersApi, type AddressData } from '../../api/users.api';
+import { mediaApi } from '../../api/media.api';
 import { ordersApi } from '../../api/orders.api';
 import { authApi } from '../../api/auth.api';
 import { geoApi, type PlaceSuggestion } from '../../api/geo.api';
@@ -69,6 +70,8 @@ import StatusBadge from '../../components/StatusBadge';
 import type { StatusView } from './technician-status';
 
 import { vnDateString } from '../../utils/vn-time';
+import { NO_RATING_TEXT, formatRating, ratingValue } from '../../utils/rating';
+import { avatarErrorMessage, updateMyAvatar } from '../../services/avatar-upload';
 
 const VN_DATE = { day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 // Floating GlassTabBar: 64pt pill + breathing room, plus the bottom inset (min 16).
@@ -123,6 +126,7 @@ export default function TechnicianProfileScreen() {
   const [fullName, setFullName] = useState(user?.fullName || 'Kỹ thuật viên');
   const [phoneNumber, setPhoneNumber] = useState(user?.phoneNumber || '');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatarUrl || null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [earningsTotal, setEarningsTotal] = useState(0);
 
   const [isAvatarModalVisible, setAvatarModalVisible] = useState(false);
@@ -175,7 +179,7 @@ export default function TechnicianProfileScreen() {
   const [locationProvince, setLocationProvince] = useState('');
   const [locationLat, setLocationLat] = useState<number | undefined>(undefined);
   const [locationLng, setLocationLng] = useState<number | undefined>(undefined);
-  const [locationRadiusKm, setLocationRadiusKm] = useState('10');
+  const [locationRadiusKm, setLocationRadiusKm] = useState('');
   const [locationSuggestions, setLocationSuggestions] = useState<PlaceSuggestion[]>([]);
   const [searchingLocation, setSearchingLocation] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
@@ -196,7 +200,11 @@ export default function TechnicianProfileScreen() {
   const [newTimeOffEnd, setNewTimeOffEnd] = useState('');
   const [newTimeOffReason, setNewTimeOffReason] = useState('');
 
+  // Same flow as the customer: upload to /media/upload, save the hosted URL on
+  // the profile, then refresh the session user. The old photo stays on screen
+  // until the server has confirmed the new one.
   const handlePickImage = async () => {
+    if (uploadingAvatar) return;
     Haptics.selectionAsync();
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
@@ -204,14 +212,22 @@ export default function TechnicianProfileScreen() {
       aspect: [1, 1],
       quality: 0.8,
     });
-    if (!result.canceled) {
-      const uri = result.assets[0].uri;
-      setAvatarUrl(uri);
-      try {
-        await usersApi.updateProfile({ avatarUrl: uri });
-      } catch (e) {
-        console.error('Failed to update avatar', e);
-      }
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+    setUploadingAvatar(true);
+    try {
+      const hostedUrl = await updateMyAvatar(
+        { uri: asset.uri, fileName: asset.fileName, mimeType: asset.mimeType },
+        { uploadImage: mediaApi.uploadPublicImage, updateProfile: usersApi.updateProfile },
+        useAuthStore,
+      );
+      setAvatarUrl(hostedUrl);
+      Alert.alert('Đã cập nhật ảnh đại diện', 'Ảnh mới đã được lưu vào hồ sơ của bạn.');
+    } catch (err: unknown) {
+      Alert.alert('Không thể cập nhật ảnh đại diện', avatarErrorMessage(err));
+    } finally {
+      setUploadingAvatar(false);
     }
   };
 
@@ -343,7 +359,9 @@ export default function TechnicianProfileScreen() {
     setLocationProvince(technicianAddress?.province ?? '');
     setLocationLat(technicianAddress?.lat);
     setLocationLng(technicianAddress?.lng);
-    setLocationRadiusKm(String(technicianProfile?.serviceRadiusKm ?? 10));
+    setLocationRadiusKm(
+      technicianProfile?.serviceRadiusKm != null ? String(technicianProfile.serviceRadiusKm) : '',
+    );
     setLocationSuggestions([]);
     locationSheetRef.current?.present();
   };
@@ -411,6 +429,12 @@ export default function TechnicianProfileScreen() {
       Alert.alert('Lỗi', 'Vui lòng tìm hoặc chọn vị trí trên bản đồ trước khi lưu.');
       return;
     }
+    const radiusText = locationRadiusKm.trim().replace(',', '.');
+    const radiusKm = Number(radiusText);
+    if (!radiusText || !Number.isFinite(radiusKm) || radiusKm <= 0) {
+      Alert.alert('Lỗi', 'Vui lòng nhập bán kính hoạt động (km).');
+      return;
+    }
     setSavingLocation(true);
     try {
       const addressDto = {
@@ -427,7 +451,7 @@ export default function TechnicianProfileScreen() {
         ? usersApi.updateAddress(technicianAddress.id, addressDto)
         : usersApi.createAddress(addressDto));
       await technicianProfileApi.updateMyProfile({
-        serviceRadiusKm: Number(locationRadiusKm) || 10,
+        serviceRadiusKm: radiusKm,
       });
       await loadTechnicianProfile();
       locationSheetRef.current?.dismiss();
@@ -553,6 +577,10 @@ export default function TechnicianProfileScreen() {
   };
 
   const phoneLine = phoneNumber || user?.email || 'Kỹ thuật viên FixHome';
+  // 0 reviews or a null average is "no rating yet", never an invented score.
+  const rating = technicianProfile
+    ? ratingValue(technicianProfile.averageRating, technicianProfile.ratingCount)
+    : null;
   const activeSkillCount = Object.values(myOfferings).filter((o) => o.isActive).length;
 
   return (
@@ -584,14 +612,20 @@ export default function TechnicianProfileScreen() {
               )}
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.cameraIconBadge}
+              style={[styles.cameraIconBadge, uploadingAvatar && { opacity: 0.75 }]}
               onPress={handlePickImage}
+              disabled={uploadingAvatar}
               activeOpacity={0.8}
               accessibilityRole="button"
-              accessibilityLabel="Đổi ảnh đại diện"
+              accessibilityLabel={uploadingAvatar ? 'Đang tải ảnh đại diện' : 'Đổi ảnh đại diện'}
+              accessibilityState={{ disabled: uploadingAvatar, busy: uploadingAvatar }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Camera size={14} color={colors.surface} strokeWidth={2} />
+              {uploadingAvatar ? (
+                <ActivityIndicator size="small" color={colors.surface} />
+              ) : (
+                <Camera size={14} color={colors.surface} strokeWidth={2} />
+              )}
             </TouchableOpacity>
           </View>
           <View style={styles.identityText}>
@@ -599,17 +633,25 @@ export default function TechnicianProfileScreen() {
             <Text style={styles.phone}>{phoneLine}</Text>
             {technicianProfile && (
               <View style={styles.chipRow}>
-                <View style={[styles.chip, { backgroundColor: colors.tone.warning.bg }]}>
-                  <Star size={14} color={colors.tone.warning.fg} strokeWidth={2} />
-                  <Text style={[styles.chipText, { color: colors.tone.warning.text }]}>
-                    {technicianProfile.averageRating.toFixed(2).replace('.', ',')}
-                  </Text>
-                </View>
-                <View style={[styles.chip, { backgroundColor: colors.tone.success.bg }]}>
-                  <Text style={[styles.chipText, { color: colors.tone.success.text }]}>
-                    Độ tin cậy {technicianProfile.reliabilityScore}%
-                  </Text>
-                </View>
+                {rating !== null ? (
+                  <View style={[styles.chip, { backgroundColor: colors.tone.warning.bg }]}>
+                    <Star size={14} color={colors.tone.warning.fg} strokeWidth={2} />
+                    <Text style={[styles.chipText, { color: colors.tone.warning.text }]}>
+                      {formatRating(rating)}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={[styles.chip, { backgroundColor: colors.background }]}>
+                    <Text style={[styles.chipText, { color: colors.textSecondary }]}>{NO_RATING_TEXT}</Text>
+                  </View>
+                )}
+                {technicianProfile.reliabilityScore !== null && (
+                  <View style={[styles.chip, { backgroundColor: colors.tone.success.bg }]}>
+                    <Text style={[styles.chipText, { color: colors.tone.success.text }]}>
+                      Độ tin cậy {technicianProfile.reliabilityScore}%
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
           </View>
@@ -657,9 +699,9 @@ export default function TechnicianProfileScreen() {
             title="Đánh giá từ khách hàng"
             desc={
               technicianProfile
-                ? technicianProfile.ratingCount > 0
-                  ? `${technicianProfile.averageRating.toFixed(2).replace('.', ',')} sao · ${technicianProfile.ratingCount} đánh giá`
-                  : 'Chưa có đánh giá nào'
+                ? rating !== null
+                  ? `${formatRating(rating)} sao · ${technicianProfile.ratingCount} đánh giá`
+                  : NO_RATING_TEXT
                 : undefined
             }
             onPress={() => navigation.navigate('TechnicianReviews')}
@@ -685,7 +727,9 @@ export default function TechnicianProfileScreen() {
             title="Vị trí và bán kính hoạt động"
             desc={
               technicianAddress
-                ? `${technicianAddress.line1} · ${technicianProfile?.serviceRadiusKm ?? 10} km`
+                ? technicianProfile?.serviceRadiusKm != null
+                  ? `${technicianAddress.line1} · ${technicianProfile.serviceRadiusKm} km`
+                  : technicianAddress.line1
                 : 'Chưa cập nhật vị trí'
             }
             onPress={openLocationSheet}
