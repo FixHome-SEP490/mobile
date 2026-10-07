@@ -2,6 +2,19 @@
 
 This Expo application is an independent Git repository and a UI client of Backend-FixHome.
 
+## Repository context (read first, keep current)
+
+`docs/CONTEXT.md` is the living context of this repository: what it owns, how it links to the other
+FixHome repositories, the current state, contracts, settled PO decisions and open risks. Read it
+before `docs/AI-TECHNICAL-GUIDE.md` and before touching code.
+
+Any change that alters behaviour, an API or event contract, an enum, an environment variable, a
+migration, how the project runs or is verified, or a PO decision must update `docs/CONTEXT.md` in
+the same pull request, following its section 0 exactly: real Vietnam time (UTC+7), the exact
+`git config user.name`, the branch, and a new top line in section 9. `src/context-doc.test.ts` enforces the
+format in the normal test run and in CI; never weaken that test to make a change pass. The
+repository is public: never write secrets, credentials, IP addresses or customer data into it.
+
 ## Mandatory pre-implementation gate
 
 Before every task, read FIXHOME-DESIGN-SYSTEM.md completely together with
@@ -13,6 +26,7 @@ If cross-repository verification is unavailable, explicitly report NOT VERIFIED.
 
 Before doing any task:
 
+0. Read `docs/CONTEXT.md` completely.
 1. Read `docs/AI-TECHNICAL-GUIDE.md` and `FIXHOME-DESIGN-SYSTEM.md` completely.
 2. Inspect the existing project structure and affected navigator, screen, store, or service.
 3. Understand the current Expo/React Navigation/Zustand/API-client architecture.
@@ -32,8 +46,10 @@ If the technical guide has not been read, implementation must not begin.
 - Keep business rules and authoritative authorization in Backend.
 - Store tokens only through `expo-secure-store`; do not use AsyncStorage for credentials.
 - Keep navigation params typed and preserve role-specific Customer/Technician flows.
-- Never call Gemini/OpenAI or a database directly from the app.
-- Coordinate contract changes with Backend, Frontend, AI, and Docs repositories.
+- Never call the AI service, a payment gateway or a database directly from the app; AI goes
+  through the Backend `/ai/*` routes only.
+- Coordinate contract changes with the `backend`, `web`, `ai-service` and `docs` repositories,
+  and update `docs/CONTEXT.md` in each affected repository.
 
 ## Required verification
 
