@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { supportCasesApi } from '../../api/support-cases.api';
 import { canDepartNow, sessionLabel } from '../../utils/booking-session';
 import { quoteStatusLabel } from '../../utils/quote-status';
 import {
@@ -375,10 +376,41 @@ export default function TechnicianOrderDetailScreen() {
       checkInRef.current = null;
     };
   }, []);
-  const onCheckIn = () => {
+  // PO 08/10/2026: arriving = check-in that requires a product photo, so the
+  // camera opens as soon as the GPS check-in is accepted.
+  const onCheckIn = async () => {
     if (!order) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    void checkInRef.current?.checkIn(order.id);
+    await checkInRef.current?.checkIn(order.id);
+    await loaderRef.current?.refresh(true);
+    const latest = latestRef.current.order;
+    if (latest?.arrivalVerified === true && (latest.beforeEvidenceCount ?? 0) < 1) {
+      void uploadRef.current?.pickFromCamera();
+    }
+  };
+
+  // "Cần thay đổi thợ": after check-in, a job outside the technician's skills goes to the Service Manager.
+  const [replacementOpen, setReplacementOpen] = useState(false);
+  const [replacementReason, setReplacementReason] = useState('');
+  const [replacementBusy, setReplacementBusy] = useState(false);
+  const [replacementSent, setReplacementSent] = useState(false);
+  const sendReplacement = async () => {
+    if (!order || replacementBusy) return;
+    const reason = replacementReason.trim();
+    if (reason.length < 10) {
+      Alert.alert('Thiếu lý do', 'Ghi rõ vì sao cần thay thợ, tối thiểu 10 ký tự.');
+      return;
+    }
+    setReplacementBusy(true);
+    try {
+      await supportCasesApi.createCase({ caseType: 'technician_replacement', reason, serviceOrderId: order.id, isUrgent: true });
+      setReplacementSent(true);
+      setReplacementOpen(false);
+    } catch (err: unknown) {
+      Alert.alert('Chưa gửi được', extractApiErrorMessage(err, 'Vui lòng thử lại sau.'));
+    } finally {
+      setReplacementBusy(false);
+    }
   };
   const onEnRoute = async () => {
     if (!order || enRouteBusy) return;
@@ -1196,6 +1228,39 @@ export default function TechnicianOrderDetailScreen() {
             <TechnicianPartsSection orderId={order.id} orderStatus={order.status} />
           )}
 
+          {order.arrivalVerified === true && ['EN_ROUTE', 'UNDER_REPAIR'].includes(String(order.status).toUpperCase()) && !order.completionRequestedAt && (
+            <View style={styles.jobCard} testID="replacement-card">
+              <Text style={styles.sectionTitle}>Cần thay đổi thợ?</Text>
+              {replacementSent ? (
+                <Text style={styles.jobMeta}>Đã báo quản lý dịch vụ. Quản lý sẽ liên hệ và sắp xếp thợ khác.</Text>
+              ) : (
+                <>
+                  <Text style={styles.jobMeta}>Dùng khi đã tới nơi và thấy việc nằm ngoài kỹ năng của bạn. Trường hợp này được quản lý xem xét, không tự trừ điểm uy tín.</Text>
+                  {replacementOpen && (
+                    <TextInput
+                      style={[styles.fieldInput, { minHeight: 80, textAlignVertical: 'top' }]}
+                      value={replacementReason}
+                      onChangeText={setReplacementReason}
+                      placeholder="Ví dụ: máy là loại công nghiệp, cần thợ chuyên"
+                      placeholderTextColor={colors.muted}
+                      multiline
+                      maxLength={1000}
+                    />
+                  )}
+                  <TouchableOpacity
+                    style={[styles.uploadBtn, { backgroundColor: colors.primarySoft }]}
+                    onPress={replacementOpen ? sendReplacement : () => setReplacementOpen(true)}
+                    disabled={replacementBusy}
+                    accessibilityRole="button"
+                    accessibilityLabel={replacementOpen ? 'Gửi cho quản lý' : 'Cần thay đổi thợ'}
+                  >
+                    <Text style={[styles.uploadBtnText, { color: colors.primaryStrong }]}>{replacementBusy ? 'Đang gửi…' : replacementOpen ? 'Gửi cho quản lý' : 'Cần thay đổi thợ'}</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          )}
+
           {String(order.status).toUpperCase() === 'ACCEPTED' && (
             <View style={[styles.jobCard, styles.nextStepCard]}>
               <Text style={styles.nextStepEyebrow}>Bước tiếp theo</Text>
@@ -1226,9 +1291,9 @@ export default function TechnicianOrderDetailScreen() {
               <Text style={styles.nextStepEyebrow}>Bước tiếp theo</Text>
               {order.arrivalVerified !== true ? (
                 <>
-                  <Text style={styles.sectionTitle}>Check-in tại nhà khách</Text>
+                  <Text style={styles.sectionTitle}>Check-in và chụp ảnh sản phẩm</Text>
                   <Text style={styles.jobMeta}>
-                    Bấm nút bên dưới khi bạn đã có mặt tại địa chỉ khách hàng để check-in bằng GPS.
+                    Tới địa chỉ của khách thì bấm nút bên dưới: hệ thống kiểm tra vị trí rồi mở camera để chụp sản phẩm.
                   </Text>
                   <TouchableOpacity
                     style={[styles.uploadBtn, styles.nextStepAction]}
@@ -1240,7 +1305,7 @@ export default function TechnicianOrderDetailScreen() {
                     {checkInBusy ? (
                       <ActivityIndicator size="small" color={colors.surface} />
                     ) : (
-                      <Text style={styles.uploadBtnText}>Check-in tại nhà khách</Text>
+                      <Text style={styles.uploadBtnText}>Check-in và chụp ảnh</Text>
                     )}
                   </TouchableOpacity>
                 </>
@@ -1275,20 +1340,17 @@ export default function TechnicianOrderDetailScreen() {
                 </>
               ) : startRepairEligible ? (
                 <>
-                  <Text style={styles.sectionTitle}>Bắt đầu sửa chữa</Text>
+                  <Text style={styles.sectionTitle}>Đơn đang chuyển sang sửa chữa</Text>
                   <Text style={styles.jobMeta}>
-                    {String(order.pricingMode ?? '').toLowerCase() === 'fixed_price'
-                      ? 'Dịch vụ giá cố định — không cần báo giá. Hệ thống vẫn kiểm tra toàn bộ điều kiện khi gửi.'
-                      : 'Báo giá khảo sát đã được khách duyệt. Hệ thống vẫn là nguồn quyết định cuối cùng.'}
+                    Đã check-in có ảnh sản phẩm{String(order.pricingMode ?? '').toLowerCase() === 'fixed_price' ? '' : ' và khách đã duyệt báo giá'}; hệ thống tự chuyển đơn sang đang sửa. Kéo xuống hoặc bấm tải lại nếu trạng thái chưa đổi.
                   </Text>
                   <TouchableOpacity
                     style={[styles.uploadBtn, styles.nextStepAction]}
-                    onPress={onStartRepairConfirm}
-                    disabled={startRepairState.busy || startRepairState.needsVerify}
+                    onPress={() => { void loaderRef.current?.refresh(true); }}
                     accessibilityRole="button"
-                    accessibilityLabel="Bắt đầu sửa chữa từ bước tiếp theo"
+                    accessibilityLabel="Tải lại trạng thái đơn"
                   >
-                    <Text style={styles.uploadBtnText}>Bắt đầu sửa chữa</Text>
+                    <Text style={styles.uploadBtnText}>Tải lại</Text>
                   </TouchableOpacity>
                 </>
               ) : (
@@ -1338,9 +1400,9 @@ export default function TechnicianOrderDetailScreen() {
                 </>
               ) : typeof order.afterEvidenceCount !== 'number' || order.afterEvidenceCount < 1 ? (
                 <>
-                  <Text style={styles.sectionTitle}>Tải ảnh sau sửa chữa</Text>
+                  <Text style={styles.sectionTitle}>Hoàn thành</Text>
                   <Text style={styles.jobMeta}>
-                    Hãy tải bằng chứng sau sửa. Số lượng tối thiểu thật vẫn do Hệ thống cấu hình và kiểm tra khi yêu cầu hoàn thành.
+                    Sửa xong thì chụp ảnh sản phẩm sau khi sửa, rồi gửi yêu cầu nghiệm thu cho khách.
                   </Text>
                   <TouchableOpacity
                     style={[styles.uploadBtn, styles.nextStepAction]}
@@ -1349,7 +1411,7 @@ export default function TechnicianOrderDetailScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Chụp ảnh sau sửa từ bước tiếp theo"
                   >
-                    <Text style={styles.uploadBtnText}>Chụp ảnh sau sửa</Text>
+                    <Text style={styles.uploadBtnText}>Hoàn thành: chụp ảnh sau sửa</Text>
                   </TouchableOpacity>
                 </>
               ) : completionEligible ? (
@@ -1439,14 +1501,7 @@ export default function TechnicianOrderDetailScreen() {
                 >
                   <Text style={styles.uploadBtnText}>Chụp ảnh</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.uploadBtn, { backgroundColor: colors.primarySoft }]}
-                  onPress={onPickGallery}
-                  accessibilityRole="button"
-                  accessibilityLabel="Chọn ảnh trước sửa chữa từ thư viện"
-                >
-                  <Text style={[styles.uploadBtnText, { color: colors.primaryStrong }]}>Chọn từ thư viện</Text>
-                </TouchableOpacity>
+                {/* PO 08/10/2026: order photos come from the camera only. */}
               </View>
             )}
             {!!uploadState.error && (
@@ -2188,14 +2243,7 @@ export default function TechnicianOrderDetailScreen() {
                 >
                   <Text style={styles.uploadBtnText}>Chụp ảnh</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.uploadBtn, { backgroundColor: colors.primarySoft }]}
-                  onPress={onPickAfterGallery}
-                  accessibilityRole="button"
-                  accessibilityLabel="Chọn ảnh sau sửa chữa từ thư viện"
-                >
-                  <Text style={[styles.uploadBtnText, { color: colors.primaryStrong }]}>Chọn từ thư viện</Text>
-                </TouchableOpacity>
+                {/* PO 08/10/2026: order photos come from the camera only. */}
               </View>
             )}
             {!!afterUploadState.error && (
