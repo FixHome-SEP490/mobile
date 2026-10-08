@@ -51,6 +51,12 @@ export interface ServiceOrderItem {
   customerPhone: string;
   addressSummary: string;
   scheduledAt: string;
+  /** scheduled = one morning/afternoon session; urgent = come now (PO 08/10/2026). */
+  bookingMode?: 'scheduled' | 'urgent';
+  slot?: 'morning' | 'afternoon' | null;
+  customerNote?: string | null;
+  /** The technician may set out from this instant (one hour before the appointment). */
+  departAvailableAt?: string | null;
   technician?: {
     id: string;
     fullName: string;

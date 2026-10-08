@@ -431,8 +431,8 @@ export default function TechnicianProfileScreen() {
     }
     const radiusText = locationRadiusKm.trim().replace(',', '.');
     const radiusKm = Number(radiusText);
-    if (!radiusText || !Number.isFinite(radiusKm) || radiusKm <= 0) {
-      Alert.alert('Lỗi', 'Vui lòng nhập bán kính hoạt động (km).');
+    if (!radiusText || !Number.isFinite(radiusKm) || radiusKm < 1 || radiusKm > 40) {
+      Alert.alert('Lỗi', 'Bán kính hoạt động từ 1 đến 40 km.');
       return;
     }
     setSavingLocation(true);
