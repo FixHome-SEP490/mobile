@@ -1,5 +1,6 @@
 // src/navigation/TechnicianNavigator.tsx
 import React from 'react';
+import { useTechnicianLocationPing } from '../hooks/useTechnicianLocationPing';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Home, MailOpen, Briefcase, Bell, User } from 'lucide-react-native';
 import type { TechnicianTabParamList } from '../types';
@@ -21,6 +22,7 @@ const Tab = createBottomTabNavigator<TechnicianTabParamList>();
 
 export default function TechnicianNavigator() {
   const user = useAuthStore((state) => state.user);
+  useTechnicianLocationPing(!!user);
   const { colors } = useAppTheme();
   const unreadCount = useBadgeStore((state) => state.unreadNotifications);
   const setUnreadCount = useBadgeStore((state) => state.setUnreadNotifications);

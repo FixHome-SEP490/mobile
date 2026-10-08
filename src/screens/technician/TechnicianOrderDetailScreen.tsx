@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { canDepartNow, sessionLabel } from '../../utils/booking-session';
 import { quoteStatusLabel } from '../../utils/quote-status';
 import {
   View,
@@ -329,6 +330,12 @@ export default function TechnicianOrderDetailScreen() {
   // invitation had no other action screen to fall back to.
   const [checkInBusy, setCheckInBusy] = useState(false);
   const [enRouteBusy, setEnRouteBusy] = useState(false);
+  // Re-evaluated every 30 s so the depart button lights up on time.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
   const checkInRef = useRef<ReturnType<typeof createCheckInController> | null>(null);
   useEffect(() => {
     checkInRef.current = createCheckInController({
@@ -1153,8 +1160,11 @@ export default function TechnicianOrderDetailScreen() {
             {!!order.scheduledAt && (
               <View style={styles.iconRow}>
                 <Clock size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
-                <Text style={styles.iconRowText}>Lịch hẹn: {vnDateTimeString(order.scheduledAt, VN_DATETIME)}</Text>
+                <Text style={styles.iconRowText}>Lịch hẹn: {sessionLabel({ bookingMode: order.bookingMode, slot: order.slot, start: order.scheduledAt })}</Text>
               </View>
+            )}
+            {!!order.customerNote && (
+              <Text style={[styles.jobMeta, { color: colors.tone.warning.fg }]} testID="customer-note">Ghi chú của khách: {order.customerNote}</Text>
             )}
             {!!order.addressSummary && (
               <View style={styles.iconRow}>
@@ -1191,12 +1201,14 @@ export default function TechnicianOrderDetailScreen() {
               <Text style={styles.nextStepEyebrow}>Bước tiếp theo</Text>
               <Text style={styles.sectionTitle}>Bắt đầu di chuyển</Text>
               <Text style={styles.jobMeta}>
-                Báo cho hệ thống biết bạn đang trên đường đến địa chỉ khách hàng.
+                {canDepartNow(order.departAvailableAt, nowTick)
+                  ? 'Báo cho hệ thống biết bạn đang trên đường đến địa chỉ khách hàng.'
+                  : `Nút xuất phát mở lúc ${vnDateTimeString(order.departAvailableAt!, VN_DATETIME)} (1 giờ trước giờ hẹn).`}
               </Text>
               <TouchableOpacity
-                style={[styles.uploadBtn, styles.nextStepAction]}
+                style={[styles.uploadBtn, styles.nextStepAction, !canDepartNow(order.departAvailableAt, nowTick) && { opacity: 0.45 }]}
                 onPress={onEnRoute}
-                disabled={enRouteBusy}
+                disabled={enRouteBusy || !canDepartNow(order.departAvailableAt, nowTick)}
                 accessibilityRole="button"
                 accessibilityLabel="Bắt đầu di chuyển"
               >

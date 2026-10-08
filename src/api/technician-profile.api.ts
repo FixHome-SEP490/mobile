@@ -102,6 +102,11 @@ export const technicianProfileApi = {
     return normalizeProfile(unwrap(res.data));
   },
 
+  /** Last GPS position while the app is open; the backend offers urgent jobs nearby. */
+  async reportLocation(data: { lat: number; lng: number; accuracyMeters?: number }): Promise<void> {
+    await apiClient.patch('/technicians/me/location', data);
+  },
+
   async getMySchedule(): Promise<TechnicianScheduleSlot[]> {
     const res = await apiClient.get<{ data: TechnicianScheduleSlot[] } | TechnicianScheduleSlot[]>(
       '/technicians/me/schedule',
