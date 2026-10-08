@@ -869,12 +869,10 @@ export default function TechnicianOrderDetailScreen() {
   }, [order, serviceOrderId]);
 
   const onPickCamera = () => { void uploadRef.current?.pickFromCamera(); };
-  const onPickGallery = () => { void uploadRef.current?.pickFromGallery(); };
   const onUploadBefore = () => { void uploadRef.current?.upload(); };
   const onReconcileBefore = () => { void uploadRef.current?.reconcile(); };
   const onDiscardUpload = () => { uploadRef.current?.discard(); };
   const onPickAfterCamera = () => { void afterUploadRef.current?.pickFromCamera(); };
-  const onPickAfterGallery = () => { void afterUploadRef.current?.pickFromGallery(); };
   const onUploadAfter = () => { void afterUploadRef.current?.upload(); };
   const onReconcileAfter = () => { void afterUploadRef.current?.reconcile(); };
   const onDiscardAfterUpload = () => { afterUploadRef.current?.discard(); };
