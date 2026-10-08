@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-09 00:08 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: feat/technician-order-steps
+> Cập nhật lần cuối: 2026-10-09 00:17 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: feat/technician-certificates
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -131,6 +131,11 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 - Màn đơn của thợ: "Check-in và chụp ảnh" kiểm GPS rồi mở camera chụp sản phẩm; không còn nút "Bắt đầu sửa chữa" (backend tự chuyển, màn hiện "Đơn đang chuyển sang sửa chữa" + Tải lại); "Hoàn thành: chụp ảnh sau sửa" trước khi gửi nghiệm thu. Ảnh đơn chỉ chụp bằng camera (bỏ nút chọn từ thư viện).
 - Thẻ "Cần thay đổi thợ" sau check-in: nhập lý do, tạo support case `technician_replacement` (khẩn).
 
+### Chứng chỉ khi đăng ký thợ (08/10/2026, nhánh `feat/technician-certificates`)
+
+- Màn Xác minh danh tính (`TechnicianKycScreen`): phần "Chứng chỉ nghề" không bắt buộc, tối đa 5 ảnh, ghi chú "bản đã công chứng"; gửi kèm hồ sơ với `documentType: certificate`.
+- Sau khi nộp và ở trạng thái chờ duyệt (cả màn onboarding): "Vui lòng đến trụ sở trong thời gian sớm nhất để tiến hành xác minh thông tin và bắt đầu công việc." (`OFFICE_VISIT_NOTE`); bỏ câu hứa duyệt trong 24 giờ.
+
 ### Đăng nhập Google
 
 Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng `WebBrowser.openAuthSessionAsync`, nhận mã sống 60 giây rồi đổi ở `/auth/google/exchange`. App không cần Google client id.
@@ -184,6 +189,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-09 00:17 (UTC+7) | ToanAltF4 | feat/technician-certificates | Đăng ký thợ: chứng chỉ không bắt buộc (bản công chứng), câu nhắc đến trụ sở sau khi nộp hồ sơ.
 - 2026-10-09 00:08 (UTC+7) | ToanAltF4 | feat/technician-order-steps | Thợ: check-in mở camera chụp sản phẩm, bỏ nút bắt đầu sửa, hoàn thành kèm ảnh, chỉ dùng camera, nút cần thay đổi thợ.
 - 2026-10-08 23:43 (UTC+7) | ToanAltF4 | feat/technician-sessions | Thợ: lịch hẹn theo buổi, ghi chú khách, nút xuất phát theo giờ cho phép, gửi GPS mỗi 5 phút, bán kính 40 km.
 - 2026-10-08 21:49 (UTC+7) | ToanAltF4 | feat/customer-extend-matching-and-tech-areas | Khách gia hạn thời gian chờ thợ; thợ sửa khu vực phục vụ sau onboarding.
