@@ -3,7 +3,7 @@ import apiClient from './client';
 
 export type VerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED';
 
-export type KycDocumentType = 'citizen_id_front' | 'citizen_id_back' | 'face_photo';
+export type KycDocumentType = 'citizen_id_front' | 'citizen_id_back' | 'face_photo' | 'certificate';
 export type KycMimeType = 'image/jpeg' | 'image/png' | 'image/webp';
 
 export interface MyVerificationDocument {
