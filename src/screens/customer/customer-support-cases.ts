@@ -29,6 +29,7 @@ export const complaintTypeLabels: Record<SupportCaseType, string> = {
   pricing_dispute: 'Tranh chấp về chi phí',
   conduct: 'Thái độ hoặc hành vi của kỹ thuật viên',
   other: 'Vấn đề khác',
+  technician_replacement: 'Cần thay đổi thợ (ngoài kỹ năng)',
 };
 
 const CUSTOMER_TYPES: Record<string, SupportCaseType[]> = {
