@@ -253,6 +253,17 @@ export const bookingsApi = {
     return unwrap(res.data);
   },
 
+  /** Gives the pending invitations of a matching booking more time (same rule as the web). */
+  async extendMatching(bookingId: string): Promise<{ expiresAt: string; extendedInvitationCount: number }> {
+    const res = await apiClient.post(`/bookings/${bookingId}/matching/extend`);
+    const data = unwrap<{ bookingId?: string; expiresAt?: string; extendedInvitationCount?: number }>(res.data);
+    if (!data || data.bookingId !== bookingId || typeof data.expiresAt !== 'string' || !Number.isFinite(Date.parse(data.expiresAt))
+      || typeof data.extendedInvitationCount !== 'number' || data.extendedInvitationCount < 1) {
+      throw new Error('Invalid matching extension response');
+    }
+    return { expiresAt: data.expiresAt, extendedInvitationCount: data.extendedInvitationCount };
+  },
+
   async cancelBooking(id: string, reason: string): Promise<BookingItem> {
     const res = await apiClient.post(`/bookings/${id}/cancel`, { reason });
     return normalizeBooking(unwrap<RawBooking>(res.data));

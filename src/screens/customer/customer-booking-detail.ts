@@ -53,6 +53,18 @@ export function bookingStatusLabel(status: unknown): string {
   }
 }
 
+/**
+ * The customer may give the technicians more time while the booking is still
+ * matching, has at least one pending invitation, has no order yet and its
+ * appointment window has not ended. Same rule as the web booking page.
+ */
+export function canExtendMatching(booking: BookingItem | null | undefined, now: number = Date.now()): boolean {
+  if (!booking || String(booking.status).toUpperCase() !== 'MATCHING' || booking.serviceOrderId) return false;
+  const end = Date.parse(String(booking.preferredEndAt ?? ''));
+  if (!Number.isFinite(end) || end <= now) return false;
+  return (booking.invitations ?? []).some((invitation) => String(invitation.status).toUpperCase() === 'PENDING');
+}
+
 export type BookingNextActionKind = 'choose_technician' | 'open_order' | 'wait' | 'none';
 
 export interface BookingNextAction {
