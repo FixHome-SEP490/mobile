@@ -119,6 +119,18 @@ export const technicianProfileApi = {
     return Array.isArray(result) ? result : [];
   },
 
+  async getMyServiceAreas(): Promise<{ provinceCode: string; districtCode: string }[]> {
+    const res = await apiClient.get<{ data: { provinceCode: string; districtCode: string }[] }>(
+      '/technicians/me/service-areas',
+    );
+    const result = unwrap(res.data);
+    return Array.isArray(result) ? result.map((a) => ({ provinceCode: String(a.provinceCode), districtCode: String(a.districtCode) })) : [];
+  },
+
+  async updateMyServiceAreas(areas: { provinceCode: string; districtCode: string }[]): Promise<void> {
+    await apiClient.put('/technicians/me/service-areas', { areas });
+  },
+
   async getMyTimeOff(): Promise<TechnicianTimeOff[]> {
     const res = await apiClient.get<{ data: TechnicianTimeOff[] } | TechnicianTimeOff[]>(
       '/technicians/me/time-off',

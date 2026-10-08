@@ -56,6 +56,7 @@ export type RootStackParamList = {
   TechnicianWallet: undefined;
   TechnicianReviews: undefined;
   TechnicianSchedule: undefined;
+  TechnicianServiceAreas: undefined;
   TechnicianEarnings: undefined;
   ChatList: undefined;
   ChatThread: {

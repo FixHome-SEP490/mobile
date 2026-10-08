@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
+  Alert,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -21,6 +22,7 @@ import { customerBookingsUserId } from './customer-bookings-history';
 import {
   bookingNextAction,
   bookingStatusLabel,
+  canExtendMatching,
   createBookingDetailLoader,
   initialBookingDetailState,
 } from './customer-booking-detail';
@@ -75,6 +77,30 @@ export default function CustomerBookingDetailScreen() {
 
   const { booking, loading, refreshing, error } = state;
   const nextAction = booking ? bookingNextAction(booking) : null;
+  const [extending, setExtending] = useState(false);
+  const [extensionNotice, setExtensionNotice] = useState('');
+
+  const extendMatching = () => {
+    if (!booking || extending) return;
+    Alert.alert('Gia hạn thời gian chờ thợ', 'Kỹ thuật viên đang được mời sẽ có thêm thời gian để nhận việc.', [
+      { text: 'Để sau', style: 'cancel' },
+      {
+        text: 'Gia hạn',
+        onPress: async () => {
+          setExtending(true);
+          try {
+            const result = await bookingsApi.extendMatching(booking.id);
+            setExtensionNotice(`Đã gia hạn lời mời tới ${vnDateTimeString(new Date(result.expiresAt))}.`);
+            void loader.refresh(true);
+          } catch {
+            Alert.alert('Chưa gia hạn được', 'Lời mời có thể đã hết hạn hoặc đã có kỹ thuật viên nhận. Kéo xuống để tải lại.');
+          } finally {
+            setExtending(false);
+          }
+        },
+      },
+    ]);
+  };
 
   const runPrimaryAction = () => {
     if (!booking || !nextAction) return;
@@ -199,6 +225,19 @@ export default function CustomerBookingDetailScreen() {
               )}
             </View>
           )}
+
+          {canExtendMatching(booking) && !extensionNotice && (
+            <TouchableOpacity
+              testID="booking-extend-matching"
+              onPress={extendMatching}
+              disabled={extending}
+              accessibilityRole="button"
+              style={styles.linkButton}
+            >
+              <Text style={styles.linkText}>{extending ? 'Đang gia hạn…' : 'Gia hạn thời gian chờ thợ'}</Text>
+            </TouchableOpacity>
+          )}
+          {!!extensionNotice && <Text style={styles.actionDetail}>{extensionNotice}</Text>}
 
           <View style={styles.noteCard}>
             <Ionicons name="information-circle-outline" size={20} color={colors.primaryStrong} />

@@ -738,6 +738,15 @@ export default function TechnicianProfileScreen() {
           <MenuRow
             styles={styles}
             colors={colors}
+            Icon={MapPin}
+            title="Khu vực phục vụ"
+            desc="Quận/huyện bạn nhận việc"
+            onPress={() => navigation.navigate('TechnicianServiceAreas')}
+          />
+          <View style={styles.divider} />
+          <MenuRow
+            styles={styles}
+            colors={colors}
             Icon={CalendarDays}
             title="Khung giờ nhận việc"
             desc={technicianProfile ? `${technicianProfile.schedules.length} khung giờ trong tuần` : 'Đang tải…'}
