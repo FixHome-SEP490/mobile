@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-08 21:49 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: feat/customer-extend-matching-and-tech-areas
+> Cập nhật lần cuối: 2026-10-09 00:17 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: feat/technician-certificates
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -121,6 +121,21 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 - Chi tiết booking của khách có nút "Gia hạn thời gian chờ thợ" (`POST /bookings/:id/matching/extend`) khi booking đang tìm thợ, còn lời mời chờ, chưa có đơn và khung giờ chưa qua (`canExtendMatching` trong `customer-booking-detail.ts`, cùng điều kiện với web). Chọn lại thợ khi hết ứng viên đã có từ trước (`bookingNextAction` trạng thái CLOSED).
 - Kỹ thuật viên sửa khu vực phục vụ sau onboarding ở màn `TechnicianServiceAreasScreen` (hồ sơ → Khu vực phục vụ), `GET/PUT /technicians/me/service-areas`, dùng lại bộ chọn tỉnh và quận của onboarding.
 
+### Phía kỹ thuật viên theo buổi (08/10/2026, nhánh `feat/technician-sessions`)
+
+- `utils/booking-session.ts`: nhãn buổi (sáng 8-12, chiều 13-18, "Tới ngay") và `canDepartNow`. Màn đơn của thợ hiện lịch hẹn theo buổi, ghi chú của khách, nút Bắt đầu di chuyển chỉ bật từ `departAvailableAt` (1 giờ trước giờ hẹn).
+- `hooks/useTechnicianLocationPing.ts` (gắn ở `TechnicianNavigator`): khi app đang mở và đã có quyền vị trí, gửi GPS mỗi 5 phút (`PATCH /technicians/me/location`), không tự hỏi quyền. Bán kính 1-40 km.
+
+### Các bước của thợ trong đơn (08/10/2026, nhánh `feat/technician-order-steps`)
+
+- Màn đơn của thợ: "Check-in và chụp ảnh" kiểm GPS rồi mở camera chụp sản phẩm; không còn nút "Bắt đầu sửa chữa" (backend tự chuyển, màn hiện "Đơn đang chuyển sang sửa chữa" + Tải lại); "Hoàn thành: chụp ảnh sau sửa" trước khi gửi nghiệm thu. Ảnh đơn chỉ chụp bằng camera (bỏ nút chọn từ thư viện).
+- Thẻ "Cần thay đổi thợ" sau check-in: nhập lý do, tạo support case `technician_replacement` (khẩn).
+
+### Chứng chỉ khi đăng ký thợ (08/10/2026, nhánh `feat/technician-certificates`)
+
+- Màn Xác minh danh tính (`TechnicianKycScreen`): phần "Chứng chỉ nghề" không bắt buộc, tối đa 5 ảnh, ghi chú "bản đã công chứng"; gửi kèm hồ sơ với `documentType: certificate`.
+- Sau khi nộp và ở trạng thái chờ duyệt (cả màn onboarding): "Vui lòng đến trụ sở trong thời gian sớm nhất để tiến hành xác minh thông tin và bắt đầu công việc." (`OFFICE_VISIT_NOTE`); bỏ câu hứa duyệt trong 24 giờ.
+
 ### Đăng nhập Google
 
 Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng `WebBrowser.openAuthSessionAsync`, nhận mã sống 60 giây rồi đổi ở `/auth/google/exchange`. App không cần Google client id.
@@ -174,6 +189,9 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-09 00:17 (UTC+7) | ToanAltF4 | feat/technician-certificates | Đăng ký thợ: chứng chỉ không bắt buộc (bản công chứng), câu nhắc đến trụ sở sau khi nộp hồ sơ.
+- 2026-10-09 00:08 (UTC+7) | ToanAltF4 | feat/technician-order-steps | Thợ: check-in mở camera chụp sản phẩm, bỏ nút bắt đầu sửa, hoàn thành kèm ảnh, chỉ dùng camera, nút cần thay đổi thợ.
+- 2026-10-08 23:43 (UTC+7) | ToanAltF4 | feat/technician-sessions | Thợ: lịch hẹn theo buổi, ghi chú khách, nút xuất phát theo giờ cho phép, gửi GPS mỗi 5 phút, bán kính 40 km.
 - 2026-10-08 21:49 (UTC+7) | ToanAltF4 | feat/customer-extend-matching-and-tech-areas | Khách gia hạn thời gian chờ thợ; thợ sửa khu vực phục vụ sau onboarding.
 - 2026-10-07 22:05 (UTC+7) | ToanAltF4 | fix/technician-quote-status-label | Trạng thái báo giá hiện bằng chữ ở màn của kỹ thuật viên, dùng chung utils/quote-status.ts.
 - 2026-10-07 19:31 (UTC+7) | ToanAltF4 | fix/no-fake-data-and-po-decisions | Ghi việc gỡ dữ liệu giả, ảnh đại diện kỹ thuật viên, BRX-064 và thông báo mới; bỏ rủi ro ảnh file:// đã sửa

@@ -13,7 +13,8 @@ export type SupportCaseType =
   | 'quality'
   | 'pricing_dispute'
   | 'conduct'
-  | 'other';
+  | 'other'
+  | 'technician_replacement';
 
 export type SupportCaseStatus = 'open' | 'in_review' | 'resolved' | 'rejected';
 
@@ -73,6 +74,7 @@ const CASE_TYPES = new Set<SupportCaseType>([
   'pricing_dispute',
   'conduct',
   'other',
+  'technician_replacement',
 ]);
 
 const CASE_STATUSES = new Set<SupportCaseStatus>([

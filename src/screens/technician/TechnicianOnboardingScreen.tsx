@@ -769,7 +769,7 @@ export default function TechnicianOnboardingScreen() {
         'time-outline',
         colors.warning,
         'Đang chờ xét duyệt',
-        'Hồ sơ của bạn đã được tiếp nhận. Quản trị viên sẽ xem xét trong vòng 24 giờ làm việc.',
+        'Hồ sơ của bạn đã được tiếp nhận. Vui lòng đến trụ sở trong thời gian sớm nhất để tiến hành xác minh thông tin và bắt đầu công việc.',
         <TouchableOpacity style={styles.primaryBtn} onPress={() => void refreshStatus()}>
           <Text style={styles.primaryBtnText}>Kiểm tra lại trạng thái</Text>
         </TouchableOpacity>,

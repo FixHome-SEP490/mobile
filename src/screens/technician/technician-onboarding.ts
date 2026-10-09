@@ -17,7 +17,7 @@ export const ONBOARDING_STEPS = [
   { id: 5, title: 'Gửi duyệt' },
 ] as const;
 
-export const SERVICE_RADIUS_OPTIONS_KM = [5, 10, 15, 20, 30, 50];
+export const SERVICE_RADIUS_OPTIONS_KM = [5, 10, 15, 20, 30, 40];
 
 // ── Trạng thái hồ sơ ────────────────────────────────────────────────────
 //
