@@ -1,24 +1,21 @@
 import { useAppTheme } from '../../constants/theme';
+import { CUSTOMER_UI_ARTWORK } from '../../constants/customer-artwork';
 // src/screens/customer/CustomerHomeScreen.tsx
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { MessageCircle } from 'lucide-react-native';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  Pressable,
   TouchableOpacity,
-  TextInput,
   Image,
   StatusBar,
   FlatList,
   useWindowDimensions,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import {
-  Ionicons,
-  MaterialCommunityIcons,
-  FontAwesome5,
-} from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
@@ -29,160 +26,94 @@ import { bookingsApi } from '../../api/bookings.api';
 import { ordersApi } from '../../api/orders.api';
 import { homeResumeTarget, type HomeResumeItem } from './customer-bookings-history';
 import {
-  HOME_POPULAR_SERVICES_PAGE_SIZE,
   HOME_POPULAR_SERVICE_TARGETS,
-  chunkHomePopularServices,
-  getHomePopularPagerLayout,
-  getHomePopularPagerPage,
+  getHomePopularGridColumns,
 } from './customer-home-pager';
 import { orderDetailTarget } from './customer-order-detail';
 import { OTHER_SERVICE_CATEGORY_CODE } from './service-catalog';
+import ServiceArtwork from '../../components/customer/ServiceArtwork';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { useChatUnreadCount } from '../../hooks/useChatUnreadCount';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomSheetModal, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 
-interface ServiceItem {
-  id: string;
+interface PopularServiceItem {
+  code: string;
   name: string;
-  iconName: string;
-  iconType: 'ionic' | 'material' | 'fa5';
-  iconColor: string;
-  pedestalColor: string;
-  isHot?: boolean;
-  imageSource?: any;
   // Deep-link target on CustomerServices: categoryCode filters by the
-  // Backend's seeded category, query pre-fills the search box. At least
-  // one of the two should be set or the tile just opens the full list.
+  // Backend's seeded category; query pre-fills the existing server search.
   categoryCode?: string;
   query?: string;
 }
 
-const getPopularServices = (colors: any): ServiceItem[] => [
+const getPopularServices = (): PopularServiceItem[] => [
   {
-    ...HOME_POPULAR_SERVICE_TARGETS[0],
-    name: 'Vệ sinh\nmáy lạnh',
-    iconName: 'snowflake',
-    iconType: 'fa5',
-    iconColor: '#0284C7',
-    pedestalColor: '#E0F2FE',
-    imageSource: require('../../../assets/air-conditioner.png'),
+    code: 'VE_SINH_DIEU_HOA_1HP',
+    name: 'Vệ sinh máy lạnh',
+    categoryCode: HOME_POPULAR_SERVICE_TARGETS[0].categoryCode,
+    query: 'Vệ sinh máy lạnh',
   },
   {
-    ...HOME_POPULAR_SERVICE_TARGETS[1],
-    name: 'Sửa ống\nnước',
-    iconName: 'pipe-wrench',
-    iconType: 'material',
-    iconColor: '#0D9488',
-    pedestalColor: '#CCFBF1',
-    imageSource: require('../../../assets/water-pipeline.png'),
+    code: 'THAY_VOI_NUOC',
+    name: 'Thay vòi nước',
+    categoryCode: HOME_POPULAR_SERVICE_TARGETS[1].categoryCode,
+    query: 'Thay vòi nước',
   },
   {
-    ...HOME_POPULAR_SERVICE_TARGETS[2],
-    name: 'Lắp đặt hệ\nthống điện',
-    iconName: 'bolt',
-    iconType: 'fa5',
-    iconColor: '#EAB308',
-    pedestalColor: '#FEF9C3',
-    imageSource: require('../../../assets/voltage-cabinet.png'),
+    code: 'THAY_CONG_TAC_DIEN',
+    name: 'Thay công tắc điện',
+    categoryCode: HOME_POPULAR_SERVICE_TARGETS[2].categoryCode,
+    query: 'Thay công tắc điện',
   },
   {
-    ...HOME_POPULAR_SERVICE_TARGETS[3],
-    name: 'Thông nghẹt\ncống',
-    iconName: 'water-pump',
-    iconType: 'material',
-    iconColor: '#4F46E5',
-    pedestalColor: '#E0E7FF',
-    imageSource: require('../../../assets/unclogging-drains.png'),
+    code: 'SUA_RO_RI_NUOC',
+    name: 'Sửa rò rỉ nước',
+    categoryCode: HOME_POPULAR_SERVICE_TARGETS[3].categoryCode,
+    query: 'Sửa rò rỉ nước',
   },
   {
-    ...HOME_POPULAR_SERVICE_TARGETS[4],
-    name: 'Sửa Tivi',
-    iconName: 'tv',
-    iconType: 'material',
-    iconColor: colors.primary,
-    pedestalColor: '#DBEAFE',
-    imageSource: require('../../../assets/tv-repair.png'),
+    code: 'LAP_TV_GIA_TREO',
+    name: 'Lắp TV treo tường',
+    query: 'Lắp TV treo tường',
   },
   {
-    ...HOME_POPULAR_SERVICE_TARGETS[5],
-    name: 'Điện tử\ngia dụng',
-    iconName: 'tools',
-    iconType: 'fa5',
-    iconColor: '#059669',
-    pedestalColor: '#D1FAE5',
-    imageSource: require('../../../assets/home-appliance-repair.png'),
+    code: 'SUA_BEP_TU',
+    name: 'Sửa bếp từ',
+    categoryCode: HOME_POPULAR_SERVICE_TARGETS[5].categoryCode,
+    query: 'Sửa bếp từ',
   },
   {
-    ...HOME_POPULAR_SERVICE_TARGETS[6],
-    name: 'Sửa máy\ngiặt',
-    iconName: 'washing-machine',
-    iconType: 'material',
-    iconColor: '#7C3AED',
-    pedestalColor: '#EDE9FE',
-    imageSource: require('../../../assets/washing-machine.png'),
+    code: 'SUA_MAY_GIAT',
+    name: 'Sửa máy giặt',
+    categoryCode: HOME_POPULAR_SERVICE_TARGETS[6].categoryCode,
+    query: 'Sửa máy giặt',
   },
   {
-    ...HOME_POPULAR_SERVICE_TARGETS[7],
-    name: 'Sửa tủ\nlạnh',
-    iconName: 'fridge-outline',
-    iconType: 'material',
-    iconColor: '#EA580C',
-    pedestalColor: '#FFEDD5',
-    imageSource: require('../../../assets/refrigerator.png'),
+    code: 'SUA_TU_LANH',
+    name: 'Sửa tủ lạnh',
+    categoryCode: HOME_POPULAR_SERVICE_TARGETS[7].categoryCode,
+    query: 'Sửa tủ lạnh',
   },
 ];
 
 export default function CustomerHomeScreen() {
-  const { colors, spacing, fontSize, isDark } = useAppTheme();
-  const { width: windowWidth } = useWindowDimensions();
-  const pagerLayout = useMemo(
-    () => getHomePopularPagerLayout(windowWidth),
-    [windowWidth],
-  );
-  const styles = getStyles(colors, spacing, fontSize, pagerLayout.pageWidth);
-  const POPULAR_SERVICES = useMemo(() => getPopularServices(colors), [colors]);
+  const { colors, spacing, fontSize } = useAppTheme();
+  const { width: windowWidth, fontScale } = useWindowDimensions();
+  const popularColumns = getHomePopularGridColumns(windowWidth, fontScale);
+  const heroArtWidth = Math.min(210, Math.max(154, Math.round(windowWidth * 0.46)));
+  const popularArtSize = popularColumns === 4
+    ? Math.min(60, Math.max(50, Math.round(windowWidth / 6.4)))
+    : 68;
+  const stackHero = fontScale >= 1.2;
+  const styles = getStyles(colors, spacing, fontSize, fontScale, windowWidth, popularColumns, heroArtWidth);
+  const POPULAR_SERVICES = useMemo(() => getPopularServices(), []);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const handleScroll = useScrollHideTabBar();
   const chatUnread = useChatUnreadCount();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeServicePage, setActiveServicePage] = useState(0);
-  const popularPagerRef = useRef<FlatList<ServiceItem[]>>(null);
-  const popularServicePages = useMemo(
-    () => chunkHomePopularServices(POPULAR_SERVICES, HOME_POPULAR_SERVICES_PAGE_SIZE),
-    [POPULAR_SERVICES],
-  );
 
-  const handleServicePageMomentumEnd = useCallback(
-    (event: { nativeEvent: { contentOffset: { x: number } } }) => {
-      setActiveServicePage((previous) => {
-        const next = getHomePopularPagerPage(
-          event.nativeEvent.contentOffset.x,
-          windowWidth,
-          popularServicePages.length,
-        );
-        return next === previous ? previous : next;
-      });
-    },
-    [popularServicePages.length, windowWidth],
-  );
-
-  useEffect(() => {
-    if (popularServicePages.length === 0) return;
-    const clampedPage = Math.min(
-      Math.max(activeServicePage, 0),
-      popularServicePages.length - 1,
-    );
-    popularPagerRef.current?.scrollToOffset({
-      offset: clampedPage * windowWidth,
-      animated: false,
-    });
-  }, [windowWidth, activeServicePage, popularServicePages.length]);
-
-  const handleSearch = () => {
-    navigation.navigate('CustomerServices', { query: searchQuery });
-  };
+  const handleSearch = () => navigation.navigate('CustomerServices');
 
   const { user, isAuthenticated } = useAuthStore();
   const [selectedAddress, setSelectedAddress] = useState('Đang tải địa chỉ...');
@@ -270,26 +201,7 @@ export default function CustomerHomeScreen() {
   }, [navigation, resume]);
 
 
-  const renderServiceIcon = (item: ServiceItem) => {
-    if (item.imageSource) {
-      return (
-        <Image 
-          source={item.imageSource} 
-          style={{ width: 88, height: 88 }} 
-          resizeMode="contain" 
-        />
-      );
-    }
-    if (item.iconType === 'fa5') {
-      return <FontAwesome5 name={item.iconName} size={26} color={item.iconColor} />;
-    }
-    if (item.iconType === 'material') {
-      return <MaterialCommunityIcons name={item.iconName as any} size={28} color={item.iconColor} />;
-    }
-    return <Ionicons name={item.iconName as any} size={28} color={item.iconColor} />;
-  };
-
-  const handleServicePress = (service: ServiceItem) => {
+  const handleServicePress = (service: PopularServiceItem) => {
     Haptics.selectionAsync();
     navigation.navigate('CustomerServices', {
       categoryCode: service.categoryCode,
@@ -297,38 +209,17 @@ export default function CustomerHomeScreen() {
     });
   };
 
+  const greetUser = () => {
+    const hour = new Date().getHours();
+    const name = user?.fullName?.split(' ').pop() ?? '';
+    if (hour < 12) return name ? `Chào buổi sáng, ${name}` : 'Chào buổi sáng';
+    if (hour < 18) return name ? `Chào buổi chiều, ${name}` : 'Chào buổi chiều';
+    return name ? `Chào buổi tối, ${name}` : 'Chào buổi tối';
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
-
-      {/* 1. Header Brand & Messages */}
-      <View style={styles.header}>
-        <View style={styles.brandRow}>
-          <Image source={require('../../../assets/icon.png')} style={styles.brandLogo} />
-          <Text style={styles.brandName}>FixHome</Text>
-        </View>
-
-        <View style={styles.headerActions}>
-          {/* Messages */}
-          <TouchableOpacity
-            style={styles.headerIconBtn}
-            onPress={() => navigation.navigate('ChatList')}
-            activeOpacity={0.8}
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-            accessibilityRole="button"
-            accessibilityLabel={chatUnread > 0 ? `Tin nhắn, ${chatUnread} tin chưa đọc` : 'Tin nhắn'}
-          >
-            <Ionicons name="chatbubble-ellipses-outline" size={22} />
-            {chatUnread > 0 && (
-              <View style={styles.notificationBadge}>
-                <Text style={styles.notificationBadgeText}>
-                  {chatUnread > 9 ? '9+' : chatUnread}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
+      <StatusBar barStyle="light-content" backgroundColor="#1D4ED8" />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -336,44 +227,102 @@ export default function CustomerHomeScreen() {
         onScroll={handleScroll}
         scrollEventThrottle={16}
       >
-
-        {/* 2. Hero Search Banner (Xanh Dương Royal Gradient - Giống Hình 1 Vua Thợ) */}
+        {/* One continuous blue gradient carries the brand bar into the hero. */}
         <LinearGradient
-          colors={[colors.primaryDark, colors.primary, colors.primary]}
+          colors={['#1D4ED8', '#2563EB', '#3B82F6']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.heroCard}
+          style={styles.heroGradient}
         >
-          {/* Subtle Decorative Circles */}
-          <View style={styles.decorCircle1} />
-          <View style={styles.decorCircle2} />
-
-          {/* Pill Search Input */}
-          <View style={styles.searchBar}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Điện, nước, máy lạnh, thông cống..."
-              placeholderTextColor={colors.muted}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onSubmitEditing={handleSearch}
-              returnKeyType="search"
-            />
-            <TouchableOpacity
-              style={styles.searchBtn}
-              onPress={handleSearch}
-              activeOpacity={0.85}
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              accessibilityRole="button"
-              accessibilityLabel="Tìm kiếm dịch vụ"
-            >
-              <Ionicons name="search" size={18} color={colors.surface} />
-            </TouchableOpacity>
+          <View style={styles.topBar}>
+            <View style={styles.brandRow}>
+              <View style={styles.brandIcon}>
+                <Image source={require('../../../assets/icon.png')} style={styles.brandIconImg} />
+              </View>
+              <Text style={styles.brandName}>FixHome</Text>
+            </View>
+            <View style={styles.topBarActions}>
+              <TouchableOpacity
+                style={styles.topBarIconBtn}
+                onPress={() => navigation.navigate('ChatList')}
+                activeOpacity={0.8}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel={chatUnread > 0 ? `Tin nhắn, ${chatUnread} tin chưa đọc` : 'Tin nhắn'}
+              >
+                <MessageCircle
+                  size={22}
+                  color="rgba(255,255,255,0.96)"
+                  strokeWidth={2.1}
+                  testID="home-chat-message-icon"
+                  accessible={false}
+                />
+                {chatUnread > 0 && (
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationBadgeText}>{chatUnread > 9 ? '9+' : chatUnread}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
-          
+
+          <View style={styles.hero}>
+            <Text accessibilityRole="header" style={styles.heroGreeting} accessibilityLabel={greetUser()}>
+              {greetUser()}
+            </Text>
+            <TouchableOpacity
+              style={styles.addressStrip}
+              onPress={() => addressSheetRef.current?.present()}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={`Địa chỉ: ${selectedAddress}`}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="location-outline" size={15} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.addressText} numberOfLines={1}>{selectedAddress}</Text>
+              <Ionicons name="chevron-down" size={14} color="rgba(255,255,255,0.8)" />
+            </TouchableOpacity>
+
+            <View style={[styles.heroHeadlineRow, stackHero && styles.heroHeadlineStack]}>
+              <View style={styles.heroHeadlineCopy} testID="home-hero-headline-copy">
+                <Text accessibilityRole="header" style={styles.heroHeadline} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
+                  Nhà cần sửa.
+                </Text>
+                <Text style={[styles.heroHeadline, styles.heroHeadlineAccent]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
+                  Mình có nhau.
+                </Text>
+              </View>
+              <Image
+                source={CUSTOMER_UI_ARTWORK.homeHero}
+                style={[styles.heroSceneArt, stackHero && styles.heroSceneArtStacked]}
+                resizeMode="contain"
+                accessible={false}
+                testID="home-hero-art"
+              />
+            </View>
+          </View>
         </LinearGradient>
 
-        {/* Active-order resume: one concise card only with real active data */}
+        {/* 3. Overlapping search bar — floats below hero */}
+        <View style={styles.searchCard}>
+          <Pressable
+            style={styles.searchBar}
+            onPress={handleSearch}
+            accessibilityRole="button"
+            accessibilityLabel="Tìm dịch vụ tại nhà"
+            accessibilityHint="Mở danh mục dịch vụ. Chạm vào ô tìm kiếm ở trang tiếp theo để nhập từ khóa."
+          >
+            <Ionicons name="search" size={20} color={colors.primaryStrong} />
+            <Text style={styles.searchPlaceholder}>Nhà bạn cần sửa gì?</Text>
+            <View
+              style={styles.searchBtn}
+            >
+              <Ionicons name="arrow-forward" size={19} color={colors.surface} />
+            </View>
+          </Pressable>
+        </View>
+
+        {/* 4. Active-order resume: one concise card only with real active data */}
         {!!resume && (
           <TouchableOpacity
             style={styles.resumeCard}
@@ -382,134 +331,72 @@ export default function CustomerHomeScreen() {
             accessibilityRole="button"
             accessibilityLabel={`${resume.title}. ${resume.detail}`}
           >
-            <View style={styles.resumeIconBox}>
-              <Ionicons name="time-outline" size={22} color={colors.surface} />
-            </View>
+            <View style={styles.resumePulseDot} />
             <View style={styles.resumeTextBox}>
               <Text style={styles.resumeTitle}>{resume.title}</Text>
               <Text style={styles.resumeDetail} numberOfLines={1}>{resume.detail}</Text>
             </View>
             <View style={styles.resumeCta}>
               <Text style={styles.resumeCtaText}>Tiếp tục</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.surface} />
+              <Ionicons name="open-outline" size={17} color={colors.primaryStrong} />
             </View>
           </TouchableOpacity>
         )}
 
-        {/* 5. Hero Feature Cards (3 Thẻ Lớn: Đặt thợ, AI Chẩn đoán, FixHome Mall) */}
-        <View style={styles.featureCardsRow}>
-          {/* Card 1: Đặt thợ */}
-          <TouchableOpacity
-            style={[styles.featureCard, { backgroundColor: '#E0F2FE' }]}
-            activeOpacity={0.85}
-            onPress={() => navigation.navigate('CustomerServices')}
-          >
-            <View style={styles.featureCardBadge}>
-              <Text style={styles.featureCardBadgeText}>Kỹ thuật viên gần bạn</Text>
-            </View>
-            <Text style={styles.featureCardTitle}>Đặt lịch</Text>
-            <Text style={styles.featureCardDesc}>Có mặt 15p</Text>
-            <View style={styles.featureCardIconBox}>
-              <FontAwesome5 name="user-cog" size={32} color="#0284C7" />
-            </View>
-          </TouchableOpacity>
-
-          {/* Card 2: AI Chẩn đoán */}
-          <TouchableOpacity
-            style={[styles.featureCard, { backgroundColor: '#F3E8FF' }]}
-            activeOpacity={0.85}
-            onPress={() => navigation.navigate('CustomerAIDiagnosis')}
-          >
-            <View style={[styles.featureCardBadge, { backgroundColor: '#7C3AED' }]}>
-              <Text style={styles.featureCardBadgeText}>AI 30s</Text>
-            </View>
-            <Text style={styles.featureCardTitle}>AI Soi lỗi</Text>
-            <Text style={styles.featureCardDesc}>Báo giá ngay</Text>
-            <View style={styles.featureCardIconBox}>
-              <MaterialCommunityIcons name="robot-happy" size={36} color="#7C3AED" />
-            </View>
-          </TouchableOpacity>
-
-        </View>
-
-        {/* 6. Section "✨ Dịch vụ phổ biến" (Lưới Icon 3D Isometric chuẩn Hình 1) */}
+        {/* 5. Service section heading */}
         <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Ionicons name="sparkles" size={18} color={colors.primary} />
-            <Text style={styles.sectionTitle}>Dịch vụ phổ biến</Text>
-          </View>
+          <Text style={styles.sectionTitle}>Dịch vụ cho nhà bạn</Text>
           <TouchableOpacity
             onPress={() => navigation.navigate('CustomerServices')}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Xem tất cả dịch vụ"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Text style={styles.viewAllText}>Xem tất cả &gt;</Text>
+            <View style={styles.viewAllRow}>
+              <Text style={styles.viewAllText}>Xem tất cả</Text>
+            </View>
           </TouchableOpacity>
         </View>
 
-        {/* Popular-services pager: 2 pages x 4 tiles */}
-        <FlatList
-          ref={popularPagerRef}
-          data={popularServicePages}
-          keyExtractor={(_, index) => `popular-services-page-${index}`}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          snapToInterval={windowWidth}
-          snapToAlignment="start"
-          decelerationRate="fast"
-          disableIntervalMomentum
-          getItemLayout={(_, index) => ({
-            length: windowWidth,
-            offset: windowWidth * index,
-            index,
-          })}
-          onMomentumScrollEnd={handleServicePageMomentumEnd}
-          testID="popular-services-pager"
-          renderItem={({ item: page }) => (
-            <View style={styles.servicesPage}>
-              {page.map((service) => (
-                <TouchableOpacity
-                  key={service.id}
-                  style={styles.serviceItem}
-                  onPress={() => handleServicePress(service)}
-                  activeOpacity={0.75}
-                >
-                  {/* 3D Isometric Pedestal Effect */}
-                  <View style={styles.pedestalOuter}>
-                    <View
-                      style={[
-                        styles.pedestalPlate,
-                        { backgroundColor: service.pedestalColor },
-                      ]}
-                    >
-                      {renderServiceIcon(service)}
-                    </View>
-                    <View style={styles.pedestalBaseShadow} />
-                    {service.isHot && (
-                      <View style={styles.hotBadge}>
-                        <Text style={styles.hotBadgeText}>HOT</Text>
-                      </View>
-                    )}
-                  </View>
-
-                  <Text style={styles.serviceName}>{service.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        />
-
-        {/* Pagination indicator reflects the actual page */}
-        <View style={styles.paginationIndicator}>
-          {popularServicePages.map((_, index) => (
-            <View
-              key={`popular-services-dot-${index}`}
-              testID={`popular-services-dot-${index}`}
-              style={index === activeServicePage ? styles.activeDotPill : styles.inactiveDot}
-            />
+        {/* Eight production-linked services remain visible in the same compact grid. */}
+        <View style={styles.servicesGrid} testID="popular-services-grid">
+          {POPULAR_SERVICES.map((service) => (
+            <TouchableOpacity
+              key={service.code}
+              style={[styles.serviceItem, { width: `${100 / popularColumns}%` }]}
+              onPress={() => handleServicePress(service)}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel={service.name}
+              accessibilityHint={`Tìm ${service.name} trong danh mục`}
+            >
+              <ServiceArtwork code={service.code} name={service.name} size={popularArtSize} />
+              <Text style={styles.serviceName} numberOfLines={2}>{service.name}</Text>
+            </TouchableOpacity>
           ))}
         </View>
 
+        {/* 7. AI entry — Codex "Chưa biết bắt đầu từ đâu?" */}
+        <TouchableOpacity
+          style={styles.aiEntry}
+          activeOpacity={0.8}
+          onPress={() => navigation.navigate('CustomerAIDiagnosis')}
+          accessibilityRole="button"
+          accessibilityLabel="Hỏi FixHome AI"
+          accessibilityHint="Mở chẩn đoán sơ bộ bằng AI"
+        >
+          <View style={styles.aiIconBox}>
+            <Image source={CUSTOMER_UI_ARTWORK.aiHelper} style={{ width: 36, height: 36 }} resizeMode="contain" accessible={false} testID="home-ai-art" />
+          </View>
+          <View style={styles.aiCopy}>
+            <Text style={styles.aiTitle}>Chưa biết bắt đầu từ đâu?</Text>
+            <Text style={styles.aiSubtitle}>FixHome AI gợi ý, bạn quyết định.</Text>
+          </View>
+          <Ionicons name="open-outline" size={19} color={colors.muted} />
+        </TouchableOpacity>
+
+        {/* 8. "Other" service entry */}
         <TouchableOpacity
           style={styles.otherServiceCard}
           activeOpacity={0.8}
@@ -523,71 +410,23 @@ export default function CustomerHomeScreen() {
           accessibilityLabel="Đặt dịch vụ khác"
         >
           <View style={styles.otherServiceIcon}>
-            <Ionicons name="ellipsis-horizontal" size={24} color={colors.primary} />
+            <Ionicons name="ellipsis-horizontal" size={24} color={colors.primaryStrong} />
           </View>
           <View style={styles.otherServiceCopy}>
             <Text style={styles.otherServiceTitle}>Không thấy dịch vụ bạn cần?</Text>
             <Text style={styles.otherServiceDesc}>
-              Chọn “Khác” và mô tả công việc để gửi yêu cầu.
+              Chọn &quot;Khác&quot; và mô tả công việc để gửi yêu cầu.
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={colors.muted} />
         </TouchableOpacity>
 
-        {/* 7. Promotional Campaign Banner (Chân trang phong cách Hình 1 & 2) */}
-        <TouchableOpacity
-          style={styles.promoBannerContainer}
-          activeOpacity={0.9}
-          onPress={() => navigation.navigate('CustomerServices')}
-        >
-          <LinearGradient
-            colors={[colors.text, '#1E293B', colors.primary]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.promoBanner}
-          >
-            <View style={styles.promoContent}>
-              <View style={styles.promoTag}>
-                <Text style={styles.promoTagText}>ĐẶT LỊCH NGAY</Text>
-              </View>
-              <Text style={styles.promoTitle}>Khám phá dịch vụ FixHome</Text>
-              <Text style={styles.promoSubtitle}>Xem dịch vụ và thông tin giá đang có trên hệ thống</Text>
-              <View style={styles.promoButton}>
-                <Text style={styles.promoButtonText}>Xem dịch vụ &gt;</Text>
-              </View>
-            </View>
-
-            <View style={styles.promoIllustration}>
-              <MaterialCommunityIcons name="tools" size={48} color="#60A5FA" />
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
-
-        {/* 8. Cam kết chất lượng FixHome */}
-        <View style={styles.trustSection}>
-          <View style={styles.trustItem}>
-            <Ionicons name="shield-checkmark-outline" size={20} color={colors.primary} />
-            <Text style={styles.trustTitle}>Hồ sơ được duyệt</Text>
-            <Text style={styles.trustDesc}>Xác minh danh tính trước khi nhận việc</Text>
-          </View>
-          <View style={styles.trustDivider} />
-          <View style={styles.trustItem}>
-            <Ionicons name="pricetag-outline" size={20} color={colors.primary} />
-            <Text style={styles.trustTitle}>Giá minh bạch</Text>
-            <Text style={styles.trustDesc}>Báo giá trước khi làm</Text>
-          </View>
-          <View style={styles.trustDivider} />
-          <View style={styles.trustItem}>
-            <Ionicons name="ribbon-outline" size={20} color={colors.primary} />
-            <Text style={styles.trustTitle}>Theo dõi rõ ràng</Text>
-            <Text style={styles.trustDesc}>Trạng thái theo từng đơn</Text>
-          </View>
-        </View>
+        {/* 9. Restrained, source-honest info */}
 
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* Address Selection Modal */}
+      {/* Address Selection Bottom Sheet */}
       <BottomSheetModal
         ref={addressSheetRef}
         snapPoints={snapPoints}
@@ -597,7 +436,7 @@ export default function CustomerHomeScreen() {
       >
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Chọn địa chỉ giao hàng</Text>
+            <Text style={styles.modalTitle}>Chọn địa chỉ</Text>
             <TouchableOpacity
               onPress={closeAddressSheet}
               style={styles.closeBtn}
@@ -655,7 +494,18 @@ export default function CustomerHomeScreen() {
   );
 }
 
-const getStyles = (colors: any, spacing: any, fontSize: any, pagerWidth: number) => StyleSheet.create({
+const HERO_BG = '#1D4ED8'; // brand[700] — deep blue hero, matches Codex
+const HERO_ACCENT = '#DBEAFE'; // high-contrast light brand accent over the blue hero
+
+const getStyles = (
+  colors: any,
+  spacing: any,
+  fontSize: any,
+  fontScale: number,
+  windowWidth: number,
+  popularColumns: number,
+  heroArtWidth: number,
+) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -664,385 +514,361 @@ const getStyles = (colors: any, spacing: any, fontSize: any, pagerWidth: number)
     paddingBottom: 20,
   },
 
-  // Brand
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
+  // 1. Top bar (lives inside hero blue bg)
+  heroGradient: {
+    width: '100%',
+    paddingBottom: 22,
   },
-  brandLogo: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-  },
-  brandName: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: colors.text,
-  },
-
-  // 1. Header
-  header: {
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    backgroundColor: 'transparent',
   },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatarWrapper: {
-    position: 'relative',
-  },
-  avatarImage: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.primarySoft,
-  },
-  onlineBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: colors.success,
-    borderWidth: 2,
-    borderColor: colors.surface,
-  },
-  userTextContainer: {
-    marginLeft: 10,
-  },
-  greetingText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  userNameText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  headerActions: {
+  brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
   },
-  roleSwitchBtn: {
+  brandIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  brandIconImg: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+  },
+  brandName: {
+    fontSize: 21,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+  topBarActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.primarySoft,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
+    gap: 6,
   },
-  roleSwitchText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  headerIconBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.border,
+  topBarIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
-  },
-  headerIconBtnAuth: {
-    backgroundColor: colors.primaryTint,
   },
   notificationBadge: {
     position: 'absolute',
-    top: 4,
-    right: 4,
+    top: 6,
+    right: 6,
     backgroundColor: colors.error,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: colors.surface,
+    borderColor: HERO_BG,
   },
   notificationBadgeText: {
-    color: colors.surface,
-    fontSize: 9,
+    color: '#FFFFFF',
+    fontSize: 8,
     fontWeight: 'bold',
   },
 
-  // 2. Hero Search Card
-  heroCard: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 20,
-    padding: 16,
+  // 2. Blue hero — Codex canonical
+  hero: {
+    backgroundColor: 'transparent',
+    paddingHorizontal: 18,
+    paddingTop: 2,
+    paddingBottom: 0,
+  },
+  heroGreeting: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.75)',
+    marginBottom: 1,
+    letterSpacing: 0.2,
+  },
+  addressStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    minHeight: 30,
+    marginBottom: 8,
+  },
+  addressText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.9)',
+    flex: 1,
+  },
+  heroHeadlineRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
     position: 'relative',
-    overflow: 'hidden',
-    shadowColor: colors.primaryDark,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
+    minHeight: Math.round(heroArtWidth * 0.78),
   },
-  decorCircle1: {
-    position: 'absolute',
-    right: -20,
-    top: -30,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  heroHeadlineStack: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    justifyContent: 'flex-start',
+    minHeight: 0,
   },
-  decorCircle2: {
+  heroHeadlineCopy: {
+    width: '100%',
+    position: 'relative',
+    zIndex: 2,
+  },
+  heroEyebrow: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    color: 'rgba(255,255,255,0.65)',
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  heroHeadline: {
+    fontSize: windowWidth < 390 ? 25 : 29,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    lineHeight: windowWidth < 390 ? 31 : 35,
+    letterSpacing: -0.7,
+    includeFontPadding: false,
+    textShadowColor: 'rgba(15,23,42,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  heroHeadlineAccent: {
+    color: HERO_ACCENT,
+  },
+  heroSubtitle: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: 'rgba(255,255,255,0.75)',
+  },
+  heroSceneArt: {
     position: 'absolute',
-    left: -40,
-    bottom: -40,
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    right: -6,
+    bottom: 0,
+    width: heroArtWidth,
+    height: Math.round(heroArtWidth * 0.78),
+    marginTop: 0,
+    marginBottom: 0,
+    flexShrink: 0,
+    alignSelf: 'flex-end',
+    zIndex: 0,
+  },
+  heroSceneArtStacked: {
+    position: 'relative',
+    right: 0,
+    bottom: 0,
+    alignSelf: 'flex-end',
+    marginTop: 0,
+    marginBottom: 0,
+  },
+
+  // 3. Overlapping search card
+  searchCard: {
+    paddingHorizontal: 14,
+    marginTop: -18,
+    marginBottom: 4,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: 25,
-    paddingLeft: 14,
-    paddingRight: 6,
-    paddingVertical: 5,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minHeight: 56,
+    paddingHorizontal: 14,
+    gap: 10,
+    // Card-like elevation
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
-  searchInput: {
+  searchPlaceholder: {
     flex: 1,
-    fontSize: 13,
-    color: colors.text,
-    paddingVertical: 4,
+    fontSize: 14,
+    color: colors.textSecondary,
+    paddingVertical: 10,
   },
   searchBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: colors.primary,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: colors.primaryStrong,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
-  // 5. Feature Cards Row
+  // 4. Resume card (real Booking/Order data only)
   resumeCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 16,
+    marginHorizontal: 14,
     marginTop: 12,
     borderRadius: 14,
-    padding: 12,
-    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primaryStrong,
     gap: 10,
   },
-  resumeIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  resumePulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primaryStrong,
+    flexShrink: 0,
   },
   resumeTextBox: {
     flex: 1,
   },
   resumeTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
-    color: colors.surface,
+    color: colors.text,
   },
   resumeDetail: {
     fontSize: 12,
-    color: colors.surface,
-    opacity: 0.9,
+    lineHeight: 17,
+    color: colors.textSecondary,
+    marginTop: 1,
   },
   resumeCta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
+    flexShrink: 0,
   },
   resumeCtaText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
-    color: colors.surface,
-  },
-  featureCardsRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 10,
-    marginTop: 4,
-  },
-  featureCard: {
-    flex: 1,
-    borderRadius: 16,
-    padding: 10,
-    position: 'relative',
-    height: 120,
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.03)',
-  },
-  featureCardBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#0284C7',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  featureCardBadgeText: {
-    color: colors.surface,
-    fontSize: 9,
-    fontWeight: 'bold',
-  },
-  featureCardTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.text,
-    marginTop: 4,
-  },
-  featureCardDesc: {
-    fontSize: 11,
-    color: '#475569',
-  },
-  featureCardIconBox: {
-    alignSelf: 'flex-end',
-    marginTop: -8,
+    color: colors.primaryStrong,
   },
 
-  // 6. Popular Services Grid (Isometric Pedestal)
+  // 5. Section header
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    marginTop: 18,
-    marginBottom: 10,
-  },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    marginTop: 14,
+    marginBottom: 4,
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: fontSize.lg,
+    lineHeight: 26,
     fontWeight: '700',
     color: colors.text,
+    letterSpacing: -0.4,
+  },
+  viewAllRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    minHeight: 44,
   },
   viewAllText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    color: colors.primary,
-  },
-  servicesPage: {
-    width: pagerWidth,
-    flexDirection: 'row',
-    paddingHorizontal: 12,
-  },
-  serviceItem: {
-    width: (pagerWidth - 24) / 4,
-    alignItems: 'center',
-    marginVertical: 8,
-    paddingHorizontal: 2,
-  },
-  pedestalOuter: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    marginBottom: 6,
-  },
-  pedestalPlate: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.surface,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 3,
-    zIndex: 2,
-  },
-  pedestalBaseShadow: {
-    position: 'absolute',
-    bottom: -4,
-    width: 50,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#CBD5E1',
-    opacity: 0.5,
-    zIndex: 1,
-  },
-  hotBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    backgroundColor: colors.error,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 6,
-    zIndex: 3,
-    borderWidth: 1,
-    borderColor: colors.surface,
-  },
-  hotBadgeText: {
-    color: colors.surface,
-    fontSize: 8,
-    fontWeight: 'bold',
-  },
-  serviceName: {
-    fontSize: 11,
-    textAlign: 'center',
-    fontWeight: '600',
-    color: '#1E293B',
-    lineHeight: 15,
-  },
-  paginationIndicator: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 6,
-    marginBottom: 14,
-  },
-  activeDotPill: {
-    width: 24,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: colors.primary,
-  },
-  inactiveDot: {
-    width: 6,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: '#CBD5E1',
+    color: colors.primaryStrong,
   },
 
+  // 6. Popular services — all eight real choices in a responsive grid
+  servicesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 12,
+    alignItems: 'stretch',
+  },
+  serviceItem: {
+    width: `${100 / popularColumns}%`,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingVertical: 4,
+    paddingHorizontal: 3,
+    minHeight: 96,
+  },
+  serviceName: {
+    fontSize: fontScale >= 1.2 ? 12 : 11,
+    lineHeight: fontScale >= 1.2 ? 18 : 15,
+    textAlign: 'center',
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 2,
+    paddingHorizontal: 2,
+  },
+  serviceExploreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  serviceExploreText: {
+    fontSize: 10,
+    color: colors.primaryStrong,
+    fontWeight: '500',
+  },
+
+  // 7. AI entry — Codex style border-top/border-bottom separator
+  aiEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: 16,
+    marginVertical: 12,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderTopColor: colors.border,
+    borderBottomColor: colors.border,
+    paddingVertical: 16,
+    backgroundColor: 'transparent',
+  },
+  aiIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  aiCopy: { flex: 1 },
+  aiTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 3,
+  },
+  aiSubtitle: {
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
+
+  // 8. Other service card
   otherServiceCard: {
     marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 16,
+    marginTop: 4,
+    marginBottom: 8,
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderRadius: 16,
@@ -1065,106 +891,19 @@ const getStyles = (colors: any, spacing: any, fontSize: any, pagerWidth: number)
   otherServiceTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
   otherServiceDesc: { fontSize: 12, lineHeight: 17, color: colors.textSecondary },
 
-  // 7. Promo Banner
-  promoBannerContainer: {
-    marginHorizontal: 16,
-    marginTop: 4,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
+  // 9. Quiet copy — Codex bottom note
+  quietCopy: {
+    paddingHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
   },
-  promoBanner: {
-    flexDirection: 'row',
-    padding: 16,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  promoContent: {
-    flex: 1,
-  },
-  promoTag: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    marginBottom: 6,
-  },
-  promoTagText: {
-    color: '#FDE047',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  promoTitle: {
-    color: colors.surface,
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  promoSubtitle: {
-    color: colors.muted,
-    fontSize: 11,
-    marginBottom: 10,
-  },
-  promoButton: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.warning,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  promoButtonText: {
-    color: colors.text,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  promoIllustration: {
-    marginLeft: 12,
-    opacity: 0.9,
+  quietText: {
+    fontSize: 12,
+    lineHeight: 19,
+    color: colors.textSecondary,
   },
 
-  // 8. Trust Section
-  trustSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginHorizontal: 16,
-    marginTop: 16,
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  trustItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  trustDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: colors.border,
-  },
-  trustTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.text,
-    marginTop: 4,
-  },
-  trustDesc: {
-    fontSize: 9,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
+  // Address modal
   modalContent: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: 20,
@@ -1187,6 +926,10 @@ const getStyles = (colors: any, spacing: any, fontSize: any, pagerWidth: number)
   },
   closeBtn: {
     padding: 4,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addressItem: {
     flexDirection: 'row',
@@ -1194,6 +937,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any, pagerWidth: number)
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    minHeight: 64,
   },
   addressItemActive: {
     backgroundColor: colors.primarySoft,
@@ -1229,11 +973,13 @@ const getStyles = (colors: any, spacing: any, fontSize: any, pagerWidth: number)
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addAddressBtnText: {
     color: colors.surface,
     fontWeight: '600',
   },
 });
-
 
