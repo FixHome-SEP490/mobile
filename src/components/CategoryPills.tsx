@@ -19,12 +19,13 @@ export default function CategoryPills({ categories, selectedId, onSelect }: Prop
         key={id ?? 'all'}
         accessibilityRole="button"
         accessibilityState={{ selected }}
+        accessibilityLabel={`Danh mục ${label}`}
         onPress={() => onSelect(id)}
         style={[
           styles.pill,
           {
-            borderColor: selected ? colors.primary : colors.border,
-            backgroundColor: selected ? colors.primary : colors.surface,
+            borderColor: selected ? colors.primaryStrong : colors.border,
+            backgroundColor: selected ? colors.primaryStrong : colors.surface,
           },
         ]}
       >
