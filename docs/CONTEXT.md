@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-09 00:17 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: feat/technician-certificates
+> Cập nhật lần cuối: 2026-10-12 20:45 (UTC+7) · Người cập nhật (git): foxonworld · Nhánh: integration/mobile-v2-gate-review
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -140,6 +140,12 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 
 Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng `WebBrowser.openAuthSessionAsync`, nhận mã sống 60 giây rồi đổi ở `/auth/google/exchange`. App không cần Google client id.
 
+### Đối chiếu source SEP-132 trên nhánh integration
+
+- `ordersApi.getMyOrdersPage` từ chối body không có mảng danh sách; mảng rỗng hợp lệ vẫn trả trang rỗng. Giữ `bookingMode`, `slot`, `customerNote`, `departAvailableAt` và parser tiền/status hiện hành.
+- `GlassTabBar` giữ liquid glass tap/pan và indicator, nối helper responsive đã có qua `technicianResponsive` mặc định tắt; Customer animation giữ nguyên. Navigator hiện chưa bật tùy chọn responsive.
+- Root thêm `TechnicianNotifications` từ screen đã được theo dõi, giữ `TechnicianServiceAreas` và tab Notifications.
+
 ## 4. Kiến trúc và thư mục chính
 
 - `src/api/`: axios dùng chung (`client.ts`) và khoảng 20 module gọi API, có test.
@@ -179,6 +185,10 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 8. Việc đang dở và rủi ro đã biết
 
+- SEP-132 HOLD: integration chưa có `src/screens/onboarding/CustomerRoleChoiceScreen.tsx`, `src/screens/onboarding/CustomerOnboardingScreen.tsx`, `src/screens/guest/CustomerGuestHomeScreen.tsx`, `src/services/customer-first-run.ts`; chưa port routes hoặc thay role guard. Auth owner cần xác nhận route handoff/guard trước khi tích hợp.
+- SEP-132 HOLD: `toMoney`, amount/quote/payment/status parser và test null-money cần Finance owner phê duyệt; chưa port Technician historical normalizer và các GET jobs phụ thuộc normalizer. Nhãn Customer `showTabLabels` chưa port vì chưa có bằng chứng tương thích runtime.
+- SEP-132: Web parity và thiết bị/E2E CHƯA KIỂM CHỨNG; không khởi động Expo/backend trong phiên đối chiếu source.
+
 - Thay đổi ngày 07/10/2026 mới chạy gate, CHƯA KIỂM CHỨNG trên thiết bị (ảnh đại diện kỹ thuật viên, nút gửi AI, ví).
 - Mở lại app khi đã có token, khách có thể rơi vào màn đăng nhập vì nhánh không phải kỹ thuật viên bắt đầu ở `Auth`. CHƯA KIỂM CHỨNG trên thiết bị.
 - Chưa có push notification (`expo-notifications` đã cài nhưng chưa dùng); booking thường chưa gửi kèm ảnh; khu vực phục vụ chỉ đặt được trong onboarding.
@@ -188,6 +198,8 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - Tài liệu audit ngày 23 và 24/09 trong `docs/` là ảnh chụp lịch sử, không phản ánh hiện trạng.
 
 ## 9. Nhật ký cập nhật context
+
+- 2026-10-12 20:45 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | Đối chiếu source SEP-132: page fail-closed, glass responsive opt-in, route thông báo thợ và các gate Auth/Finance còn chờ.
 
 - 2026-10-09 00:17 (UTC+7) | ToanAltF4 | feat/technician-certificates | Đăng ký thợ: chứng chỉ không bắt buộc (bản công chứng), câu nhắc đến trụ sở sau khi nộp hồ sơ.
 - 2026-10-09 00:08 (UTC+7) | ToanAltF4 | feat/technician-order-steps | Thợ: check-in mở camera chụp sản phẩm, bỏ nút bắt đầu sửa, hoàn thành kèm ảnh, chỉ dùng camera, nút cần thay đổi thợ.

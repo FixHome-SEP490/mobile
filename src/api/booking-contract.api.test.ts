@@ -215,4 +215,41 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
     expect(page.total).toBe(1);
     expect(page.data[0].status).toBe('MATCHING');
   });
+  it.each([
+    ['null body', null],
+    ['undefined body', undefined],
+    ['object body', { unexpected: true }],
+    ['null data', { data: null }],
+    ['object data', { data: {} }],
+    ['string data', { data: 'not-array' }],
+  ])('rejects malformed successful ServiceOrder page responses (%s)', async (_shape, response) => {
+    api.get.mockResolvedValue({ data: response });
+    await expect(ordersApi.getMyOrdersPage(2, 17))
+      .rejects.toThrow('Invalid orders page response');
+    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(api.get).toHaveBeenCalledWith('/service-orders/my', { params: { page: 2, pageSize: 17 } });
+    expect(api.post).not.toHaveBeenCalled();
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['raw array', []],
+    ['wrapped array', { data: [], meta: { total: 0 } }],
+  ])('accepts a valid empty ServiceOrder page response (%s)', async (_shape, response) => {
+    api.get.mockResolvedValue({ data: response });
+    await expect(ordersApi.getMyOrdersPage(1, 20)).resolves.toEqual({ data: [], total: 0 });
+    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(api.get).toHaveBeenCalledWith('/service-orders/my', { params: { page: 1, pageSize: 20 } });
+  });
+
+  it.each([
+    ['raw array', [{ id: 'order-raw', status: 'accepted', paymentStatus: 'unpaid' }]],
+    ['wrapped array without total', { data: [{ id: 'order-wrapped', status: 'accepted', paymentStatus: 'unpaid' }] }],
+  ])('keeps valid nonempty ServiceOrder rows and falls back to row count (%s)', async (_shape, response) => {
+    api.get.mockResolvedValue({ data: response });
+    const page = await ordersApi.getMyOrdersPage(3, 5);
+    expect(page).toMatchObject({ data: [{ status: 'ACCEPTED' }], total: 1 });
+    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(api.get).toHaveBeenCalledWith('/service-orders/my', { params: { page: 3, pageSize: 5 } });
+  });
 });

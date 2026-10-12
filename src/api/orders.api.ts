@@ -299,8 +299,9 @@ export const ordersApi = {
     const safePage = toPositiveInt(page, 1);
     const safePageSize = Math.min(toPositiveInt(pageSize, 20), 100);
     const res = await apiClient.get('/service-orders/my', { params: { page: safePage, pageSize: safePageSize } });
-    const body = res.data as { data?: ServiceOrderItem[]; meta?: { total?: number } } | ServiceOrderItem[];
-    const rows = Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : [];
+    const body = res.data as { data?: ServiceOrderItem[]; meta?: { total?: number } } | ServiceOrderItem[] | null | undefined;
+    const rows = Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : undefined;
+    if (!rows) throw new Error('Invalid orders page response');
     const total = !Array.isArray(body)
       && typeof body?.meta?.total === 'number' && body.meta.total >= 0
       ? body.meta.total : rows.length;
