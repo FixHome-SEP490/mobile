@@ -99,7 +99,10 @@ export default function TechnicianScheduleScreen() {
         <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Quay lại">
           <ChevronLeft size={26} color={colors.text} strokeWidth={1.75} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} accessibilityRole="header">Lịch làm việc</Text>
+        <View style={styles.headerTitleGroup}>
+          <Text style={styles.headerEyebrow}>Công việc trong tuần</Text>
+          <Text style={styles.headerTitle} accessibilityRole="header">Lịch làm việc</Text>
+        </View>
         <View style={styles.iconBtn} />
       </View>
 
@@ -125,6 +128,11 @@ export default function TechnicianScheduleScreen() {
           contentContainerStyle={[styles.content, { paddingBottom: 32 + Math.max(insets.bottom, 16) }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); }} />}
         >
+          <View style={styles.sourceNotice}>
+            <Text style={styles.sourceNoticeText}>
+              Lịch hiển thị các đơn đã tải và ngày nghỉ đã khai báo. Chỉnh khung giờ nhận việc tại Hồ sơ nghề nghiệp.
+            </Text>
+          </View>
           <View style={styles.weekNav}>
             <TouchableOpacity style={styles.iconBtn} onPress={() => changeWeek(-1)} accessibilityRole="button" accessibilityLabel="Tuần trước">
               <ChevronLeft size={22} color={colors.text} strokeWidth={1.75} />
@@ -233,8 +241,12 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   pad: { flex: 1, padding: 16 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, paddingVertical: 4, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider },
   iconBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text },
+  headerTitleGroup: { flex: 1, gap: 1, justifyContent: 'center' },
+  headerEyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.textSecondary },
+  headerTitle: { fontSize: 22, lineHeight: 30, fontWeight: '700', color: colors.text },
   content: { padding: 16, gap: 12 },
+  sourceNotice: { padding: 12, borderRadius: 14, backgroundColor: colors.primarySoft },
+  sourceNoticeText: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
   weekNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   weekTitleBtn: { alignItems: 'center', minHeight: 44, justifyContent: 'center' },
   weekTitle: { fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.text },
