@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image } from 'react-native';
 import { User } from 'lucide-react-native';
 
@@ -23,30 +23,56 @@ export function AvatarTabIcon({
   color: string;
   focused: boolean;
 }) {
+  return <AvatarTabIconImage key={uri} uri={uri} size={size} color={color} focused={focused} />;
+}
+
+function AvatarTabIconImage({
+  uri,
+  size,
+  color,
+  focused,
+}: {
+  uri: string;
+  size: number;
+  color: string;
+  focused: boolean;
+}) {
   const [state, setState] = useState(() => ({
     uri,
     failed: !isLoadableUri(uri),
     loaded: false,
   }));
-
-  // Reset when a different avatar URL comes in (e.g. user updates their photo).
-  if (state.uri !== uri) {
-    setState({ uri, failed: !isLoadableUri(uri), loaded: false });
-  }
+  const stateRef = useRef(state);
 
   useEffect(() => {
     if (state.uri !== uri || state.failed || state.loaded) return;
     const timer = setTimeout(() => {
-      setState((s) => (s.uri === uri && !s.loaded ? { ...s, failed: true } : s));
+      const current = stateRef.current;
+      if (current.uri !== uri || current.loaded || current.failed) return;
+      const next = { ...current, failed: true };
+      stateRef.current = next;
+      setState(next);
     }, LOAD_TIMEOUT_MS);
     return () => clearTimeout(timer);
   }, [uri, state.uri, state.failed, state.loaded]);
 
-  // react-native-web's Image treats a new `source` object as a new image and
-  // re-decodes it; an inline `{ uri }` literal here is a fresh object every
-  // render (tab bar re-renders on every navigation state change), which loops
-  // decode -> onLoad setState -> re-render -> new object forever on web.
+  // react-native-web's Image effect depends on source and callback identity.
+  // Keep all three stable across tab-bar renders to avoid restarting decode.
   const source = useMemo(() => ({ uri }), [uri]);
+  const handleLoad = useCallback(() => {
+    const current = stateRef.current;
+    if (current.uri !== uri || current.loaded || current.failed) return;
+    const next = { ...current, loaded: true };
+    stateRef.current = next;
+    setState(next);
+  }, [uri]);
+  const handleError = useCallback(() => {
+    const current = stateRef.current;
+    if (current.uri !== uri || current.loaded || current.failed) return;
+    const next = { ...current, failed: true };
+    stateRef.current = next;
+    setState(next);
+  }, [uri]);
 
   if (state.failed) {
     return <User size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
@@ -55,8 +81,8 @@ export function AvatarTabIcon({
   return (
     <Image
       source={source}
-      onLoad={() => setState((s) => (s.uri === uri ? { ...s, loaded: true } : s))}
-      onError={() => setState((s) => (s.uri === uri ? { ...s, failed: true } : s))}
+      onLoad={handleLoad}
+      onError={handleError}
       style={{ width: size + 5, height: size + 5, borderRadius: (size + 5) / 2, borderColor: '#FFFFFF' }}
     />
   );
