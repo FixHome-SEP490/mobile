@@ -1,4 +1,4 @@
-import type { OrdersPage, ServiceOrderItem } from '../../api/orders.api';
+import { isHistoricalOrder, type TechnicianOrdersPage, type TechnicianOrderItem } from '../../api/orders.api';
 import { UserRole, type UserInfo } from '../../types/auth.types';
 
 export function technicianJobsUserId(session: { isAuthenticated: boolean; user: UserInfo | null }): string | null {
@@ -10,7 +10,7 @@ interface JobsSession {
   subscribe: (listener: () => void) => () => void;
 }
 export interface JobsState {
-  jobs: ServiceOrderItem[];
+  jobs: TechnicianOrderItem[];
   jobsTotal: number;
   jobsPage: number;
   loading: boolean;
@@ -52,11 +52,18 @@ function submissions(userId: string) {
 
 export const JOBS_PAGE_SIZE = 20;
 
-function dedupeJobs(existing: ServiceOrderItem[], incoming: ServiceOrderItem[]): ServiceOrderItem[] {
-  const seen = new Set(existing.map((job) => job.id));
+function dedupeJobs(existing: TechnicianOrderItem[], incoming: TechnicianOrderItem[]): TechnicianOrderItem[] {
+  const indexById = new Map(existing.map((job, index) => [job.id, index] as const));
   const merged = [...existing];
   for (const job of incoming) {
-    if (!seen.has(job.id)) { seen.add(job.id); merged.push(job); }
+    const index = indexById.get(job.id);
+    if (index === undefined) {
+      indexById.set(job.id, merged.length);
+      merged.push(job);
+    } else if (isHistoricalOrder(job) && !isHistoricalOrder(merged[index])) {
+      // A later page can revoke an earlier full row: replace it with the sanitized projection.
+      merged[index] = job;
+    }
   }
   return merged;
 }
@@ -65,8 +72,8 @@ function dedupeJobs(existing: ServiceOrderItem[], incoming: ServiceOrderItem[]):
  * Merge one fetched jobs page. An empty page clamps the total to what is actually
  * loaded so inconsistent metadata can never promise infinite further pages.
  */
-function mergeJobsPage(existing: ServiceOrderItem[], rows: ServiceOrderItem[], total: number, page: number): {
-  jobs: ServiceOrderItem[]; jobsTotal: number; jobsPage: number;
+function mergeJobsPage(existing: TechnicianOrderItem[], rows: TechnicianOrderItem[], total: number, page: number): {
+  jobs: TechnicianOrderItem[]; jobsTotal: number; jobsPage: number;
 } {
   const jobs = dedupeJobs(existing, rows);
   return {
@@ -78,11 +85,11 @@ function mergeJobsPage(existing: ServiceOrderItem[], rows: ServiceOrderItem[], t
 
 export interface JobsLoaderOptions {
   pageSize?: number;
-  getOrdersPage?: (page: number, pageSize: number) => Promise<OrdersPage>;
+  getOrdersPage?: (page: number, pageSize: number) => Promise<TechnicianOrdersPage>;
 }
 
 export function createJobsLoader(
-  getOrders: () => Promise<ServiceOrderItem[]>, write: (state: JobsState) => void,
+  getOrders: () => Promise<TechnicianOrderItem[]>, write: (state: JobsState) => void,
   enRoute: (id: string) => Promise<unknown>, session: JobsSession,
   notify: (title: string, message: string) => void,
   options: JobsLoaderOptions = {},
@@ -186,7 +193,7 @@ export function createJobsLoader(
     if (!active || !authorized() || state.actionLoading) return;
     const userId = ownerId!;
     const ids = submissions(userId);
-    if (ids.has(id) || !state.jobs.some(job => job.id === id && job.status === 'ACCEPTED' && !job.historical)) return;
+    if (ids.has(id) || !state.jobs.some(job => job.id === id && job.status === 'ACCEPTED' && !isHistoricalOrder(job))) return;
     ids.add(id); // Synchronous lock before API/await; no retry on unknown outcome.
     const isCurrent = captureFocus();
     const sameAccount = () => ownerId === userId && session.getUserId() === userId;

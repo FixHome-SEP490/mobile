@@ -1,5 +1,6 @@
+import BookingActionBar from '../../components/BookingActionBar';
 import React, { useCallback, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { bookingsApi, type BookingItem, type TechnicianCandidate } from '../../api/bookings.api';
 import { ordersApi, type ServiceOrderItem } from '../../api/orders.api';
 import { useAppTheme } from '../../constants/theme';
+import { CUSTOMER_UI_ARTWORK } from '../../constants/customer-artwork';
 import { useAuthStore } from '../../store';
 import { UserRole, type RootStackParamList } from '../../types';
 import { canChooseTechnicians, mayRequestLinkedReplacement, orderedCandidateIds, toggleCandidate } from '../../utils/booking-candidate-selection';
@@ -41,6 +43,7 @@ import {
   type InitialShortlistAttempt,
 } from './customer-initial-shortlist-attempt';
 import { vnDateTimeString } from '../../utils/vn-time';
+import CustomerMatchingAcceptedScene from './CustomerMatchingAcceptedScene';
 
 type MatchingRoute = RouteProp<RootStackParamList, 'CustomerMatching'>;
 type CandidateDetailTarget = { bookingId: string; ownerId: string; candidateUserId: string };
@@ -73,7 +76,7 @@ function isTransientMatchingReadFailure(problem: unknown): boolean {
 function describeBooking(booking: BookingItem): string {
   if (booking.serviceOrderId && booking.status === 'CLOSED') return 'Lượt mời trước đã kết thúc. Thử yêu cầu chọn kỹ thuật viên mới; hệ thống kiểm tra trước khi gửi.';
   if (booking.serviceOrderId && booking.status === 'MATCHING') return 'Đang tìm kỹ thuật viên thay thế; đơn vẫn chờ kỹ thuật viên phản hồi lời mời còn lại. Làm mới để cập nhật, không cần gửi lại.';
-  if (booking.serviceOrderId && booking.status === 'MATCHED') return 'Kỹ thuật viên đã nhận đơn. Đơn sửa chữa đã được tạo trên hệ thống.';
+  if (booking.serviceOrderId && booking.status === 'MATCHED') return 'Đã ghép kỹ thuật viên. Xem đơn sửa chữa liên kết để theo dõi trạng thái thực hiện.';
   if (booking.status === 'MATCHED') return 'Đã có kỹ thuật viên nhận lời mời. Đang kiểm tra liên kết đơn sửa chữa.';
   if (booking.status === 'MATCHING') {
     const pending = (booking.invitations ?? []).find((invitation) => invitation.status === 'PENDING');
@@ -955,6 +958,11 @@ export default function CustomerMatchingScreen() {
   const linkedMode = !!booking?.serviceOrderId;
   const candidateState = candidateAvailabilityState(candidates.length);
   const verifiedOrderId = verifiedLinkedOrderId(booking, linkedOrder, userId);
+  // Presentation only: an invitation or a Booking never stands in for an accepted order.
+  const acceptedHandoff = isAuthenticated && role === UserRole.CUSTOMER
+    && ownsVisibleBooking && !!verifiedOrderId
+    && booking?.status === 'MATCHED' && linkedOrder?.status === 'ACCEPTED'
+    && !loading && !refreshing && !error;
   const detailCandidate = detailTarget
     && isAuthenticated
     && role === UserRole.CUSTOMER
@@ -971,22 +979,46 @@ export default function CustomerMatchingScreen() {
     setDetailTarget({ bookingId, ownerId: userId, candidateUserId: candidate.userId });
   };
 
+  // Dedicated C08 scene only after BOTH owner-scoped Backend records agree.
+  // It never creates an order, accepts an invitation, or changes Booking status.
+  if (acceptedHandoff && verifiedOrderId && booking && linkedOrder) {
+    return (
+      <SafeAreaView style={[styles.page, { backgroundColor: colors.background }]}>
+        <CustomerMatchingAcceptedScene
+          booking={booking}
+          order={linkedOrder}
+          onBack={() => navigation.goBack()}
+          onViewOrder={() => navigation.navigate('CustomerOrderDetail', { serviceOrderId: verifiedOrderId })}
+          onHome={() => navigation.navigate('CustomerMain')}
+          onRefresh={refresh}
+        />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.page, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
-          style={styles.backBtn}
+          style={[styles.backBtn, { backgroundColor: colors.divider }]}
           accessibilityRole="button"
           accessibilityLabel="Quay lại"
-          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+          accessibilityHint="Quay lại màn hình trước"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.text }]}>Chọn kỹ thuật viên</Text>
-        {loadedContextKey === currentContextKey && (
-          <Text style={[styles.note, { color: colors.textSecondary }]}>Mã tham chiếu: {bookingId.slice(0, 8)}</Text>
-        )}
+        <View style={styles.headerCopy}>
+          <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>
+            {acceptedHandoff ? 'Có người cùng bạn lo nhà.' : isAuthenticated && role === UserRole.CUSTOMER && waiting ? 'Trạng thái lời mời' : 'Chọn kỹ thuật viên'}
+          </Text>
+          {loadedContextKey === currentContextKey && (
+            <Text style={[styles.note, { color: colors.textSecondary }]}>Mã tham chiếu: {bookingId.slice(0, 8)}</Text>
+          )}
+        </View>
+        </View>
         {!isAuthenticated || role !== UserRole.CUSTOMER ? (
           <Text style={{ color: colors.error }}>Hãy đăng nhập bằng tài khoản khách hàng để xem yêu cầu này.</Text>
         ) : (
@@ -999,16 +1031,41 @@ export default function CustomerMatchingScreen() {
                 Đang cập nhật trạng thái…
               </Text>
             )}
-            {!!error && <Text style={[styles.note, { color: colors.error }]}>{error}</Text>}
+            {!!error && <Text accessibilityRole="alert" style={[styles.note, { color: colors.error }]}>{error}</Text>}
             {!!booking && ownsVisibleBooking && (
-              <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Text style={[styles.heading, { color: colors.text }]}>{booking.serviceName || 'Yêu cầu dịch vụ'}</Text>
+              <View style={[styles.summary, { borderColor: colors.border }]}>
+                {acceptedHandoff ? (
+                  <View testID="matching-accepted-handoff" style={styles.accepted}>
+                    <View style={[styles.acceptedMark, { backgroundColor: colors.tone.success.bg }]}>
+                      <Ionicons name="checkmark-circle-outline" size={56} color={colors.tone.success.text} />
+                    </View>
+                    <Text style={[styles.statusPill, { backgroundColor: colors.tone.success.bg, color: colors.tone.success.text }]}>
+                      Kỹ thuật viên đã nhận đơn
+                    </Text>
+                    <Text style={[styles.heading, { color: colors.text }]}>{booking.serviceName || 'Yêu cầu dịch vụ'}</Text>
+                    <Text style={[styles.note, { color: colors.textSecondary }]}>Đơn sửa chữa đã được xác nhận trên hệ thống.</Text>
+                  </View>
+                ) : (
+                  <View style={styles.matchingVisual}>
+                    <Image source={CUSTOMER_UI_ARTWORK.technicianMatch} style={{ width: 64, height: 64 }} resizeMode="contain" accessible={false} testID="matching-status-art" />
+                    <View style={styles.visualCopy}>
+                      <Text style={[styles.statusPill, { backgroundColor: colors.primarySoft, color: colors.primaryStrong }]}>
+                        {booking.status === 'MATCHING' && booking.invitations?.some((invite) => invite.status === 'PENDING')
+                          ? 'Đã gửi lời mời · Chờ phản hồi' : bookingStatusLabel(booking.status)}
+                      </Text>
+                      <Text style={[styles.heading, { color: colors.text }]}>{booking.serviceName || 'Yêu cầu dịch vụ'}</Text>
+                      {!!booking.preferredStartAt && Number.isFinite(Date.parse(booking.preferredStartAt)) && (
+                        <Text style={[styles.note, { color: colors.textSecondary }]}>Giờ mong muốn: {vnDateTimeString(booking.preferredStartAt)}</Text>
+                      )}
+                    </View>
+                  </View>
+                )}
                 <Text style={[styles.note, { color: colors.textSecondary }]}>{describeBooking(booking)}</Text>
-                <Text style={[styles.note, { color: colors.textSecondary }]}>Trạng thái: {bookingStatusLabel(booking.status)}</Text>
-                {!!booking.serviceOrderId && (
-                  <Text selectable style={{ color: colors.success }}>
-                    Mã tham chiếu đơn: {booking.serviceOrderId.slice(0, 8)}
-                  </Text>
+                {verifiedOrderId && (
+                  <View style={[styles.orderReference, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>ĐƠN SỬA CHỮA</Text>
+                    <Text selectable style={[styles.heading, { color: colors.text }]}>{linkedOrder?.code || verifiedOrderId.slice(0, 8)}</Text>
+                  </View>
                 )}
               </View>
             )}
@@ -1022,7 +1079,7 @@ export default function CustomerMatchingScreen() {
                     { backgroundColor: colors.surface, borderColor: colors.border },
                   ]}
                 >
-                  <Text style={[styles.heading, { color: colors.text }]}>
+                  <Text accessibilityRole="header" style={[styles.heading, { color: colors.text }]}>
                     Trạng thái lời mời
                   </Text>
                   {[...booking.invitations]
@@ -1046,8 +1103,12 @@ export default function CustomerMatchingScreen() {
                           ? Date.parse(invitation.expiresAt)
                           : Number.NaN;
                       return (
-                        <View key={invitation.id} style={{ gap: 2 }}>
-                          <Text style={{ color: colors.text }}>
+                        <View key={invitation.id} style={[styles.invitationRow, { borderColor: colors.border }]}>
+                          <View style={[styles.invitationRank, { backgroundColor: colors.divider }]}>
+                            <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>#{invitation.priorityOrder}</Text>
+                          </View>
+                          <View style={styles.visualCopy}>
+                          <Text style={[styles.invitationText, { color: colors.text }]}>
                             Ưu tiên {invitation.priorityOrder}: {statusText}
                           </Text>
                           {Number.isFinite(expiresAt) && (
@@ -1056,6 +1117,7 @@ export default function CustomerMatchingScreen() {
                               {vnDateTimeString(expiresAt)}
                             </Text>
                           )}
+                          </View>
                         </View>
                       );
                     })}
@@ -1066,35 +1128,39 @@ export default function CustomerMatchingScreen() {
             )}
             {pickerVisible && (
               <>
-                <Text style={[styles.heading, { color: colors.text }]}>
+                <Text accessibilityRole="header" style={[styles.heading, { color: colors.text }]}>
                   {linkedMode
-                    ? 'Yêu cầu chọn 1 hoặc 2 kỹ thuật viên mới (hệ thống sẽ kiểm tra) (' + selected.length + '/2)'
-                    : 'Chọn 1 hoặc 2 người theo thứ tự ưu tiên (' + selected.length + '/2)'}
+                    ? 'Chọn kỹ thuật viên mới (' + selected.length + '/2)'
+                    : 'Chọn theo thứ tự ưu tiên (' + selected.length + '/2)'}
                 </Text>
                 <Text style={[styles.note, { color: colors.textSecondary }]}>
                   {linkedMode
-                    ? 'Thử yêu cầu chọn kỹ thuật viên mới; hệ thống kiểm tra trước khi gửi. Chỉ hệ thống mới quyết định lời mời có được tạo hay không.'
-                    : 'Bạn có thể chọn 1 người để mời ngay, hoặc chọn thêm người thứ hai làm dự phòng. Thứ tự chọn là thứ tự ưu tiên.'}
+                    ? 'Hệ thống kiểm tra quyền chọn lại trước khi gửi lời mời.'
+                    : 'Ưu tiên 1 được mời trước. Ưu tiên 2 là dự phòng.'}
                 </Text>
                 {!loading && !refreshing && !error && candidateState === 'none' && (
-                  <View style={styles.card}>
+                  <View testID="matching-empty-none" style={styles.card}>
+                    <Text accessibilityRole="header" style={[styles.heading, { color: colors.text }]}>
+                      Chưa có kỹ thuật viên phù hợp
+                    </Text>
                     <Text style={{ color: colors.textSecondary }}>
-                      Hiện chưa có kỹ thuật viên phù hợp với dịch vụ, khu vực và khung giờ này.
-                      Hãy làm mới sau một lúc hoặc quay lại xem lịch hẹn.
+                      Thử làm mới hoặc xem lại lịch hẹn.
                     </Text>
                     <Text style={[styles.note, { color: colors.textSecondary }]}>
-                      Ứng dụng không tự đổi lịch, hủy hay tạo yêu cầu mới. Việc đổi lịch chỉ thực
-                      hiện ở trạng thái được cho phép và bằng thao tác riêng của khách hàng.
+                      Yêu cầu và lịch hẹn vẫn được giữ nguyên.
                     </Text>
                   </View>
                 )}
                 {!loading && !refreshing && !error && candidateState === 'one' && (
-                  <View style={styles.card}>
+                  <View testID="matching-empty-one" style={styles.card}>
+                    <Text accessibilityRole="header" style={[styles.heading, { color: colors.text }]}>
+                      Có 1 kỹ thuật viên phù hợp
+                    </Text>
                     <Text style={{ color: colors.textSecondary }}>
-                      Hiện có 1 kỹ thuật viên phù hợp. Bạn có thể chọn người này và gửi lời mời ngay.
+                      Bạn có thể chọn và gửi lời mời ngay.
                     </Text>
                     <Text style={[styles.note, { color: colors.textSecondary }]}>
-                      Nếu muốn có thêm lựa chọn, hãy làm mới sau một lúc; không cần tạo yêu cầu khác.
+                      Làm mới để kiểm tra thêm lựa chọn.
                     </Text>
                   </View>
                 )}
@@ -1112,31 +1178,72 @@ export default function CustomerMatchingScreen() {
                     />
                   );
                 })}
-                <TouchableOpacity accessibilityRole="button" onPress={sendShortlist} disabled={!pickerActionsEnabled || selected.length < 1 || sending}
-                  style={[styles.action, { backgroundColor: pickerActionsEnabled && selected.length >= 1 ? colors.primary : colors.border }]}
-                  accessibilityState={{ disabled: !pickerActionsEnabled || selected.length < 1 || sending }}>
-                  <Text style={styles.actionText}>
-                    {sending ? 'Đang gửi...' : linkedMode ? 'Gửi yêu cầu chọn ' + selected.length + ' kỹ thuật viên mới' : 'Xác nhận mời ' + selected.length + ' kỹ thuật viên'}
-                  </Text>
-                </TouchableOpacity>
+
               </>
             )}
             {waiting && ownsVisibleBooking && (
               <>
+                <TouchableOpacity
+                  testID="matching-booking-detail"
+                  accessibilityRole="button"
+                  accessibilityLabel="Xem chi tiết yêu cầu"
+                  disabled={loading || refreshing || sending || !!error}
+                  accessibilityState={{ disabled: loading || refreshing || sending || !!error }}
+                  style={styles.bookingDetailLink}
+                  onPress={() => {
+                    const session = useAuthStore.getState();
+                    if (!ownsVisibleBooking || !booking || booking.id !== bookingId
+                      || loading || refreshing || sending || error
+                      || !session.isAuthenticated || session.user?.role !== UserRole.CUSTOMER
+                      || session.user?.id !== booking.customerId
+                      || matchingSessionKey(bookingId, session.user.id, session.user.role, session.sessionGeneration) !== currentContextKey) return;
+                    navigation.navigate('CustomerBookingDetail', { bookingId: booking.id });
+                  }}
+                >
+                  <Text style={{ color: colors.primaryStrong, fontSize: 13, fontWeight: '600' }}>Xem chi tiết yêu cầu</Text>
+                  <Ionicons name="chevron-forward" size={16} color={colors.primaryStrong} />
+                </TouchableOpacity>
                 <Text style={[styles.note, { color: colors.textSecondary }]}>
-                  Chỉ trạng thái trên hệ thống mới xác nhận kỹ thuật viên nhận đơn. Không cần gửi lại danh sách mời.
+                  Đang chờ phản hồi trên hệ thống.
                   {' '}Rời màn hình không hủy lời mời.
                 </Text>
-                <TouchableOpacity
-                  testID="matching-waiting-primary"
-                  accessibilityRole="button"
-                  onPress={() => verifiedOrderId
-                    ? navigation.navigate('CustomerOrderDetail', { serviceOrderId: verifiedOrderId })
-                    : navigation.navigate('CustomerMain')}
-                  style={[styles.action, { backgroundColor: colors.primary }]}
-                >
-                  <Text style={styles.actionText}>{verifiedOrderId ? 'Xem đơn sửa chữa' : 'Về trang chủ'}</Text>
+
+              </>
+            )}
+            {ownsVisibleBooking && uncertainSend && <Text style={[styles.note, { color: colors.error }]}>Chưa thể xác nhận kết quả gửi. Không gửi lại khi chưa kiểm tra yêu cầu trên hệ thống.</Text>}
+            {ownsVisibleBooking && attemptLocked && (
+              <Text style={[styles.note, { color: colors.error }]}>
+                Đã có một lượt mời đang chờ xác minh. Không gửi lại để tránh trùng; hãy làm mới
+                yêu cầu. Chỉ bằng chứng từ hệ thống mới được gỡ khóa.
+              </Text>
+            )}
+            {ownsVisibleBooking && rejectedDefinitive && <Text style={[styles.note, { color: colors.textSecondary }]}>Hệ thống đã từ chối yêu cầu chọn lại theo trạng thái mới nhất. Hãy làm mới để xem trạng thái hiện tại.</Text>}
+            {!waiting && (
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Làm mới trạng thái" onPress={refresh} disabled={loading || refreshing || sending}
+                style={[styles.secondaryAction, { borderColor: colors.border }]}
+                accessibilityState={{ disabled: loading || refreshing || sending }}>
+                <Text style={[styles.secondaryActionText, { color: colors.text }]}>
+                  {loading || refreshing ? 'Đang cập nhật…' : 'Làm mới trạng thái'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
+      </ScrollView>
+      {isAuthenticated && role === UserRole.CUSTOMER && (pickerVisible || (waiting && ownsVisibleBooking)) && (
+        <BookingActionBar>
+          {pickerVisible && (
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Gửi danh sách kỹ thuật viên đã chọn" accessibilityHint="Gửi 1 hoặc 2 kỹ thuật viên theo thứ tự ưu tiên. Người thứ nhất được mời trước." onPress={sendShortlist} disabled={!pickerActionsEnabled || selected.length < 1 || sending}
+                  style={[styles.action, { backgroundColor: pickerActionsEnabled && selected.length >= 1 ? colors.primaryStrong : colors.border }]}
+                  accessibilityState={{ disabled: !pickerActionsEnabled || selected.length < 1 || sending }}>
+                  <Text style={[styles.actionText, { color: pickerActionsEnabled && selected.length >= 1 ? colors.surface : colors.textSecondary }]}>
+                    {sending ? 'Đang gửi...' : linkedMode ? 'Gửi yêu cầu chọn ' + selected.length + ' kỹ thuật viên mới' : 'Xác nhận mời ' + selected.length + ' kỹ thuật viên'}
+                  </Text>
                 </TouchableOpacity>
+          )}
+          {waiting && ownsVisibleBooking && (
+            <>
+
                 {verifiedOrderId && (
                   <TouchableOpacity
                     accessibilityRole="button"
@@ -1149,36 +1256,30 @@ export default function CustomerMatchingScreen() {
                 <TouchableOpacity
                   testID="matching-waiting-refresh"
                   accessibilityRole="button"
+                  accessibilityLabel="Làm mới trạng thái"
                   onPress={refresh}
                   disabled={loading || refreshing || sending}
+                  accessibilityState={{ disabled: loading || refreshing || sending }}
                   style={[styles.secondaryAction, { borderColor: colors.border }]}
                 >
                   <Text style={[styles.secondaryActionText, { color: colors.text }]}>
                     {loading || refreshing ? 'Đang cập nhật…' : 'Làm mới trạng thái'}
                   </Text>
                 </TouchableOpacity>
-              </>
-            )}
-            {ownsVisibleBooking && uncertainSend && <Text style={[styles.note, { color: colors.error }]}>Chưa thể xác nhận kết quả gửi. Không gửi lại khi chưa kiểm tra yêu cầu trên hệ thống.</Text>}
-            {ownsVisibleBooking && attemptLocked && (
-              <Text style={[styles.note, { color: colors.error }]}>
-                Đã có một lượt mời đang chờ xác minh. Không gửi lại để tránh trùng; hãy làm mới
-                yêu cầu. Chỉ bằng chứng từ hệ thống mới được gỡ khóa.
-              </Text>
-            )}
-            {ownsVisibleBooking && rejectedDefinitive && <Text style={[styles.note, { color: colors.textSecondary }]}>Hệ thống đã từ chối yêu cầu chọn lại theo trạng thái mới nhất. Hãy làm mới để xem trạng thái hiện tại.</Text>}
-            {!waiting && (
-              <TouchableOpacity accessibilityRole="button" onPress={refresh} disabled={loading || refreshing || sending}
-                style={[styles.secondaryAction, { borderColor: colors.border }]}
-                accessibilityState={{ disabled: loading || refreshing || sending }}>
-                <Text style={[styles.secondaryActionText, { color: colors.text }]}>
-                  {loading || refreshing ? 'Đang cập nhật…' : 'Làm mới trạng thái'}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </>
-        )}
-      </ScrollView>
+<TouchableOpacity
+                  testID="matching-waiting-primary"
+                  accessibilityRole="button"
+                  onPress={() => verifiedOrderId
+                    ? navigation.navigate('CustomerOrderDetail', { serviceOrderId: verifiedOrderId })
+                    : navigation.navigate('CustomerMain')}
+                  style={[styles.action, { backgroundColor: colors.primaryStrong }]}
+                >
+                  <Text style={[styles.actionText, { color: colors.surface }]}>{verifiedOrderId ? 'Xem đơn sửa chữa' : 'Về trang chủ'}</Text>
+                </TouchableOpacity>
+            </>
+          )}
+        </BookingActionBar>
+      )}
       <MatchingTechnicianDetailSheet
         candidate={detailCandidate}
         priority={detailCandidate ? selected.indexOf(detailCandidate.userId) + 1 : 0}
@@ -1192,14 +1293,30 @@ export default function CustomerMatchingScreen() {
 
 const styles = StyleSheet.create({
   page: { flex: 1 },
-  content: { padding: 18, paddingBottom: 42, gap: 12 },
-  backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  title: { fontSize: 23, fontWeight: '700', marginBottom: 6 },
-  heading: { fontSize: 16, fontWeight: '700' },
-  note: { fontSize: 13, lineHeight: 21 },
-  card: { padding: 15, borderWidth: 1, borderRadius: 12, gap: 7 },
-  action: { padding: 15, borderRadius: 12, alignItems: 'center' },
-  secondaryAction: { minHeight: 44, paddingHorizontal: 15, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  content: { padding: 16, paddingBottom: 32, gap: 16 },
+  bookingDetailLink: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
+  headerCopy: { flex: 1, minWidth: 0, gap: 4 },
+  eyebrow: { fontSize: 12, lineHeight: 18, fontWeight: '600', letterSpacing: 0.5 },
+  backBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
+  title: { fontSize: 22, lineHeight: 30, fontWeight: '700' },
+  sectionTitle: { fontSize: 20, lineHeight: 28, fontWeight: '600', marginTop: 8 },
+  heading: { fontSize: 16, lineHeight: 24, fontWeight: '600' },
+  note: { fontSize: 14, lineHeight: 22 },
+  summary: { paddingBottom: 24, borderBottomWidth: 1, gap: 16 },
+  matchingVisual: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 8 },
+  visualCopy: { flex: 1, minWidth: 0, gap: 8 },
+  statusPill: { alignSelf: 'flex-start', fontSize: 12, lineHeight: 18, fontWeight: '600', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  accepted: { alignItems: 'center', gap: 16, paddingVertical: 8 },
+  acceptedMark: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center' },
+  orderReference: { borderWidth: 1, borderRadius: 20, padding: 16, gap: 8 },
+  card: { padding: 16, borderWidth: 1, borderRadius: 20, gap: 12 },
+  invitationRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingTop: 12, borderTopWidth: 1 },
+  invitationRank: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  invitationText: { fontSize: 14, lineHeight: 22, fontWeight: '600' },
+  footer: { padding: 16, gap: 8, borderTopWidth: 1 },
+  action: { minHeight: 52, padding: 15, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  secondaryAction: { minHeight: 48, padding: 12, borderWidth: 1, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   secondaryActionText: { fontSize: 14, lineHeight: 20, fontWeight: '600' },
-  actionText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  actionText: { fontSize: 16, lineHeight: 24, fontWeight: '600', textAlign: 'center' },
 });

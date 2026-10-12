@@ -12,6 +12,7 @@ import {
   Platform,
   Alert,
   StatusBar,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +23,7 @@ import type { AuthStackParamList, RootStackParamList } from '../../types';
 import { authApi } from '../../api/auth.api';
 import { useAuthStore } from '../../store';
 import { UserRole } from '../../types';
+import { handoffAuthenticatedRoute } from '../../navigation/root-navigation';
 import GoogleSignInButton from '../../components/GoogleSignInButton';
 import {
   GoogleSignInCancelled,
@@ -49,7 +51,7 @@ export default function RegisterScreen() {
       <Ionicons 
         name={met ? "checkmark-circle" : "ellipse-outline"} 
         size={14} 
-        color={met ? colors.success : "#9CA3AF"} 
+        color={met ? colors.success : colors.textSecondary}
       />
       <Text style={[styles.ruleText, met && styles.ruleTextMet]}>{text}</Text>
     </View>
@@ -98,7 +100,7 @@ export default function RegisterScreen() {
   }, [password]);
 
   const strengthScore = Object.values(passwordRules).filter(Boolean).length;
-  const barColors = [colors.error, '#F97316', '#EAB308', '#84CC16', colors.success];
+  const barColors = [colors.error, colors.warning, colors.warning, colors.success, colors.success];
   const [isLoading, setIsLoading] = useState(false);
 
   const { setAuth } = useAuthStore();
@@ -109,23 +111,14 @@ export default function RegisterScreen() {
    * Người dùng vào thẳng ứng dụng.
    */
   const handleGoogleSignIn = async () => {
+    if (isLoading || googleLoading) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setGoogleLoading(true);
     try {
       const code = await startGoogleSignIn();
       const result = await authApi.exchangeGoogleCode(code);
       setAuth(result.accessToken, result.user);
-      navigation.reset({
-        index: 0,
-        routes: [
-          {
-            name:
-              result.user.role === UserRole.CUSTOMER
-                ? 'CustomerMain'
-                : 'TechnicianMain',
-          },
-        ],
-      });
+      if (result.user.role === UserRole.CUSTOMER || result.user.role === UserRole.TECHNICIAN) handoffAuthenticatedRoute(result.user.role === UserRole.CUSTOMER ? 'CustomerMain' : 'TechnicianMain');
     } catch (err: unknown) {
       if (err instanceof GoogleSignInCancelled) return;
       const envelope = (
@@ -144,6 +137,7 @@ export default function RegisterScreen() {
   };
 
   const handleRegister = async () => {
+    if (isLoading || googleLoading) return;
     setTouchedEmail(true);
     setTouchedFullName(true);
     setTouchedPhone(true);
@@ -195,17 +189,15 @@ export default function RegisterScreen() {
       >
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       
+          <View style={styles.brandBar}><TouchableOpacity style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Quay lại đăng nhập" onPress={() => navigation.navigate('Login')} disabled={isLoading || googleLoading}><Ionicons name="arrow-back" size={20} color={colors.text} /></TouchableOpacity><View style={styles.brandRow}><Image source={require('../../../assets/icon.png')} style={styles.brandLogo} /><Text style={styles.brandText}>Fix<Text style={styles.accent}>Home</Text></Text></View></View>
           <View style={styles.header}>
-            <View style={styles.iconWrapper}>
-              <Ionicons name="home" size={32} color={colors.primary} />
-            </View>
-            <Text style={styles.title}>ĐĂNG KÝ HỘI VIÊN</Text>
-            <View style={styles.divider} />
+            <Text style={styles.title}>Đăng ký tài khoản</Text><Text style={styles.heroTitle} accessibilityRole="header">Chào bạn mới.{'\n'}<Text style={styles.accent}>Cùng bắt đầu nhé.</Text></Text>
             <Text style={styles.subtitle}>
-              {isTechnician ? 'GIA NHẬP ĐỘI NGŨ KỸ THUẬT VIÊN FIXHOME' : 'GIA NHẬP HỆ THỐNG FIXHOME'}
+              {isTechnician ? 'Tạo tài khoản, xác thực email rồi hoàn thiện hồ sơ nghề nghiệp.' : 'Tạo tài khoản để đặt lịch và theo dõi sửa chữa.'}
             </Text>
           </View>
 
+          <Text style={styles.inputLabel} accessibilityLabel="Vai trò tài khoản">Vai trò tài khoản</Text>
           <View style={styles.roleRow}>
             {([
               { value: 'customer', title: 'Khách hàng', sub: 'Đặt lịch sửa chữa' },
@@ -220,9 +212,11 @@ export default function RegisterScreen() {
                     Haptics.selectionAsync();
                     setRole(option.value);
                   }}
-                  disabled={isLoading}
+                  disabled={isLoading || googleLoading}
                   accessibilityRole="radio"
-                  accessibilityState={{ selected }}
+                  accessibilityLabel={`${option.title}, ${option.sub}`}
+                  accessibilityState={{ checked: selected, selected }}
+                  aria-checked={selected}
                 >
                   <Text style={[styles.roleTitle, selected && styles.roleTitleActive]}>{option.title}</Text>
                   <Text style={styles.roleSub}>{option.sub}</Text>
@@ -241,17 +235,21 @@ export default function RegisterScreen() {
           )}
 
           <View style={styles.formContainer}>
+            <Text style={styles.helperText}>Sau khi đăng ký, nhập mã OTP gửi qua email để xác thực tài khoản.</Text>
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Họ và tên</Text>
               <View style={[
                 styles.inputWrapper,
-                fullNameError ? { borderColor: '#FF3B30', marginBottom: 6 } : undefined
+                fullNameError ? { borderColor: colors.error, marginBottom: 6 } : undefined
               ]}>
-                <Ionicons name="person-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
+                <Ionicons name="person-outline" size={18} color={colors.textSecondary} style={styles.inputIcon} />
                 <TextInput
+                  accessibilityLabel="Họ và tên"
+                  editable={!(isLoading || googleLoading)}
+                  autoCorrect={false}
                   style={styles.input}
                   placeholder="Nguyễn Văn An"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.textSecondary}
                   value={fullName}
                   onChangeText={setFullName}
                   onBlur={() => setTouchedFullName(true)}
@@ -267,13 +265,17 @@ export default function RegisterScreen() {
               <Text style={styles.inputLabel}>Email</Text>
               <View style={[
                 styles.inputWrapper,
-                emailError ? { borderColor: '#FF3B30', marginBottom: 6 } : undefined
+                emailError ? { borderColor: colors.error, marginBottom: 6 } : undefined
               ]}>
-                <Ionicons name="mail-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
+                <Ionicons name="mail-outline" size={18} color={colors.textSecondary} style={styles.inputIcon} />
                 <TextInput
+                  accessibilityLabel="Email"
+                  editable={!(isLoading || googleLoading)}
+                  autoCorrect={false}
+                  autoComplete="email"
                   style={styles.input}
                   placeholder="example@gmail.com"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.textSecondary}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   value={email}
@@ -297,13 +299,17 @@ export default function RegisterScreen() {
               <Text style={styles.inputLabel}>Mật khẩu</Text>
               <View style={[
                 styles.inputWrapper,
-                (password.length > 0 && strengthScore < 5) ? { borderColor: '#FF3B30', marginBottom: 6 } : undefined
+                (password.length > 0 && strengthScore < 5) ? { borderColor: colors.error, marginBottom: 6 } : undefined
               ]}>
-                <Ionicons name="lock-closed-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
+                <Ionicons name="lock-closed-outline" size={18} color={colors.textSecondary} style={styles.inputIcon} />
                 <TextInput
+                  accessibilityLabel="Mật khẩu"
+                  editable={!(isLoading || googleLoading)}
+                  autoCorrect={false}
+                  autoComplete="new-password"
                   style={styles.input}
                   placeholder="••••••••"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.textSecondary}
                   secureTextEntry={!showPassword}
                   value={password}
                   onChangeText={setPassword}
@@ -315,12 +321,12 @@ export default function RegisterScreen() {
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
-                  style={{ padding: 4 }}
+                  style={styles.eyeButton}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   accessibilityRole="button"
                   accessibilityLabel={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                 >
-                  <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color="#9CA3AF" />
+                  <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -333,7 +339,7 @@ export default function RegisterScreen() {
                       key={index} 
                       style={[
                         styles.strengthBar, 
-                        { backgroundColor: strengthScore > index ? barColors[index] : '#E5E7EB' }
+                        { backgroundColor: strengthScore > index ? barColors[index] : colors.border }
                       ]} 
                     />
                   ))}
@@ -352,13 +358,17 @@ export default function RegisterScreen() {
               <Text style={styles.inputLabel}>Xác nhận mật khẩu</Text>
               <View style={[
                 styles.inputWrapper,
-                confirmError ? { borderColor: '#FF3B30', marginBottom: 6 } : undefined
+                confirmError ? { borderColor: colors.error, marginBottom: 6 } : undefined
               ]}>
-                <Ionicons name="shield-checkmark-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
+                <Ionicons name="shield-checkmark-outline" size={18} color={colors.textSecondary} style={styles.inputIcon} />
                 <TextInput
+                  accessibilityLabel="Xác nhận mật khẩu"
+                  editable={!(isLoading || googleLoading)}
+                  autoCorrect={false}
+                  autoComplete="new-password"
                   style={styles.input}
                   placeholder="••••••••"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.textSecondary}
                   secureTextEntry={!showConfirmPassword}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
@@ -371,12 +381,12 @@ export default function RegisterScreen() {
                 />
                 <TouchableOpacity
                   onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                  style={{ padding: 4 }}
+                  style={styles.eyeButton}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   accessibilityRole="button"
                   accessibilityLabel={showConfirmPassword ? 'Ẩn mật khẩu xác nhận' : 'Hiện mật khẩu xác nhận'}
                 >
-                  <Ionicons name={showConfirmPassword ? "eye-off-outline" : "eye-outline"} size={18} color="#9CA3AF" />
+                  <Ionicons name={showConfirmPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
               {confirmError ? <Text style={styles.errorText}>{confirmError}</Text> : null}
@@ -386,13 +396,16 @@ export default function RegisterScreen() {
               <Text style={styles.inputLabel}>Số điện thoại</Text>
               <View style={[
                 styles.inputWrapper,
-                phoneError ? { borderColor: '#FF3B30', marginBottom: 6 } : undefined
+                phoneError ? { borderColor: colors.error, marginBottom: 6 } : undefined
               ]}>
-                <Ionicons name="call-outline" size={18} color="#9CA3AF" style={styles.inputIcon} />
+                <Ionicons name="call-outline" size={18} color={colors.textSecondary} style={styles.inputIcon} />
                 <TextInput
+                  accessibilityLabel="Số điện thoại"
+                  editable={!(isLoading || googleLoading)}
+                  autoCorrect={false}
                   style={styles.input}
                   placeholder="0901234567"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.textSecondary}
                   keyboardType="phone-pad"
                   value={phone}
                   onChangeText={setPhone}
@@ -405,8 +418,8 @@ export default function RegisterScreen() {
               {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
             </View>
 
-            <TouchableOpacity style={[styles.registerBtn, isLoading && { opacity: 0.7 }]} onPress={handleRegister} activeOpacity={0.85} disabled={isLoading}>
-              <Text style={styles.registerBtnText}>{isLoading ? 'ĐANG ĐĂNG KÝ...' : 'ĐĂNG KÝ'}</Text>
+            <TouchableOpacity style={[styles.registerBtn, isLoading && { opacity: 0.7 }]} onPress={handleRegister} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Đăng ký tài khoản" accessibilityState={{ disabled: isLoading || googleLoading, busy: isLoading }} disabled={isLoading || googleLoading}>
+              <><Text style={styles.registerBtnText}>{isLoading ? 'Đang đăng ký…' : 'Đăng ký tài khoản'}</Text><Ionicons name="arrow-forward" size={20} color={colors.surface} /></>
             </TouchableOpacity>
 
             {/* Google chỉ tạo tài khoản khách hàng, nên ẩn khi đang đăng ký kỹ thuật viên. */}
@@ -414,14 +427,14 @@ export default function RegisterScreen() {
               <>
                 <View style={styles.googleDividerRow}>
                   <View style={styles.googleDividerLine} />
-                  <Text style={styles.googleDividerText}>HOẶC</Text>
+                  <Text style={styles.googleDividerText}>hoặc</Text>
                   <View style={styles.googleDividerLine} />
                 </View>
 
                 <GoogleSignInButton
                   onPress={() => void handleGoogleSignIn()}
                   loading={googleLoading}
-                  disabled={isLoading}
+                  disabled={isLoading || googleLoading}
                   label="Đăng ký với Google"
                 />
               </>
@@ -429,7 +442,7 @@ export default function RegisterScreen() {
 
             <View style={[styles.loginRow, { marginTop: 20 }]}>
               <Text style={styles.loginText}>Đã có tài khoản? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+              <TouchableOpacity style={styles.linkButton} accessibilityRole="button" accessibilityLabel="Đăng nhập" disabled={isLoading || googleLoading} onPress={() => navigation.navigate('Login')}>
                 <Text style={styles.loginLink}>Đăng nhập</Text>
               </TouchableOpacity>
             </View>
@@ -441,236 +454,49 @@ export default function RegisterScreen() {
 }
 
 const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    padding: 24,
-    paddingTop: 60,
-    paddingBottom: 40,
-  },
-  backBtn: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 24,
-    marginTop: -20,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-  },
-  backText: {
-    fontSize: 13,
-    color: '#4B5563',
-    fontWeight: '600',
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  iconWrapper: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: '#DBEAFE',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#111827',
-    marginBottom: 12,
-  },
-  divider: {
-    width: 40,
-    height: 4,
-    backgroundColor: colors.primary,
-    borderRadius: 2,
-    marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#6B7280',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
-  roleRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
-  roleBtn: {
-    flex: 1,
-    minHeight: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    backgroundColor: colors.surface,
-    paddingVertical: 8,
-  },
-  roleBtnActive: {
-    borderColor: colors.primaryStrong,
-    backgroundColor: colors.primarySoft,
-  },
-  roleTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  roleTitleActive: {
-    color: colors.primaryStrong,
-    fontWeight: '700',
-  },
-  roleSub: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  roleNotice: {
-    flexDirection: 'row',
-    gap: 8,
-    padding: 12,
-    marginBottom: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.primaryTint,
-    backgroundColor: colors.primarySoft,
-  },
-  roleNoticeText: {
-    flex: 1,
-    fontSize: 12,
-    lineHeight: 18,
-    color: colors.text,
-  },
-  formContainer: {
-    width: '100%',
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#4B5563',
-    marginBottom: 8,
-    letterSpacing: 0.5,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 50,
-  },
-  inputIcon: {
-    marginRight: 10,
-  },
-  input: {
-    flex: 1,
-    fontSize: 14,
-    color: '#111827',
-  },
-  errorText: {
-    color: '#FF3B30',
-    fontSize: 11,
-    fontWeight: '500',
-    paddingLeft: 4,
-    marginTop: -8,
-  },
-  passwordStrengthContainer: {
-    marginBottom: 16,
-    marginTop: -4,
-  },
-  strengthBars: {
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: 12,
-  },
-  strengthBar: {
-    flex: 1,
-    height: 4,
-    borderRadius: 2,
-  },
-  rulesGrid: {
-    gap: 8,
-  },
-  ruleItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  ruleText: {
-    fontSize: 11,
-    color: '#9CA3AF',
-  },
-  ruleTextMet: {
-    color: colors.success,
-  },
-  registerBtn: {
-    backgroundColor: colors.primary,
-    height: 50,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 16,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  registerBtnText: {
-    color: colors.surface,
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  googleDividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 24,
-    marginBottom: 16,
-  },
-  googleDividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.border,
-  },
-  googleDividerText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.5,
-    color: colors.textSecondary,
-  },
-  loginRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 24,
-  },
-  loginText: {
-    fontSize: 13,
-    color: '#6B7280',
-  },
-  loginLink: {
-    fontSize: 13,
-    color: colors.primary,
-    fontWeight: '700',
-  },
+  container: { flex: 1, backgroundColor: colors.background },
+  scrollContent: { flexGrow: 1, padding: spacing.lg, paddingTop: spacing.md, paddingBottom: 40, width: '100%', maxWidth: 480, alignSelf: 'center' },
+  brandBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg, minHeight: 44 },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  brandLogo: { width: 32, height: 32, borderRadius: 8 },
+  brandText: { fontSize: fontSize.xxl, fontWeight: '700', letterSpacing: -1, color: colors.text },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.divider, alignItems: 'center', justifyContent: 'center' },
+  header: { alignItems: 'flex-start', marginBottom: spacing.lg },
+  title: { fontSize: fontSize.xs, lineHeight: 20, fontWeight: '600', color: colors.primaryDark, marginBottom: 16 },
+  heroTitle: { fontSize: fontSize.xxxl, lineHeight: 42, fontWeight: '700', letterSpacing: -1, color: colors.text, marginBottom: 16 },
+  accent: { color: colors.primaryStrong },
+  subtitle: { fontSize: fontSize.sm, lineHeight: 24, color: colors.textSecondary },
+  helperText: { fontSize: fontSize.sm, lineHeight: 24, color: colors.textSecondary, marginBottom: 24 },
+  formContainer: { width: '100%' },
+  errorText: { flexShrink: 1, color: colors.tone.danger.text, fontSize: fontSize.xs, lineHeight: 20, marginTop: 4 },
+  inputGroup: { marginBottom: 16 },
+  inputLabel: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: 8 },
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingHorizontal: 16, minHeight: 56 },
+  inputIcon: { marginRight: 12 },
+  input: { flex: 1, minWidth: 0, fontSize: fontSize.md, color: colors.text, paddingVertical: 16 },
+  eyeButton: { minWidth: 44, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  registerBtn: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, backgroundColor: colors.primaryStrong, minHeight: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginTop: 16, padding: 12 },
+  registerBtnText: { color: colors.surface, fontSize: fontSize.md, fontWeight: '600' },
+  loginRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', marginTop: 24 },
+  loginText: { fontSize: fontSize.sm, color: colors.textSecondary },
+  loginLink: { fontSize: fontSize.sm, color: colors.primaryStrong, fontWeight: '600' },
+  linkButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
+  roleRow: { flexDirection: 'row', gap: 8, marginBottom: 24 },
+  roleBtn: { flex: 1, minHeight: 64, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 14, backgroundColor: colors.surface, padding: 8 },
+  roleBtnActive: { borderColor: colors.primaryStrong, backgroundColor: colors.primarySoft },
+  roleTitle: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text },
+  roleTitleActive: { color: colors.primaryStrong },
+  roleSub: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4 },
+  roleNotice: { flexDirection: 'row', gap: 8, padding: 12, marginBottom: 24, borderRadius: 12, backgroundColor: colors.primarySoft },
+  roleNoticeText: { flex: 1, fontSize: fontSize.xs, lineHeight: 20, color: colors.textSecondary },
+  passwordStrengthContainer: { marginBottom: 16 },
+  strengthBars: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  strengthBar: { flex: 1, height: 4, borderRadius: 2 },
+  rulesGrid: { gap: 8 },
+  ruleItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  ruleText: { fontSize: fontSize.xs, color: colors.textSecondary },
+  ruleTextMet: { color: colors.tone.success.text },
+  googleDividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 24, marginBottom: 16 },
+  googleDividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  googleDividerText: { fontSize: fontSize.xs, color: colors.textSecondary },
 });
-
-

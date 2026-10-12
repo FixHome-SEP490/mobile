@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +23,7 @@ import type { AuthStackParamList, RootStackParamList } from '../../types';
 import { authApi } from '../../api/auth.api';
 import { useAuthStore } from '../../store';
 import { UserRole } from '../../types';
+import { handoffAuthenticatedRoute } from '../../navigation/root-navigation';
 import { extractApiErrorMessage } from '../../utils/input-validation';
 
 export default function VerifyRegisterOtpScreen() {
@@ -48,13 +50,12 @@ export default function VerifyRegisterOtpScreen() {
   }, [cooldown]);
 
   // Kỹ thuật viên mới chưa được duyệt nên vào thẳng luồng đăng ký hồ sơ.
-  const enterApp = (role: UserRole) =>
-    navigation.reset({
-      index: 0,
-      routes: [{ name: role === UserRole.TECHNICIAN ? 'TechnicianOnboarding' : 'CustomerMain' }],
-    });
+  const enterApp = (role: UserRole) => {
+    if (role === UserRole.CUSTOMER || role === UserRole.TECHNICIAN) handoffAuthenticatedRoute(role === UserRole.TECHNICIAN ? 'TechnicianOnboarding' : 'CustomerMain');
+  };
 
   const handleVerify = async (otpOverride?: string) => {
+    if (loading || resending) return;
     const finalOtp = (typeof otpOverride === 'string' ? otpOverride : otp).trim();
     setError(null);
     if (!/^[0-9]{6}$/.test(finalOtp)) {
@@ -67,11 +68,7 @@ export default function VerifyRegisterOtpScreen() {
     try {
       const result = await authApi.verifyRegisterOtp(email, finalOtp);
       setAuth(result.accessToken, result.user);
-      // Self-service registration is Customer or Technician. Both targets are
-      // registered in every branch of AppNavigator regardless of auth state, so
-      // it's safe to navigate directly instead of hoping the state update alone
-      // moves the user off this screen (it won't for a Customer: their screens
-      // list doesn't change, so nothing auto-navigates them).
+      // The root handoff waits until the authenticated role routes are mounted.
       enterApp(result.user.role);
     } catch (err: any) {
       // A slow/dropped connection can mean the OTP was actually verified and
@@ -95,6 +92,7 @@ export default function VerifyRegisterOtpScreen() {
   };
 
   const handleResend = async () => {
+    if (loading || resending || cooldown > 0) return;
     Haptics.selectionAsync();
     setError(null);
     setResending(true);
@@ -117,7 +115,7 @@ export default function VerifyRegisterOtpScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <TouchableOpacity
+          <View style={styles.brandBar}><TouchableOpacity
             style={styles.backBtn}
             onPress={() => navigation.goBack()}
             accessibilityRole="button"
@@ -125,28 +123,28 @@ export default function VerifyRegisterOtpScreen() {
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
             <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
+          </TouchableOpacity><View style={styles.brandRow}><Image source={require('../../../assets/icon.png')} style={styles.brandLogo} /><Text style={styles.brandText}>Fix<Text style={styles.accent}>Home</Text></Text></View></View>
 
           <View style={styles.header}>
             <View style={styles.iconWrapper}>
-              <Ionicons name="shield-checkmark" size={32} color={colors.primary} />
+              <Ionicons name="shield-checkmark" size={32} color={colors.primaryStrong} />
             </View>
-            <Text style={styles.title}>XÁC THỰC OTP</Text>
-            <View style={styles.divider} />
-            <Text style={styles.subtitle}>HOÀN TẤT ĐĂNG KÝ</Text>
+            <Text style={styles.title}>Xác thực email</Text><Text style={styles.heroTitle} accessibilityRole="header">Hoàn tất đăng ký.{'\n'}<Text style={styles.accent}>Xác nhận email của bạn.</Text></Text>
+            <Text style={styles.subtitle}>Mã OTP gồm 6 số từ email đăng ký.</Text>
           </View>
           <Text style={styles.helperText}>Vui lòng nhập mã OTP đã được gửi đến email của bạn.</Text>
 
           <View style={styles.formContainer}>
             {error && (
-              <View style={styles.errorBox}>
+              <View style={styles.errorBox} accessibilityRole="alert" accessibilityLiveRegion="polite">
                 <Ionicons name="alert-circle" size={16} color={colors.error} />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             )}
 
-            <TouchableOpacity activeOpacity={1} style={styles.otpWrapper} onPress={() => inputRef.current?.focus()}>
-              <View style={styles.otpBoxesContainer} pointerEvents="none">
+            <Text style={styles.inputLabel}>Mã OTP gồm 6 số</Text>
+            <TouchableOpacity accessible={false} activeOpacity={1} style={styles.otpWrapper} onPress={() => inputRef.current?.focus()}>
+              <View style={styles.otpBoxesContainer} pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                 {[0, 1, 2, 3, 4, 5].map((index) => {
                   const char = otp[index] || '';
                   const isFocused = otp.length === index;
@@ -158,9 +156,14 @@ export default function VerifyRegisterOtpScreen() {
                 })}
               </View>
               <TextInput
+                  accessibilityLabel="Mã OTP gồm 6 số"
+                  editable={!(loading || resending)}
+                  autoCorrect={false}
+                  autoComplete="one-time-code"
                 ref={inputRef}
                 style={styles.hiddenOtpInput}
                 keyboardType="number-pad"
+                textContentType="oneTimeCode"
                 maxLength={6}
                 value={otp}
                 onChangeText={(text) => {
@@ -178,12 +181,13 @@ export default function VerifyRegisterOtpScreen() {
               style={[styles.submitBtn, loading && { opacity: 0.7 }]}
               onPress={() => handleVerify()}
               activeOpacity={0.85}
-              disabled={loading}
+              accessibilityRole="button" accessibilityLabel="Xác nhận OTP" accessibilityState={{ disabled: loading || resending, busy: loading }}
+              disabled={loading || resending}
             >
               {loading ? (
                 <ActivityIndicator color={colors.surface} size="small" />
               ) : (
-                <Text style={styles.submitBtnText}>Xác nhận</Text>
+                <><Text style={styles.submitBtnText}>Xác nhận</Text><Ionicons name="arrow-forward" size={20} color={colors.surface} /></>
               )}
             </TouchableOpacity>
 
@@ -191,10 +195,10 @@ export default function VerifyRegisterOtpScreen() {
               <Text style={styles.resendTextWrapper}>Chưa nhận được mã?</Text>
               <TouchableOpacity
                 onPress={handleResend}
-                disabled={resending || cooldown > 0}
+                style={styles.linkButton} accessibilityRole="button" accessibilityLabel="Gửi lại OTP" accessibilityState={{ disabled: loading || resending || cooldown > 0, busy: resending }} disabled={loading || resending || cooldown > 0}
               >
                 <Text style={[styles.resendText, (resending || cooldown > 0) && { color: colors.muted }]}>
-                  {resending ? 'Đang gửi...' : cooldown > 0 ? `Gửi lại (${cooldown}s)` : 'Gửi lại OTP'}
+                  {resending ? 'Đang gửi…' : cooldown > 0 ? `Gửi lại (${cooldown}s)` : 'Gửi lại OTP'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -206,226 +210,35 @@ export default function VerifyRegisterOtpScreen() {
 }
 
 const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    marginBottom: 8,
-    marginTop: -12,
-    marginLeft: -8,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    padding: 24,
-    paddingTop: 60,
-    paddingBottom: 40,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  iconWrapper: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: '#DBEAFE',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#111827',
-    marginBottom: 12,
-  },
-  divider: {
-    width: 40,
-    height: 4,
-    backgroundColor: colors.primary,
-    borderRadius: 2,
-    marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#6B7280',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    textAlign: 'center',
-  },
-  formContainer: {
-    width: '100%',
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FEE2E2',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 14,
-  },
-  errorText: {
-    flex: 1,
-    color: colors.error,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#4B5563',
-    marginBottom: 8,
-    letterSpacing: 0.5,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 50,
-  },
-  inputIcon: {
-    marginRight: 10,
-  },
-  input: {
-    flex: 1,
-    fontSize: 14,
-    color: '#111827',
-  },
-  submitBtn: {
-    backgroundColor: colors.primary,
-    height: 50,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 16,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  submitBtnText: {
-    color: colors.surface,
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  loginRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 24,
-  },
-  loginText: {
-    fontSize: 13,
-    color: '#6B7280',
-  },
-  loginLink: {
-    fontSize: 13,
-    color: colors.primary,
-    fontWeight: '700',
-  },
-  otpWrapper: {
-    position: 'relative',
-    height: 60,
-    marginBottom: 24,
-    marginTop: 8,
-  },
-  otpBoxesContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    height: '100%',
-    position: 'absolute',
-  },
-  otpBox: {
-    width: 45,
-    height: 55,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#BFDBFE',
-    backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  otpBoxFilled: {
-    borderColor: '#3B82F6',
-  },
-  otpBoxFocused: {
-    borderColor: colors.primary,
-    borderWidth: 2,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  otpBoxText: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  hiddenOtpInput: {
-    width: '100%',
-    height: '100%',
-    position: 'absolute',
-    opacity: 0,
-  },
-  resendRow: {
-    alignItems: 'center',
-    marginTop: 20,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  resendTextWrapper: {
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-  resendText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  helperText: {
-    fontSize: 13,
-    color: '#4B5563',
-    textAlign: 'center',
-    marginBottom: 24,
-    marginTop: -16,
-    paddingHorizontal: 16,
-  },
-  timerText: {
-    fontSize: 12,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  resendBtn: {
-    padding: 8,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  resendBtnText: {
-    color: colors.primary,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  resendBtnDisabled: {
-    color: '#9CA3AF',
-  }
+  container: { flex: 1, backgroundColor: colors.background },
+  scrollContent: { flexGrow: 1, padding: spacing.lg, paddingTop: spacing.md, paddingBottom: 40, width: '100%', maxWidth: 480, alignSelf: 'center' },
+  brandBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg, minHeight: 44 },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  brandLogo: { width: 32, height: 32, borderRadius: 8 },
+  brandText: { fontSize: fontSize.xxl, fontWeight: '700', letterSpacing: -1, color: colors.text },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.divider, alignItems: 'center', justifyContent: 'center' },
+  header: { alignItems: 'flex-start', marginBottom: spacing.lg },
+  iconWrapper: { width: 72, height: 72, borderRadius: 24, backgroundColor: colors.primaryTint, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.lg },
+  title: { fontSize: fontSize.xs, lineHeight: 20, fontWeight: '600', color: colors.primaryDark, marginBottom: 16 },
+  heroTitle: { fontSize: fontSize.xxxl, lineHeight: 42, fontWeight: '700', letterSpacing: -1, color: colors.text, marginBottom: 16 },
+  accent: { color: colors.primaryStrong },
+  subtitle: { fontSize: fontSize.sm, lineHeight: 24, color: colors.textSecondary },
+  formContainer: { width: '100%' },
+  inputLabel: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: 8 },
+  errorBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: colors.tone.danger.bg, padding: 12, borderRadius: 12, marginBottom: 16 },
+  errorText: { flexShrink: 1, color: colors.tone.danger.text, fontSize: fontSize.xs, lineHeight: 20, marginTop: 4 },
+  submitBtn: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, backgroundColor: colors.primaryStrong, minHeight: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginTop: 16, padding: 12 },
+  submitBtnText: { color: colors.surface, fontSize: fontSize.md, fontWeight: '600' },
+  linkButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
+  helperText: { fontSize: fontSize.sm, lineHeight: 24, color: colors.textSecondary, marginBottom: 24 },
+  otpWrapper: { position: 'relative', minHeight: 60, marginBottom: 24, marginTop: 8 },
+  otpBoxesContainer: { flexDirection: 'row', gap: 8, width: '100%', minHeight: 60 },
+  otpBox: { flex: 1, minHeight: 56, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center' },
+  otpBoxFilled: { borderColor: colors.primaryStrong },
+  otpBoxFocused: { borderColor: colors.primaryStrong, borderWidth: 2 },
+  otpBoxText: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.text },
+  hiddenOtpInput: { width: '100%', height: '100%', position: 'absolute', opacity: 0 },
+  resendRow: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 4, marginTop: 16 },
+  resendTextWrapper: { fontSize: fontSize.sm, color: colors.textSecondary },
+  resendText: { fontSize: fontSize.sm, fontWeight: '600', color: colors.primaryStrong },
 });
-
-
-

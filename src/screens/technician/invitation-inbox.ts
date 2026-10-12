@@ -1,7 +1,13 @@
 import type { bookingsApi, InvitationItem } from '../../api/bookings.api';
-import type { ordersApi, ServiceOrderItem } from '../../api/orders.api';
+import { isHistoricalOrder, type TechnicianOrderItem, type TechnicianOrdersPage } from '../../api/orders.api';
 
 type Action = 'ACCEPT' | 'DECLINE';
+
+/** Technician GETs accept sanitized history; never use the Customer full-order parser here. */
+interface ReconciliationOrdersApi {
+  getMyOrdersPage: (page: number, pageSize: number) => Promise<TechnicianOrdersPage>;
+  getOrder: (id: string) => Promise<TechnicianOrderItem>;
+}
 
 interface TechnicianSession {
   getUserId: () => string | null;
@@ -95,21 +101,21 @@ type OrderVerification =
   | { state: 'unknown' };
 
 function isCurrentAssignedOrder(
-  order: ServiceOrderItem,
+  order: TechnicianOrderItem,
   orderId: string,
   bookingId: string,
   technicianId: string,
 ): boolean {
   return (
-    order.id === orderId &&
+    !isHistoricalOrder(order) && order.id === orderId &&
     order.bookingId === bookingId &&
-    order.historical !== true &&
+
     order.technician?.id === technicianId
   );
 }
 
 async function verifyOrderId(
-  orderApi: Pick<typeof ordersApi, 'getOrder'>,
+  orderApi: ReconciliationOrdersApi,
   orderId: string,
   bookingId: string,
   technicianId: string,
@@ -133,7 +139,7 @@ async function verifyOrderId(
 }
 
 async function findCurrentAssignedOrderForBooking(
-  orderApi: Pick<typeof ordersApi, 'getMyOrdersPage' | 'getOrder'>,
+  orderApi: ReconciliationOrdersApi,
   bookingId: string,
   technicianId: string,
   stillCurrent: () => boolean,
@@ -153,7 +159,7 @@ async function findCurrentAssignedOrderForBooking(
 
     for (const row of result.data) {
       if (
-        row.historical === true ||
+        isHistoricalOrder(row) ||
         row.bookingId !== bookingId ||
         !UUID.test(row.id)
       ) {
@@ -183,7 +189,7 @@ async function findCurrentAssignedOrderForBooking(
 // One instance per screen ref. Transport is injected so tests exercise this exact controller.
 export function createInvitationInbox(
   api: Pick<typeof bookingsApi, 'getMyInvitations' | 'respondInvitation'>,
-  orderApi: Pick<typeof ordersApi, 'getMyOrdersPage' | 'getOrder'>,
+  orderApi: ReconciliationOrdersApi,
   write: (state: InboxState) => void,
   notify: (notice: Notice, isCurrent: () => boolean) => void,
   session: TechnicianSession,

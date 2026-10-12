@@ -1,4 +1,5 @@
 import type { CreateBookingDto } from '../../api/bookings.api';
+import type { MediaUploadImage } from '../../api/media.api';
 import type { ServiceItem } from '../../api/services.api';
 import type { AddressData } from '../../api/users.api';
 import { resolveServicePrice } from './service-catalog';
@@ -15,8 +16,13 @@ export interface BookingReviewSnapshot {
   readonly addressDescription: string;
   readonly scheduleLabel: string;
   readonly pricingLabel: string;
+  readonly photos: readonly BookingPhotoPreview[];
   /** The booking carries an assistant conversation the technician will see. */
   readonly hasAiSummary: boolean;
+}
+
+export interface BookingPhotoPreview extends MediaUploadImage {
+  readonly sizeBytes?: number;
 }
 
 const AI_SESSION_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
@@ -37,6 +43,7 @@ export function buildBookingReviewSnapshot({
   time,
   now,
   aiSessionId,
+  photos = [],
 }: {
   ownerUserId: string;
   service: ServiceItem;
@@ -46,6 +53,7 @@ export function buildBookingReviewSnapshot({
   time: string;
   now?: Date;
   aiSessionId?: string | null;
+  photos?: readonly BookingPhotoPreview[];
 }): BookingReviewSnapshot {
   if (!ownerUserId || address.userId !== ownerUserId) {
     throw new Error('Vui lòng chọn địa chỉ đã lưu của tài khoản này.');
@@ -97,6 +105,7 @@ export function buildBookingReviewSnapshot({
       .join(', '),
     scheduleLabel: `${formatBookingDate(date)} · ${time}–${endHour}:${endMinute}`,
     pricingLabel,
+    photos: Object.freeze(photos.map((photo) => Object.freeze({ ...photo }))),
     hasAiSummary: session !== null,
   });
 }

@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -24,6 +26,7 @@ import { fetchAllOrders } from './technician-earnings';
 import { buildWeek, dayKeyVn } from './technician-schedule';
 
 import { vnDateString, vnTimeString } from '../../utils/vn-time';
+import TechnicianAvailabilityEditor from './TechnicianAvailabilityEditor';
 
 const VN_DATE = { day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 const VN_TIME = { hour: '2-digit', minute: '2-digit' } as const;
@@ -44,6 +47,8 @@ export default function TechnicianScheduleScreen() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const aliveRef = useRef(true);
+  // Once a server page confirms historical access, never reinsert its former full DTO this mount.
+  const revokedOrderIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     aliveRef.current = true;
@@ -55,11 +60,20 @@ export default function TechnicianScheduleScreen() {
   const load = useCallback(async () => {
     try {
       const [all, off] = await Promise.all([
-        fetchAllOrders((page, size) => ordersApi.getMyOrdersPage(page, size)),
+        fetchAllOrders(
+          (page, size) => ordersApi.getTechnicianJobsPage(page, size),
+          undefined,
+          (ids) => {
+            if (!aliveRef.current) return;
+            for (const id of ids) revokedOrderIdsRef.current.add(id);
+            // A verified revocation must survive failure of either GET in Promise.all.
+            setOrders((previous) => previous.filter((item) => !revokedOrderIdsRef.current.has(item.id)));
+          },
+        ),
         technicianProfileApi.getMyTimeOff(),
       ]);
       if (!aliveRef.current) return;
-      setOrders(all.orders);
+      setOrders(all.orders.filter((item) => !revokedOrderIdsRef.current.has(item.id)));
       setTimeOff(off);
       setLoadedAt(Date.now());
       setLoadError(false);
@@ -74,7 +88,6 @@ export default function TechnicianScheduleScreen() {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount, guarded by aliveRef
     void load();
   }, [load]);
 
@@ -94,12 +107,16 @@ export default function TechnicianScheduleScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
       <View style={styles.header}>
         <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Quay lại">
           <ChevronLeft size={26} color={colors.text} strokeWidth={1.75} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} accessibilityRole="header">Lịch làm việc</Text>
+        <View style={styles.headerTitleGroup}>
+          <Text style={styles.headerEyebrow}>Công việc trong tuần</Text>
+          <Text style={styles.headerTitle} accessibilityRole="header">Lịch làm việc</Text>
+        </View>
         <View style={styles.iconBtn} />
       </View>
 
@@ -122,9 +139,16 @@ export default function TechnicianScheduleScreen() {
         </View>
       ) : (
         <ScrollView
+          keyboardShouldPersistTaps="handled"
           contentContainerStyle={[styles.content, { paddingBottom: 32 + Math.max(insets.bottom, 16) }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); }} />}
         >
+          <View style={styles.sourceNotice}>
+            <Text style={styles.sourceNoticeText}>
+              Lịch hiển thị các đơn đã tải và ngày nghỉ đã khai báo.
+            </Text>
+          </View>
+          <TechnicianAvailabilityEditor onChanged={() => { void load(); }} />
           <View style={styles.weekNav}>
             <TouchableOpacity style={styles.iconBtn} onPress={() => changeWeek(-1)} accessibilityRole="button" accessibilityLabel="Tuần trước">
               <ChevronLeft size={22} color={colors.text} strokeWidth={1.75} />
@@ -224,6 +248,7 @@ export default function TechnicianScheduleScreen() {
           {refreshing && <ActivityIndicator color={colors.primaryStrong} />}
         </ScrollView>
       )}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -233,8 +258,12 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   pad: { flex: 1, padding: 16 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, paddingVertical: 4, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider },
   iconBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text },
+  headerTitleGroup: { flex: 1, gap: 1, justifyContent: 'center' },
+  headerEyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.textSecondary },
+  headerTitle: { fontSize: 22, lineHeight: 30, fontWeight: '700', color: colors.text },
   content: { padding: 16, gap: 12 },
+  sourceNotice: { padding: 12, borderRadius: 14, backgroundColor: colors.primarySoft },
+  sourceNoticeText: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
   weekNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   weekTitleBtn: { alignItems: 'center', minHeight: 44, justifyContent: 'center' },
   weekTitle: { fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.text },

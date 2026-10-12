@@ -126,6 +126,7 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
     async (items) => {
       api.get.mockResolvedValue({ data: { data: {
         id: 'order-1', status: 'en_route', paymentStatus: 'unpaid',
+        laborTotal: 100000, partsTotal: 0, grandTotal: 100000,
         completedAt: '2026-09-30T01:00:00.000Z',
         quotation: { id: 'quote-1', status: 'sent', laborTotal: 100000, partsTotal: 0, items },
       } } });
@@ -156,6 +157,7 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
     api.get.mockResolvedValue({ data: { data: [{
       id: 'order-1', code: 'SO-1', bookingId: 'booking-1', status: 'accepted',
       serviceName: 'Tap repair', paymentStatus: 'unpaid',
+      laborTotal: 0, partsTotal: 0, grandTotal: 0,
     }], meta: { total: 40 } } });
     const page = await ordersApi.getMyOrdersPage(2, 20);
     expect(api.get).toHaveBeenCalledWith('/service-orders/my', { params: { page: 2, pageSize: 20 } });
@@ -166,7 +168,7 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
   it('turns money sent as numeric strings into numbers, so totals add up', async () => {
     api.get.mockResolvedValue({ data: { data: [
       { id: 'a', status: 'completed', paymentStatus: 'paid', laborTotal: '220000.00', partsTotal: '0', grandTotal: '220000.00' },
-      { id: 'b', status: 'completed', paymentStatus: 'paid', laborTotal: '650000.00', partsTotal: null, grandTotal: '650000.00' },
+      { id: 'b', status: 'completed', paymentStatus: 'paid', laborTotal: '650000.00', partsTotal: '0', grandTotal: '650000.00' },
     ] } });
     const orders = await ordersApi.getMyOrders();
     expect(orders.map((o) => o.laborTotal)).toEqual([220000, 650000]);
@@ -197,6 +199,27 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
     expect(page.data[0]).toMatchObject({ id: 'booking-1', status: 'SUBMITTED' });
   });
 
+  it.each([
+    ['raw object', { unexpected: true }],
+    ['null data', { data: null }],
+    ['object data', { data: {} }],
+  ])('rejects malformed successful Booking page responses (%s)', async (_shape, response) => {
+    api.get.mockResolvedValue({ data: response });
+    await expect(bookingsApi.getMyBookingsPage(1, 20))
+      .rejects.toThrow('Invalid bookings page response');
+    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(api.get).toHaveBeenCalledWith('/bookings/my', { params: { page: 1, pageSize: 20 } });
+  });
+
+  it.each([
+    ['raw array', []],
+    ['wrapped array', { data: [], meta: { total: 0 } }],
+  ])('accepts a valid empty Booking page response (%s)', async (_shape, response) => {
+    api.get.mockResolvedValue({ data: response });
+    await expect(bookingsApi.getMyBookingsPage(1, 20)).resolves.toEqual({ data: [], total: 0 });
+    expect(api.get).toHaveBeenCalledTimes(1);
+  });
+
   it('clamps invalid page bounds and caps pageSize at the server limit', async () => {
     api.get.mockResolvedValue({ data: { data: [], meta: { total: 0 } } });
     await bookingsApi.getMyBookingsPage(0, -5);
@@ -214,5 +237,42 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
     const page = await bookingsApi.getMyBookingsPage(1, 20);
     expect(page.total).toBe(1);
     expect(page.data[0].status).toBe('MATCHING');
+  });
+  it.each([
+    ['null body', null],
+    ['undefined body', undefined],
+    ['object body', { unexpected: true }],
+    ['null data', { data: null }],
+    ['object data', { data: {} }],
+    ['string data', { data: 'not-array' }],
+  ])('rejects malformed successful ServiceOrder page responses (%s)', async (_shape, response) => {
+    api.get.mockResolvedValue({ data: response });
+    await expect(ordersApi.getMyOrdersPage(2, 17))
+      .rejects.toThrow('Invalid orders page response');
+    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(api.get).toHaveBeenCalledWith('/service-orders/my', { params: { page: 2, pageSize: 17 } });
+    expect(api.post).not.toHaveBeenCalled();
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['raw array', []],
+    ['wrapped array', { data: [], meta: { total: 0 } }],
+  ])('accepts a valid empty ServiceOrder page response (%s)', async (_shape, response) => {
+    api.get.mockResolvedValue({ data: response });
+    await expect(ordersApi.getMyOrdersPage(1, 20)).resolves.toEqual({ data: [], total: 0 });
+    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(api.get).toHaveBeenCalledWith('/service-orders/my', { params: { page: 1, pageSize: 20 } });
+  });
+
+  it.each([
+    ['raw array', [{ id: 'order-raw', status: 'accepted', paymentStatus: 'unpaid' }]],
+    ['wrapped array without total', { data: [{ id: 'order-wrapped', status: 'accepted', paymentStatus: 'unpaid' }] }],
+  ])('keeps valid nonempty ServiceOrder rows and falls back to row count (%s)', async (_shape, response) => {
+    api.get.mockResolvedValue({ data: response });
+    const page = await ordersApi.getMyOrdersPage(3, 5);
+    expect(page).toMatchObject({ data: [{ status: 'ACCEPTED' }], total: 1 });
+    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(api.get).toHaveBeenCalledWith('/service-orders/my', { params: { page: 3, pageSize: 5 } });
   });
 });

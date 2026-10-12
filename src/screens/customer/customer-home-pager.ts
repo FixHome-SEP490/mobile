@@ -5,6 +5,11 @@
 
 export const HOME_POPULAR_SERVICES_PAGE_SIZE = 4;
 
+/** Keep four compact columns at target phone widths; use two when text scaling needs room. */
+export function getHomePopularGridColumns(viewportWidth: number, fontScale: number): 2 | 4 {
+  return viewportWidth < 360 || fontScale >= 1.2 ? 2 : 4;
+}
+
 export interface HomePopularServiceTarget {
   readonly id: string;
   readonly categoryCode?: string;

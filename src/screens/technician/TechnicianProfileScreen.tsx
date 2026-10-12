@@ -16,66 +16,56 @@ import {
   BottomSheetBackdrop,
   type BottomSheetBackdropProps,
   BottomSheetSectionList,
-  BottomSheetScrollView,
   BottomSheetTextInput,
 } from '@gorhom/bottom-sheet';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  CalendarDays,
-  CalendarOff,
   CalendarRange,
   ChartColumn,
   Camera,
   CheckSquare,
   ChevronRight,
-  LocateFixed,
-  LogOut,
   MapPin,
   MessageSquareText,
   ShieldCheck,
   Square,
   Star,
-  Trash2,
   Wallet,
   Wrench,
   X,
   type LucideIcon,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuthStore } from '../../store';
 import type { RootStackParamList } from '../../types';
 import { usersApi, type AddressData } from '../../api/users.api';
 import { mediaApi } from '../../api/media.api';
-import { ordersApi } from '../../api/orders.api';
+import { ordersApi, isHistoricalOrder, type ServiceOrderItem } from '../../api/orders.api';
 import { authApi } from '../../api/auth.api';
-import { geoApi, type PlaceSuggestion } from '../../api/geo.api';
 import { servicesApi, type ServiceItem, type CategoryItem } from '../../api/services.api';
 import {
   technicianProfileApi,
   type TechnicianProfile,
-  type TechnicianScheduleSlot,
   type TechnicianServiceOffering,
-  type TechnicianTimeOff,
 } from '../../api/technician-profile.api';
+import { technicianVerificationApi, type MyVerification } from '../../api/technician-verification.api';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
 import CategoryPills from '../../components/CategoryPills';
-import MapView, { Marker } from '../../components/AddressMap';
 import { useAppTheme } from '../../constants/theme';
 import { extractApiErrorMessage } from '../../utils/input-validation';
-import { formatVnd, parseVnDateInput } from '../../utils/format';
+import { formatVnd } from '../../utils/format';
 import StatusBadge from '../../components/StatusBadge';
 import type { StatusView } from './technician-status';
 
-import { vnDateString } from '../../utils/vn-time';
 import { NO_RATING_TEXT, formatRating, ratingValue } from '../../utils/rating';
 import { avatarErrorMessage, updateMyAvatar } from '../../services/avatar-upload';
+import AccountLogoutAction from '../../components/account/AccountLogoutAction';
 
-const VN_DATE = { day: '2-digit', month: '2-digit', year: 'numeric' } as const;
-// Floating GlassTabBar: 64pt pill + breathing room, plus the bottom inset (min 16).
-const TAB_BAR_CLEARANCE = 64 + 16;
+// Match Customer account clearance above the floating bar, plus the bottom inset.
+const TAB_BAR_CLEARANCE = 96;
 
 const VERIFICATION_VIEW: Record<string, StatusView> = {
   pending: { label: 'Chờ duyệt', tone: 'warning', icon: 'Clock' },
@@ -83,13 +73,18 @@ const VERIFICATION_VIEW: Record<string, StatusView> = {
   rejected: { label: 'Bị từ chối', tone: 'danger', icon: 'XCircle' },
 };
 
+// Xác minh danh tính (KYC) ở Hồ sơ chỉ đọc trạng thái đã nộp từ server:
+// null/chưa nộp → “Chưa nộp hồ sơ”, không suy diễn từ pending mặc định.
+const KYC_VIEW: Record<MyVerification['status'], StatusView> = {
+  PENDING: { label: 'Đang chờ duyệt', tone: 'warning', icon: 'Clock' },
+  VERIFIED: { label: 'Đã xác minh', tone: 'success', icon: 'CheckCircle2' },
+  REJECTED: { label: 'Cần cập nhật', tone: 'danger', icon: 'XCircle' },
+};
+
 const renderBackdrop = (props: BottomSheetBackdropProps) => (
   <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} />
 );
 
-const DAY_NAMES = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
-const START_TIMES = ['06:00', '07:00', '08:00', '09:00', '10:00', '13:00', '14:00'];
-const END_TIMES = ['12:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00'];
 
 type ProfileStyles = ReturnType<typeof getStyles>;
 
@@ -119,31 +114,46 @@ export default function TechnicianProfileScreen() {
   const { colors, isDark } = useAppTheme();
   const styles = getStyles(colors);
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReduceMotion();
   const logout = useAuthStore((state) => state.logout);
-  const { user } = useAuthStore();
+  const { user, sessionGeneration } = useAuthStore();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  // Giảm chuyển động: bỏ rung phản hồi, giữ nội dung tĩnh.
+  const tapFeedback = () => {
+    if (!reduceMotion) void Haptics.selectionAsync();
+  };
 
   const [fullName, setFullName] = useState(user?.fullName || 'Kỹ thuật viên');
-  const [phoneNumber, setPhoneNumber] = useState(user?.phoneNumber || '');
+  const [profilePhone, setProfilePhone] = useState<{
+    userId: string | undefined;
+    sessionGeneration: number;
+    phoneNumber: string;
+  } | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatarUrl || null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [earningsTotal, setEarningsTotal] = useState(0);
+  const [earningsLoading, setEarningsLoading] = useState(true);
+  const [earningsLoaded, setEarningsLoaded] = useState(false);
 
   const [isAvatarModalVisible, setAvatarModalVisible] = useState(false);
 
   // ---- Hồ sơ nghề nghiệp (skills / location & radius / schedule / time-off) ----
   const [technicianProfile, setTechnicianProfile] = useState<TechnicianProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [verification, setVerification] = useState<MyVerification | null>(null);
+  const [verificationLoading, setVerificationLoading] = useState(true);
+  const [verificationLoaded, setVerificationLoaded] = useState(false);
+  const [skillsLoaded, setSkillsLoaded] = useState(false);
   const [addresses, setAddresses] = useState<AddressData[]>([]);
   const technicianAddress = addresses.find((a) => a.isDefault) ?? addresses[0] ?? null;
 
   const skillsSheetRef = useRef<BottomSheetModal>(null);
-  const locationSheetRef = useRef<BottomSheetModal>(null);
-  const scheduleSheetRef = useRef<BottomSheetModal>(null);
-  const timeOffSheetRef = useRef<BottomSheetModal>(null);
   const wideSnapPoints = useMemo(() => ['90%'], []);
 
   // Skills
   const [loadingSkills, setLoadingSkills] = useState(false);
+  const [skillsSheetLoaded, setSkillsSheetLoaded] = useState(false);
+  const [skillsSheetError, setSkillsSheetError] = useState<string | null>(null);
   const [catalogServices, setCatalogServices] = useState<ServiceItem[]>([]);
   const [pickerCategories, setPickerCategories] = useState<CategoryItem[]>([]);
   const [pickerCategoryId, setPickerCategoryId] = useState<string | null>(null);
@@ -172,40 +182,12 @@ export default function TechnicianProfileScreen() {
     ].filter((section) => section.data.length > 0);
   }, [filteredCatalogServices, myOfferings]);
 
-  // Location & radius
-  const [locationLine1, setLocationLine1] = useState('');
-  const [locationWard, setLocationWard] = useState('');
-  const [locationDistrict, setLocationDistrict] = useState('');
-  const [locationProvince, setLocationProvince] = useState('');
-  const [locationLat, setLocationLat] = useState<number | undefined>(undefined);
-  const [locationLng, setLocationLng] = useState<number | undefined>(undefined);
-  const [locationRadiusKm, setLocationRadiusKm] = useState('');
-  const [locationSuggestions, setLocationSuggestions] = useState<PlaceSuggestion[]>([]);
-  const [searchingLocation, setSearchingLocation] = useState(false);
-  const [gettingLocation, setGettingLocation] = useState(false);
-  const [savingLocation, setSavingLocation] = useState(false);
-  const locationSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Schedule
-  const [scheduleDraft, setScheduleDraft] = useState(
-    Array.from({ length: 7 }, () => ({ enabled: false, startTime: '08:00', endTime: '17:00' })),
-  );
-  const [savingSchedule, setSavingSchedule] = useState(false);
-
-  // Time off
-  const [timeOffList, setTimeOffList] = useState<TechnicianTimeOff[]>([]);
-  const [loadingTimeOff, setLoadingTimeOff] = useState(false);
-  const [savingTimeOff, setSavingTimeOff] = useState(false);
-  const [newTimeOffStart, setNewTimeOffStart] = useState('');
-  const [newTimeOffEnd, setNewTimeOffEnd] = useState('');
-  const [newTimeOffReason, setNewTimeOffReason] = useState('');
-
   // Same flow as the customer: upload to /media/upload, save the hosted URL on
   // the profile, then refresh the session user. The old photo stays on screen
   // until the server has confirmed the new one.
   const handlePickImage = async () => {
     if (uploadingAvatar) return;
-    Haptics.selectionAsync();
+    tapFeedback();
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
@@ -233,25 +215,47 @@ export default function TechnicianProfileScreen() {
 
   useEffect(() => {
     let mounted = true;
+    const requestedUserId = user?.id;
+    const requestedSessionGeneration = sessionGeneration;
     usersApi
       .getProfile()
       .then((profile) => {
-        if (mounted && profile) {
+        const currentAuth = useAuthStore.getState();
+        const isCurrentSession = currentAuth.user?.id === requestedUserId
+          && currentAuth.sessionGeneration === requestedSessionGeneration;
+        if (mounted && isCurrentSession && profile) {
           if (profile.fullName) setFullName(profile.fullName);
-          if (profile.phoneNumber) setPhoneNumber(profile.phoneNumber);
+          if (profile.phoneNumber) {
+            setProfilePhone({
+              userId: requestedUserId,
+              sessionGeneration: requestedSessionGeneration,
+              phoneNumber: profile.phoneNumber,
+            });
+          }
         }
       })
       .catch(() => {});
 
+    return () => {
+      mounted = false;
+    };
+  }, [sessionGeneration, user?.id]);
+
+  useEffect(() => {
+    let mounted = true;
     ordersApi
-      .getMyOrders()
+      .getTechnicianJobs()
       .then((orders) => {
         if (!mounted || !Array.isArray(orders)) return;
-        const completed = orders.filter((o) => String(o.status).toUpperCase() === 'COMPLETED');
+        const completed = orders.filter((o): o is ServiceOrderItem => !isHistoricalOrder(o) && String(o.status).toUpperCase() === 'COMPLETED');
         const earn = completed.reduce((sum, o) => sum + (o.laborTotal || o.grandTotal || 0), 0);
         setEarningsTotal(earn);
+        setEarningsLoaded(true);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setEarningsLoading(false);
+      });
 
     return () => {
       mounted = false;
@@ -260,14 +264,27 @@ export default function TechnicianProfileScreen() {
 
   const loadTechnicianProfile = useCallback(async () => {
     try {
-      const [profile, addrs] = await Promise.all([
+      const [profile, addrs, offeringsResult, verificationResult] = await Promise.all([
         technicianProfileApi.getMyProfile(),
         usersApi.getAddresses().catch(() => []),
+        // Lấy sớm để số lượng kỹ năng ở hàng tóm tắt là số thật từ server,
+        // không phải 0 mặc định trước khi mở sheet.
+        technicianProfileApi.getMyServices().then((data) => ({ loaded: true, data })).catch(() => ({ loaded: false, data: [] as TechnicianServiceOffering[] })),
+        technicianVerificationApi.getMyVerification().then((data) => ({ loaded: true, data })).catch(() => ({ loaded: false, data: null as MyVerification | null })),
       ]);
       setTechnicianProfile(profile);
       setAddresses(addrs);
+      const offeringsById: Record<string, TechnicianServiceOffering> = {};
+      for (const o of offeringsResult.data) offeringsById[o.serviceId] = o;
+      if (offeringsResult.loaded) setMyOfferings(offeringsById);
+      setSkillsLoaded(offeringsResult.loaded);
+      setVerification(verificationResult.data);
+      setVerificationLoaded(verificationResult.loaded);
     } catch {
       // Best-effort; menu rows just show no summary yet.
+    } finally {
+      setProfileLoading(false);
+      setVerificationLoading(false);
     }
   }, []);
 
@@ -278,9 +295,10 @@ export default function TechnicianProfileScreen() {
 
   // ---- Skills sheet ----
   const openSkillsSheet = async () => {
-    Haptics.selectionAsync();
+    tapFeedback();
     skillsSheetRef.current?.present();
     setLoadingSkills(true);
+    setSkillsSheetError(null);
     try {
       const [services, categories, offerings] = await Promise.all([
         servicesApi.getServices({ pageSize: 100 }),
@@ -303,8 +321,11 @@ export default function TechnicianProfileScreen() {
         };
       }
       setSkillDrafts(drafts);
+      setSkillsLoaded(true);
+      setSkillsSheetLoaded(true);
     } catch {
-      setCatalogServices([]);
+      // A failed request is not an empty catalog; keep the last confirmed data/drafts.
+      setSkillsSheetError('Không thể tải danh sách dịch vụ. Kiểm tra kết nối rồi thử lại.');
     } finally {
       setLoadingSkills(false);
     }
@@ -335,256 +356,53 @@ export default function TechnicianProfileScreen() {
     }
   };
 
-  // ---- Location & radius sheet ----
-  const applyLocationPlace = (
-    lat: number,
-    lng: number,
-    place?: { formattedAddress?: string; ward?: string; district?: string; province?: string },
-  ) => {
-    setLocationLat(lat);
-    setLocationLng(lng);
-    if (place) {
-      setLocationLine1(place.formattedAddress || locationLine1);
-      setLocationWard(place.ward || '');
-      setLocationDistrict(place.district || locationDistrict);
-      setLocationProvince(place.province || locationProvince);
-    }
-  };
-
-  const openLocationSheet = () => {
-    Haptics.selectionAsync();
-    setLocationLine1(technicianAddress?.line1 ?? '');
-    setLocationWard(technicianAddress?.ward ?? '');
-    setLocationDistrict(technicianAddress?.district ?? '');
-    setLocationProvince(technicianAddress?.province ?? '');
-    setLocationLat(technicianAddress?.lat);
-    setLocationLng(technicianAddress?.lng);
-    setLocationRadiusKm(
-      technicianProfile?.serviceRadiusKm != null ? String(technicianProfile.serviceRadiusKm) : '',
-    );
-    setLocationSuggestions([]);
-    locationSheetRef.current?.present();
-  };
-
-  const handleLocationSearchChange = (text: string) => {
-    setLocationLine1(text);
-    if (locationSearchDebounceRef.current) clearTimeout(locationSearchDebounceRef.current);
-    const query = text.trim();
-    if (query.length < 3) { setLocationSuggestions([]); return; }
-    locationSearchDebounceRef.current = setTimeout(async () => {
-      setSearchingLocation(true);
-      try {
-        setLocationSuggestions(await geoApi.autocomplete(query));
-      } catch {
-        setLocationSuggestions([]);
-      } finally {
-        setSearchingLocation(false);
-      }
-    }, 350);
-  };
-
-  const handleSelectLocationSuggestion = (s: PlaceSuggestion) => {
-    setLocationSuggestions([]);
-    applyLocationPlace(s.lat, s.lng, { formattedAddress: s.description, ward: s.ward, district: s.district, province: s.province });
-  };
-
-  const handleMapPressLocation = async (e: any) => {
-    const lat = e.nativeEvent.coordinate.latitude;
-    const lng = e.nativeEvent.coordinate.longitude;
-    setLocationLat(lat);
-    setLocationLng(lng);
-    try {
-      applyLocationPlace(lat, lng, await geoApi.reverse(lat, lng));
-    } catch {
-      // Keep the pin even if reverse lookup fails.
-    }
-  };
-
-  const handleGetCurrentLocation = async () => {
-    setGettingLocation(true);
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Quyền bị từ chối', 'Ứng dụng cần quyền vị trí để lấy vị trí hiện tại.');
-        return;
-      }
-      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const { latitude, longitude } = location.coords;
-      setLocationLat(latitude);
-      setLocationLng(longitude);
-      try {
-        applyLocationPlace(latitude, longitude, await geoApi.reverse(latitude, longitude));
-      } catch {
-        // Keep the raw coordinates even if reverse lookup fails.
-      }
-    } catch {
-      Alert.alert('Lỗi', 'Không thể lấy vị trí hiện tại.');
-    } finally {
-      setGettingLocation(false);
-    }
-  };
-
-  const handleSaveLocation = async () => {
-    if (!locationLine1.trim() || locationLat == null || locationLng == null) {
-      Alert.alert('Lỗi', 'Vui lòng tìm hoặc chọn vị trí trên bản đồ trước khi lưu.');
-      return;
-    }
-    const radiusText = locationRadiusKm.trim().replace(',', '.');
-    const radiusKm = Number(radiusText);
-    if (!radiusText || !Number.isFinite(radiusKm) || radiusKm < 1 || radiusKm > 40) {
-      Alert.alert('Lỗi', 'Bán kính hoạt động từ 1 đến 40 km.');
-      return;
-    }
-    setSavingLocation(true);
-    try {
-      const addressDto = {
-        label: 'Vị trí làm việc',
-        line1: locationLine1.trim(),
-        ward: locationWard || '',
-        district: locationDistrict || locationWard || locationProvince,
-        province: locationProvince,
-        lat: locationLat,
-        lng: locationLng,
-        isDefault: true,
-      };
-      await (technicianAddress
-        ? usersApi.updateAddress(technicianAddress.id, addressDto)
-        : usersApi.createAddress(addressDto));
-      await technicianProfileApi.updateMyProfile({
-        serviceRadiusKm: radiusKm,
-      });
-      await loadTechnicianProfile();
-      locationSheetRef.current?.dismiss();
-    } catch (err: unknown) {
-      Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể lưu vị trí.'));
-    } finally {
-      setSavingLocation(false);
-    }
-  };
-
-  // ---- Schedule sheet ----
-  const openScheduleSheet = () => {
-    Haptics.selectionAsync();
-    const byDay = new Map((technicianProfile?.schedules ?? []).map((s) => [s.dayOfWeek, s]));
-    setScheduleDraft(
-      Array.from({ length: 7 }, (_, day) => {
-        const existing = byDay.get(day);
-        return existing
-          ? { enabled: true, startTime: existing.startTime, endTime: existing.endTime }
-          : { enabled: false, startTime: '08:00', endTime: '17:00' };
-      }),
-    );
-    scheduleSheetRef.current?.present();
-  };
-
-  const handleSaveSchedule = async () => {
-    setSavingSchedule(true);
-    try {
-      const schedules: TechnicianScheduleSlot[] = scheduleDraft
-        .map((slot, dayOfWeek) => ({ ...slot, dayOfWeek }))
-        .filter((slot) => slot.enabled)
-        .map(({ dayOfWeek, startTime, endTime }) => ({ dayOfWeek, startTime, endTime }));
-      await technicianProfileApi.updateMySchedule(schedules);
-      await loadTechnicianProfile();
-      scheduleSheetRef.current?.dismiss();
-    } catch (err: unknown) {
-      Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể lưu khung giờ nhận việc.'));
-    } finally {
-      setSavingSchedule(false);
-    }
-  };
-
-  // ---- Time-off sheet ----
-  const openTimeOffSheet = async () => {
-    Haptics.selectionAsync();
-    setNewTimeOffStart('');
-    setNewTimeOffEnd('');
-    setNewTimeOffReason('');
-    timeOffSheetRef.current?.present();
-    setLoadingTimeOff(true);
-    try {
-      setTimeOffList(await technicianProfileApi.getMyTimeOff());
-    } catch {
-      setTimeOffList([]);
-    } finally {
-      setLoadingTimeOff(false);
-    }
-  };
-
-  const handleAddTimeOff = async () => {
-    const start = parseVnDateInput(newTimeOffStart);
-    const end = parseVnDateInput(newTimeOffEnd);
-    if (!start || !end) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đủ ngày bắt đầu và kết thúc theo dạng dd/MM/yyyy.');
-      return;
-    }
-    if (end < start) {
-      Alert.alert('Lỗi', 'Ngày kết thúc phải sau hoặc trùng ngày bắt đầu.');
-      return;
-    }
-    setSavingTimeOff(true);
-    try {
-      await technicianProfileApi.createTimeOff({
-        startAt: `${start}T00:00:00`,
-        endAt: `${end}T23:59:59`,
-        reason: newTimeOffReason.trim() || undefined,
-      });
-      setNewTimeOffStart('');
-      setNewTimeOffEnd('');
-      setNewTimeOffReason('');
-      setTimeOffList(await technicianProfileApi.getMyTimeOff());
-    } catch (err: unknown) {
-      Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể thêm ngày nghỉ. Kiểm tra lại khoảng ngày.'));
-    } finally {
-      setSavingTimeOff(false);
-    }
-  };
-
-  const handleDeleteTimeOff = (id: string) => {
-    Alert.alert('Xóa ngày nghỉ', 'Bạn có thể được xếp việc trở lại trong khoảng ngày này sau khi xóa.', [
-      { text: 'Hủy', style: 'cancel' },
-      {
-        text: 'Xóa',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await technicianProfileApi.deleteTimeOff(id);
-            setTimeOffList((prev) => prev.filter((t) => t.id !== id));
-          } catch {
-            Alert.alert('Lỗi', 'Không thể xóa ngày nghỉ.');
-          }
-        },
-      },
-    ]);
-  };
-
   const handleLogout = () => {
-    Alert.alert('Đăng xuất?', 'Bạn có chắc muốn đăng xuất khỏi FixHome?', [
-      { text: 'Ở lại', style: 'cancel' },
+    Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất?', [
+      { text: 'Hủy', style: 'cancel' },
       {
         text: 'Đăng xuất',
         style: 'destructive',
         onPress: async () => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          if (!reduceMotion) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
           await authApi.logout();
           logout();
-          setTimeout(() => {
-            navigation.navigate('Auth');
-          }, 100);
         },
       },
     ]);
   };
 
-  const phoneLine = phoneNumber || user?.email || 'Kỹ thuật viên FixHome';
+  const accountEmail = user?.email?.trim() || 'Chưa cập nhật';
+  const scopedProfilePhone = profilePhone
+    && profilePhone.userId === user?.id
+    && profilePhone.sessionGeneration === sessionGeneration
+    ? profilePhone.phoneNumber.trim()
+    : '';
+  const accountPhone = user?.phoneNumber?.trim() || scopedProfilePhone || 'Chưa cập nhật';
+  const phoneLine = accountPhone;
   // 0 reviews or a null average is "no rating yet", never an invented score.
   const rating = technicianProfile
     ? ratingValue(technicianProfile.averageRating, technicianProfile.ratingCount)
     : null;
   const activeSkillCount = Object.values(myOfferings).filter((o) => o.isActive).length;
+  const kycDesc = verificationLoading
+    ? 'Đang tải…'
+    : !verificationLoaded
+      ? 'Chưa tải được trạng thái xác minh'
+      : verification === null
+      ? 'Chưa nộp hồ sơ'
+      : verification.status === 'REJECTED' && verification.rejectionReason
+        ? `Bị từ chối: ${verification.rejectionReason}`
+        : KYC_VIEW[verification.status].label;
+  const skillDesc = !skillsLoaded && profileLoading
+    ? 'Đang tải…'
+    : activeSkillCount > 0
+      ? `${activeSkillCount} dịch vụ đang nhận`
+      : skillsLoaded
+        ? 'Chưa có dịch vụ đang nhận'
+        : 'Chưa tải được danh sách dịch vụ · Mở để thử lại';
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <ScrollView
         contentContainerStyle={[
@@ -593,7 +411,9 @@ export default function TechnicianProfileScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.pageTitle} accessibilityRole="header">Hồ sơ kỹ thuật viên</Text>
+        <View style={styles.pageHeading}>
+          <Text style={styles.pageTitle} accessibilityRole="header">Tài khoản</Text>
+        </View>
 
         {/* Identity */}
         <View style={styles.identity}>
@@ -612,7 +432,7 @@ export default function TechnicianProfileScreen() {
               )}
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.cameraIconBadge, uploadingAvatar && { opacity: 0.75 }]}
+              style={[styles.cameraTouch, uploadingAvatar && { opacity: 0.75 }]}
               onPress={handlePickImage}
               disabled={uploadingAvatar}
               activeOpacity={0.8}
@@ -621,17 +441,21 @@ export default function TechnicianProfileScreen() {
               accessibilityState={{ disabled: uploadingAvatar, busy: uploadingAvatar }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              {uploadingAvatar ? (
-                <ActivityIndicator size="small" color={colors.surface} />
-              ) : (
-                <Camera size={14} color={colors.surface} strokeWidth={2} />
-              )}
+              <View style={styles.cameraIconBadge}>
+                {uploadingAvatar ? (
+                  <ActivityIndicator size="small" color={colors.surface} />
+                ) : (
+                  <Camera size={14} color={colors.surface} strokeWidth={2} />
+                )}
+              </View>
             </TouchableOpacity>
           </View>
           <View style={styles.identityText}>
             <Text style={styles.name} numberOfLines={2}>{fullName}</Text>
             <Text style={styles.phone}>{phoneLine}</Text>
-            {technicianProfile && (
+            {profileLoading && !technicianProfile ? (
+              <Text style={styles.caption}>Đang tải…</Text>
+            ) : technicianProfile ? (
               <View style={styles.chipRow}>
                 {rating !== null ? (
                   <View style={[styles.chip, { backgroundColor: colors.tone.warning.bg }]}>
@@ -653,14 +477,17 @@ export default function TechnicianProfileScreen() {
                   </View>
                 )}
               </View>
-            )}
+            ) : null}
           </View>
         </View>
 
         {/* Thu nhập & ví */}
         <View style={[styles.group, styles.incomeCard]}>
           <Text style={styles.caption}>Tổng thu nhập từ đơn đã hoàn thành</Text>
-          <Text style={styles.incomeValue}>{formatVnd(earningsTotal)}</Text>
+          <Text style={styles.incomeValue}>
+            {earningsLoading ? 'Đang tải…' : earningsLoaded ? formatVnd(earningsTotal) : 'Chưa tải được thu nhập'}
+          </Text>
+          <Text style={styles.caption}>Tính theo tiền công, nếu thiếu thì theo tổng đơn đã tải.</Text>
         </View>
         <View style={styles.group}>
           <MenuRow
@@ -688,7 +515,7 @@ export default function TechnicianProfileScreen() {
             colors={colors}
             Icon={CalendarRange}
             title="Lịch làm việc"
-            desc="Đơn theo ngày và ngày nghỉ"
+            desc="Khung giờ nhận việc, ngày nghỉ và đơn theo ngày"
             onPress={() => navigation.navigate('TechnicianSchedule')}
           />
           <View style={styles.divider} />
@@ -698,93 +525,84 @@ export default function TechnicianProfileScreen() {
             Icon={MessageSquareText}
             title="Đánh giá từ khách hàng"
             desc={
-              technicianProfile
-                ? rating !== null
-                  ? `${formatRating(rating)} sao · ${technicianProfile.ratingCount} đánh giá`
-                  : NO_RATING_TEXT
-                : undefined
+              profileLoading && !technicianProfile
+                ? 'Đang tải…'
+                : technicianProfile
+                  ? rating !== null
+                    ? `${formatRating(rating)} sao · ${technicianProfile.ratingCount} đánh giá`
+                    : NO_RATING_TEXT
+                  : 'Mở để xem đánh giá'
             }
             onPress={() => navigation.navigate('TechnicianReviews')}
           />
         </View>
 
         {/* HỒ SƠ NGHỀ NGHIỆP */}
-        <Text style={styles.sectionTitle}>Hồ sơ nghề nghiệp</Text>
+        <Text style={styles.sectionTitle} accessibilityRole="header">Hồ sơ nghề nghiệp</Text>
         <View style={styles.group}>
           <MenuRow
             styles={styles}
             colors={colors}
             Icon={Wrench}
             title="Kỹ năng và dịch vụ nhận làm"
-            desc={activeSkillCount > 0 ? `${activeSkillCount} dịch vụ đang nhận` : 'Chọn dịch vụ bạn nhận làm'}
+            desc={skillDesc}
             onPress={openSkillsSheet}
           />
+          {verification !== null && (
+            <View style={styles.kycBadgeRow}>
+              <StatusBadge view={KYC_VIEW[verification.status]} />
+            </View>
+          )}
           <View style={styles.divider} />
           <MenuRow
             styles={styles}
             colors={colors}
             Icon={MapPin}
-            title="Vị trí và bán kính hoạt động"
+            title="Khu vực hoạt động"
             desc={
-              technicianAddress
-                ? technicianProfile?.serviceRadiusKm != null
-                  ? `${technicianAddress.line1} · ${technicianProfile.serviceRadiusKm} km`
-                  : technicianAddress.line1
-                : 'Chưa cập nhật vị trí'
+              profileLoading && !technicianProfile
+                ? 'Đang tải…'
+                : technicianAddress
+                  ? technicianProfile?.serviceRadiusKm != null
+                    ? `${technicianAddress.line1} · ${technicianProfile.serviceRadiusKm} km`
+                    : technicianAddress.line1
+                  : 'Chưa cập nhật vị trí'
             }
-            onPress={openLocationSheet}
-          />
-          <View style={styles.divider} />
-          <MenuRow
-            styles={styles}
-            colors={colors}
-            Icon={MapPin}
-            title="Khu vực phục vụ"
-            desc="Quận/huyện bạn nhận việc"
             onPress={() => navigation.navigate('TechnicianServiceAreas')}
-          />
-          <View style={styles.divider} />
-          <MenuRow
-            styles={styles}
-            colors={colors}
-            Icon={CalendarDays}
-            title="Khung giờ nhận việc"
-            desc={technicianProfile ? `${technicianProfile.schedules.length} khung giờ trong tuần` : 'Đang tải…'}
-            onPress={openScheduleSheet}
-          />
-          <View style={styles.divider} />
-          <MenuRow
-            styles={styles}
-            colors={colors}
-            Icon={CalendarOff}
-            title="Ngày nghỉ"
-            desc="Đăng ký các khoảng ngày không nhận việc"
-            onPress={openTimeOffSheet}
           />
         </View>
 
         {/* TÀI KHOẢN */}
-        <Text style={styles.sectionTitle}>Tài khoản</Text>
+        <Text style={styles.sectionTitle} accessibilityRole="header">Tài khoản</Text>
+        <View style={styles.group}>
+          <View style={styles.accountField}>
+            <Text style={styles.accountLabel}>Email</Text>
+            <Text style={styles.accountValue}>{accountEmail}</Text>
+          </View>
+          <View style={styles.accountDivider} />
+          <View style={styles.accountField}>
+            <Text style={styles.accountLabel}>Số điện thoại</Text>
+            <Text style={styles.accountValue}>{accountPhone}</Text>
+          </View>
+        </View>
         <View style={styles.group}>
           <MenuRow
             styles={styles}
             colors={colors}
             Icon={ShieldCheck}
             title="Xác minh danh tính"
-            desc="Cập nhật CCCD và thông tin"
+            desc={kycDesc}
             onPress={() => navigation.navigate('TechnicianKyc')}
           />
+          {verification !== null && (
+            <View style={styles.kycBadgeRow}>
+              <StatusBadge view={KYC_VIEW[verification.status]} />
+            </View>
+          )}
         </View>
 
-        <TouchableOpacity
-          onPress={handleLogout}
-          style={styles.logoutBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Đăng xuất"
-        >
-          <LogOut size={20} color={colors.error} strokeWidth={1.75} />
-          <Text style={styles.logoutText}>Đăng xuất</Text>
-        </TouchableOpacity>
+        <View style={styles.logoutSpacer} />
+        <AccountLogoutAction onPress={handleLogout} />
       </ScrollView>
 
       {/* Skills sheet */}
@@ -799,8 +617,26 @@ export default function TechnicianProfileScreen() {
             <CategoryPills categories={pickerCategories} selectedId={pickerCategoryId} onSelect={setPickerCategoryId} />
           )}
         </View>
+        {skillsSheetError && (
+          <View style={styles.loadingBlock} accessibilityRole="alert">
+            <Text style={styles.emptyText}>{skillsSheetError}</Text>
+            <TouchableOpacity
+              onPress={openSkillsSheet}
+              style={styles.skillSaveBtn}
+              disabled={loadingSkills}
+              accessibilityRole="button"
+              accessibilityLabel="Thử lại danh sách dịch vụ"
+              accessibilityState={{ disabled: loadingSkills, busy: loadingSkills }}
+            >
+              <Text style={styles.skillSaveBtnText}>Thử lại</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         {loadingSkills ? (
-          <ActivityIndicator color={colors.primaryStrong} style={styles.sheetSpinner} />
+          <View style={styles.loadingBlock}>
+            <ActivityIndicator color={colors.primaryStrong} style={styles.sheetSpinner} />
+            <Text style={styles.emptyText}>Đang tải…</Text>
+          </View>
         ) : (
           <BottomSheetSectionList
             sections={skillSections}
@@ -893,296 +729,14 @@ export default function TechnicianProfileScreen() {
                 </View>
               );
             }}
-            ListEmptyComponent={<Text style={styles.emptyText}>Không có dịch vụ nào.</Text>}
+            ListEmptyComponent={skillsSheetLoaded && !skillsSheetError
+              ? <Text style={styles.emptyText}>Không có dịch vụ nào.</Text>
+              : null}
           />
         )}
       </BottomSheetModal>
 
-      {/* Location & radius sheet */}
-      <BottomSheetModal
-        ref={locationSheetRef}
-        snapPoints={wideSnapPoints}
-        keyboardBehavior="interactive"
-        backdropComponent={renderBackdrop}
-      >
-        <BottomSheetScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-          <Text style={styles.modalTitle} accessibilityRole="header">Vị trí và bán kính hoạt động</Text>
-          <Text style={styles.fieldLabel}>Địa chỉ</Text>
-          <BottomSheetTextInput
-            value={locationLine1}
-            onChangeText={handleLocationSearchChange}
-            placeholder="Tìm địa chỉ (số nhà, tên đường…)"
-            placeholderTextColor={colors.textSecondary}
-            accessibilityLabel="Địa chỉ"
-            style={styles.input}
-          />
-          {searchingLocation && <ActivityIndicator size="small" color={colors.primaryStrong} style={styles.searchSpinner} />}
-          {locationSuggestions.length > 0 && (
-            <View style={styles.suggestionBox}>
-              {locationSuggestions.map((s) => (
-                <TouchableOpacity
-                  key={s.placeId}
-                  style={styles.suggestionItem}
-                  onPress={() => handleSelectLocationSuggestion(s)}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.suggestionText} numberOfLines={2}>{s.description}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-          {(locationWard || locationProvince) ? (
-            <View style={styles.placeRow}>
-              <MapPin size={14} color={colors.textSecondary} strokeWidth={1.75} />
-              <Text style={styles.placeText}>{[locationWard, locationProvince].filter(Boolean).join(', ')}</Text>
-            </View>
-          ) : null}
-
-          <View style={styles.mapBox}>
-            <MapView
-              style={styles.mapFill}
-              initialRegion={{
-                latitude: locationLat || 10.7769,
-                longitude: locationLng || 106.7009,
-                latitudeDelta: 0.05,
-                longitudeDelta: 0.05,
-              }}
-              region={locationLat && locationLng ? {
-                latitude: locationLat,
-                longitude: locationLng,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-              } : undefined}
-              onPress={handleMapPressLocation}
-            >
-              {locationLat != null && locationLng != null && (
-                <Marker coordinate={{ latitude: locationLat, longitude: locationLng }} />
-              )}
-            </MapView>
-          </View>
-
-          <TouchableOpacity
-            style={styles.locationBtn}
-            onPress={handleGetCurrentLocation}
-            disabled={gettingLocation}
-            accessibilityRole="button"
-          >
-            {gettingLocation ? (
-              <ActivityIndicator size="small" color={colors.primaryStrong} />
-            ) : (
-              <>
-                <LocateFixed size={20} color={colors.primaryStrong} strokeWidth={1.75} />
-                <Text style={styles.locationBtnText}>Dùng vị trí hiện tại</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <Text style={styles.fieldLabel}>Bán kính hoạt động (km)</Text>
-          <BottomSheetTextInput
-            value={locationRadiusKm}
-            onChangeText={setLocationRadiusKm}
-            keyboardType="numeric"
-            accessibilityLabel="Bán kính hoạt động (km)"
-            style={styles.input}
-          />
-
-          <View style={styles.modalActions}>
-            <TouchableOpacity
-              style={[styles.secondaryBtn, styles.flex1]}
-              onPress={() => locationSheetRef.current?.dismiss()}
-              disabled={savingLocation}
-              accessibilityRole="button"
-            >
-              <Text style={styles.secondaryBtnText}>Đóng</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.primaryBtn, styles.flex1, savingLocation && styles.disabled]}
-              onPress={handleSaveLocation}
-              disabled={savingLocation}
-              accessibilityRole="button"
-            >
-              {savingLocation ? <ActivityIndicator size="small" color={colors.surface} /> : <Text style={styles.primaryBtnText}>Lưu thay đổi</Text>}
-            </TouchableOpacity>
-          </View>
-        </BottomSheetScrollView>
-      </BottomSheetModal>
-
-      {/* Schedule sheet */}
-      <BottomSheetModal
-        ref={scheduleSheetRef}
-        snapPoints={wideSnapPoints}
-        backdropComponent={renderBackdrop}
-      >
-        <BottomSheetScrollView contentContainerStyle={styles.modalContent}>
-          <Text style={styles.modalTitle} accessibilityRole="header">Khung giờ nhận việc theo tuần</Text>
-          {scheduleDraft.map((slot, day) => (
-            <View key={day} style={styles.scheduleRow}>
-              <TouchableOpacity
-                style={styles.scheduleDayToggle}
-                onPress={() =>
-                  setScheduleDraft((prev) => prev.map((s, i) => (i === day ? { ...s, enabled: !s.enabled } : s)))
-                }
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: slot.enabled }}
-                accessibilityLabel={DAY_NAMES[day]}
-              >
-                {slot.enabled ? (
-                  <CheckSquare size={22} color={colors.primaryStrong} strokeWidth={1.75} />
-                ) : (
-                  <Square size={22} color={colors.textSecondary} strokeWidth={1.75} />
-                )}
-                <Text style={styles.scheduleDayText}>{DAY_NAMES[day]}</Text>
-              </TouchableOpacity>
-              {slot.enabled && (
-                <View style={styles.scheduleTimesRow}>
-                  <Text style={styles.caption}>Từ</Text>
-                  <View style={styles.scheduleChipRow}>
-                    {START_TIMES.map((t) => (
-                      <TouchableOpacity
-                        key={t}
-                        style={[styles.timeChip, slot.startTime === t && styles.timeChipActive]}
-                        onPress={() => setScheduleDraft((prev) => prev.map((s, i) => (i === day ? { ...s, startTime: t } : s)))}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: slot.startTime === t }}
-                        accessibilityLabel={`Bắt đầu ${t}`}
-                      >
-                        <Text style={[styles.timeChipText, slot.startTime === t && styles.timeChipTextActive]}>{t}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  <Text style={styles.caption}>Đến</Text>
-                  <View style={styles.scheduleChipRow}>
-                    {END_TIMES.map((t) => (
-                      <TouchableOpacity
-                        key={t}
-                        style={[styles.timeChip, slot.endTime === t && styles.timeChipActive]}
-                        onPress={() => setScheduleDraft((prev) => prev.map((s, i) => (i === day ? { ...s, endTime: t } : s)))}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: slot.endTime === t }}
-                        accessibilityLabel={`Kết thúc ${t}`}
-                      >
-                        <Text style={[styles.timeChipText, slot.endTime === t && styles.timeChipTextActive]}>{t}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              )}
-            </View>
-          ))}
-          <View style={styles.modalActions}>
-            <TouchableOpacity
-              style={[styles.secondaryBtn, styles.flex1]}
-              onPress={() => scheduleSheetRef.current?.dismiss()}
-              disabled={savingSchedule}
-              accessibilityRole="button"
-            >
-              <Text style={styles.secondaryBtnText}>Đóng</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.primaryBtn, styles.flex2, savingSchedule && styles.disabled]}
-              onPress={handleSaveSchedule}
-              disabled={savingSchedule}
-              accessibilityRole="button"
-            >
-              {savingSchedule ? <ActivityIndicator size="small" color={colors.surface} /> : <Text style={styles.primaryBtnText}>Lưu khung giờ</Text>}
-            </TouchableOpacity>
-          </View>
-        </BottomSheetScrollView>
-      </BottomSheetModal>
-
-      {/* Time-off sheet */}
-      <BottomSheetModal
-        ref={timeOffSheetRef}
-        snapPoints={wideSnapPoints}
-        keyboardBehavior="interactive"
-        backdropComponent={renderBackdrop}
-      >
-        <BottomSheetScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-          <Text style={styles.modalTitle} accessibilityRole="header">Ngày nghỉ</Text>
-
-          <View style={styles.timeOffList}>
-            {loadingTimeOff ? (
-              <ActivityIndicator color={colors.primaryStrong} />
-            ) : timeOffList.length === 0 ? (
-              <Text style={styles.emptyText}>Chưa có ngày nghỉ nào.</Text>
-            ) : (
-              timeOffList.map((t) => (
-                <View key={t.id} style={styles.timeOffItem}>
-                  <View style={styles.flex1}>
-                    <Text style={styles.timeOffDates}>
-                      {vnDateString(t.startAt, VN_DATE)} – {vnDateString(t.endAt, VN_DATE)}
-                    </Text>
-                    {!!t.reason && <Text style={styles.timeOffReason}>{t.reason}</Text>}
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => handleDeleteTimeOff(t.id)}
-                    style={styles.iconBtn}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Xóa ngày nghỉ ${vnDateString(t.startAt, VN_DATE)} đến ${vnDateString(t.endAt, VN_DATE)}`}
-                  >
-                    <Trash2 size={20} color={colors.error} strokeWidth={1.75} />
-                  </TouchableOpacity>
-                </View>
-              ))
-            )}
-          </View>
-
-          <Text style={styles.subTitle}>Thêm ngày nghỉ</Text>
-          <View style={styles.dateRow}>
-            <View style={styles.flex1}>
-              <Text style={styles.fieldLabel}>Từ ngày</Text>
-              <BottomSheetTextInput
-                value={newTimeOffStart}
-                onChangeText={setNewTimeOffStart}
-                keyboardType="numbers-and-punctuation"
-                placeholder="dd/MM/yyyy"
-                placeholderTextColor={colors.textSecondary}
-                accessibilityLabel="Từ ngày, định dạng ngày/tháng/năm"
-                style={styles.input}
-              />
-            </View>
-            <View style={styles.flex1}>
-              <Text style={styles.fieldLabel}>Đến ngày</Text>
-              <BottomSheetTextInput
-                value={newTimeOffEnd}
-                onChangeText={setNewTimeOffEnd}
-                keyboardType="numbers-and-punctuation"
-                placeholder="dd/MM/yyyy"
-                placeholderTextColor={colors.textSecondary}
-                accessibilityLabel="Đến ngày, định dạng ngày/tháng/năm"
-                style={styles.input}
-              />
-            </View>
-          </View>
-          <Text style={styles.fieldLabel}>Lý do (không bắt buộc)</Text>
-          <BottomSheetTextInput
-            value={newTimeOffReason}
-            onChangeText={setNewTimeOffReason}
-            placeholder="Nhập lý do"
-            placeholderTextColor={colors.textSecondary}
-            accessibilityLabel="Lý do nghỉ"
-            style={styles.input}
-          />
-          <TouchableOpacity
-            style={[styles.primaryBtn, styles.fullWidth, savingTimeOff && styles.disabled]}
-            onPress={handleAddTimeOff}
-            disabled={savingTimeOff}
-            accessibilityRole="button"
-          >
-            {savingTimeOff ? <ActivityIndicator size="small" color={colors.surface} /> : <Text style={styles.primaryBtnText}>Thêm ngày nghỉ</Text>}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.secondaryBtn, styles.fullWidth]}
-            onPress={() => timeOffSheetRef.current?.dismiss()}
-            accessibilityRole="button"
-          >
-            <Text style={styles.secondaryBtnText}>Đóng</Text>
-          </TouchableOpacity>
-        </BottomSheetScrollView>
-      </BottomSheetModal>
-
-      <Modal visible={isAvatarModalVisible} transparent={true} animationType="fade" onRequestClose={() => setAvatarModalVisible(false)}>
+      <Modal visible={isAvatarModalVisible} transparent={true} animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={() => setAvatarModalVisible(false)}>
         <View style={styles.avatarModalContainer}>
           <TouchableOpacity
             style={styles.closeAvatarModalBtn}
@@ -1207,17 +761,18 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   flex2: { flex: 2 },
   fullWidth: { width: '100%', marginTop: 8 },
   disabled: { opacity: 0.5 },
-  scrollContent: { padding: 16, gap: 12 },
-  pageTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
-  identity: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 8 },
-  identityText: { flex: 1, gap: 2 },
-  name: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text },
-  phone: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
+  scrollContent: { flexGrow: 1, padding: 16, gap: 12 },
+  pageHeading: { gap: 4, paddingBottom: 4 },
+  pageTitle: { fontSize: 26, lineHeight: 34, fontWeight: '700', color: colors.text },
+  identity: { flexDirection: 'column', alignItems: 'center', gap: 14, paddingVertical: 24, paddingHorizontal: 16, backgroundColor: colors.primarySoft, borderRadius: 22, borderWidth: 1, borderColor: colors.primaryTint },
+  identityText: { width: '100%', alignItems: 'center', gap: 4 },
+  name: { fontSize: 20, lineHeight: 28, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  phone: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
+  chipRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 8, marginTop: 6 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 24, paddingHorizontal: 8, borderRadius: 8 },
   chipText: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
-  avatarBorder: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center' },
-  avatar: { width: '100%', height: '100%', borderRadius: 40, backgroundColor: colors.primaryTint, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  avatarBorder: { width: 88, height: 88, borderRadius: 44, justifyContent: 'center', alignItems: 'center' },
+  avatar: { width: '100%', height: '100%', minWidth: 44, minHeight: 44, borderRadius: 44, backgroundColor: colors.primaryTint, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   avatarImage: { width: '100%', height: '100%' },
   avatarText: { fontSize: 32, fontWeight: '700', color: colors.primaryStrong },
   caption: { fontSize: 12, lineHeight: 16, fontWeight: '500', color: colors.textSecondary },
@@ -1225,15 +780,20 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   incomeValue: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
   sectionTitle: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text, marginTop: 12 },
   group: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
+  accountField: { paddingHorizontal: 16, paddingVertical: 12, gap: 2 },
+  accountLabel: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: colors.textSecondary },
+  accountValue: { fontSize: 15, lineHeight: 22, color: colors.text },
+  accountDivider: { height: 1, backgroundColor: colors.divider, marginHorizontal: 16 },
   menuItem: { flexDirection: 'row', minHeight: 56, paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center', gap: 12 },
   menuIconTile: { width: 36, height: 36, borderRadius: 8, backgroundColor: colors.primarySoft, justifyContent: 'center', alignItems: 'center' },
   menuContent: { flex: 1 },
   menuTitle: { fontSize: 16, lineHeight: 24, fontWeight: '500', color: colors.text },
   menuDesc: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
   divider: { height: 1, backgroundColor: colors.divider, marginLeft: 64 },
-  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48, marginTop: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
-  logoutText: { fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.error },
-  cameraIconBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: colors.primaryStrong, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: colors.background },
+  logoutSpacer: { flexGrow: 1, minHeight: 12 },
+  cameraTouch: { position: 'absolute', bottom: -8, right: -8, width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  cameraIconBadge: { backgroundColor: colors.primaryStrong, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: colors.background },
+  kycBadgeRow: { paddingHorizontal: 16, paddingBottom: 12 },
   avatarModalContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
   closeAvatarModalBtn: { position: 'absolute', top: 50, right: 12, zIndex: 10, width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   fullAvatarImage: { width: '100%', height: 400 },
@@ -1251,19 +811,10 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   secondaryBtn: { minHeight: 48, borderRadius: 14, borderWidth: 1.5, borderColor: colors.primaryStrong, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 },
   secondaryBtnText: { color: colors.primaryStrong, fontWeight: '600', fontSize: 16, lineHeight: 24 },
   iconBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-  locationBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingHorizontal: 16, backgroundColor: colors.primarySoft, borderRadius: 14, alignSelf: 'flex-start', marginBottom: 16 },
-  locationBtnText: { color: colors.primaryStrong, fontSize: 14, lineHeight: 20, fontWeight: '600' },
-  searchSpinner: { marginBottom: 8 },
-  placeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-  placeText: { flex: 1, fontSize: 14, lineHeight: 20, color: colors.textSecondary },
-  mapBox: { width: '100%', height: 200, borderRadius: 14, overflow: 'hidden', marginBottom: 12, borderWidth: 1, borderColor: colors.border },
-  mapFill: { width: '100%', height: '100%' },
-  suggestionBox: { width: '100%', backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, marginBottom: 12, overflow: 'hidden' },
-  suggestionItem: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.divider },
-  suggestionText: { fontSize: 14, lineHeight: 20, color: colors.text },
 
   sheetHeader: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 6, gap: 8 },
   sheetSpinner: { marginTop: 24 },
+  loadingBlock: { alignItems: 'center', paddingVertical: 24, gap: 8 },
   pickerListContent: { padding: 20, paddingTop: 10, gap: 12 },
   skillSectionHeader: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.textSecondary, marginTop: 6, marginBottom: 2 },
   skillSectionCount: { fontWeight: '500' },
@@ -1277,19 +828,5 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   skillField: { minWidth: 120, flex: 1 },
   skillFieldInput: { minHeight: 44, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.textSecondary, borderRadius: 14, color: colors.text, fontSize: 16, backgroundColor: colors.surface },
 
-  scheduleRow: { width: '100%', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.divider, gap: 8 },
-  scheduleDayToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
-  scheduleDayText: { fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.text },
-  scheduleTimesRow: { paddingLeft: 30, gap: 6 },
-  scheduleChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  timeChip: { minHeight: 40, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
-  timeChipActive: { backgroundColor: colors.primaryStrong, borderColor: colors.primaryStrong },
-  timeChipText: { fontSize: 14, lineHeight: 20, color: colors.text },
-  timeChipTextActive: { color: colors.surface, fontWeight: '700' },
 
-  timeOffList: { width: '100%', marginBottom: 16 },
-  dateRow: { flexDirection: 'row', gap: 12, width: '100%' },
-  timeOffItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingLeft: 12, borderRadius: 14, marginBottom: 8, width: '100%' },
-  timeOffDates: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.text },
-  timeOffReason: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
 });

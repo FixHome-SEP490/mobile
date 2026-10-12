@@ -1,6 +1,6 @@
 "use no memo";
-import React, { useEffect } from 'react';
-import { View, StyleSheet, Dimensions, Platform, TouchableOpacity, Text } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, StyleSheet, Dimensions, Platform, TouchableOpacity, Text, useWindowDimensions } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import Animated, { 
   useSharedValue, 
@@ -20,15 +20,20 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useUIStore } from '../../store/ui.store';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
+import {
+  GLASS_TAB_BAR_ACTION_CIRCLE_SIZE,
+  GLASS_TAB_BAR_GAP,
+  GLASS_TAB_BAR_MARGIN_HORIZONTAL,
+  getGlassTabBarLayout,
+  getGlassTabIndicatorOffset,
+  shouldSyncGlassTabIndicator,
+} from './glass-tab-bar-layout';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const MARGIN_HORIZONTAL = 16;
-const GAP = 12;
-const ACTION_CIRCLE_SIZE = 64;
-// Without the AI action circle the pill takes the whole row (5 technician tabs need the room).
-const pillWidthFor = (showAssistant: boolean) =>
-  SCREEN_WIDTH - MARGIN_HORIZONTAL * 2 - (showAssistant ? GAP + ACTION_CIRCLE_SIZE : 0);
+const MARGIN_HORIZONTAL = GLASS_TAB_BAR_MARGIN_HORIZONTAL;
+const GAP = GLASS_TAB_BAR_GAP;
+const ACTION_CIRCLE_SIZE = GLASS_TAB_BAR_ACTION_CIRCLE_SIZE;
 
 // Sub-component for Icon Color Interpolation
 const AnimatedTabIcon = ({ 
@@ -51,7 +56,7 @@ const AnimatedTabIcon = ({
     // When distance is 0, opacity is 1 (fully white). Fades to 0 quickly as it moves away.
     const opacity = interpolate(distance, [0, tabWidth / 1.2], [1, 0], Extrapolation.CLAMP);
     return { opacity, position: 'absolute' };
-  });
+  }, [index, tabWidth]);
 
   const grayOpacityStyle = useAnimatedStyle(() => {
     const indicatorCenter = translateX.value + tabWidth / 2;
@@ -61,7 +66,7 @@ const AnimatedTabIcon = ({
     // When distance is 0, gray is hidden (0). When far, gray is visible (1).
     const opacity = interpolate(distance, [0, tabWidth / 1.2], [0, 1], Extrapolation.CLAMP);
     return { opacity, position: 'absolute' };
-  });
+  }, [index, tabWidth]);
 
   return (
     <View style={styles.iconWrapper}>
@@ -82,20 +87,85 @@ const AnimatedTabIcon = ({
   );
 };
 
+const AnimatedTabLabel = ({
+  index,
+  translateX,
+  tabWidth,
+  title,
+}: {
+  index: number;
+  translateX: SharedValue<number>;
+  tabWidth: number;
+  title: string;
+}) => {
+  const activeOpacityStyle = useAnimatedStyle(() => {
+    const indicatorCenter = translateX.value + tabWidth / 2;
+    const tabCenter = (index * tabWidth) + tabWidth / 2;
+    const distance = Math.abs(indicatorCenter - tabCenter);
+    const opacity = interpolate(distance, [0, tabWidth / 1.2], [1, 0], Extrapolation.CLAMP);
+    return { opacity, position: 'absolute', top: 0, left: 0, right: 0 };
+  });
+
+  const idleOpacityStyle = useAnimatedStyle(() => {
+    const indicatorCenter = translateX.value + tabWidth / 2;
+    const tabCenter = (index * tabWidth) + tabWidth / 2;
+    const distance = Math.abs(indicatorCenter - tabCenter);
+    const opacity = interpolate(distance, [0, tabWidth / 1.2], [0, 1], Extrapolation.CLAMP);
+    return { opacity, position: 'absolute', top: 0, left: 0, right: 0 };
+  });
+
+  return (
+    <View pointerEvents="none" style={styles.tabLabelContainer}>
+      <Animated.Text
+        accessible={false}
+        adjustsFontSizeToFit
+        ellipsizeMode="tail"
+        minimumFontScale={0.75}
+        numberOfLines={1}
+        style={[styles.tabLabel, styles.tabLabelIdle, idleOpacityStyle]}
+      >
+        {title}
+      </Animated.Text>
+      <Animated.Text
+        accessible={false}
+        adjustsFontSizeToFit
+        ellipsizeMode="tail"
+        minimumFontScale={0.75}
+        numberOfLines={1}
+        style={[styles.tabLabel, styles.tabLabelActive, activeOpacityStyle]}
+      >
+        {title}
+      </Animated.Text>
+    </View>
+  );
+};
+
 // Hook tùy chỉnh để đồng bộ state từ React Navigation vào Reanimated SharedValue
 // Việc tách hook này giúp vượt qua cơ chế kiểm tra gắt gao của React Compiler (tránh lỗi "This value cannot be modified")
 function useSyncTabState(
   currentIndex: number, 
   tabWidth: number, 
   translateX: SharedValue<number>, 
-  activeIndex: SharedValue<number>
+  activeIndex: SharedValue<number>,
+  scaleX: SharedValue<number>,
+  scaleY: SharedValue<number>,
 ) {
+  const previousTabWidth = useRef(tabWidth);
+
   useEffect(() => {
-    if (activeIndex.value !== currentIndex) {
+    const widthChanged = previousTabWidth.current !== tabWidth;
+    if (shouldSyncGlassTabIndicator(currentIndex, activeIndex.value, previousTabWidth.current, tabWidth)) {
+      previousTabWidth.current = tabWidth;
       activeIndex.value = currentIndex;
-      translateX.value = withSpring(currentIndex * tabWidth, { damping: 14, stiffness: 130, mass: 0.8 });
+      translateX.value = withSpring(getGlassTabIndicatorOffset(currentIndex, tabWidth), { damping: 14, stiffness: 130, mass: 0.8 });
+      if (widthChanged) {
+        scaleX.value = withSpring(1, { damping: 12, stiffness: 150 });
+        scaleY.value = withSpring(1, { damping: 12, stiffness: 150 });
+      }
+    } else {
+      previousTabWidth.current = tabWidth;
     }
-  }, [currentIndex, tabWidth, activeIndex, translateX]);
+  }, [currentIndex, tabWidth, activeIndex, translateX, scaleX, scaleY]);
 }
 
 export const GlassTabBar = ({
@@ -103,11 +173,19 @@ export const GlassTabBar = ({
   descriptors,
   navigation,
   showAssistant = true,
-}: BottomTabBarProps & { showAssistant?: boolean }) => {
+  technicianResponsive = false,
+  showTabLabels = false,
+}: BottomTabBarProps & { showAssistant?: boolean; technicianResponsive?: boolean; showTabLabels?: boolean }) => {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const tabCount = state.routes.length;
-  const pillWidth = pillWidthFor(showAssistant);
-  const tabWidth = pillWidth / tabCount;
+  const { pillWidth, tabWidth } = getGlassTabBarLayout({
+    windowWidth,
+    screenWidth: SCREEN_WIDTH,
+    tabCount,
+    showAssistant,
+    technicianResponsive,
+  });
 
   // Shared Values cho Liquid Glass Physics
   const translateX = useSharedValue(state.index * tabWidth);
@@ -118,7 +196,7 @@ export const GlassTabBar = ({
   const reduceMotion = useReduceMotion();
 
   // Sync back to navigation state if changed from outside
-  useSyncTabState(state.index, tabWidth, translateX, activeIndex);
+  useSyncTabState(state.index, tabWidth, translateX, activeIndex, scaleX, scaleY);
 
   const triggerHaptic = () => {
     Haptics.selectionAsync();
@@ -140,6 +218,7 @@ export const GlassTabBar = ({
   // Fluid Drag & Tap Gesture Arena
   const tapGesture = Gesture.Tap()
     .onEnd((event) => {
+      if (tabCount === 0 || tabWidth === 0) return;
       const targetIndex = Math.floor(event.x / tabWidth);
       const clampedIndex = Math.max(0, Math.min(targetIndex, tabCount - 1));
 
@@ -161,6 +240,7 @@ export const GlassTabBar = ({
       scaleY.value = withSpring(1.15, { damping: 12, stiffness: 200 });
     })
     .onUpdate((event) => {
+      if (tabCount === 0 || tabWidth === 0) return;
       // 1. Follow finger
       const newX = event.x - (tabWidth / 2);
       const maxTranslateX = pillWidth - tabWidth;
@@ -192,6 +272,7 @@ export const GlassTabBar = ({
       }
     })
     .onEnd((event) => {
+      if (tabCount === 0 || tabWidth === 0) return;
       // 1. Determine final target based on finger release position
       const targetIndex = Math.floor(event.x / tabWidth);
       const clampedIndex = Math.max(0, Math.min(targetIndex, tabCount - 1));
@@ -252,27 +333,40 @@ export const GlassTabBar = ({
                />
             </Animated.View>
 
-            {/* Hàng Icon Overlay */}
+            {/* Hàng nội dung tab: icon và nhãn tùy chọn */}
             <View style={styles.iconsRow} pointerEvents="none" accessibilityRole="tablist">
-              {state.routes.map((route, index) => (
-                <View
-                  key={route.key}
-                  style={styles.tabSlot}
-                  accessible
-                  accessibilityRole="tab"
-                  accessibilityLabel={descriptors[route.key].options.tabBarAccessibilityLabel ?? descriptors[route.key].options.title ?? route.name}
-                  accessibilityState={{ selected: state.index === index }}
-                  accessibilityActions={[{ name: 'activate' }]}
-                  onAccessibilityAction={() => navigateToTab(index)}
-                >
-                  <AnimatedTabIcon 
-                    index={index} 
-                    translateX={translateX} 
-                    tabWidth={tabWidth} 
-                    options={descriptors[route.key].options} 
-                  />
-                </View>
-              ))}
+              {state.routes.map((route, index) => {
+                const options = descriptors[route.key].options;
+                const title = options.title;
+
+                return (
+                  <View
+                    key={route.key}
+                    style={[styles.tabSlot, showTabLabels && styles.tabSlotWithLabels]}
+                    accessible
+                    accessibilityRole="tab"
+                    accessibilityLabel={options.tabBarAccessibilityLabel ?? title ?? route.name}
+                    accessibilityState={{ selected: state.index === index }}
+                    accessibilityActions={[{ name: 'activate' }]}
+                    onAccessibilityAction={() => navigateToTab(index)}
+                  >
+                    <AnimatedTabIcon
+                      index={index}
+                      translateX={translateX}
+                      tabWidth={tabWidth}
+                      options={options}
+                    />
+                    {showTabLabels && title ? (
+                      <AnimatedTabLabel
+                        index={index}
+                        translateX={translateX}
+                        tabWidth={tabWidth}
+                        title={title}
+                      />
+                    ) : null}
+                  </View>
+                );
+              })}
             </View>
           </BlurView>
         </View>
@@ -362,6 +456,31 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  tabSlotWithLabels: {
+    justifyContent: 'flex-start',
+    paddingTop: 6,
+  },
+  tabLabelContainer: {
+    position: 'absolute',
+    bottom: 8,
+    left: 2,
+    right: 2,
+    height: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    lineHeight: 12,
+    textAlign: 'center',
+  },
+  tabLabelActive: {
+    color: '#FFFFFF',
+  },
+  tabLabelIdle: {
+    color: '#475569',
   },
   iconWrapper: {
     alignItems: 'center',

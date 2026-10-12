@@ -36,6 +36,31 @@ const address: AddressData = {
 };
 
 describe('customer booking review snapshot', () => {
+  it('keeps local Booking photo previews in the review without adding media refs to the request', () => {
+    const photo = {
+      uri: 'file:///device/photo.jpg',
+      name: 'photo.jpg',
+      type: 'image/jpeg' as const,
+      sizeBytes: 2048,
+    };
+    const snapshot = buildBookingReviewSnapshot({
+      ownerUserId: 'customer-a',
+      service,
+      address,
+      description: 'Máy lạnh chảy nước',
+      date: new Date(2026, 8, 27),
+      time: '09:00',
+      now: vnWallClockToDate(2026, 9, 27, 8, 0),
+      photos: [photo],
+    });
+
+    expect(snapshot.photos).toEqual([photo]);
+    expect(Object.isFrozen(snapshot.photos)).toBe(true);
+    expect(Object.isFrozen(snapshot.photos[0])).toBe(true);
+    expect(snapshot.request).not.toHaveProperty('photoUploadIds');
+    expect(snapshot.request).not.toHaveProperty('mediaUrls');
+  });
+
   it('captures an immutable backend request with only the existing booking fields', () => {
     const snapshot = buildBookingReviewSnapshot({
       ownerUserId: 'customer-a',

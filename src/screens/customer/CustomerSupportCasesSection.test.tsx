@@ -1,5 +1,5 @@
 import React from 'react';
-import { Switch, Text, TouchableOpacity } from 'react-native';
+import { StyleSheet, Switch, Text, TouchableOpacity } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 const ORDER_ID = '11111111-1111-4111-8111-111111111111';
@@ -144,6 +144,25 @@ describe('CustomerSupportCasesSection', () => {
     ).toBe(true);
   });
 
+  it('names a rejected case as rejected in the final progress step, without creating a case', async () => {
+    const rejected = supportRow({ status: 'rejected', resolutionReason: 'Không đủ điều kiện xử lý.' });
+    mockListMine.mockResolvedValue({ data: [rejected], total: 1, page: 1, limit: 20, totalPages: 1 });
+    mockGetMine.mockResolvedValue(rejected);
+    const tree = await mount();
+    try {
+      const row = tree.root.findAllByType(TouchableOpacity).find(
+        (node) => node.props.accessibilityLabel === 'Xem chi tiết khiếu nại Chất lượng sửa chữa chưa đạt',
+      );
+      expect(row).toBeDefined();
+      await act(async () => { row?.props.onPress(); await Promise.resolve(); });
+      const progress = tree.root.findByProps({ testID: 'support-case-progress' });
+      const labels = progress.findAllByType(Text).map((node) => String(node.props.children ?? ''));
+      expect(labels).toContain('Đã từ chối');
+      expect(labels).not.toContain('Kết quả xử lý');
+      expect(mockCreateCase).not.toHaveBeenCalled();
+    } finally { act(() => tree.unmount()); }
+  });
+
   it('creates an active-order complaint using an allowed type, reason, serviceOrderId and urgent flag only', async () => {
     const tree = await mount('UNDER_REPAIR');
     const openButton = tree.root.findAllByType(TouchableOpacity).find(
@@ -196,5 +215,100 @@ describe('CustomerSupportCasesSection', () => {
       (node) => node.props.accessibilityLabel === 'Gửi khiếu nại',
     );
     expect(createButton?.props.disabled).toBe(true);
+  });
+
+  it('shows failed first GET with an accessible retry, not a confirmed empty list', async () => {
+    mockListMine.mockRejectedValueOnce(new Error('Mất kết nối'));
+    const tree = await mount();
+    try {
+      const txt = tree.root.findAllByType(Text).map((x) => String(x.props.children ?? ''));
+      expect(txt).not.toContain('Bạn chưa gửi khiếu nại nào cho đơn này.');
+      const retry = tree.root.findAllByType(TouchableOpacity).find(
+        (x) => x.props.accessibilityLabel === 'Tải lại danh sách khiếu nại',
+      );
+      expect(retry).toBeDefined();
+      expect(retry?.props.accessibilityState.disabled).toBe(false);
+      expect(StyleSheet.flatten(retry?.props.style).minHeight).toBeGreaterThanOrEqual(44);
+      expect(mockCreateCase).not.toHaveBeenCalled();
+    } finally { act(() => tree.unmount()); }
+  });
+
+  it('communicates ineligible creation as disabled with a 44pt target', async () => {
+    const { default: Screen } = jest.requireActual('./CustomerSupportCasesSection') as {
+      default: React.ComponentType<{ orderId: string; orderStatus: string; completedAt?: string | null }>;
+    };
+    let tree!: ReactTestRenderer;
+    await act(async () => {
+      tree = create(React.createElement(Screen, {
+        orderId: ORDER_ID, orderStatus: 'COMPLETED',
+        completedAt: '2026-01-01T00:00:00.000Z',
+      }));
+      await Promise.resolve();
+    });
+    try {
+      const action = tree.root.findAllByType(TouchableOpacity).find(
+        (x) => x.props.accessibilityLabel === 'Gửi khiếu nại',
+      );
+      expect(action?.props.disabled).toBe(true);
+      expect(action?.props.accessibilityState.disabled).toBe(true);
+      expect(StyleSheet.flatten(action?.props.style).minHeight).toBeGreaterThanOrEqual(44);
+      expect(mockCreateCase).not.toHaveBeenCalled();
+    } finally { act(() => tree.unmount()); }
+  });
+
+  it('uses accessible controls without a submit when opening the form', async () => {
+    const tree = await mount();
+    try {
+      const open = tree.root.findAllByType(TouchableOpacity).find(
+        (x) => x.props.accessibilityLabel === 'Gửi khiếu nại',
+      );
+      act(() => open?.props.onPress());
+      const close = tree.root.findAllByType(TouchableOpacity).find(
+        (x) => x.props.accessibilityLabel === 'Đóng biểu mẫu khiếu nại',
+      );
+      expect(close).toBeDefined();
+      expect(StyleSheet.flatten(close?.props.style).minWidth).toBeGreaterThanOrEqual(44);
+      const choice = tree.root.findAllByType(TouchableOpacity).find(
+        (x) => x.props.accessibilityRole === 'radio',
+      );
+      expect(choice?.props.accessibilityLabel).toBeTruthy();
+      expect(StyleSheet.flatten(choice?.props.style).minHeight).toBeGreaterThanOrEqual(44);
+      expect(mockCreateCase).not.toHaveBeenCalled();
+    } finally { act(() => tree.unmount()); }
+  });
+
+  it('makes a failed actor-safe detail read retryable without POST', async () => {
+    mockListMine.mockResolvedValue({ data: [supportRow()], total: 1, page: 1, limit: 20, totalPages: 1 });
+    mockGetMine.mockRejectedValueOnce(new Error('Không thể kết nối'));
+    const tree = await mount();
+    try {
+      const row = tree.root.findAllByType(TouchableOpacity).find(
+        (x) => x.props.accessibilityLabel === 'Xem chi tiết khiếu nại Chất lượng sửa chữa chưa đạt',
+      );
+      await act(async () => { row?.props.onPress(); await Promise.resolve(); });
+      const retry = tree.root.findAllByType(TouchableOpacity).find(
+        (x) => x.props.accessibilityLabel === 'Tải lại chi tiết khiếu nại',
+      );
+      expect(retry).toBeDefined();
+      expect(StyleSheet.flatten(retry?.props.style).minHeight).toBeGreaterThanOrEqual(44);
+      expect(mockGetMine).toHaveBeenCalledWith(CASE_ID);
+      expect(mockCreateCase).not.toHaveBeenCalled();
+    } finally { act(() => tree.unmount()); }
+  });
+
+  it('keeps primary complaint actions on a 44pt target without submitting on open', async () => {
+    const tree = await mount();
+    try {
+      const open = tree.root.findAllByType(TouchableOpacity).find(
+        (x) => x.props.accessibilityLabel === 'Gửi khiếu nại',
+      );
+      act(() => open?.props.onPress());
+      const submit = tree.root.findAllByType(TouchableOpacity).find(
+        (x) => x.props.accessibilityLabel === 'Xác nhận gửi khiếu nại',
+      );
+      expect(submit).toBeDefined();
+      expect(StyleSheet.flatten(submit?.props.style).minHeight).toBeGreaterThanOrEqual(44);
+      expect(mockCreateCase).not.toHaveBeenCalled();
+    } finally { act(() => tree.unmount()); }
   });
 });

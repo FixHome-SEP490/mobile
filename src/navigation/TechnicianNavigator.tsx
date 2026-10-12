@@ -2,12 +2,12 @@
 import React from 'react';
 import { useTechnicianLocationPing } from '../hooks/useTechnicianLocationPing';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Home, MailOpen, Briefcase, Bell, User } from 'lucide-react-native';
+import { Home, MailOpen, Briefcase, Wallet, User } from 'lucide-react-native';
 import type { TechnicianTabParamList } from '../types';
 import TechnicianHomeScreen from '../screens/technician/TechnicianHomeScreen';
 import TechnicianInvitationsScreen from '../screens/technician/TechnicianInvitationsScreen';
 import TechnicianJobsScreen from '../screens/technician/TechnicianJobsScreen';
-import TechnicianNotificationsScreen from '../screens/technician/TechnicianNotificationsScreen';
+import TechnicianWalletScreen from '../screens/technician/TechnicianWalletScreen';
 import TechnicianProfileScreen from '../screens/technician/TechnicianProfileScreen';
 import { GlassTabBar } from '../components/navigation/GlassTabBar';
 import { AvatarTabIcon } from '../components/navigation/AvatarTabIcon';
@@ -24,7 +24,6 @@ export default function TechnicianNavigator() {
   const user = useAuthStore((state) => state.user);
   useTechnicianLocationPing(!!user);
   const { colors } = useAppTheme();
-  const unreadCount = useBadgeStore((state) => state.unreadNotifications);
   const setUnreadCount = useBadgeStore((state) => state.setUnreadNotifications);
   const invitationCount = useInvitationCount();
 
@@ -40,7 +39,7 @@ export default function TechnicianNavigator() {
 
   return (
     <Tab.Navigator
-      tabBar={(props) => <GlassTabBar {...props} showAssistant={false} />}
+      tabBar={(props) => <GlassTabBar {...props} showAssistant={false} technicianResponsive />}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarIcon: ({ focused, color, size }) => {
@@ -50,8 +49,8 @@ export default function TechnicianNavigator() {
             return <MailOpen size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
           } else if (route.name === 'Jobs') {
             return <Briefcase size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
-          } else if (route.name === 'Notifications') {
-            return <Bell size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
+          } else if (route.name === 'Wallet') {
+            return <Wallet size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
           } else if (route.name === 'Profile') {
             if (user?.avatarUrl) {
               return <AvatarTabIcon uri={user.avatarUrl} size={size} color={color} focused={focused} />;
@@ -91,13 +90,12 @@ export default function TechnicianNavigator() {
          }}
       />
       <Tab.Screen
-        name="Notifications"
-        component={TechnicianNotificationsScreen}
+        name="Wallet"
+        component={TechnicianWalletScreen}
         options={{ 
-          title: 'Thông báo',
+          title: 'Ví',
           headerShown: false,
-          tabBarBadge: unreadCount,
-          tabBarAccessibilityLabel: unreadCount > 0 ? `Thông báo, ${unreadCount} chưa đọc` : 'Thông báo',
+          tabBarAccessibilityLabel: 'Ví',
          }}
       />
       <Tab.Screen

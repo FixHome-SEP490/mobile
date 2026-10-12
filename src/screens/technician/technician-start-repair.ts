@@ -248,3 +248,12 @@ export function createStartRepairController(
     },
   };
 }
+
+/** Footer adapter: the first tap only asks for confirmation; the next submits once. */
+export function pressStartRepairFooter(
+  controller: Pick<ReturnType<typeof createStartRepairController>, 'requestConfirm' | 'submit'>,
+  confirming: boolean,
+): void | Promise<void> {
+  if (confirming) return controller.submit();
+  controller.requestConfirm();
+}

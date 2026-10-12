@@ -10,6 +10,7 @@ import {
   RefreshControl,
   StatusBar,
   Image,
+  Modal,
   Alert,
   TextInput,
   Linking,
@@ -31,7 +32,6 @@ import { customerBookingsUserId } from './customer-bookings-history';
 import {
   orderNextAction,
   orderNextActionButtonLabel,
-  timelineEntryLabel,
   type OrderNextActionKind,
 } from './customer-order-next-action';
 import {
@@ -98,6 +98,8 @@ import {
 } from './customer-order-cancel';
 import { vnDateTimeString } from '../../utils/vn-time';
 import { findChatForBooking } from '../technician/technician-chat-shortcut';
+import CustomerOrderTimeline from './CustomerOrderTimeline';
+import { actionDetailSection, customerActiveOrderSection, customerOrderTimeline, type OrderDetailSection } from './customer-order-timeline';
 
 type DetailRoute = RouteProp<RootStackParamList, 'CustomerOrderDetail'>;
 
@@ -112,18 +114,37 @@ export default function CustomerOrderDetailScreen() {
   const route = useRoute<DetailRoute>();
   const serviceOrderId = route.params.serviceOrderId;
   const detailScrollRef = useRef<ScrollView | null>(null);
+  const [detailView, setDetailView] = useState<{ orderId: string; section: OrderDetailSection | 'all' } | null>(null);
+  const pendingScroll = useRef<{ orderId: string; kind: OrderNextActionKind } | null>(null);
+  const openDetailSection = (section: OrderDetailSection) => {
+    pendingScroll.current = null;
+    setDetailView({ orderId: serviceOrderId, section });
+  };
   const actionSectionYRef = useRef<Partial<Record<OrderNextActionKind, number>>>({});
   const markActionSection = useCallback((kind: OrderNextActionKind) => (event: LayoutChangeEvent) => {
     actionSectionYRef.current[kind] = event.nativeEvent.layout.y;
-  }, []);
+    if (pendingScroll.current?.orderId === serviceOrderId && pendingScroll.current.kind === kind && event.nativeEvent.layout.height > 0) {
+      pendingScroll.current = null;
+      detailScrollRef.current?.scrollTo({ y: Math.max(0, event.nativeEvent.layout.y - 12), animated: true });
+    }
+  }, [serviceOrderId]);
   const scrollToActionSection = useCallback((kind: OrderNextActionKind) => {
+    const section = actionDetailSection(kind);
+    const alreadyOpen = detailView?.orderId === serviceOrderId && (detailView.section === 'all' || detailView.section === section);
+    pendingScroll.current = { orderId: serviceOrderId, kind };
+    if (!alreadyOpen) setDetailView({ orderId: serviceOrderId, section });
     const y = actionSectionYRef.current[kind];
-    if (typeof y !== 'number') return;
+    if (!alreadyOpen || typeof y !== 'number') return;
+    pendingScroll.current = null;
     detailScrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
-  }, []);
+  }, [detailView, serviceOrderId]);
   const [detailState, setDetailState] = useState(initialOrderDetailState);
   const { order, loading, refreshing, error } = detailState;
   const [evidenceState, setEvidenceState] = useState(initialEvidenceState);
+  const [selectedEvidencePhotoId, setSelectedEvidencePhotoId] = useState<string | null>(null);
+  const selectedEvidencePhoto = order?.id === serviceOrderId
+    ? evidenceState.photos.find((photo) => photo.id === selectedEvidencePhotoId) ?? null
+    : null;
   const [decisionState, setDecisionState] = useState(initialDecisionState);
   const focusAliveRef = useRef(false);
   const [invoiceState, setInvoiceState] = useState(initialInvoiceState);
@@ -133,6 +154,7 @@ export default function CustomerOrderDetailScreen() {
   const [reviewState, setReviewState] = useState(initialCustomerOrderReviewState);
   const [paymentState, setPaymentState] = useState(initialCustomerPaymentState);
   const [orderCancelState, setOrderCancelState] = useState(initialCustomerOrderCancelState);
+  const [progressVisible, setProgressVisible] = useState(false);
   const invoiceViewRef = useRef(invoiceState.invoice);
   useEffect(() => { invoiceViewRef.current = invoiceState.invoice; }, [invoiceState.invoice]);
   const latestRef = useRef({ order, serviceOrderId });
@@ -419,6 +441,7 @@ export default function CustomerOrderDetailScreen() {
     void loaderRef.current?.focus(serviceOrderId);
     return () => {
       focusAliveRef.current = false;
+      setSelectedEvidencePhotoId(null);
       loaderRef.current?.blur();
       evidenceRef.current?.blurEvidence();
       invoiceRef.current?.blurInvoice();
@@ -798,24 +821,34 @@ export default function CustomerOrderDetailScreen() {
   const attributionNote = technicianAttributionNote(order);
   // Universal top summary (display-only): reuses the eligibility outcomes
   // already computed below/above instead of inventing new rules.
-  const orderSummaryAction = order && order.id === serviceOrderId
-    ? orderNextAction({
-        status: order.status,
-        quoteAwaitingDecision: sections.quoteAwaitingDecision,
-        additionalCostPending: underRepairTask?.kind === 'additional_cost_pending',
-        completionRequested:
-          underRepairTask?.kind === 'completion_requested' ||
-          (!!order.completionRequestedAt && !order.customerConfirmed),
-        paymentPending: paymentEligible != null,
-        reviewable: reviewEligible != null && !reviewState.review,
-      })
-    : null;
-  // P3B7 decision visibility mirrors the controller gate: active customer
-  // order in EN_ROUTE with the latest quotation SENT.
   const canDecideQuote = !!order &&
     order.id === serviceOrderId &&
     String(order.status).toUpperCase() === 'EN_ROUTE' &&
     sections.quoteAwaitingDecision;
+  const orderSummaryAction = order && order.id === serviceOrderId
+    ? orderNextAction({
+        status: order.status,
+        quoteAwaitingDecision: canDecideQuote,
+        additionalCostPending: costsState.requests.some(canDecideCost),
+        completionRequested: confirmCompletionEligible != null,
+        paymentPending: paymentEligible != null,
+        reviewable: reviewEligible != null && !reviewState.review,
+      })
+    : null;
+  const onCustomerFooterAction = () => {
+    if (orderSummaryAction && !['track', 'none'].includes(orderSummaryAction.kind)) scrollToActionSection(orderSummaryAction.kind);
+    else onRefresh();
+  };
+  const activeSection = order && order.id === serviceOrderId
+    ? customerActiveOrderSection(order, orderSummaryAction?.kind ?? 'none')
+    : 'overview';
+  const detailSectionStyle = (section: OrderDetailSection): { display: 'flex' | 'none' } => ({
+    display: detailView?.orderId === serviceOrderId
+      ? (detailView.section === 'all' || detailView.section === section ? 'flex' : 'none')
+      : (activeSection === section ? 'flex' : 'none'),
+  });
+  // P3B7 decision visibility mirrors the controller gate: active customer
+  // order in EN_ROUTE with the latest quotation SENT.
   const warrantyOptions = order?.quotation ? eligibleWarrantyOptions(order.quotation.items) : [];
   const selectedWarrantyFee = warrantyOptions
     .filter((option) => decisionState.selectedIds.includes(option.itemId))
@@ -849,18 +882,19 @@ export default function CustomerOrderDetailScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           accessibilityRole="button"
           accessibilityLabel="Quay lại"
+          style={styles.headerBackBtn}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chi tiết đơn sửa chữa</Text>
+        <Text style={styles.headerTitle} accessibilityRole="header">{`Bước · ${orderSummaryAction?.title ?? 'Chi tiết đơn sửa chữa'}`}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -872,13 +906,21 @@ export default function CustomerOrderDetailScreen() {
       ) : !order ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="receipt-outline" size={56} color="#CBD5E1" />
-          <Text style={styles.emptyTitle}>Không xem được đơn</Text>
+          <Text style={styles.emptyTitle} accessibilityRole="header">Không xem được đơn</Text>
           {!!error && <Text style={styles.emptyDesc}>{error}</Text>}
-          <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button" style={styles.retryBtn}>
+          <TouchableOpacity
+            onPress={onRefresh}
+            disabled={refreshing}
+            accessibilityRole="button"
+            accessibilityLabel="Thử tải lại chi tiết đơn"
+            accessibilityState={{ disabled: refreshing, busy: refreshing }}
+            style={styles.retryBtn}
+          >
             <Text style={styles.retryText}>Thử lại</Text>
           </TouchableOpacity>
         </View>
       ) : (
+        <>
         <ScrollView
           ref={detailScrollRef}
           contentContainerStyle={styles.scrollContent}
@@ -887,7 +929,14 @@ export default function CustomerOrderDetailScreen() {
           {!!error && (
             <View style={styles.errorBanner} accessibilityRole="alert">
               <Text style={styles.emptyDesc}>{error}</Text>
-              <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button">
+              <TouchableOpacity
+                onPress={onRefresh}
+                disabled={refreshing}
+                accessibilityRole="button"
+                accessibilityLabel="Thử tải lại chi tiết đơn"
+                accessibilityState={{ disabled: refreshing, busy: refreshing }}
+                style={styles.inlineRetryButton}
+              >
                 <Text style={styles.retryText}>Thử lại</Text>
               </TouchableOpacity>
             </View>
@@ -899,16 +948,17 @@ export default function CustomerOrderDetailScreen() {
                 {getStatusBadge(order.status).label}
               </Text>
             </View>
-            <Text style={styles.title}>Đơn #{order.code || order.id.slice(0, 8)}</Text>
-            <Text style={styles.meta}>{order.serviceName || 'Dịch vụ sửa chữa'}</Text>
+            <Text style={styles.title} accessibilityRole="header">{order.serviceName || 'Dịch vụ sửa chữa'}</Text>
+            <Text style={styles.meta}>Đơn #{order.code || order.id.slice(0, 8)}</Text>
             {!!order.scheduledAt && (
               <Text style={styles.meta}>
                 Lịch hẹn: {vnDateTimeString(order.scheduledAt)}
               </Text>
             )}
             {!!order.addressSummary && (
-              <Text style={styles.meta}>📍 {order.addressSummary}</Text>
+              <Text style={styles.meta} numberOfLines={2}>📍 {order.addressSummary}</Text>
             )}
+            <View style={detailSectionStyle('overview')}>
             {sections.quantity !== null && (
               <Text style={styles.meta}>Số lượng: {sections.quantity}</Text>
             )}
@@ -918,47 +968,18 @@ export default function CustomerOrderDetailScreen() {
             {!!order.bookingDescription && (
               <Text style={styles.meta}>Mô tả yêu cầu: {order.bookingDescription}</Text>
             )}
+            </View>
           </View>
 
-          {!!orderSummaryAction && (
-            <View
-              style={[
-                styles.card,
-                {
-                  borderWidth: 1,
-                  borderColor: colors.primary,
-                  backgroundColor: colors.primarySoft,
-                },
-              ]}
-              accessibilityRole="summary"
-            >
-              <Text style={[styles.meta, { fontWeight: '900', color: colors.primaryStrong }]}>
-                BẠN CẦN LÀM GÌ?
-              </Text>
-              <Text style={styles.actionSummaryTitle}>{orderSummaryAction.title}</Text>
-              <Text style={styles.actionSummaryDetail}>{orderSummaryAction.detail}</Text>
-              {!!orderNextActionButtonLabel(orderSummaryAction.kind) && (
-                <TouchableOpacity
-                  testID="order-detail-primary-next-action"
-                  onPress={() => scrollToActionSection(orderSummaryAction.kind)}
-                  accessibilityRole="button"
-                  accessibilityLabel={orderNextActionButtonLabel(orderSummaryAction.kind) ?? undefined}
-                  style={[styles.actionPrimaryButton, { backgroundColor: colors.primaryStrong }]}
-                >
-                  <Text style={styles.actionPrimaryButtonText}>
-                    {orderNextActionButtonLabel(orderSummaryAction.kind)}
-                  </Text>
-                  <Ionicons name="arrow-down" size={17} color={colors.surface} />
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
+          <TouchableOpacity style={styles.progressLink} accessibilityRole="button" accessibilityLabel="Xem tiến độ đơn hàng" onPress={() => setProgressVisible(true)}><Text style={styles.retryText}>Xem tiến độ</Text></TouchableOpacity>
+
+
 
           {String(order.status).toUpperCase() === 'COMPLETED' && (
-            <View style={styles.card}>
+            <View style={[styles.card, detailSectionStyle('warranty')]} testID="order-detail-section-warranty-4">
               <View style={[styles.row, { alignItems: 'flex-start' }]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.sectionTitle}>Bảo hành sau sửa chữa</Text>
+                  <Text style={styles.sectionTitle} accessibilityRole="header">Bảo hành sau sửa chữa</Text>
                   <Text style={styles.meta}>
                     Xem các hạng mục bảo hành của đơn này, theo dõi yêu cầu đã gửi hoặc gửi yêu cầu mới khi có sự cố.
                   </Text>
@@ -981,7 +1002,7 @@ export default function CustomerOrderDetailScreen() {
               onLayout={underRepairTask.kind === 'completion_requested'
                 ? markActionSection('confirm_completion')
                 : undefined}
-              style={[
+              style={[[
                 styles.card,
                 {
                   borderWidth: 1,
@@ -994,7 +1015,7 @@ export default function CustomerOrderDetailScreen() {
                       ? '#FFFBEB'
                       : colors.primarySoft,
                 },
-              ]}
+              ], detailSectionStyle('completion')]} testID="order-detail-section-completion-5"
             >
               <Text style={[styles.meta, { fontWeight: '800', color: '#1D4ED8' }]}>
                 BƯỚC TIẾP THEO
@@ -1078,7 +1099,7 @@ export default function CustomerOrderDetailScreen() {
           )}
 
           {sections.hasTechnician && (
-            <View style={styles.card}>
+            <View style={[styles.card, detailSectionStyle('technician')]} testID="order-detail-section-technician-6">
               <Text style={styles.sectionTitle}>Kỹ thuật viên ghi nhận trên đơn</Text>
               <Text style={styles.title}>{sections.technicianName}</Text>
               {!!sections.technicianPhone && (
@@ -1100,7 +1121,7 @@ export default function CustomerOrderDetailScreen() {
             </View>
           )}
 
-          <View style={styles.card}>
+          <View style={[styles.card, detailSectionStyle('payment')]} testID="order-detail-section-payment-7">
             <Text style={styles.sectionTitle}>Chi phí</Text>
             {sections.laborText !== null && (
               <View style={styles.row}>
@@ -1131,7 +1152,7 @@ export default function CustomerOrderDetailScreen() {
           </View>
 
           {sections.hasQuotation && order.quotation && (
-            <View onLayout={markActionSection('decide_quote')} style={styles.card}>
+            <View onLayout={markActionSection('decide_quote')} style={[styles.card, detailSectionStyle('quote')]} testID="order-detail-section-quote-8">
               <Text style={styles.sectionTitle}>Báo giá</Text>
               <Text style={styles.meta}>Trạng thái: {quoteStatusLabel(sections.quotationStatus)}</Text>
               {quotationItemsList(order).length === 0 ? (
@@ -1263,20 +1284,8 @@ export default function CustomerOrderDetailScreen() {
             </View>
           )}
 
-          {sections.hasTimeline && (
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Tiến độ</Text>
-              {order.timeline!.map((entry, index) => (
-                <View key={`${entry.status}-${entry.timestamp}-${index}`} style={styles.row}>
-                  <Text style={styles.meta}>{timelineEntryLabel(entry.title, entry.status)}</Text>
-                  <Text style={styles.meta}>{vnDateTimeString(entry.timestamp)}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
           {(sections.beforeCount !== null || sections.afterCount !== null) && (
-            <View style={styles.card}>
+            <View style={[styles.card, detailSectionStyle('evidence')]} testID="order-detail-section-evidence-9">
               <Text style={styles.sectionTitle}>Bằng chứng ảnh</Text>
               {sections.beforeCount !== null && (
                 <Text style={styles.meta}>Ảnh trước sửa chữa: {sections.beforeCount}</Text>
@@ -1287,7 +1296,7 @@ export default function CustomerOrderDetailScreen() {
             </View>
           )}
 
-          <View style={styles.card}>
+          <View style={[styles.card, detailSectionStyle('evidence')]} testID="order-detail-section-evidence-10">
             <Text style={styles.sectionTitle}>Ảnh thực tế</Text>
             {evidenceState.loading && evidenceState.photos.length === 0 && !evidenceState.error ? (
               <Text style={styles.meta}>Đang tải ảnh bằng chứng...</Text>
@@ -1302,13 +1311,22 @@ export default function CustomerOrderDetailScreen() {
                       <Text style={styles.meta}>Không tải được ảnh. Nhấn “Tải lại ảnh” để lấy đường dẫn mới.</Text>
                     </View>
                   ) : (
-                    <Image
-                      source={{ uri: photo.uri }}
-                      style={styles.evidenceThumb}
-                      resizeMode="contain"
-                      accessibilityLabel={`Ảnh ${evidenceTypeLabel(photo.type)}`}
-                      onError={() => evidenceRef.current?.markImageFailed(photo.id)}
-                    />
+                    <TouchableOpacity
+                      testID={`order-evidence-zoom-${photo.id}`}
+                      style={styles.evidencePhotoButton}
+                      onPress={() => setSelectedEvidencePhotoId(photo.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Phóng to ảnh ${evidenceTypeLabel(photo.type)}`}
+                      accessibilityHint="Mở ảnh bằng chứng ở kích thước lớn"
+                    >
+                      <Image
+                        source={{ uri: photo.uri }}
+                        style={styles.evidenceThumb}
+                        resizeMode="contain"
+                        accessibilityLabel={`Ảnh ${evidenceTypeLabel(photo.type)}`}
+                        onError={() => evidenceRef.current?.markImageFailed(photo.id)}
+                      />
+                    </TouchableOpacity>
                   )}
                   {!!photo.note && <Text style={styles.meta}>{photo.note}</Text>}
                 </View>
@@ -1317,60 +1335,101 @@ export default function CustomerOrderDetailScreen() {
             {!!evidenceState.error && (
               <View style={styles.evidenceError}>
                 <Text style={styles.meta}>{evidenceState.error}</Text>
-                <TouchableOpacity onPress={onRetryEvidence} disabled={!evidenceState.canRetry} accessibilityRole="button">
+                <TouchableOpacity
+                  onPress={onRetryEvidence}
+                  disabled={!evidenceState.canRetry}
+                  accessibilityRole="button"
+                  accessibilityLabel="Tải lại ảnh bằng chứng"
+                  accessibilityState={{ disabled: !evidenceState.canRetry }}
+                  style={styles.inlineRetryButton}
+                >
                   <Text style={evidenceState.canRetry ? styles.retryText : styles.meta}>Tải lại ảnh</Text>
                 </TouchableOpacity>
               </View>
             )}
             {!evidenceState.error && Object.keys(evidenceState.failed).length > 0 && (
-              <TouchableOpacity onPress={onRetryEvidence} accessibilityRole="button">
+              <TouchableOpacity onPress={onRetryEvidence} accessibilityRole="button" accessibilityLabel="Tải lại ảnh bằng chứng" style={styles.inlineRetryButton}>
                 <Text style={styles.retryText}>Tải lại ảnh</Text>
               </TouchableOpacity>
             )}
           </View>
 
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Hóa đơn</Text>
+          <View style={[[styles.card, styles.invoiceCard], detailSectionStyle('payment')]} testID="order-detail-section-payment-11">
+            <View style={styles.invoiceHeader}>
+              <View style={styles.invoiceHeading}>
+                <Text style={styles.invoiceEyebrow}>CHI TIẾT CHI PHÍ</Text>
+                <Text style={styles.sectionTitle}>Hóa đơn</Text>
+              </View>
+              {invoiceState.invoice && (
+                <View
+                  testID="invoice-payment-status"
+                  accessible
+                  accessibilityRole="text"
+                  accessibilityLabel={"Trạng thái thanh toán: " + invoicePaymentLabel(invoiceState.invoice.paymentStatus)}
+                  style={[
+                    styles.statusChip,
+                    invoiceState.invoice.paymentStatus === 'PAID'
+                      ? styles.statusChipPaid
+                      : invoiceState.invoice.paymentStatus === 'UNPAID'
+                        ? styles.statusChipUnpaid
+                        : invoiceState.invoice.paymentStatus === 'REFUNDED'
+                          ? styles.statusChipInfo
+                          : styles.statusChipUnknown,
+                  ]}
+                >
+                  <Text style={[
+                    styles.statusChipText,
+                    invoiceState.invoice.paymentStatus === 'PAID'
+                      ? styles.statusChipTextPaid
+                      : invoiceState.invoice.paymentStatus === 'UNPAID'
+                        ? styles.statusChipTextUnpaid
+                        : invoiceState.invoice.paymentStatus === 'REFUNDED'
+                          ? styles.statusChipTextInfo
+                          : styles.statusChipTextUnknown,
+                  ]}>
+                    {invoicePaymentLabel(invoiceState.invoice.paymentStatus)}
+                  </Text>
+                </View>
+              )}
+            </View>
             {invoiceState.loading && !invoiceState.invoice && !invoiceState.error ? (
               <Text style={styles.meta}>Đang tải hóa đơn...</Text>
             ) : invoiceState.invoice ? (
               <>
-                <View style={styles.row}>
-                  <Text style={styles.meta}>Trạng thái thanh toán</Text>
-                  <Text style={styles.meta}>{invoicePaymentLabel(invoiceState.invoice.paymentStatus)}</Text>
+                <View style={styles.invoiceLines}>
+                  {invoiceState.invoice.items.map((item) => (
+                    <View key={item.id} style={styles.invoiceRow}>
+                      <Text style={styles.invoiceItemLabel}>{item.description} × {item.quantity}</Text>
+                      <Text style={styles.invoiceItemValue}>{item.lineTotalText ?? '—'}</Text>
+                    </View>
+                  ))}
+                  {invoiceState.invoice.laborText !== null && (
+                    <View style={styles.invoiceRow}>
+                      <Text style={styles.invoiceItemLabel}>Tiền công</Text>
+                      <Text style={styles.invoiceItemValue}>{invoiceState.invoice.laborText}</Text>
+                    </View>
+                  )}
+                  {invoiceState.invoice.partsText !== null && (
+                    <View style={styles.invoiceRow}>
+                      <Text style={styles.invoiceItemLabel}>Vật tư</Text>
+                      <Text style={styles.invoiceItemValue}>{invoiceState.invoice.partsText}</Text>
+                    </View>
+                  )}
                 </View>
-                {invoiceState.invoice.laborText !== null && (
-                  <View style={styles.row}>
-                    <Text style={styles.meta}>Tiền công</Text>
-                    <Text style={styles.meta}>{invoiceState.invoice.laborText}</Text>
-                  </View>
-                )}
-                {invoiceState.invoice.partsText !== null && (
-                  <View style={styles.row}>
-                    <Text style={styles.meta}>Vật tư</Text>
-                    <Text style={styles.meta}>{invoiceState.invoice.partsText}</Text>
-                  </View>
-                )}
                 {invoiceState.invoice.totalText !== null ? (
-                  <View style={styles.row}>
+                  <View testID="invoice-total" style={styles.invoiceTotalRow}>
                     <Text style={styles.totalLabel}>Tổng cộng</Text>
                     <Text style={styles.totalValue}>{invoiceState.invoice.totalText}</Text>
                   </View>
                 ) : (
-                  <Text style={styles.meta}>Chưa rõ tổng tiền.</Text>
+                  <Text style={styles.invoiceUnknownTotal}>Chưa rõ tổng tiền.</Text>
                 )}
                 {!!invoiceState.invoice.issuedText && (
                   <Text style={styles.meta}>Phát hành: {invoiceState.invoice.issuedText}</Text>
                 )}
                 {!!invoiceState.invoice.paidText && (
-                  <Text style={styles.meta}>Đã thanh toán: {invoiceState.invoice.paidText}</Text>
+                  <Text style={styles.meta}>Thanh toán lúc: {invoiceState.invoice.paidText}</Text>
                 )}
-                {invoiceState.invoice.items.map((item) => (
-                  <View key={item.id} style={styles.row}>
-                    <Text style={styles.meta}>{item.description} × {item.quantity}</Text>
-                    <Text style={styles.meta}>{item.lineTotalText ?? '—'}</Text>
-                  </View>
-                ))}
               </>
             ) : !invoiceState.error ? (
               <Text style={styles.meta}>Chưa có hóa đơn.</Text>
@@ -1378,15 +1437,21 @@ export default function CustomerOrderDetailScreen() {
             {!!invoiceState.error && (
               <View style={styles.evidenceError}>
                 <Text style={styles.meta}>{invoiceState.error}</Text>
-                <TouchableOpacity onPress={onRetryInvoice} disabled={!invoiceState.canRetry} accessibilityRole="button">
+                <TouchableOpacity
+                  onPress={onRetryInvoice}
+                  disabled={!invoiceState.canRetry}
+                  accessibilityRole="button"
+                  accessibilityLabel="Tải lại hóa đơn"
+                  accessibilityState={{ disabled: !invoiceState.canRetry }}
+                  style={styles.inlineRetryButton}
+                >
                   <Text style={invoiceState.canRetry ? styles.retryText : styles.meta}>Tải lại hóa đơn</Text>
                 </TouchableOpacity>
               </View>
             )}
           </View>
-
           {orderCancelEligible && (
-            <View style={styles.card}>
+            <View style={[styles.card, detailSectionStyle('cancel')]} testID="order-detail-section-cancel-12">
               {/* K09_B_CUSTOMER_ORDER_CANCEL */}
               <Text style={styles.sectionTitle}>Hủy đơn sửa chữa</Text>
               <Text style={styles.meta}>
@@ -1481,22 +1546,39 @@ export default function CustomerOrderDetailScreen() {
           )}
 
           {paymentEligible && (
-            <View onLayout={markActionSection('pay')} style={styles.card}>
+            <View onLayout={markActionSection('pay')} style={[[styles.card, styles.paymentCard], detailSectionStyle('payment')]} testID="order-detail-section-payment-13">
               {/* K08_CUSTOMER_PAYMENT */}
-              <Text style={styles.sectionTitle}>Thanh toán</Text>
+              <View style={styles.paymentHeader}>
+                <View style={styles.invoiceHeading}>
+                  <Text style={styles.invoiceEyebrow}>THANH TOÁN</Text>
+                  <Text style={styles.sectionTitle}>Thanh toán</Text>
+                </View>
+                <View style={[styles.statusChip, styles.statusChipInfo]}>
+                  <Text style={[styles.statusChipText, styles.statusChipTextInfo]}>Bước riêng</Text>
+                </View>
+              </View>
               <Text style={styles.meta}>
-                Nghiệm thu công việc đã được xác nhận. Thanh toán là bước riêng; chỉ khi hệ thống xác nhận đã thanh toán/hoàn thành mới được coi là thành công.
+                Công việc đã được nghiệm thu. Thanh toán là bước riêng; chỉ khi hệ thống xác nhận đã thanh toán hoặc hoàn thành thì mới được coi là thành công.
               </Text>
 
               {paymentState.loading ? (
                 <Text style={styles.meta}>Đang kiểm tra thanh toán tiền mặt...</Text>
               ) : paymentState.settlement?.status === 'PENDING_CONFIRMATION' ? (
-                <View style={styles.evidenceError}>
+                <View style={styles.cashPendingPanel}>
+                  <View
+                    testID="cash-settlement-status"
+                    accessible
+                    accessibilityRole="text"
+                    accessibilityLabel="Đối soát tiền mặt: Chờ khách xác nhận"
+                    style={[styles.statusChip, styles.statusChipUnpaid]}
+                  >
+                    <Text style={[styles.statusChipText, styles.statusChipTextUnpaid]}>Chờ khách xác nhận</Text>
+                  </View>
                   <Text style={styles.meta}>
-                    Kỹ thuật viên khai đã nhận {paymentState.settlement.declaredAmount.toLocaleString('vi-VN')}đ tiền mặt.
+                    Kỹ thuật viên khai báo đã nhận {paymentState.settlement.declaredAmount.toLocaleString('vi-VN')}đ tiền mặt. Hãy đối chiếu trước khi xác nhận.
                   </Text>
                   {!!paymentState.settlement.technicianNotes && (
-                    <Text style={styles.meta}>Ghi chú: {paymentState.settlement.technicianNotes}</Text>
+                    <Text style={styles.meta}>Ghi chú kỹ thuật viên: {paymentState.settlement.technicianNotes}</Text>
                   )}
                   <View style={styles.decisionBtnRow}>
                     <TouchableOpacity
@@ -1504,6 +1586,8 @@ export default function CustomerOrderDetailScreen() {
                       onPress={onPaymentConfirmCash}
                       disabled={paymentState.cashBusy || paymentState.cashNeedsVerify}
                       accessibilityRole="button"
+                      accessibilityLabel="Xác nhận đã trả tiền mặt"
+                      accessibilityState={{ disabled: paymentState.cashBusy || paymentState.cashNeedsVerify, busy: paymentState.cashBusy }}
                     >
                       <Text style={styles.decisionBtnText}>Xác nhận đã trả</Text>
                     </TouchableOpacity>
@@ -1512,35 +1596,73 @@ export default function CustomerOrderDetailScreen() {
                       onPress={onPaymentDisputeCash}
                       disabled={paymentState.cashBusy || paymentState.cashNeedsVerify}
                       accessibilityRole="button"
+                      accessibilityLabel="Báo sai số tiền mặt"
+                      accessibilityState={{ disabled: paymentState.cashBusy || paymentState.cashNeedsVerify, busy: paymentState.cashBusy }}
                     >
                       <Text style={styles.decisionBtnText}>Báo sai số tiền</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
               ) : paymentState.settlement?.status === 'DISPUTED' ? (
-                <Text style={[styles.meta, { color: '#B91C1C', fontWeight: '700' }]}>
-                  Đối soát tiền mặt đang tranh chấp và cần xử lý. Hóa đơn chưa được coi là đã thanh toán.
-                </Text>
+                <View style={styles.cashDisputedPanel}>
+                  <View
+                    testID="cash-settlement-status"
+                    accessible
+                    accessibilityRole="text"
+                    accessibilityLabel="Đối soát tiền mặt: Đang tranh chấp"
+                    style={[styles.statusChip, styles.statusChipDanger]}
+                  >
+                    <Text style={[styles.statusChipText, styles.statusChipTextDanger]}>Đang tranh chấp</Text>
+                  </View>
+                  <Text style={styles.meta}>
+                    Đối soát tiền mặt đang tranh chấp và cần xử lý. Hóa đơn chưa được coi là đã thanh toán.
+                  </Text>
+                </View>
               ) : paymentState.settlement?.status === 'CONFIRMED' ? (
-                <Text style={[styles.meta, { color: '#047857', fontWeight: '700' }]}>
-                  Hệ thống đã xác nhận đối soát tiền mặt.
-                </Text>
+                <View style={styles.cashConfirmedPanel}>
+                  <View
+                    testID="cash-settlement-status"
+                    accessible
+                    accessibilityRole="text"
+                    accessibilityLabel="Đối soát tiền mặt: Đã xác nhận"
+                    style={[styles.statusChip, styles.statusChipPaid]}
+                  >
+                    <Text style={[styles.statusChipText, styles.statusChipTextPaid]}>Đã xác nhận đối soát</Text>
+                  </View>
+                  <Text style={styles.meta}>
+                    Hệ thống đã xác nhận đối soát tiền mặt. Trạng thái hóa đơn được hiển thị riêng theo dữ liệu hệ thống.
+                  </Text>
+                </View>
               ) : (
                 <Text style={styles.meta}>Chưa có khai báo tiền mặt từ kỹ thuật viên.</Text>
               )}
 
               {paymentState.cashNeedsVerify && (
-                <TouchableOpacity onPress={onPaymentCheckCash} disabled={paymentState.cashBusy} accessibilityRole="button">
-                  <Text style={styles.retryText}>Kiểm tra đối soát tiền mặt</Text>
-                </TouchableOpacity>
+                <View style={styles.paymentRecovery}>
+                  <Text style={styles.meta}>
+                    Chưa xác định được kết quả đối soát tiền mặt. Kiểm tra lại trạng thái trước khi tiếp tục.
+                  </Text>
+                  <TouchableOpacity
+                    onPress={onPaymentCheckCash}
+                    disabled={paymentState.cashBusy}
+                    accessibilityRole="button"
+                    accessibilityLabel="Kiểm tra đối soát tiền mặt"
+                    accessibilityState={{ disabled: paymentState.cashBusy, busy: paymentState.cashBusy }}
+                    style={styles.paymentSecondaryButton}
+                  >
+                    <Text style={styles.retryText}>Kiểm tra đối soát tiền mặt</Text>
+                  </TouchableOpacity>
+                </View>
               )}
 
-              <View style={{ marginTop: 10, gap: 8 }}>
+              <View style={styles.paymentActions}>
                 <TouchableOpacity
-                  style={[styles.decisionBtn, { backgroundColor: colors.primaryStrong, alignSelf: 'flex-start' }]}
+                  style={[styles.decisionBtn, styles.paymentPrimaryButton, { backgroundColor: colors.primaryStrong }]}
                   onPress={onPaymentVnpay}
                   disabled={paymentState.onlineBusy || paymentState.onlinePending}
                   accessibilityRole="button"
+                  accessibilityLabel="Thanh toán qua VNPay"
+                  accessibilityState={{ disabled: paymentState.onlineBusy || paymentState.onlinePending, busy: paymentState.onlineBusy }}
                 >
                   {paymentState.onlineBusy ? (
                     <ActivityIndicator size="small" color={colors.surface} />
@@ -1549,14 +1671,30 @@ export default function CustomerOrderDetailScreen() {
                   )}
                 </TouchableOpacity>
                 {paymentState.onlinePending && (
-                  <>
+                  <View style={styles.paymentRecovery}>
+                    <View
+                      testID="online-payment-status"
+                      accessible
+                      accessibilityRole="text"
+                      accessibilityLabel="Trạng thái VNPay: Chờ hệ thống xác nhận"
+                      style={[styles.statusChip, styles.statusChipInfo]}
+                    >
+                      <Text style={[styles.statusChipText, styles.statusChipTextInfo]}>Chờ hệ thống xác nhận</Text>
+                    </View>
                     <Text style={styles.meta}>
-                      Đã tạo/mở một lần thanh toán VNPay. Quay lại ứng dụng không đồng nghĩa đã thanh toán thành công.
+                      Đã tạo hoặc mở một lần thanh toán VNPay. Quay lại ứng dụng không đồng nghĩa đã thanh toán thành công. Hãy kiểm tra trạng thái với hệ thống.
                     </Text>
-                    <TouchableOpacity onPress={onPaymentCheckOnline} disabled={paymentState.onlineBusy} accessibilityRole="button">
+                    <TouchableOpacity
+                      onPress={onPaymentCheckOnline}
+                      disabled={paymentState.onlineBusy}
+                      accessibilityRole="button"
+                      accessibilityLabel="Kiểm tra trạng thái thanh toán"
+                      accessibilityState={{ disabled: paymentState.onlineBusy, busy: paymentState.onlineBusy }}
+                      style={styles.paymentSecondaryButton}
+                    >
                       <Text style={styles.retryText}>Kiểm tra trạng thái thanh toán</Text>
                     </TouchableOpacity>
-                  </>
+                  </View>
                 )}
               </View>
 
@@ -1565,9 +1703,8 @@ export default function CustomerOrderDetailScreen() {
               )}
             </View>
           )}
-
           {reviewEligible && (
-            <View onLayout={markActionSection('review')} style={styles.card}>
+            <View onLayout={markActionSection('review')} style={[styles.card, detailSectionStyle('review')]} testID="order-detail-section-review-14">
               {/* K09_A_SERVER_REVIEW */}
               <Text style={styles.sectionTitle}>Đánh giá dịch vụ</Text>
               {reviewState.loading && !reviewState.review ? (
@@ -1678,7 +1815,7 @@ export default function CustomerOrderDetailScreen() {
             </View>
           )}
 
-          <View onLayout={markActionSection('decide_cost')} style={styles.card}>
+          <View onLayout={markActionSection('decide_cost')} style={[styles.card, detailSectionStyle('cost')]} testID="order-detail-section-cost-15">
             <Text style={styles.sectionTitle}>Chi phí phát sinh</Text>
             {costsState.loading && costsState.requests.length === 0 && !costsState.error ? (
               <Text style={styles.meta}>Đang tải chi phí phát sinh...</Text>
@@ -1789,19 +1926,82 @@ export default function CustomerOrderDetailScreen() {
             {!!costsState.error && (
               <View style={styles.evidenceError}>
                 <Text style={styles.meta}>{costsState.error}</Text>
-                <TouchableOpacity onPress={onRetryCosts} disabled={!costsState.canRetry} accessibilityRole="button">
+                <TouchableOpacity
+                  onPress={onRetryCosts}
+                  disabled={!costsState.canRetry}
+                  accessibilityRole="button"
+                  accessibilityLabel="Tải lại danh sách chi phí phát sinh"
+                  accessibilityState={{ disabled: !costsState.canRetry }}
+                  style={styles.inlineRetryButton}
+                >
                   <Text style={costsState.canRetry ? styles.retryText : styles.meta}>Tải lại chi phí</Text>
                 </TouchableOpacity>
               </View>
             )}
           </View>
 
-          <CustomerSupportCasesSection
+          <View style={detailSectionStyle('support')}>
+            <CustomerSupportCasesSection
             orderId={serviceOrderId}
             orderStatus={order.status}
             completedAt={order.completedAt ?? null}
           />
+          </View>
+          <TouchableOpacity testID="order-detail-expand-all" accessibilityRole="button" accessibilityLabel="Xem toàn bộ chi tiết"
+            style={[styles.actionPrimaryButton, { borderWidth: 1, borderColor: colors.primaryStrong, backgroundColor: colors.surface }]}
+            onPress={() => setProgressVisible(true)}>
+            <Text style={[styles.actionPrimaryButtonText, { color: colors.primaryStrong }]}>Xem toàn bộ chi tiết</Text>
+          </TouchableOpacity>
         </ScrollView>
+        <View style={styles.stickyFooter} testID="customer-sticky-footer">
+          <Text style={styles.footerReason}>{orderSummaryAction?.title ?? 'Trạng thái đơn được cập nhật từ hệ thống'}</Text>
+          <TouchableOpacity style={[styles.footerButton, { backgroundColor: colors.primaryStrong }]} onPress={onCustomerFooterAction} accessibilityRole="button" accessibilityLabel={orderSummaryAction ? orderNextActionButtonLabel(orderSummaryAction.kind) ?? 'Cập nhật trạng thái' : 'Cập nhật trạng thái'} accessibilityState={{ disabled: refreshing, busy: refreshing }} disabled={refreshing}>
+            <Text style={styles.footerButtonText}>{orderSummaryAction ? orderNextActionButtonLabel(orderSummaryAction.kind) ?? 'Cập nhật trạng thái' : 'Cập nhật trạng thái'}</Text>
+          </TouchableOpacity>
+        </View>
+        <Modal visible={progressVisible} transparent animationType="slide" onRequestClose={() => setProgressVisible(false)} accessibilityViewIsModal>
+          <View style={styles.progressBackdrop}><View style={styles.progressSheet}>
+            <Text style={styles.sectionTitle}>Tiến độ đơn sửa chữa</Text>
+            <CustomerOrderTimeline key={serviceOrderId} steps={customerOrderTimeline(order, orderSummaryAction?.kind)} onOpenSection={() => undefined} actionLabel={null} actionTitle={orderSummaryAction?.title} onAction={() => undefined} />
+            <ScrollView style={styles.progressSections} keyboardShouldPersistTaps="handled">{([
+              ['overview', 'Thông tin đơn'], ['technician', 'Kỹ thuật viên'], ['quote', 'Báo giá'], ['cost', 'Chi phí phát sinh'], ['evidence', 'Ảnh bằng chứng'], ['completion', 'Nghiệm thu'], ['payment', 'Thanh toán'], ['review', 'Đánh giá'], ['warranty', 'Bảo hành'], ['cancel', 'Hủy đơn'], ['support', 'Hỗ trợ'],
+            ] as [OrderDetailSection, string][]).map(([section, label]) => <TouchableOpacity key={section} style={styles.progressSectionButton} accessibilityRole="button" accessibilityLabel={`Mở ${label}`} onPress={() => { setProgressVisible(false); openDetailSection(section); }}><Text style={styles.retryText}>{label}</Text></TouchableOpacity>)}</ScrollView>
+            <TouchableOpacity style={styles.progressClose} accessibilityRole="button" accessibilityLabel="Đóng tiến độ" onPress={() => setProgressVisible(false)}><Text style={styles.retryText}>Đóng</Text></TouchableOpacity>
+          </View></View>
+        </Modal>
+        <Modal
+          visible={!!selectedEvidencePhoto}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSelectedEvidencePhotoId(null)}
+          accessibilityViewIsModal
+        >
+          <View style={styles.evidenceViewerBackdrop}>
+            <TouchableOpacity
+              onPress={() => setSelectedEvidencePhotoId(null)}
+              style={styles.evidenceViewerClose}
+              accessibilityRole="button"
+              accessibilityLabel="Đóng ảnh"
+              accessibilityHint="Đóng ảnh bằng chứng đang phóng to"
+            >
+              <Ionicons name="close" size={24} color={colors.surface} />
+            </TouchableOpacity>
+            {!!selectedEvidencePhoto && (
+              <>
+                <Text style={styles.evidenceViewerTitle}>
+                  {evidenceTypeLabel(selectedEvidencePhoto.type)}
+                </Text>
+                <Image
+                  source={{ uri: selectedEvidencePhoto.uri }}
+                  style={styles.evidenceViewerImage}
+                  resizeMode="contain"
+                  accessibilityLabel={`Ảnh phóng to ${evidenceTypeLabel(selectedEvidencePhoto.type)}`}
+                />
+              </>
+            )}
+          </View>
+        </Modal>
+        </>
       )}
     </SafeAreaView>
   );
@@ -1812,6 +2012,16 @@ const getStyles = (colors: any) => StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  stickyFooter: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, gap: 6, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
+  footerReason: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
+  footerButton: { minHeight: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+  footerButtonText: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.surface },
+  progressLink: { minHeight: 44, justifyContent: 'center', alignItems: 'flex-start', paddingHorizontal: 12 },
+  progressBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15, 23, 42, 0.35)' },
+  progressSheet: { maxHeight: '85%', padding: 20, gap: 8, backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+  progressClose: { minHeight: 44, justifyContent: 'center', alignItems: 'center' },
+  progressSections: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  progressSectionButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 10, backgroundColor: colors.primarySoft },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1823,16 +2033,23 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderBottomColor: colors.border,
   },
   headerTitle: {
+    flex: 1,
+    textAlign: 'center',
     fontSize: 18,
+    lineHeight: 25,
     fontWeight: '800',
     color: colors.text,
   },
+  headerBackBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
   headerSpacer: {
-    width: 24,
+    width: 44,
   },
   scrollContent: {
-    padding: 16,
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 72,
+    gap: 14,
+    flexGrow: 1,
   },
   loadingState: {
     flex: 1,
@@ -1852,7 +2069,8 @@ const getStyles = (colors: any) => StyleSheet.create({
     gap: 8,
   },
   emptyTitle: {
-    fontSize: 17,
+    fontSize: 18,
+    lineHeight: 26,
     fontWeight: '700',
     color: colors.text,
     marginTop: 16,
@@ -1861,12 +2079,20 @@ const getStyles = (colors: any) => StyleSheet.create({
     fontSize: 13,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 20,
   },
   retryBtn: {
-    padding: 12,
+    minHeight: 48,
+    minWidth: 116,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 8,
   },
+  inlineRetryButton: { minHeight: 44, minWidth: 88, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, alignSelf: 'center' },
   retryText: {
     fontSize: 13,
     fontWeight: '700',
@@ -1876,8 +2102,10 @@ const getStyles = (colors: any) => StyleSheet.create({
     padding: 16,
     gap: 8,
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    borderRadius: 8,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 14,
   },
   card: {
     backgroundColor: colors.surface,
@@ -1898,12 +2126,14 @@ const getStyles = (colors: any) => StyleSheet.create({
     marginBottom: 6,
   },
   badgeText: {
-    fontSize: 11,
+    fontSize: 12,
+    lineHeight: 18,
     fontWeight: '700',
   },
   title: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 17,
+    lineHeight: 25,
+    fontWeight: '800',
     color: colors.text,
   },
   actionSummaryTitle: {
@@ -1919,7 +2149,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   actionPrimaryButton: {
     alignSelf: 'flex-start',
-    minHeight: 42,
+    minHeight: 48,
     marginTop: 4,
     paddingHorizontal: 14,
     borderRadius: 10,
@@ -1941,19 +2171,28 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   meta: {
     fontSize: 13,
+    lineHeight: 20,
+    flexShrink: 1,
     color: colors.textSecondary,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
     gap: 12,
   },
+  timelineRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  timelineTitle: { flexGrow: 1, flexShrink: 1, minWidth: 130, fontSize: 13, lineHeight: 20, color: colors.text, fontWeight: '600' },
+  timelineTime: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, flexShrink: 0 },
   decisionBtnRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   decisionBtn: {
     flex: 1,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
@@ -1984,6 +2223,36 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderRadius: 10,
     backgroundColor: colors.divider,
   },
+  evidencePhotoButton: { width: '100%', borderRadius: 10, overflow: 'hidden' },
+  evidenceViewerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(8, 12, 20, 0.96)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  evidenceViewerClose: {
+    position: 'absolute',
+    top: 36,
+    right: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+  },
+  evidenceViewerTitle: {
+    position: 'absolute',
+    top: 48,
+    left: 18,
+    right: 74,
+    color: colors.surface,
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '700',
+  },
+  evidenceViewerImage: { width: '100%', height: '78%' },
   evidencePlaceholder: {
     height: 120,
     borderRadius: 12,
@@ -1995,9 +2264,167 @@ const getStyles = (colors: any) => StyleSheet.create({
   evidenceError: {
     gap: 8,
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    borderRadius: 8,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    padding: 14,
+  },
+  invoiceCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 18,
+    padding: 18,
+    gap: 12,
+  },
+  invoiceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  paymentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  invoiceHeading: {
+    flexShrink: 1,
+    gap: 2,
+  },
+  invoiceEyebrow: {
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 0.8,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  invoiceLines: {
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+    paddingTop: 10,
+    gap: 10,
+  },
+  invoiceRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  invoiceItemLabel: {
+    flex: 1,
+    minWidth: 120,
+    flexShrink: 1,
+    fontSize: 13,
+    lineHeight: 20,
+    color: colors.text,
+  },
+  invoiceItemValue: {
+    flexShrink: 1,
+    fontSize: 13,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  invoiceTotalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    marginTop: 2,
+    paddingTop: 12,
+  },
+  invoiceUnknownTotal: {
+    paddingVertical: 8,
+    fontSize: 13,
+    lineHeight: 20,
+    color: colors.textSecondary,
+  },
+  statusChip: {
+    alignSelf: 'flex-start',
+    minHeight: 28,
+    justifyContent: 'center',
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 99,
+  },
+  statusChipText: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '700',
+  },
+  statusChipPaid: { backgroundColor: colors.tone.success.bg },
+  statusChipTextPaid: { color: colors.tone.success.text },
+  statusChipUnpaid: { backgroundColor: colors.tone.warning.bg },
+  statusChipTextUnpaid: { color: colors.tone.warning.text },
+  statusChipDanger: { backgroundColor: colors.tone.danger.bg },
+  statusChipTextDanger: { color: colors.tone.danger.text },
+  statusChipInfo: { backgroundColor: colors.tone.info.bg },
+  statusChipTextInfo: { color: colors.tone.info.text },
+  statusChipUnknown: { backgroundColor: colors.tone.neutral.bg },
+  statusChipTextUnknown: { color: colors.tone.neutral.text },
+  paymentCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 12,
+  },
+  cashPendingPanel: {
+    gap: 10,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.tone.warning.bg,
+    backgroundColor: colors.tone.warning.bg,
+  },
+  cashDisputedPanel: {
+    gap: 8,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.tone.danger.bg,
+    backgroundColor: colors.tone.danger.bg,
+  },
+  cashConfirmedPanel: {
+    gap: 8,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.tone.success.bg,
+    backgroundColor: colors.tone.success.bg,
+  },
+  paymentActions: {
+    gap: 10,
+    marginTop: 2,
+  },
+  paymentPrimaryButton: {
+    flex: 0,
+    alignSelf: 'stretch',
+    minHeight: 48,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+  },
+  paymentRecovery: {
+    gap: 8,
     padding: 12,
+    borderRadius: 12,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  paymentSecondaryButton: {
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: colors.primarySoft,
   },
   totalLabel: {
     fontSize: 14,

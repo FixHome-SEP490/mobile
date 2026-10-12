@@ -14,6 +14,14 @@ export interface UploadedPublicMedia {
 }
 
 const MEDIA_UPLOAD_TIMEOUT = 60_000;
+const BOOKING_PHOTO_MAX_BYTES = 10 * 1024 * 1024;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export interface UploadedBookingPhoto {
+  uploadId: string;
+  mimeType: MediaUploadImage['type'];
+  sizeBytes: number;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -48,6 +56,30 @@ function normalizeUploadedMedia(value: unknown): UploadedPublicMedia {
   return { url, mimeType, sizeBytes, filename };
 }
 
+function normalizeUploadedBookingPhoto(value: unknown): UploadedBookingPhoto {
+  const raw = isRecord(value) && isRecord(value.data) ? value.data : null;
+  const uploadId = typeof raw?.uploadId === 'string' ? raw.uploadId.trim() : '';
+  const mimeType = typeof raw?.mimeType === 'string' ? raw.mimeType.trim().toLowerCase() : '';
+  const sizeBytes = raw?.sizeBytes;
+
+  if (
+    !UUID_PATTERN.test(uploadId)
+    || !['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)
+    || typeof sizeBytes !== 'number'
+    || !Number.isInteger(sizeBytes)
+    || sizeBytes <= 0
+    || sizeBytes > BOOKING_PHOTO_MAX_BYTES
+  ) {
+    throw new Error('Backend trả về thông tin ảnh yêu cầu không hợp lệ.');
+  }
+
+  return {
+    uploadId,
+    mimeType: mimeType as MediaUploadImage['type'],
+    sizeBytes,
+  };
+}
+
 export const mediaApi = {
   async uploadPublicImage(image: MediaUploadImage): Promise<UploadedPublicMedia> {
     const form = new FormData();
@@ -63,5 +95,25 @@ export const mediaApi = {
     });
 
     return normalizeUploadedMedia(response.data);
+  },
+
+  async uploadBookingPhoto(image: MediaUploadImage): Promise<UploadedBookingPhoto> {
+    const form = new FormData();
+    form.append('file', {
+      uri: image.uri,
+      name: image.name,
+      type: image.type,
+    } as unknown as Blob);
+
+    const response = await apiClient.post('/media/booking-photo-upload', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: MEDIA_UPLOAD_TIMEOUT,
+    });
+
+    if (response.status !== 201) {
+      throw new Error('Không xác nhận được ảnh yêu cầu đã tải lên.');
+    }
+
+    return normalizeUploadedBookingPhoto(response.data);
   },
 };

@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
+  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -193,12 +194,25 @@ export default function CustomerSupportCasesSection({
     return colors.warning;
   };
 
+  const statusPillBackground = (status: MySupportCase['status']) => {
+    if (status === 'resolved') return colors.tone?.success?.bg ?? '#E7F6F0';
+    if (status === 'rejected') return colors.background;
+    if (status === 'in_review') return colors.primarySoft;
+    return colors.tone?.warning?.bg ?? '#FEF6E0';
+  };
+
+  const detailProgressStep = (status: MySupportCase['status']) => {
+    if (status === 'resolved' || status === 'rejected') return 2;
+    if (status === 'in_review') return 1;
+    return 0;
+  };
+
   return (
     <>
       <View style={styles.card}>
         <View style={styles.headerRow}>
           <View style={styles.headerCopy}>
-            <Text style={styles.sectionTitle}>Hỗ trợ & khiếu nại</Text>
+            <Text style={styles.sectionTitle} accessibilityRole="header">Hỗ trợ & khiếu nại</Text>
             <Text style={styles.helper}>
               Nếu có vấn đề với kỹ thuật viên hoặc đơn sửa chữa, bạn có thể gửi khiếu nại tại đây.
             </Text>
@@ -221,7 +235,14 @@ export default function CustomerSupportCasesSection({
         ) : loadError ? (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>{loadError}</Text>
-            <TouchableOpacity onPress={() => void loadCases(true)} disabled={refreshing} accessibilityRole="button">
+            <TouchableOpacity
+              onPress={() => void loadCases(true)}
+              disabled={refreshing}
+              accessibilityRole="button"
+              accessibilityLabel="Tải lại danh sách khiếu nại"
+              accessibilityState={{ disabled: refreshing, busy: refreshing }}
+              style={styles.retryButton}
+            >
               <Text style={styles.linkText}>{refreshing ? 'Đang tải...' : 'Tải lại'}</Text>
             </TouchableOpacity>
           </View>
@@ -254,9 +275,11 @@ export default function CustomerSupportCasesSection({
                   </Text>
                 </View>
                 <View style={styles.caseTrailing}>
-                  <Text style={[styles.statusText, { color: statusColor(item.status) }]}>
-                    {supportCaseStatusLabels[item.status]}
-                  </Text>
+                  <View style={[styles.statusPill, { backgroundColor: statusPillBackground(item.status) }]}>
+                    <Text style={[styles.statusText, { color: statusColor(item.status) }]}>
+                      {supportCaseStatusLabels[item.status]}
+                    </Text>
+                  </View>
                   <Ionicons name="chevron-forward" size={18} color={colors.muted} />
                 </View>
               </TouchableOpacity>
@@ -281,6 +304,7 @@ export default function CustomerSupportCasesSection({
             disabled={!canCreate}
             accessibilityRole="button"
             accessibilityLabel="Gửi khiếu nại"
+            accessibilityState={{ disabled: !canCreate }}
           >
             <Ionicons name="add-circle-outline" size={18} color="#FFFFFF" />
             <Text style={styles.createButtonText}>Gửi khiếu nại</Text>
@@ -293,14 +317,22 @@ export default function CustomerSupportCasesSection({
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <View style={styles.headerCopy}>
-                <Text style={styles.modalTitle}>Gửi khiếu nại</Text>
+                <Text style={styles.modalTitle} accessibilityRole="header">Gửi khiếu nại</Text>
                 <Text style={styles.helper}>Chọn vấn đề đúng với đơn hiện tại để quản lý dịch vụ xử lý.</Text>
               </View>
-              <TouchableOpacity onPress={closeForm} disabled={formBusy} accessibilityRole="button" accessibilityLabel="Đóng">
+              <TouchableOpacity
+                onPress={closeForm}
+                disabled={formBusy}
+                accessibilityRole="button"
+                accessibilityLabel="Đóng biểu mẫu khiếu nại"
+                accessibilityState={{ disabled: formBusy }}
+                style={styles.modalCloseButton}
+              >
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
 
+            <ScrollView style={styles.formScroll} contentContainerStyle={styles.formScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <Text style={styles.fieldLabel}>Loại vấn đề</Text>
             <View style={styles.typeList}>
               {allowedTypes.map((type) => {
@@ -315,7 +347,8 @@ export default function CustomerSupportCasesSection({
                     onPress={() => setCaseType(type)}
                     disabled={formBusy}
                     accessibilityRole="radio"
-                    accessibilityState={{ checked: selected }}
+                    accessibilityLabel={complaintTypeLabel(type)}
+                    accessibilityState={{ checked: selected, disabled: formBusy }}
                   >
                     <Ionicons
                       name={selected ? 'radio-button-on' : 'radio-button-off'}
@@ -354,19 +387,20 @@ export default function CustomerSupportCasesSection({
             )}
 
             {!!formError && <Text style={styles.errorText}>{formError}</Text>}
+            </ScrollView>
 
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.secondaryButton} onPress={closeForm} disabled={formBusy}>
+              <TouchableOpacity style={styles.secondaryButton} onPress={closeForm} disabled={formBusy} accessibilityRole="button" accessibilityLabel="Đóng biểu mẫu khiếu nại" accessibilityState={{ disabled: formBusy }}>
                 <Text style={styles.secondaryButtonText}>Đóng</Text>
               </TouchableOpacity>
               {needsVerify ? (
-                <TouchableOpacity style={styles.primaryButton} onPress={() => void reconcileCreate()} disabled={formBusy}>
+                <TouchableOpacity style={styles.primaryButton} onPress={() => void reconcileCreate()} disabled={formBusy} accessibilityRole="button" accessibilityLabel="Kiểm tra danh sách khiếu nại trước khi gửi lại" accessibilityState={{ disabled: formBusy, busy: formBusy }}>
                   {formBusy
                     ? <ActivityIndicator size="small" color="#FFFFFF" />
                     : <Text style={styles.primaryButtonText}>Kiểm tra danh sách</Text>}
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity style={styles.primaryButton} onPress={() => void submit()} disabled={formBusy}>
+                <TouchableOpacity style={styles.primaryButton} onPress={() => void submit()} disabled={formBusy} accessibilityRole="button" accessibilityLabel="Xác nhận gửi khiếu nại" accessibilityState={{ disabled: formBusy, busy: formBusy }}>
                   {formBusy
                     ? <ActivityIndicator size="small" color="#FFFFFF" />
                     : <Text style={styles.primaryButtonText}>Gửi khiếu nại</Text>}
@@ -387,19 +421,22 @@ export default function CustomerSupportCasesSection({
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <View style={styles.headerCopy}>
-                <Text style={styles.modalTitle}>Chi tiết khiếu nại</Text>
+                <Text style={styles.modalTitle} accessibilityRole="header">Chi tiết khiếu nại</Text>
                 {!!detail && <Text style={styles.helper}>{complaintTypeLabel(detail.caseType)}</Text>}
               </View>
               <TouchableOpacity
                 onPress={() => setDetailOpen(false)}
                 disabled={detailLoading}
                 accessibilityRole="button"
-                accessibilityLabel="Đóng"
+                accessibilityLabel="Đóng chi tiết khiếu nại"
+                accessibilityState={{ disabled: detailLoading }}
+                style={styles.modalCloseButton}
               >
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
 
+            <ScrollView style={styles.detailScroll} contentContainerStyle={styles.detailScrollContent} showsVerticalScrollIndicator={false}>
             {detailLoading && !detail ? (
               <View style={styles.inlineLoading}>
                 <ActivityIndicator size="small" color={colors.primary} />
@@ -408,12 +445,30 @@ export default function CustomerSupportCasesSection({
             ) : detail ? (
               <View style={styles.detailBody}>
                 <View style={styles.detailTopRow}>
-                  <Text style={[styles.statusText, { color: statusColor(detail.status) }]}>
-                    {supportCaseStatusLabels[detail.status]}
-                  </Text>
+                  <View style={[styles.statusPill, { backgroundColor: statusPillBackground(detail.status) }]}>
+                    <Text style={[styles.statusText, { color: statusColor(detail.status) }]}>
+                      {supportCaseStatusLabels[detail.status]}
+                    </Text>
+                  </View>
                   {detail.isUrgent && isOpenSupportCase(detail) && (
                     <Text style={styles.urgentBadge}>Cần hỗ trợ ngay</Text>
                   )}
+                </View>
+
+                <View testID="support-case-progress" style={styles.progressRow}>
+                  {['Đã tiếp nhận', 'Đang xem xét', detail.status === 'rejected' ? 'Đã từ chối' : 'Kết quả xử lý'].map((label, index) => {
+                    const done = index <= detailProgressStep(detail.status);
+                    return (
+                      <View key={label} style={styles.progressStep}>
+                        <View style={[styles.progressDot, done && { backgroundColor: colors.primary, borderColor: colors.primary }]}>
+                          {done && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
+                        </View>
+                        <Text style={[styles.progressLabel, done && { color: colors.text, fontWeight: '700' }]}>
+                          {label}
+                        </Text>
+                      </View>
+                    );
+                  })}
                 </View>
 
                 <Text style={styles.detailLabel}>Nội dung bạn thấy</Text>
@@ -452,14 +507,15 @@ export default function CustomerSupportCasesSection({
             ) : (
               <Text style={styles.errorText}>{detailError || 'Không thể tải chi tiết khiếu nại.'}</Text>
             )}
+            </ScrollView>
 
             <View style={styles.modalActions}>
               {!!detailError && !!detail && (
-                <TouchableOpacity onPress={() => void openDetail(detail)} style={styles.secondaryButton} disabled={detailLoading}>
+                <TouchableOpacity onPress={() => void openDetail(detail)} style={styles.secondaryButton} disabled={detailLoading} accessibilityRole="button" accessibilityLabel="Tải lại chi tiết khiếu nại" accessibilityState={{ disabled: detailLoading, busy: detailLoading }}>
                   <Text style={styles.secondaryButtonText}>Tải lại</Text>
                 </TouchableOpacity>
               )}
-              <TouchableOpacity style={styles.primaryButton} onPress={() => setDetailOpen(false)} disabled={detailLoading}>
+              <TouchableOpacity style={styles.primaryButton} onPress={() => setDetailOpen(false)} disabled={detailLoading} accessibilityRole="button" accessibilityLabel="Đóng chi tiết khiếu nại" accessibilityState={{ disabled: detailLoading }}>
                 <Text style={styles.primaryButtonText}>Đóng</Text>
               </TouchableOpacity>
             </View>
@@ -478,9 +534,10 @@ const getStyles = (colors: any) => StyleSheet.create({
     gap: 12,
   },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  retryButton: { minHeight: 44, minWidth: 100, paddingHorizontal: 14, justifyContent: 'center', alignItems: 'center', alignSelf: 'flex-start' },
   headerCopy: { flex: 1 },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 4 },
-  helper: { fontSize: 12, lineHeight: 17, color: colors.textSecondary },
+  sectionTitle: { fontSize: 18, lineHeight: 26, fontWeight: '700', color: colors.text, marginBottom: 4 },
+  helper: { fontSize: 12, lineHeight: 19, color: colors.textSecondary },
   notice: {
     flexDirection: 'row',
     gap: 8,
@@ -499,17 +556,18 @@ const getStyles = (colors: any) => StyleSheet.create({
     padding: 10,
     gap: 6,
   },
-  errorText: { fontSize: 12, lineHeight: 17, color: colors.error },
-  linkText: { fontSize: 12, fontWeight: '800', color: colors.primary },
+  errorText: { fontSize: 12, lineHeight: 19, color: colors.error },
+  linkText: { fontSize: 13, lineHeight: 19, fontWeight: '700', color: colors.primary },
   caseList: { gap: 8 },
   caseRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 10,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 12,
-    padding: 11,
+    minHeight: 68,
+    padding: 12,
   },
   caseIcon: {
     width: 34,
@@ -519,22 +577,24 @@ const getStyles = (colors: any) => StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.background,
   },
-  caseCopy: { flex: 1 },
-  caseTitle: { fontSize: 13, fontWeight: '800', color: colors.text },
-  caseReason: { fontSize: 12, lineHeight: 17, color: colors.text, marginTop: 2 },
-  caseMeta: { fontSize: 11, color: colors.textSecondary, marginTop: 3 },
-  caseTrailing: { alignItems: 'flex-end', gap: 5, maxWidth: 110 },
-  statusText: { fontSize: 11, lineHeight: 15, fontWeight: '800', textAlign: 'right' },
+  caseCopy: { flex: 1, minWidth: 0 },
+  caseTitle: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.text },
+  caseReason: { fontSize: 12, lineHeight: 19, color: colors.text, marginTop: 3 },
+  caseMeta: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, marginTop: 4 },
+  caseTrailing: { alignItems: 'flex-end', gap: 5, maxWidth: 112, flexShrink: 1 },
+  statusPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  statusText: { fontSize: 12, lineHeight: 18, fontWeight: '700', textAlign: 'right' },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 10,
     borderTopWidth: 1,
     borderTopColor: colors.divider,
     paddingTop: 12,
   },
   createButton: {
-    minHeight: 42,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -557,14 +617,19 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderTopRightRadius: 24,
     paddingHorizontal: 18,
     paddingTop: 18,
-    paddingBottom: 28,
+    paddingBottom: 40,
   },
+  modalCloseButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  formScroll: { flexShrink: 1 },
+  formScrollContent: { paddingBottom: 8 },
+  detailScroll: { flexShrink: 1 },
+  detailScrollContent: { paddingBottom: 8 },
   modalHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 16 },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: colors.text, marginBottom: 3 },
+  modalTitle: { fontSize: 18, lineHeight: 26, fontWeight: '700', color: colors.text, marginBottom: 3 },
   fieldLabel: { fontSize: 13, fontWeight: '800', color: colors.text, marginBottom: 8, marginTop: 4 },
   typeList: { gap: 7, marginBottom: 14 },
   typeChoice: {
-    minHeight: 42,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -594,9 +659,9 @@ const getStyles = (colors: any) => StyleSheet.create({
     backgroundColor: colors.background,
   },
   urgentTitle: { fontSize: 13, fontWeight: '800', color: colors.text, marginBottom: 2 },
-  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 16 },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 8, marginTop: 16 },
   secondaryButton: {
-    minHeight: 42,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 14,
@@ -607,7 +672,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   secondaryButtonText: { fontSize: 13, fontWeight: '700', color: colors.text },
   primaryButton: {
-    minHeight: 42,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 14,
@@ -616,10 +681,24 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   primaryButtonText: { fontSize: 13, fontWeight: '800', color: '#FFFFFF' },
   detailBody: { gap: 10 },
-  detailTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  detailTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 },
+  progressRow: { flexDirection: 'row', gap: 6 },
+  progressStep: { flex: 1, alignItems: 'center', gap: 5 },
+  progressDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  progressLabel: { fontSize: 12, lineHeight: 16, color: colors.textSecondary, textAlign: 'center' },
   urgentBadge: {
-    fontSize: 11,
-    fontWeight: '800',
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '700',
     color: colors.error,
     borderWidth: 1,
     borderColor: colors.border,
@@ -627,8 +706,8 @@ const getStyles = (colors: any) => StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 4,
   },
-  detailLabel: { fontSize: 11, fontWeight: '800', color: colors.textSecondary, textTransform: 'uppercase' },
-  detailText: { fontSize: 13, lineHeight: 19, color: colors.text },
+  detailLabel: { fontSize: 12, lineHeight: 18, fontWeight: '700', color: colors.textSecondary },
+  detailText: { fontSize: 14, lineHeight: 21, color: colors.text },
   infoBox: {
     flexDirection: 'row',
     gap: 8,
