@@ -207,6 +207,7 @@ describe('T-NATIVE-08B completion pending Codex fidelity', () => {
     const renderer = await renderScreen();
     expect(byId(renderer, 'completion-pending-overview')).toHaveLength(0);
     expect(byId(renderer, 'after-overview')).toHaveLength(1);
+    await act(async () => button(renderer, 'Ảnh sau & bàn giao')[0].props.onPress());
     await act(async () => button(renderer, 'Yêu cầu nghiệm thu')[0].props.onPress());
     await flush();
     await act(async () => button(renderer, 'Xác nhận yêu cầu hoàn thành')[0].props.onPress());
@@ -225,6 +226,7 @@ describe('T-NATIVE-08B completion pending Codex fidelity', () => {
     } as never);
     jest.mocked(ordersApi.requestCompletion).mockRejectedValueOnce(new Error('timeout'));
     const renderer = await renderScreen();
+    await act(async () => button(renderer, 'Ảnh sau & bàn giao')[0].props.onPress());
     await act(async () => button(renderer, 'Yêu cầu nghiệm thu')[0].props.onPress());
     await flush();
     await act(async () => button(renderer, 'Xác nhận yêu cầu hoàn thành')[0].props.onPress());
@@ -445,9 +447,9 @@ describe('T-NATIVE-08B completion pending Codex fidelity', () => {
     expect(StyleSheet.flatten(scroll.props.contentContainerStyle).paddingBottom).toBeGreaterThanOrEqual(48);
     expect(panel[0].findAll((node) => node.props.testID === 'after-overview')).toHaveLength(0);
     const overviewIndex = scroll.findAll((node) => node.type === View).findIndex((node) => node.props.testID === 'completion-pending-overview');
-    const nextStepIndex = textOf(renderer.root).indexOf('Bước tiếp theo');
     expect(overviewIndex).toBeGreaterThanOrEqual(0);
-    expect(nextStepIndex).toBeGreaterThan(-1);
+    expect(textOf(renderer.root)).toContain('Nghiệm thu & thanh toán');
+    expect(textOf(renderer.root)).not.toContain('Bước tiếp theo');
     expectNoSensitiveEffects();
   });
 });

@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { BackHandler, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { act, create, type ReactTestInstance } from 'react-test-renderer';
 import { ordersApi } from '../../api/orders.api';
 import * as Location from 'expo-location';
@@ -219,6 +219,53 @@ describe('technician workflow focused UI P1A T04/T05 (RED first)', () => {
     expectNoMountSideEffects();
   });
 
+  it('opens all details as a separate scroll scene and returns to the same active stage without a CTA request', async () => {
+    const renderer = await renderScreen();
+    expect(renderer.root.findAll((node) => node.type === View && node.props.testID === 'technician-current-stage-context')).toHaveLength(1);
+    expect(renderer.root.findAll((node) => node.type === View && node.props.testID === 'technician-sticky-footer')).toHaveLength(1);
+
+    await act(async () => { button(renderer, 'Xem toàn bộ chi tiết')[0].props.onPress(); });
+
+    expect(renderer.root.findAll((node) => node.type === View && node.props.testID === 'technician-all-details-header')).toHaveLength(1);
+    expect(renderer.root.findAll((node) => node.type === ScrollView && node.props.testID === 'technician-all-details-scroll')).toHaveLength(1);
+    expect(renderer.root.findAll((node) => node.type === View && node.props.testID === 'technician-current-stage-context')).toHaveLength(0);
+    expect(renderer.root.findAll((node) => node.type === View && node.props.testID === 'technician-stage-progress')).toHaveLength(0);
+    expect(renderer.root.findAll((node) => node.type === View && node.props.testID === 'technician-sticky-footer')).toHaveLength(0);
+    expect(button(renderer, 'Xem toàn bộ chi tiết')).toHaveLength(0);
+    expectNoMountSideEffects();
+
+    await act(async () => { button(renderer, 'Đóng toàn bộ chi tiết')[0].props.onPress(); });
+
+    expect(renderer.root.findAll((node) => node.type === View && node.props.testID === 'technician-all-details-header')).toHaveLength(0);
+    expect(renderer.root.findAll((node) => node.type === View && node.props.testID === 'technician-current-stage-context')).toHaveLength(1);
+    expect(renderer.root.findAll((node) => node.type === View && node.props.testID === 'technician-sticky-footer')).toHaveLength(1);
+    expect(button(renderer, 'Bắt đầu di chuyển')).toHaveLength(1);
+    expectNoMountSideEffects();
+  });
+
+  it('closes all details back to the exact previously selected read-only stage', async () => {
+    getDetail.mockResolvedValue({ ...enRouteOrder });
+    const renderer = await renderScreen();
+    await act(async () => { button(renderer, 'Xem tiến độ công việc')[0].props.onPress(); });
+    const pastStep = button(renderer, 'Di chuyển, đã ghi nhận, xem lại');
+    expect(pastStep).toHaveLength(1);
+    await act(async () => { pastStep[0].props.onPress(); });
+    expect(renderer.root.findAll((node) => node.type === View && node.props.testID === 'technician-past-stage')).toHaveLength(1);
+
+    const backHandlerRegistration = jest.spyOn(BackHandler, 'addEventListener');
+    await act(async () => { button(renderer, 'Xem toàn bộ chi tiết')[0].props.onPress(); });
+    expect(renderer.root.findAll((node) => node.type === View && node.props.testID === 'technician-past-stage')).toHaveLength(0);
+    expect(renderer.root.findAll((node) => node.type === View && node.props.testID === 'technician-sticky-footer')).toHaveLength(0);
+
+    const hardwareBackPress = backHandlerRegistration.mock.calls.find(([event]) => event === 'hardwareBackPress')?.[1];
+    expect(hardwareBackPress).toBeDefined();
+    await act(async () => { expect(hardwareBackPress?.({} as never)).toBe(true); });
+    expect(renderer.root.findAll((node) => node.type === View && node.props.testID === 'technician-past-stage')).toHaveLength(1);
+    expect(renderer.root.findAll((node) => node.type === View && node.props.testID === 'technician-current-stage-context')).toHaveLength(0);
+    expect(renderer.root.findAll((node) => node.type === View && node.props.testID === 'technician-sticky-footer')).toHaveLength(0);
+    expectNoMountSideEffects();
+  });
+
   it('T05 EN_ROUTE before arrival shows the check-in stage first with exactly one existing check-in CTA', async () => {
     getDetail.mockResolvedValue({ ...enRouteOrder });
     const renderer = await renderScreen();
@@ -232,10 +279,12 @@ describe('technician workflow focused UI P1A T04/T05 (RED first)', () => {
     expectNoMountSideEffects();
   });
 
-  it('T05 after arrivalVerified never shows the check-in stage and keeps the BEFORE hero', async () => {
+  it('after arrivalVerified moves to the BEFORE stage and never shows the check-in stage', async () => {
     getDetail.mockResolvedValue({ ...arrivedOrder });
     const renderer = await renderScreen();
-    expect(stageFocus(renderer)).toHaveLength(0);
+    expect(stageFocus(renderer)).toHaveLength(1);
+    expect(textOf(stageFocus(renderer)[0])).toContain('Ghi nhận trước khi sửa');
+    expect(textOf(stageFocus(renderer)[0])).not.toContain('Đến nơi, xác nhận rõ');
     expect(textOf(renderer.root)).not.toContain('Đến nơi, xác nhận rõ');
     expect(renderer.root.findAll((node) => node.type === View && node.props.testID === 'before-evidence-overview')).toHaveLength(1);
     expectNoMountSideEffects();
@@ -294,10 +343,11 @@ describe('technician workflow focused UI P1A T04/T05 (RED first)', () => {
     expect(button(renderer, 'Check-in tại nhà khách')).toHaveLength(0);
   });
 
-  it('UNDER_REPAIR keeps every existing work form mounted with no P1A stage and no duplicate CTA', async () => {
+  it('UNDER_REPAIR keeps its focused repair stage and every existing work form without duplicate CTA', async () => {
     getDetail.mockResolvedValue({ ...underRepairOrder });
     const renderer = await renderScreen();
-    expect(stageFocus(renderer)).toHaveLength(0);
+    expect(stageFocus(renderer)).toHaveLength(1);
+    expect(textOf(stageFocus(renderer)[0])).toContain('Sửa chữa theo phạm vi đã duyệt');
     for (const section of ['Ảnh trước sửa chữa', 'Giá cố định', 'Đề xuất chi phí phát sinh', 'Ảnh sau sửa chữa', 'Nghiệm thu', 'Hóa đơn', 'Chi phí phát sinh']) {
       expect(textOf(renderer.root)).toContain(section);
     }

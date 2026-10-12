@@ -3,6 +3,8 @@ import type { ImageSourcePropType } from 'react-native';
 // Owner-supplied illustrations, resized with alpha intact. Decorative only:
 // status, service names, prices and permissions always come from existing data.
 export const CUSTOMER_UI_ARTWORK = {
+  roleChoiceCustomer: require('../../assets/optimized/ui/role-choice-customer.png'),
+  roleChoiceTechnician: require('../../assets/optimized/ui/role-choice-technician.png'),
   homeHero: require('../../assets/optimized/ui/home-hero-repair-family.png'),
   aircon: require('../../assets/optimized/ui/service-aircon-clean.png'),
   plumbing: require('../../assets/optimized/ui/service-plumbing.png'),

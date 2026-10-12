@@ -1,3 +1,5 @@
+import CustomerAdministrativeAreaPicker from './CustomerAdministrativeAreaPicker';
+import { canonicalCustomerAddressArea } from './customer-administrative-area';
 import BookingActionBar from '../../components/BookingActionBar';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -225,16 +227,11 @@ export default function CustomerBookingAddressEditor({
       const decision = resolveReverseLookup(pinRef.current, point, result);
       if (decision.kind !== 'resolved') return;
       setLine1(result.formattedAddress || '');
-      setArea({
-        ward: result.ward || '',
-        district: result.district || '',
-        province: result.province || '',
-        provinceCode: result.provinceCode,
-        districtCode: result.districtCode,
-      });
-      setMessage(result.formattedAddress && result.district && result.province
+      const resolvedArea = canonicalCustomerAddressArea(result);
+      setArea(resolvedArea);
+      setMessage(result.formattedAddress && resolvedArea.district && resolvedArea.province
         ? 'Đã tra cứu địa chỉ cho ghim. Hãy kiểm tra và xác nhận điểm này.'
-        : 'Chưa đủ thông tin khu vực. Thử lại hoặc chọn vị trí khác; chưa thể lưu.');
+        : 'Xác nhận ghim, nhập địa chỉ và chọn tỉnh/thành, phường/xã để lưu.');
     } catch {
       if (generation.current === request && ownerValid()) {
         const decision = resolveReverseLookup(pinRef.current, point, null);
@@ -465,7 +462,7 @@ export default function CustomerBookingAddressEditor({
       <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets contentContainerStyle={{ padding: 16, paddingBottom: 24 }}>
     <View testID="booking-new-address-editor" style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <Text accessibilityRole="header" style={[styles.heading, { color: colors.text }]}>Thêm địa chỉ tại nơi cần sửa</Text>
-      <Text style={[styles.hint, { color: colors.textSecondary }]}>Ghim chỉ được lưu sau khi bạn chọn và xác nhận chính xác trên bản đồ.</Text>
+      <Text style={[styles.hint, { color: colors.textSecondary }]}>Tìm địa chỉ → Ghim vị trí → Xác nhận địa chỉ → Lưu</Text>
       <TextInput accessibilityLabel="Tên địa chỉ mới" placeholder="Tên gợi nhớ (Ví dụ: Nhà riêng)" value={label}
         onChangeText={setLabel} maxLength={100} editable={!saveAttempted}
         style={[styles.input, { color: colors.text, borderColor: colors.border }]} />
@@ -498,9 +495,6 @@ export default function CustomerBookingAddressEditor({
         </Text>
       )}
       {lookingUp && <Text style={{ color: colors.textSecondary }}>Đang xác định địa chỉ cho vị trí đã chọn…</Text>}
-      {!!(area.district || area.province) && (
-        <Text style={{ color: colors.textSecondary }}>{[area.ward, area.district, area.province].filter(Boolean).join(', ')}</Text>
-      )}
       {pin.status === 'pending-confirmation' && (
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Xác nhận ghim mới"
           disabled={lookingUp} onPress={confirmPin}
@@ -509,6 +503,13 @@ export default function CustomerBookingAddressEditor({
         </TouchableOpacity>
       )}
       {pin.status === 'confirmed' && <Text style={{ color: colors.success }}>Đã xác nhận ghim chính xác</Text>}
+      {(pin.status === 'pending-confirmation' || pin.status === 'confirmed') && !lookingUp && <View style={{ gap: 8 }}>
+        <Text style={{ color: colors.text, fontWeight: '600' }}>Xác nhận địa chỉ</Text>
+        <Text style={{ color: colors.textSecondary }}>{line1.split(',').map(part => part.trim()).filter((part, index, all) => part && all.indexOf(part) === index).join(', ') || 'Nhập số nhà, tên đường tại ghim.'}</Text>
+        <TextInput accessibilityLabel="Địa chỉ tại ghim" placeholder="Số nhà, tên đường" value={line1} onChangeText={searchAddress} maxLength={255} editable={!saveAttempted} style={[styles.input, { color: colors.text, borderColor: colors.border }]} />
+        <CustomerAdministrativeAreaPicker value={area} disabled={saveAttempted} onOpen={cancelPending} onChange={next => { if (!ownerValid() || saveAttemptRef.current) return; cancelPending(); setArea(next); setMessage(''); }} />
+        {maySave && <Text style={{ color: colors.success }}>Địa chỉ sẵn sàng để lưu.</Text>}
+      </View>}
       {(pin.status === 'pending-confirmation' || pin.status === 'confirmed') && !lookingUp && (
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Tra cứu lại địa chỉ"
           onPress={retryReverse} style={styles.link}>
@@ -530,7 +531,7 @@ export default function CustomerBookingAddressEditor({
       {saveDecision.kind === 'blocked' && !saveAttempted && (
         <Text style={[styles.hint, { color: colors.textSecondary }]}>
           {saveDecision.reason === 'administrative-area'
-            ? 'Chưa xác định đủ quận/huyện và tỉnh/thành cho ghim.'
+            ? 'Chọn tỉnh/thành và phường/xã ở phần Xác nhận địa chỉ.'
             : 'Hãy chọn đúng điểm trên bản đồ và xác nhận ghim trước khi lưu.'}
         </Text>
       )}

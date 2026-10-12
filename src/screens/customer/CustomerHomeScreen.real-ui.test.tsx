@@ -78,6 +78,7 @@ jest.mock('../../constants/theme', () => ({
 jest.mock('../../hooks/useScrollHideTabBar', () => ({
   useScrollHideTabBar: () => jest.fn(),
 }));
+jest.mock('../../components/navigation/CustomerAnimatedBottomBar', () => () => null);
 
 jest.mock('../../hooks/useChatUnreadCount', () => ({
   useChatUnreadCount: () => mockChatUnreadCount(),
@@ -137,6 +138,17 @@ beforeEach(() => {
 });
 
 describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
+  it('shares guest Home browsing while private actions open Auth without address requests', () => {
+    storeMock.useAuthStore.mockImplementation(() => ({ user: null, isAuthenticated: false }));
+    const tree = mountScreen();
+    try {
+      act(() => tree.root.findByProps({ accessibilityLabel: 'Hỏi FixHome AI' }).props.onPress());
+      expect(mockNavigate).toHaveBeenCalledWith('Auth');
+      expect(jest.requireMock('../../api/users.api').usersApi.getAddresses).not.toHaveBeenCalled();
+      act(() => tree.root.findByProps({ accessibilityLabel: 'Tìm dịch vụ tại nhà' }).props.onPress());
+      expect(mockNavigate).toHaveBeenCalledWith('CustomerServices');
+    } finally { act(() => tree.unmount()); }
+  });
   it('renders a visible vector chat icon and unread badge in the 40dp action at phone widths', () => {
     for (const width of [320, 360, 390, 430]) {
       Dimensions.set({

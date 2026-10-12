@@ -1195,7 +1195,7 @@ export default function CustomerBookingCreateScreen() {
                   {selectedPresentation ? (
                     <Image
                       source={selectedPresentation.imageSource}
-                      style={[styles.serviceArt, { backgroundColor: colors.divider }]}
+                      style={styles.serviceArt}
                       resizeMode="contain"
                       accessible={false}
                       testID="booking-service-artwork"
@@ -1239,8 +1239,8 @@ export default function CustomerBookingCreateScreen() {
                 </Text>
                 <Text style={[styles.note, { color: colors.textSecondary }]}>
                   {selectedIsOtherService
-                    ? 'Mô tả càng rõ thiết bị hoặc công việc cần hỗ trợ thì kỹ thuật viên càng dễ đánh giá trước khi nhận yêu cầu.'
-                    : 'Số lượng đặt hiện tại: 1. Thanh toán và bảo hành được xử lý ở các bước riêng theo trạng thái thực tế của đơn.'}
+                    ? 'Mô tả thiết bị và công việc cần hỗ trợ.'
+                    : 'Mỗi yêu cầu đặt 1 đơn vị dịch vụ.'}
                 </Text>
               </View>
             )}
@@ -1293,7 +1293,7 @@ export default function CustomerBookingCreateScreen() {
                 Ảnh sự cố (không bắt buộc)
               </Text>
               <Text style={[styles.note, { color: colors.textSecondary }]}>
-                Thêm tối đa 5 ảnh JPEG, PNG hoặc WebP. Ảnh đã gửi cho AI chưa được đính kèm yêu cầu.
+                Tối đa 5 ảnh JPEG, PNG hoặc WebP. Chọn lại ảnh từ AI nếu cần đính kèm.
               </Text>
               <View style={styles.photoList}>
                 {bookingPhotos.map((photo, index) => (
@@ -1498,9 +1498,6 @@ export default function CustomerBookingCreateScreen() {
 
         {visibleReviewSnapshot && !visibleCreatedBookingId && (
           <View testID="booking-review-full-screen" style={[styles.section, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.note, { color: colors.textSecondary }]}>
-              Yêu cầu chưa được tạo. Thông tin và ảnh chỉ gửi sau khi bạn xác nhận.
-            </Text>
             <BookingReviewSummary snapshot={visibleReviewSnapshot} colors={colors} />
             {!!visibleReviewError && (
               <Text accessibilityRole="alert" style={{ color: colors.error }}>{visibleReviewError}</Text>
@@ -1517,17 +1514,21 @@ export default function CustomerBookingCreateScreen() {
           <View style={[styles.section, { backgroundColor: colors.surface }]}>
             <Image source={CUSTOMER_UI_ARTWORK.bookingConfirmed} style={{ width: 144, height: 112, alignSelf: 'center' }} resizeMode="contain" accessible={false} testID="booking-confirmed-art" />
             <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>
-              Yêu cầu đặt lịch đã được xác nhận.
+              Đã gửi yêu cầu
             </Text>
             <Text selectable style={{ color: colors.text }}>
-              Mã tham chiếu: {visibleCreatedBookingId.slice(0, 8)}
+              Tham chiếu hỗ trợ: {visibleCreatedBookingId.slice(0, 8)}
             </Text>
             <Text style={[styles.note, { color: colors.textSecondary }]}>
-              Yêu cầu đã được hệ thống xác nhận hoặc được đối chiếu bằng lịch sử của chính tài khoản.
-              Bước tiếp theo là chọn 1 hoặc 2 kỹ thuật viên theo thứ tự ưu tiên.
+              Chọn kỹ thuật viên để gửi lời mời.
             </Text>
             {visibleCreatedBooking && (
-              <BookingReviewSummary snapshot={visibleCreatedBooking.snapshot} colors={colors} />
+              <View style={{ gap: 8 }}>
+                <Text style={{ color: colors.text, fontWeight: '600' }}>{visibleCreatedBooking.snapshot.serviceName}</Text>
+                <Text numberOfLines={1} style={[styles.note, { color: colors.textSecondary }]}>{visibleCreatedBooking.snapshot.request.description}</Text>
+                <Text style={[styles.note, { color: colors.textSecondary }]}>{visibleCreatedBooking.snapshot.scheduleLabel}</Text>
+                <Text numberOfLines={2} style={[styles.note, { color: colors.textSecondary }]}>{visibleCreatedBooking.snapshot.addressLabel} · {visibleCreatedBooking.snapshot.addressDescription}</Text>
+              </View>
             )}
 
           </View>

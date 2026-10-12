@@ -199,13 +199,45 @@ function showEligiblePayment(orderPaymentStatus = 'UNPAID') {
 }
 
 describe('CustomerOrderDetailScreen source-backed empty/loading UI', () => {
+  it('renders only the eligible quotation section and does not approve it on open', async () => {
+    showEligiblePayment();
+    Object.assign(mockInitialState.order!, { status: 'EN_ROUTE', customerConfirmed: false, quotation: { id: 'quote-fixture', status: 'SENT', items: [] } });
+    const tree = await mount();
+    try {
+      const quoteSection = () => tree.root.findAll(node => node.props.testID === 'order-detail-section-quote-8')[0];
+      expect(StyleSheet.flatten(quoteSection().props.style).display).toBe('flex');
+      const footer = touch(tree, 'Xem báo giá');
+      expect(footer).toBeDefined();
+      await act(async () => { footer?.props.onPress(); });
+      expect(mockGetOrder).not.toHaveBeenCalled();
+      expect(mockPaymentController.startVnpay).not.toHaveBeenCalled();
+    } finally { await act(async () => tree.unmount()); }
+  });
+  it('shows one active payment section and opens read-only progress without a transaction', async () => {
+    showEligiblePayment();
+    const tree = await mount();
+    try {
+      const detail = () => tree.root.findAll(node => node.props.testID === 'order-detail-section-payment-11')[0];
+      expect(StyleSheet.flatten(detail().props.style).display).toBe('flex');
+      const expand = tree.root.findAllByType(TouchableOpacity).find(node => node.props.testID === 'order-detail-expand-all')!;
+      await act(async () => { expand.props.onPress(); });
+      expect(tree.root.findAllByType(Modal).some(node => node.props.visible)).toBe(true);
+      const approve = touch(tree, 'Duyệt báo giá');
+      expect(approve).toBeUndefined();
+      const milestone = tree.root.findAllByType(TouchableOpacity).find(node => node.props.accessibilityLabel === 'Tiến độ: Đang sửa chữa');
+      if (milestone) await act(async () => { milestone.props.onPress(); });
+      expect(mockPaymentController.startVnpay).not.toHaveBeenCalled();
+      expect(mockPaymentController.confirmCash).not.toHaveBeenCalled();
+      expect(mockGetOrder).not.toHaveBeenCalled();
+    } finally { await act(async () => tree.unmount()); }
+  });
   it('renders an accessible order detail header and retry without claiming order status, payment or warranty', async () => {
     const tree = await mount();
     try {
-      expect(textValues(tree)).toContain('Chi tiết đơn sửa chữa');
+      expect(textValues(tree)).toContain('Bước · Chi tiết đơn sửa chữa');
       expect(textValues(tree)).toContain('Không xem được đơn');
       expect(textValues(tree)).toContain('Không thể tải chi tiết đơn.');
-      const header = tree.root.findAllByType(Text).find((x) => x.props.children === 'Chi tiết đơn sửa chữa');
+      const header = tree.root.findAllByType(Text).find((x) => x.props.children === 'Bước · Chi tiết đơn sửa chữa');
       expect(header?.props.accessibilityRole).toBe('header');
       const back = touch(tree, 'Quay lại');
       expect(back).toBeDefined();
@@ -257,7 +289,7 @@ describe('CustomerOrderDetailScreen source-backed empty/loading UI', () => {
       const open = touch(tree, 'Phóng to ảnh Trước sửa chữa');
       expect(open).toBeDefined();
       act(() => open?.props.onPress());
-      const viewer = tree.root.findByType(Modal);
+      const viewer = tree.root.findAllByType(Modal).find((node) => node.props.visible)!;
       expect(viewer.props.visible).toBe(true);
       expect(tree.root.findAllByType(Image).some((node) => node.props.source?.uri === PHOTO_URI)).toBe(true);
       const close = touch(tree, 'Đóng ảnh');

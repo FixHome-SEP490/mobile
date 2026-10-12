@@ -351,6 +351,8 @@ describe('T-NATIVE-07A authorized native UNDER_REPAIR overview', () => {
   it('keeps the existing after-evidence single CTA and cost area without a demo CTA', async () => {
     const renderer = await renderScreen();
     expect(byId(renderer, 'repair-overview')).toHaveLength(1);
+    expect(button(renderer, 'Chụp ảnh sau sửa từ bước tiếp theo')).toHaveLength(0);
+    await act(async () => button(renderer, 'Ảnh sau & bàn giao')[0].props.onPress());
     expect(button(renderer, 'Chụp ảnh sau sửa từ bước tiếp theo')).toHaveLength(1);
     expect(textOf(renderer.root)).not.toContain('Ghi nhận sau sửa');
     expect(textOf(renderer.root)).toContain('Chi phí phát sinh');

@@ -1,4 +1,5 @@
 import {
+  pressStartRepairFooter,
   createStartRepairController,
   describeStartRepairBlockers,
   initialStartRepairState,
@@ -98,6 +99,16 @@ it('posts nothing before an explicit confirm + submit', async () => {
   expect(post(h)).not.toHaveBeenCalled();
   h.controller.requestConfirm();
   expect(post(h)).not.toHaveBeenCalled();
+});
+
+it('footer first requests explicit confirmation, then submits through the controller', async () => {
+  const h = setup();
+  pressStartRepairFooter(h.controller, false);
+  expect(h.state().confirming).toBe(true);
+  expect(post(h)).not.toHaveBeenCalled();
+  await pressStartRepairFooter(h.controller, true);
+  expect(post(h)).toHaveBeenCalledTimes(1);
+  expect(post(h)).toHaveBeenCalledWith(ORDER_ID);
 });
 
 it('starts repair for inspection_required with an APPROVED quote and refreshes', async () => {

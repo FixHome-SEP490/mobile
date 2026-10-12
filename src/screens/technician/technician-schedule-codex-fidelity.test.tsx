@@ -54,7 +54,7 @@ jest.mock('../../api/orders.api', () => ({
 }));
 jest.mock('../../api/technician-profile.api', () => ({
   technicianProfileApi: {
-    getMyTimeOff: jest.fn(), updateMySchedule: jest.fn(), createTimeOff: jest.fn(),
+    getMySchedule: jest.fn().mockResolvedValue([]), getMyTimeOff: jest.fn(), updateMySchedule: jest.fn(), createTimeOff: jest.fn(),
     deleteTimeOff: jest.fn(), updateMyProfile: jest.fn(), setSkillPricing: jest.fn(),
   },
 }));
@@ -99,10 +99,10 @@ describe('T12B1 real jobs calendar read-only Codex presentation', () => {
     expect(visibleText(r)).toContain('Công việc trong tuần');
     await act(async () => r.unmount());
   });
-  it('discloses loaded orders and keeps availability edits in real Profile', async () => {
+  it('discloses loaded orders and shares availability editing on the same screen', async () => {
     const r = await render();
     expect(visibleText(r)).toContain('Lịch hiển thị các đơn đã tải và ngày nghỉ đã khai báo.');
-    expect(visibleText(r)).toContain('Chỉnh khung giờ nhận việc tại Hồ sơ nghề nghiệp.');
+    expect(visibleText(r)).toContain('Thiết lập lịch nhận việc'); expect(visibleText(r)).toContain('Ngày nghỉ');
     await act(async () => r.unmount());
   });
   it('never fabricates fake availability, price, demo save or district slots', async () => {

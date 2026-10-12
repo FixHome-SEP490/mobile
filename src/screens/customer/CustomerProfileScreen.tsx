@@ -27,7 +27,7 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import MapView, { Marker } from '../../components/AddressMap';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
@@ -35,12 +35,16 @@ import { useAuthStore } from '../../store';
 import { authApi } from '../../api/auth.api';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { usersApi, type AddressData, type CreateAddressRequest } from '../../api/users.api';
+import CustomerAdministrativeAreaPicker from './CustomerAdministrativeAreaPicker';
+import { canonicalCustomerAddressArea } from './customer-administrative-area';
+import { confirmedCustomerAddressWrite, customerProfileAddressWrites } from './customer-address-write';
 import { mediaApi } from '../../api/media.api';
 import { geoApi, type PlaceSuggestion } from '../../api/geo.api';
 import { useAppTheme } from '../../constants/theme';
 import { extractApiErrorMessage } from '../../utils/input-validation';
 import { persistCustomerAvatar } from './customer-avatar-upload';
 import { avatarErrorMessage, withPersistedAvatar } from '../../services/avatar-upload';
+import AccountLogoutAction from '../../components/account/AccountLogoutAction';
 import {
   addressPinAfterManualEdit,
   confirmExactPin,
@@ -62,6 +66,7 @@ export default function CustomerProfileScreen() {
   const { colors, isDark } = useAppTheme();
   const isDarkMode = isDark;
   const styles = getStyles(colors);
+  const insets = useSafeAreaInsets();
 
   // States for user info
   const [name, setName] = useState(user?.fullName || 'Khách hàng');
@@ -145,6 +150,9 @@ export default function CustomerProfileScreen() {
   const [profileBusyGeneration, setProfileBusyGeneration] = useState<number | null>(null);
   const savingProfile = profileBusyGeneration === sessionGeneration;
   const [savingAddress, setSavingAddress] = useState(false);
+  const addressWriteBusyRef = useRef(false);
+  const [addressWriteUnverified, setAddressWriteUnverified] = useState(false);
+  const [addressPickerVersion, setAddressPickerVersion] = useState(0);
 
   // Temp states for editing profile
   const [editName, setEditName] = useState(name);
@@ -204,9 +212,11 @@ export default function CustomerProfileScreen() {
     pin: addressPin,
     legacyAddress: legacyAddress ?? undefined,
   });
+  const hasUnverifiedAddressWrite = addressWriteUnverified || !!(user?.id && customerProfileAddressWrites.has(user.id));
   const canSaveAddress = Boolean(addressName.trim() && addressDetail.trim())
     && addressSaveLocation.kind !== 'blocked'
-    && !savingAddress;
+    && !savingAddress && !reverseGeocodingAddress && !hasUnverifiedAddressWrite
+    && user?.role === 'customer';
 
   const clearAddressDebounce = useCallback(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
@@ -238,6 +248,8 @@ export default function CustomerProfileScreen() {
     }), []);
 
   const resetAddressDraft = useCallback(() => {
+    setAddressWriteUnverified(false);
+    setAddressPickerVersion(version => version + 1);
     setLegacyAddress(null);
     setEditAddressId(null);
     setAddressName('');
@@ -258,6 +270,8 @@ export default function CustomerProfileScreen() {
     setReverseGeocodingAddress(false);
     setSavingAddress(false);
   }, [
+    setAddressWriteUnverified,
+    setAddressPickerVersion,
     setLegacyAddress,
     setEditAddressId,
     setAddressName,
@@ -437,23 +451,21 @@ export default function CustomerProfileScreen() {
       if (decision.kind !== 'resolved') return;
 
       setAddressDetail(place.formattedAddress || '');
-      setAddressWard(place.ward || '');
-      setAddressDistrict(place.district || '');
-      setAddressProvince(place.province || '');
-      setAddressProvinceCode(place.provinceCode);
-      setAddressDistrictCode(place.districtCode);
+      const area = canonicalCustomerAddressArea(place);
+      setAddressWard(area.ward); setAddressDistrict(area.district); setAddressProvince(area.province);
+      setAddressProvinceCode(area.provinceCode); setAddressDistrictCode(area.districtCode);
       const hasCompleteAddress = Boolean(
-        place.formattedAddress?.trim() && place.province?.trim() && place.district?.trim(),
+        place.formattedAddress?.trim() && area.province && area.district,
       );
       setAddressPinMessage(hasCompleteAddress
         ? 'Địa chỉ đã được tra cứu cho ghim bạn chọn. Hãy kiểm tra rồi xác nhận vị trí.'
-        : 'Ghim vẫn được giữ, nhưng chưa tra cứu đủ địa chỉ, quận/huyện và tỉnh/thành để lưu. Hãy thử lại hoặc chọn vị trí khác.');
+        : 'Ghim vẫn được giữ. Xác nhận vị trí, nhập địa chỉ và chọn tỉnh/thành, phường/xã phía dưới.');
       setAddressReverseRetryAvailable(!hasCompleteAddress);
     } catch {
       if (!isAddressRequestCurrent(request)) return;
       const decision = resolveReverseLookup(pin, coordinates, null);
       if (decision.kind === 'failed') {
-        setAddressPinMessage('Không thể tra cứu địa chỉ cho ghim này. Ghim vẫn được giữ; hãy thử lại hoặc chọn vị trí khác.');
+        setAddressPinMessage('Không thể tra cứu địa chỉ. Ghim vẫn được giữ; xác nhận vị trí rồi nhập địa chỉ và chọn khu vực phía dưới.');
         setAddressReverseRetryAvailable(true);
       }
     } finally {
@@ -462,6 +474,15 @@ export default function CustomerProfileScreen() {
   };
 
   const handleSaveAddress = async () => {
+    const session = useAuthStore.getState();
+    if (addressWriteBusyRef.current || !addressSheetOpenRef.current || session.user?.role !== 'customer'
+      || !isProfileSessionCurrent(session.user?.id, session.sessionGeneration)) return;
+    if (editAddressId && legacyAddress?.userId !== session.user.id) return;
+    if (customerProfileAddressWrites.has(session.user.id)) {
+      setAddressWriteUnverified(true);
+      setAddressPinMessage('Yêu cầu trước chưa được xác minh. Kiểm tra danh sách, không gửi lại.');
+      return;
+    }
     if (!addressName.trim() || !addressDetail.trim()) return;
 
     const decision = resolveAddressSaveLocation({
@@ -476,14 +497,19 @@ export default function CustomerProfileScreen() {
     });
     if (decision.kind === 'blocked') {
       setAddressPinMessage(decision.reason === 'administrative-area'
-        ? 'Chưa xác định đủ quận/huyện và tỉnh/thành cho vị trí này. Hãy thử lại hoặc chọn vị trí khác.'
+        ? 'Chọn tỉnh/thành và phường/xã phía trên để lưu vị trí.'
         : 'Hãy chọn vị trí chính xác trên bản đồ rồi xác nhận trước khi lưu.');
       return;
     }
 
-    const ownerId = ownerIdRef.current;
+    const ownerId = session.user.id;
+    const editorSession = addressSessionIdRef.current;
+    const isCurrentSave = () => isProfileSessionCurrent(ownerId, session.sessionGeneration)
+      && addressSessionIdRef.current === editorSession && useAuthStore.getState().user?.role === 'customer';
+    addressWriteBusyRef.current = true;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSavingAddress(true);
+    let acknowledged = false;
     try {
       const payload: Record<string, unknown> = {
         label: addressName.trim(),
@@ -538,25 +564,71 @@ export default function CustomerProfileScreen() {
         });
       }
 
-      if (editAddressId) {
-        await usersApi.updateAddress(editAddressId, payload as unknown as Partial<CreateAddressRequest>);
+      const attempt = { ownerId, payload: payload as Partial<CreateAddressRequest>, baselineIds: addresses.map(row => row.id), knownId: editAddressId, posting: true };
+      customerProfileAddressWrites.set(ownerId, attempt);
+      const saved = editAddressId
+        ? await usersApi.updateAddress(editAddressId, payload as Partial<CreateAddressRequest>)
+        : await usersApi.createAddress(payload as unknown as CreateAddressRequest);
+      acknowledged = true;
+      attempt.posting = false;
+      if (saved?.userId === ownerId && saved.id) attempt.knownId = saved.id;
+      if (!isCurrentSave()) return;
+      const rows = await usersApi.getAddresses();
+      if (!isCurrentSave()) return;
+      if (confirmedCustomerAddressWrite(attempt, rows)) {
+        customerProfileAddressWrites.delete(ownerId);
+        setAddresses(rows); setAddressWriteUnverified(false);
+        addressSheetRef.current?.dismiss();
       } else {
-        await usersApi.createAddress(payload as unknown as CreateAddressRequest);
+        setAddressWriteUnverified(true);
+        setAddressPinMessage('Chưa xác minh được địa chỉ đã lưu. Kiểm tra danh sách, không gửi lại.');
       }
-      if (ownerIdRef.current !== ownerId) return;
-      await refreshAddresses();
-      if (ownerIdRef.current !== ownerId) return;
-      addressSheetRef.current?.dismiss();
     } catch (err: unknown) {
-      if (ownerIdRef.current === ownerId) {
-        Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể lưu địa chỉ.'));
-      }
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      const rejected = !acknowledged && typeof status === 'number' && [400, 401, 403, 404, 422].includes(status);
+      const attempt = customerProfileAddressWrites.get(ownerId);
+      if (attempt) attempt.posting = false;
+      if (rejected) customerProfileAddressWrites.delete(ownerId);
+      if (!isCurrentSave()) return;
+      setAddressWriteUnverified(!rejected);
+      const error = rejected ? extractApiErrorMessage(err, 'Không thể lưu địa chỉ. Kiểm tra thông tin và thử lại.')
+        : 'Chưa rõ địa chỉ đã được lưu hay chưa. Kiểm tra danh sách, không gửi lại.';
+      setAddressPinMessage(error);
+      Alert.alert('Lỗi', error);
     } finally {
-      if (ownerIdRef.current === ownerId) setSavingAddress(false);
+      addressWriteBusyRef.current = false;
+      if (isCurrentSave()) setSavingAddress(false);
+    }
+  };
+
+  const reconcileAddressWrite = async () => {
+    const session = useAuthStore.getState();
+    if (addressWriteBusyRef.current || session.user?.role !== 'customer' || !isProfileSessionCurrent(session.user?.id, session.sessionGeneration)) return;
+    const ownerId = session.user.id;
+    const attempt = customerProfileAddressWrites.get(ownerId);
+    if (!attempt || attempt.posting) return;
+    const editorSession = addressSessionIdRef.current;
+    const isCurrent = () => isProfileSessionCurrent(ownerId, session.sessionGeneration)
+      && addressSessionIdRef.current === editorSession && useAuthStore.getState().user?.role === 'customer'
+      && customerProfileAddressWrites.get(ownerId) === attempt;
+    addressWriteBusyRef.current = true; setSavingAddress(true);
+    try {
+      const rows = await usersApi.getAddresses();
+      if (!isCurrent()) return;
+      if (confirmedCustomerAddressWrite(attempt, rows)) {
+        customerProfileAddressWrites.delete(ownerId);
+        setAddresses(rows); setAddressWriteUnverified(false); addressSheetRef.current?.dismiss();
+      } else setAddressPinMessage('Chưa thấy địa chỉ khớp trên máy chủ. Chưa gửi lại yêu cầu lưu.');
+    } catch {
+      if (isCurrent()) setAddressPinMessage('Không thể kiểm tra địa chỉ. Thử kiểm tra lại khi có kết nối.');
+    } finally {
+      addressWriteBusyRef.current = false;
+      if (isProfileSessionCurrent(ownerId, session.sessionGeneration) && addressSessionIdRef.current === editorSession) setSavingAddress(false);
     }
   };
 
   const handleEditAddress = (addr: AddressData) => {
+    setAddressPickerVersion(version => version + 1);
     Haptics.selectionAsync();
     addressSessionIdRef.current += 1;
     invalidateAddressRequests();
@@ -585,6 +657,12 @@ export default function CustomerProfileScreen() {
     const requestId = invalidateAddressRequests();
     setAddressDetail(text);
     setAddressSearchMessage(null);
+
+    if (addressPin.status === 'confirmed') {
+      // The user confirmed the coordinates; correcting street text does not move them.
+      setAddressSuggestions([]);
+      return;
+    }
 
     if (addressChanged) {
       const nextPin = addressPinAfterManualEdit(text, legacyAddress, addressPin);
@@ -797,7 +875,7 @@ export default function CustomerProfileScreen() {
     <SafeAreaView style={[styles.container, isDarkMode && styles.containerDark]} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <ScrollView
-        contentContainerStyle={styles.scrollContent} // Padding top của v2
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 96 + Math.max(insets.bottom, 16) }]}
         onScroll={handleScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
@@ -808,17 +886,9 @@ export default function CustomerProfileScreen() {
       >
         {/* Main Wrapper từ UI v2 */}
         <View style={styles.mainWrapperCard}>
-          <View style={[styles.pageIntro, styles.pageIntroRow]}>
+          <View style={styles.pageIntro}>
             <Text accessibilityRole="header" style={styles.pageTitle}>Tài khoản</Text>
-            <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}
-              disabled={loggingOut} accessibilityState={{ disabled: loggingOut, busy: loggingOut }}
-              accessibilityRole="button" accessibilityLabel="Đăng xuất khỏi FixHome">
-              <Ionicons name="log-out-outline" size={17} color={colors.error} />
-              <Text style={styles.logoutText}>{loggingOut ? 'Đang đăng xuất…' : 'Đăng xuất'}</Text>
-            </TouchableOpacity>
           </View>
-          
-          {!!logoutError && <Text accessibilityRole="alert" style={{ color: colors.error, fontSize: 14, lineHeight: 20 }}>{logoutError}</Text>}
 
           {/* Avatar Section từ v2 */}
           <View style={styles.avatarSection}>
@@ -879,7 +949,7 @@ export default function CustomerProfileScreen() {
                 profileSheetRef.current?.present();
               }}
             >
-              <Ionicons name="person-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
+              <View style={styles.menuIconTile}><Ionicons name="person-outline" size={20} color={colors.primaryStrong} /></View>
               <View style={styles.menuContent}>
                 <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Thông tin cá nhân</Text>
                 <Text style={styles.menuDesc}>{[name, phone || email].filter(Boolean).join(' · ')}</Text>
@@ -889,7 +959,7 @@ export default function CustomerProfileScreen() {
             <View style={styles.divider} />
 
             <TouchableOpacity style={styles.menuItem} onPress={startNewAddressEditor} accessibilityRole="button" accessibilityLabel="Quản lý địa chỉ sửa chữa">
-              <Ionicons name="location-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
+              <View style={styles.menuIconTile}><Ionicons name="location-outline" size={20} color={colors.primaryStrong} /></View>
               <View style={styles.menuContent}>
                 <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Địa chỉ sửa chữa</Text>
                 <Text style={styles.menuDesc}>
@@ -911,7 +981,7 @@ export default function CustomerProfileScreen() {
               accessibilityRole="button"
               accessibilityLabel="Mở bảo mật tài khoản"
             >
-              <Ionicons name="shield-checkmark-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
+              <View style={styles.menuIconTile}><Ionicons name="shield-checkmark-outline" size={20} color={colors.primaryStrong} /></View>
               <View style={styles.menuContent}>
                 <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Bảo mật tài khoản</Text>
                 <Text style={styles.menuDesc}>Đổi mật khẩu và quản lý phiên đăng nhập</Text>
@@ -928,7 +998,7 @@ export default function CustomerProfileScreen() {
               accessibilityRole="button"
               accessibilityLabel="Mở bảo hành"
             >
-              <Ionicons name="shield-checkmark-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
+              <View style={styles.menuIconTile}><Ionicons name="shield-checkmark-outline" size={20} color={colors.primaryStrong} /></View>
               <View style={styles.menuContent}>
                 <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Bảo hành</Text>
                 <Text style={styles.menuDesc}>Xem hạng mục bảo hành và yêu cầu hỗ trợ</Text>
@@ -944,7 +1014,7 @@ export default function CustomerProfileScreen() {
               accessibilityRole="button"
               accessibilityLabel="Mở lịch sử sửa chữa"
             >
-              <Ionicons name="time-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
+              <View style={styles.menuIconTile}><Ionicons name="time-outline" size={20} color={colors.primaryStrong} /></View>
               <View style={styles.menuContent}>
                 <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Lịch sử sửa chữa</Text>
                 <Text style={styles.menuDesc}>Xem các đơn đã sửa chữa và hoàn tất</Text>
@@ -956,6 +1026,8 @@ export default function CustomerProfileScreen() {
 
 
 
+          <View style={styles.logoutSpacer} />
+          <AccountLogoutAction onPress={handleLogout} disabled={loggingOut} busy={loggingOut} error={logoutError} accessibilityLabel="Đăng xuất khỏi FixHome" />
         </View>
       </ScrollView>
 
@@ -1381,6 +1453,21 @@ export default function CustomerProfileScreen() {
             )}
           </TouchableOpacity>
 
+          <CustomerAdministrativeAreaPicker
+            key={`area-${addressPickerVersion}`}
+            value={{ ward: addressWard, district: addressDistrict, province: addressProvince, provinceCode: addressProvinceCode, districtCode: addressDistrictCode }}
+            disabled={savingAddress}
+            onOpen={invalidateAddressRequests}
+            onChange={area => {
+              if (!screenMountedRef.current || !addressSheetOpenRef.current || savingAddress) return;
+              const current = useAuthStore.getState();
+              if (!current.isAuthenticated || current.user?.id !== ownerIdRef.current || current.user?.role !== 'customer') return;
+              invalidateAddressRequests();
+              setAddressWard(area.ward); setAddressDistrict(area.district); setAddressProvince(area.province);
+              setAddressProvinceCode(area.provinceCode); setAddressDistrictCode(area.districtCode);
+              setAddressPinMessage('Khu vực đã chọn. Kiểm tra tên địa chỉ và xác nhận ghim trước khi lưu.');
+            }}
+          />
           <View style={styles.defaultRow}>
             <Text style={[styles.locationBtnText, { color: colors.text }]}>Đặt làm địa chỉ mặc định</Text>
             <Switch value={addressIsDefault} onValueChange={setAddressIsDefault} />
@@ -1391,7 +1478,7 @@ export default function CustomerProfileScreen() {
               {!addressName.trim() || !addressDetail.trim()
                 ? 'Nhập tên gợi nhớ và địa chỉ chi tiết để tiếp tục.'
                 : addressSaveLocation.reason === 'administrative-area'
-                  ? 'Cần xác định đủ quận/huyện và tỉnh/thành trước khi lưu ghim.'
+                  ? 'Chọn tỉnh/thành và phường/xã phía trên để lưu vị trí.'
                   : Platform.OS === 'web'
                     ? 'Dùng ứng dụng di động để đặt và xác nhận ghim chính xác.'
                     : editAddressId
@@ -1410,6 +1497,7 @@ export default function CustomerProfileScreen() {
             </Text>
           )}
 
+          {hasUnverifiedAddressWrite && <TouchableOpacity style={[styles.saveBtn, { alignSelf: 'stretch', minHeight: 48, marginBottom: 12 }]} accessibilityRole="button" accessibilityLabel="Kiểm tra địa chỉ đã lưu" disabled={savingAddress} onPress={reconcileAddressWrite}><Text style={styles.saveBtnText}>Kiểm tra địa chỉ đã lưu</Text></TouchableOpacity>}
           <View style={styles.modalActions}>
             <TouchableOpacity
               style={styles.cancelBtn}
@@ -1443,22 +1531,21 @@ const getStyles = (colors: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   containerDark: { backgroundColor: colors.background },
   cardDark: { backgroundColor: '#1E293B' },
-  name: { fontSize: 21, lineHeight: 28, fontWeight: '700', color: colors.text, marginBottom: 5, textAlign: 'center' },
+  name: { fontSize: 20, lineHeight: 28, fontWeight: '700', color: colors.text, marginBottom: 4, textAlign: 'center' },
   textDark: { color: colors.text },
 
   // Giao diện Main Wrapper & Avatar của v2
-  scrollContent: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 108 },
+  scrollContent: { flexGrow: 1, padding: 16 },
   pageIntro: { marginBottom: 14, paddingHorizontal: 2, gap: 4 },
-  pageIntroRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   pageOverline: { fontSize: 12, lineHeight: 16, fontWeight: '700', letterSpacing: 1, color: colors.textSecondary },
-  pageTitle: { fontSize: 22, lineHeight: 30, fontWeight: '700', color: colors.text },
+  pageTitle: { fontSize: 26, lineHeight: 34, fontWeight: '700', color: colors.text },
   pageDescription: { fontSize: 13, lineHeight: 19, color: colors.textSecondary },
   mainWrapperCard: {
     backgroundColor: colors.background,
     flexGrow: 1,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 40,
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
     marginTop: 0,
@@ -1472,40 +1559,40 @@ const getStyles = (colors: any) => StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
     marginTop: 0,
-    paddingVertical: 14,
-    backgroundColor: colors.surface,
-    borderRadius: 20,
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    backgroundColor: colors.primarySoft,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.primaryTint,
   },
   avatarBorder: {
-    width: 100, height: 100, borderRadius: 50,
+    width: 88, height: 88, borderRadius: 44,
     justifyContent: 'center', alignItems: 'center',
-    marginBottom: 12, borderWidth: 4,
+    marginBottom: 14,
   },
   avatarBorderLight: { borderColor: colors.surface, backgroundColor: colors.surface },
   avatarBorderDark: { borderColor: '#1E293B', backgroundColor: '#1E293B' },
   avatar: {
-    width: '100%', height: '100%', borderRadius: 50,
+    width: '100%', height: '100%', borderRadius: 44,
     backgroundColor: colors.primaryTint, justifyContent: 'center', alignItems: 'center', overflow: 'hidden'
   },
   avatarImage: { width: '100%', height: '100%' },
-  avatarText: { fontSize: 36, fontWeight: '700', color: colors.primary },
+  avatarText: { fontSize: 32, fontWeight: '700', color: colors.primaryStrong },
   phone: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, fontWeight: '500', textAlign: 'center' },
   heroEditBtn: { minHeight: 48, justifyContent: 'center', alignItems: 'center', marginTop: 14, paddingHorizontal: 20, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   heroEditText: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.text },
   
-  sectionTitle: { fontSize: 16, lineHeight: 23, fontWeight: '700', color: colors.text, marginBottom: 12, marginLeft: 2 },
-  menuContainer: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 16, overflow: 'hidden', marginBottom: 24 },
-  menuItem: { flexDirection: 'row', minHeight: 72, paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center' },
-  menuIcon: { marginRight: 16 },
+  sectionTitle: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text, marginBottom: 12, marginTop: 12 },
+  menuContainer: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 14, overflow: 'hidden', marginBottom: 12 },
+  menuItem: { flexDirection: 'row', minHeight: 56, paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center', gap: 12 },
+  menuIconTile: { width: 36, height: 36, borderRadius: 8, backgroundColor: colors.primarySoft, justifyContent: 'center', alignItems: 'center' },
   menuContent: { flex: 1, minWidth: 0 },
-  menuTitle: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: colors.text },
-  menuDesc: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, marginTop: 3, flexShrink: 1 },
-  divider: { height: 1, backgroundColor: colors.border, marginLeft: 54 },
+  menuTitle: { fontSize: 16, lineHeight: 24, fontWeight: '500', color: colors.text },
+  menuDesc: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, flexShrink: 1 },
+  divider: { height: 1, backgroundColor: colors.divider, marginLeft: 64 },
   footer: { alignItems: 'center', marginTop: 12, marginBottom: 32 },
-  logoutBtn: { minHeight: 44, flexDirection: 'row', gap: 6, justifyContent: 'center', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 22, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
-  logoutText: { fontSize: 14, fontWeight: '600', color: colors.error },
+  logoutSpacer: { flexGrow: 1, minHeight: 12 },
 
   profileSheetContent: {
     width: '100%',

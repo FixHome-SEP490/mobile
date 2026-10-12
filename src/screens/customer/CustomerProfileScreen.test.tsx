@@ -1,7 +1,14 @@
 import React from 'react';
-import { Alert, Platform, Text, TextInput, TouchableOpacity } from 'react-native';
+import { Alert, Platform, StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { UserRole, type UserInfo } from '../../types';
+import { customerProfileAddressWrites } from './customer-address-write';
+
+jest.mock('lucide-react-native', () => {
+  const ReactModule = jest.requireActual<typeof import('react')>('react');
+  const Native = jest.requireActual<typeof import('react-native')>('react-native');
+  return { LogOut: () => ReactModule.createElement(Native.Text, null, 'LogOut') };
+});
 
 const mockCustomer: UserInfo = {
   id: 'customer-exact-pin-1',
@@ -39,7 +46,7 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('react-native-safe-area-context', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const Native = require('react-native');
-  return { SafeAreaView: Native.View };
+  return { SafeAreaView: Native.View, useSafeAreaInsets: () => ({ top: 0, bottom: 20, left: 0, right: 0 }) };
 });
 
 jest.mock('@gorhom/bottom-sheet', () => {
@@ -186,6 +193,7 @@ async function flushPromises() {
 }
 
 beforeEach(() => {
+  customerProfileAddressWrites.clear();
   jest.useFakeTimers();
   jest.clearAllMocks();
   mockAuthState = { user: mockCustomer, token: 'test-token', isAuthenticated: true,
@@ -198,11 +206,11 @@ beforeEach(() => {
   mockAutocomplete.mockResolvedValue([]);
   mockReverse.mockResolvedValue({
     formattedAddress: '123 Đường Mới, Phường An Bình',
-    ward: 'Phường An Bình',
-    district: 'Quận Bình An',
-    province: 'Tỉnh Bình Dương',
-    provinceCode: '74',
-    districtCode: '741',
+    ward: 'Phường Bến Thành',
+    district: 'Phường Bến Thành',
+    province: 'Thành phố Hồ Chí Minh',
+    provinceCode: '79',
+    districtCode: '26743',
   });
 });
 
@@ -230,7 +238,11 @@ describe('CustomerProfileScreen exact pin flow', () => {
     expect(logout).toBeDefined();
     expect(personal?.props.style.minHeight).toBeGreaterThanOrEqual(44);
     expect(address?.props.style.minHeight).toBeGreaterThanOrEqual(44);
-    expect(logout?.props.style.minHeight).toBeGreaterThanOrEqual(44);
+    expect(StyleSheet.flatten(logout?.props.style).minHeight).toBeGreaterThanOrEqual(44);
+    expect(StyleSheet.flatten(logout?.props.style).width).toBe('100%');
+    expect(StyleSheet.flatten(logout?.props.style).position).not.toBe('absolute');
+    const allButtons = tree.root.findAllByType(TouchableOpacity);
+    expect(allButtons.indexOf(logout!)).toBeGreaterThan(allButtons.indexOf(findButton(tree, 'Mở lịch sử sửa chữa')!));
     expect(mockUpdateProfile).not.toHaveBeenCalled();
     expect(mockCreateAddress).not.toHaveBeenCalled();
     expect(mockUpdateAddress).not.toHaveBeenCalled();
@@ -283,8 +295,8 @@ describe('CustomerProfileScreen exact pin flow', () => {
 
     expect(mockCreateAddress).toHaveBeenCalledWith(expect.objectContaining({
       line1: '123 Đường Mới, Phường An Bình',
-      province: 'Tỉnh Bình Dương',
-      district: 'Quận Bình An',
+      province: 'Thành phố Hồ Chí Minh',
+      district: 'Phường Bến Thành',
       lat: 0,
       lng: 0,
     }));
@@ -465,6 +477,77 @@ describe('CustomerProfileScreen exact pin flow', () => {
 });
 
 describe('CustomerProfileScreen C16 account presentation', () => {
+  const saved = { id: 'saved-address', userId: mockCustomer.id, label: 'Nhà', line1: 'Old street', province: 'Old province', district: 'Old district', lat: 10, lng: 106, isDefault: false };
+  const canonical = { ...saved, line1: 'New street', province: 'Thành phố Hồ Chí Minh', provinceCode: '79', ward: 'Phường Bến Thành', district: 'Phường Bến Thành', districtCode: '26743', lat: 10.78, lng: 106.69 };
+  async function movePin(tree: ReactTestRenderer) {
+    const menu = tree.root.findAllByType(TouchableOpacity).find(node => node.findAllByType(Text).some(text => text.props.children === 'Địa chỉ sửa chữa'));
+    act(() => menu?.props.onPress());
+    act(() => findButton(tree, 'Sửa địa chỉ Nhà')?.props.onPress());
+    await act(async () => {
+      tree.root.findByProps({ testID: 'address-map' }).props.onPress({ nativeEvent: { coordinate: { latitude: canonical.lat, longitude: canonical.lng } } });
+      await flushPromises();
+    });
+  }
+  async function pickCanonical(tree: ReactTestRenderer) {
+    act(() => findButton(tree, 'Chọn tỉnh/thành')?.props.onPress());
+    act(() => findTextInput(tree, 'Tìm khu vực')?.props.onChangeText('Hồ Chí Minh'));
+    act(() => findButton(tree, 'Chọn khu vực: Thành phố Hồ Chí Minh')?.props.onPress());
+    act(() => findButton(tree, 'Chọn phường/xã')?.props.onPress());
+    act(() => findTextInput(tree, 'Tìm khu vực')?.props.onChangeText('Bến Thành'));
+    act(() => findButton(tree, 'Chọn khu vực: Phường Bến Thành')?.props.onPress());
+    act(() => findButton(tree, 'Xác nhận ghim đã chọn')?.props.onPress());
+  }
+  it('updates a moved pin with explicitly chosen canonical codes and prevents duplicate submission', async () => {
+    mockGetAddresses.mockResolvedValue([saved]); mockReverse.mockResolvedValue({ formattedAddress: 'New street' });
+    const tree = await mountScreen(); await movePin(tree); await pickCanonical(tree);
+    expect(findButton(tree, 'Cập nhật địa chỉ')?.props.disabled).toBe(false);
+    act(() => findTextInput(tree, 'Địa chỉ chi tiết')?.props.onChangeText('Corrected street'));
+    expect(findButton(tree, 'Cập nhật địa chỉ')?.props.disabled).toBe(false);
+    mockGetAddresses.mockResolvedValue([{ ...canonical, line1: 'Corrected street' }]);
+    mockUpdateAddress.mockResolvedValue({ ...canonical, line1: 'Corrected street' });
+    const submit = findButton(tree, 'Cập nhật địa chỉ')!;
+    await act(async () => { submit.props.onPress(); submit.props.onPress(); await flushPromises(); });
+    expect(mockUpdateAddress).toHaveBeenCalledTimes(1);
+    expect(mockUpdateAddress).toHaveBeenCalledWith(saved.id, expect.objectContaining({ lat: canonical.lat, lng: canonical.lng, provinceCode: '79', districtCode: '26743', district: 'Phường Bến Thành', line1: 'Corrected street' }));
+    expect(customerProfileAddressWrites.size).toBe(0);
+  });
+  it('retains the edit and exposes a definitive update error', async () => {
+    mockGetAddresses.mockResolvedValue([saved]); mockReverse.mockResolvedValue({ formattedAddress: 'New street' });
+    mockUpdateAddress.mockRejectedValueOnce({ response: { status: 400, data: { message: 'Invalid address' } } });
+    const tree = await mountScreen(); await movePin(tree); await pickCanonical(tree);
+    await act(async () => { findButton(tree, 'Cập nhật địa chỉ')?.props.onPress(); await flushPromises(); });
+    expect(findTextInput(tree, 'Địa chỉ chi tiết')?.props.value).toBe('New street');
+    expect(findButton(tree, 'Cập nhật địa chỉ')?.props.disabled).toBe(false);
+    expect(tree.root.findAllByType(Text).some(node => node.props.children === 'Invalid address')).toBe(true);
+  });
+  it('rejects a late reverse response after the owner selected administrative fields', async () => {
+    let resolve!: (value: unknown) => void;
+    mockGetAddresses.mockResolvedValue([saved]); mockReverse.mockReturnValueOnce(new Promise(done => { resolve = done; }));
+    const tree = await mountScreen(); await movePin(tree); await pickCanonical(tree);
+    act(() => findTextInput(tree, 'Địa chỉ chi tiết')?.props.onChangeText('Manually entered street'));
+    await act(async () => { resolve({ formattedAddress: 'Stale street', province: 'Wrong', district: 'Wrong' }); await flushPromises(); });
+    expect(findTextInput(tree, 'Địa chỉ chi tiết')?.props.value).not.toBe('Stale street');
+    expect(findButton(tree, 'Cập nhật địa chỉ')?.props.disabled).toBe(false);
+  });
+  it('does not write for another role even through a previously enabled handler', async () => {
+    mockGetAddresses.mockResolvedValue([saved]); mockReverse.mockResolvedValue({ formattedAddress: 'New street' });
+    const tree = await mountScreen(); await movePin(tree); await pickCanonical(tree);
+    const submit = findButton(tree, 'Cập nhật địa chỉ')!;
+    mockAuthState = { ...mockAuthState, user: { ...mockCustomer, role: UserRole.TECHNICIAN } };
+    await act(async () => { submit.props.onPress(); await flushPromises(); });
+    expect(mockUpdateAddress).not.toHaveBeenCalled();
+  });
+  it('locks an ambiguous update and reconciles with GET instead of sending it again', async () => {
+    mockGetAddresses.mockResolvedValue([saved]); mockReverse.mockResolvedValue({ formattedAddress: 'New street' });
+    mockUpdateAddress.mockRejectedValueOnce(new Error('timeout'));
+    const tree = await mountScreen(); await movePin(tree); await pickCanonical(tree);
+    await act(async () => { findButton(tree, 'Cập nhật địa chỉ')?.props.onPress(); await flushPromises(); });
+    expect(findButton(tree, 'Cập nhật địa chỉ')?.props.disabled).toBe(true);
+    mockGetAddresses.mockResolvedValue([canonical]);
+    await act(async () => { findButton(tree, 'Kiểm tra địa chỉ đã lưu')?.props.onPress(); await flushPromises(); });
+    expect(mockUpdateAddress).toHaveBeenCalledTimes(1);
+    expect(customerProfileAddressWrites.size).toBe(0);
+  });
   it('shows one account title and a hero edit action without writes on mount', async () => {
     const tree = await mountScreen();
     const textValues = tree.root.findAllByType(Text).map((node) => node.props.children);

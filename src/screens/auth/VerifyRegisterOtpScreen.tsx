@@ -23,6 +23,7 @@ import type { AuthStackParamList, RootStackParamList } from '../../types';
 import { authApi } from '../../api/auth.api';
 import { useAuthStore } from '../../store';
 import { UserRole } from '../../types';
+import { handoffAuthenticatedRoute } from '../../navigation/root-navigation';
 import { extractApiErrorMessage } from '../../utils/input-validation';
 
 export default function VerifyRegisterOtpScreen() {
@@ -49,11 +50,9 @@ export default function VerifyRegisterOtpScreen() {
   }, [cooldown]);
 
   // Kỹ thuật viên mới chưa được duyệt nên vào thẳng luồng đăng ký hồ sơ.
-  const enterApp = (role: UserRole) =>
-    navigation.reset({
-      index: 0,
-      routes: [{ name: role === UserRole.TECHNICIAN ? 'TechnicianOnboarding' : 'CustomerMain' }],
-    });
+  const enterApp = (role: UserRole) => {
+    if (role === UserRole.CUSTOMER || role === UserRole.TECHNICIAN) handoffAuthenticatedRoute(role === UserRole.TECHNICIAN ? 'TechnicianOnboarding' : 'CustomerMain');
+  };
 
   const handleVerify = async (otpOverride?: string) => {
     if (loading || resending) return;
@@ -69,11 +68,7 @@ export default function VerifyRegisterOtpScreen() {
     try {
       const result = await authApi.verifyRegisterOtp(email, finalOtp);
       setAuth(result.accessToken, result.user);
-      // Self-service registration is Customer or Technician. Both targets are
-      // registered in every branch of AppNavigator regardless of auth state, so
-      // it's safe to navigate directly instead of hoping the state update alone
-      // moves the user off this screen (it won't for a Customer: their screens
-      // list doesn't change, so nothing auto-navigates them).
+      // The root handoff waits until the authenticated role routes are mounted.
       enterApp(result.user.role);
     } catch (err: any) {
       // A slow/dropped connection can mean the OTP was actually verified and

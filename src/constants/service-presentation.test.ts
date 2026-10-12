@@ -54,12 +54,13 @@ const EXPECTED_PRESENTATIONS = {
 } as const;
 
 describe('service presentation map', () => {
-  it('bundles all ten team-owned optimized UI illustrations with alpha', () => {
+  it('bundles ten team illustrations and both role-choice illustrations as optimized RGBA PNGs', () => {
     const source = fs.readFileSync('src/constants/customer-artwork.ts', 'utf8');
     const paths = [...source.matchAll(/require\('\.\.\/\.\.\/assets\/optimized\/ui\/([^']+)'\)/g)].map((match) => match[1]);
-    expect(paths).toHaveLength(10);
-    expect(new Set(paths).size).toBe(10);
-    expect(Object.keys(CUSTOMER_UI_ARTWORK)).toHaveLength(10);
+    expect(paths).toHaveLength(12);
+    expect(new Set(paths).size).toBe(12);
+    expect(paths).toEqual(expect.arrayContaining(['role-choice-customer.png', 'role-choice-technician.png']));
+    expect(Object.keys(CUSTOMER_UI_ARTWORK)).toHaveLength(12);
     // Generated full-resolution originals are preserved outside Git and are not CI dependencies.
     for (const filename of paths) {
       const png = fs.readFileSync(`assets/optimized/ui/${filename}`);

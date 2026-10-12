@@ -224,9 +224,11 @@ describe('T-NATIVE-04A accepted order presentation through the real detail loade
     expectNoSensitiveEffects();
   });
 
-  it('keeps the original next-step, contact, chat and back controls with accessible touch targets', async () => {
+  it('keeps the active stage, contact, chat and back controls with accessible touch targets', async () => {
     const renderer = await renderScreen();
-    expect(textOf(renderer.root)).toContain('Bước tiếp theo');
+    expect(textOf(renderer.root)).toContain('Bước 1/8 · Công việc đã nhận');
+    expect(textOf(renderer.root)).not.toContain('Bước tiếp theo');
+    expect(renderer.root.findAll((node) => node.type === View && node.props.testID === 'technician-sticky-footer')).toHaveLength(1);
     expect(textOf(renderer.root)).toContain('Liên hệ nhanh');
     for (const label of ['Quay lại', 'Bắt đầu di chuyển', 'Nhắn tin với khách hàng', 'Chỉ đường đến địa chỉ khách hàng']) {
       const controls = button(renderer, label);

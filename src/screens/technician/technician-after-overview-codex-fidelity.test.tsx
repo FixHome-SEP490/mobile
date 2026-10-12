@@ -246,7 +246,8 @@ describe('T-NATIVE-08A authorized native AFTER overview', () => {
     expect(textOf(panel[0])).not.toMatch(/Không có yêu cầu chi phí/);
     // Pending cost keeps the single await-cost next action, never a completion CTA.
     expect(button(renderer, 'Gửi yêu cầu nghiệm thu')).toHaveLength(0);
-    expect(textOf(renderer.root)).toContain('Chờ phản hồi chi phí phát sinh');
+    expect(textOf(byId(renderer, 'technician-current-stage-context')[0]))
+      .toContain('Khách cần duyệt hoặc từ chối khoản phát sinh.');
     expectNoSensitiveEffects();
   });
 
@@ -341,6 +342,7 @@ describe('T-NATIVE-08A authorized native AFTER overview', () => {
 
   it('keeps exactly one true next-step CTA and the existing AFTER plus Nghiệm thu cards', async () => {
     const renderer = await renderScreen();
+    await act(async () => button(renderer, 'Ảnh sau & bàn giao')[0].props.onPress());
     expect(byId(renderer, 'after-overview')).toHaveLength(1);
     expect(button(renderer, 'Chụp ảnh sau sửa từ bước tiếp theo')).toHaveLength(1);
     expect(button(renderer, 'Ảnh sau sửa chữa')).toHaveLength(1);
@@ -355,6 +357,7 @@ describe('T-NATIVE-08A authorized native AFTER overview', () => {
     const renderer = await renderScreen();
     expect(byId(renderer, 'after-overview')).toHaveLength(1);
     expect(textOf(byId(renderer, 'after-overview')[0])).toContain('Đã ghi nhận 2 ảnh sau sửa');
+    await act(async () => button(renderer, 'Ảnh sau & bàn giao')[0].props.onPress());
     expect(button(renderer, 'Yêu cầu nghiệm thu')).toHaveLength(1);
     expect(button(renderer, 'Chụp ảnh sau sửa từ bước tiếp theo')).toHaveLength(0);
     expect(ordersApi.requestCompletion).not.toHaveBeenCalled();

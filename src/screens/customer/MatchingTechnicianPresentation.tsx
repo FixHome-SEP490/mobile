@@ -214,6 +214,7 @@ export function MatchingTechnicianCard({
                 <Text style={[styles.metadataText, { color: colors.textSecondary }]}>• {distance} tham khảo</Text>
               )}
             </View>
+            {priority > 0 && <Text style={[styles.priorityLabel, { color: colors.primaryStrong }]}>Xem hồ sơ</Text>}
           </View>
         </TouchableOpacity>
         <TouchableOpacity
@@ -593,7 +594,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   candidateCardSelected: { borderWidth: 2 },
-  candidateBody: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 11, minHeight: 68 },
+  candidateBody: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 11, minHeight: 68 },
   candidateAvatarWrap: { position: 'relative' },
   priorityBadge: {
     position: 'absolute',
@@ -609,7 +610,7 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
   },
   priorityBadgeText: { color: '#FFFFFF', fontSize: 12, lineHeight: 16, fontWeight: '900' },
-  candidateInfo: { flex: 1, gap: 3 },
+  candidateInfo: { flex: 1, minWidth: 0, gap: 3 },
   candidateName: { fontSize: 16, lineHeight: 21, fontWeight: '700' },
   priorityLabel: { fontSize: 12, lineHeight: 17, fontWeight: '600' },
   candidateMetadata: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingTop: 1 },

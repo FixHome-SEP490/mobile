@@ -1130,12 +1130,12 @@ export default function CustomerMatchingScreen() {
               <>
                 <Text accessibilityRole="header" style={[styles.heading, { color: colors.text }]}>
                   {linkedMode
-                    ? 'Yêu cầu chọn 1 hoặc 2 kỹ thuật viên mới (hệ thống sẽ kiểm tra) (' + selected.length + '/2)'
+                    ? 'Chọn kỹ thuật viên mới (' + selected.length + '/2)'
                     : 'Chọn theo thứ tự ưu tiên (' + selected.length + '/2)'}
                 </Text>
                 <Text style={[styles.note, { color: colors.textSecondary }]}>
                   {linkedMode
-                    ? 'Thử yêu cầu chọn kỹ thuật viên mới; hệ thống kiểm tra trước khi gửi. Chỉ hệ thống mới quyết định lời mời có được tạo hay không.'
+                    ? 'Hệ thống kiểm tra quyền chọn lại trước khi gửi lời mời.'
                     : 'Ưu tiên 1 được mời trước. Ưu tiên 2 là dự phòng.'}
                 </Text>
                 {!loading && !refreshing && !error && candidateState === 'none' && (
@@ -1144,12 +1144,10 @@ export default function CustomerMatchingScreen() {
                       Chưa có kỹ thuật viên phù hợp
                     </Text>
                     <Text style={{ color: colors.textSecondary }}>
-                      Hiện chưa có kỹ thuật viên phù hợp với dịch vụ, khu vực và khung giờ này.
-                      Hãy làm mới sau một lúc hoặc quay lại xem lịch hẹn.
+                      Thử làm mới hoặc xem lại lịch hẹn.
                     </Text>
                     <Text style={[styles.note, { color: colors.textSecondary }]}>
-                      Ứng dụng không tự đổi lịch, hủy hay tạo yêu cầu mới. Việc đổi lịch chỉ thực
-                      hiện ở trạng thái được cho phép và bằng thao tác riêng của khách hàng.
+                      Yêu cầu và lịch hẹn vẫn được giữ nguyên.
                     </Text>
                   </View>
                 )}
@@ -1159,10 +1157,10 @@ export default function CustomerMatchingScreen() {
                       Có 1 kỹ thuật viên phù hợp
                     </Text>
                     <Text style={{ color: colors.textSecondary }}>
-                      Hiện có 1 kỹ thuật viên phù hợp. Bạn có thể chọn người này và gửi lời mời ngay.
+                      Bạn có thể chọn và gửi lời mời ngay.
                     </Text>
                     <Text style={[styles.note, { color: colors.textSecondary }]}>
-                      Nếu muốn có thêm lựa chọn, hãy làm mới sau một lúc; không cần tạo yêu cầu khác.
+                      Làm mới để kiểm tra thêm lựa chọn.
                     </Text>
                   </View>
                 )}
@@ -1206,7 +1204,7 @@ export default function CustomerMatchingScreen() {
                   <Ionicons name="chevron-forward" size={16} color={colors.primaryStrong} />
                 </TouchableOpacity>
                 <Text style={[styles.note, { color: colors.textSecondary }]}>
-                  Chỉ trạng thái trên hệ thống mới xác nhận kỹ thuật viên nhận đơn. Không cần gửi lại danh sách mời.
+                  Đang chờ phản hồi trên hệ thống.
                   {' '}Rời màn hình không hủy lời mời.
                 </Text>
 

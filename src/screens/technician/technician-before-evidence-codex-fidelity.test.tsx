@@ -234,7 +234,10 @@ describe('T-NATIVE-06A authorized native BEFORE overview', () => {
     expect(byId(renderer, 'before-evidence-overview')).toHaveLength(0);
     expect(textOf(renderer.root)).toContain(travelOrder.serviceName);
     if (status === 'ACCEPTED') expect(button(renderer, 'Bắt đầu di chuyển')).toHaveLength(1);
-    if (status === 'UNDER_REPAIR') expect(button(renderer, 'Chụp ảnh sau sửa từ bước tiếp theo')).toHaveLength(1);
+    if (status === 'UNDER_REPAIR') {
+      await act(async () => button(renderer, 'Ảnh sau & bàn giao')[0].props.onPress());
+      expect(button(renderer, 'Chụp ảnh sau sửa từ bước tiếp theo')).toHaveLength(1);
+    }
     if (status === 'COMPLETED') expect(textOf(renderer.root)).toContain('Nghiệm thu');
     expectNoSensitiveEffects();
   });
@@ -343,8 +346,8 @@ describe('T-NATIVE-06A authorized native BEFORE overview', () => {
     expect(button(renderer, 'Chụp ảnh trước sửa chữa ngay')).toHaveLength(0);
     if (status === 'SENT') expect(textOf(renderer.root)).toContain('Đang chờ khách duyệt báo giá.');
     else {
-      expect(button(renderer, 'Tải lại trạng thái đơn')).toHaveLength(1);
-      expect(button(renderer, 'Bắt đầu sửa chữa')).toHaveLength(0);
+      expect(button(renderer, 'Cập nhật từ hệ thống')).toHaveLength(1);
+      expect(button(renderer, 'Bắt đầu sửa chữa')).toHaveLength(1);
     }
     expectNoSensitiveEffects();
   });

@@ -150,11 +150,11 @@ beforeEach(() => {
 });
 
 describe('T12A authenticated Technician profile Codex identity shell', () => {
-  it('shows original profile name as eyebrow and Codex title as the heading', async () => {
+  it('shows the common account title while retaining the professional section', async () => {
     const r = await render(); const text = visibleText(r);
-    expect(text).toContain('Hồ sơ kỹ thuật viên');
+    expect(text).toContain('Tài khoản');
     expect(text).toContain('Hồ sơ nghề nghiệp');
-    const header = r.root.findAllByType(Text).filter(x => x.props.accessibilityRole === 'header' && x.props.children === 'Hồ sơ nghề nghiệp');
+    const header = r.root.findAllByType(Text).filter(x => x.props.accessibilityRole === 'header' && x.props.children === 'Tài khoản');
     expect(header.some(x => styleList(x.props.style).some(s => s.fontSize === 26))).toBe(true);
     await act(async () => r.unmount());
   });
@@ -223,193 +223,31 @@ describe('T12A authenticated Technician profile Codex identity shell', () => {
   });
 });
 
-describe('T12B2A real weekly availability and time-off sheet presentation', () => {
-  const day = (r: ReactTestRenderer, name: string) => r.root.findAllByType(TouchableOpacity).find(
-    x => x.props.accessibilityLabel === name && x.props.accessibilityRole === 'checkbox',
-  )!;
-  const pressText = (r: ReactTestRenderer, label: string) => r.root.findAllByType(TouchableOpacity).find(
-    x => x.findAllByType(Text).some(t => t.props.children === label),
-  )!;
-  const loaded = (schedules: { dayOfWeek: number; startTime: string; endTime: string }[]) =>
-    profileApi.getMyProfile.mockResolvedValue({ ...profile, schedules } as never);
-
-  it('keeps existing weekly heading while adding Codex-inspired large heading and truthful draft copy', async () => {
-    const r = await render(); const t = visibleText(r);
-    expect(t).toContain('Khung giờ nhận việc theo tuần');
-    expect(t).toContain('Chọn khung giờ phù hợp');
-    expect(t).toContain('Chỉ cập nhật lên máy chủ khi chọn Lưu khung giờ.');
-    await act(async () => r.unmount());
-  });
-
-  it('renders separate soft-theme visual shells for weekly schedule and leave', async () => {
+describe('SEP-136 combined profile entries', () => {
+  it('opens one scheduling screen and one service area screen', async () => {
     const r = await render();
-    const highlighted = r.root.findAllByType(View).filter(
-      x => styleList(x.props.style).some(s => s.backgroundColor === '#eff6ff' && s.borderRadius === 18),
-    );
-    expect(highlighted.length).toBeGreaterThanOrEqual(2);
+    const schedule = button(r, 'Lịch làm việc, Khung giờ nhận việc, ngày nghỉ và đơn theo ngày');
+    expect(schedule).toHaveLength(1);
+    await act(async () => schedule[0].props.onPress());
+    expect(mockNavigate).toHaveBeenCalledWith('TechnicianSchedule');
+    const area = r.root.findAllByType(TouchableOpacity).find(x => String(x.props.accessibilityLabel ?? '').startsWith('Khu vực hoạt động,'));
+    expect(area).toBeDefined();
+    await act(async () => area!.props.onPress());
+    expect(mockNavigate).toHaveBeenCalledWith('TechnicianServiceAreas');
+    expect(visibleText(r)).not.toContain('Khung giờ nhận việc hằng tuần');
     await act(async () => r.unmount());
   });
-
-  it('identifies empty draft as 0 of 7 selected, not as saved server availability', async () => {
+  it('puts the full-width outlined logout after the role-specific account actions', async () => {
     const r = await render();
-    expect(visibleText(r)).toContain('Đang chọn 0/7 ngày');
-    expect(profileApi.updateMySchedule).not.toHaveBeenCalled();
-    await act(async () => r.unmount());
-  });
-
-  it('maps source Sunday=0, Wednesday=3 and real hour ranges without shifting by Monday-first calendar', async () => {
-    loaded([
-      { dayOfWeek: 0, startTime: '07:00', endTime: '18:00' },
-      { dayOfWeek: 3, startTime: '09:00', endTime: '17:00' },
-    ]);
-    const r = await render();
-    await act(async () => button(r, 'Khung giờ nhận việc hằng tuần, 2 khung giờ trong tuần')[0].props.onPress());
-    expect(day(r, 'Chủ Nhật').props.accessibilityState.checked).toBe(true);
-    expect(day(r, 'Thứ Tư').props.accessibilityState.checked).toBe(true);
-    expect(day(r, 'Thứ Hai').props.accessibilityState.checked).toBe(false);
-    expect(visibleText(r)).toContain('Đang chọn 2/7 ngày');
-    expect(profileApi.updateMySchedule).not.toHaveBeenCalled();
-    await act(async () => r.unmount());
-  });
-
-  it('updates only a local day draft when toggled; preserves 44pt checkbox', async () => {
-    const r = await render();
-    await act(async () => day(r, 'Chủ Nhật').props.onPress());
-    expect(day(r, 'Chủ Nhật').props.accessibilityState.checked).toBe(true);
-    expect(visibleText(r)).toContain('Đang chọn 1/7 ngày');
-    expect(styleList(day(r, 'Chủ Nhật').props.style).some(s => (s.minHeight as number) >= 44)).toBe(true);
-    expect(profileApi.updateMySchedule).not.toHaveBeenCalled();
-    await act(async () => r.unmount());
-  });
-
-  it('submits exact real Sunday schedule only after explicit save, no demo availability', async () => {
-    profileApi.updateMySchedule.mockResolvedValue([] as never);
-    const r = await render();
-    await act(async () => day(r, 'Chủ Nhật').props.onPress());
-    await act(async () => pressText(r, 'Lưu khung giờ').props.onPress());
-    expect(profileApi.updateMySchedule).toHaveBeenCalledTimes(1);
-    expect(profileApi.updateMySchedule).toHaveBeenCalledWith([
-      { dayOfWeek: 0, startTime: '08:00', endTime: '17:00' },
-    ]);
-    expect(profileApi.createTimeOff).not.toHaveBeenCalled();
-    await act(async () => r.unmount());
-  });
-
-  it('presents time-off as actual server-requested data without demo leave fixture', async () => {
-    profileApi.getMyTimeOff.mockResolvedValue([{
-      id: 'leave-real-mock', startAt: '2026-10-18T00:00:00+07:00',
-      endAt: '2026-10-19T23:59:59+07:00', reason: 'Nghỉ gia đình',
-    }]);
-    const r = await render();
-    await act(async () => button(r, 'Ngày nghỉ, Đăng ký các khoảng ngày không nhận việc')[0].props.onPress());
-    expect(profileApi.getMyTimeOff).toHaveBeenCalledTimes(1);
-    const t = visibleText(r);
-    expect(t).toContain('Quản lý ngày nghỉ');
-    expect(t).toContain('Nghỉ gia đình');
-    expect(t).not.toContain('Quận 3 mẫu');
-    expect(profileApi.createTimeOff).not.toHaveBeenCalled();
-    expect(profileApi.deleteTimeOff).not.toHaveBeenCalled();
-    await act(async () => r.unmount());
-  });
-
-  it('keeps the manual dd/MM/yyyy leave form and 44pt delete control without auto mutations', async () => {
-    const r = await render();
-    expect(visibleText(r)).toContain('Ngày nghỉ');
-    expect(visibleText(r)).toContain('Quản lý ngày nghỉ');
-    const picker = r.root.findAllByType(TouchableOpacity).filter(x => String(x.props.accessibilityLabel ?? '').startsWith('Xóa ngày nghỉ'));
-    expect(profileApi.createTimeOff).not.toHaveBeenCalled();
-    expect(profileApi.deleteTimeOff).not.toHaveBeenCalled();
-    expect(picker.length).toBe(0);
-    await act(async () => r.unmount());
-  });
-
-  it('displays precise write boundary and keeps existing save and add controls', async () => {
-    const r = await render(); const t = visibleText(r);
-    expect(t).toContain('Thêm hoặc xóa chỉ có hiệu lực khi máy chủ xác nhận.');
-    expect(pressText(r, 'Lưu khung giờ')).toBeDefined();
-    expect(pressText(r, 'Thêm ngày nghỉ')).toBeDefined();
-    expect(t).not.toMatch(/Minh mẫu|Quận 3 mẫu|300\.000 ₫|Lưu lịch & kỹ năng mẫu|khung giờ đã được duyệt/);
-    await act(async () => r.unmount());
-  });
-});
-
-describe('T12B2B time-off GET fail-closed and explicit retry', () => {
-  const openTimeOff = async (r: ReactTestRenderer) => {
-    await act(async () => {
-      await button(r, 'Ngày nghỉ, Đăng ký các khoảng ngày không nhận việc')[0].props.onPress();
-    });
-  };
-  const apiLeave = {
-    id: 'server-leave-2', startAt: '2026-10-20T00:00:00+07:00',
-    endAt: '2026-10-20T23:59:59+07:00', reason: 'Nghỉ gia đình theo API',
-  };
-
-  it('does not invent an empty leave list after failed authenticated GET', async () => {
-    profileApi.getMyTimeOff.mockRejectedValue(new Error('offline'));
-    const r = await render();
-    await openTimeOff(r);
-    const t = visibleText(r);
-    expect(t).toContain('Không thể tải danh sách ngày nghỉ.');
-    expect(t).not.toContain('Chưa có ngày nghỉ nào.');
-    expect(profileApi.createTimeOff).not.toHaveBeenCalled();
-    expect(profileApi.deleteTimeOff).not.toHaveBeenCalled();
-    await act(async () => r.unmount());
-  });
-
-  it('shows a visible explicit GET-only retry control with at least 44pt touch target', async () => {
-    profileApi.getMyTimeOff.mockRejectedValue(new Error('offline'));
-    const r = await render();
-    await openTimeOff(r);
-    const retries = button(r, 'Thử lại tải ngày nghỉ');
-    expect(retries).toHaveLength(1);
-    expect(styleList(retries[0].props.style).some(s => (s.minHeight as number) >= 44)).toBe(true);
-    await act(async () => r.unmount());
-  });
-
-  it('retrieves actual leave on explicit retry and clears previous failure', async () => {
-    profileApi.getMyTimeOff.mockRejectedValueOnce(new Error('offline'));
-    profileApi.getMyTimeOff.mockResolvedValueOnce([apiLeave] as never);
-    const r = await render();
-    await openTimeOff(r);
-    expect(visibleText(r)).toContain('Không thể tải danh sách ngày nghỉ.');
-    await act(async () => button(r, 'Thử lại tải ngày nghỉ')[0].props.onPress());
-    expect(profileApi.getMyTimeOff).toHaveBeenCalledTimes(2);
-    expect(visibleText(r)).toContain('Nghỉ gia đình theo API');
-    expect(visibleText(r)).not.toContain('Không thể tải danh sách ngày nghỉ.');
-    expect(profileApi.createTimeOff).not.toHaveBeenCalled();
-    expect(profileApi.deleteTimeOff).not.toHaveBeenCalled();
-    await act(async () => r.unmount());
-  });
-
-  it('retains retry state after repeated GET failures without mutations', async () => {
-    profileApi.getMyTimeOff.mockRejectedValue(new Error('offline'));
-    const r = await render();
-    await openTimeOff(r);
-    await act(async () => button(r, 'Thử lại tải ngày nghỉ')[0].props.onPress());
-    expect(visibleText(r)).toContain('Không thể tải danh sách ngày nghỉ.');
-    expect(button(r, 'Thử lại tải ngày nghỉ')).toHaveLength(1);
-    expect(profileApi.getMyTimeOff).toHaveBeenCalledTimes(2);
-    expect(profileApi.updateMySchedule).not.toHaveBeenCalled();
-    expect(profileApi.createTimeOff).not.toHaveBeenCalled();
-    expect(profileApi.deleteTimeOff).not.toHaveBeenCalled();
-    await act(async () => r.unmount());
-  });
-
-  it('shows legitimate no-leave empty state only after successful GET returning []', async () => {
-    profileApi.getMyTimeOff.mockResolvedValue([]);
-    const r = await render();
-    await openTimeOff(r);
-    expect(visibleText(r)).toContain('Chưa có ngày nghỉ nào.');
-    expect(visibleText(r)).not.toContain('Không thể tải danh sách ngày nghỉ.');
-    await act(async () => r.unmount());
-  });
-
-  it('does not assert empty leave while GET is still loading', async () => {
-    profileApi.getMyTimeOff.mockImplementation(() => new Promise(() => undefined));
-    const r = await render();
-    await act(async () => { void button(r, 'Ngày nghỉ, Đăng ký các khoảng ngày không nhận việc')[0].props.onPress(); });
-    expect(visibleText(r)).not.toContain('Chưa có ngày nghỉ nào.');
-    expect(visibleText(r)).not.toContain('Không thể tải danh sách ngày nghỉ.');
+    const logout = button(r, 'Đăng xuất')[0];
+    const styles = Object.assign({}, ...styleList(logout.props.style));
+    expect(styles.width).toBe('100%');
+    expect(styles.minHeight).toBeGreaterThanOrEqual(44);
+    expect(styles.borderWidth).toBe(1);
+    expect(styles.position).not.toBe('absolute');
+    const actions = r.root.findAllByType(TouchableOpacity);
+    const kyc = actions.find(item => String(item.props.accessibilityLabel).startsWith('Xác minh danh tính'))!;
+    expect(actions.indexOf(logout)).toBeGreaterThan(actions.indexOf(kyc));
     await act(async () => r.unmount());
   });
 });

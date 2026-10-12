@@ -17,7 +17,8 @@ const mockApi = {
   exchangeGoogleCode: jest.fn(),
 };
 jest.mock('../../api/auth.api', () => ({ get authApi() { return mockApi; } }));
-jest.mock('../../store', () => ({ useAuthStore: () => ({ setAuth: mockSetAuth }) }));
+jest.mock('../../store', () => ({ useAuthStore: Object.assign(() => ({ setAuth: mockSetAuth }), { getState: () => ({ user: { role: 'customer' } }) }) }));
+jest.mock('../../navigation/root-navigation', () => ({ handoffAuthenticatedRoute: (name: string) => mockReset({ index: 0, routes: [{ name }] }) }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate, reset: mockReset, goBack: jest.fn() }),
   useRoute: () => ({ params: { email: 'native-test@example.com', password: 'NativeTest!123' } }),
@@ -64,13 +65,15 @@ it.each([LoginScreen, RegisterScreen, VerifyRegisterOtpScreen, ForgotPasswordScr
   expect(mockSetAuth).not.toHaveBeenCalled();
 });
 
-it('keeps Customer onboarding and Technician Auth routes', async () => {
+it('Customer continues to Guest Home and Technician still opens Auth', async () => {
   await render(<CustomerRoleChoiceScreen />);
   await press('Tiếp tục với vai trò khách hàng');
-  expect(mockNavigate).toHaveBeenCalledWith('CustomerOnboarding');
+  expect(mockReset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'CustomerGuestHome' }] });
+  await act(async () => tree.unmount());
+  await render(<CustomerRoleChoiceScreen />);
   await press('Tiếp tục với vai trò kỹ thuật viên');
-  expect(mockReset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'Auth' }] });
-  expect(mockMarkSeen).not.toHaveBeenCalled();
+  expect(mockNavigate).toHaveBeenCalledWith('Auth');
+  expect(mockMarkSeen).toHaveBeenCalled();
 });
 
 it('gives registration role choices a clear prompt, labels and selected state', async () => {
@@ -98,7 +101,7 @@ it('gives registration role choices a clear prompt, labels and selected state', 
 it('logs in through the existing API and routes by the returned role', async () => {
   mockApi.login.mockResolvedValue({ accessToken: 'mock-token', user: { id: 'mock-customer', role: 'customer' } });
   await render(<LoginScreen />);
-  await fill('Email', 'native-test@example.com');
+  await fill('Email hoặc Số điện thoại', 'native-test@example.com');
   await fill('Mật khẩu', 'NativeTest!123');
   await press('Đăng nhập');
   expect(mockApi.login).toHaveBeenCalledWith({ email: 'native-test@example.com', password: 'NativeTest!123' });
@@ -181,7 +184,7 @@ it('blocks keyboard resubmission and Google while email login is pending', async
   let resolve!: (value: unknown) => void;
   mockApi.login.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
   await render(<LoginScreen />);
-  await fill('Email', 'native-test@example.com');
+  await fill('Email hoặc Số điện thoại', 'native-test@example.com');
   await fill('Mật khẩu', 'NativeTest!123');
   await act(async () => { void tree.root.findByProps({ accessibilityLabel: 'Đăng nhập' }).props.onPress(); });
   expect(tree.root.findByProps({ accessibilityLabel: 'Đăng nhập' }).props.disabled).toBe(true);
@@ -196,7 +199,7 @@ it('locks password, keyboard and Google login synchronously before React renders
   let releaseLogin!: (value: unknown) => void;
   mockApi.login.mockImplementationOnce(() => new Promise((resolve) => { releaseLogin = resolve; }));
   await render(<LoginScreen />);
-  await fill('Email', 'native-test@example.com');
+  await fill('Email hoặc Số điện thoại', 'native-test@example.com');
   await fill('Mật khẩu', 'NativeTest!123');
   const googleStart = jest.requireMock('../../services/google-auth.service').startGoogleSignIn as jest.Mock;
   await act(async () => {
@@ -218,7 +221,7 @@ it('locks password login while Google authentication starts in the same event tu
   googleStart.mockImplementationOnce(() => new Promise((resolve) => { releaseGoogle = resolve; }));
   mockApi.exchangeGoogleCode.mockResolvedValue({ accessToken: 'google-mock-token', user: { id: 'mock-customer', role: 'customer' } });
   await render(<LoginScreen />);
-  await fill('Email', 'native-test@example.com');
+  await fill('Email hoặc Số điện thoại', 'native-test@example.com');
   await fill('Mật khẩu', 'NativeTest!123');
   await act(async () => {
     void tree.root.findByProps({ accessibilityLabel: 'Đăng nhập với Google' }).props.onPress();

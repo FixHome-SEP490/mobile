@@ -458,7 +458,7 @@ it('keeps review local, then creates exactly the immutable reviewed request on c
     quantity: 1,
     urgency: 'NORMAL',
   });
-  expect(textContent(renderer.root)).toContain('Yêu cầu đặt lịch đã được xác nhận');
+  expect(textContent(renderer.root)).toContain('Đã gửi yêu cầu');
   expect(textContent(renderer.root)).toContain('Về trang chủ');
   expect(mockUsePreventRemove).toHaveBeenLastCalledWith(false, expect.any(Function));
   await act(async () => (findAccessibleActions(renderer, 'Quay lại')[0].props.onPress as () => void)());
@@ -534,7 +534,7 @@ it('keeps the immutable Review visible and locked while the POST is pending, inc
       pending.resolve({ id: 'booking-a', customerId: 'customer-a' });
       await flushPromises();
     });
-    expect(textContent(renderer.root)).toContain('Yêu cầu đặt lịch đã được xác nhận');
+    expect(textContent(renderer.root)).toContain('Đã gửi yêu cầu');
   } finally {
     await act(async () => renderer.unmount());
   }
@@ -548,7 +548,7 @@ it.each([SERVICE_ID, OTHER_SERVICE_ID])('starts a fresh %s booking flow with an 
       (findDescriptionInput(renderer)!.props.onChangeText as (value: string) => void)('Old request A');
     });
     await openAndConfirmReview(renderer);
-    expect(textContent(renderer.root)).toContain('Yêu cầu đặt lịch đã được xác nhận');
+    expect(textContent(renderer.root)).toContain('Đã gửi yêu cầu');
     // React Navigation may reuse the mounted screen with new route params.
     mockRoute.key = 'booking-flow-b';
     mockRoute.params.prefill.serviceId = nextServiceId;
@@ -559,7 +559,7 @@ it.each([SERVICE_ID, OTHER_SERVICE_ID])('starts a fresh %s booking flow with an 
     expect(findDescriptionInput(renderer)?.props.value).toBe('');
     expect(findActions(renderer, 'Tiếp tục: Chọn địa chỉ')).toHaveLength(1);
     expect(textContent(renderer.root)).not.toContain('Old request A');
-    expect(textContent(renderer.root)).not.toContain('Yêu cầu đặt lịch đã được xác nhận');
+    expect(textContent(renderer.root)).not.toContain('Đã gửi yêu cầu');
     expect(findDescriptionInput(renderer)?.props.accessibilityLabel).toBe(nextServiceId === OTHER_SERVICE_ID ? 'Mô tả yêu cầu' : 'Mô tả sự cố');
     await act(async () => renderer.unmount());
     renderer = await renderScreen();
@@ -757,7 +757,7 @@ it('fences a late ACK from flow A away from a new flow B while keeping the owner
       pending.resolve({ id: 'booking-a', customerId: 'customer-a' });
       await flushPromises();
     });
-    expect(textContent(renderer.root)).not.toContain('Yêu cầu đặt lịch đã được xác nhận');
+    expect(textContent(renderer.root)).not.toContain('Đã gửi yêu cầu');
     expect(mockCreateBooking).toHaveBeenCalledTimes(1);
   } finally {
     await act(async () => renderer.unmount());
@@ -945,7 +945,7 @@ it('updates a newly mounted Booking screen from an old in-flight POST without re
     pending.resolve({ id: 'booking-created-after-route-remount' });
     await flushPromises();
   });
-  expect(textContent(replacement.root)).toContain('Yêu cầu đặt lịch đã được xác nhận');
+  expect(textContent(replacement.root)).toContain('Đã gửi yêu cầu');
   expect(mockCreateBooking).toHaveBeenCalledTimes(1);
   await act(async () => replacement.unmount());
 });
@@ -1281,7 +1281,7 @@ it('retains a successful in-flight create under its original owner across an acc
   expect(textContent(renderer.root)).not.toContain('customer A confirmed request');
 
   await switchOwner(renderer, 'customer-a');
-  expect(textContent(renderer.root)).toContain('Yêu cầu đặt lịch đã được xác nhận');
+  expect(textContent(renderer.root)).toContain('Đã gửi yêu cầu');
   expect(textContent(renderer.root)).toContain('customer A confirmed request');
   expect(mockCreateBooking).toHaveBeenCalledTimes(1);
   await act(async () => renderer.unmount());
@@ -1421,6 +1421,6 @@ it('states the preferred window is only desired time and the review creates noth
 
   expect(mockCreateBooking).not.toHaveBeenCalled();
   expect(mockUploadBookingPhoto).not.toHaveBeenCalled();
-  expect(textContent(renderer.root)).toContain('chỉ gửi sau khi bạn xác nhận');
+  expect(findActions(renderer, 'Xác nhận đặt lịch')).toHaveLength(1);
   await act(async () => renderer.unmount());
 });

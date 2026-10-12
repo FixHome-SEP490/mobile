@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, TouchableOpacity } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import { serviceOrderStatusView } from './technician-status';
 import { selectTechnicianWorkOrderHierarchy } from './technician-work-order-hierarchy';
@@ -166,17 +166,45 @@ async function renderScreen() {
 }
 
 describe('TechnicianOrderDetailScreen real-UI presentation (T-RUI2C)', () => {
-  it('locks one real current state, one dominant next action with its checklist, and secondary contact/chat', async () => {
+  it('discloses full details and verified past steps without sending a write', async () => {
+    const { ordersApi } = jest.requireMock('../../api/orders.api');
+    const renderer = await renderScreen();
+    const shown = (node: (typeof renderer.root)) => {
+      let current: typeof node | null = node;
+      while (current) {
+        if (StyleSheet.flatten(current.props.style)?.display === 'none') return false;
+        current = current.parent;
+      }
+      return true;
+    };
+    const chat = renderer.root.findAllByType(TouchableOpacity).find(node => node.props.accessibilityLabel === 'Nhắn tin với khách hàng')!;
+    expect(shown(chat)).toBe(false);
+    const all = renderer.root.findAllByType(TouchableOpacity).find(node => node.props.accessibilityLabel === 'Xem toàn bộ chi tiết')!;
+    await act(async () => all.props.onPress());
+    expect(shown(chat)).toBe(true);
+    expect(visibleText(renderer)).toContain('Toàn bộ chi tiết');
+    expect(renderer.root.findAllByType(ScrollView).filter(node => node.props.testID === 'technician-all-details-scroll')).toHaveLength(1);
+    expect(renderer.root.findAllByType(View).filter(node => node.props.testID === 'technician-current-stage-context')).toHaveLength(0);
+    expect(renderer.root.findAllByType(View).filter(node => node.props.testID === 'technician-sticky-footer')).toHaveLength(0);
+    const back = renderer.root.findAllByType(TouchableOpacity).find(node => node.props.accessibilityLabel === 'Đóng toàn bộ chi tiết')!;
+    await act(async () => back.props.onPress());
+    const progress = renderer.root.findAllByType(TouchableOpacity).find(node => node.props.accessibilityLabel === 'Xem tiến độ công việc')!;
+    await act(async () => progress.props.onPress());
+    const gps = renderer.root.findAllByType(TouchableOpacity).find(node => node.props.accessibilityLabel === 'Check-in GPS, đã ghi nhận, xem lại')!;
+    await act(async () => gps.props.onPress());
+    expect(renderer.root.findAllByType(View).filter(node => node.props.testID === 'technician-past-stage')).toHaveLength(1);
+    expect(renderer.root.findAllByType(TouchableOpacity).filter(node => shown(node) && node.props.accessibilityLabel === 'Yêu cầu nghiệm thu')).toHaveLength(0);
+    for (const name of ['startRepair', 'requestCompletion', 'createQuotation', 'createAdditionalCostProposal', 'checkIn', 'enRoute']) expect(ordersApi[name]).not.toHaveBeenCalled();
+    await act(async () => renderer.unmount());
+  });
+  it('renders the current waiting stage and secondary contact/chat without a stale next-step CTA', async () => {
     const renderer = await renderScreen();
     const text = visibleText(renderer);
-    expect(text).toContain('Chi tiết công việc');
-    // One real current state from the Backend status.
+    expect(text).toMatch(/Bước 7\/8 · Nghiệm thu & thanh toán/);
     expect(text).toContain('Đang sửa chữa');
-    // One dominant next action for the requested-completion state.
-    expect(text).toContain('Đã yêu cầu hoàn thành');
-    // Readiness checklist sits next to the action inside the same card.
-    expect(text).toContain('Điều kiện yêu cầu nghiệm thu');
-    // Call/map/chat stay secondary below the primary action.
+    expect(text).toContain('Chờ khách nghiệm thu. Yêu cầu hoàn thành không đồng nghĩa đã thanh toán');
+    expect(text).not.toContain('Bước tiếp theo');
+    expect(renderer.root.findAllByProps({ accessibilityLabel: 'Yêu cầu nghiệm thu' })).toHaveLength(0);
     expect(text).toContain('Liên hệ nhanh');
     expect(text).toContain('Nhắn tin với khách');
     // Never invents ETA, distance, rating, or verified payment proof.
@@ -188,9 +216,10 @@ describe('TechnicianOrderDetailScreen real-UI presentation (T-RUI2C)', () => {
   it('keeps completion, customer payment, and cash declaration semantically separate', async () => {
     const renderer = await renderScreen();
     const text = visibleText(renderer);
-    // Completion card no longer merges payment into its title or success claim.
+    // The scene groups the journey but acceptance and payment retain separate statuses.
     expect(text).toContain('Nghiệm thu');
-    expect(text).not.toContain('Nghiệm thu và thanh toán');
+    expect(text).toContain('1. Khách nghiệm thu dịch vụ');
+    expect(text).toContain('2. Thanh toán');
     // Customer payment stays a separate read-only invoice concern.
     expect(text).toContain('Hóa đơn');
     // Cash declaration stays opt-in and never equals customer payment.

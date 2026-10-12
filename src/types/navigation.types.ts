@@ -89,6 +89,6 @@ export type TechnicianTabParamList = {
   Home: undefined;
   Invitations: undefined;
   Jobs: undefined;
-  Notifications: undefined;
+  Wallet: undefined;
   Profile: undefined;
 };

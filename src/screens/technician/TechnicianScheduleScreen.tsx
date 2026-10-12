@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -24,6 +26,7 @@ import { fetchAllOrders } from './technician-earnings';
 import { buildWeek, dayKeyVn } from './technician-schedule';
 
 import { vnDateString, vnTimeString } from '../../utils/vn-time';
+import TechnicianAvailabilityEditor from './TechnicianAvailabilityEditor';
 
 const VN_DATE = { day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 const VN_TIME = { hour: '2-digit', minute: '2-digit' } as const;
@@ -104,6 +107,7 @@ export default function TechnicianScheduleScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
       <View style={styles.header}>
         <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Quay lại">
@@ -135,14 +139,16 @@ export default function TechnicianScheduleScreen() {
         </View>
       ) : (
         <ScrollView
+          keyboardShouldPersistTaps="handled"
           contentContainerStyle={[styles.content, { paddingBottom: 32 + Math.max(insets.bottom, 16) }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); }} />}
         >
           <View style={styles.sourceNotice}>
             <Text style={styles.sourceNoticeText}>
-              Lịch hiển thị các đơn đã tải và ngày nghỉ đã khai báo. Chỉnh khung giờ nhận việc tại Hồ sơ nghề nghiệp.
+              Lịch hiển thị các đơn đã tải và ngày nghỉ đã khai báo.
             </Text>
           </View>
+          <TechnicianAvailabilityEditor onChanged={() => { void load(); }} />
           <View style={styles.weekNav}>
             <TouchableOpacity style={styles.iconBtn} onPress={() => changeWeek(-1)} accessibilityRole="button" accessibilityLabel="Tuần trước">
               <ChevronLeft size={22} color={colors.text} strokeWidth={1.75} />
@@ -242,6 +248,7 @@ export default function TechnicianScheduleScreen() {
           {refreshing && <ActivityIndicator color={colors.primaryStrong} />}
         </ScrollView>
       )}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

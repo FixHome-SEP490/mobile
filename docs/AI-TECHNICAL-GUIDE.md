@@ -51,9 +51,10 @@ index.ts
 native capabilities such as SecureStore. `src/api/client.ts` centralizes URL, timeout, secure token
 attachment, and session refresh: on 401 it runs one shared `/auth/refresh` per session and replays
 only GET/HEAD/OPTIONS requests; mutations are not replayed automatically. `src/constants/config.ts`
-reads Expo public configuration (`EXPO_PUBLIC_API_BASE_URL`, falling back to
-`http://10.0.2.2:3000/api/v1` on Android and `http://localhost:3000/api/v1` elsewhere, and
-`EXPO_PUBLIC_APP_NAME`).
+reads Expo public configuration (`EXPO_PUBLIC_API_BASE_URL` takes priority, and
+`EXPO_PUBLIC_APP_NAME`). Native development derives the Backend host from Expo/Metro LAN
+metadata on port 3000. Web keeps localhost; Android with loopback Metro keeps the emulator
+bridge. Tunnel/production hosts are not inferred; use an explicit local environment override.
 
 Client navigation is not an authorization boundary. Backend repeats all role and ownership checks.
 

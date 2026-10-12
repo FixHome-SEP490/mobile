@@ -23,6 +23,7 @@ import type { AuthStackParamList, RootStackParamList } from '../../types';
 import { authApi } from '../../api/auth.api';
 import { useAuthStore } from '../../store';
 import { UserRole } from '../../types';
+import { handoffAuthenticatedRoute } from '../../navigation/root-navigation';
 import GoogleSignInButton from '../../components/GoogleSignInButton';
 import {
   GoogleSignInCancelled,
@@ -117,17 +118,7 @@ export default function RegisterScreen() {
       const code = await startGoogleSignIn();
       const result = await authApi.exchangeGoogleCode(code);
       setAuth(result.accessToken, result.user);
-      navigation.reset({
-        index: 0,
-        routes: [
-          {
-            name:
-              result.user.role === UserRole.CUSTOMER
-                ? 'CustomerMain'
-                : 'TechnicianMain',
-          },
-        ],
-      });
+      if (result.user.role === UserRole.CUSTOMER || result.user.role === UserRole.TECHNICIAN) handoffAuthenticatedRoute(result.user.role === UserRole.CUSTOMER ? 'CustomerMain' : 'TechnicianMain');
     } catch (err: unknown) {
       if (err instanceof GoogleSignInCancelled) return;
       const envelope = (

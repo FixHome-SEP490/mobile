@@ -16,7 +16,7 @@ import {
   Linking,
   Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AlertCircle,
   AlertTriangle,
@@ -81,11 +81,13 @@ const WITHDRAWAL_STATUS_VIEW: Record<WithdrawalRequest['status'], StatusView> = 
   FAILED: { label: 'Chuyển thất bại', tone: 'danger', icon: 'AlertTriangle' },
 };
 
-export default function TechnicianWalletScreen() {
+export default function TechnicianWalletScreen({ route }: { route?: { name: string } }) {
   const { colors, isDark } = useAppTheme();
   const styles = getStyles(colors);
   const reduceMotion = useReduceMotion();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const insets = useSafeAreaInsets();
+  const isTab = route?.name === 'Wallet';
   const { user } = useAuthStore();
 
   const [state, setState] = useState<WalletUiState>(initialWalletState);
@@ -264,7 +266,7 @@ export default function TechnicianWalletScreen() {
 
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => navigation.goBack()}
+          onPress={() => isTab ? (navigation as unknown as { navigate: (name: string) => void }).navigate('Home') : navigation.goBack()}
           style={styles.backBtn}
           accessibilityRole="button"
           accessibilityLabel="Quay lại"
@@ -279,7 +281,7 @@ export default function TechnicianWalletScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: (isTab ? 96 : 40) + insets.bottom }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={state.refreshing} onRefresh={onRefresh} />}
       >

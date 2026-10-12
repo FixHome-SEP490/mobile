@@ -453,7 +453,7 @@ it('shows a dedicated full-screen confirmation scene, preserves the snapshot and
   expect(renderer.root.findAll((node) => node.type === View && node.props.testID === 'booking-review-full-screen')).toHaveLength(1);
   const body = textContent(renderer.root);
   expect(body).toContain('Kiểm tra lần cuối');
-  expect(body).toContain('Yêu cầu chưa được tạo');
+  expect(body).not.toContain('Yêu cầu chưa được tạo');
   expect(body).toContain('Máy lạnh không mát');
   expect(body).toContain('Nhà riêng');
   expect(body).toContain('Giá dịch vụ');

@@ -26,6 +26,7 @@ import {
   serviceIdFromRoute,
 } from './service-catalog';
 import { getServicePresentation } from '../../constants/service-presentation';
+import { useAuthStore } from '../../store/auth.store';
 
 type DetailRoute = RouteProp<RootStackParamList, 'CustomerServiceDetail'>;
 
@@ -53,6 +54,7 @@ export default function CustomerServiceDetailScreen() {
   const onRetry = () => { void loader.focus(serviceId); };
   const onBook = () => {
     if (!service) return;
+    if (!useAuthStore.getState().isAuthenticated) { navigation.navigate('Auth'); return; }
     Haptics.selectionAsync();
     navigation.push('CustomerBookingCreate', {
       prefill: { serviceId: service.id, serviceName: service.name },

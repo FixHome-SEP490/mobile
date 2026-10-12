@@ -565,7 +565,7 @@ describe('technician profile real UI (T-RUI5)', () => {
     mockOrdersApi.getTechnicianJobs.mockImplementation(() => new Promise(() => undefined) as never);
     const renderer = await renderProfile();
     const text = visibleText(renderer);
-    expect(text).toContain('Hồ sơ kỹ thuật viên');
+    expect(text).toContain('Tài khoản');
     expect(text).toContain('Đang tải…');
     // No invented money or stars before the server answers.
     expect(text).not.toContain('₫');

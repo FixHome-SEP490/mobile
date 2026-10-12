@@ -18,6 +18,7 @@ const mockNavigate = jest.fn();
 const mockPush = jest.fn();
 const mockGoBack = jest.fn();
 let mockRouteParams: Record<string, unknown> = {};
+let mockIsAuthenticated = true;
 
 jest.mock('@react-navigation/native', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -28,6 +29,12 @@ jest.mock('@react-navigation/native', () => {
     useFocusEffect: (effect: () => void | (() => void)) => ReactModule.useEffect(effect, [effect]),
   };
 });
+
+jest.mock('../../store/auth.store', () => ({
+  useAuthStore: Object.assign(jest.fn(), {
+    getState: () => ({ isAuthenticated: mockIsAuthenticated }),
+  }),
+}));
 
 jest.mock('react-native-safe-area-context', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -134,6 +141,7 @@ function flatStyle(node: { props: { style?: unknown } }): Record<string, unknown
 beforeEach(() => {
   jest.clearAllMocks();
   mockRouteParams = {};
+  mockIsAuthenticated = true;
   servicesMock.servicesApi.getCategories.mockResolvedValue([mockCategory]);
   servicesMock.servicesApi.getServices.mockResolvedValue({ data: [mockService], total: 1 });
   servicesMock.servicesApi.getServiceById.mockResolvedValue(mockService);
@@ -389,6 +397,25 @@ describe('customer service loader behavior (mocked servicesApi, C-RUI3 M1)', () 
       expect(mockPush).toHaveBeenCalledWith('CustomerBookingCreate', {
         prefill: { serviceId: SERVICE_ID, serviceName: LONG_VN_NAME },
       });
+    } finally {
+      act(() => tree.unmount());
+    }
+  });
+
+  it('routes an unauthenticated booking attempt to Auth without opening booking create', async () => {
+    mockRouteParams = { serviceId: SERVICE_ID };
+    mockIsAuthenticated = false;
+    let tree!: ReactTestRenderer;
+    act(() => { tree = create(detailElement()); });
+    try {
+      await settle(400);
+      const book = tree.root.findAllByType(TouchableOpacity).find(
+        (node) => node.props.accessibilityLabel === `Đặt lịch sửa chữa ${LONG_VN_NAME}`,
+      );
+      expect(book).toBeDefined();
+      act(() => book!.props.onPress());
+      expect(mockNavigate).toHaveBeenCalledWith('Auth');
+      expect(mockPush).not.toHaveBeenCalled();
     } finally {
       act(() => tree.unmount());
     }

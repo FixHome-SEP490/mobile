@@ -232,7 +232,10 @@ describe('T-NATIVE-05A real EN_ROUTE prearrival presentation', () => {
     expect(StyleSheet.flatten(scroll.props.contentContainerStyle).paddingBottom).toBeGreaterThanOrEqual(48);
     expect(textOf(renderer.root)).toContain(travelOrder.serviceName);
     expect(textOf(renderer.root)).toContain(travelOrder.addressSummary);
-    expect(textOf(renderer.root)).toContain('Bước tiếp theo');
+    expect(textOf(renderer.root)).toContain('Bước 2/8 · Đến nơi, xác nhận rõ');
+    expect(textOf(renderer.root)).not.toContain('Bước tiếp theo');
+    expect(renderer.root.findAll((node) => node.type === View && node.props.testID === 'technician-sticky-footer')).toHaveLength(1);
+    expect(renderer.root.findByType(ScrollView).findAll((node) => node === cta[0])).toHaveLength(0);
     expectNoSensitiveEffects();
   });
 
@@ -317,7 +320,7 @@ describe('T-NATIVE-05A real EN_ROUTE prearrival presentation', () => {
     expect(button(renderer, 'Check-in tại nhà khách')).toHaveLength(0);
     expect(textOf(renderer.root)).toContain(travelOrder.serviceName);
     if (status === 'ACCEPTED') expect(button(renderer, 'Bắt đầu di chuyển')).toHaveLength(1);
-    if (status === 'UNDER_REPAIR') expect(button(renderer, 'Chụp ảnh sau sửa từ bước tiếp theo')).toHaveLength(1);
+    if (status === 'UNDER_REPAIR') expect(button(renderer, 'Ảnh sau & bàn giao')).toHaveLength(1);
     if (status === 'COMPLETED') expect(textOf(renderer.root)).toContain('Nghiệm thu');
     expectNoSensitiveEffects();
   });

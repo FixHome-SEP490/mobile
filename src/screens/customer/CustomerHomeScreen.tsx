@@ -35,6 +35,8 @@ import ServiceArtwork from '../../components/customer/ServiceArtwork';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { useChatUnreadCount } from '../../hooks/useChatUnreadCount';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import CustomerAnimatedBottomBar from '../../components/navigation/CustomerAnimatedBottomBar';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { BottomSheetModal, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -116,6 +118,9 @@ export default function CustomerHomeScreen() {
   const handleSearch = () => navigation.navigate('CustomerServices');
 
   const { user, isAuthenticated } = useAuthStore();
+  const isGuest = !isAuthenticated;
+  const scrollRef = useRef<ScrollView>(null);
+  const reduceMotion = useReduceMotion();
   const [selectedAddress, setSelectedAddress] = useState('Đang tải địa chỉ...');
   const [addresses, setAddresses] = useState<AddressData[]>([]);
   const [resume, setResume] = useState<HomeResumeItem | null>(null);
@@ -129,7 +134,8 @@ export default function CustomerHomeScreen() {
   const fetchAddress = useCallback(async () => {
     try {
       if (!isAuthenticated) {
-        setSelectedAddress('Vui lòng đăng nhập để xem địa chỉ');
+        setAddresses([]);
+        setSelectedAddress('Khám phá dịch vụ tại nhà');
         return;
       }
       
@@ -222,6 +228,7 @@ export default function CustomerHomeScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#1D4ED8" />
 
       <ScrollView
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         onScroll={handleScroll}
@@ -244,7 +251,7 @@ export default function CustomerHomeScreen() {
             <View style={styles.topBarActions}>
               <TouchableOpacity
                 style={styles.topBarIconBtn}
-                onPress={() => navigation.navigate('ChatList')}
+                onPress={() => navigation.navigate(isGuest ? 'Auth' : 'ChatList')}
                 activeOpacity={0.8}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 accessibilityRole="button"
@@ -272,7 +279,7 @@ export default function CustomerHomeScreen() {
             </Text>
             <TouchableOpacity
               style={styles.addressStrip}
-              onPress={() => addressSheetRef.current?.present()}
+              onPress={() => isGuest ? navigation.navigate('Auth') : addressSheetRef.current?.present()}
               activeOpacity={0.8}
               accessibilityRole="button"
               accessibilityLabel={`Địa chỉ: ${selectedAddress}`}
@@ -381,7 +388,7 @@ export default function CustomerHomeScreen() {
         <TouchableOpacity
           style={styles.aiEntry}
           activeOpacity={0.8}
-          onPress={() => navigation.navigate('CustomerAIDiagnosis')}
+          onPress={() => navigation.navigate(isGuest ? 'Auth' : 'CustomerAIDiagnosis')}
           accessibilityRole="button"
           accessibilityLabel="Hỏi FixHome AI"
           accessibilityHint="Mở chẩn đoán sơ bộ bằng AI"
@@ -423,8 +430,11 @@ export default function CustomerHomeScreen() {
 
         {/* 9. Restrained, source-honest info */}
 
-        <View style={{ height: 40 }} />
+        {isGuest && <TouchableOpacity style={[styles.searchBar, { margin: 16, justifyContent: 'center' }]} accessibilityRole="button" accessibilityLabel="Đăng nhập hoặc tạo tài khoản" onPress={() => navigation.navigate('Auth')}><Text style={{ color: colors.primaryStrong, fontWeight: '600' }}>Đăng nhập / Tạo tài khoản</Text></TouchableOpacity>}
+        <View style={{ height: isGuest ? 112 : 40 }} />
       </ScrollView>
+
+      {isGuest && <CustomerAnimatedBottomBar mode="guest" activeRouteName="Home" onGuestTabPress={name => name === 'Home' ? scrollRef.current?.scrollTo({ y: 0, animated: !reduceMotion }) : navigation.navigate('Auth')} onGuestBookingChoice={() => navigation.navigate('Auth')} />}
 
       {/* Address Selection Bottom Sheet */}
       <BottomSheetModal

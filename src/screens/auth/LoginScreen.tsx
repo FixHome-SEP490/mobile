@@ -28,8 +28,10 @@ import {
   GoogleSignInCancelled,
   startGoogleSignIn,
 } from '../../services/google-auth.service';
-import { extractApiErrorMessage } from '../../utils/input-validation';
+import { loginErrorMessage } from './login-error';
 import { technicianLandingRoute } from '../technician/technician-onboarding';
+import { handoffAuthenticatedRoute } from '../../navigation/root-navigation';
+import { markCustomerFirstRunSeen } from '../../services/customer-first-run';
 
 export default function LoginScreen() {
   const { colors, spacing, fontSize, isDark } = useAppTheme();
@@ -45,11 +47,22 @@ export default function LoginScreen() {
   const passwordRef = useRef<TextInput>(null);
   // Shared synchronous lock covers taps before React flushes loading state.
   const authAttemptInFlight = useRef(false);
+  const goGuestHome = () => {
+    const root = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
+    const state = root?.getState();
+    const previous = state?.routes[(state.index ?? 0) - 1]?.name;
+    if (root?.canGoBack() && previous && ['CustomerGuestHome', 'CustomerServices', 'CustomerServiceDetail'].includes(previous)) root.goBack();
+    else (root ?? navigation).reset({ index: 0, routes: [{ name: 'CustomerGuestHome' }] });
+  };
+  const explore = () => {
+    void markCustomerFirstRunSeen();
+    (navigation.getParent<NativeStackNavigationProp<RootStackParamList>>() ?? navigation).reset({ index: 0, routes: [{ name: 'CustomerGuestHome' }] });
+  };
 
   const handleLogin = async () => {
     if (authAttemptInFlight.current || loading || googleLoading) return;
     if (!email.trim() || !password) {
-      setError('Vui lòng nhập email và mật khẩu.');
+      setError('Vui lòng nhập email hoặc số điện thoại và mật khẩu.');
       return;
     }
 
@@ -66,7 +79,7 @@ export default function LoginScreen() {
       // cũ luôn rơi xuống `err.message` của axios và hiện ra cho người dùng câu
       // "Request failed with status code 401" thay vì lý do thật.
       setError(
-        extractApiErrorMessage(err, 'Đăng nhập thất bại. Vui lòng thử lại.'),
+        loginErrorMessage(err),
       );
     } finally {
       authAttemptInFlight.current = false;
@@ -78,9 +91,10 @@ export default function LoginScreen() {
 
   /** Sau khi có phiên thì đi tiếp y hệt đăng nhập bằng mật khẩu. */
   const goAfterLogin = async (role: UserRole) => {
+    if (role !== UserRole.CUSTOMER && role !== UserRole.TECHNICIAN) return;
     const name =
       role === UserRole.CUSTOMER ? 'CustomerMain' : await technicianLandingRoute();
-    navigation.reset({ index: 0, routes: [{ name }] });
+    if (useAuthStore.getState().user?.role === role) handoffAuthenticatedRoute(name);
   };
 
   const handleGoogleSignIn = async () => {
@@ -122,14 +136,12 @@ export default function LoginScreen() {
       >
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         
-          <View style={styles.brandBar}><TouchableOpacity style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Đổi vai trò" onPress={() => navigation.navigate('CustomerRoleChoice')} disabled={loading || googleLoading}><Ionicons name="arrow-back" size={20} color={colors.text} /></TouchableOpacity><View style={styles.brandRow}><Image source={require('../../../assets/icon.png')} style={styles.brandLogo} /><Text style={styles.brandText}>Fix<Text style={styles.accent}>Home</Text></Text></View></View>
+          <View style={styles.brandBar}><TouchableOpacity style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Quay lại" onPress={goGuestHome} disabled={loading || googleLoading}><Ionicons name="arrow-back" size={20} color={colors.text} /></TouchableOpacity><View style={styles.brandRow}><Image source={require('../../../assets/icon.png')} style={styles.brandLogo} /><Text style={styles.brandText}>Fix<Text style={styles.accent}>Home</Text></Text></View></View>
           <View style={styles.header}>
-            <Text style={styles.title}>Đăng nhập</Text><Text style={styles.heroTitle} accessibilityRole="header">Chào bạn.{'\n'}<Text style={styles.accent}>Về với FixHome.</Text></Text>
-            <Text style={styles.subtitle}>Một tài khoản để theo dõi những việc trong nhà.</Text>
+            <Text style={styles.heroTitle} accessibilityRole="header">Chào bạn.{'\n'}<Text style={styles.accent}>Về với FixHome.</Text></Text>
           </View>
 
           <View style={styles.formContainer}>
-            <Text style={styles.note}>Đăng nhập bằng email đã đăng ký. Số điện thoại dùng làm thông tin liên hệ khi đăng ký.</Text>
             {error && (
               <View style={styles.errorBox} accessibilityRole="alert" accessibilityLiveRegion="polite">
                 <Ionicons name="alert-circle" size={16} color={colors.error} />
@@ -138,20 +150,20 @@ export default function LoginScreen() {
             )}
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email</Text>
+              <Text style={styles.inputLabel}>Email hoặc Số điện thoại</Text>
               <View style={styles.inputWrapper}>
                 <Ionicons name="mail-outline" size={18} color={colors.textSecondary} style={styles.inputIcon} />
                 <TextInput
-                  accessibilityLabel="Email"
+                  accessibilityLabel="Email hoặc Số điện thoại"
                   editable={!(loading || googleLoading)}
                   autoCorrect={false}
-                  autoComplete="email"
+                  autoComplete="username"
                   style={styles.input}
                   value={email}
                   onChangeText={setEmail}
                   placeholder="example@gmail.com"
                   placeholderTextColor={colors.textSecondary}
-                  keyboardType="email-address"
+                  keyboardType="default"
                   autoCapitalize="none"
                   returnKeyType="next"
                   onSubmitEditing={() => passwordRef.current?.focus()}
@@ -221,14 +233,14 @@ export default function LoginScreen() {
             />
 
             <TouchableOpacity
-              style={[styles.forgotPasswordRow, { minHeight: 48, justifyContent: 'center' }]}
-              onPress={() => navigation.navigate('CustomerRoleChoice')}
+              style={[styles.forgotPasswordRow, { minHeight: 48, alignSelf: 'center', justifyContent: 'center' }]}
+              onPress={explore}
               disabled={loading || googleLoading}
               accessibilityRole="button"
               accessibilityLabel="Khám phá dịch vụ trước khi đăng nhập"
               accessibilityState={{ disabled: loading || googleLoading }}
             >
-              <Text style={styles.forgotPasswordText}>Khám phá dịch vụ trước khi đăng nhập</Text>
+              <Text style={styles.forgotPasswordText}>Khám phá</Text>
             </TouchableOpacity>
 
             <View style={[styles.registerRow, { marginTop: 20 }]}>
@@ -253,10 +265,8 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   brandText: { fontSize: fontSize.xxl, fontWeight: '700', letterSpacing: -1, color: colors.text },
   backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.divider, alignItems: 'center', justifyContent: 'center' },
   header: { alignItems: 'flex-start', marginBottom: spacing.lg },
-  title: { fontSize: fontSize.xs, lineHeight: 20, fontWeight: '600', color: colors.primaryDark, marginBottom: 16 },
   heroTitle: { fontSize: fontSize.xxxl, lineHeight: 42, fontWeight: '700', letterSpacing: -1, color: colors.text, marginBottom: 16 },
   accent: { color: colors.primaryStrong },
-  subtitle: { fontSize: fontSize.sm, lineHeight: 24, color: colors.textSecondary },
   formContainer: { width: '100%' },
   errorBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: colors.tone.danger.bg, padding: 12, borderRadius: 12, marginBottom: 16 },
   errorText: { flexShrink: 1, color: colors.tone.danger.text, fontSize: fontSize.xs, lineHeight: 20, marginTop: 4 },
@@ -277,5 +287,4 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 24 },
   lineDivider: { flex: 1, height: 1, backgroundColor: colors.border },
   dividerText: { fontSize: fontSize.xs, color: colors.textSecondary, marginHorizontal: 12 },
-  note: { fontSize: fontSize.xs, lineHeight: 20, color: colors.textSecondary, marginTop: 16 },
 });

@@ -6,6 +6,7 @@ import CustomerBookingAddressEditor, {
 
 const mockAutocomplete = jest.fn();
 const mockReverse = jest.fn();
+const mockProvinces = jest.fn();
 const mockCreateAddress = jest.fn();
 const mockGetAddresses = jest.fn();
 const mockGetLocation = jest.fn();
@@ -15,6 +16,7 @@ jest.mock('../../api/geo.api', () => ({
   geoApi: {
     autocomplete: (...args: unknown[]) => mockAutocomplete(...args),
     reverse: (...args: unknown[]) => mockReverse(...args),
+    getProvinces: (...args: unknown[]) => mockProvinces(...args),
   },
 }));
 jest.mock('../../api/users.api', () => ({
@@ -67,8 +69,8 @@ const existing = { id: 'old-address', userId: ownerId, label: 'Old',
   line1: 'Old st', ward: '', district: 'Old District', province: 'Old City',
   lat: 10.11, lng: 106.11, isDefault: true };
 const newAddress = { id: 'address-created', userId: ownerId, label: 'Nhà mới',
-  line1: '50 Phố Mới', ward: 'Phường 2', district: 'Quận 3',
-  province: 'TP. HCM', lat: 10.78, lng: 106.69, isDefault: false };
+  line1: '50 Phố Mới', ward: 'Phường Bến Thành', district: 'Phường Bến Thành', districtCode: '26743',
+  province: 'Thành phố Hồ Chí Minh', provinceCode: '79', lat: 10.78, lng: 106.69, isDefault: false };
 
 function action(tree: Renderer, label: string): Node {
   const node = tree.root.findAll((item) =>
@@ -133,6 +135,7 @@ beforeEach(() => {
     lat: 10.78, lng: 106.69, district: 'Quận 3', province: 'TP. HCM' }]);
   mockReverse.mockResolvedValue({ formattedAddress: newAddress.line1,
     ward: newAddress.ward, district: newAddress.district, province: newAddress.province });
+  mockProvinces.mockResolvedValue([{ code: 79, name: 'TP. HCM', districts: [{ code: 3, name: 'Quận 3' }] }]);
   mockCreateAddress.mockResolvedValue(newAddress);
   mockGetAddresses.mockResolvedValue([existing, newAddress]);
 });
@@ -141,6 +144,40 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
+it('keeps a confirmed pin blocked until the owner explicitly completes missing administrative fields', async () => {
+  mockReverse.mockResolvedValueOnce({ formattedAddress: newAddress.line1 });
+  const tree = await render();
+  await fillAndPick(tree); await placeAndConfirm(tree);
+  expect(textOf(tree.root)).toContain('Đã xác nhận ghim chính xác');
+  expect(action(tree, 'Lưu địa chỉ mới').props.disabled).toBe(true);
+  await act(async () => { (action(tree, 'Chọn tỉnh/thành').props.onPress as () => void)(); });
+  await act(async () => { (field(tree, 'Tìm khu vực').props.onChangeText as (value: string) => void)('Hồ Chí Minh'); });
+  await act(async () => { (action(tree, 'Chọn khu vực: Thành phố Hồ Chí Minh').props.onPress as () => void)(); });
+  expect(action(tree, 'Lưu địa chỉ mới').props.disabled).toBe(true);
+  await act(async () => { (action(tree, 'Chọn phường/xã').props.onPress as () => void)(); });
+  await act(async () => { (field(tree, 'Tìm khu vực').props.onChangeText as (value: string) => void)('Bến Thành'); });
+  await act(async () => { (action(tree, 'Chọn khu vực: Phường Bến Thành').props.onPress as () => void)(); });
+  const canonicalAddress = { ...newAddress, province: 'Thành phố Hồ Chí Minh', provinceCode: '79', ward: 'Phường Bến Thành', district: 'Phường Bến Thành', districtCode: '26743' };
+  mockCreateAddress.mockResolvedValueOnce(canonicalAddress); mockGetAddresses.mockResolvedValueOnce([existing, canonicalAddress]);
+  expect(action(tree, 'Lưu địa chỉ mới').props.disabled).toBe(false);
+  expect(mockCreateAddress).not.toHaveBeenCalled();
+  await act(async () => { (action(tree, 'Lưu địa chỉ mới').props.onPress as () => void)(); });
+  expect(mockCreateAddress).toHaveBeenCalledTimes(1);
+  expect(mockCreateAddress).toHaveBeenCalledWith(expect.objectContaining({ provinceCode: '79', districtCode: '26743', lat: 10.78, lng: 106.69 }));
+  expect(onSaved).toHaveBeenCalledWith(canonicalAddress, [existing, canonicalAddress]);
+  await act(async () => tree.unmount());
+});
+
+it('uses canonical offline areas without calling the historical proxy', async () => {
+  mockReverse.mockResolvedValueOnce({ formattedAddress: newAddress.line1 });
+  const tree = await render();
+  await fillAndPick(tree); await placeAndConfirm(tree);
+  await act(async () => { (action(tree, 'Chọn tỉnh/thành').props.onPress as () => void)(); });
+  expect(mockProvinces).not.toHaveBeenCalled();
+  expect(action(tree, 'Lưu địa chỉ mới').props.disabled).toBe(true);
+  expect(mockCreateAddress).not.toHaveBeenCalled();
+  await act(async () => tree.unmount());
+});
 it('starts with no confirmed pin and never calls write endpoints on mount or search', async () => {
   const tree = await render();
   expect(action(tree, 'Lưu địa chỉ mới').props.disabled).toBe(true);

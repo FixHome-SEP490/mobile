@@ -7,6 +7,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  BackHandler,
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
@@ -14,6 +15,7 @@ import {
   Image,
   Alert,
   TextInput,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -82,6 +84,7 @@ import {
 } from './technician-quotation-create';
 import {
   createStartRepairController,
+  pressStartRepairFooter,
   describeStartRepairBlockers,
   initialStartRepairState,
   startRepairTarget,
@@ -103,11 +106,11 @@ import {
   type WorkOrderReadinessChecklist,
 } from './technician-work-order-hierarchy';
 import { selectTechnicianWorkflowScene } from './technician-workflow-scene';
+import { technicianWorkflowStages, type TechnicianStageId } from './technician-workflow-stages';
 import StatusBadge from '../../components/StatusBadge';
 import ContactActions from '../../components/ContactActions';
 import OrderNoteCard from '../../components/OrderNoteCard';
 import { serviceOrderStatusView } from './technician-status';
-import { jobProgress, type StepState } from './technician-job-progress';
 import { formatVnd, vndText } from '../../utils/format';
 import { findChatForBooking } from './technician-chat-shortcut';
 import {
@@ -126,39 +129,6 @@ function amountOrNull(value: unknown): string | null {
 
 type DetailStyles = ReturnType<typeof getStyles>;
 type DetailColors = ReturnType<typeof useAppTheme>['colors'];
-
-/** Where the job is in its lifecycle (display only). */
-function JobStepper({ styles, colors, steps }: {
-  styles: DetailStyles;
-  colors: DetailColors;
-  steps: { label: string; state: StepState }[];
-}) {
-  const current = steps.find((step) => step.state === 'current');
-  return (
-    <View
-      style={styles.stepper}
-      accessible
-      accessibilityLabel={current ? `Tiến độ công việc, bước hiện tại: ${current.label}` : 'Tiến độ công việc, đã hoàn thành các bước'}
-    >
-      {steps.map((step, index) => (
-        <View key={step.label} style={styles.stepItem}>
-          <View style={styles.stepDotRow}>
-            <View style={[styles.stepLine, index === 0 && { opacity: 0 }, step.state !== 'todo' && styles.stepLineDone]} />
-            <View style={[styles.stepDot, step.state === 'done' && styles.stepDotDone, step.state === 'current' && styles.stepDotCurrent]}>
-              {step.state === 'done' ? (
-                <Check size={14} color={colors.surface} strokeWidth={3} />
-              ) : step.state === 'current' ? (
-                <View style={styles.stepDotInner} />
-              ) : null}
-            </View>
-            <View style={[styles.stepLine, index === steps.length - 1 && { opacity: 0 }, step.state === 'done' && styles.stepLineDone]} />
-          </View>
-          <Text style={[styles.stepLabel, step.state === 'current' && styles.stepLabelCurrent]}>{step.label}</Text>
-        </View>
-      ))}
-    </View>
-  );
-}
 
 /** Action card that opens on the step the technician is on and folds away otherwise. */
 function CollapsibleCard({ styles, colors, title, defaultOpen, children }: {
@@ -196,6 +166,9 @@ export default function TechnicianOrderDetailScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<DetailRoute>();
   const serviceOrderId = route.params.serviceOrderId;
+  const [stageView, setStageView] = useState<{ orderId: string; stage: TechnicianStageId | 'all' | null; handover: boolean; extras: boolean }>({ orderId: serviceOrderId, stage: null, handover: false, extras: false });
+  const detailsReturnStageRef = useRef<TechnicianStageId | null>(null);
+  const [progressVisible, setProgressVisible] = useState(false);
   const [detailState, setDetailState] = useState({
     order: null as ServiceOrderItem | null,
     loading: true,
@@ -1159,7 +1132,6 @@ export default function TechnicianOrderDetailScreen() {
   const repairOpen = st === 'UNDER_REPAIR' && !order?.completionRequestedAt;
   const completionOpen = st === 'COMPLETED' ||
     (st === 'UNDER_REPAIR' && (!!order?.completionRequestedAt || completionState.requested));
-  const progress = order ? jobProgress(order) : null;
   const statusView = order ? serviceOrderStatusView(order.status) : null;
   const beforeEvidenceStep = selectEvidenceDisplayPriority({
     needsVerify: uploadState.needsVerify,
@@ -1252,9 +1224,9 @@ export default function TechnicianOrderDetailScreen() {
       if (startRepairEligible) {
         return {
           kind: 'start-repair',
-          heading: 'Đơn đang chuyển sang sửa chữa',
-          description: 'Đã check-in có ảnh sản phẩm và đủ điều kiện báo giá; hệ thống tự chuyển đơn sang đang sửa. Tải lại để cập nhật trạng thái.',
-          buttonLabel: 'Tải lại',
+          heading: 'Bắt đầu sửa chữa',
+          description: 'Đã đủ điều kiện theo dữ liệu hiện tại. Xác nhận để gửi yêu cầu bắt đầu sửa chữa.',
+          buttonLabel: startRepairState.needsVerify ? 'Kiểm tra trạng thái' : 'Bắt đầu sửa chữa',
           disabled: refreshing,
         };
       }
@@ -1414,15 +1386,49 @@ export default function TechnicianOrderDetailScreen() {
     arrivalVerified: typeof verifiedOrder?.arrivalVerified === 'boolean'
       ? verifiedOrder.arrivalVerified
       : undefined,
-    completionRequested: verifiedOrder?.completionRequestedAt ? true : undefined,
+    completionRequested: verifiedOrder ? !!verifiedOrder.completionRequestedAt : undefined,
     actionDisabled: sceneActionDisabled,
     actionBusy: sceneActionBusy,
     actionConfirming: sceneActionConfirming,
   });
-  // P1A scope is T04 (ACCEPTED) and T05 (EN_ROUTE, arrival unverified) only.
-  // Any other scene (including neutral) keeps the previous baseline layout.
-  const isStageFocus = !!verifiedOrder && !error &&
-    (workflowScene.sceneId === 'accepted' || workflowScene.sceneId === 'check-in');
+  // Disclosure is keyed by order. Controllers stay mounted across scene changes.
+  const isStageFocus = !!verifiedOrder && !error && workflowScene.sceneId !== 'neutral';
+  const localStage = stageView.orderId === serviceOrderId ? stageView : null;
+  const staged = verifiedOrder ? technicianWorkflowStages(verifiedOrder, workflowScene.sceneId, localStage?.handover, afterUploadState.needsVerify || !!afterUploadState.pending) : { current: 'neutral' as const, steps: [] };
+  const selectedPast = staged.steps.find(step => step.id === localStage?.stage && step.done && step.id !== staged.current);
+  const isAllDetails = isStageFocus && localStage?.stage === 'all';
+  const showAll = !isStageFocus || localStage?.stage === 'all';
+  const activeStage = selectedPast?.id ?? staged.current;
+  const selectStage = (stage: TechnicianStageId | 'all' | null, updates: { handover?: boolean; extras?: boolean } = {}) => setStageView({ orderId: serviceOrderId, stage, handover: localStage?.handover ?? false, extras: localStage?.extras ?? false, ...updates });
+  const openAllDetails = () => {
+    detailsReturnStageRef.current = localStage?.stage === 'all' ? null : (localStage?.stage ?? null);
+    selectStage('all');
+  };
+  const closeAllDetails = useCallback(() => {
+    const returnStage = detailsReturnStageRef.current;
+    detailsReturnStageRef.current = null;
+    setStageView(previous => ({
+      orderId: serviceOrderId,
+      stage: returnStage,
+      handover: previous.orderId === serviceOrderId ? previous.handover : false,
+      extras: previous.orderId === serviceOrderId ? previous.extras : false,
+    }));
+  }, [serviceOrderId]);
+  useEffect(() => {
+    if (!isAllDetails) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      closeAllDetails();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [isAllDetails, closeAllDetails]);
+  const stageVisible = (...ids: TechnicianStageId[]) => showAll || (!selectedPast && ids.includes(activeStage));
+  const sceneTitle = activeStage === 'repair' ? 'Sửa chữa theo phạm vi đã duyệt'
+    : activeStage === 'waiting-acceptance' ? 'Nghiệm thu & thanh toán'
+    : activeStage === 'ready-repair' ? 'Phạm vi đã xác nhận'
+    : activeStage === 'quotation' && existingQuoteStatus !== 'SENT' ? 'Báo giá khảo sát'
+    : workflowScene.title;
+  const showPrimaryAction = showAll || (!selectedPast && activeStage !== 'repair' && activeStage !== 'completed-summary' && !(st === 'COMPLETED' && staged.current !== 'completed-summary'));
 
   // The ONE controller-wired primary-action card (moved, not copied): the exact
   // pre-existing JSX below, now referenced from two mutually exclusive render
@@ -1431,41 +1437,14 @@ export default function TechnicianOrderDetailScreen() {
   // confirmations, or POSTs are impossible. Every button keeps its original
   // onPress/disabled/busy/confirmation wiring; no new handlers or mutations.
   const primaryActionCard = primaryAction ? (
-            <View style={[styles.jobCard, styles.nextStepCard]}>
+            <View style={styles.compactFooterAction}>
               {mainHierarchySections.map((section) => {
-                if (section.kind === 'current-state') {
-                  return (
-                    <View key={section.kind} style={styles.hierarchyStateRow}>
-                      <Text style={styles.nextStepEyebrow}>Trạng thái hiện tại</Text>
-                      <StatusBadge view={section.value} />
-                    </View>
-                  );
-                }
-
-                if (section.kind === 'readiness') {
-                  return (
-                    <View key={section.kind} style={styles.readinessCard}>
-                      <Text style={styles.readinessTitle}>{section.value.title}</Text>
-                      {section.value.items.length > 0 ? (
-                        section.value.items.map((item, index) => (
-                          <Text key={`${index}-${item}`} style={styles.jobMeta}>• {item}</Text>
-                        ))
-                      ) : (
-                        <Text style={styles.jobMeta}>{section.value.emptyMessage}</Text>
-                      )}
-                    </View>
-                  );
-                }
-
                 if (section.kind !== 'primary-action') return null;
                 const action = section.value;
 
                 return (
-                  <View key={section.kind} style={styles.hierarchyAction}>
-                    <Text style={styles.nextStepEyebrow}>Bước tiếp theo</Text>
-                    <Text style={styles.sectionTitle}>{action.heading}</Text>
-                    {!!action.description && <Text style={styles.jobMeta}>{action.description}</Text>}
-                    {!!action.waitingMessage && <Text style={styles.nextStepWait}>{action.waitingMessage}</Text>}
+                  <View key={section.kind} style={styles.compactFooterContent}>
+                    {!!(action.disabled || action.waitingMessage) && <Text numberOfLines={2} style={styles.footerReason}>{action.disabled ? (action.description || action.waitingMessage || 'Chưa thể thực hiện bước này.') : action.waitingMessage}</Text>}
 
                     {action.kind === 'begin-travel' && (
                       <TouchableOpacity
@@ -1538,14 +1517,16 @@ export default function TechnicianOrderDetailScreen() {
                     {action.kind === 'start-repair' && action.buttonLabel && (
                       <TouchableOpacity
                         style={[styles.uploadBtn, styles.nextStepAction]}
-                        onPress={() => { void loaderRef.current?.refresh(true); }}
-                        disabled={!!action.disabled}
+                        onPress={() => { if (startRepairState.needsVerify) onRefresh(); else if (startRepairRef.current) void pressStartRepairFooter(startRepairRef.current, startRepairState.confirming); }}
+                        disabled={!!action.disabled || startRepairState.busy}
                         accessibilityRole="button"
-                        accessibilityLabel="Tải lại trạng thái đơn"
+                        accessibilityLabel={startRepairState.confirming ? 'Xác nhận bắt đầu sửa chữa' : 'Bắt đầu sửa chữa'}
                       >
-                        <Text style={styles.uploadBtnText}>{action.buttonLabel}</Text>
+                        {startRepairState.busy ? <ActivityIndicator size="small" color={colors.surface} /> : <Text style={styles.uploadBtnText}>{startRepairState.confirming ? 'Xác nhận bắt đầu sửa chữa' : action.buttonLabel}</Text>}
                       </TouchableOpacity>
                     )}
+                    {action.kind === 'start-repair' && startRepairState.confirming && <View style={styles.evidenceError}><Text style={styles.jobMeta}>Đơn sẽ chuyển sang trạng thái đang sửa chữa.</Text><TouchableOpacity onPress={() => startRepairRef.current?.cancelConfirm()} disabled={startRepairState.busy} accessibilityRole="button" accessibilityLabel="Hủy xác nhận bắt đầu sửa"><Text style={styles.retryText}>Hủy</Text></TouchableOpacity></View>}
+                    {action.kind === 'await-quotation' && <TouchableOpacity style={[styles.uploadBtn, styles.nextStepAction]} onPress={onRefresh} disabled={refreshing} accessibilityRole="button" accessibilityLabel="Cập nhật báo giá"><Text style={styles.uploadBtnText}>{refreshing ? 'Đang cập nhật…' : 'Cập nhật'}</Text></TouchableOpacity>}
 
                     {action.kind === 'reconcile-after-evidence' && (
                       <TouchableOpacity
@@ -1629,16 +1610,8 @@ export default function TechnicianOrderDetailScreen() {
                       )
                     )}
 
-                    {!!startRepairState.error && (
-                      <View style={styles.evidenceError}>
-                        <Text style={styles.jobMeta}>{startRepairState.error}</Text>
-                      </View>
-                    )}
-                    {!!completionState.error && (
-                      <View style={styles.evidenceError}>
-                        <Text style={styles.jobMeta}>{completionState.error}</Text>
-                      </View>
-                    )}
+                    {!!startRepairState.error && <Text numberOfLines={2} style={styles.footerError}>{startRepairState.error}</Text>}
+                    {!!completionState.error && <Text numberOfLines={2} style={styles.footerError}>{completionState.error}</Text>}
                   </View>
                 );
               })}
@@ -1646,18 +1619,18 @@ export default function TechnicianOrderDetailScreen() {
   ) : null;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
-      <View style={styles.header}>
+      <View style={styles.header} testID={isAllDetails ? 'technician-all-details-header' : undefined}>
         <TouchableOpacity
           style={styles.headerBtn}
-          onPress={() => navigation.goBack()}
+          onPress={() => isAllDetails ? closeAllDetails() : navigation.goBack()}
           accessibilityRole="button"
-          accessibilityLabel="Quay lại"
+          accessibilityLabel={isAllDetails ? 'Đóng toàn bộ chi tiết' : 'Quay lại'}
         >
           <ChevronLeft size={26} color={colors.text} strokeWidth={1.75} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} accessibilityRole="header">Chi tiết công việc</Text>
+        <Text style={styles.headerTitle} accessibilityRole="header">{isAllDetails ? 'Toàn bộ chi tiết' : isStageFocus ? `Bước ${Math.max(1, staged.steps.findIndex(step => step.id === activeStage) + 1)}/${staged.steps.length} · ${sceneTitle}` : 'Chi tiết công việc'}</Text>
         <View style={styles.headerBtn} accessible={false} />
       </View>
 
@@ -1676,7 +1649,11 @@ export default function TechnicianOrderDetailScreen() {
           </TouchableOpacity>
         </View>
       ) : (
+        <>
         <ScrollView
+          testID={isAllDetails ? 'technician-all-details-scroll' : undefined}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
           contentContainerStyle={styles.scrollContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
@@ -1689,22 +1666,58 @@ export default function TechnicianOrderDetailScreen() {
             </View>
           )}
 
-          {isStageFocus && (
-            <View
-              testID="technician-stage-focus"
-              style={styles.stageFocus}
-              accessible
-              accessibilityRole="header"
-              accessibilityLabel={workflowScene.title}
-            >
-              <Text style={styles.stageFocusEyebrow}>Bước hiện tại</Text>
-              <Text style={styles.stageFocusTitle}>{workflowScene.title}</Text>
-              <Text style={styles.stageFocusDescription}>{workflowScene.description}</Text>
+          {isStageFocus && !isAllDetails && (
+            <View testID="technician-stage-focus">
+              <TouchableOpacity style={styles.bannerRetryBtn} accessibilityRole="button" accessibilityLabel="Xem tiến độ công việc" onPress={() => setProgressVisible(true)}><Text style={styles.retryText}>Xem tiến độ</Text></TouchableOpacity>
+              {!selectedPast && <View style={styles.jobCard} testID="technician-current-stage-context">
+                <View style={styles.hierarchyStateRow}><Text style={styles.nextStepEyebrow}>{sceneTitle}</Text>{statusView && <StatusBadge view={statusView} />}</View>
+                {!!primaryAction?.description && <Text style={styles.jobMeta}>{primaryAction.description}</Text>}
+                {activeStage === 'ready-repair' && startRepairBlockers.map((reason) => <Text key={reason} style={styles.jobMeta}>• {reason}</Text>)}
+              </View>}
             </View>
           )}
-          {isStageFocus && primaryActionCard}
+          {isStageFocus && !isAllDetails && (
+            <Modal visible={progressVisible} transparent animationType="slide" onRequestClose={() => setProgressVisible(false)} accessibilityViewIsModal>
+              <View style={styles.progressBackdrop}><View style={styles.progressSheet} testID="technician-stage-progress">
+              <Text style={styles.sectionTitle}>Tiến độ công việc</Text>
+              {staged.steps.map(step => {
+                const current = step.id === staged.current || (step.id === 'repair' && staged.current === 'extras-pending') || (step.id === 'scope' && staged.current === 'ready-repair') || (step.id === 'after-evidence' && ['request-completion', 'completion-readiness'].includes(staged.current));
+                return <TouchableOpacity key={step.id} accessibilityRole="button" accessibilityLabel={`${step.label}, ${current ? 'hiện tại' : step.done ? 'đã ghi nhận, xem lại' : 'chưa đến bước'}`} accessibilityState={{ disabled: !current && !step.done, selected: activeStage === step.id }} disabled={!current && !step.done} style={[styles.stageChip, current && styles.stageChipCurrent]} onPress={() => { setProgressVisible(false); selectStage(current ? null : step.id); }}><Text style={styles.stageChipText}>{step.done ? '✓ ' : current ? '• ' : ''}{step.label}</Text></TouchableOpacity>;
+              })}
+              <TouchableOpacity style={styles.bannerRetryBtn} accessibilityRole="button" accessibilityLabel="Đóng tiến độ" onPress={() => setProgressVisible(false)}><Text style={styles.retryText}>Đóng</Text></TouchableOpacity>
+              </View></View>
+            </Modal>
+          )}
+          {selectedPast && !showAll && (
+            <View style={styles.jobCard} testID="technician-past-stage">
+              <Text style={styles.jobMeta}>Thông tin đã được hệ thống ghi nhận · Chỉ đọc</Text>
+              {selectedPast.id === 'accepted' && <Text style={styles.jobMeta}>{order.serviceName}{order.addressSummary ? ` · ${order.addressSummary}` : ''}</Text>}
+              {selectedPast.id === 'check-in' && <Text style={styles.jobMeta}>Đã xác minh đến nơi bằng GPS</Text>}
+              {selectedPast.id === 'before-evidence' && <Text style={styles.jobMeta}>Đã ghi nhận {order.beforeEvidenceCount} ảnh trước sửa</Text>}
+              {selectedPast.id === 'after-evidence' && <Text style={styles.jobMeta}>Đã ghi nhận {order.afterEvidenceCount} ảnh sau sửa</Text>}
+              {['quotation', 'scope', 'repair'].includes(selectedPast.id) && <><Text style={styles.jobMeta}>{order.scopeDescription || 'Xem các hạng mục đã ghi nhận bên dưới.'}</Text>{quotationItemsList(order).map((item, index) => <Text key={item.id ?? index} style={styles.jobMeta}>{item.description} × {item.quantity} · {amountOrNull(item.lineTotal) ?? '—'}</Text>)}</>}
+              {selectedPast.id === 'scope' && order.pricingMode === 'fixed_price' && <><Text style={styles.jobMeta}>Đơn giá: {amountOrNull(order.fixedUnitPrice) ?? 'Chưa có thông tin'}</Text>{typeof order.quantity === 'number' && <Text style={styles.jobMeta}>Số lượng: {order.quantity}</Text>}</>}
+              {['quotation', 'scope'].includes(selectedPast.id) && quotationItemsList(order).map((item, index) => typeof (item.warrantyTermDays ?? item.warrantyDays) === 'number' ? <Text key={`warranty-${item.id ?? index}`} style={styles.jobMeta}>{item.description} · Bảo hành {item.warrantyTermDays ?? item.warrantyDays} ngày{typeof item.warrantyFee === 'number' ? ` · ${formatVnd(item.warrantyFee)}` : ''}</Text> : null)}
+              <TouchableOpacity style={styles.bannerRetryBtn} accessibilityRole="button" accessibilityLabel="Trở về bước hiện tại" onPress={() => selectStage(null)}><Text style={styles.retryText}>{selectedPast.id === 'scope' ? 'Tiếp tục' : 'Trở về bước hiện tại'}</Text></TouchableOpacity>
+            </View>
+          )}
+          {!isStageFocus && showPrimaryAction && primaryActionCard}
+          {isStageFocus && !selectedPast && activeStage === 'repair' && !showAll && (
+            <View style={styles.jobCard} testID="technician-repair-workspace">
+              <Text style={styles.jobMeta}>{order.scopeDescription || order.serviceName}</Text>
+              <TouchableOpacity style={styles.bannerRetryBtn} accessibilityRole="button" accessibilityLabel="Xem phạm vi đã duyệt" disabled={!staged.steps.find(step => step.id === 'scope')?.done} onPress={() => selectStage('scope')}><Text style={styles.retryText}>Xem phạm vi đã duyệt</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.bannerRetryBtn} accessibilityRole="button" accessibilityLabel="Có phát sinh?" onPress={() => selectStage(null, { extras: !localStage?.extras })}><Text style={styles.retryText}>{localStage?.extras ? 'Đóng đề xuất' : 'Có phát sinh?'}</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.uploadBtn} accessibilityRole="button" accessibilityLabel="Ảnh sau & bàn giao" onPress={() => selectStage(null, { handover: true })}><Text style={styles.uploadBtnText}>Ảnh sau & bàn giao</Text></TouchableOpacity>
+            </View>
+          )}
+          {isStageFocus && !selectedPast && ['quotation', 'extras-pending', 'ready-repair', 'waiting-acceptance'].includes(activeStage) && (
+            <TouchableOpacity style={styles.bannerRetryBtn} accessibilityRole="button" accessibilityLabel="Cập nhật từ hệ thống" disabled={refreshing} onPress={onRefresh}><Text style={styles.retryText}>{refreshing ? 'Đang cập nhật…' : 'Cập nhật từ hệ thống'}</Text></TouchableOpacity>
+          )}
+          {isStageFocus && !selectedPast && localStage?.handover && st === 'UNDER_REPAIR' && !order.completionRequestedAt && <TouchableOpacity style={styles.bannerRetryBtn} accessibilityRole="button" accessibilityLabel="Trở về sửa chữa" onPress={() => selectStage(null, { handover: false })}><Text style={styles.retryText}>Trở về sửa chữa</Text></TouchableOpacity>}
+          {isStageFocus && activeStage === 'completed-summary' && !selectedPast && <View style={styles.jobCard}><Text style={styles.sectionTitle}>Đã hoàn thành</Text><Text style={styles.jobMeta}>Khách đã nghiệm thu · Đã thanh toán</Text></View>}
 
-          {st === 'EN_ROUTE' && order.historical !== true && order.arrivalVerified !== true && (
+          <View style={!(stageVisible('check-in')) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(stageVisible('check-in'))} importantForAccessibility={!(stageVisible('check-in')) ? 'no-hide-descendants' : 'auto'}>
+{st === 'EN_ROUTE' && order.historical !== true && order.arrivalVerified !== true && (
             <View testID="checkin-prearrival" style={styles.checkInPresentation}>
               <Text style={styles.checkInTitle} accessibilityRole="header">Đến nơi, xác nhận rõ</Text>
               <View
@@ -1744,8 +1757,10 @@ export default function TechnicianOrderDetailScreen() {
               </View>
             </View>
           )}
+</View>
 
-          {String(order.status) === 'EN_ROUTE' && order.id === serviceOrderId && order.historical !== true && order.arrivalVerified === true && (
+          <View style={!(stageVisible('before-evidence')) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(stageVisible('before-evidence'))} importantForAccessibility={!(stageVisible('before-evidence')) ? 'no-hide-descendants' : 'auto'}>
+{String(order.status) === 'EN_ROUTE' && order.id === serviceOrderId && order.historical !== true && order.arrivalVerified === true && (
             <View testID="before-evidence-overview" style={styles.beforeOverview}>
               <View style={styles.beforeArrivalBadge}>
                 <ShieldCheck size={16} color={colors.tone.success.text} strokeWidth={1.75} accessible={false} />
@@ -1788,8 +1803,10 @@ export default function TechnicianOrderDetailScreen() {
               )}
             </View>
           )}
+</View>
 
-          {st === 'UNDER_REPAIR' && !error && order.historical !== true && order.id === serviceOrderId && (
+          <View style={!(stageVisible('repair')) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(stageVisible('repair'))} importantForAccessibility={!(stageVisible('repair')) ? 'no-hide-descendants' : 'auto'}>
+{st === 'UNDER_REPAIR' && !error && order.historical !== true && order.id === serviceOrderId && (
             <View testID="repair-overview" style={styles.repairOverview}>
               <View style={styles.repairHero}>
                 <View
@@ -1845,8 +1862,10 @@ export default function TechnicianOrderDetailScreen() {
               </View>
             </View>
           )}
+</View>
 
-          {st === 'ACCEPTED' && order.historical !== true ? (
+          <View style={!(stageVisible('accepted', 'check-in')) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(stageVisible('accepted', 'check-in'))} importantForAccessibility={!(stageVisible('accepted', 'check-in')) ? 'no-hide-descendants' : 'auto'}>
+{st === 'ACCEPTED' && order.historical !== true ? (
             <View style={styles.acceptedOverview}>
               <View testID="accepted-order-hero" style={styles.acceptedHero}>
                 <View
@@ -1910,7 +1929,6 @@ export default function TechnicianOrderDetailScreen() {
                   )}
                 </View>
               )}
-              {progress && <JobStepper styles={styles} colors={colors} steps={progress} />}
             </View>
           ) : (
           <View style={styles.jobCard}>
@@ -1946,11 +1964,12 @@ export default function TechnicianOrderDetailScreen() {
             {!!order.scopeDescription && (
               <Text style={styles.jobMeta}>Phạm vi: {order.scopeDescription}</Text>
             )}
-            {progress && <JobStepper styles={styles} colors={colors} steps={progress} />}
           </View>
           )}
+</View>
 
-          {st === 'UNDER_REPAIR' && !error && order.historical !== true && order.id === serviceOrderId && !order.completionRequestedAt && !completionState.requested && (
+          <View style={!(stageVisible('after-evidence', 'request-completion', 'completion-readiness')) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(stageVisible('after-evidence', 'request-completion', 'completion-readiness'))} importantForAccessibility={!(stageVisible('after-evidence', 'request-completion', 'completion-readiness')) ? 'no-hide-descendants' : 'auto'}>
+{st === 'UNDER_REPAIR' && !error && order.historical !== true && order.id === serviceOrderId && !order.completionRequestedAt && !completionState.requested && (
             <View testID="after-overview" style={styles.afterOverview}>
               <View style={styles.afterHero}>
                 <View
@@ -2002,8 +2021,10 @@ export default function TechnicianOrderDetailScreen() {
               </View>
             </View>
           )}
+</View>
 
-          {st === 'UNDER_REPAIR' && !error && order.historical !== true && order.id === serviceOrderId && completionPendingRequested && (
+          <View style={!(stageVisible('waiting-acceptance')) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(stageVisible('waiting-acceptance'))} importantForAccessibility={!(stageVisible('waiting-acceptance')) ? 'no-hide-descendants' : 'auto'}>
+{st === 'UNDER_REPAIR' && !error && order.historical !== true && order.id === serviceOrderId && completionPendingRequested && (
             <View testID="completion-pending-overview" style={styles.completionPendingOverview}>
               <View style={styles.completionPendingHero}>
                 <View
@@ -2031,8 +2052,10 @@ export default function TechnicianOrderDetailScreen() {
               </View>
             </View>
           )}
+</View>
 
-          {order.arrivalVerified === true && ['EN_ROUTE', 'UNDER_REPAIR'].includes(String(order.status).toUpperCase()) && !order.completionRequestedAt && (
+          <View style={!(showAll) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(showAll)} importantForAccessibility={!(showAll) ? 'no-hide-descendants' : 'auto'}>
+{order.arrivalVerified === true && ['EN_ROUTE', 'UNDER_REPAIR'].includes(String(order.status).toUpperCase()) && !order.completionRequestedAt && (
             <View style={styles.jobCard} testID="replacement-card">
               <Text style={styles.sectionTitle}>Cần thay đổi thợ?</Text>
               {replacementSent ? (
@@ -2064,10 +2087,10 @@ export default function TechnicianOrderDetailScreen() {
               )}
             </View>
           )}
+</View>
 
-          {!isStageFocus && primaryActionCard}
-
-          {secondaryHierarchySection?.kind === 'secondary-actions' && (
+          <View style={!(stageVisible('accepted', 'check-in')) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(stageVisible('accepted', 'check-in'))} importantForAccessibility={!(stageVisible('accepted', 'check-in')) ? 'no-hide-descendants' : 'auto'}>
+{secondaryHierarchySection?.kind === 'secondary-actions' && (
             <View style={styles.quickActionsCard}>
               <Text style={styles.quickActionsTitle} accessibilityRole="header">Liên hệ nhanh</Text>
               {secondaryHierarchySection.value.includes('contact') && (
@@ -2093,14 +2116,20 @@ export default function TechnicianOrderDetailScreen() {
               )}
             </View>
           )}
+</View>
 
-          {order.historical !== true && (
+          <View style={!(stageVisible('accepted', 'repair', 'completion-readiness')) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(stageVisible('accepted', 'repair', 'completion-readiness'))} importantForAccessibility={!(stageVisible('accepted', 'repair', 'completion-readiness')) ? 'no-hide-descendants' : 'auto'}>
+{order.historical !== true && (
             <TechnicianPartsSection orderId={order.id} orderStatus={order.status} />
           )}
+</View>
 
-          <Text style={styles.groupHeading}>Thao tác</Text>
+          <View style={!(showAll) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(showAll)} importantForAccessibility={!(showAll) ? 'no-hide-descendants' : 'auto'}>
+<Text style={styles.groupHeading}>Thao tác</Text>
+</View>
 
-          <CollapsibleCard key={`before-${beforeOpen}`} styles={styles} colors={colors} title="Ảnh trước sửa chữa" defaultOpen={beforeOpen}>
+          <View style={!(stageVisible('before-evidence')) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(stageVisible('before-evidence'))} importantForAccessibility={!(stageVisible('before-evidence')) ? 'no-hide-descendants' : 'auto'}>
+<CollapsibleCard key={`before-${beforeOpen}`} styles={styles} colors={colors} title="Ảnh trước sửa chữa" defaultOpen={beforeOpen}>
             {!canUploadBefore ? (
               <Text style={styles.jobMeta}>Check-in hợp lệ trước khi tải ảnh.</Text>
             ) : uploadState.needsVerify ? (
@@ -2134,7 +2163,7 @@ export default function TechnicianOrderDetailScreen() {
             ) : (
               <View style={styles.uploadBtnRow}>
                 <TouchableOpacity
-                  style={[styles.uploadBtn, { backgroundColor: colors.primaryStrong }]}
+                  style={[[styles.uploadBtn, { backgroundColor: colors.primaryStrong }], isStageFocus && !showAll && styles.sceneHidden]}
                   onPress={onPickCamera}
                   accessibilityRole="button"
                   accessibilityLabel="Chụp ảnh trước sửa chữa"
@@ -2149,8 +2178,10 @@ export default function TechnicianOrderDetailScreen() {
               </View>
             )}
           </CollapsibleCard>
+</View>
 
-          <CollapsibleCard key={`quote-${quoteOpen}`} styles={styles} colors={colors} title={isFixedPriceOrder ? 'Giá cố định' : 'Báo giá'} defaultOpen={quoteOpen}>
+          <View style={!(stageVisible('quotation', 'ready-repair')) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(stageVisible('quotation', 'ready-repair'))} importantForAccessibility={!(stageVisible('quotation', 'ready-repair')) ? 'no-hide-descendants' : 'auto'}>
+<CollapsibleCard key={`quote-${quoteOpen}`} styles={styles} colors={colors} title={isFixedPriceOrder ? 'Giá cố định' : 'Báo giá'} defaultOpen={quoteOpen}>
 
             {order.id === serviceOrderId && order.historical !== true && !error && !refreshing && (
               <View testID="quotation-price-branch" style={styles.quoteBranch}>
@@ -2502,8 +2533,10 @@ export default function TechnicianOrderDetailScreen() {
             )}
 
           </CollapsibleCard>
+</View>
 
-          <CollapsibleCard key={`proposal-${repairOpen}`} styles={styles} colors={colors} title="Đề xuất chi phí phát sinh" defaultOpen={repairOpen}>
+          <View style={!(showAll || (!selectedPast && activeStage === 'repair' && !!localStage?.extras)) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(showAll || (!selectedPast && activeStage === 'repair' && !!localStage?.extras))} importantForAccessibility={!(showAll || (!selectedPast && activeStage === 'repair' && !!localStage?.extras)) ? 'no-hide-descendants' : 'auto'}>
+<CollapsibleCard key={`proposal-${repairOpen}`} styles={styles} colors={colors} title="Đề xuất chi phí phát sinh" defaultOpen={repairOpen}>
             <Text style={styles.jobMeta}>
               Đề xuất thêm một dòng nhân công khi phát sinh ngoài dự kiến.
               Đây là đề xuất, khách cần duyệt, chưa thanh toán.
@@ -2788,8 +2821,10 @@ export default function TechnicianOrderDetailScreen() {
               </View>
             )}
           </CollapsibleCard>
+</View>
 
-          <CollapsibleCard key={`after-${repairOpen}`} styles={styles} colors={colors} title="Ảnh sau sửa chữa" defaultOpen={repairOpen}>
+          <View style={!(stageVisible('after-evidence', 'request-completion', 'completion-readiness', 'extras-pending')) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(stageVisible('after-evidence', 'request-completion', 'completion-readiness', 'extras-pending'))} importantForAccessibility={!(stageVisible('after-evidence', 'request-completion', 'completion-readiness', 'extras-pending')) ? 'no-hide-descendants' : 'auto'}>
+<CollapsibleCard key={`after-${repairOpen}`} styles={styles} colors={colors} title="Ảnh sau sửa chữa" defaultOpen={repairOpen}>
             {!canUploadAfter ? (
               <Text style={styles.jobMeta}>
                 Ảnh sau sửa chữa chỉ tải được khi đơn đang sửa và chưa yêu cầu hoàn thành.
@@ -2825,7 +2860,7 @@ export default function TechnicianOrderDetailScreen() {
             ) : (
               <View style={styles.uploadBtnRow}>
                 <TouchableOpacity
-                  style={[styles.uploadBtn, { backgroundColor: colors.primaryStrong }]}
+                  style={[[styles.uploadBtn, { backgroundColor: colors.primaryStrong }], isStageFocus && !showAll && styles.sceneHidden]}
                   onPress={onPickAfterCamera}
                   accessibilityRole="button"
                   accessibilityLabel="Chụp ảnh sau sửa chữa"
@@ -2840,8 +2875,10 @@ export default function TechnicianOrderDetailScreen() {
               </View>
             )}
           </CollapsibleCard>
+</View>
 
-          <CollapsibleCard key={`completion-${completionOpen}`} styles={styles} colors={colors} title="Nghiệm thu" defaultOpen={completionOpen}>
+          <View style={!(stageVisible('waiting-acceptance', 'completed-summary')) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(stageVisible('waiting-acceptance', 'completed-summary'))} importantForAccessibility={!(stageVisible('waiting-acceptance', 'completed-summary')) ? 'no-hide-descendants' : 'auto'}>
+<CollapsibleCard key={`completion-${completionOpen}`} styles={styles} colors={colors} title="Nghiệm thu" defaultOpen={completionOpen}>
             <Text style={styles.jobMeta}>
               Gửi yêu cầu để khách nghiệm thu. Thanh toán của khách xem ở mục Hóa đơn; khai báo tiền mặt (nếu có) ở thẻ riêng bên dưới.
             </Text>
@@ -2893,12 +2930,18 @@ export default function TechnicianOrderDetailScreen() {
               <Text style={styles.jobMeta}>Điều kiện đang chờ được hiển thị ở thẻ trạng thái hiện tại phía trên.</Text>
             )}
           </CollapsibleCard>
+</View>
 
-          {order.historical !== true && <OrderNoteCard orderId={order.id} />}
+          <View style={!(stageVisible('after-evidence', 'request-completion', 'completion-readiness')) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(stageVisible('after-evidence', 'request-completion', 'completion-readiness'))} importantForAccessibility={!(stageVisible('after-evidence', 'request-completion', 'completion-readiness')) ? 'no-hide-descendants' : 'auto'}>
+{order.historical !== true && <OrderNoteCard orderId={order.id} />}
+</View>
 
-          <Text style={styles.groupHeading}>Chi tiết và lịch sử đơn</Text>
+          <View style={!(showAll) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(showAll)} importantForAccessibility={!(showAll) ? 'no-hide-descendants' : 'auto'}>
+<Text style={styles.groupHeading}>Chi tiết và lịch sử đơn</Text>
+</View>
 
-          <View style={styles.jobCard}>
+          <View style={!(stageVisible('repair', 'ready-repair')) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(stageVisible('repair', 'ready-repair'))} importantForAccessibility={!(stageVisible('repair', 'ready-repair')) ? 'no-hide-descendants' : 'auto'}>
+<View style={styles.jobCard}>
             <Text style={styles.sectionTitle}>Chi phí</Text>
             {sections.laborText !== null && (
               <View style={styles.row}>
@@ -2921,8 +2964,10 @@ export default function TechnicianOrderDetailScreen() {
               <Text style={styles.jobMeta}>Chưa có thông tin giá</Text>
             )}
           </View>
+</View>
 
-          {sections.hasQuotation && order.quotation && (
+          <View style={!(showAll || activeStage === 'scope' || stageVisible('ready-repair', 'repair')) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(showAll || activeStage === 'scope' || stageVisible('ready-repair', 'repair'))} importantForAccessibility={!(showAll || activeStage === 'scope' || stageVisible('ready-repair', 'repair')) ? 'no-hide-descendants' : 'auto'}>
+{sections.hasQuotation && order.quotation && (
             <View style={styles.jobCard}>
               <Text style={styles.sectionTitle}>Báo giá</Text>
               <Text style={styles.jobMeta}>Trạng thái: {quoteStatusLabel(sections.quotationStatus)}</Text>
@@ -2943,8 +2988,10 @@ export default function TechnicianOrderDetailScreen() {
               )}
             </View>
           )}
+</View>
 
-          {sections.hasTimeline && (
+          <View style={!(showAll) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(showAll)} importantForAccessibility={!(showAll) ? 'no-hide-descendants' : 'auto'}>
+{sections.hasTimeline && (
             <View style={styles.jobCard}>
               <Text style={styles.sectionTitle}>Tiến độ</Text>
               {order.timeline!.map((entry, index) => (
@@ -2955,8 +3002,10 @@ export default function TechnicianOrderDetailScreen() {
               ))}
             </View>
           )}
+</View>
 
-          {(sections.beforeCount !== null || sections.afterCount !== null) && (
+          <View style={!(showAll) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(showAll)} importantForAccessibility={!(showAll) ? 'no-hide-descendants' : 'auto'}>
+{(sections.beforeCount !== null || sections.afterCount !== null) && (
             <View style={styles.jobCard}>
               <Text style={styles.sectionTitle}>Bằng chứng ảnh</Text>
               {sections.beforeCount !== null && (
@@ -2967,8 +3016,10 @@ export default function TechnicianOrderDetailScreen() {
               )}
             </View>
           )}
+</View>
 
-          <View style={styles.jobCard}>
+          <View style={!(showAll || (!!selectedPast && ['before-evidence','after-evidence'].includes(selectedPast.id))) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(showAll || (!!selectedPast && ['before-evidence','after-evidence'].includes(selectedPast.id)))} importantForAccessibility={!(showAll || (!!selectedPast && ['before-evidence','after-evidence'].includes(selectedPast.id))) ? 'no-hide-descendants' : 'auto'}>
+<View style={styles.jobCard}>
             <Text style={styles.sectionTitle}>Ảnh thực tế</Text>
             {evidenceState.loading && evidenceState.photos.length === 0 && !evidenceState.error ? (
               <Text style={styles.jobMeta}>Đang tải ảnh bằng chứng…</Text>
@@ -2991,7 +3042,7 @@ export default function TechnicianOrderDetailScreen() {
                   )}
                   <Text style={styles.jobMeta}>{evidenceTypeLabel(photo.type)}</Text>
                   {!!photo.note && <Text style={styles.jobMeta}>{photo.note}</Text>}
-                  <TouchableOpacity
+                  {!selectedPast && <TouchableOpacity
                     onPress={() => handleDeleteEvidencePhoto(photo.id)}
                     disabled={deletingEvidenceId === photo.id}
                     accessibilityRole="button"
@@ -3002,7 +3053,7 @@ export default function TechnicianOrderDetailScreen() {
                     ) : (
                       <Text style={[styles.retryText, { color: colors.error }]}>Xóa ảnh</Text>
                     )}
-                  </TouchableOpacity>
+                  </TouchableOpacity>}
                 </View>
               ))
             )}
@@ -3020,8 +3071,10 @@ export default function TechnicianOrderDetailScreen() {
               </TouchableOpacity>
             )}
           </View>
+</View>
 
-          <View style={styles.jobCard}>
+          <View style={!(stageVisible('waiting-acceptance', 'completed-summary')) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(stageVisible('waiting-acceptance', 'completed-summary'))} importantForAccessibility={!(stageVisible('waiting-acceptance', 'completed-summary')) ? 'no-hide-descendants' : 'auto'}>
+<View style={styles.jobCard}>
             <Text style={styles.sectionTitle}>Hóa đơn</Text>
             {invoiceState.loading && !invoiceState.invoice && !invoiceState.error ? (
               <Text style={styles.jobMeta}>Đang tải hóa đơn…</Text>
@@ -3076,8 +3129,10 @@ export default function TechnicianOrderDetailScreen() {
               </View>
             )}
           </View>
+</View>
 
-          {cashEligible && (
+          <View style={!(stageVisible('waiting-acceptance', 'completed-summary')) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(stageVisible('waiting-acceptance', 'completed-summary'))} importantForAccessibility={!(stageVisible('waiting-acceptance', 'completed-summary')) ? 'no-hide-descendants' : 'auto'}>
+{cashEligible && (
             <View style={styles.jobCard}>
               {/* K08_TECHNICIAN_CASH_SETTLEMENT */}
               <Text style={styles.sectionTitle}>Thanh toán tiền mặt</Text>
@@ -3125,9 +3180,11 @@ export default function TechnicianOrderDetailScreen() {
               )}
             </View>
           )}
+</View>
 
-          <View style={styles.jobCard}>
-            <Text style={styles.sectionTitle}>Chi phí phát sinh</Text>
+          <View style={!(stageVisible('extras-pending', 'repair')) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(stageVisible('extras-pending', 'repair'))} importantForAccessibility={!(stageVisible('extras-pending', 'repair')) ? 'no-hide-descendants' : 'auto'}>
+<View style={styles.jobCard}>
+              <Text style={styles.sectionTitle}>Chi phí phát sinh</Text>
             {costsState.loading && costsState.requests.length === 0 && !costsState.error ? (
               <Text style={styles.jobMeta}>Đang tải chi phí phát sinh…</Text>
             ) : costsState.requests.length === 0 && !costsState.error ? (
@@ -3170,7 +3227,11 @@ export default function TechnicianOrderDetailScreen() {
               </View>
             )}
           </View>
+</View>
+          {isStageFocus && !isAllDetails && <TouchableOpacity style={styles.bannerRetryBtn} accessibilityRole="button" accessibilityLabel="Xem toàn bộ chi tiết" onPress={openAllDetails}><Text style={styles.retryText}>Xem toàn bộ chi tiết</Text></TouchableOpacity>}
         </ScrollView>
+        {isStageFocus && !isAllDetails && showPrimaryAction && <View style={styles.stickyFooter} testID="technician-sticky-footer">{primaryActionCard}</View>}
+        </>
       )}
     </SafeAreaView>
   );
@@ -3312,6 +3373,18 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   stepLabelCurrent: { color: colors.text, fontWeight: '700' },
 
   nextStepCard: { borderColor: colors.primaryTint, backgroundColor: colors.primarySoft },
+  sceneHidden: { display: 'none' },
+  stageNavigation: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  stickyFooter: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.divider },
+  compactFooterAction: { gap: 4 },
+  compactFooterContent: { gap: 4 },
+  footerReason: { fontSize: 12, lineHeight: 16, color: colors.textSecondary },
+  footerError: { fontSize: 12, lineHeight: 16, color: colors.tone.danger.text },
+  progressBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15, 23, 42, 0.35)' },
+  progressSheet: { maxHeight: '80%', padding: 20, gap: 8, backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+  stageChip: { minHeight: 44, maxWidth: '100%', paddingHorizontal: 10, justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: colors.border },
+  stageChipCurrent: { backgroundColor: colors.primarySoft, borderColor: colors.primaryStrong },
+  stageChipText: { fontSize: 12, lineHeight: 18, color: colors.text, flexShrink: 1 },
   stageFocus: {
     backgroundColor: colors.primarySoft,
     borderRadius: 14,

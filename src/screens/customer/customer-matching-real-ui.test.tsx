@@ -238,7 +238,7 @@ describe('Customer Matching real UI polish (C-RUI5)', () => {
     const tree = await mountLoadedScreen(makeBooking(), []);
     expect(tree.root.findByProps({ testID: 'matching-empty-none' })).toBeDefined();
     expect(allText(tree)).toContain('Chưa có kỹ thuật viên phù hợp');
-    expect(allText(tree)).toContain('Hiện chưa có kỹ thuật viên phù hợp');
+    expect(allText(tree)).not.toContain('Hiện chưa có kỹ thuật viên phù hợp');
     const refresh = tree.root.findAllByType(TouchableOpacity).find(
       (button) => button.props.accessibilityLabel === 'Làm mới trạng thái'
         || String(button.findAllByType(Text).map((node) => String(node.props.children ?? '')).join('')).includes('Làm mới'),

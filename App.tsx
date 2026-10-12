@@ -1,21 +1,25 @@
 // App.tsx - FixHome Mobile Entry Point
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { MenuProvider } from 'react-native-popup-menu';
 import AppNavigator from './src/navigation/AppNavigator';
-import { ActivityIndicator, View } from 'react-native';
+import BootstrapSplash from './src/components/BootstrapSplash';
+import { hasSeenCustomerFirstRun } from './src/services/customer-first-run';
 import { storageService } from './src/services/storage.service';
 import { authApi } from './src/api/auth.api';
 import { useAuthStore } from './src/store/auth.store';
 
 export default function App() {
   const isLoading = useAuthStore(state => state.isLoading);
+  const [firstRunSeen, setFirstRunSeen] = useState<boolean | null>(null);
   useEffect(() => {
     let mounted = true;
     void (async () => {
       try {
+        const seen = await hasSeenCustomerFirstRun();
+        if (mounted) setFirstRunSeen(seen);
         const token = await storageService.getToken();
         if (token) {
           const user = await authApi.getProfile();
@@ -31,13 +35,13 @@ export default function App() {
     })();
     return () => { mounted = false; };
   }, []);
-  if (isLoading) return <View style={{ flex: 1, justifyContent: 'center' }}><ActivityIndicator /></View>;
+  if (isLoading || firstRunSeen === null) return <BootstrapSplash />;
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <BottomSheetModalProvider>
         <MenuProvider>
           <StatusBar style="auto" />
-          <AppNavigator />
+          <AppNavigator firstRunSeen={firstRunSeen} />
         </MenuProvider>
       </BottomSheetModalProvider>
     </GestureHandlerRootView>

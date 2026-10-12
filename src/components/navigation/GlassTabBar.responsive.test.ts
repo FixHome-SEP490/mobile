@@ -62,12 +62,12 @@ describe('GlassTabBar responsive layout', () => {
 
     expect(technicianSource).toContain("import { GlassTabBar } from '../components/navigation/GlassTabBar';");
     expect(technicianSource).toContain('<GlassTabBar {...props} showAssistant={false} technicianResponsive />');
-    expect(technicianSource).toContain('Home, MailOpen, Briefcase, Bell, User');
+    expect(technicianSource).toContain('Home, MailOpen, Briefcase, Wallet, User');
     expect(technicianSource.match(/<Tab\.Screen/g)).toHaveLength(5);
     expect(technicianSource).not.toContain('TechnicianResponsiveTabBar');
     expect(customerSource).toContain('<CustomerAnimatedBottomBar {...props} mode="authenticated" />');
     expect(technicianSource).toContain('useTechnicianLocationPing(!!user)');
-    expect(technicianSource).toContain('name="Notifications"');
+    expect(technicianSource).toContain('name="Wallet"');
   });
 
   it('keeps an empty route set from dividing by zero', () => {

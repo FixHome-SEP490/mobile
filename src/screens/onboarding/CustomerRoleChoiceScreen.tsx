@@ -40,11 +40,9 @@ export default function CustomerRoleChoiceScreen() {
           <Image source={require('../../../assets/icon.png')} style={styles.brandIcon} />
           <Text style={styles.brand}>Fix<Text style={{ color: colors.primaryStrong }}>Home</Text></Text>
         </View>
-        <Text style={styles.kicker}>FixHome, cùng một mái nhà</Text>
         <Text style={styles.title} accessibilityRole="header">
           Hôm nay, bạn{'\n'}cần điều gì?
         </Text>
-        <Text style={styles.subtitle}>Chọn hành trình phù hợp. Khám phá dịch vụ hoặc đăng nhập để tiếp tục công việc.</Text>
 
         <TouchableOpacity
           style={styles.roleCard}
@@ -53,7 +51,7 @@ export default function CustomerRoleChoiceScreen() {
           accessibilityLabel="Tiếp tục với vai trò khách hàng"
           disabled={leaving}
           accessibilityState={{ disabled: leaving }}
-          onPress={() => navigation.navigate('CustomerOnboarding')}
+          onPress={() => void goGuestHome()}
         >
           <View style={styles.iconTile}>
             <House size={24} color={colors.primaryStrong} />
@@ -61,10 +59,9 @@ export default function CustomerRoleChoiceScreen() {
           <View style={styles.roleText}>
             <Text style={styles.roleCaption}>Khách hàng</Text>
             <Text style={styles.roleTitle}>Tôi cần sửa chữa</Text>
-            <Text style={styles.roleHint}>Đặt dịch vụ và chăm sóc nhà.</Text>
             <View style={styles.roleLink}><Text style={styles.roleLinkText}>Tiếp tục với khách hàng</Text><ArrowRight size={16} color={colors.primaryStrong} /></View>
           </View>
-          <Image source={CUSTOMER_UI_ARTWORK.homeHero} style={styles.roleArt} resizeMode="contain" accessible={false} />
+          <Image source={CUSTOMER_UI_ARTWORK.roleChoiceCustomer} style={styles.roleArt} resizeMode="contain" accessible={false} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -74,7 +71,7 @@ export default function CustomerRoleChoiceScreen() {
           accessibilityLabel="Tiếp tục với vai trò kỹ thuật viên"
           disabled={leaving}
           accessibilityState={{ disabled: leaving }}
-          onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Auth' }] })}
+          onPress={() => { void markCustomerFirstRunSeen(); navigation.navigate('Auth'); }}
         >
           <View style={[styles.iconTile, styles.technicianIcon]}>
             <Wrench size={24} color={colors.surface} />
@@ -82,10 +79,9 @@ export default function CustomerRoleChoiceScreen() {
           <View style={styles.roleText}>
             <Text style={[styles.roleCaption, styles.technicianText]}>Kỹ thuật viên</Text>
             <Text style={[styles.roleTitle, styles.technicianText]}>Tôi là kỹ thuật viên</Text>
-            <Text style={[styles.roleHint, styles.technicianText]}>Đăng nhập và hoàn thiện hồ sơ để nhận việc.</Text>
             <View style={styles.roleLink}><Text style={[styles.roleLinkText, styles.technicianText]}>Tiếp tục với kỹ thuật viên</Text><ArrowRight size={16} color={colors.surface} /></View>
           </View>
-          <Image source={CUSTOMER_UI_ARTWORK.aircon} style={styles.roleArt} resizeMode="contain" accessible={false} />
+          <Image source={CUSTOMER_UI_ARTWORK.roleChoiceTechnician} style={styles.roleArt} resizeMode="contain" accessible={false} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -114,9 +110,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) =>
     brandRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 32 },
     brandIcon: { width: 32, height: 32, borderRadius: 8 },
     brand: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.text, letterSpacing: -1 },
-    kicker: { fontSize: fontSize.xs, color: colors.primaryDark, marginBottom: 16 },
     title: { fontSize: fontSize.xxxl, lineHeight: 42, letterSpacing: -1, fontWeight: '700', color: colors.text, marginBottom: 16 },
-    subtitle: { fontSize: fontSize.sm, lineHeight: 24, color: colors.textSecondary, marginBottom: spacing.lg },
     roleCard: {
       alignItems: 'flex-start',
       backgroundColor: colors.surface,
@@ -136,13 +130,13 @@ const getStyles = (colors: any, spacing: any, fontSize: any) =>
       justifyContent: 'center',
       marginBottom: spacing.md,
     },
-    roleText: { zIndex: 1 },
+    // Keep the full-width copy below the illustration, including on 320dp screens.
+    roleText: { zIndex: 1, paddingTop: 56 },
     roleCaption: { fontSize: fontSize.xs, fontWeight: '600', color: colors.primaryDark, marginBottom: 8 },
     roleTitle: { fontSize: fontSize.xl, fontWeight: '700', color: colors.text },
-    roleHint: { maxWidth: 188, fontSize: fontSize.sm, lineHeight: 22, color: colors.textSecondary, marginTop: 8 },
     roleLink: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16 },
     roleLinkText: { fontSize: fontSize.xs, fontWeight: '600', color: colors.primaryStrong },
-    roleArt: { position: 'absolute', width: 150, height: 150, right: -36, bottom: 8 },
+    roleArt: { position: 'absolute', width: 120, height: 120, right: 12, top: 12 },
     technicianCard: { backgroundColor: colors.text, borderColor: colors.text },
     technicianIcon: { backgroundColor: colors.primaryStrong },
     technicianText: { color: colors.surface },

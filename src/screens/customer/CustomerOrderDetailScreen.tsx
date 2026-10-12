@@ -32,7 +32,6 @@ import { customerBookingsUserId } from './customer-bookings-history';
 import {
   orderNextAction,
   orderNextActionButtonLabel,
-  timelineEntryLabel,
   type OrderNextActionKind,
 } from './customer-order-next-action';
 import {
@@ -99,6 +98,8 @@ import {
 } from './customer-order-cancel';
 import { vnDateTimeString } from '../../utils/vn-time';
 import { findChatForBooking } from '../technician/technician-chat-shortcut';
+import CustomerOrderTimeline from './CustomerOrderTimeline';
+import { actionDetailSection, customerActiveOrderSection, customerOrderTimeline, type OrderDetailSection } from './customer-order-timeline';
 
 type DetailRoute = RouteProp<RootStackParamList, 'CustomerOrderDetail'>;
 
@@ -113,15 +114,30 @@ export default function CustomerOrderDetailScreen() {
   const route = useRoute<DetailRoute>();
   const serviceOrderId = route.params.serviceOrderId;
   const detailScrollRef = useRef<ScrollView | null>(null);
+  const [detailView, setDetailView] = useState<{ orderId: string; section: OrderDetailSection | 'all' } | null>(null);
+  const pendingScroll = useRef<{ orderId: string; kind: OrderNextActionKind } | null>(null);
+  const openDetailSection = (section: OrderDetailSection) => {
+    pendingScroll.current = null;
+    setDetailView({ orderId: serviceOrderId, section });
+  };
   const actionSectionYRef = useRef<Partial<Record<OrderNextActionKind, number>>>({});
   const markActionSection = useCallback((kind: OrderNextActionKind) => (event: LayoutChangeEvent) => {
     actionSectionYRef.current[kind] = event.nativeEvent.layout.y;
-  }, []);
+    if (pendingScroll.current?.orderId === serviceOrderId && pendingScroll.current.kind === kind && event.nativeEvent.layout.height > 0) {
+      pendingScroll.current = null;
+      detailScrollRef.current?.scrollTo({ y: Math.max(0, event.nativeEvent.layout.y - 12), animated: true });
+    }
+  }, [serviceOrderId]);
   const scrollToActionSection = useCallback((kind: OrderNextActionKind) => {
+    const section = actionDetailSection(kind);
+    const alreadyOpen = detailView?.orderId === serviceOrderId && (detailView.section === 'all' || detailView.section === section);
+    pendingScroll.current = { orderId: serviceOrderId, kind };
+    if (!alreadyOpen) setDetailView({ orderId: serviceOrderId, section });
     const y = actionSectionYRef.current[kind];
-    if (typeof y !== 'number') return;
+    if (!alreadyOpen || typeof y !== 'number') return;
+    pendingScroll.current = null;
     detailScrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
-  }, []);
+  }, [detailView, serviceOrderId]);
   const [detailState, setDetailState] = useState(initialOrderDetailState);
   const { order, loading, refreshing, error } = detailState;
   const [evidenceState, setEvidenceState] = useState(initialEvidenceState);
@@ -138,6 +154,7 @@ export default function CustomerOrderDetailScreen() {
   const [reviewState, setReviewState] = useState(initialCustomerOrderReviewState);
   const [paymentState, setPaymentState] = useState(initialCustomerPaymentState);
   const [orderCancelState, setOrderCancelState] = useState(initialCustomerOrderCancelState);
+  const [progressVisible, setProgressVisible] = useState(false);
   const invoiceViewRef = useRef(invoiceState.invoice);
   useEffect(() => { invoiceViewRef.current = invoiceState.invoice; }, [invoiceState.invoice]);
   const latestRef = useRef({ order, serviceOrderId });
@@ -804,24 +821,34 @@ export default function CustomerOrderDetailScreen() {
   const attributionNote = technicianAttributionNote(order);
   // Universal top summary (display-only): reuses the eligibility outcomes
   // already computed below/above instead of inventing new rules.
-  const orderSummaryAction = order && order.id === serviceOrderId
-    ? orderNextAction({
-        status: order.status,
-        quoteAwaitingDecision: sections.quoteAwaitingDecision,
-        additionalCostPending: underRepairTask?.kind === 'additional_cost_pending',
-        completionRequested:
-          underRepairTask?.kind === 'completion_requested' ||
-          (!!order.completionRequestedAt && !order.customerConfirmed),
-        paymentPending: paymentEligible != null,
-        reviewable: reviewEligible != null && !reviewState.review,
-      })
-    : null;
-  // P3B7 decision visibility mirrors the controller gate: active customer
-  // order in EN_ROUTE with the latest quotation SENT.
   const canDecideQuote = !!order &&
     order.id === serviceOrderId &&
     String(order.status).toUpperCase() === 'EN_ROUTE' &&
     sections.quoteAwaitingDecision;
+  const orderSummaryAction = order && order.id === serviceOrderId
+    ? orderNextAction({
+        status: order.status,
+        quoteAwaitingDecision: canDecideQuote,
+        additionalCostPending: costsState.requests.some(canDecideCost),
+        completionRequested: confirmCompletionEligible != null,
+        paymentPending: paymentEligible != null,
+        reviewable: reviewEligible != null && !reviewState.review,
+      })
+    : null;
+  const onCustomerFooterAction = () => {
+    if (orderSummaryAction && !['track', 'none'].includes(orderSummaryAction.kind)) scrollToActionSection(orderSummaryAction.kind);
+    else onRefresh();
+  };
+  const activeSection = order && order.id === serviceOrderId
+    ? customerActiveOrderSection(order, orderSummaryAction?.kind ?? 'none')
+    : 'overview';
+  const detailSectionStyle = (section: OrderDetailSection): { display: 'flex' | 'none' } => ({
+    display: detailView?.orderId === serviceOrderId
+      ? (detailView.section === 'all' || detailView.section === section ? 'flex' : 'none')
+      : (activeSection === section ? 'flex' : 'none'),
+  });
+  // P3B7 decision visibility mirrors the controller gate: active customer
+  // order in EN_ROUTE with the latest quotation SENT.
   const warrantyOptions = order?.quotation ? eligibleWarrantyOptions(order.quotation.items) : [];
   const selectedWarrantyFee = warrantyOptions
     .filter((option) => decisionState.selectedIds.includes(option.itemId))
@@ -855,7 +882,7 @@ export default function CustomerOrderDetailScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
         <TouchableOpacity
@@ -867,7 +894,7 @@ export default function CustomerOrderDetailScreen() {
         >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} accessibilityRole="header">Chi tiết đơn sửa chữa</Text>
+        <Text style={styles.headerTitle} accessibilityRole="header">{`Bước · ${orderSummaryAction?.title ?? 'Chi tiết đơn sửa chữa'}`}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -921,16 +948,17 @@ export default function CustomerOrderDetailScreen() {
                 {getStatusBadge(order.status).label}
               </Text>
             </View>
-            <Text style={styles.title} accessibilityRole="header">Đơn #{order.code || order.id.slice(0, 8)}</Text>
-            <Text style={styles.meta}>{order.serviceName || 'Dịch vụ sửa chữa'}</Text>
+            <Text style={styles.title} accessibilityRole="header">{order.serviceName || 'Dịch vụ sửa chữa'}</Text>
+            <Text style={styles.meta}>Đơn #{order.code || order.id.slice(0, 8)}</Text>
             {!!order.scheduledAt && (
               <Text style={styles.meta}>
                 Lịch hẹn: {vnDateTimeString(order.scheduledAt)}
               </Text>
             )}
             {!!order.addressSummary && (
-              <Text style={styles.meta}>📍 {order.addressSummary}</Text>
+              <Text style={styles.meta} numberOfLines={2}>📍 {order.addressSummary}</Text>
             )}
+            <View style={detailSectionStyle('overview')}>
             {sections.quantity !== null && (
               <Text style={styles.meta}>Số lượng: {sections.quantity}</Text>
             )}
@@ -940,56 +968,15 @@ export default function CustomerOrderDetailScreen() {
             {!!order.bookingDescription && (
               <Text style={styles.meta}>Mô tả yêu cầu: {order.bookingDescription}</Text>
             )}
+            </View>
           </View>
 
-          {sections.hasTimeline && (
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Tiến độ</Text>
-              {order.timeline!.map((entry, index) => (
-                <View key={`${entry.status}-${entry.timestamp}-${index}`} style={styles.timelineRow}>
-                  <Text style={styles.timelineTitle}>{timelineEntryLabel(entry.title, entry.status)}</Text>
-                  <Text style={styles.timelineTime}>{vnDateTimeString(entry.timestamp)}</Text>
-                </View>
-              ))}
-            </View>
-          )}
+          <TouchableOpacity style={styles.progressLink} accessibilityRole="button" accessibilityLabel="Xem tiến độ đơn hàng" onPress={() => setProgressVisible(true)}><Text style={styles.retryText}>Xem tiến độ</Text></TouchableOpacity>
 
-          {!!orderSummaryAction && (
-            <View
-              style={[
-                styles.card,
-                {
-                  borderWidth: 1,
-                  borderColor: colors.primary,
-                  backgroundColor: colors.primarySoft,
-                },
-              ]}
-              accessibilityRole="summary"
-            >
-              <Text style={[styles.meta, { fontWeight: '900', color: colors.primaryStrong }]}>
-                BẠN CẦN LÀM GÌ?
-              </Text>
-              <Text style={styles.actionSummaryTitle}>{orderSummaryAction.title}</Text>
-              <Text style={styles.actionSummaryDetail}>{orderSummaryAction.detail}</Text>
-              {!!orderNextActionButtonLabel(orderSummaryAction.kind) && (
-                <TouchableOpacity
-                  testID="order-detail-primary-next-action"
-                  onPress={() => scrollToActionSection(orderSummaryAction.kind)}
-                  accessibilityRole="button"
-                  accessibilityLabel={orderNextActionButtonLabel(orderSummaryAction.kind) ?? undefined}
-                  style={[styles.actionPrimaryButton, { backgroundColor: colors.primaryStrong }]}
-                >
-                  <Text style={styles.actionPrimaryButtonText}>
-                    {orderNextActionButtonLabel(orderSummaryAction.kind)}
-                  </Text>
-                  <Ionicons name="arrow-down" size={17} color={colors.surface} />
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
+
 
           {String(order.status).toUpperCase() === 'COMPLETED' && (
-            <View style={styles.card}>
+            <View style={[styles.card, detailSectionStyle('warranty')]} testID="order-detail-section-warranty-4">
               <View style={[styles.row, { alignItems: 'flex-start' }]}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.sectionTitle} accessibilityRole="header">Bảo hành sau sửa chữa</Text>
@@ -1015,7 +1002,7 @@ export default function CustomerOrderDetailScreen() {
               onLayout={underRepairTask.kind === 'completion_requested'
                 ? markActionSection('confirm_completion')
                 : undefined}
-              style={[
+              style={[[
                 styles.card,
                 {
                   borderWidth: 1,
@@ -1028,7 +1015,7 @@ export default function CustomerOrderDetailScreen() {
                       ? '#FFFBEB'
                       : colors.primarySoft,
                 },
-              ]}
+              ], detailSectionStyle('completion')]} testID="order-detail-section-completion-5"
             >
               <Text style={[styles.meta, { fontWeight: '800', color: '#1D4ED8' }]}>
                 BƯỚC TIẾP THEO
@@ -1112,7 +1099,7 @@ export default function CustomerOrderDetailScreen() {
           )}
 
           {sections.hasTechnician && (
-            <View style={styles.card}>
+            <View style={[styles.card, detailSectionStyle('technician')]} testID="order-detail-section-technician-6">
               <Text style={styles.sectionTitle}>Kỹ thuật viên ghi nhận trên đơn</Text>
               <Text style={styles.title}>{sections.technicianName}</Text>
               {!!sections.technicianPhone && (
@@ -1134,7 +1121,7 @@ export default function CustomerOrderDetailScreen() {
             </View>
           )}
 
-          <View style={styles.card}>
+          <View style={[styles.card, detailSectionStyle('payment')]} testID="order-detail-section-payment-7">
             <Text style={styles.sectionTitle}>Chi phí</Text>
             {sections.laborText !== null && (
               <View style={styles.row}>
@@ -1165,7 +1152,7 @@ export default function CustomerOrderDetailScreen() {
           </View>
 
           {sections.hasQuotation && order.quotation && (
-            <View onLayout={markActionSection('decide_quote')} style={styles.card}>
+            <View onLayout={markActionSection('decide_quote')} style={[styles.card, detailSectionStyle('quote')]} testID="order-detail-section-quote-8">
               <Text style={styles.sectionTitle}>Báo giá</Text>
               <Text style={styles.meta}>Trạng thái: {quoteStatusLabel(sections.quotationStatus)}</Text>
               {quotationItemsList(order).length === 0 ? (
@@ -1298,7 +1285,7 @@ export default function CustomerOrderDetailScreen() {
           )}
 
           {(sections.beforeCount !== null || sections.afterCount !== null) && (
-            <View style={styles.card}>
+            <View style={[styles.card, detailSectionStyle('evidence')]} testID="order-detail-section-evidence-9">
               <Text style={styles.sectionTitle}>Bằng chứng ảnh</Text>
               {sections.beforeCount !== null && (
                 <Text style={styles.meta}>Ảnh trước sửa chữa: {sections.beforeCount}</Text>
@@ -1309,7 +1296,7 @@ export default function CustomerOrderDetailScreen() {
             </View>
           )}
 
-          <View style={styles.card}>
+          <View style={[styles.card, detailSectionStyle('evidence')]} testID="order-detail-section-evidence-10">
             <Text style={styles.sectionTitle}>Ảnh thực tế</Text>
             {evidenceState.loading && evidenceState.photos.length === 0 && !evidenceState.error ? (
               <Text style={styles.meta}>Đang tải ảnh bằng chứng...</Text>
@@ -1367,7 +1354,7 @@ export default function CustomerOrderDetailScreen() {
             )}
           </View>
 
-          <View style={[styles.card, styles.invoiceCard]}>
+          <View style={[[styles.card, styles.invoiceCard], detailSectionStyle('payment')]} testID="order-detail-section-payment-11">
             <View style={styles.invoiceHeader}>
               <View style={styles.invoiceHeading}>
                 <Text style={styles.invoiceEyebrow}>CHI TIẾT CHI PHÍ</Text>
@@ -1464,7 +1451,7 @@ export default function CustomerOrderDetailScreen() {
             )}
           </View>
           {orderCancelEligible && (
-            <View style={styles.card}>
+            <View style={[styles.card, detailSectionStyle('cancel')]} testID="order-detail-section-cancel-12">
               {/* K09_B_CUSTOMER_ORDER_CANCEL */}
               <Text style={styles.sectionTitle}>Hủy đơn sửa chữa</Text>
               <Text style={styles.meta}>
@@ -1559,7 +1546,7 @@ export default function CustomerOrderDetailScreen() {
           )}
 
           {paymentEligible && (
-            <View onLayout={markActionSection('pay')} style={[styles.card, styles.paymentCard]}>
+            <View onLayout={markActionSection('pay')} style={[[styles.card, styles.paymentCard], detailSectionStyle('payment')]} testID="order-detail-section-payment-13">
               {/* K08_CUSTOMER_PAYMENT */}
               <View style={styles.paymentHeader}>
                 <View style={styles.invoiceHeading}>
@@ -1717,7 +1704,7 @@ export default function CustomerOrderDetailScreen() {
             </View>
           )}
           {reviewEligible && (
-            <View onLayout={markActionSection('review')} style={styles.card}>
+            <View onLayout={markActionSection('review')} style={[styles.card, detailSectionStyle('review')]} testID="order-detail-section-review-14">
               {/* K09_A_SERVER_REVIEW */}
               <Text style={styles.sectionTitle}>Đánh giá dịch vụ</Text>
               {reviewState.loading && !reviewState.review ? (
@@ -1828,7 +1815,7 @@ export default function CustomerOrderDetailScreen() {
             </View>
           )}
 
-          <View onLayout={markActionSection('decide_cost')} style={styles.card}>
+          <View onLayout={markActionSection('decide_cost')} style={[styles.card, detailSectionStyle('cost')]} testID="order-detail-section-cost-15">
             <Text style={styles.sectionTitle}>Chi phí phát sinh</Text>
             {costsState.loading && costsState.requests.length === 0 && !costsState.error ? (
               <Text style={styles.meta}>Đang tải chi phí phát sinh...</Text>
@@ -1953,12 +1940,35 @@ export default function CustomerOrderDetailScreen() {
             )}
           </View>
 
-          <CustomerSupportCasesSection
+          <View style={detailSectionStyle('support')}>
+            <CustomerSupportCasesSection
             orderId={serviceOrderId}
             orderStatus={order.status}
             completedAt={order.completedAt ?? null}
           />
+          </View>
+          <TouchableOpacity testID="order-detail-expand-all" accessibilityRole="button" accessibilityLabel="Xem toàn bộ chi tiết"
+            style={[styles.actionPrimaryButton, { borderWidth: 1, borderColor: colors.primaryStrong, backgroundColor: colors.surface }]}
+            onPress={() => setProgressVisible(true)}>
+            <Text style={[styles.actionPrimaryButtonText, { color: colors.primaryStrong }]}>Xem toàn bộ chi tiết</Text>
+          </TouchableOpacity>
         </ScrollView>
+        <View style={styles.stickyFooter} testID="customer-sticky-footer">
+          <Text style={styles.footerReason}>{orderSummaryAction?.title ?? 'Trạng thái đơn được cập nhật từ hệ thống'}</Text>
+          <TouchableOpacity style={[styles.footerButton, { backgroundColor: colors.primaryStrong }]} onPress={onCustomerFooterAction} accessibilityRole="button" accessibilityLabel={orderSummaryAction ? orderNextActionButtonLabel(orderSummaryAction.kind) ?? 'Cập nhật trạng thái' : 'Cập nhật trạng thái'} accessibilityState={{ disabled: refreshing, busy: refreshing }} disabled={refreshing}>
+            <Text style={styles.footerButtonText}>{orderSummaryAction ? orderNextActionButtonLabel(orderSummaryAction.kind) ?? 'Cập nhật trạng thái' : 'Cập nhật trạng thái'}</Text>
+          </TouchableOpacity>
+        </View>
+        <Modal visible={progressVisible} transparent animationType="slide" onRequestClose={() => setProgressVisible(false)} accessibilityViewIsModal>
+          <View style={styles.progressBackdrop}><View style={styles.progressSheet}>
+            <Text style={styles.sectionTitle}>Tiến độ đơn sửa chữa</Text>
+            <CustomerOrderTimeline key={serviceOrderId} steps={customerOrderTimeline(order, orderSummaryAction?.kind)} onOpenSection={() => undefined} actionLabel={null} actionTitle={orderSummaryAction?.title} onAction={() => undefined} />
+            <ScrollView style={styles.progressSections} keyboardShouldPersistTaps="handled">{([
+              ['overview', 'Thông tin đơn'], ['technician', 'Kỹ thuật viên'], ['quote', 'Báo giá'], ['cost', 'Chi phí phát sinh'], ['evidence', 'Ảnh bằng chứng'], ['completion', 'Nghiệm thu'], ['payment', 'Thanh toán'], ['review', 'Đánh giá'], ['warranty', 'Bảo hành'], ['cancel', 'Hủy đơn'], ['support', 'Hỗ trợ'],
+            ] as [OrderDetailSection, string][]).map(([section, label]) => <TouchableOpacity key={section} style={styles.progressSectionButton} accessibilityRole="button" accessibilityLabel={`Mở ${label}`} onPress={() => { setProgressVisible(false); openDetailSection(section); }}><Text style={styles.retryText}>{label}</Text></TouchableOpacity>)}</ScrollView>
+            <TouchableOpacity style={styles.progressClose} accessibilityRole="button" accessibilityLabel="Đóng tiến độ" onPress={() => setProgressVisible(false)}><Text style={styles.retryText}>Đóng</Text></TouchableOpacity>
+          </View></View>
+        </Modal>
         <Modal
           visible={!!selectedEvidencePhoto}
           transparent
@@ -2002,6 +2012,16 @@ const getStyles = (colors: any) => StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  stickyFooter: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, gap: 6, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
+  footerReason: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
+  footerButton: { minHeight: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+  footerButtonText: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.surface },
+  progressLink: { minHeight: 44, justifyContent: 'center', alignItems: 'flex-start', paddingHorizontal: 12 },
+  progressBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15, 23, 42, 0.35)' },
+  progressSheet: { maxHeight: '85%', padding: 20, gap: 8, backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+  progressClose: { minHeight: 44, justifyContent: 'center', alignItems: 'center' },
+  progressSections: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  progressSectionButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 10, backgroundColor: colors.primarySoft },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
