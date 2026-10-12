@@ -109,7 +109,8 @@ export default function CustomerRepairHistoryScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerCopy}>
-          <Text style={styles.headerTitle}>Lịch sử sửa chữa</Text>
+          <Text style={styles.headerOverline}>LỊCH SỬ & BẢO HÀNH</Text>
+          <Text style={styles.headerTitle} accessibilityRole="header">Lịch sử sửa chữa</Text>
           <Text style={styles.headerSubtitle}>Những đơn đã sửa chữa và hoàn tất</Text>
         </View>
       </View>
@@ -121,6 +122,7 @@ export default function CustomerRepairHistoryScreen() {
             value={query}
             onChangeText={setQuery}
             placeholder="Tìm dịch vụ, kỹ thuật viên, mã đơn..."
+            accessibilityLabel="Tìm trong lịch sử sửa chữa đã tải"
             placeholderTextColor={colors.muted}
             style={styles.searchInput}
             returnKeyType="search"
@@ -130,6 +132,7 @@ export default function CustomerRepairHistoryScreen() {
               onPress={() => setQuery('')}
               accessibilityRole="button"
               accessibilityLabel="Xóa tìm kiếm"
+              style={styles.searchResetButton}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Ionicons name="close-circle" size={20} color={colors.muted} />
@@ -137,6 +140,12 @@ export default function CustomerRepairHistoryScreen() {
           )}
         </View>
       </View>
+
+      {!!query.trim() && !loading && rows.length < total && (
+        <Text style={styles.searchScopeNote}>
+          Tìm kiếm chỉ áp dụng cho các đơn đã tải. Bạn có thể tải thêm để tìm tiếp.
+        </Text>
+      )}
 
       {loading ? (
         <View style={styles.centerState}>
@@ -154,14 +163,19 @@ export default function CustomerRepairHistoryScreen() {
               <Ionicons name="alert-circle-outline" size={20} color={colors.warning} />
               <View style={styles.errorCopy}>
                 <Text style={styles.errorText}>{error}</Text>
-                <TouchableOpacity onPress={() => void loadFirstPage(true)} accessibilityRole="button">
+                <TouchableOpacity
+                  onPress={() => void loadFirstPage(true)}
+                  style={styles.retryButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Thử tải lại lịch sử sửa chữa"
+                >
                   <Text style={styles.retryText}>Thử lại</Text>
                 </TouchableOpacity>
               </View>
             </View>
           )}
 
-          {rows.length === 0 && !error ? (
+          {rows.length === 0 && error ? null : rows.length === 0 ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyIcon}>
                 <Ionicons name="checkmark-done-outline" size={30} color={colors.primary} />
@@ -174,14 +188,22 @@ export default function CustomerRepairHistoryScreen() {
               <View style={styles.emptyIcon}>
                 <Ionicons name="search-outline" size={30} color={colors.primary} />
               </View>
-              <Text style={styles.emptyTitle}>Không tìm thấy kết quả</Text>
-              <Text style={styles.stateText}>Thử tìm theo dịch vụ, kỹ thuật viên hoặc mã đơn khác.</Text>
+              <Text style={styles.emptyTitle}>
+                {rows.length < total ? 'Không có kết quả trong lịch sử đã tải' : 'Không tìm thấy kết quả'}
+              </Text>
+              <Text style={styles.stateText}>
+                {rows.length < total
+                  ? 'Có thể còn kết quả ở các trang chưa tải.'
+                  : 'Thử tìm theo dịch vụ, kỹ thuật viên hoặc mã đơn khác.'}
+              </Text>
             </View>
           ) : (
             <>
               <View style={styles.listHeading}>
-                <Text style={styles.sectionTitle}>Đã hoàn tất</Text>
-                <Text style={styles.sectionCount}>{visibleRows.length}{total > visibleRows.length ? `/${total}` : ''}</Text>
+                <Text style={styles.sectionTitle} accessibilityRole="header">Đã hoàn tất</Text>
+                <Text style={styles.sectionCount}>
+                  {query.trim() ? `${visibleRows.length} trong ${rows.length} đã tải` : `Đã tải ${rows.length}/${total}`}
+                </Text>
               </View>
               {visibleRows.map((item) => {
                 const totalText = repairHistoryTotal(item);
@@ -232,6 +254,8 @@ export default function CustomerRepairHistoryScreen() {
               style={styles.loadMoreButton}
               onPress={() => void onLoadMore()}
               disabled={loadingMore}
+              accessibilityLabel="Tải thêm lịch sử sửa chữa"
+              accessibilityState={{ disabled: loadingMore }}
               accessibilityRole="button"
             >
               {loadingMore ? (
@@ -267,6 +291,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     marginRight: 4,
   },
   headerCopy: { flex: 1 },
+  headerOverline: { fontSize: 12, lineHeight: 16, fontWeight: '700', letterSpacing: 1, color: colors.textSecondary },
   headerTitle: { fontSize: 20, fontWeight: '800', color: colors.text },
   headerSubtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   searchWrap: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8 },
@@ -282,7 +307,9 @@ const getStyles = (colors: any) => StyleSheet.create({
     backgroundColor: colors.surface,
   },
   searchInput: { flex: 1, fontSize: 14, color: colors.text, paddingVertical: 0 },
-  scrollContent: { padding: 16, paddingBottom: 32 },
+  searchResetButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  searchScopeNote: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, paddingHorizontal: 18, paddingTop: 4, paddingBottom: 7 },
+  scrollContent: { padding: 16, paddingBottom: 56, flexGrow: 1 },
   centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 32 },
   stateText: { fontSize: 13, lineHeight: 19, color: colors.textSecondary, textAlign: 'center' },
   emptyState: { alignItems: 'center', paddingHorizontal: 28, paddingVertical: 56 },
@@ -309,6 +336,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   errorCopy: { flex: 1 },
   errorText: { fontSize: 13, lineHeight: 18, color: colors.text, marginBottom: 6 },
   retryText: { fontSize: 13, fontWeight: '700', color: colors.primary },
+  retryButton: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start', paddingHorizontal: 2 },
   listHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   sectionTitle: { fontSize: 14, fontWeight: '800', color: colors.text },
   sectionCount: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
@@ -319,6 +347,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderColor: colors.border,
     padding: 16,
     marginBottom: 12,
+    minHeight: 84,
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   statusPill: {
@@ -328,9 +357,9 @@ const getStyles = (colors: any) => StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: colors.tone?.success?.bg ?? '#DCFCE7',
   },
-  statusText: { fontSize: 11, fontWeight: '700', color: colors.success },
+  statusText: { fontSize: 12, fontWeight: '700', color: colors.tone?.success?.text ?? colors.success },
   dateText: { fontSize: 12, color: colors.textSecondary },
   serviceTitle: { fontSize: 16, lineHeight: 22, fontWeight: '800', color: colors.text, marginBottom: 10 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 },
@@ -343,7 +372,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.divider,
   },
-  referenceLabel: { fontSize: 10, textTransform: 'uppercase', fontWeight: '700', color: colors.muted },
+  referenceLabel: { fontSize: 12, lineHeight: 17, textTransform: 'uppercase', fontWeight: '700', color: colors.textSecondary },
   referenceText: { fontSize: 12, fontWeight: '700', color: colors.text, marginTop: 2 },
   totalBlock: { flex: 1, alignItems: 'flex-end' },
   totalText: { fontSize: 14, fontWeight: '800', color: colors.primaryStrong, marginTop: 2 },
