@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-12 20:45 (UTC+7) · Người cập nhật (git): foxonworld · Nhánh: integration/mobile-v2-gate-review
+> Cập nhật lần cuối: 2026-10-12 21:10 (UTC+7) · Người cập nhật (git): foxonworld · Nhánh: integration/mobile-v2-gate-review
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -143,8 +143,10 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 ### Đối chiếu source SEP-132 trên nhánh integration
 
 - `ordersApi.getMyOrdersPage` từ chối body không có mảng danh sách; mảng rỗng hợp lệ vẫn trả trang rỗng. Giữ `bookingMode`, `slot`, `customerNote`, `departAvailableAt` và parser tiền/status hiện hành.
-- `GlassTabBar` giữ liquid glass tap/pan và indicator, nối helper responsive đã có qua `technicianResponsive` mặc định tắt; Customer animation giữ nguyên. Navigator hiện chưa bật tùy chọn responsive.
+- `GlassTabBar` giữ liquid glass tap/pan và indicator; `TechnicianNavigator` bật `technicianResponsive`, giữ năm tab, Notifications/badge và `useTechnicianLocationPing`. Customer dùng `CustomerAnimatedBottomBar` với bốn tab và lựa chọn đặt lịch thường/AI; lựa chọn chỉ điều hướng, không tạo booking.
 - Root thêm `TechnicianNotifications` từ screen đã được theo dõi, giữ `TechnicianServiceAreas` và tab Notifications.
+- Login có lối vào giới thiệu vai trò → ba trang Customer onboarding → Guest Home. Guest chỉ mở danh mục công khai; AI, đặt lịch và các tab riêng chuyển về Auth. Điểm khởi động Auth, khôi phục phiên và role handoff giữ nguyên; first-run chỉ lưu preference không bí mật, chưa tự đổi cold start.
+- Port giao diện Customer AI input/chat, lịch sử sửa chữa, bảo hành và hỗ trợ; Technician Home, lời mời, thông báo và lịch tuần. Home/lời mời/lịch tuần vẫn dùng API dev và helper hiện hành; không thêm `getTechnicianJobs*`, historical normalizer hay sửa money parser. Notifications chỉ cập nhật trạng thái đọc sau API xác nhận và chặn GET cũ ghi đè trạng thái mới.
 
 ## 4. Kiến trúc và thư mục chính
 
@@ -185,7 +187,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 8. Việc đang dở và rủi ro đã biết
 
-- SEP-132 HOLD: integration chưa có `src/screens/onboarding/CustomerRoleChoiceScreen.tsx`, `src/screens/onboarding/CustomerOnboardingScreen.tsx`, `src/screens/guest/CustomerGuestHomeScreen.tsx`, `src/services/customer-first-run.ts`; chưa port routes hoặc thay role guard. Auth owner cần xác nhận route handoff/guard trước khi tích hợp.
+- SEP-132 HOLD: đã có giới thiệu/Guest qua nút Login; tự mở first-run lúc cold start, reset khi logout và thay role guard/handoff vẫn chờ Auth owner. Customer Profile/address/upload, Booking Create/Detail/Matching/Order WIP và Technician Jobs/history/KYC/finance WIP chưa port; các màn dev hiện hành vẫn còn.
 - SEP-132 HOLD: `toMoney`, amount/quote/payment/status parser và test null-money cần Finance owner phê duyệt; chưa port Technician historical normalizer và các GET jobs phụ thuộc normalizer. Nhãn Customer `showTabLabels` chưa port vì chưa có bằng chứng tương thích runtime.
 - SEP-132: Web parity và thiết bị/E2E CHƯA KIỂM CHỨNG; không khởi động Expo/backend trong phiên đối chiếu source.
 
@@ -199,6 +201,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-12 21:10 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | Port UI demo hai vai trò, giới thiệu/Guest qua Login và hai thanh tab, giữ API dev, role handoff, các gate Auth/Finance và thiết bị chưa kiểm chứng.
 - 2026-10-12 20:45 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | Đối chiếu source SEP-132: page fail-closed, glass responsive opt-in, route thông báo thợ và các gate Auth/Finance còn chờ.
 
 - 2026-10-09 00:17 (UTC+7) | ToanAltF4 | feat/technician-certificates | Đăng ký thợ: chứng chỉ không bắt buộc (bản công chứng), câu nhắc đến trụ sở sau khi nộp hồ sơ.
