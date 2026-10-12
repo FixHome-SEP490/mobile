@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
@@ -32,6 +32,7 @@ import { prepareCustomerNotificationAction } from './customer-notification-actio
 
 export default function CustomerNotificationsScreen() {
   const { colors, spacing, fontSize, isDark } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const styles = getStyles(colors, spacing, fontSize);
   const handleScroll = useScrollHideTabBar();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -44,6 +45,7 @@ export default function CustomerNotificationsScreen() {
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [resolvingReferenceId, setResolvingReferenceId] = useState<string | null>(null);
   const loadingMoreRef = useRef(false);
+  const readRequestsRef = useRef(new Map<string, Promise<void>>());
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -97,15 +99,20 @@ export default function CustomerNotificationsScreen() {
   }, [loading, pageMeta, refreshing]);
 
   const [markingAll, setMarkingAll] = useState(false);
+  const [markAllError, setMarkAllError] = useState<string | null>(null);
+  const loadedUnreadCount = notifications.filter((item) => !item.isRead).length;
 
   const onMarkAllRead = async () => {
     if (markingAll) return;
     setMarkingAll(true);
+    setMarkAllError(null);
     try {
       await notificationsApi.readAll();
       setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
+      setMarkAllError(null);
     } catch (error) {
       console.error('Lỗi khi đánh dấu đã đọc tất cả:', error);
+      setMarkAllError('Không thể đánh dấu tất cả đã đọc. Vui lòng thử lại.');
     } finally {
       setMarkingAll(false);
     }
@@ -126,9 +133,18 @@ export default function CustomerNotificationsScreen() {
             )),
           );
         },
-        markReadRemote: notificationsApi.readNotification,
+        markReadRemote: (id) => {
+          const pending = readRequestsRef.current.get(id);
+          if (pending) return pending;
+          const request = notificationsApi.readNotification(id).finally(() => {
+            readRequestsRef.current.delete(id);
+          });
+          readRequestsRef.current.set(id, request);
+          return request;
+        },
         onMarkReadError: (error) => {
           console.error('Lỗi khi đánh dấu đã đọc:', error);
+          setMarkAllError('Không thể đánh dấu thông báo đã đọc. Vui lòng thử lại.');
         },
         getSupportCase: supportCasesApi.getMine,
       });
@@ -209,8 +225,9 @@ export default function CustomerNotificationsScreen() {
         activeOpacity={0.7}
         disabled={resolvingReferenceId === item.id}
         accessibilityRole="button"
-        accessibilityLabel={`Mở thông báo: ${item.title}`}
-        accessibilityState={{ busy: resolvingReferenceId === item.id }}
+        accessibilityLabel={`${isUnread ? 'Chưa đọc' : 'Đã đọc'}. ${item.title || 'Thông báo mới'}. ${item.body || item.message || ''}`}
+        accessibilityState={{ busy: resolvingReferenceId === item.id, disabled: resolvingReferenceId === item.id }}
+        accessibilityHint="Mở nội dung liên quan nếu thông báo có liên kết hợp lệ"
         onPress={() => void onNotificationPress(item)}
       >
         <View style={[styles.iconContainer, { backgroundColor: renderIconBackground(item.type) }]}>
@@ -219,7 +236,7 @@ export default function CustomerNotificationsScreen() {
         </View>
         <View style={styles.cardContent}>
           <View style={styles.cardTopRow}>
-            <Text style={[styles.title, isUnread && styles.unreadText]} numberOfLines={1}>
+            <Text style={[styles.title, isUnread && styles.unreadText]} numberOfLines={2} ellipsizeMode="tail">
               {item.title || 'Thông báo mới'}
             </Text>
             {!!item.createdAt && (
@@ -262,7 +279,7 @@ export default function CustomerNotificationsScreen() {
         </View>
         <Text style={styles.emptyTitle}>Chưa có thông báo nào</Text>
         <Text style={styles.emptyDesc}>
-          Khi có cập nhật về dịch vụ hoặc ưu đãi, thông báo sẽ hiển thị tại đây.
+          Khi có cập nhật về lịch hẹn, đơn sửa chữa hoặc yêu cầu hỗ trợ, thông báo sẽ hiển thị tại đây.
         </Text>
       </View>
     );
@@ -280,7 +297,7 @@ export default function CustomerNotificationsScreen() {
       return (
         <View style={styles.loadMoreFooter} accessibilityRole="alert">
           <Text style={styles.errorText}>{loadMoreError}</Text>
-          <TouchableOpacity onPress={() => void onLoadMore()} accessibilityRole="button">
+          <TouchableOpacity onPress={() => void onLoadMore()} accessibilityRole="button" accessibilityLabel="Thử tải thêm thông báo" style={styles.inlineRetryBtn}>
             <Text style={styles.retryText}>Thử tải lại</Text>
           </TouchableOpacity>
         </View>
@@ -295,20 +312,31 @@ export default function CustomerNotificationsScreen() {
       
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Thông báo</Text>
+        <View style={styles.headerCopy}>
+          <Text style={styles.headerTitle} accessibilityRole="header">Thông báo</Text>
+          {!loading && <Text style={styles.headerSubtitle}>{loadedUnreadCount} chưa đọc · {notifications.length} đã tải</Text>}
+
+        </View>
         <TouchableOpacity
           style={[styles.markAllBtn, markingAll && { opacity: 0.6 }]}
           activeOpacity={0.7}
           onPress={onMarkAllRead}
           disabled={markingAll}
+          accessibilityRole="button"
+          accessibilityLabel="Đánh dấu tất cả thông báo đã đọc"
+          accessibilityState={{ disabled: markingAll, busy: markingAll }}
         >
           <Ionicons name="checkmark-done-outline" size={18} color={colors.primary} />
           <Text style={styles.markAllText}>Đã đọc tất cả</Text>
         </TouchableOpacity>
       </View>
 
+      {!!markAllError && <Text style={styles.markAllError} accessibilityRole="alert">{markAllError}</Text>}
       {loading && !refreshing ? (
-        <CustomerSkeleton variant="notification" rows={4} />
+        <View style={styles.loadingWrap}>
+          <Text style={styles.loadingText}>Đang tải thông báo…</Text>
+          <CustomerSkeleton variant="notification" rows={4} />
+        </View>
       ) : (
         <FlatList
           data={notifications}
@@ -318,7 +346,7 @@ export default function CustomerNotificationsScreen() {
             loadError && notifications.length > 0 ? (
               <View style={styles.errorBanner} accessibilityRole="alert">
                 <Text style={styles.errorText}>{loadError}</Text>
-                <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button">
+                <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button" accessibilityLabel="Thử tải lại thông báo" style={styles.inlineRetryBtn}>
                   <Text style={styles.retryText}>Thử lại</Text>
                 </TouchableOpacity>
               </View>
@@ -328,7 +356,7 @@ export default function CustomerNotificationsScreen() {
           ListFooterComponent={renderFooter}
           onEndReached={() => void onLoadMore()}
           onEndReachedThreshold={0.4}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: 88 + Math.max(insets.bottom, 16) }]}
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
@@ -356,12 +384,23 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  headerCopy: { flex: 1, minWidth: 0, gap: 3 },
+  headerOverline: { fontSize: 12, lineHeight: 16, fontWeight: '700', letterSpacing: 1, color: colors.textSecondary },
+  headerSubtitle: { fontSize: 12, lineHeight: 17, color: colors.textSecondary },
+  unreadPill: { alignSelf: 'flex-start', backgroundColor: colors.primarySoft, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginTop: 2 },
+  unreadPillText: { fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.primaryStrong ?? colors.primary },
+  markAllError: { fontSize: 13, lineHeight: 19, color: colors.error, paddingHorizontal: 16, paddingVertical: 10 },
+  loadingWrap: { flex: 1, paddingTop: 14 },
+  loadingText: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, paddingHorizontal: 16, paddingBottom: 8 },
   headerTitle: {
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '700',
     color: colors.text,
   },
   markAllBtn: {
+    minHeight: 44,
+    flexShrink: 0,
+    justifyContent: 'center',
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.primarySoft,
@@ -375,6 +414,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontWeight: '600',
     color: colors.primary,
   },
+  inlineRetryBtn: { minHeight: 44, minWidth: 88, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 12, borderRadius: 10 },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -390,14 +430,15 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     padding: 16,
     borderRadius: 16,
     marginBottom: 12,
-    shadowColor: '#000',
+    minHeight: 76,
+    shadowColor: colors.border,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.01,
     shadowRadius: 8,
-    elevation: 2,
+    elevation: 0,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'transparent',
+    borderColor: colors.border,
   },
   unreadCard: {
     backgroundColor: colors.background,
@@ -424,6 +465,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     borderColor: colors.surface,
   },
   cardContent: {
+    minWidth: 0,
     flex: 1,
   },
   cardTopRow: {
@@ -434,10 +476,12 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     marginBottom: 4,
   },
   title: {
+    flexShrink: 1,
+    lineHeight: 22,
     flex: 1,
     fontSize: 15,
     fontWeight: '600',
-    color: '#334155',
+    color: colors.text,
   },
   unreadText: {
     fontWeight: '800',
@@ -449,7 +493,9 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     lineHeight: 18,
   },
   timeText: {
-    fontSize: 11,
+    flexShrink: 0,
+    lineHeight: 16,
+    fontSize: 12,
     color: colors.muted,
     fontWeight: '500',
   },
@@ -470,7 +516,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   emptyTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#334155',
+    color: colors.text,
     marginBottom: 8,
   },
   emptyDesc: {
@@ -485,16 +531,21 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     marginBottom: 12,
     gap: 8,
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
+    backgroundColor: colors.tone.warning.bg,
     borderRadius: 8,
   },
   errorText: {
+
     fontSize: 13,
     color: colors.primary,
     textAlign: 'center',
     lineHeight: 18,
   },
   retryBtn: {
+    minHeight: 44,
+    minWidth: 104,
+    justifyContent: 'center',
+    alignItems: 'center',
     padding: 12,
     marginTop: 8,
   },
