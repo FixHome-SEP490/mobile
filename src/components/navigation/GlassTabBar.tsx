@@ -87,6 +87,59 @@ const AnimatedTabIcon = ({
   );
 };
 
+const AnimatedTabLabel = ({
+  index,
+  translateX,
+  tabWidth,
+  title,
+}: {
+  index: number;
+  translateX: SharedValue<number>;
+  tabWidth: number;
+  title: string;
+}) => {
+  const activeOpacityStyle = useAnimatedStyle(() => {
+    const indicatorCenter = translateX.value + tabWidth / 2;
+    const tabCenter = (index * tabWidth) + tabWidth / 2;
+    const distance = Math.abs(indicatorCenter - tabCenter);
+    const opacity = interpolate(distance, [0, tabWidth / 1.2], [1, 0], Extrapolation.CLAMP);
+    return { opacity, position: 'absolute', top: 0, left: 0, right: 0 };
+  });
+
+  const idleOpacityStyle = useAnimatedStyle(() => {
+    const indicatorCenter = translateX.value + tabWidth / 2;
+    const tabCenter = (index * tabWidth) + tabWidth / 2;
+    const distance = Math.abs(indicatorCenter - tabCenter);
+    const opacity = interpolate(distance, [0, tabWidth / 1.2], [0, 1], Extrapolation.CLAMP);
+    return { opacity, position: 'absolute', top: 0, left: 0, right: 0 };
+  });
+
+  return (
+    <View pointerEvents="none" style={styles.tabLabelContainer}>
+      <Animated.Text
+        accessible={false}
+        adjustsFontSizeToFit
+        ellipsizeMode="tail"
+        minimumFontScale={0.75}
+        numberOfLines={1}
+        style={[styles.tabLabel, styles.tabLabelIdle, idleOpacityStyle]}
+      >
+        {title}
+      </Animated.Text>
+      <Animated.Text
+        accessible={false}
+        adjustsFontSizeToFit
+        ellipsizeMode="tail"
+        minimumFontScale={0.75}
+        numberOfLines={1}
+        style={[styles.tabLabel, styles.tabLabelActive, activeOpacityStyle]}
+      >
+        {title}
+      </Animated.Text>
+    </View>
+  );
+};
+
 // Hook tùy chỉnh để đồng bộ state từ React Navigation vào Reanimated SharedValue
 // Việc tách hook này giúp vượt qua cơ chế kiểm tra gắt gao của React Compiler (tránh lỗi "This value cannot be modified")
 function useSyncTabState(
@@ -121,7 +174,8 @@ export const GlassTabBar = ({
   navigation,
   showAssistant = true,
   technicianResponsive = false,
-}: BottomTabBarProps & { showAssistant?: boolean; technicianResponsive?: boolean }) => {
+  showTabLabels = false,
+}: BottomTabBarProps & { showAssistant?: boolean; technicianResponsive?: boolean; showTabLabels?: boolean }) => {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const tabCount = state.routes.length;
@@ -279,27 +333,40 @@ export const GlassTabBar = ({
                />
             </Animated.View>
 
-            {/* Hàng Icon Overlay */}
+            {/* Hàng nội dung tab: icon và nhãn tùy chọn */}
             <View style={styles.iconsRow} pointerEvents="none" accessibilityRole="tablist">
-              {state.routes.map((route, index) => (
-                <View
-                  key={route.key}
-                  style={styles.tabSlot}
-                  accessible
-                  accessibilityRole="tab"
-                  accessibilityLabel={descriptors[route.key].options.tabBarAccessibilityLabel ?? descriptors[route.key].options.title ?? route.name}
-                  accessibilityState={{ selected: state.index === index }}
-                  accessibilityActions={[{ name: 'activate' }]}
-                  onAccessibilityAction={() => navigateToTab(index)}
-                >
-                  <AnimatedTabIcon 
-                    index={index} 
-                    translateX={translateX} 
-                    tabWidth={tabWidth} 
-                    options={descriptors[route.key].options} 
-                  />
-                </View>
-              ))}
+              {state.routes.map((route, index) => {
+                const options = descriptors[route.key].options;
+                const title = options.title;
+
+                return (
+                  <View
+                    key={route.key}
+                    style={[styles.tabSlot, showTabLabels && styles.tabSlotWithLabels]}
+                    accessible
+                    accessibilityRole="tab"
+                    accessibilityLabel={options.tabBarAccessibilityLabel ?? title ?? route.name}
+                    accessibilityState={{ selected: state.index === index }}
+                    accessibilityActions={[{ name: 'activate' }]}
+                    onAccessibilityAction={() => navigateToTab(index)}
+                  >
+                    <AnimatedTabIcon
+                      index={index}
+                      translateX={translateX}
+                      tabWidth={tabWidth}
+                      options={options}
+                    />
+                    {showTabLabels && title ? (
+                      <AnimatedTabLabel
+                        index={index}
+                        translateX={translateX}
+                        tabWidth={tabWidth}
+                        title={title}
+                      />
+                    ) : null}
+                  </View>
+                );
+              })}
             </View>
           </BlurView>
         </View>
@@ -389,6 +456,31 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  tabSlotWithLabels: {
+    justifyContent: 'flex-start',
+    paddingTop: 6,
+  },
+  tabLabelContainer: {
+    position: 'absolute',
+    bottom: 8,
+    left: 2,
+    right: 2,
+    height: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    lineHeight: 12,
+    textAlign: 'center',
+  },
+  tabLabelActive: {
+    color: '#FFFFFF',
+  },
+  tabLabelIdle: {
+    color: '#475569',
   },
   iconWrapper: {
     alignItems: 'center',

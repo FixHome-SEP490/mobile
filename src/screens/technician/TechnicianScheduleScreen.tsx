@@ -44,6 +44,8 @@ export default function TechnicianScheduleScreen() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const aliveRef = useRef(true);
+  // Once a server page confirms historical access, never reinsert its former full DTO this mount.
+  const revokedOrderIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     aliveRef.current = true;
@@ -55,11 +57,20 @@ export default function TechnicianScheduleScreen() {
   const load = useCallback(async () => {
     try {
       const [all, off] = await Promise.all([
-        fetchAllOrders((page, size) => ordersApi.getMyOrdersPage(page, size)),
+        fetchAllOrders(
+          (page, size) => ordersApi.getTechnicianJobsPage(page, size),
+          undefined,
+          (ids) => {
+            if (!aliveRef.current) return;
+            for (const id of ids) revokedOrderIdsRef.current.add(id);
+            // A verified revocation must survive failure of either GET in Promise.all.
+            setOrders((previous) => previous.filter((item) => !revokedOrderIdsRef.current.has(item.id)));
+          },
+        ),
         technicianProfileApi.getMyTimeOff(),
       ]);
       if (!aliveRef.current) return;
-      setOrders(all.orders);
+      setOrders(all.orders.filter((item) => !revokedOrderIdsRef.current.has(item.id)));
       setTimeOff(off);
       setLoadedAt(Date.now());
       setLoadError(false);
@@ -74,7 +85,6 @@ export default function TechnicianScheduleScreen() {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount, guarded by aliveRef
     void load();
   }, [load]);
 

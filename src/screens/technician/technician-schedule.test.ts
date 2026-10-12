@@ -44,3 +44,11 @@ describe('buildWeek', () => {
     expect(week.map((d) => d.timeOff.length)).toEqual([0, 1, 1, 1, 0, 0, 0]);
   });
 });
+
+it('accepts a typed historical summary without accessing schedule or private data', () => {
+  const history: import('../../api/orders.api').HistoricalOrderItem = {
+    id: 'h', code: 'H', status: 'COMPLETED', historical: true, createdAt: '2026-09-29T05:00:00Z',
+  };
+  const week = buildWeek([history], [], Date.parse('2026-09-30T07:00:00Z'));
+  expect(week.flatMap(day => day.orders)).toEqual([]);
+});

@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Briefcase,
+  Camera,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -33,6 +34,7 @@ import {
   ShieldCheck,
   Trash2,
   User,
+  Wrench,
 } from 'lucide-react-native';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -83,7 +85,6 @@ import {
   describeStartRepairBlockers,
   initialStartRepairState,
   startRepairTarget,
-  START_REPAIR_CONFIRM_COPY,
 } from './technician-start-repair';
 import {
   createRequestCompletionController,
@@ -94,6 +95,14 @@ import {
 } from './technician-request-completion';
 import { createTechOrderDetailLoader } from './technician-order-detail';
 import TechnicianPartsSection from './technician-parts-section';
+import {
+  selectTechnicianWorkOrderHierarchy,
+  selectEvidenceDisplayPriority,
+  selectAfterEvidenceDisplayPriority,
+  type WorkOrderNextAction,
+  type WorkOrderReadinessChecklist,
+} from './technician-work-order-hierarchy';
+import { selectTechnicianWorkflowScene } from './technician-workflow-scene';
 import StatusBadge from '../../components/StatusBadge';
 import ContactActions from '../../components/ContactActions';
 import OrderNoteCard from '../../components/OrderNoteCard';
@@ -247,7 +256,7 @@ export default function TechnicianOrderDetailScreen() {
     // unlock against a stale pre-commit order. Effect-created so no ref is
     // read during render.
     loaderRef.current = createTechOrderDetailLoader(
-      ordersApi.getOrder,
+      ordersApi.getTechnicianOrder,
       writeDetailWithMirror(latestRef, serviceOrderId, setDetailState),
       {
         getUserId: () => technicianJobsUserId(useAuthStore.getState()),
@@ -413,7 +422,7 @@ export default function TechnicianOrderDetailScreen() {
     }
   };
   const onEnRoute = async () => {
-    if (!order || enRouteBusy) return;
+    if (!order || enRouteBusy || !canDepartNow(order.departAvailableAt, nowTick)) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setEnRouteBusy(true);
     try {
@@ -899,12 +908,7 @@ export default function TechnicianOrderDetailScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     void quoteRef.current?.submit();
   };
-  const onStartRepairConfirm = () => { startRepairRef.current?.requestConfirm(); };
-  const onStartRepairCancel = () => { startRepairRef.current?.cancelConfirm(); };
-  const onStartRepairSubmit = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    void startRepairRef.current?.submit();
-  };
+
   const onCompletionConfirm = () => { completionRef.current?.requestConfirm(); };
   const onCompletionCancel = () => { completionRef.current?.cancelConfirm(); };
   const onCompletionSubmit = () => {
@@ -1063,6 +1067,17 @@ export default function TechnicianOrderDetailScreen() {
     String(order.status).toUpperCase() === 'UNDER_REPAIR' &&
     !order.completionRequestedAt;
   const isFixedPriceOrder = String(order?.pricingMode ?? '').toLowerCase() === 'fixed_price';
+  // T-NATIVE-07A read-only UNDER_REPAIR readiness: server truth only, unknown
+  // stays neutral. BEFORE counts only a finite positive server count; pricing
+  // is fixed_price or an explicitly APPROVED inspection quotation; the started
+  // row follows the verified UNDER_REPAIR status at the render site below.
+  const repairBeforeRecorded = typeof order?.beforeEvidenceCount === 'number' &&
+    Number.isFinite(order.beforeEvidenceCount) &&
+    order.beforeEvidenceCount > 0;
+  const repairPricingMode = String(order?.pricingMode ?? '').toLowerCase();
+  const repairQuoteApproved = order?.quotation
+    ? String(order.quotation.status).toUpperCase() === 'APPROVED'
+    : false;
   // P3B6 labor-only create visibility mirrors the controller gate: inspection
   // survey pricing, verified arrival, and no live SENT/APPROVED quotation.
   const existingQuoteStatus = order?.quotation ? String(order.quotation.status).toUpperCase() : null;
@@ -1111,6 +1126,31 @@ export default function TechnicianOrderDetailScreen() {
   } : null;
   const completionEligible = requestCompletionTarget(completionGate);
   const completionBlockers = completionGate ? describeCompletionBlockers(completionGate) : [];
+  // T-NATIVE-08B read-only pending hero: server truth only. Server
+  // completionRequestedAt (nonempty) means the request is logged;
+  // controller requested is true only after a confirmed successful POST
+  // this focus (ambiguous needsVerify is never success).
+  const completionPendingRequested = !!order?.completionRequestedAt ||
+    (completionState.requested && !completionState.needsVerify);
+  const pendingAfterCount = order?.afterEvidenceCount;
+  const completionPendingAfterText = typeof pendingAfterCount === 'number' &&
+    Number.isFinite(pendingAfterCount) &&
+    pendingAfterCount > 0
+    ? `Đã ghi nhận ${pendingAfterCount} ảnh sau sửa`
+    : pendingAfterCount === 0
+      ? 'Không có ảnh AFTER được ghi nhận'
+      : 'Chưa xác định ảnh AFTER đã lưu';
+  const completionPendingCustomerText = order?.customerConfirmed === true
+    ? 'Khách đã xác nhận nghiệm thu'
+    : order?.customerConfirmed === false
+      ? 'Chờ khách xác nhận nghiệm thu'
+      : 'Chưa xác định trạng thái nghiệm thu';
+  const pendingPaymentStatus = String(order?.paymentStatus ?? '').toUpperCase();
+  const completionPendingPaymentText = pendingPaymentStatus === 'PAID'
+    ? 'Đã thanh toán'
+    : pendingPaymentStatus === 'UNPAID'
+      ? 'Chưa thanh toán'
+      : 'Chưa xác định trạng thái thanh toán';
 
   // Action cards open on the step the technician is on; everything stays reachable.
   const st = order ? String(order.status).toUpperCase() : '';
@@ -1118,8 +1158,492 @@ export default function TechnicianOrderDetailScreen() {
   const quoteOpen = st === 'EN_ROUTE' && order?.arrivalVerified === true;
   const repairOpen = st === 'UNDER_REPAIR' && !order?.completionRequestedAt;
   const completionOpen = st === 'COMPLETED' ||
-    (st === 'UNDER_REPAIR' && (!!completionEligible || !!order?.completionRequestedAt || completionState.requested));
+    (st === 'UNDER_REPAIR' && (!!order?.completionRequestedAt || completionState.requested));
   const progress = order ? jobProgress(order) : null;
+  const statusView = order ? serviceOrderStatusView(order.status) : null;
+  const beforeEvidenceStep = selectEvidenceDisplayPriority({
+    needsVerify: uploadState.needsVerify,
+    hasPendingPhoto: !!uploadState.pending,
+    recordedCount: order?.beforeEvidenceCount,
+  });
+  const afterEvidenceStep = selectAfterEvidenceDisplayPriority({
+    needsVerify: afterUploadState.needsVerify,
+    hasPendingPhoto: !!afterUploadState.pending,
+    recordedCount: order?.afterEvidenceCount,
+    hasPendingCosts,
+  });
+
+  // Compose the next-step display from the existing order state, controller
+  // state, and target/blocker helpers. This only selects presentation; action
+  // handlers and their guards remain in their existing controllers.
+  const primaryAction: WorkOrderNextAction | null = (() => {
+    if (st === 'ACCEPTED') {
+      return {
+        kind: 'begin-travel',
+        heading: 'Bắt đầu di chuyển',
+        description: 'Báo cho hệ thống biết bạn đang trên đường đến địa chỉ khách hàng.',
+        buttonLabel: 'Bắt đầu di chuyển',
+        disabled: enRouteBusy || !canDepartNow(order?.departAvailableAt, nowTick),
+        busy: enRouteBusy,
+      };
+    }
+
+    if (st === 'EN_ROUTE') {
+      if (startRepairState.started) {
+        return {
+          kind: 'start-repair',
+          heading: 'Đã bắt đầu sửa chữa',
+          description: 'Hệ thống đã ghi nhận yêu cầu bắt đầu sửa chữa.',
+        };
+      }
+      if (order?.arrivalVerified !== true) {
+        return {
+          kind: 'check-in',
+          heading: 'Check-in tại nhà khách',
+          description: 'Chỉ check-in khi bạn đã có mặt tại địa chỉ khách hàng.',
+          buttonLabel: 'Check-in tại nhà khách',
+          disabled: checkInBusy,
+          busy: checkInBusy,
+        };
+      }
+      if (beforeEvidenceStep === 'reconcile') {
+        return {
+          kind: 'reconcile-before-evidence',
+          heading: 'Xác minh ảnh trước sửa chữa',
+          description: 'Không tải lại ảnh khi lần trước đang chờ xác minh.',
+          buttonLabel: 'Kiểm tra bằng chứng',
+          disabled: uploadState.busy,
+          busy: uploadState.busy,
+        };
+      }
+      if (beforeEvidenceStep === 'upload') {
+        return {
+          kind: 'upload-before-evidence',
+          heading: 'Tải ảnh trước sửa chữa',
+          description: 'Ảnh đã chọn. Tải ảnh lên để hệ thống kiểm tra bằng chứng.',
+          buttonLabel: 'Tải ảnh lên',
+          disabled: uploadState.busy,
+          busy: uploadState.busy,
+        };
+      }
+      if (beforeEvidenceStep === 'capture') {
+        return {
+          kind: 'capture-before-evidence',
+          heading: 'Tải ảnh trước sửa chữa',
+          description: 'Hệ thống đã xác minh check-in. Hãy tải bằng chứng trước sửa; số lượng tối thiểu cấu hình và đúng người tải vẫn do hệ thống kiểm tra khi bắt đầu sửa.',
+          buttonLabel: 'Chụp ảnh trước sửa',
+          disabled: uploadState.busy,
+          busy: uploadState.busy,
+        };
+      }
+      if (
+        String(order?.pricingMode ?? '').toLowerCase() === 'inspection_required' &&
+        String(order?.quotation?.status ?? '').toUpperCase() !== 'APPROVED'
+      ) {
+        return {
+          kind: 'await-quotation',
+          heading: 'Báo giá khảo sát',
+          description: 'Dịch vụ khảo sát chỉ được bắt đầu sửa sau khi khách duyệt báo giá.',
+          waitingMessage: String(order?.quotation?.status ?? '').toUpperCase() === 'SENT'
+            ? 'Đang chờ khách duyệt báo giá.'
+            : 'Tạo báo giá ở phần Báo giá bên dưới.',
+        };
+      }
+      if (startRepairEligible) {
+        return {
+          kind: 'start-repair',
+          heading: 'Đơn đang chuyển sang sửa chữa',
+          description: 'Đã check-in có ảnh sản phẩm và đủ điều kiện báo giá; hệ thống tự chuyển đơn sang đang sửa. Tải lại để cập nhật trạng thái.',
+          buttonLabel: 'Tải lại',
+          disabled: refreshing,
+        };
+      }
+
+      return {
+        kind: 'start-repair-blocked',
+        heading: 'Kiểm tra điều kiện bắt đầu sửa',
+        description: 'Hoàn tất các điều kiện bên dưới trước khi bắt đầu sửa.',
+      };
+    }
+
+    if (st === 'UNDER_REPAIR') {
+      if (completionState.requested || !!order?.completionRequestedAt) {
+        return {
+          kind: 'await-customer-acceptance',
+          heading: 'Đã yêu cầu hoàn thành',
+          description: 'Chờ khách nghiệm thu. Yêu cầu hoàn thành không đồng nghĩa đã thanh toán hoặc đơn đã hoàn thành.',
+        };
+      }
+      // Recover ambiguous uploads first, then upload any selected additional
+      // evidence regardless of the already recorded photo count. Pending
+      // additional costs still block completion through its existing gate.
+      if (afterEvidenceStep === 'reconcile') {
+        return {
+          kind: 'reconcile-after-evidence',
+          heading: 'Xác minh ảnh sau sửa',
+          description: 'Không gửi ảnh lại. Chỉ kiểm tra bằng chứng mới được gỡ khóa lần tải trước.',
+          buttonLabel: 'Kiểm tra bằng chứng',
+          disabled: afterUploadState.busy,
+          busy: afterUploadState.busy,
+        };
+      }
+      if (afterEvidenceStep === 'upload') {
+        return {
+          kind: 'upload-after-evidence',
+          heading: 'Tải ảnh sau sửa chữa',
+          description: 'Ảnh đã chọn. Tải ảnh lên để hệ thống kiểm tra bằng chứng.',
+          buttonLabel: 'Tải ảnh lên',
+          disabled: afterUploadState.busy,
+          busy: afterUploadState.busy,
+        };
+      }
+      if (afterEvidenceStep === 'await-cost') {
+        return {
+          kind: 'await-additional-cost-decision',
+          heading: 'Chờ phản hồi chi phí phát sinh',
+          description: 'Khách cần duyệt hoặc từ chối khoản phát sinh. Từ chối khoản này không đồng nghĩa từ chối báo giá ban đầu hay hủy đơn.',
+        };
+      }
+      if (afterEvidenceStep === 'capture') {
+        return {
+          kind: 'capture-after-evidence',
+          heading: 'Tải ảnh sau sửa chữa',
+          description: 'Hãy tải bằng chứng sau sửa. Số lượng tối thiểu thật vẫn do hệ thống cấu hình và kiểm tra khi yêu cầu hoàn thành.',
+          buttonLabel: 'Chụp ảnh sau sửa',
+          disabled: afterUploadState.busy,
+          busy: afterUploadState.busy,
+        };
+      }
+      if (completionEligible) {
+        return {
+          kind: 'request-completion',
+          heading: 'Đủ điều kiện sơ bộ để yêu cầu hoàn thành',
+          description: 'Hệ thống vẫn kiểm tra số ảnh sau sửa cấu hình, báo giá và mọi chi phí đang chờ.',
+          buttonLabel: 'Gửi yêu cầu nghiệm thu',
+          disabled: completionState.busy || completionState.needsVerify,
+          busy: completionState.busy,
+          confirming: completionState.confirming,
+          confirmationCopy: REQUEST_COMPLETION_CONFIRM_COPY,
+        };
+      }
+      return {
+        kind: 'completion-blocked',
+        heading: 'Chưa sẵn sàng yêu cầu hoàn thành',
+        description: 'Hoàn tất các điều kiện bên dưới trước khi gửi yêu cầu nghiệm thu.',
+      };
+    }
+
+    return null;
+  })();
+
+  const readiness: WorkOrderReadinessChecklist | null = st === 'EN_ROUTE'
+    ? {
+        title: 'Điều kiện bắt đầu sửa',
+        items: startRepairBlockers,
+        emptyMessage: 'Các điều kiện hiển thị đã sẵn sàng. Hệ thống vẫn kiểm tra lại khi bắt đầu sửa.',
+      }
+    : st === 'UNDER_REPAIR'
+      ? {
+          title: 'Điều kiện yêu cầu nghiệm thu',
+          items: completionBlockers,
+          emptyMessage: 'Các điều kiện hiển thị đã sẵn sàng. Hệ thống vẫn kiểm tra lại khi gửi yêu cầu.',
+        }
+      : null;
+
+  const secondaryActions: ('contact' | 'chat')[] = [];
+  if (
+    order?.historical !== true &&
+    st !== 'COMPLETED' &&
+    st !== 'CANCELLED'
+  ) {
+    if (order?.customerPhone || order?.addressSummary) secondaryActions.push('contact');
+    if (order?.bookingId) secondaryActions.push('chat');
+  }
+
+  const hierarchy = order && statusView
+    ? selectTechnicianWorkOrderHierarchy({
+        currentState: statusView,
+        primaryAction,
+        readiness,
+        secondaryActions,
+      })
+    : [];
+  const mainHierarchySections = hierarchy.filter((section) => section.kind !== 'secondary-actions');
+  const secondaryHierarchySection = hierarchy.find((section) => section.kind === 'secondary-actions');
+
+  // P1A T04/T05 stage-first (presentation only): the P0 pure selector maps the
+  // already-computed `primaryAction.kind` plus verified owner-scoped flags to a
+  // static Vietnamese stage label. Every flag below is proven from the
+  // loader-verified detail, never guessed:
+  // - `verifiedOrder` is non-null only after a successful authorized GET for
+  //   the exact focused UUID (order present, id matches route, initial load
+  //   finished). The loader already suppresses historical summaries, 401/403,
+  //   404, retargeted rows and stale accounts into cleared state, so a present
+  //   verified order proves non-historical (`!isHistoricalOrder` at fetch),
+  //   viewer assignment, and no error at fetch time.
+  // - `arrivalVerified` passes through only an explicit boolean from the
+  //   canonical ServiceOrder field; unknown stays undefined (fail-closed).
+  // - `completionRequested` passes server proof only: a non-empty
+  //   `completionRequestedAt` means requested, anything else stays undefined so
+  //   early-stage scenes are never blocked by a guessed `false` and repair
+  //   scenes can never be forced by a guessed value.
+  // - `offline`/`denied` are `false` only on a verified error-free detail
+  //   (the successful GET itself proves connectivity/authorization at fetch
+  //   time); otherwise undefined (fail-closed).
+  // - Action enable flags pass the existing controller values through; a
+  //   missing flag only hides the presentational CTA hint, never the existing
+  //   controller-wired button. The scene never creates permission or POSTs.
+  const verifiedOrder = order && !loading && order.id === serviceOrderId ? order : null;
+  const sceneActionDisabled = primaryAction && 'disabled' in primaryAction
+    ? (primaryAction.disabled as boolean | undefined)
+    : undefined;
+  const sceneActionBusy = primaryAction && 'busy' in primaryAction
+    ? (primaryAction.busy as boolean | undefined)
+    : undefined;
+  const sceneActionConfirming = primaryAction && 'confirming' in primaryAction
+    ? (primaryAction.confirming as boolean | undefined)
+    : undefined;
+  const workflowScene = selectTechnicianWorkflowScene({
+    actionKind: primaryAction?.kind ?? null,
+    orderStatus: verifiedOrder?.status,
+    historical: verifiedOrder && !error ? false : undefined,
+    assignedToViewer: verifiedOrder && !error ? true : undefined,
+    hasError: error ? true : (verifiedOrder ? false : undefined),
+    offline: verifiedOrder && !error ? false : undefined,
+    denied: verifiedOrder && !error ? false : undefined,
+    arrivalVerified: typeof verifiedOrder?.arrivalVerified === 'boolean'
+      ? verifiedOrder.arrivalVerified
+      : undefined,
+    completionRequested: verifiedOrder?.completionRequestedAt ? true : undefined,
+    actionDisabled: sceneActionDisabled,
+    actionBusy: sceneActionBusy,
+    actionConfirming: sceneActionConfirming,
+  });
+  // P1A scope is T04 (ACCEPTED) and T05 (EN_ROUTE, arrival unverified) only.
+  // Any other scene (including neutral) keeps the previous baseline layout.
+  const isStageFocus = !!verifiedOrder && !error &&
+    (workflowScene.sceneId === 'accepted' || workflowScene.sceneId === 'check-in');
+
+  // The ONE controller-wired primary-action card (moved, not copied): the exact
+  // pre-existing JSX below, now referenced from two mutually exclusive render
+  // sites (first viewport when `isStageFocus`, original position otherwise).
+  // Exactly one instance ever mounts, so duplicate CTA, handlers,
+  // confirmations, or POSTs are impossible. Every button keeps its original
+  // onPress/disabled/busy/confirmation wiring; no new handlers or mutations.
+  const primaryActionCard = primaryAction ? (
+            <View style={[styles.jobCard, styles.nextStepCard]}>
+              {mainHierarchySections.map((section) => {
+                if (section.kind === 'current-state') {
+                  return (
+                    <View key={section.kind} style={styles.hierarchyStateRow}>
+                      <Text style={styles.nextStepEyebrow}>Trạng thái hiện tại</Text>
+                      <StatusBadge view={section.value} />
+                    </View>
+                  );
+                }
+
+                if (section.kind === 'readiness') {
+                  return (
+                    <View key={section.kind} style={styles.readinessCard}>
+                      <Text style={styles.readinessTitle}>{section.value.title}</Text>
+                      {section.value.items.length > 0 ? (
+                        section.value.items.map((item, index) => (
+                          <Text key={`${index}-${item}`} style={styles.jobMeta}>• {item}</Text>
+                        ))
+                      ) : (
+                        <Text style={styles.jobMeta}>{section.value.emptyMessage}</Text>
+                      )}
+                    </View>
+                  );
+                }
+
+                if (section.kind !== 'primary-action') return null;
+                const action = section.value;
+
+                return (
+                  <View key={section.kind} style={styles.hierarchyAction}>
+                    <Text style={styles.nextStepEyebrow}>Bước tiếp theo</Text>
+                    <Text style={styles.sectionTitle}>{action.heading}</Text>
+                    {!!action.description && <Text style={styles.jobMeta}>{action.description}</Text>}
+                    {!!action.waitingMessage && <Text style={styles.nextStepWait}>{action.waitingMessage}</Text>}
+
+                    {action.kind === 'begin-travel' && (
+                      <TouchableOpacity
+                        style={[styles.uploadBtn, styles.nextStepAction]}
+                        onPress={onEnRoute}
+                        disabled={!!action.disabled}
+                        accessibilityRole="button"
+                        accessibilityLabel="Bắt đầu di chuyển"
+                      >
+                        {action.busy ? <ActivityIndicator size="small" color={colors.surface} /> : (
+                          <Text style={styles.uploadBtnText}>{action.buttonLabel}</Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+
+                    {action.kind === 'check-in' && (
+                      <TouchableOpacity
+                        style={[styles.uploadBtn, styles.nextStepAction]}
+                        onPress={onCheckIn}
+                        disabled={!!action.disabled}
+                        accessibilityRole="button"
+                        accessibilityLabel="Check-in tại nhà khách"
+                      >
+                        {action.busy ? <ActivityIndicator size="small" color={colors.surface} /> : (
+                          <Text style={styles.uploadBtnText}>{action.buttonLabel}</Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+
+                    {action.kind === 'capture-before-evidence' && (
+                      <TouchableOpacity
+                        style={[styles.uploadBtn, styles.nextStepAction]}
+                        onPress={onPickCamera}
+                        disabled={!!action.disabled}
+                        accessibilityRole="button"
+                        accessibilityLabel="Chụp ảnh trước sửa chữa ngay"
+                      >
+                        <Text style={styles.uploadBtnText}>{action.buttonLabel}</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {action.kind === 'upload-before-evidence' && (
+                      <TouchableOpacity
+                        style={[styles.uploadBtn, styles.nextStepAction]}
+                        onPress={onUploadBefore}
+                        disabled={!!action.disabled}
+                        accessibilityRole="button"
+                        accessibilityLabel="Tải ảnh trước sửa chữa lên"
+                      >
+                        {action.busy ? <ActivityIndicator size="small" color={colors.surface} /> : (
+                          <Text style={styles.uploadBtnText}>{action.buttonLabel}</Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+
+                    {action.kind === 'reconcile-before-evidence' && (
+                      <TouchableOpacity
+                        style={[styles.uploadBtn, styles.nextStepAction]}
+                        onPress={onReconcileBefore}
+                        disabled={!!action.disabled}
+                        accessibilityRole="button"
+                        accessibilityLabel="Kiểm tra bằng chứng trước sửa chữa"
+                      >
+                        {action.busy ? <ActivityIndicator size="small" color={colors.surface} /> : (
+                          <Text style={styles.uploadBtnText}>{action.buttonLabel}</Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+
+                    {action.kind === 'start-repair' && action.buttonLabel && (
+                      <TouchableOpacity
+                        style={[styles.uploadBtn, styles.nextStepAction]}
+                        onPress={() => { void loaderRef.current?.refresh(true); }}
+                        disabled={!!action.disabled}
+                        accessibilityRole="button"
+                        accessibilityLabel="Tải lại trạng thái đơn"
+                      >
+                        <Text style={styles.uploadBtnText}>{action.buttonLabel}</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {action.kind === 'reconcile-after-evidence' && (
+                      <TouchableOpacity
+                        style={[styles.uploadBtn, styles.nextStepAction]}
+                        onPress={onReconcileAfter}
+                        disabled={!!action.disabled}
+                        accessibilityRole="button"
+                        accessibilityLabel="Kiểm tra ảnh sau sửa"
+                      >
+                        {action.busy ? <ActivityIndicator size="small" color={colors.surface} /> : (
+                          <Text style={styles.uploadBtnText}>{action.buttonLabel}</Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+
+                    {action.kind === 'capture-after-evidence' && (
+                      <TouchableOpacity
+                        style={[styles.uploadBtn, styles.nextStepAction]}
+                        onPress={onPickAfterCamera}
+                        disabled={!!action.disabled}
+                        accessibilityRole="button"
+                        accessibilityLabel="Chụp ảnh sau sửa từ bước tiếp theo"
+                      >
+                        <Text style={styles.uploadBtnText}>{action.buttonLabel}</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {action.kind === 'upload-after-evidence' && (
+                      <TouchableOpacity
+                        style={[styles.uploadBtn, styles.nextStepAction]}
+                        onPress={onUploadAfter}
+                        disabled={!!action.disabled}
+                        accessibilityRole="button"
+                        accessibilityLabel="Tải ảnh sau sửa chữa lên"
+                      >
+                        {action.busy ? <ActivityIndicator size="small" color={colors.surface} /> : (
+                          <Text style={styles.uploadBtnText}>{action.buttonLabel}</Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+
+                    {action.kind === 'request-completion' && action.buttonLabel && (
+                      action.confirming ? (
+                        <View style={styles.evidenceError}>
+                          <Text style={styles.jobMeta}>{action.confirmationCopy}</Text>
+                          <View style={styles.uploadBtnRow}>
+                            <TouchableOpacity
+                              style={[styles.uploadBtn, { backgroundColor: colors.tone.success.text }]}
+                              onPress={onCompletionSubmit}
+                              disabled={completionState.busy}
+                              accessibilityRole="button"
+                              accessibilityLabel="Xác nhận yêu cầu hoàn thành"
+                            >
+                              {completionState.busy ? <ActivityIndicator size="small" color={colors.surface} /> : (
+                                <Text style={styles.uploadBtnText}>Xác nhận</Text>
+                              )}
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.uploadBtn, { backgroundColor: colors.divider }]}
+                              onPress={onCompletionCancel}
+                              disabled={completionState.busy}
+                              accessibilityRole="button"
+                              accessibilityLabel="Hủy yêu cầu hoàn thành"
+                            >
+                              <Text style={[styles.uploadBtnText, { color: colors.text }]}>Hủy</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ) : (
+                        <TouchableOpacity
+                          style={[styles.uploadBtn, styles.nextStepAction]}
+                          onPress={onCompletionConfirm}
+                          disabled={!!action.disabled}
+                          accessibilityRole="button"
+                          accessibilityLabel="Yêu cầu nghiệm thu"
+                        >
+                          {action.busy ? <ActivityIndicator size="small" color={colors.surface} /> : (
+                            <Text style={styles.uploadBtnText}>{action.buttonLabel}</Text>
+                          )}
+                        </TouchableOpacity>
+                      )
+                    )}
+
+                    {!!startRepairState.error && (
+                      <View style={styles.evidenceError}>
+                        <Text style={styles.jobMeta}>{startRepairState.error}</Text>
+                      </View>
+                    )}
+                    {!!completionState.error && (
+                      <View style={styles.evidenceError}>
+                        <Text style={styles.jobMeta}>{completionState.error}</Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+  ) : null;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -1134,23 +1658,7 @@ export default function TechnicianOrderDetailScreen() {
           <ChevronLeft size={26} color={colors.text} strokeWidth={1.75} />
         </TouchableOpacity>
         <Text style={styles.headerTitle} accessibilityRole="header">Chi tiết công việc</Text>
-        {order?.bookingId ? (
-          <TouchableOpacity
-            style={styles.headerBtn}
-            onPress={() => handleOpenChat(order.bookingId)}
-            disabled={openingChat}
-            accessibilityRole="button"
-            accessibilityLabel="Nhắn tin với khách hàng"
-          >
-            {openingChat ? (
-              <ActivityIndicator size="small" color={colors.text} />
-            ) : (
-              <MessageCircle size={22} color={colors.text} strokeWidth={1.75} />
-            )}
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.headerBtn} />
-        )}
+        <View style={styles.headerBtn} accessible={false} />
       </View>
 
       {loading ? (
@@ -1163,7 +1671,7 @@ export default function TechnicianOrderDetailScreen() {
           <Briefcase size={56} color={colors.muted} strokeWidth={1.5} />
           <Text style={styles.emptyTitle}>Không xem được công việc</Text>
           {!!error && <Text style={styles.emptyDesc}>{error}</Text>}
-          <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button" style={styles.retryBtn}>
+          <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button" accessibilityLabel="Thử tải lại chi tiết công việc" style={styles.retryBtn}>
             <Text style={styles.retryText}>Thử lại</Text>
           </TouchableOpacity>
         </View>
@@ -1175,27 +1683,249 @@ export default function TechnicianOrderDetailScreen() {
           {!!error && (
             <View style={styles.errorBanner} accessibilityRole="alert">
               <Text style={styles.emptyDesc}>{error}</Text>
-              <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button">
+              <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button" accessibilityLabel="Thử tải lại chi tiết công việc" style={styles.bannerRetryBtn}>
                 <Text style={styles.retryText}>Thử lại</Text>
               </TouchableOpacity>
             </View>
           )}
 
+          {isStageFocus && (
+            <View
+              testID="technician-stage-focus"
+              style={styles.stageFocus}
+              accessible
+              accessibilityRole="header"
+              accessibilityLabel={workflowScene.title}
+            >
+              <Text style={styles.stageFocusEyebrow}>Bước hiện tại</Text>
+              <Text style={styles.stageFocusTitle}>{workflowScene.title}</Text>
+              <Text style={styles.stageFocusDescription}>{workflowScene.description}</Text>
+            </View>
+          )}
+          {isStageFocus && primaryActionCard}
+
+          {st === 'EN_ROUTE' && order.historical !== true && order.arrivalVerified !== true && (
+            <View testID="checkin-prearrival" style={styles.checkInPresentation}>
+              <Text style={styles.checkInTitle} accessibilityRole="header">Đến nơi, xác nhận rõ</Text>
+              <View
+                testID="checkin-locator-art"
+                style={styles.checkInLocator}
+                accessible={false}
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+              >
+                <View style={styles.checkInOuterRing}>
+                  <View style={styles.checkInInnerRing}>
+                    <MapPin size={56} color={colors.primaryDark} strokeWidth={1.75} />
+                  </View>
+                </View>
+              </View>
+              <View style={styles.checkInCopy}>
+                <Text style={styles.checkInTitle} accessibilityRole="header">Check-in tại điểm làm việc</Text>
+                <Text style={styles.checkInDescription}>
+                  Chỉ xác nhận hiện diện tại thời điểm check-in. Không theo dõi vị trí liên tục.
+                </Text>
+              </View>
+              <View>
+                <View testID="checkin-readiness-travel" style={styles.checkInReadinessRow}>
+                  <View testID="checkin-travel-checked" style={styles.checkInTravelCheck} accessible={false}>
+                    <Check size={12} color={colors.primaryStrong} strokeWidth={1.75} />
+                  </View>
+                  <Text style={styles.checkInReadinessText}>Đang di chuyển</Text>
+                </View>
+                <View testID="checkin-readiness-permission" style={styles.checkInReadinessRow}>
+                  <Circle size={20} color={colors.textSecondary} strokeWidth={1.75} accessible={false} />
+                  <Text style={styles.checkInReadinessText}>Ứng dụng sẽ hỏi quyền vị trí khi check-in</Text>
+                </View>
+                <View testID="checkin-readiness-arrival" style={styles.checkInReadinessRow}>
+                  <Circle size={20} color={colors.textSecondary} strokeWidth={1.75} accessible={false} />
+                  <Text style={styles.checkInReadinessText}>Chưa xác minh đến nơi</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {String(order.status) === 'EN_ROUTE' && order.id === serviceOrderId && order.historical !== true && order.arrivalVerified === true && (
+            <View testID="before-evidence-overview" style={styles.beforeOverview}>
+              <View style={styles.beforeArrivalBadge}>
+                <ShieldCheck size={16} color={colors.tone.success.text} strokeWidth={1.75} accessible={false} />
+                <Text style={styles.beforeArrivalText}>Đã xác minh đến nơi</Text>
+              </View>
+              <View style={styles.beforeOverviewCopy}>
+                <Text style={styles.beforeOverviewTitle} accessibilityRole="header">Tình trạng trước sửa</Text>
+                <Text style={styles.beforeOverviewDescription}>Ghi nhận ảnh hiện trạng trước khi sửa chữa.</Text>
+              </View>
+              <View style={styles.beforeEvidencePaper}>
+                <Text style={styles.beforeEvidenceLabel}>BEFORE</Text>
+                <View
+                  testID="before-evidence-placeholder"
+                  style={styles.beforeEvidencePlaceholder}
+                  accessible={false}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                >
+                  <View style={styles.beforeCameraFrame}>
+                    <Camera size={64} color={colors.textSecondary} strokeWidth={1.25} />
+                  </View>
+                </View>
+                <Text style={styles.beforeEvidenceCount}>
+                  {typeof order.beforeEvidenceCount === 'number' && Number.isFinite(order.beforeEvidenceCount) && order.beforeEvidenceCount > 0
+                    ? `Đã ghi nhận ${order.beforeEvidenceCount} ảnh trước sửa`
+                    : 'Chưa ghi nhận ảnh trước sửa'}
+                </Text>
+                {uploadState.needsVerify ? (
+                  <Text style={styles.beforeEvidenceNote}>Lần tải ảnh trước đang chờ xác minh.</Text>
+                ) : uploadState.pending ? (
+                  <Text style={styles.beforeEvidenceNote}>Ảnh đã chọn trên máy chưa được xác minh tải lên.</Text>
+                ) : null}
+              </View>
+              {(order.pricingMode === 'fixed_price' || order.pricingMode === 'inspection_required') && (
+                <View testID="before-evidence-pricing" style={styles.beforePricingLabel}>
+                  <Text style={styles.beforePricingText}>
+                    {order.pricingMode === 'fixed_price' ? 'Giá cố định' : 'Cần khảo sát và báo giá'}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {st === 'UNDER_REPAIR' && !error && order.historical !== true && order.id === serviceOrderId && (
+            <View testID="repair-overview" style={styles.repairOverview}>
+              <View style={styles.repairHero}>
+                <View
+                  testID="repair-hero-art"
+                  style={styles.repairHeroArt}
+                  accessible={false}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                >
+                  <Wrench size={40} color={colors.tone.repair.text} strokeWidth={1.75} />
+                </View>
+                <Text style={styles.repairHeroTitle} accessibilityRole="header">Đang sửa chữa</Text>
+                <Text style={styles.repairHeroSubtitle}>Một công việc đang mở · Không có bộ đếm thời gian giả</Text>
+                {!!order.code && <Text style={styles.repairHeroMeta}>Mã đơn: {order.code}</Text>}
+              </View>
+              <View testID="repair-readiness-before" style={styles.repairReadinessRow}>
+                {repairBeforeRecorded ? (
+                  <View testID="repair-before-checked" style={styles.repairChecked} accessible={false}>
+                    <Check size={12} color={colors.primaryStrong} strokeWidth={1.75} />
+                  </View>
+                ) : (
+                  <Circle size={20} color={colors.textSecondary} strokeWidth={1.75} accessible={false} />
+                )}
+                <Text style={styles.repairReadinessText}>
+                  {repairBeforeRecorded
+                    ? `Đã ghi nhận ${order.beforeEvidenceCount} ảnh trước sửa`
+                    : 'Chưa ghi nhận ảnh trước sửa'}
+                </Text>
+              </View>
+              <View testID="repair-readiness-pricing" style={styles.repairReadinessRow}>
+                {repairPricingMode === 'fixed_price' || (repairPricingMode === 'inspection_required' && repairQuoteApproved) ? (
+                  <View testID="repair-pricing-checked" style={styles.repairChecked} accessible={false}>
+                    <Check size={12} color={colors.primaryStrong} strokeWidth={1.75} />
+                  </View>
+                ) : (
+                  <Circle size={20} color={colors.textSecondary} strokeWidth={1.75} accessible={false} />
+                )}
+                <Text style={styles.repairReadinessText}>
+                  {repairPricingMode === 'fixed_price'
+                    ? 'Giá cố định theo đơn'
+                    : repairPricingMode === 'inspection_required' && repairQuoteApproved
+                      ? 'Báo giá đã được khách duyệt'
+                      : repairPricingMode === 'inspection_required'
+                        ? 'Chưa có báo giá được duyệt'
+                        : 'Chưa xác định nhánh giá'}
+                </Text>
+              </View>
+              <View testID="repair-readiness-started" style={styles.repairReadinessRow}>
+                <View testID="repair-started-checked" style={styles.repairChecked} accessible={false}>
+                  <Check size={12} color={colors.primaryStrong} strokeWidth={1.75} />
+                </View>
+                <Text style={styles.repairReadinessText}>Đã bắt đầu sửa chữa</Text>
+              </View>
+            </View>
+          )}
+
+          {st === 'ACCEPTED' && order.historical !== true ? (
+            <View style={styles.acceptedOverview}>
+              <View testID="accepted-order-hero" style={styles.acceptedHero}>
+                <View
+                  testID="accepted-order-art"
+                  style={styles.acceptedArt}
+                  accessible={false}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                >
+                  <Wrench size={96} color={colors.primaryStrong} strokeWidth={1.25} />
+                </View>
+                {statusView && <View><StatusBadge view={statusView} /></View>}
+                <Text style={styles.acceptedTitle} accessibilityRole="header">
+                  {order.serviceName || 'Dịch vụ sửa chữa'}
+                </Text>
+                {!!order.code && <Text style={styles.caption}>Mã đơn: {order.code}</Text>}
+              </View>
+
+              {!!(order.customerName || order.addressSummary || order.scheduledAt || order.scopeDescription || sections.quantity !== null) && (
+                <View testID="accepted-order-information" style={styles.acceptedPaper}>
+                  {!!order.customerName && (
+                    <View testID="accepted-order-row-customer" style={styles.acceptedInfoRow}>
+                      <View style={styles.acceptedInfoLabelRow}>
+                        <User size={16} color={colors.textSecondary} strokeWidth={1.75} accessible={false} />
+                        <Text style={styles.acceptedInfoLabel}>Khách hàng</Text>
+                      </View>
+                      <Text style={styles.acceptedInfoValue}>{order.customerName}</Text>
+                    </View>
+                  )}
+                  {!!order.customerNote && <Text style={styles.jobMeta}>Ghi chú khách: {order.customerNote}</Text>}
+            {!!order.addressSummary && (
+                    <View testID="accepted-order-row-address" style={styles.acceptedInfoRow}>
+                      <View style={styles.acceptedInfoLabelRow}>
+                        <MapPin size={16} color={colors.textSecondary} strokeWidth={1.75} accessible={false} />
+                        <Text style={styles.acceptedInfoLabel}>Địa chỉ thực hiện</Text>
+                      </View>
+                      <Text style={styles.acceptedInfoValue}>{order.addressSummary}</Text>
+                    </View>
+                  )}
+                  {!!order.customerNote && <Text style={styles.acceptedInfoValue}>Ghi chú khách: {order.customerNote}</Text>}
+                  {!!order.scheduledAt && (
+                    <View testID="accepted-order-row-schedule" style={styles.acceptedInfoRow}>
+                      <View style={styles.acceptedInfoLabelRow}>
+                        <Clock size={16} color={colors.textSecondary} strokeWidth={1.75} accessible={false} />
+                        <Text style={styles.acceptedInfoLabel}>Lịch hẹn</Text>
+                      </View>
+                      <Text style={styles.acceptedInfoValue}>{(order.bookingMode || order.slot ? sessionLabel({ ...order, start: order.scheduledAt }) : vnDateTimeString(order.scheduledAt, VN_DATETIME))}</Text>
+                    </View>
+                  )}
+                  {!!order.scopeDescription && (
+                    <View testID="accepted-order-row-scope" style={styles.acceptedInfoRow}>
+                      <Text style={styles.acceptedInfoLabel}>Phạm vi công việc</Text>
+                      <Text style={styles.acceptedInfoValue}>{order.scopeDescription}</Text>
+                    </View>
+                  )}
+                  {sections.quantity !== null && (
+                    <View testID="accepted-order-row-quantity" style={styles.acceptedInfoRow}>
+                      <Text style={styles.acceptedInfoLabel}>Số lượng</Text>
+                      <Text style={styles.acceptedInfoValue}>{sections.quantity}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+              {progress && <JobStepper styles={styles} colors={colors} steps={progress} />}
+            </View>
+          ) : (
           <View style={styles.jobCard}>
             <View style={styles.summaryTop}>
-              <StatusBadge view={serviceOrderStatusView(order.status)} />
+              {!primaryAction && statusView && <StatusBadge view={statusView} />}
               <Text style={styles.caption}>#{order.code || order.id.slice(0, 8)}</Text>
             </View>
             <Text style={styles.jobTitle}>{order.serviceName || 'Dịch vụ sửa chữa'}</Text>
             {!!order.scheduledAt && (
               <View style={styles.iconRow}>
                 <Clock size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
-                <Text style={styles.iconRowText}>Lịch hẹn: {sessionLabel({ bookingMode: order.bookingMode, slot: order.slot, start: order.scheduledAt })}</Text>
+                <Text style={styles.iconRowText}>Lịch hẹn: {(order.bookingMode || order.slot ? sessionLabel({ ...order, start: order.scheduledAt }) : vnDateTimeString(order.scheduledAt, VN_DATETIME))}</Text>
               </View>
             )}
-            {!!order.customerNote && (
-              <Text style={[styles.jobMeta, { color: colors.tone.warning.fg }]} testID="customer-note">Ghi chú của khách: {order.customerNote}</Text>
-            )}
+            {!!order.customerNote && <Text style={styles.jobMeta}>Ghi chú khách: {order.customerNote}</Text>}
             {!!order.addressSummary && (
               <View style={styles.iconRow}>
                 <MapPin size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
@@ -1216,14 +1946,90 @@ export default function TechnicianOrderDetailScreen() {
             {!!order.scopeDescription && (
               <Text style={styles.jobMeta}>Phạm vi: {order.scopeDescription}</Text>
             )}
-            {order.historical !== true && st !== 'COMPLETED' && st !== 'CANCELLED' && (
-              <ContactActions phone={order.customerPhone} address={order.addressSummary} />
-            )}
             {progress && <JobStepper styles={styles} colors={colors} steps={progress} />}
           </View>
+          )}
 
-          {order.historical !== true && (
-            <TechnicianPartsSection orderId={order.id} orderStatus={order.status} />
+          {st === 'UNDER_REPAIR' && !error && order.historical !== true && order.id === serviceOrderId && !order.completionRequestedAt && !completionState.requested && (
+            <View testID="after-overview" style={styles.afterOverview}>
+              <View style={styles.afterHero}>
+                <View
+                  testID="after-hero-art"
+                  style={styles.afterHeroArt}
+                  accessible={false}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                >
+                  <Camera size={40} color={colors.tone.repair.text} strokeWidth={1.75} />
+                </View>
+                <Text style={styles.afterHeroTitle} accessibilityRole="header">Tình trạng sau sửa</Text>
+                <Text style={styles.afterHeroDescription}>Ghi nhận ảnh hiện trạng sau khi sửa chữa.</Text>
+              </View>
+              <View style={styles.afterEvidencePaper}>
+                <Text style={styles.afterEvidenceLabel}>AFTER</Text>
+                <View
+                  testID="after-evidence-placeholder"
+                  style={styles.afterEvidencePlaceholder}
+                  accessible={false}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                >
+                  <View style={styles.afterCameraFrame}>
+                    <Camera size={64} color={colors.textSecondary} strokeWidth={1.25} />
+                  </View>
+                </View>
+                <Text style={styles.afterEvidenceCount}>
+                  {typeof order.afterEvidenceCount === 'number' && Number.isFinite(order.afterEvidenceCount) && order.afterEvidenceCount > 0
+                    ? `Đã ghi nhận ${order.afterEvidenceCount} ảnh sau sửa`
+                    : 'Chưa ghi nhận ảnh sau sửa'}
+                </Text>
+                {afterUploadState.needsVerify ? (
+                  <Text style={styles.afterEvidenceNote}>Lần tải ảnh sau đang chờ xác minh.</Text>
+                ) : afterUploadState.pending ? (
+                  <Text style={styles.afterEvidenceNote}>Ảnh đã chọn trên máy chưa được xác minh tải lên.</Text>
+                ) : null}
+              </View>
+              <View testID="after-cost-row" style={styles.afterCostRow}>
+                <Text style={styles.afterCostText}>
+                  {costsState.loading
+                    ? 'Đang tải chi phí phát sinh…'
+                    : costsState.error
+                      ? 'Chưa xác định chi phí phát sinh chờ duyệt.'
+                      : hasPendingCosts
+                        ? 'Còn chi phí phát sinh chờ khách quyết định'
+                        : 'Không có yêu cầu chi phí phát sinh đang chờ duyệt'}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {st === 'UNDER_REPAIR' && !error && order.historical !== true && order.id === serviceOrderId && completionPendingRequested && (
+            <View testID="completion-pending-overview" style={styles.completionPendingOverview}>
+              <View style={styles.completionPendingHero}>
+                <View
+                  testID="completion-pending-art"
+                  style={styles.completionPendingArt}
+                  accessible={false}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                >
+                  <Clock size={40} color={colors.tone.warning.text} strokeWidth={1.75} />
+                </View>
+                <Text style={styles.completionPendingTitle} accessibilityRole="header">Đã yêu cầu hoàn thành</Text>
+                <View testID="completion-pending-customer">
+                  <Text style={styles.completionPendingSubtitle}>{completionPendingCustomerText}</Text>
+                </View>
+                <Text style={styles.completionPendingNote}>Yêu cầu hoàn thành chưa phải đã hoàn thành. Nghiệm thu, thanh toán là các bước riêng.</Text>
+              </View>
+              <View style={styles.completionPendingPaper}>
+                <View testID="completion-pending-after">
+                  <Text style={styles.completionPendingValue}>{completionPendingAfterText}</Text>
+                </View>
+                <View testID="completion-pending-payment">
+                  <Text style={styles.completionPendingValue}>{completionPendingPaymentText}</Text>
+                </View>
+              </View>
+            </View>
           )}
 
           {order.arrivalVerified === true && ['EN_ROUTE', 'UNDER_REPAIR'].includes(String(order.status).toUpperCase()) && !order.completionRequestedAt && (
@@ -1259,178 +2065,37 @@ export default function TechnicianOrderDetailScreen() {
             </View>
           )}
 
-          {String(order.status).toUpperCase() === 'ACCEPTED' && (
-            <View style={[styles.jobCard, styles.nextStepCard]}>
-              <Text style={styles.nextStepEyebrow}>Bước tiếp theo</Text>
-              <Text style={styles.sectionTitle}>Bắt đầu di chuyển</Text>
-              <Text style={styles.jobMeta}>
-                {canDepartNow(order.departAvailableAt, nowTick)
-                  ? 'Báo cho hệ thống biết bạn đang trên đường đến địa chỉ khách hàng.'
-                  : `Nút xuất phát mở lúc ${vnDateTimeString(order.departAvailableAt!, VN_DATETIME)} (1 giờ trước giờ hẹn).`}
-              </Text>
-              <TouchableOpacity
-                style={[styles.uploadBtn, styles.nextStepAction, !canDepartNow(order.departAvailableAt, nowTick) && { opacity: 0.45 }]}
-                onPress={onEnRoute}
-                disabled={enRouteBusy || !canDepartNow(order.departAvailableAt, nowTick)}
-                accessibilityRole="button"
-                accessibilityLabel="Bắt đầu di chuyển"
-              >
-                {enRouteBusy ? (
-                  <ActivityIndicator size="small" color={colors.surface} />
-                ) : (
-                  <Text style={styles.uploadBtnText}>Bắt đầu di chuyển</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
+          {!isStageFocus && primaryActionCard}
 
-          {String(order.status).toUpperCase() === 'EN_ROUTE' && (
-            <View style={[styles.jobCard, styles.nextStepCard]}>
-              <Text style={styles.nextStepEyebrow}>Bước tiếp theo</Text>
-              {order.arrivalVerified !== true ? (
-                <>
-                  <Text style={styles.sectionTitle}>Check-in và chụp ảnh sản phẩm</Text>
-                  <Text style={styles.jobMeta}>
-                    Tới địa chỉ của khách thì bấm nút bên dưới: hệ thống kiểm tra vị trí rồi mở camera để chụp sản phẩm.
-                  </Text>
-                  <TouchableOpacity
-                    style={[styles.uploadBtn, styles.nextStepAction]}
-                    onPress={onCheckIn}
-                    disabled={checkInBusy}
-                    accessibilityRole="button"
-                    accessibilityLabel="Check-in tại nhà khách"
-                  >
-                    {checkInBusy ? (
-                      <ActivityIndicator size="small" color={colors.surface} />
-                    ) : (
-                      <Text style={styles.uploadBtnText}>Check-in và chụp ảnh</Text>
-                    )}
-                  </TouchableOpacity>
-                </>
-              ) : typeof order.beforeEvidenceCount !== 'number' || order.beforeEvidenceCount < 1 ? (
-                <>
-                  <Text style={styles.sectionTitle}>Tải ảnh trước sửa chữa</Text>
-                  <Text style={styles.jobMeta}>
-                    Hệ thống đã xác minh check-in. Hãy tải bằng chứng trước sửa; số lượng tối thiểu cấu hình và đúng người tải vẫn do Hệ thống kiểm tra khi bắt đầu sửa.
-                  </Text>
-                  <TouchableOpacity
-                    style={[styles.uploadBtn, styles.nextStepAction]}
-                    onPress={onPickCamera}
-                    disabled={uploadState.busy || uploadState.needsVerify}
-                    accessibilityRole="button"
-                    accessibilityLabel="Chụp ảnh trước sửa chữa ngay"
-                  >
-                    <Text style={styles.uploadBtnText}>Chụp ảnh trước sửa</Text>
-                  </TouchableOpacity>
-                </>
-              ) : String(order.pricingMode ?? '').toLowerCase() === 'inspection_required' &&
-                String(order.quotation?.status ?? '').toUpperCase() !== 'APPROVED' ? (
-                <>
-                  <Text style={styles.sectionTitle}>Báo giá khảo sát</Text>
-                  <Text style={styles.jobMeta}>
-                    Ảnh trước sửa đã có trên dữ liệu chi tiết. Dịch vụ khảo sát chỉ được bắt đầu sửa sau khi khách duyệt báo giá.
-                  </Text>
-                  {String(order.quotation?.status ?? '').toUpperCase() === 'SENT' ? (
-                    <Text style={styles.nextStepWait}>Đang chờ khách duyệt báo giá.</Text>
+          {secondaryHierarchySection?.kind === 'secondary-actions' && (
+            <View style={styles.quickActionsCard}>
+              <Text style={styles.quickActionsTitle} accessibilityRole="header">Liên hệ nhanh</Text>
+              {secondaryHierarchySection.value.includes('contact') && (
+                <ContactActions phone={order.customerPhone} address={order.addressSummary} />
+              )}
+              {secondaryHierarchySection.value.includes('chat') && (
+                <TouchableOpacity
+                  style={styles.quickChatAction}
+                  onPress={() => handleOpenChat(order.bookingId!)}
+                  disabled={openingChat}
+                  accessibilityRole="button"
+                  accessibilityLabel="Nhắn tin với khách hàng"
+                >
+                  {openingChat ? (
+                    <ActivityIndicator size="small" color={colors.primaryStrong} />
                   ) : (
-                    <Text style={styles.nextStepWait}>Tạo báo giá ở phần Báo giá bên dưới.</Text>
+                    <>
+                      <MessageCircle size={18} color={colors.primaryStrong} strokeWidth={1.75} />
+                      <Text style={styles.quickChatText}>Nhắn tin với khách</Text>
+                    </>
                   )}
-                </>
-              ) : startRepairEligible ? (
-                <>
-                  <Text style={styles.sectionTitle}>Đơn đang chuyển sang sửa chữa</Text>
-                  <Text style={styles.jobMeta}>
-                    Đã check-in có ảnh sản phẩm{String(order.pricingMode ?? '').toLowerCase() === 'fixed_price' ? '' : ' và khách đã duyệt báo giá'}; hệ thống tự chuyển đơn sang đang sửa. Kéo xuống hoặc bấm tải lại nếu trạng thái chưa đổi.
-                  </Text>
-                  <TouchableOpacity
-                    style={[styles.uploadBtn, styles.nextStepAction]}
-                    onPress={() => { void loaderRef.current?.refresh(true); }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Tải lại trạng thái đơn"
-                  >
-                    <Text style={styles.uploadBtnText}>Tải lại</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.sectionTitle}>Kiểm tra điều kiện bắt đầu sửa</Text>
-                  {startRepairBlockers.map((blocker) => (
-                    <Text key={blocker} style={styles.jobMeta}>• {blocker}</Text>
-                  ))}
-                </>
+                </TouchableOpacity>
               )}
             </View>
           )}
 
-          {String(order.status).toUpperCase() === 'UNDER_REPAIR' && (
-            <View style={[styles.jobCard, styles.nextStepCard]}>
-              {/* K06_UNDER_REPAIR_NEXT_STEP */}
-              <Text style={styles.nextStepEyebrow}>Bước tiếp theo</Text>
-              {order.completionRequestedAt ? (
-                <>
-                  <Text style={styles.sectionTitle}>Đã yêu cầu hoàn thành</Text>
-                  <Text style={styles.jobMeta}>
-                    Chờ khách nghiệm thu. Yêu cầu hoàn thành không đồng nghĩa đã thanh toán hoặc Hoàn thành.
-                  </Text>
-                </>
-              ) : hasPendingCosts ? (
-                <>
-                  <Text style={styles.sectionTitle}>Chờ phản hồi chi phí phát sinh</Text>
-                  <Text style={styles.jobMeta}>
-                    Khách cần duyệt hoặc từ chối khoản phát sinh. Từ chối khoản này không đồng nghĩa từ chối báo giá ban đầu hay hủy đơn.
-                  </Text>
-                </>
-              ) : afterUploadState.needsVerify ? (
-                <>
-                  <Text style={styles.sectionTitle}>Xác minh ảnh sau sửa</Text>
-                  <Text style={styles.jobMeta}>
-                    Không gửi ảnh lại. Chỉ kiểm tra bằng chứng mới được gỡ khóa lần tải trước.
-                  </Text>
-                  <TouchableOpacity
-                    style={[styles.uploadBtn, styles.nextStepAction]}
-                    onPress={onReconcileAfter}
-                    disabled={afterUploadState.busy}
-                    accessibilityRole="button"
-                    accessibilityLabel="Kiểm tra ảnh sau sửa"
-                  >
-                    <Text style={styles.uploadBtnText}>Kiểm tra bằng chứng</Text>
-                  </TouchableOpacity>
-                </>
-              ) : typeof order.afterEvidenceCount !== 'number' || order.afterEvidenceCount < 1 ? (
-                <>
-                  <Text style={styles.sectionTitle}>Hoàn thành</Text>
-                  <Text style={styles.jobMeta}>
-                    Sửa xong thì chụp ảnh sản phẩm sau khi sửa, rồi gửi yêu cầu nghiệm thu cho khách.
-                  </Text>
-                  <TouchableOpacity
-                    style={[styles.uploadBtn, styles.nextStepAction]}
-                    onPress={onPickAfterCamera}
-                    disabled={afterUploadState.busy}
-                    accessibilityRole="button"
-                    accessibilityLabel="Chụp ảnh sau sửa từ bước tiếp theo"
-                  >
-                    <Text style={styles.uploadBtnText}>Hoàn thành: chụp ảnh sau sửa</Text>
-                  </TouchableOpacity>
-                </>
-              ) : completionEligible ? (
-                <>
-                  <Text style={styles.sectionTitle}>Đủ điều kiện sơ bộ để yêu cầu hoàn thành</Text>
-                  <Text style={styles.jobMeta}>
-                    Hệ thống vẫn kiểm tra số ảnh sau sửa cấu hình, báo giá và mọi chi phí đang chờ.
-                  </Text>
-                  <Text style={styles.nextStepWait}>
-                    Gửi yêu cầu nghiệm thu ở mục &quot;Nghiệm thu và thanh toán&quot; bên dưới.
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.sectionTitle}>Chưa sẵn sàng yêu cầu hoàn thành</Text>
-                  {completionBlockers.map((blocker) => (
-                    <Text key={blocker} style={styles.jobMeta}>• {blocker}</Text>
-                  ))}
-                </>
-              )}
-            </View>
+          {order.historical !== true && (
+            <TechnicianPartsSection orderId={order.id} orderStatus={order.status} />
           )}
 
           <Text style={styles.groupHeading}>Thao tác</Text>
@@ -1443,16 +2108,6 @@ export default function TechnicianOrderDetailScreen() {
                 <Text style={styles.jobMeta}>
                   Lần tải ảnh trước đang chờ Hệ thống xác minh. Chưa gửi lại để tránh trùng lặp.
                 </Text>
-                <TouchableOpacity
-                  onPress={onReconcileBefore}
-                  disabled={uploadState.busy}
-                  accessibilityRole="button"
-                  accessibilityLabel="Kiểm tra bằng chứng trước sửa chữa"
-                >
-                  <Text style={styles.retryText}>
-                    {uploadState.busy ? 'Đang kiểm tra…' : 'Kiểm tra bằng chứng'}
-                  </Text>
-                </TouchableOpacity>
               </View>
             ) : uploadState.pending ? (
               <>
@@ -1465,19 +2120,6 @@ export default function TechnicianOrderDetailScreen() {
                   Đã chọn ảnh ({(uploadState.pending.sizeBytes / 1048576).toFixed(1)} MB). Chỉ tải ảnh trước sửa chữa.
                 </Text>
                 <View style={styles.uploadBtnRow}>
-                  <TouchableOpacity
-                    style={[styles.uploadBtn, { backgroundColor: colors.tone.success.text }]}
-                    onPress={onUploadBefore}
-                    disabled={uploadState.busy}
-                    accessibilityRole="button"
-                    accessibilityLabel="Tải lên ảnh trước sửa chữa"
-                  >
-                    {uploadState.busy ? (
-                      <ActivityIndicator size="small" color={colors.surface} />
-                    ) : (
-                      <Text style={styles.uploadBtnText}>Tải lên</Text>
-                    )}
-                  </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.uploadBtn, { backgroundColor: colors.divider }]}
                     onPress={onDiscardUpload}
@@ -1499,27 +2141,57 @@ export default function TechnicianOrderDetailScreen() {
                 >
                   <Text style={styles.uploadBtnText}>Chụp ảnh</Text>
                 </TouchableOpacity>
-                {/* PO 08/10/2026: order photos come from the camera only. */}
               </View>
             )}
             {!!uploadState.error && (
               <View style={styles.evidenceError}>
                 <Text style={styles.jobMeta}>{uploadState.error}</Text>
-                {!!uploadState.pending && !uploadState.needsVerify && (
-                  <TouchableOpacity onPress={onUploadBefore} disabled={uploadState.busy} accessibilityRole="button">
-                    <Text style={styles.retryText}>Thử tải lại</Text>
-                  </TouchableOpacity>
-                )}
-                {uploadState.needsVerify && (
-                  <TouchableOpacity onPress={onReconcileBefore} disabled={uploadState.busy} accessibilityRole="button">
-                    <Text style={styles.retryText}>Kiểm tra bằng chứng</Text>
-                  </TouchableOpacity>
-                )}
               </View>
             )}
           </CollapsibleCard>
 
-          <CollapsibleCard key={`quote-${quoteOpen}`} styles={styles} colors={colors} title={isFixedPriceOrder ? 'Giá cố định và bắt đầu sửa chữa' : 'Báo giá và bắt đầu sửa chữa'} defaultOpen={quoteOpen}>
+          <CollapsibleCard key={`quote-${quoteOpen}`} styles={styles} colors={colors} title={isFixedPriceOrder ? 'Giá cố định' : 'Báo giá'} defaultOpen={quoteOpen}>
+
+            {order.id === serviceOrderId && order.historical !== true && !error && !refreshing && (
+              <View testID="quotation-price-branch" style={styles.quoteBranch}>
+                <Text style={styles.quoteBranchTitle} accessibilityRole="header">Nhánh giá của đơn</Text>
+                <View style={styles.quoteBranchSegments}>
+                  {[
+                    { mode: 'inspection_required', label: 'Cần khảo sát' },
+                    { mode: 'fixed_price', label: 'Giá cố định' },
+                  ].map(({ mode, label }) => {
+                    const current = String(order.pricingMode ?? '').toLowerCase() === mode;
+                    const known = ['fixed_price', 'inspection_required'].includes(String(order.pricingMode ?? '').toLowerCase());
+                    return (
+                      <View
+                        key={mode}
+                        style={[styles.quoteBranchOption, current && styles.quoteBranchCurrent]}
+                        accessible
+                        accessibilityRole="text"
+                        accessibilityLabel={`${label}, ${current ? 'áp dụng cho đơn này' : known ? 'không áp dụng cho đơn này' : 'chưa xác định'}, chỉ đọc`}
+                      >
+                        <Text style={[styles.quoteBranchLabel, current && styles.quoteBranchCurrentLabel]}>{label}</Text>
+                        {current && <Text style={styles.quoteBranchCurrentNote}>Đang áp dụng</Text>}
+                      </View>
+                    );
+                  })}
+                </View>
+                {!['fixed_price', 'inspection_required'].includes(String(order.pricingMode ?? '').toLowerCase()) && (
+                  <Text style={styles.quoteBranchNote}>Chưa xác định nhánh giá</Text>
+                )}
+                {order.quotation && (
+                  <View style={styles.quoteBranchStatus}>
+                    <Text style={styles.quoteBranchNote}>Trạng thái báo giá</Text>
+                    <Text
+                      style={styles.quoteBranchStatusLabel}
+                      accessibilityLabel={`Trạng thái báo giá: ${quoteStatusLabel(sections.quotationStatus)}`}
+                    >
+                      {existingQuoteStatus === 'SENT' ? 'Chờ khách duyệt' : quoteStatusLabel(sections.quotationStatus)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
 
             {isFixedPriceOrder && (
               <>
@@ -1538,7 +2210,7 @@ export default function TechnicianOrderDetailScreen() {
                       ? formatVnd(order.fixedUnitPrice * (sections.quantity ?? 1))
                       : '—'}
                   </Text>
-                  <Text style={[styles.jobMeta, { fontSize: 11 }]}>
+                  <Text style={[styles.jobMeta, { fontSize: 12 }]}>
                     Không bao gồm chi phí phát sinh được duyệt riêng (nếu có).
                   </Text>
                 </View>
@@ -1666,7 +2338,7 @@ export default function TechnicianOrderDetailScreen() {
                             </View>
                           )}
                           {!!quotePartHints[row.key] && (
-                            <Text style={[styles.jobMeta, { fontSize: 11, marginTop: 2 }]}>{quotePartHints[row.key]}</Text>
+                            <Text style={[styles.jobMeta, { fontSize: 12, marginTop: 2 }]}>{quotePartHints[row.key]}</Text>
                           )}
                         </View>
                       )}
@@ -1829,65 +2501,7 @@ export default function TechnicianOrderDetailScreen() {
               </View>
             )}
 
-            <View style={styles.startRepairDivider} />
-            {startRepairState.started ? (
-              <Text style={styles.jobMeta}>Đã bắt đầu sửa chữa. Đơn đã chuyển sang trạng thái đang sửa chữa.</Text>
-            ) : startRepairEligible ? (
-              !startRepairState.confirming ? (
-                <TouchableOpacity
-                  style={[styles.uploadBtn, { backgroundColor: colors.tone.success.text }]}
-                  onPress={onStartRepairConfirm}
-                  disabled={startRepairState.busy || startRepairState.needsVerify}
-                  accessibilityRole="button"
-                  accessibilityLabel="Bắt đầu sửa chữa"
-                >
-                  <Text style={styles.uploadBtnText}>Bắt đầu sửa chữa</Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.evidenceError}>
-                  <Text style={styles.jobMeta}>{START_REPAIR_CONFIRM_COPY}</Text>
-                  <Text style={styles.jobMeta}>
-                    {startRepairState.pricing === 'fixed_price'
-                      ? 'Đơn giá cố định — không cần báo giá.'
-                      : 'Báo giá đã được khách duyệt.'}
-                  </Text>
-                  <View style={styles.uploadBtnRow}>
-                    <TouchableOpacity
-                      style={[styles.uploadBtn, { backgroundColor: colors.tone.success.text }]}
-                      onPress={onStartRepairSubmit}
-                      disabled={startRepairState.busy}
-                      accessibilityRole="button"
-                      accessibilityLabel="Xác nhận bắt đầu sửa chữa"
-                    >
-                      {startRepairState.busy ? (
-                        <ActivityIndicator size="small" color={colors.surface} />
-                      ) : (
-                        <Text style={styles.uploadBtnText}>Xác nhận</Text>
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.uploadBtn, { backgroundColor: colors.divider }]}
-                      onPress={onStartRepairCancel}
-                      disabled={startRepairState.busy}
-                      accessibilityRole="button"
-                      accessibilityLabel="Hủy bắt đầu sửa chữa"
-                    >
-                      <Text style={[styles.uploadBtnText, { color: colors.text }]}>Hủy</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )
-            ) : (
-              startRepairBlockers.map((blocker) => (
-                <Text key={blocker} style={styles.jobMeta}>• {blocker}</Text>
-              ))
-            )}
-          {!!startRepairState.error && (
-            <View style={styles.evidenceError}>
-              <Text style={styles.jobMeta}>{startRepairState.error}</Text>
-            </View>
-          )}
-        </CollapsibleCard>
+          </CollapsibleCard>
 
           <CollapsibleCard key={`proposal-${repairOpen}`} styles={styles} colors={colors} title="Đề xuất chi phí phát sinh" defaultOpen={repairOpen}>
             <Text style={styles.jobMeta}>
@@ -2185,16 +2799,6 @@ export default function TechnicianOrderDetailScreen() {
                 <Text style={styles.jobMeta}>
                   Lần tải ảnh sau sửa trước đang chờ Hệ thống xác minh. Chưa gửi lại để tránh trùng lặp.
                 </Text>
-                <TouchableOpacity
-                  onPress={onReconcileAfter}
-                  disabled={afterUploadState.busy}
-                  accessibilityRole="button"
-                  accessibilityLabel="Kiểm tra bằng chứng sau sửa chữa"
-                >
-                  <Text style={styles.retryText}>
-                    {afterUploadState.busy ? 'Đang kiểm tra…' : 'Kiểm tra bằng chứng'}
-                  </Text>
-                </TouchableOpacity>
               </View>
             ) : afterUploadState.pending ? (
               <>
@@ -2207,19 +2811,6 @@ export default function TechnicianOrderDetailScreen() {
                   Đã chọn ảnh ({(afterUploadState.pending.sizeBytes / 1048576).toFixed(1)} MB). Chỉ tải ảnh sau sửa chữa.
                 </Text>
                 <View style={styles.uploadBtnRow}>
-                  <TouchableOpacity
-                    style={[styles.uploadBtn, { backgroundColor: colors.tone.success.text }]}
-                    onPress={onUploadAfter}
-                    disabled={afterUploadState.busy}
-                    accessibilityRole="button"
-                    accessibilityLabel="Tải lên ảnh sau sửa chữa"
-                  >
-                    {afterUploadState.busy ? (
-                      <ActivityIndicator size="small" color={colors.surface} />
-                    ) : (
-                      <Text style={styles.uploadBtnText}>Tải lên</Text>
-                    )}
-                  </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.uploadBtn, { backgroundColor: colors.divider }]}
                     onPress={onDiscardAfterUpload}
@@ -2241,34 +2832,26 @@ export default function TechnicianOrderDetailScreen() {
                 >
                   <Text style={styles.uploadBtnText}>Chụp ảnh</Text>
                 </TouchableOpacity>
-                {/* PO 08/10/2026: order photos come from the camera only. */}
               </View>
             )}
             {!!afterUploadState.error && (
               <View style={styles.evidenceError}>
                 <Text style={styles.jobMeta}>{afterUploadState.error}</Text>
-                {!!afterUploadState.pending && !afterUploadState.needsVerify && (
-                  <TouchableOpacity onPress={onUploadAfter} disabled={afterUploadState.busy} accessibilityRole="button">
-                    <Text style={styles.retryText}>Thử tải lại</Text>
-                  </TouchableOpacity>
-                )}
-                {afterUploadState.needsVerify && (
-                  <TouchableOpacity onPress={onReconcileAfter} disabled={afterUploadState.busy} accessibilityRole="button">
-                    <Text style={styles.retryText}>Kiểm tra bằng chứng</Text>
-                  </TouchableOpacity>
-                )}
               </View>
             )}
           </CollapsibleCard>
 
-          <CollapsibleCard key={`completion-${completionOpen}`} styles={styles} colors={colors} title="Nghiệm thu và thanh toán" defaultOpen={completionOpen}>
+          <CollapsibleCard key={`completion-${completionOpen}`} styles={styles} colors={colors} title="Nghiệm thu" defaultOpen={completionOpen}>
             <Text style={styles.jobMeta}>
-              Quy trình: Khách nghiệm thu dịch vụ đạt chuẩn → Thanh toán (tiền mặt hoặc online) → Hệ thống tự hoàn tất đơn.
+              Gửi yêu cầu để khách nghiệm thu. Thanh toán của khách xem ở mục Hóa đơn; khai báo tiền mặt (nếu có) ở thẻ riêng bên dưới.
             </Text>
             {String(order.status).toUpperCase() === 'COMPLETED' ? (
               <View style={styles.evidenceError}>
                 <Text style={[styles.jobMeta, { color: colors.tone.success.text, fontWeight: '700' }]}>
-                  Đơn hàng đã hoàn tất thành công. Nghiệm thu, thanh toán và tiền công đã được ghi nhận.
+                  Đơn đã hoàn thành.
+                </Text>
+                <Text style={styles.jobMeta}>
+                  Thanh toán: {String(order.paymentStatus).toUpperCase() === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'} (xem chi tiết ở mục Hóa đơn).
                 </Text>
               </View>
             ) : completionState.requested || !!order.completionRequestedAt ? (
@@ -2297,62 +2880,17 @@ export default function TechnicianOrderDetailScreen() {
                     {String(order.paymentStatus).toUpperCase() === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}
                   </Text>
                 </View>
-                <Text style={[styles.jobMeta, { fontSize: 11, marginTop: 4 }]}>
-                  Có thu tiền mặt: khai báo ở thẻ &quot;Thanh toán tiền mặt&quot; bên dưới. Khách trả online: chỉ cần chờ khách thanh toán qua app.
+                <Text style={[styles.jobMeta, { fontSize: 12, marginTop: 4 }]}>
+                  Tiền mặt: khai báo ở thẻ Thanh toán tiền mặt bên dưới. Khách trả online: chờ khách thanh toán trong app; trạng thái thật xem ở mục Hóa đơn.
                 </Text>
-                <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button">
-                  <Text style={styles.retryText}>{refreshing ? 'Đang kiểm tra…' : 'Kiểm tra trạng thái nghiệm thu/thanh toán'}</Text>
+                <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button" accessibilityLabel="Kiểm tra trạng thái nghiệm thu" style={styles.bannerRetryBtn}>
+                  <Text style={styles.retryText}>{refreshing ? 'Đang kiểm tra…' : 'Kiểm tra trạng thái nghiệm thu'}</Text>
                 </TouchableOpacity>
               </View>
             ) : completionEligible ? (
-              !completionState.confirming ? (
-                <TouchableOpacity
-                  style={[styles.uploadBtn, { backgroundColor: colors.primaryStrong }]}
-                  onPress={onCompletionConfirm}
-                  disabled={completionState.busy || completionState.needsVerify}
-                  accessibilityRole="button"
-                  accessibilityLabel="Yêu cầu hoàn thành"
-                >
-                  <Text style={styles.uploadBtnText}>Gửi yêu cầu nghiệm thu</Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.evidenceError}>
-                  <Text style={styles.jobMeta}>{REQUEST_COMPLETION_CONFIRM_COPY}</Text>
-                  <View style={styles.uploadBtnRow}>
-                    <TouchableOpacity
-                      style={[styles.uploadBtn, { backgroundColor: colors.tone.success.text }]}
-                      onPress={onCompletionSubmit}
-                      disabled={completionState.busy}
-                      accessibilityRole="button"
-                      accessibilityLabel="Xác nhận yêu cầu hoàn thành"
-                    >
-                      {completionState.busy ? (
-                        <ActivityIndicator size="small" color={colors.surface} />
-                      ) : (
-                        <Text style={styles.uploadBtnText}>Xác nhận</Text>
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.uploadBtn, { backgroundColor: colors.divider }]}
-                      onPress={onCompletionCancel}
-                      disabled={completionState.busy}
-                      accessibilityRole="button"
-                      accessibilityLabel="Hủy yêu cầu hoàn thành"
-                    >
-                      <Text style={[styles.uploadBtnText, { color: colors.text }]}>Hủy</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )
+              <Text style={styles.jobMeta}>Gửi yêu cầu nghiệm thu ở thẻ trạng thái hiện tại phía trên.</Text>
             ) : (
-              completionBlockers.map((blocker) => (
-                <Text key={blocker} style={styles.jobMeta}>• {blocker}</Text>
-              ))
-            )}
-            {!!completionState.error && (
-              <View style={styles.evidenceError}>
-                <Text style={styles.jobMeta}>{completionState.error}</Text>
-              </View>
+              <Text style={styles.jobMeta}>Điều kiện đang chờ được hiển thị ở thẻ trạng thái hiện tại phía trên.</Text>
             )}
           </CollapsibleCard>
 
@@ -2659,6 +3197,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   emptyTitle: { fontSize: 18, lineHeight: 26, fontWeight: '700', color: colors.text, marginTop: 8 },
   emptyDesc: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
   retryBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, marginTop: 8 },
+  bannerRetryBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16 },
   retryText: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong, paddingVertical: 10 },
 
   acPartResultItem: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.divider },
@@ -2692,6 +3231,69 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
     borderColor: colors.border,
   },
   summaryTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  beforeOverview: { gap: 24, paddingBottom: 12 },
+  beforeArrivalBadge: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.tone.success.bg },
+  beforeArrivalText: { flexShrink: 1, fontSize: 12, lineHeight: 16, fontWeight: '500', color: colors.tone.success.text },
+  beforeOverviewCopy: { gap: 12 },
+  beforeOverviewTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
+  beforeOverviewDescription: { fontSize: 14, lineHeight: 24, color: colors.textSecondary },
+  beforeEvidencePaper: { borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, padding: 16, gap: 8 },
+  beforeEvidenceLabel: { alignSelf: 'flex-end', fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.textSecondary },
+  beforeEvidencePlaceholder: { minHeight: 200, borderRadius: 14, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
+  beforeCameraFrame: { width: '72%', minHeight: 120, borderWidth: 1, borderColor: colors.border, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  beforeEvidenceCount: { fontSize: 14, lineHeight: 20, fontWeight: '500', color: colors.text, textAlign: 'center' },
+  beforeEvidenceNote: { fontSize: 12, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
+  beforePricingLabel: { borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, padding: 16 },
+  beforePricingText: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.text },
+  checkInPresentation: { gap: 24, paddingBottom: 12 },
+  checkInTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
+  checkInLocator: { minHeight: 230, borderRadius: 24, backgroundColor: colors.tone.info.bg, alignItems: 'center', justifyContent: 'center' },
+  checkInOuterRing: { width: 160, height: 160, borderRadius: 80, borderWidth: 1, borderColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center' },
+  checkInInnerRing: { width: 120, height: 120, borderRadius: 60, borderWidth: 1, borderColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center' },
+  checkInCopy: { gap: 12 },
+  checkInDescription: { fontSize: 14, lineHeight: 24, color: colors.textSecondary },
+  checkInReadinessRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  checkInTravelCheck: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.75, borderColor: colors.primaryStrong, alignItems: 'center', justifyContent: 'center' },
+  checkInReadinessText: { flex: 1, fontSize: 14, lineHeight: 24, color: colors.text },
+  repairOverview: { gap: 12, paddingBottom: 12 },
+  repairHero: { backgroundColor: colors.tone.repair.bg, borderRadius: 20, padding: 20, alignItems: 'center', gap: 8 },
+  repairHeroArt: { minHeight: 72, alignItems: 'center', justifyContent: 'center' },
+  repairHeroTitle: { fontSize: 20, lineHeight: 28, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  repairHeroSubtitle: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
+  repairHeroMeta: { fontSize: 12, lineHeight: 16, fontWeight: '500', color: colors.textSecondary, textAlign: 'center' },
+  repairReadinessRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  repairChecked: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.75, borderColor: colors.primaryStrong, alignItems: 'center', justifyContent: 'center' },
+  repairReadinessText: { flex: 1, fontSize: 14, lineHeight: 24, color: colors.text },
+  afterOverview: { gap: 12, paddingBottom: 12 },
+  afterHero: { backgroundColor: colors.tone.repair.bg, borderRadius: 20, padding: 20, alignItems: 'center', gap: 8 },
+  afterHeroArt: { minHeight: 72, alignItems: 'center', justifyContent: 'center' },
+  afterHeroTitle: { fontSize: 20, lineHeight: 28, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  afterHeroDescription: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
+  afterEvidencePaper: { borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, padding: 16, gap: 8 },
+  afterEvidenceLabel: { alignSelf: 'flex-end', fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.textSecondary },
+  afterEvidencePlaceholder: { minHeight: 200, borderRadius: 14, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
+  afterCameraFrame: { width: '72%', minHeight: 120, borderWidth: 1, borderColor: colors.border, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  afterEvidenceCount: { fontSize: 14, lineHeight: 20, fontWeight: '500', color: colors.text, textAlign: 'center' },
+  afterEvidenceNote: { fontSize: 12, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
+  afterCostRow: { borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, padding: 16 },
+  afterCostText: { fontSize: 14, lineHeight: 20, fontWeight: '500', color: colors.text },
+  completionPendingOverview: { gap: 12, paddingBottom: 12 },
+  completionPendingHero: { backgroundColor: colors.tone.warning.bg, borderRadius: 20, padding: 20, alignItems: 'center', gap: 8 },
+  completionPendingArt: { minHeight: 72, alignItems: 'center', justifyContent: 'center' },
+  completionPendingTitle: { fontSize: 20, lineHeight: 28, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  completionPendingSubtitle: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
+  completionPendingNote: { fontSize: 12, lineHeight: 16, color: colors.textSecondary, textAlign: 'center' },
+  completionPendingPaper: { borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, padding: 16, gap: 8 },
+  completionPendingValue: { fontSize: 14, lineHeight: 20, fontWeight: '500', color: colors.text, textAlign: 'center' },
+  acceptedOverview: { gap: 24 },
+  acceptedHero: { alignItems: 'center', gap: 12, paddingTop: 8 },
+  acceptedArt: { minHeight: 160, width: '100%', alignItems: 'center', justifyContent: 'center' },
+  acceptedTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text, textAlign: 'center', alignSelf: 'stretch' },
+  acceptedPaper: { backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 20, paddingBottom: 8 },
+  acceptedInfoRow: { paddingVertical: 16, gap: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  acceptedInfoLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  acceptedInfoLabel: { fontSize: 12, lineHeight: 16, fontWeight: '500', color: colors.textSecondary, flexShrink: 1 },
+  acceptedInfoValue: { fontSize: 14, lineHeight: 24, color: colors.text },
   caption: { fontSize: 12, lineHeight: 16, fontWeight: '500', color: colors.textSecondary },
   iconRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   rowIcon: { marginTop: 2 },
@@ -2710,7 +3312,26 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   stepLabelCurrent: { color: colors.text, fontWeight: '700' },
 
   nextStepCard: { borderColor: colors.primaryTint, backgroundColor: colors.primarySoft },
+  stageFocus: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: 14,
+    padding: 16,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: colors.primaryTint,
+  },
+  stageFocusEyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.primaryStrong },
+  stageFocusTitle: { fontSize: 20, lineHeight: 28, fontWeight: '700', color: colors.text },
+  stageFocusDescription: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
   nextStepEyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.primaryStrong },
+  hierarchyStateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  hierarchyAction: { gap: 6 },
+  readinessCard: { marginTop: 6, padding: 12, gap: 4, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  readinessTitle: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.text },
+  quickActionsCard: { backgroundColor: colors.surface, borderRadius: 14, padding: 14, gap: 8, borderWidth: 1, borderColor: colors.border },
+  quickActionsTitle: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.textSecondary },
+  quickChatAction: { minHeight: 48, borderRadius: 14, backgroundColor: colors.primarySoft, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  quickChatText: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong },
   groupHeading: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.textSecondary, marginTop: 8 },
   nextStepAction: { flex: 0, alignSelf: 'stretch', backgroundColor: colors.primaryStrong, marginTop: 6 },
   nextStepWait: { fontSize: 14, lineHeight: 20, color: colors.tone.warning.text, fontWeight: '600', marginTop: 4 },
@@ -2747,9 +3368,19 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   },
   fieldError: { fontSize: 12, lineHeight: 16, color: colors.error },
   quoteInfoNote: { color: colors.primaryStrong, fontWeight: '600' },
+  quoteBranch: { gap: 12, marginBottom: 8 },
+  quoteBranchTitle: { fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.text },
+  quoteBranchSegments: { flexDirection: 'row', backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 4, gap: 4 },
+  quoteBranchOption: { flex: 1, minWidth: 0, minHeight: 48, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 8, borderRadius: 8, gap: 4 },
+  quoteBranchCurrent: { backgroundColor: colors.primarySoft },
+  quoteBranchLabel: { fontSize: 14, lineHeight: 20, fontWeight: '500', color: colors.textSecondary, textAlign: 'center' },
+  quoteBranchCurrentLabel: { color: colors.primaryStrong, fontWeight: '700' },
+  quoteBranchCurrentNote: { fontSize: 12, lineHeight: 16, color: colors.primaryStrong, textAlign: 'center' },
+  quoteBranchNote: { fontSize: 12, lineHeight: 16, color: colors.textSecondary },
+  quoteBranchStatus: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, gap: 4 },
+  quoteBranchStatusLabel: { fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.text },
   fixedPriceBox: { backgroundColor: colors.background, borderRadius: 14, padding: 12, gap: 4, marginTop: 8 },
   fixedPriceTotalText: { fontWeight: '700', color: colors.text },
-  startRepairDivider: { height: 1, backgroundColor: colors.divider, marginVertical: 12 },
   totalLabel: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.text },
   totalValue: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong },
 });

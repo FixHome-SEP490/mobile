@@ -124,11 +124,12 @@ export default function CustomerBookingDetailScreen() {
           onPress={() => navigation.goBack()}
           accessibilityRole="button"
           accessibilityLabel="Quay lại"
+          style={styles.headerBackBtn}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chi tiết yêu cầu đặt lịch</Text>
+        <Text style={styles.headerTitle} accessibilityRole="header">Chi tiết yêu cầu đặt lịch</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -140,12 +141,14 @@ export default function CustomerBookingDetailScreen() {
       ) : !booking ? (
         <View style={styles.emptyState}>
           <Ionicons name="calendar-outline" size={52} color={colors.muted} />
-          <Text style={styles.emptyTitle}>Không xem được yêu cầu</Text>
+          <Text style={styles.emptyTitle} accessibilityRole="header">Không xem được yêu cầu</Text>
           {!!error && <Text style={styles.emptyText}>{error}</Text>}
           <TouchableOpacity
             onPress={() => void loader.refresh(true)}
             disabled={refreshing}
             accessibilityRole="button"
+            accessibilityLabel="Thử tải lại yêu cầu đặt lịch"
+            accessibilityState={{ disabled: refreshing, busy: refreshing }}
             style={styles.secondaryButton}
           >
             <Text style={styles.secondaryButtonText}>{refreshing ? 'Đang tải…' : 'Thử lại'}</Text>
@@ -170,7 +173,7 @@ export default function CustomerBookingDetailScreen() {
               </View>
               <Text style={styles.referenceText}>#{booking.id.slice(0, 8)}</Text>
             </View>
-            <Text style={styles.serviceTitle}>{booking.serviceName || 'Dịch vụ sửa chữa'}</Text>
+            <Text style={styles.serviceTitle} accessibilityRole="header">{booking.serviceName || 'Dịch vụ sửa chữa'}</Text>
             {!!booking.description && <Text style={styles.description}>{booking.description}</Text>}
             {!!booking.addressSummary && (
               <View style={styles.infoRow}>
@@ -196,16 +199,55 @@ export default function CustomerBookingDetailScreen() {
             )}
           </View>
 
+          <View testID="booking-detail-status-timeline" style={styles.progressCard}>
+            <Text style={styles.progressHeading} accessibilityRole="header">Tiến độ yêu cầu</Text>
+            <View style={styles.progressRow}>
+              <View style={styles.progressTrack}>
+                <View style={styles.progressDotComplete} />
+                <View style={styles.progressConnector} />
+              </View>
+              <View style={styles.progressCopy}>
+                <Text style={styles.progressTitle}>Yêu cầu đã gửi</Text>
+                {!!booking.createdAt && (
+                  <Text style={styles.progressMeta}>{vnDateTimeString(booking.createdAt)}</Text>
+                )}
+              </View>
+            </View>
+            <View style={styles.progressRow}>
+              <View style={styles.progressTrack}>
+                <View style={styles.progressDotCurrent} />
+              </View>
+              <View style={styles.progressCopy}>
+                <Text style={styles.progressMeta}>Trạng thái hiện tại</Text>
+                <Text style={styles.progressTitle}>{bookingStatusLabel(booking.status)}</Text>
+              </View>
+            </View>
+            <View style={styles.orderRelation}>
+              <Ionicons
+                name={booking.serviceOrderId ? 'construct-outline' : 'time-outline'}
+                size={18}
+                color={colors.textSecondary}
+              />
+              <Text style={styles.orderRelationText}>
+                {booking.serviceOrderId
+                  ? 'Đơn sửa chữa đã được tạo'
+                  : 'Đơn sửa chữa chưa được tạo'}
+              </Text>
+            </View>
+          </View>
+
           {nextAction && (
             <View style={styles.actionCard} accessibilityRole="summary">
-              <Text style={styles.actionEyebrow}>BẠN CẦN LÀM GÌ?</Text>
-              <Text style={styles.actionTitle}>{nextAction.title}</Text>
+              <Text style={styles.actionEyebrow}>Bước tiếp theo</Text>
+              <Text style={styles.actionTitle} accessibilityRole="header">{nextAction.title}</Text>
               <Text style={styles.actionDetail}>{nextAction.detail}</Text>
               {!!nextAction.primaryLabel && (
                 <TouchableOpacity
                   testID="booking-detail-primary-action"
                   onPress={runPrimaryAction}
                   accessibilityRole="button"
+                  accessibilityLabel={nextAction.primaryLabel}
+                  accessibilityHint="Mở bước tiếp theo; không tự gửi yêu cầu đặt lịch hoặc thanh toán"
                   style={styles.primaryButton}
                 >
                   <Text style={styles.primaryButtonText}>{nextAction.primaryLabel}</Text>
@@ -218,6 +260,7 @@ export default function CustomerBookingDetailScreen() {
                     serviceOrderId: nextAction.serviceOrderId!,
                   })}
                   accessibilityRole="button"
+                  accessibilityLabel="Xem đơn sửa chữa liên quan"
                   style={styles.linkButton}
                 >
                   <Text style={styles.linkText}>Xem đơn sửa chữa liên quan</Text>
@@ -268,15 +311,17 @@ function getStyles(colors: ThemeColors) {
       flex: 1,
       textAlign: 'center',
       fontSize: 17,
-      fontWeight: '800',
+      lineHeight: 24,
+      fontWeight: '700',
       color: colors.text,
     },
-    headerSpacer: { width: 24 },
-    content: { padding: 16, paddingBottom: 36, gap: 14 },
+    headerBackBtn: { width: 44, height: 44, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
+    headerSpacer: { width: 44 },
+    content: { padding: 16, paddingBottom: 64, gap: 14, flexGrow: 1 },
     loadingState: { flex: 1, padding: 16, gap: 12 },
     loadingText: { textAlign: 'center', color: colors.textSecondary, fontSize: 13 },
     emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 10 },
-    emptyTitle: { color: colors.text, fontSize: 17, fontWeight: '800' },
+    emptyTitle: { color: colors.text, fontSize: 18, lineHeight: 26, fontWeight: '700' },
     emptyText: { color: colors.textSecondary, fontSize: 13, lineHeight: 19, textAlign: 'center' },
     inlineError: {
       padding: 12,
@@ -294,7 +339,7 @@ function getStyles(colors: ThemeColors) {
       borderWidth: 1,
       borderColor: colors.border,
     },
-    summaryTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+    summaryTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 },
     statusBadge: {
       alignSelf: 'flex-start',
       paddingHorizontal: 10,
@@ -303,8 +348,8 @@ function getStyles(colors: ThemeColors) {
       backgroundColor: colors.primarySoft,
     },
     statusText: { color: colors.primaryStrong, fontSize: 12, lineHeight: 17, fontWeight: '800' },
-    referenceText: { color: colors.textSecondary, fontSize: 12, fontWeight: '600' },
-    serviceTitle: { color: colors.text, fontSize: 19, lineHeight: 26, fontWeight: '800' },
+    referenceText: { color: colors.textSecondary, fontSize: 12, lineHeight: 18, fontWeight: '600', flexShrink: 0 },
+    serviceTitle: { color: colors.text, fontSize: 20, lineHeight: 28, fontWeight: '700' },
     description: { color: colors.text, fontSize: 14, lineHeight: 21 },
     infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
     infoText: { flex: 1, color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
@@ -312,16 +357,16 @@ function getStyles(colors: ThemeColors) {
       borderRadius: 16,
       padding: 16,
       gap: 8,
-      backgroundColor: colors.primarySoft,
+      backgroundColor: colors.surface,
       borderWidth: 1,
-      borderColor: colors.primary,
+      borderColor: colors.border,
     },
-    actionEyebrow: { color: colors.primaryStrong, fontSize: 11, fontWeight: '900', letterSpacing: 0.4 },
-    actionTitle: { color: colors.text, fontSize: 18, lineHeight: 25, fontWeight: '800' },
+    actionEyebrow: { color: colors.textSecondary, fontSize: 12, lineHeight: 18, fontWeight: '700' },
+    actionTitle: { color: colors.text, fontSize: 18, lineHeight: 26, fontWeight: '700' },
     actionDetail: { color: colors.textSecondary, fontSize: 13, lineHeight: 20 },
     primaryButton: {
       marginTop: 4,
-      minHeight: 46,
+      minHeight: 48,
       borderRadius: 12,
       paddingHorizontal: 16,
       backgroundColor: colors.primaryStrong,
@@ -342,7 +387,7 @@ function getStyles(colors: ThemeColors) {
       backgroundColor: colors.surface,
     },
     secondaryButtonText: { color: colors.primaryStrong, fontSize: 14, fontWeight: '700' },
-    linkButton: { alignSelf: 'flex-start', paddingVertical: 6 },
+    linkButton: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 3 },
     linkText: { color: colors.primaryStrong, fontSize: 13, fontWeight: '700' },
     noteCard: {
       flexDirection: 'row',
@@ -354,6 +399,53 @@ function getStyles(colors: ThemeColors) {
       borderWidth: 1,
       borderColor: colors.border,
     },
-    noteText: { flex: 1, color: colors.textSecondary, fontSize: 12, lineHeight: 18 },
+    noteText: { flex: 1, color: colors.textSecondary, fontSize: 12, lineHeight: 19 },
+    progressCard: {
+      borderRadius: 16,
+      padding: 16,
+      gap: 12,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    progressHeading: { color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '800' },
+    progressRow: { flexDirection: 'row', minHeight: 38, gap: 12 },
+    progressTrack: { width: 18, alignItems: 'center' },
+    progressDotComplete: {
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      marginTop: 4,
+      backgroundColor: colors.primaryStrong,
+    },
+    progressDotCurrent: {
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      marginTop: 4,
+      borderWidth: 3,
+      borderColor: colors.primaryStrong,
+      backgroundColor: colors.surface,
+    },
+    progressConnector: {
+      position: 'absolute',
+      top: 18,
+      bottom: -14,
+      width: 1,
+      backgroundColor: colors.border,
+    },
+    progressCopy: { flex: 1, gap: 2 },
+    progressTitle: { color: colors.text, fontSize: 14, lineHeight: 20, fontWeight: '700' },
+    progressMeta: { color: colors.textSecondary, fontSize: 12, lineHeight: 18 },
+    orderRelation: {
+      marginTop: 2,
+      paddingTop: 12,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    orderRelationText: { flex: 1, color: colors.textSecondary, fontSize: 12, lineHeight: 18 },
   });
 }

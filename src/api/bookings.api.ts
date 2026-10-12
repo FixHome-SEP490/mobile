@@ -170,11 +170,16 @@ export const bookingsApi = {
     const safePage = toPositiveInt(page, 1);
     const safePageSize = Math.min(toPositiveInt(pageSize, 20), 100);
     const res = await apiClient.get('/bookings/my', { params: { page: safePage, pageSize: safePageSize } });
-    const body = res.data as { data?: RawBooking[]; meta?: { total?: number } } | RawBooking[];
-    const rows = Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : [];
-    const total = !Array.isArray(body)
-      && typeof body?.meta?.total === 'number' && body.meta.total >= 0
-      ? body.meta.total : rows.length;
+    const body: unknown = res.data;
+    const envelope = !Array.isArray(body) && body !== null && typeof body === 'object'
+      ? body as { data?: unknown; meta?: { total?: unknown } }
+      : undefined;
+    const rows = Array.isArray(body)
+      ? body as RawBooking[]
+      : Array.isArray(envelope?.data) ? envelope.data as RawBooking[] : null;
+    if (rows === null) throw new Error('Invalid bookings page response');
+    const total = typeof envelope?.meta?.total === 'number' && envelope.meta.total >= 0
+      ? envelope.meta.total : rows.length;
     return { data: rows.map(normalizeBooking), total };
   },
 

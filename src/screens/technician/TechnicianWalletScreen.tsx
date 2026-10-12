@@ -31,6 +31,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuthStore } from '../../store';
 import { walletApi } from '../../api/wallet.api';
 import { useAppTheme, type Tone } from '../../constants/theme';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
 import StatusBadge from '../../components/StatusBadge';
 import type { StatusView } from './technician-status';
 import { formatVnd } from '../../utils/format';
@@ -44,6 +45,7 @@ import {
   openWithdrawalOf,
   type WalletUiState,
 } from './technician-wallet';
+import { getWalletSummaryDisplayRows, maskAccountNumber } from './technician-wallet-presentation';
 import { vnDateTimeString } from '../../utils/vn-time';
 
 const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
@@ -79,14 +81,10 @@ const WITHDRAWAL_STATUS_VIEW: Record<WithdrawalRequest['status'], StatusView> = 
   FAILED: { label: 'Chuyển thất bại', tone: 'danger', icon: 'AlertTriangle' },
 };
 
-/** Only the last four digits are shown outside the edit form. */
-function maskAccountNumber(number: string): string {
-  return number.length > 4 ? `•••• ${number.slice(-4)}` : number;
-}
-
 export default function TechnicianWalletScreen() {
   const { colors, isDark } = useAppTheme();
   const styles = getStyles(colors);
+  const reduceMotion = useReduceMotion();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user } = useAuthStore();
 
@@ -165,6 +163,7 @@ export default function TechnicianWalletScreen() {
   const minimumWithdrawal = minimumWithdrawalOf(summary);
   const canWithdraw =
     !!summary && !openWithdrawal && summary.withdrawableBalance >= minimumWithdrawal;
+  const summaryMetrics = summary ? getWalletSummaryDisplayRows(summary) : [];
 
   const selectedBank = state.banks.find((b) => b.bin === bankBin) ?? null;
   const visibleBanks = useMemo(() => {
@@ -260,7 +259,7 @@ export default function TechnicianWalletScreen() {
   const balanceNegative = !!summary && summary.balance < 0;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       <View style={styles.header}>
@@ -272,7 +271,10 @@ export default function TechnicianWalletScreen() {
         >
           <ChevronLeft size={26} color={colors.text} strokeWidth={1.75} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} accessibilityRole="header">Ví của tôi</Text>
+        <View style={styles.headerTitleGroup}>
+          <Text style={styles.headerEyebrow}>Ví của tôi</Text>
+          <Text style={styles.headerTitle} accessibilityRole="header">Ví rõ từng khoản</Text>
+        </View>
         <View style={styles.backBtn} />
       </View>
 
@@ -290,15 +292,21 @@ export default function TechnicianWalletScreen() {
           <View style={styles.centerBlock}>
             <AlertTriangle size={40} color={colors.error} strokeWidth={1.5} />
             <Text style={styles.errorText}>{state.error}</Text>
-            <TouchableOpacity style={styles.textBtn} onPress={onRefresh} accessibilityRole="button">
+            <TouchableOpacity style={styles.textBtn} onPress={onRefresh} accessibilityRole="button" accessibilityLabel="Thử tải lại thông tin ví">
               <Text style={styles.textBtnLabel}>Thử lại</Text>
             </TouchableOpacity>
           </View>
         ) : summary ? (
           <>
             <View style={styles.heroCard}>
-              <Text style={styles.caption}>Số dư ví</Text>
-              <Text style={[styles.heroBalance, balanceNegative && { color: colors.error }]}>
+              <View style={styles.heroCaptionRow}>
+                <Landmark size={20} color="#FFFFFF" strokeWidth={1.75} />
+                <Text style={styles.heroCaption}>Số dư ví</Text>
+              </View>
+              <Text
+                style={[styles.heroBalance, balanceNegative && { color: '#FECACA' }]}
+                accessibilityLabel={`Số dư ví: ${formatVnd(summary.balance)}`}
+              >
                 {formatVnd(summary.balance)}
               </Text>
               <StatusBadge
@@ -308,12 +316,14 @@ export default function TechnicianWalletScreen() {
                     : { label: 'Dưới mức ký quỹ', tone: 'danger', icon: 'AlertTriangle' }
                 }
               />
-              <Text style={styles.bodySmall}>Mức tối thiểu để nhận việc: {formatVnd(summary.minimumBalance)}</Text>
-              <View style={styles.heroActions}>
+              <Text style={styles.heroMinBalance}>Mức tối thiểu để nhận việc: {formatVnd(summary.minimumBalance)}</Text>
+            </View>
+            <View style={styles.heroActions}>
                 <TouchableOpacity
                   style={[styles.primaryBtn, styles.flex1]}
                   onPress={() => setTopUpVisible(true)}
                   accessibilityRole="button"
+                  accessibilityLabel="Mở nạp tiền qua VNPay"
                 >
                   <Plus size={18} color={colors.surface} strokeWidth={2} />
                   <Text style={styles.primaryBtnText}>Nạp tiền</Text>
@@ -329,7 +339,6 @@ export default function TechnicianWalletScreen() {
                   <ArrowDownToLine size={18} color={colors.primaryStrong} strokeWidth={2} />
                   <Text style={styles.secondaryBtnText}>Rút tiền</Text>
                 </TouchableOpacity>
-              </View>
             </View>
 
             {!summary.eligibleForJobs && !balanceNegative && (
@@ -365,22 +374,27 @@ export default function TechnicianWalletScreen() {
               />
             )}
 
-            <View style={styles.statRow}>
-              <View style={styles.statCard}>
-                <Text style={styles.caption}>Có thể rút</Text>
-                <Text style={styles.statValue}>{formatVnd(summary.withdrawableBalance)}</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.caption}>Giữ tối thiểu</Text>
-                <Text style={styles.statValue}>{formatVnd(summary.minimumBalance)}</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.caption}>Đang chuyển</Text>
-                <Text style={styles.statValue}>
-                  {formatVnd(summary.pendingWithdrawal + (summary.processingWithdrawal ?? 0))}
-                </Text>
-              </View>
+            <View style={styles.statGrid}>
+              {[summaryMetrics.slice(0, 2), summaryMetrics.slice(2, 4)].map((row, index) => (
+                <View key={index} style={styles.statRow}>
+                  {row.map((metric) => {
+                    const value = metric.value === undefined ? 'Chưa xác định' : formatVnd(metric.value);
+                    return (
+                      <View
+                        key={metric.key}
+                        style={styles.statCard}
+                        accessible
+                        accessibilityLabel={`${metric.label}: ${value}`}
+                      >
+                        <Text style={styles.caption}>{metric.label}</Text>
+                        <Text style={styles.statValue}>{value}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              ))}
             </View>
+            <Text style={styles.bodySmall}>Khoản đang chuyển đã được trừ khỏi số dư ví.</Text>
 
             {/* Receiving bank account */}
             <View style={styles.bankCard}>
@@ -422,6 +436,7 @@ export default function TechnicianWalletScreen() {
                     style={[styles.segmentBtn, active && styles.segmentBtnActive]}
                     onPress={() => setActiveTab(tab)}
                     accessibilityRole="button"
+                    accessibilityLabel={tab === 'transactions' ? 'Xem biến động số dư' : 'Xem lịch sử rút tiền'}
                     accessibilityState={{ selected: active }}
                   >
                     <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
@@ -448,6 +463,7 @@ export default function TechnicianWalletScreen() {
                         style={[styles.filterChip, active && styles.filterChipActive]}
                         onPress={() => controllerRef.current?.setTxFilter(f.value)}
                         accessibilityRole="button"
+                        accessibilityLabel={`Lọc giao dịch: ${f.label}`}
                         accessibilityState={{ selected: active }}
                       >
                         <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{f.label}</Text>
@@ -464,7 +480,12 @@ export default function TechnicianWalletScreen() {
                   state.transactions.map((tx: WalletTransaction) => {
                     const isCredit = tx.balanceAfter >= tx.balanceBefore;
                     return (
-                      <View key={tx.id} style={styles.txRow}>
+                      <View
+                        key={tx.id}
+                        style={styles.txRow}
+                        accessible
+                        accessibilityLabel={`${TX_TYPE_LABELS[tx.type] ?? tx.type}, ${isCredit ? 'cộng' : 'trừ'} ${formatVnd(tx.amount)}, ${vnDateTimeString(tx.createdAt, VN_DATETIME)}`}
+                      >
                         <View style={styles.flex1}>
                           <Text style={styles.rowTitle}>{TX_TYPE_LABELS[tx.type] ?? tx.type}</Text>
                           {!!tx.description && <Text style={styles.bodySmall}>{tx.description}</Text>}
@@ -517,9 +538,19 @@ export default function TechnicianWalletScreen() {
               <Text style={styles.emptyText}>Chưa có yêu cầu rút tiền nào.</Text>
             ) : (
               state.withdrawals.map((w: WithdrawalRequest) => (
-                <View key={w.id} style={styles.txRow}>
+                <View
+                  key={w.id}
+                  style={styles.txRow}
+                  accessible
+                  accessibilityLabel={`Rút ${formatVnd(w.amount)}, ${w.bankName}, tài khoản ${maskAccountNumber(w.bankAccountNumber)}`}
+                >
                   <View style={styles.flex1}>
-                    <Text style={styles.rowTitle}>{w.bankName} · {w.bankAccountNumber}</Text>
+                    <Text
+                      style={styles.rowTitle}
+                      accessibilityLabel={`${w.bankName}, tài khoản ${maskAccountNumber(w.bankAccountNumber)}`}
+                    >
+                      {w.bankName} · {maskAccountNumber(w.bankAccountNumber)}
+                    </Text>
                     <Text style={styles.bodySmall}>{w.bankAccountName}</Text>
                     <Text style={styles.caption}>{vnDateTimeString(w.requestedAt, VN_DATETIME)}</Text>
                     {w.status === 'REJECTED' && !!w.rejectReason && (
@@ -561,6 +592,7 @@ export default function TechnicianWalletScreen() {
         styles={styles}
         visible={topUpVisible}
         title="Nạp tiền vào ví"
+        reduceMotion={reduceMotion}
         onClose={() => { setTopUpVisible(false); setTopUpAmount(''); }}
       >
         <View style={styles.presetRow}>
@@ -570,6 +602,7 @@ export default function TechnicianWalletScreen() {
               style={[styles.presetChip, topUpAmount === String(p) && styles.presetChipActive]}
               onPress={() => setTopUpAmount(String(p))}
               accessibilityRole="button"
+              accessibilityLabel={`Nạp ${formatVnd(p)}`}
               accessibilityState={{ selected: topUpAmount === String(p) }}
             >
               <Text style={[styles.presetChipText, topUpAmount === String(p) && styles.presetChipTextActive]}>
@@ -598,12 +631,13 @@ export default function TechnicianWalletScreen() {
           >
             <Text style={styles.secondaryBtnText}>Hủy</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.primaryBtn, styles.flex1, state.topUpBusy && styles.disabled]}
-            onPress={submitTopUp}
-            disabled={state.topUpBusy}
-            accessibilityRole="button"
-          >
+                <TouchableOpacity
+                  style={[styles.primaryBtn, styles.flex1, state.topUpBusy && styles.disabled]}
+                  onPress={submitTopUp}
+                  disabled={state.topUpBusy}
+                  accessibilityRole="button"
+                  accessibilityLabel="Xác nhận nạp tiền qua VNPay"
+                >
             {state.topUpBusy ? (
               <ActivityIndicator size="small" color={colors.surface} />
             ) : (
@@ -618,6 +652,7 @@ export default function TechnicianWalletScreen() {
         styles={styles}
         visible={withdrawVisible}
         title="Rút tiền về ngân hàng"
+        reduceMotion={reduceMotion}
         onClose={() => setWithdrawVisible(false)}
       >
         <Text style={styles.bodySmall}>Có thể rút: {formatVnd(summary?.withdrawableBalance ?? 0)}</Text>
@@ -668,6 +703,7 @@ export default function TechnicianWalletScreen() {
             onPress={submitWithdraw}
             disabled={state.withdrawBusy}
             accessibilityRole="button"
+            accessibilityLabel="Xác nhận rút tiền về tài khoản đã khai báo"
           >
             {state.withdrawBusy ? (
               <ActivityIndicator size="small" color={colors.surface} />
@@ -683,6 +719,7 @@ export default function TechnicianWalletScreen() {
         styles={styles}
         visible={bankVisible}
         title="Tài khoản nhận tiền rút"
+        reduceMotion={reduceMotion}
         onClose={() => setBankVisible(false)}
       >
         {bankForWithdraw && (
@@ -714,6 +751,7 @@ export default function TechnicianWalletScreen() {
                     style={[styles.bankOption, bankBin === b.bin && styles.bankOptionActive]}
                     onPress={() => chooseBank(b.bin)}
                     accessibilityRole="button"
+                    accessibilityLabel={`Chọn ngân hàng ${b.shortName}`}
                     accessibilityState={{ selected: bankBin === b.bin }}
                   >
                     <Text style={[styles.rowTitle, bankBin === b.bin && { color: colors.primaryStrong }]}>
@@ -812,15 +850,16 @@ function Banner({ styles, tone, Icon, busy, text }: {
 }
 
 /** Centered dialog that keeps its fields above the keyboard and scrolls when content is tall. */
-function FormModal({ styles, visible, title, onClose, children }: {
+function FormModal({ styles, visible, title, reduceMotion, onClose, children }: {
   styles: WalletStyles;
   visible: boolean;
   title: string;
+  reduceMotion?: boolean;
   onClose: () => void;
   children: React.ReactNode;
 }) {
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={onClose}>
       <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.modalCard}>
           <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -835,12 +874,14 @@ function FormModal({ styles, visible, title, onClose, children }: {
 
 const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  flex1: { flex: 1 },
+  flex1: { flex: 1, minWidth: 0 },
   pad12: { padding: 12 },
   disabled: { opacity: 0.5 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, paddingVertical: 4 },
   backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text },
+  headerTitleGroup: { flex: 1, justifyContent: 'center', gap: 1 },
+  headerEyebrow: { fontSize: 12, lineHeight: 16, color: colors.textSecondary, fontWeight: '600' },
+  headerTitle: { fontSize: 20, lineHeight: 28, fontWeight: '700', color: colors.text },
   scrollContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40, gap: 12 },
   centerBlock: { alignItems: 'center', gap: 12, marginTop: 40 },
   mutedText: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
@@ -851,8 +892,11 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   rowTitle: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.text },
   hintText: { fontSize: 12, lineHeight: 16, color: colors.textSecondary, marginBottom: 12 },
 
-  heroCard: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 16, gap: 8 },
-  heroBalance: { fontSize: 32, lineHeight: 40, fontWeight: '700', color: colors.text },
+  heroCard: { backgroundColor: '#193E70', borderRadius: 20, borderWidth: 1, borderColor: '#193E70', padding: 20, gap: 10 },
+  heroCaptionRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  heroCaption: { fontSize: 12, lineHeight: 18, fontWeight: '600', color: '#FFFFFF' },
+  heroMinBalance: { fontSize: 12, lineHeight: 18, color: '#EAF2FF' },
+  heroBalance: { fontSize: 32, lineHeight: 40, fontWeight: '700', color: '#FFFFFF' },
   heroActions: { flexDirection: 'row', gap: 12, marginTop: 8 },
   primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48, borderRadius: 14, backgroundColor: colors.primaryStrong, paddingHorizontal: 16 },
   primaryBtnText: { color: colors.surface, fontSize: 16, lineHeight: 24, fontWeight: '600' },
@@ -864,6 +908,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   banner: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, padding: 12 },
   bannerText: { flex: 1, fontSize: 14, lineHeight: 20, fontWeight: '500' },
 
+  statGrid: { gap: 8 },
   statRow: { flexDirection: 'row', gap: 8 },
   statCard: { flex: 1, backgroundColor: colors.surface, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: colors.border, gap: 4 },
   statValue: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.text },

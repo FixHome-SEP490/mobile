@@ -1,6 +1,6 @@
 import { createJobsLoader, technicianJobsUserId, type JobsState } from './technician-jobs-loader';
 import { UserRole, type UserInfo } from '../../types/auth.types';
-import type { OrdersPage, ServiceOrderItem } from '../../api/orders.api';
+import type { TechnicianOrdersPage, TechnicianOrderItem, ServiceOrderItem } from '../../api/orders.api';
 
 const order = { id: 'real-order-1', status: 'ACCEPTED' } as ServiceOrderItem;
 function deferred<T>() {
@@ -20,8 +20,8 @@ function setup(pagedJobs = false) {
   };
   const enRoute = jest.fn<Promise<unknown>, [string]>().mockResolvedValue({});
   const notify = jest.fn();
-  const get = jest.fn<Promise<ServiceOrderItem[]>, []>().mockResolvedValue([]);
-  const getOrdersPage = jest.fn<Promise<OrdersPage>, [number, number]>()
+  const get = jest.fn<Promise<TechnicianOrderItem[]>, []>().mockResolvedValue([]);
+  const getOrdersPage = jest.fn<Promise<TechnicianOrdersPage>, [number, number]>()
     .mockResolvedValue({ data: [], total: 0 });
   const write = jest.fn<void, [JobsState]>();
   const loader = pagedJobs
@@ -350,7 +350,7 @@ describe('independent jobs pagination (P3B2b production loader)', () => {
     const h = setup(true);
     h.getOrdersPage.mockResolvedValue({ data: pageOfJobs(20), total: 40 });
     await h.loader.focus();
-    const next = deferred<OrdersPage>();
+    const next = deferred<TechnicianOrdersPage>();
     h.getOrdersPage.mockReturnValueOnce(next.promise);
     const first = h.loader.loadMoreJobs();
     const second = h.loader.loadMoreJobs();
@@ -415,7 +415,7 @@ describe('independent jobs pagination (P3B2b production loader)', () => {
     const h = setup(true);
     h.getOrdersPage.mockResolvedValue({ data: pageOfJobs(20), total: 40 });
     await h.loader.focus();
-    const pending = deferred<OrdersPage>();
+    const pending = deferred<TechnicianOrdersPage>();
     h.getOrdersPage.mockReturnValueOnce(pending.promise);
     const request = h.loader.loadMoreJobs();
     h.loader.blur();
@@ -430,7 +430,7 @@ describe('independent jobs pagination (P3B2b production loader)', () => {
     const h = setup(true);
     h.getOrdersPage.mockResolvedValue({ data: pageOfJobs(20), total: 40 });
     await h.loader.focus();
-    const pending = deferred<OrdersPage>();
+    const pending = deferred<TechnicianOrdersPage>();
     h.getOrdersPage.mockReturnValueOnce(pending.promise);
     const request = h.loader.loadMoreJobs();
     h.session.change(null);
@@ -453,4 +453,38 @@ describe('independent jobs pagination (P3B2b production loader)', () => {
     expect(h.getOrdersPage).toHaveBeenCalledWith(1, 20);
     expect(h.state().jobsPage).toBe(1);
   });
+});
+
+it('keeps mixed history rows and server pagination total without allowing historical actions', async () => {
+  const h = setup(true);
+  const archived: TechnicianOrderItem = { id: 'history', code: 'H', status: 'ACCEPTED',
+    createdAt: '2026-10-09T00:00:00Z', historical: true };
+  h.getOrdersPage.mockResolvedValueOnce({ data: [order, archived], total: 3 })
+    .mockResolvedValueOnce({ data: [{ ...archived, id: 'history-2' }], total: 3 });
+  await h.loader.focus();
+  expect(h.state()).toMatchObject({ jobs: [order, archived], jobsTotal: 3, jobsPage: 1 });
+  await h.loader.handleEnRoute('history');
+  expect(h.enRoute).not.toHaveBeenCalled();
+  await h.loader.loadMoreJobs();
+  expect(h.state().jobs).toHaveLength(3);
+  expect(h.state().jobsTotal).toBe(3);
+  expect(h.getOrdersPage.mock.calls).toEqual([[1, 20], [2, 20]]);
+});
+
+it('replaces previously loaded full-order PII when a later page revokes the same order ID', async () => {
+  const h = setup(true);
+  const full = { ...order, id: 'revoked-order', bookingId: 'PRIVATE_BOOKING', grandTotal: 750000,
+    customerName: 'PRIVATE_CUSTOMER', status: 'ACCEPTED' as const };
+  const archive: TechnicianOrderItem = { id: full.id, code: 'ARCHIVE', status: 'COMPLETED',
+    createdAt: '2026-10-09T00:00:00Z', historical: true };
+  h.getOrdersPage.mockResolvedValueOnce({ data: [full], total: 2 })
+    .mockResolvedValueOnce({ data: [archive], total: 2 });
+  await h.loader.focus();
+  expect(h.state().jobs[0]).toHaveProperty('customerName', 'PRIVATE_CUSTOMER');
+  await h.loader.loadMoreJobs();
+  expect(h.state().jobs).toHaveLength(1);
+  expect(h.state().jobs[0]).toEqual(archive);
+  expect(JSON.stringify(h.state().jobs)).not.toMatch(/PRIVATE_CUSTOMER|PRIVATE_BOOKING|750000/);
+  await h.loader.handleEnRoute(full.id);
+  expect(h.enRoute).not.toHaveBeenCalled();
 });

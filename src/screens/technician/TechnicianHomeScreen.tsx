@@ -32,7 +32,7 @@ import {
   type OnboardingStatusResponse,
 } from '../../api/technician-onboarding.api';
 import { resolveOnboardingView } from './technician-onboarding';
-import { pickPriorityJob, weeklyStats } from './technician-home';
+import { createHomeOrdersReadGuard, pickPriorityJob, weeklyStats } from './technician-home';
 import { serviceOrderStatusView } from './technician-status';
 import { techOrderDetailTarget } from './technician-order-detail';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -70,6 +70,7 @@ export default function TechnicianHomeScreen() {
   const availability = useTechnicianAvailability();
   const handleScroll = useScrollHideTabBar();
   const [orders, setOrders] = useState<ServiceOrderItem[]>([]);
+  const [homeReadGuard] = useState(createHomeOrdersReadGuard);
   const [loaded, setLoaded] = useState(false);
   // Week boundary is evaluated at fetch time (render must stay pure).
   const [loadedAt, setLoadedAt] = useState(0);
@@ -108,22 +109,32 @@ export default function TechnicianHomeScreen() {
   );
 
   const loadOrders = useCallback(async () => {
+    const request = homeReadGuard.begin();
     try {
-      const result = await ordersApi.getMyOrders();
-      setOrders(Array.isArray(result) ? result : []);
+      const result = await ordersApi.getTechnicianJobs();
+      const { orders: current, revokedIds } = homeReadGuard.resolve(request, result);
+      if (revokedIds.length) {
+        // Revocation is independent of request ordering: even a stale GET
+        // can prove the prior full DTO is no longer safe to display.
+        const denied = new Set(revokedIds);
+        setOrders((previous) => previous.filter((item) => !denied.has(item.id)));
+      }
+      if (!current) return; // A newer request or unmount invalidated this GET.
+      setOrders(current);
       setLoadError(false);
       setLoadedAt(Date.now());
     } catch {
-      setLoadError(true);
+      if (homeReadGuard.isCurrent(request)) setLoadError(true);
     } finally {
-      setLoaded(true);
+      if (homeReadGuard.isCurrent(request)) setLoaded(true);
     }
-  }, []);
+  }, [homeReadGuard]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount
     void loadOrders();
-  }, [loadOrders]);
+    return () => homeReadGuard.invalidate();
+  }, [loadOrders, homeReadGuard]);
 
   const onRefresh = async () => {
     setRefreshing(true);

@@ -1,7 +1,9 @@
+import BookingActionBar from '../../components/BookingActionBar';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import {
   BottomSheetModal,
   BottomSheetBackdrop,
@@ -21,13 +24,17 @@ import { CircleAlert } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import {
   useFocusEffect,
+  usePreventRemove,
   useNavigation,
   useRoute,
   type RouteProp,
 } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../../constants/theme';
+import { CUSTOMER_UI_ARTWORK } from '../../constants/customer-artwork';
+import { getServicePresentation } from '../../constants/service-presentation';
 import { bookingsApi } from '../../api/bookings.api';
+import { mediaApi, type MediaUploadImage } from '../../api/media.api';
 import { servicesApi, type ServiceItem, type CategoryItem } from '../../api/services.api';
 import CategoryPills from '../../components/CategoryPills';
 import {
@@ -47,22 +54,90 @@ import { usersApi, type AddressData } from '../../api/users.api';
 import { useAuthStore } from '../../store';
 import { UserRole, type RootStackParamList } from '../../types';
 import BookingSchedulePicker from '../../components/BookingSchedulePicker';
-import BookingReviewSheet, { BookingReviewSummary } from '../../components/BookingReviewSheet';
+import { BookingReviewSummary } from '../../components/BookingReviewSheet';
 import {
   buildBookingReviewSnapshot,
+  type BookingPhotoPreview,
   type BookingReviewSnapshot,
 } from './customer-booking-review';
-import { vnTodayCalendarDate } from '../../utils/vn-time';
+import { vnParts, vnTodayCalendarDate } from '../../utils/vn-time';
+import CustomerBookingAddressEditor, {
+  clearBookingAddressAttempt,
+  getBookingAddressAttempt,
+  rememberBookingAddressAttempt,
+  type BookingAddressCreateAttempt,
+} from './CustomerBookingAddressEditor';
 
 type CreateRoute = RouteProp<RootStackParamList, 'CustomerBookingCreate'>;
 type UncertainBookingCreate = {
+  flowId: string;
   attempt: BookingCreationAttempt;
   snapshot: BookingReviewSnapshot;
 };
 type CustomerCreateState =
   | ({ kind: 'in-flight' } & UncertainBookingCreate)
   | ({ kind: 'uncertain' } & UncertainBookingCreate)
-  | { kind: 'created'; id: string; snapshot: BookingReviewSnapshot };
+  | { kind: 'created'; flowId: string; id: string; snapshot: BookingReviewSnapshot };
+
+// Process-local, owner-keyed safety state: leaving/re-entering the Booking route
+// must not erase a possibly committed POST or an unresolved photo upload.
+let runtimeCreateStates: Record<string, CustomerCreateState> = {};
+const runtimeCompletedCreates = new Map<string, Map<string, Extract<CustomerCreateState, { kind: 'created' }>>>();
+const runtimeSubmittingOwners = new Set<string>();
+const runtimeReviewSnapshots = new Map<string, { flowId: string; snapshot: BookingReviewSnapshot; error?: string }>();
+const runtimeUncertainPhotoUris = new Map<string, Set<string>>();
+const runtimeListeners = new Set<() => void>();
+const notifyRuntimeListeners = () => runtimeListeners.forEach((listener) => listener());
+
+// Tests only. Production never clears an uncertain write without readback proof.
+export function clearBookingCreateRuntimeForTest(ownerId: string) {
+  if (process.env.NODE_ENV !== 'test') return;
+  const latest = { ...runtimeCreateStates };
+  delete latest[ownerId];
+  runtimeCreateStates = latest;
+  runtimeCompletedCreates.delete(ownerId);
+  runtimeSubmittingOwners.delete(ownerId);
+  runtimeReviewSnapshots.delete(ownerId);
+  runtimeUncertainPhotoUris.delete(ownerId);
+  notifyRuntimeListeners();
+}
+
+const MAX_BOOKING_PHOTOS = 5;
+const MAX_BOOKING_PHOTO_BYTES = 10 * 1024 * 1024;
+const BOOKING_PHOTO_TTL_MS = 2 * 60 * 60 * 1000;
+
+interface BookingPhotoDraft extends BookingPhotoPreview {
+  uploadId?: string;
+  uploadExpiresAt?: number;
+  uploadUncertain?: boolean;
+}
+
+function bookingPhotoType(
+  mimeType?: string | null,
+  fileName?: string | null,
+): MediaUploadImage['type'] | null {
+  const normalized = mimeType?.trim().toLowerCase();
+  if (normalized === 'image/jpg' || normalized === 'image/jpeg') return 'image/jpeg';
+  if (normalized === 'image/png') return 'image/png';
+  if (normalized === 'image/webp') return 'image/webp';
+
+  if (normalized) return null;
+  const extension = fileName?.split('.').pop()?.toLowerCase();
+  if (extension === 'jpg' || extension === 'jpeg') return 'image/jpeg';
+  if (extension === 'png') return 'image/png';
+  if (extension === 'webp') return 'image/webp';
+  return null;
+}
+
+function bookingPhotoName(
+  fileName: string | null | undefined,
+  type: MediaUploadImage['type'],
+): string {
+  const name = fileName?.trim();
+  if (name) return name;
+  const extension = type === 'image/jpeg' ? 'jpg' : type.slice('image/'.length);
+  return `booking-photo.${extension}`;
+}
 
 function definitiveCreateMessage(status?: number): string {
   if (status === 401) {
@@ -86,6 +161,93 @@ function isCurrentAuthenticatedCustomer(ownerUserId: string): boolean {
   );
 }
 
+const BOOKING_INTAKE_STEPS = ['Tình trạng', 'Địa chỉ', 'Khung giờ'] as const;
+
+function BookingIntakeProgress({
+  active,
+  colors,
+}: {
+  active: number;
+  colors: {
+    primary: string;
+    border: string;
+    surface: string;
+    text: string;
+    textSecondary: string;
+  };
+}) {
+  return (
+    <View
+      testID="booking-intake-progress"
+      accessible
+      accessibilityLabel={`Tiến trình đặt lịch, bước ${active + 1} trên 3: ${BOOKING_INTAKE_STEPS[active] ?? ''}`}
+      style={progressStyles.track}
+    >
+      {BOOKING_INTAKE_STEPS.map((label, index) => {
+        const done = index < active;
+        const current = index === active;
+        return (
+          <React.Fragment key={label}>
+            {index > 0 && (
+              <View
+                style={[
+                  progressStyles.connector,
+                  { backgroundColor: index <= active ? colors.primary : colors.border },
+                ]}
+              />
+            )}
+            <View style={progressStyles.step}>
+              <View
+                style={[
+                  progressStyles.dot,
+                  {
+                    backgroundColor: done || current ? colors.primary : colors.surface,
+                    borderColor: done || current ? colors.primary : colors.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    progressStyles.dotText,
+                    { color: done || current ? colors.surface : colors.textSecondary },
+                  ]}
+                >
+                  {done ? '✓' : String(index + 1)}
+                </Text>
+              </View>
+              <Text
+                style={[
+                  progressStyles.stepLabel,
+                  { color: current ? colors.text : colors.textSecondary },
+                  current ? progressStyles.stepLabelActive : null,
+                ]}
+              >
+                {label}
+              </Text>
+            </View>
+          </React.Fragment>
+        );
+      })}
+    </View>
+  );
+}
+
+function BookingPrimaryAction({ label, onPress, disabled, colors, accessibilityLabel = label }: {
+  label: string;
+  onPress: () => void;
+  disabled: boolean;
+  colors: ReturnType<typeof useAppTheme>['colors'];
+  accessibilityLabel?: string;
+}) {
+  return (
+    <TouchableOpacity accessibilityRole="button" accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
+      style={[styles.action, { backgroundColor: disabled ? colors.border : colors.primary }]}>
+      <Text style={[styles.actionText, { color: disabled ? colors.textSecondary : colors.surface }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
 export default function CustomerBookingCreateScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<CreateRoute>();
@@ -97,27 +259,53 @@ export default function CustomerBookingCreateScreen() {
     isAuthenticated && userRole === UserRole.CUSTOMER ? userId : null;
   const prefill = route.params?.prefill;
   const prefillServiceId = prefill?.serviceId;
+  // Stack pushes create a new initiation; service identity also fences route reuse.
+  const flowId = `${route.key}:${prefillServiceId ?? ''}`;
+  const flowIdRef = useRef(flowId);
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [addresses, setAddresses] = useState<AddressData[]>([]);
   const [serviceId, setServiceId] = useState('');
   const [addressId, setAddressId] = useState('');
   const [description, setDescription] = useState(prefill?.description ?? '');
+  const [bookingPhotos, setBookingPhotos] = useState<BookingPhotoDraft[]>([]);
+  const bookingPhotosRef = useRef<BookingPhotoDraft[]>([]);
+  const uncertainPhotoUrisByOwnerRef = useRef(runtimeUncertainPhotoUris);
+  const [photoUploadError, setPhotoUploadError] = useState('');
+  const [uploadingPhotoUri, setUploadingPhotoUri] = useState<string | null>(null);
   const [bookingDate, setBookingDate] = useState(() => {
     return vnTodayCalendarDate();
   });
   const [startTime, setStartTime] = useState<string>('09:00');
+  // Keep one owner-bound draft while moving between dedicated booking scenes.
+  const [bookingStage, setBookingStage] = useState<0 | 1 | 2>(() =>
+    customerOwnerId && (runtimeCreateStates[customerOwnerId]?.flowId === flowId
+      || runtimeCompletedCreates.get(customerOwnerId)?.has(flowId)
+      || runtimeCreateStates[customerOwnerId]?.kind === 'uncertain'
+      || runtimeReviewSnapshots.get(customerOwnerId)?.flowId === flowId) ? 2 : 0);
+  const [addressEditorOpen, setAddressEditorOpen] = useState(false);
+  // Preserve unknown address POST identity when the panel is closed/reopened.
+  const [addressAttemptsByOwner, setAddressAttemptsByOwner] = useState<Record<string, BookingAddressCreateAttempt>>(() => {
+    if (!customerOwnerId) return {};
+    const locked = getBookingAddressAttempt(customerOwnerId);
+    return locked ? { [customerOwnerId]: locked } : {};
+  });
+
   const [descriptionTouched, setDescriptionTouched] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [submittingByOwner, setSubmittingByOwner] = useState<Record<string, boolean>>({});
-  const submittingOwnersRef = useRef(new Set<string>());
+  const [submittingByOwner, setSubmittingByOwner] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries([...runtimeSubmittingOwners].map((ownerId) => [ownerId, true])),
+  );
+  const submittingOwnersRef = useRef(new Set(runtimeSubmittingOwners));
   const [createStateByOwner, setCreateStateByOwner] = useState<
     Record<string, CustomerCreateState>
-  >({});
-  const createStateByOwnerRef = useRef<Record<string, CustomerCreateState>>({});
+  >(() => runtimeCreateStates);
+  const createStateByOwnerRef = useRef<Record<string, CustomerCreateState>>(runtimeCreateStates);
   const [reviewSnapshot, setReviewSnapshot] = useState<BookingReviewSnapshot | null>(null);
+  const [reviewError, setReviewError] = useState('');
   const [reconcilingByOwner, setReconcilingByOwner] = useState<Record<string, boolean>>({});
   const previousOwnerRef = useRef(customerOwnerId);
+  const previousFlowRef = useRef(flowId);
   const loadGenerationRef = useRef(0);
   const [pickerQuery, setPickerQuery] = useState('');
   const [pickerCategoryId, setPickerCategoryId] = useState<string | null>(null);
@@ -126,31 +314,45 @@ export default function CustomerBookingCreateScreen() {
   const pickerSnapPoints = useMemo(() => ['80%'], []);
   const addressSheetRef = useRef<BottomSheetModal>(null);
   const addressSnapPoints = useMemo(() => ['60%'], []);
-  const reviewSheetRef = useRef<BottomSheetModal>(null);
   const descriptionInputRef = useRef<TextInput>(null);
   const descriptionTopRef = useRef(0);
   const scrollRef = useRef<ScrollView>(null);
 
+  useEffect(() => {
+    const syncRuntime = () => {
+      createStateByOwnerRef.current = runtimeCreateStates;
+      submittingOwnersRef.current = new Set(runtimeSubmittingOwners);
+      setCreateStateByOwner(runtimeCreateStates);
+      setSubmittingByOwner(Object.fromEntries(
+        [...runtimeSubmittingOwners].map((ownerId) => [ownerId, true]),
+      ));
+    };
+    runtimeListeners.add(syncRuntime);
+    return () => { runtimeListeners.delete(syncRuntime); };
+  }, []);
+
   const setOwnerCreateState = useCallback(
     (ownerId: string, nextState: CustomerCreateState | null) => {
-      const next = { ...createStateByOwnerRef.current };
+      const next = { ...runtimeCreateStates };
       if (nextState) next[ownerId] = nextState;
       else delete next[ownerId];
+      runtimeCreateStates = next;
+      if (nextState?.kind === 'created') {
+        const completed = runtimeCompletedCreates.get(ownerId) ?? new Map();
+        completed.set(nextState.flowId, nextState);
+        runtimeCompletedCreates.set(ownerId, completed);
+      }
       createStateByOwnerRef.current = next;
-      setCreateStateByOwner(next);
+      notifyRuntimeListeners();
     },
     [],
   );
 
   const setOwnerSubmitting = useCallback((ownerId: string, isSubmitting: boolean) => {
-    const next = new Set(submittingOwnersRef.current);
-    if (isSubmitting) next.add(ownerId);
-    else next.delete(ownerId);
-    submittingOwnersRef.current = next;
-    setSubmittingByOwner((current) => ({
-      ...current,
-      [ownerId]: isSubmitting,
-    }));
+    if (isSubmitting) runtimeSubmittingOwners.add(ownerId);
+    else runtimeSubmittingOwners.delete(ownerId);
+    submittingOwnersRef.current = new Set(runtimeSubmittingOwners);
+    notifyRuntimeListeners();
   }, []);
 
   const setOwnerReconciling = useCallback((ownerId: string, isReconciling: boolean) => {
@@ -160,30 +362,56 @@ export default function CustomerBookingCreateScreen() {
     }));
   }, []);
 
+  const updateBookingPhotos = (next: BookingPhotoDraft[]) => {
+    bookingPhotosRef.current = next;
+    setBookingPhotos(next);
+  };
+
+  const uncertainPhotoUrisForOwner = (ownerUserId: string) => {
+    const existing = uncertainPhotoUrisByOwnerRef.current.get(ownerUserId);
+    if (existing) return existing;
+    const next = new Set<string>();
+    uncertainPhotoUrisByOwnerRef.current.set(ownerUserId, next);
+    return next;
+  };
+
   useLayoutEffect(() => {
-    if (previousOwnerRef.current === customerOwnerId) return;
+    flowIdRef.current = flowId;
+    if (previousOwnerRef.current === customerOwnerId && previousFlowRef.current === flowId) return;
+    const sameOwner = previousOwnerRef.current === customerOwnerId;
     previousOwnerRef.current = customerOwnerId;
-    reviewSheetRef.current?.dismiss();
+    previousFlowRef.current = flowId;
+
     setReviewSnapshot(null);
+    setReviewError('');
     setServices([]);
     setAddresses([]);
     setServiceId('');
     setAddressId('');
-    setDescription('');
+    setDescription(sameOwner ? prefill?.description ?? '' : '');
+    bookingPhotosRef.current = [];
+    setBookingPhotos([]);
+    setPhotoUploadError('');
+    setUploadingPhotoUri(null);
     setDescriptionTouched(false);
+    const state = customerOwnerId ? runtimeCreateStates[customerOwnerId] : null;
+    setBookingStage((customerOwnerId && runtimeCompletedCreates.get(customerOwnerId)?.has(flowId))
+      || (state && (state.kind === 'uncertain' || state.flowId === flowId)) ? 2 : 0);
+    setAddressEditorOpen(false);
     setBookingDate(() => {
       return vnTodayCalendarDate();
     });
     setStartTime('09:00');
     setLoadError('');
     setLoading(Boolean(customerOwnerId));
-  }, [customerOwnerId]);
+  }, [customerOwnerId, flowId, prefill?.description]);
 
   const loadOptions = useCallback(async () => {
     const generation = ++loadGenerationRef.current;
     const ownerUserId = userId;
     const isCurrentLoad = () =>
       loadGenerationRef.current === generation &&
+      flowIdRef.current === flowId &&
       Boolean(ownerUserId && isCurrentAuthenticatedCustomer(ownerUserId));
 
     if (!isAuthenticated || userRole !== UserRole.CUSTOMER || !ownerUserId) {
@@ -245,7 +473,7 @@ export default function CustomerBookingCreateScreen() {
     } finally {
       if (isCurrentLoad()) setLoading(false);
     }
-  }, [isAuthenticated, prefillServiceId, userId, userRole]);
+  }, [flowId, isAuthenticated, prefillServiceId, userId, userRole]);
 
   useFocusEffect(
     useCallback(() => {
@@ -256,15 +484,55 @@ export default function CustomerBookingCreateScreen() {
     }, [loadOptions]),
   );
 
-  const visibleReviewSnapshot =
-    reviewSnapshot?.ownerUserId === customerOwnerId ? reviewSnapshot : null;
-  useEffect(() => {
-    if (visibleReviewSnapshot) reviewSheetRef.current?.present();
-  }, [visibleReviewSnapshot]);
+  const ownerState = customerOwnerId ? createStateByOwner[customerOwnerId] ?? null : null;
+  // Uncertain writes remain owner-wide locks even when a different draft opens.
+  const completedFlow = customerOwnerId ? runtimeCompletedCreates.get(customerOwnerId)?.get(flowId) : null;
+  const currentOwnerCreateState = completedFlow ?? (ownerState?.kind === 'created' && ownerState.flowId !== flowId
+    ? null : ownerState);
+  const pendingReview = customerOwnerId ? runtimeReviewSnapshots.get(customerOwnerId) : null;
+  const visibleReviewSnapshot = currentOwnerCreateState?.kind === 'created'
+    ? null : reviewSnapshot?.ownerUserId === customerOwnerId
+    ? reviewSnapshot
+    : pendingReview?.flowId === flowId ? pendingReview.snapshot
+      : currentOwnerCreateState?.kind === 'in-flight' && currentOwnerCreateState.flowId === flowId
+        ? currentOwnerCreateState.snapshot : null;
+  usePreventRemove(Boolean(visibleReviewSnapshot), () => {
+    if (!customerOwnerId || !runtimeSubmittingOwners.has(customerOwnerId)) dismissReview();
+  });
 
-  const currentOwnerCreateState = customerOwnerId
-    ? createStateByOwner[customerOwnerId] ?? null
-    : null;
+  const dismissReview = () => {
+    if (customerOwnerId && runtimeSubmittingOwners.has(customerOwnerId)) return;
+    // Editing after a remount must restore the reviewed draft, not empty inputs.
+    if (visibleReviewSnapshot && customerOwnerId && !runtimeSubmittingOwners.has(customerOwnerId)) {
+      const { request, photos } = visibleReviewSnapshot;
+      setServiceId(request.serviceId);
+      setAddressId(request.addressId);
+      setDescription(request.description);
+      if (request.preferredStartAt) {
+        const parts = vnParts(request.preferredStartAt);
+        setBookingDate(vnTodayCalendarDate(request.preferredStartAt));
+        setStartTime(`${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`);
+      }
+      const restoredPhotos = photos.map((photo) => {
+        const cached = bookingPhotosRef.current.find((item) => item.uri === photo.uri);
+        return {
+          ...(cached ?? photo),
+          uploadUncertain: Boolean(cached?.uploadUncertain || uncertainPhotoUrisForOwner(customerOwnerId).has(photo.uri)),
+        };
+      });
+      updateBookingPhotos(restoredPhotos);
+      if (restoredPhotos.some((photo) => photo.uploadUncertain)) {
+        setPhotoUploadError('Ảnh có lần tải chưa xác định. Hãy xóa ảnh đó hoặc chọn ảnh khác.');
+      }
+    }
+    if (customerOwnerId && runtimeReviewSnapshots.get(customerOwnerId)?.flowId === flowId) {
+      runtimeReviewSnapshots.delete(customerOwnerId);
+      notifyRuntimeListeners();
+    }
+    setReviewSnapshot(null);
+    setReviewError('');
+  };
+  const visibleReviewError = reviewError || (pendingReview?.flowId === flowId ? pendingReview.error ?? '' : '');
   const isSubmitting = customerOwnerId
     ? submittingByOwner[customerOwnerId] === true
     : false;
@@ -288,6 +556,7 @@ export default function CustomerBookingCreateScreen() {
     addresses.find((address) => address.id === addressId) ?? null;
   const selectedAddressReady = addressReadyForBooking(selectedAddress);
   const selectedPrice = resolveServicePrice(selectedService);
+  const selectedPresentation = getServicePresentation(selectedService?.code);
   const selectedIsOtherService = isOtherService(selectedService);
   const descriptionLabel = selectedIsOtherService
     ? 'Mô tả yêu cầu (bắt buộc)'
@@ -300,6 +569,10 @@ export default function CustomerBookingCreateScreen() {
     Boolean(currentOwnerCreateState) ||
     loading ||
     Boolean(loadError);
+  const hasUncertainReviewPhoto = Boolean(visibleReviewSnapshot?.photos.some((photo) =>
+    bookingPhotos.find((item) => item.uri === photo.uri)?.uploadUncertain
+      || (customerOwnerId && runtimeUncertainPhotoUris.get(customerOwnerId)?.has(photo.uri)),
+  ));
   const descriptionError =
     descriptionTouched && !description.trim()
       ? selectedIsOtherService
@@ -335,6 +608,20 @@ export default function CustomerBookingCreateScreen() {
     return q === '' || service.name.toLowerCase().includes(q);
   });
 
+  const openInlineAddressEditor = () => {
+    if (!customerOwnerId || !isCurrentAuthenticatedCustomer(customerOwnerId)) return;
+    const previous = getBookingAddressAttempt(customerOwnerId);
+    // Re-read the authoritative ledger each time the editor is opened:
+    // a definite POST 400 may have cleared it after the old UI unmounted.
+    setAddressAttemptsByOwner((attempts) => {
+      const next = { ...attempts };
+      if (previous) next[customerOwnerId] = previous;
+      else delete next[customerOwnerId];
+      return next;
+    });
+    setAddressEditorOpen(true);
+  };
+
   const openAddressEditor = () => {
     const rootNavigation = navigation as unknown as {
       navigate: (name: 'CustomerMain', params: { screen: 'Profile' }) => void;
@@ -346,9 +633,83 @@ export default function CustomerBookingCreateScreen() {
     addressSheetRef.current?.present();
   };
 
+  const pickBookingPhotos = async () => {
+    const ownerUserId = customerOwnerId;
+    if (!ownerUserId || !isCurrentAuthenticatedCustomer(ownerUserId)) return;
+    if (bookingPhotosRef.current.length >= MAX_BOOKING_PHOTOS) return;
+
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!isCurrentAuthenticatedCustomer(ownerUserId) || ownerUserId !== customerOwnerId) return;
+      if (!permission.granted) {
+        setPhotoUploadError('Cho phép truy cập thư viện ảnh để đính kèm ảnh sự cố.');
+        return;
+      }
+
+      const remaining = MAX_BOOKING_PHOTOS - bookingPhotosRef.current.length;
+      if (remaining <= 0) return;
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: remaining > 1,
+        selectionLimit: remaining,
+        quality: 1,
+      });
+      if (!isCurrentAuthenticatedCustomer(ownerUserId) || ownerUserId !== customerOwnerId) return;
+      if (result.canceled) return;
+
+      const next = [...bookingPhotosRef.current];
+      const knownUris = new Set(next.map((photo) => photo.uri));
+      const issues: string[] = [];
+      for (const asset of result.assets) {
+        if (next.length >= MAX_BOOKING_PHOTOS) break;
+        if (!asset.uri || knownUris.has(asset.uri)) continue;
+        if (uncertainPhotoUrisForOwner(ownerUserId).has(asset.uri)) {
+          issues.push('Ảnh có lần tải chưa xác định. Hãy bỏ ảnh đó và chọn ảnh khác.');
+          continue;
+        }
+        const type = bookingPhotoType(asset.mimeType, asset.fileName);
+        if (!type) {
+          issues.push('Ảnh phải có định dạng JPEG, PNG hoặc WebP.');
+          continue;
+        }
+        if (asset.fileSize !== undefined && asset.fileSize !== null
+          && (!Number.isInteger(asset.fileSize)
+            || asset.fileSize <= 0
+            || asset.fileSize > MAX_BOOKING_PHOTO_BYTES)) {
+          issues.push('Mỗi ảnh không được vượt quá 10 MiB.');
+          continue;
+        }
+
+        next.push({
+          uri: asset.uri,
+          name: bookingPhotoName(asset.fileName, type),
+          type,
+          ...(asset.fileSize !== undefined ? { sizeBytes: asset.fileSize } : {}),
+        });
+        knownUris.add(asset.uri);
+      }
+
+      updateBookingPhotos(next);
+      if (issues.length > 0) setPhotoUploadError(issues[0]);
+      else if (!next.some((photo) => photo.uploadUncertain)) setPhotoUploadError('');
+    } catch {
+      if (isCurrentAuthenticatedCustomer(ownerUserId) && ownerUserId === customerOwnerId) {
+        setPhotoUploadError('Không thể mở thư viện ảnh. Hãy thử lại.');
+      }
+    }
+  };
+
+  const removeBookingPhoto = (uri: string) => {
+    if (isSubmitting || currentOwnerCreateState) return;
+    const next = bookingPhotosRef.current.filter((photo) => photo.uri !== uri);
+    updateBookingPhotos(next);
+    if (!next.some((photo) => photo.uploadUncertain)) setPhotoUploadError('');
+  };
+
   const requestReview = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (reviewDisabled || (customerOwnerId && submittingOwnersRef.current.has(customerOwnerId))) return;
+    setReviewError('');
     setDescriptionTouched(true);
     if (!description.trim()) {
       scrollRef.current?.scrollTo({ y: descriptionTopRef.current, animated: true });
@@ -384,29 +745,40 @@ export default function CustomerBookingCreateScreen() {
         date: bookingDate,
         time: startTime,
         aiSessionId: prefill?.aiSessionId ?? null,
+        photos: bookingPhotos.map(({ uri, name, type, sizeBytes }) => ({
+          uri,
+          name,
+          type,
+          ...(sizeBytes !== undefined ? { sizeBytes } : {}),
+        })),
       });
       setReviewSnapshot(snapshot);
     } catch (error) {
-      Alert.alert(
-        'Thông tin chưa hợp lệ',
-        error instanceof Error ? error.message : 'Kiểm tra lại thông tin đặt lịch.',
-      );
+      setReviewError(error instanceof Error ? error.message : 'Kiểm tra lại thông tin đặt lịch.');
     }
   };
 
   const submit = async (snapshot: BookingReviewSnapshot) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const ownerUserId = snapshot.ownerUserId;
+    // Fence all pre-Booking-POST async work to the initiating auth session.
+    // Never suppress server ACK/reconciliation after the POST has been sent.
+    const originSession = useAuthStore.getState().sessionGeneration;
+    const sameSubmissionSession = () => isCurrentAuthenticatedCustomer(ownerUserId)
+      && useAuthStore.getState().sessionGeneration === originSession
+      && flowIdRef.current === flowId;
     if (
-      submittingOwnersRef.current.has(ownerUserId) ||
-      createStateByOwnerRef.current[ownerUserId] ||
+      (submittingOwnersRef.current.has(ownerUserId) || runtimeSubmittingOwners.has(ownerUserId)) ||
+      runtimeCompletedCreates.get(ownerUserId)?.has(flowId) ||
+      (runtimeCreateStates[ownerUserId] && (runtimeCreateStates[ownerUserId].kind !== 'created'
+        || runtimeCreateStates[ownerUserId].flowId === flowId)) ||
       loading ||
       loadError ||
       snapshot.ownerUserId !== customerOwnerId
     ) {
       return;
     }
-    if (!isAuthenticated || userRole !== UserRole.CUSTOMER || !userId) {
+    if (!sameSubmissionSession() || !isAuthenticated || userRole !== UserRole.CUSTOMER || !userId) {
       Alert.alert(
         'Cần tài khoản khách hàng',
         'Hãy đăng nhập bằng tài khoản khách hàng trước khi đặt lịch.',
@@ -429,22 +801,100 @@ export default function CustomerBookingCreateScreen() {
       return;
     }
 
+    setReviewError('');
+    runtimeReviewSnapshots.set(ownerUserId, { flowId, snapshot });
     setOwnerSubmitting(ownerUserId, true);
     let baselineIds: string[] | null = null;
 
     try {
+      const photoUploadIds: string[] = [];
+      for (const photo of snapshot.photos) {
+        if (!sameSubmissionSession()) return;
+        const currentPhoto = bookingPhotosRef.current.find((item) => item.uri === photo.uri);
+        if (!currentPhoto) {
+          setPhotoUploadError('Ảnh đã chọn không còn trong yêu cầu. Hãy kiểm tra lại ảnh.');
+          return;
+        }
+        if (currentPhoto.uploadUncertain || uncertainPhotoUrisForOwner(ownerUserId).has(photo.uri)) {
+          setPhotoUploadError('Không thể xác nhận ảnh đã tải lên. Hãy xóa ảnh đó hoặc chọn ảnh khác.');
+          return;
+        }
+
+        let uploadId = currentPhoto.uploadId;
+        if (!uploadId || !currentPhoto.uploadExpiresAt || currentPhoto.uploadExpiresAt <= Date.now()) {
+          // Lock this URI for its original owner BEFORE the request crosses the network.
+          const photoAttemptUris = uncertainPhotoUrisForOwner(ownerUserId);
+          photoAttemptUris.add(photo.uri);
+          setUploadingPhotoUri(photo.uri);
+          try {
+            const uploaded = await mediaApi.uploadBookingPhoto({
+              uri: photo.uri,
+              name: photo.name,
+              type: photo.type,
+            });
+            if (!sameSubmissionSession() || ownerUserId !== customerOwnerId) return;
+            if (photoUploadIds.includes(uploaded.uploadId)) {
+              uncertainPhotoUrisForOwner(ownerUserId).add(photo.uri);
+              updateBookingPhotos(bookingPhotosRef.current.map((item) => item.uri === photo.uri
+                ? { ...item, uploadUncertain: true }
+                : item));
+              setPhotoUploadError('Một ảnh chưa nhận được mã tải lên riêng. Hãy xóa ảnh đó hoặc chọn ảnh khác.');
+              return;
+            }
+
+            uploadId = uploaded.uploadId;
+            updateBookingPhotos(bookingPhotosRef.current.map((item) => item.uri === photo.uri
+              ? {
+                ...item,
+                uploadId,
+                uploadExpiresAt: Date.now() + BOOKING_PHOTO_TTL_MS,
+                uploadUncertain: false,
+              }
+              : item));
+            // Remove the retry lock only after receiving and storing the upload ID
+            // for the SAME currently authenticated owner.
+            photoAttemptUris.delete(photo.uri);
+          } catch {
+            // Never drop A's uncertain retry guard just because B logged in.
+            photoAttemptUris.add(photo.uri);
+            if (sameSubmissionSession() && ownerUserId === customerOwnerId) {
+              updateBookingPhotos(bookingPhotosRef.current.map((item) => item.uri === photo.uri
+                ? { ...item, uploadUncertain: true }
+                : item));
+              setPhotoUploadError('Không thể xác nhận ảnh đã tải lên. Hãy xóa ảnh đó hoặc chọn ảnh khác. Yêu cầu chưa được tạo.');
+            }
+            return;
+          } finally {
+            if (sameSubmissionSession() && ownerUserId === customerOwnerId) {
+              setUploadingPhotoUri(null);
+            }
+          }
+        }
+
+        if (!uploadId || photoUploadIds.includes(uploadId)) {
+          setPhotoUploadError('Mã ảnh tải lên không hợp lệ hoặc bị trùng. Hãy kiểm tra lại ảnh.');
+          return;
+        }
+        photoUploadIds.push(uploadId);
+      }
+
+      if (!sameSubmissionSession()) return;
+      setPhotoUploadError('');
+      const request = photoUploadIds.length > 0
+        ? { ...snapshot.request, photoUploadIds }
+        : snapshot.request;
+
       try {
         const before = await bookingsApi.getMyBookingsPage(1, 100);
-        if (!isCurrentAuthenticatedCustomer(ownerUserId)) return;
+        if (!sameSubmissionSession()) return;
         baselineIds = before.data.map((booking) => booking.id);
       } catch {
         // Baseline is best-effort. If POST later becomes ambiguous, no
         // baseline means GET reconciliation cannot auto-confirm creation.
       }
 
-      if (!isCurrentAuthenticatedCustomer(ownerUserId)) return;
+      if (!sameSubmissionSession()) return;
 
-      const request = snapshot.request;
       const attempt: BookingCreationAttempt = {
         ownerUserId,
         serviceId: request.serviceId,
@@ -455,18 +905,21 @@ export default function CustomerBookingCreateScreen() {
         baselineIds,
       };
 
-      setOwnerCreateState(ownerUserId, { kind: 'in-flight', attempt, snapshot });
+      setOwnerCreateState(ownerUserId, { kind: 'in-flight', flowId, attempt, snapshot });
       try {
         // AI preview photos are local data URIs, NOT private Booking upload IDs.
         const booking = await bookingsApi.createBooking(request);
         if (!booking.id) {
           throw new Error('Hệ thống chưa xác nhận mã yêu cầu.');
         }
-        setOwnerCreateState(ownerUserId, { kind: 'created', id: booking.id, snapshot });
+        runtimeReviewSnapshots.delete(ownerUserId);
+        setOwnerCreateState(ownerUserId, { kind: 'created', flowId, id: booking.id, snapshot });
       } catch (error) {
         if (classifyBookingCreatePostError(error) === 'definitive') {
+          runtimeReviewSnapshots.set(ownerUserId, { flowId, snapshot, error: definitiveCreateMessage(bookingCreateErrorStatus(error)) });
           setOwnerCreateState(ownerUserId, null);
-          if (isCurrentAuthenticatedCustomer(ownerUserId)) {
+          if (sameSubmissionSession() && flowIdRef.current === flowId) {
+            setReviewError(definitiveCreateMessage(bookingCreateErrorStatus(error)));
             Alert.alert(
               'Yêu cầu chưa được tạo',
               definitiveCreateMessage(bookingCreateErrorStatus(error)),
@@ -475,9 +928,11 @@ export default function CustomerBookingCreateScreen() {
           return;
         }
 
-        setOwnerCreateState(ownerUserId, { kind: 'uncertain', attempt, snapshot });
+        runtimeReviewSnapshots.delete(ownerUserId);
+        setOwnerCreateState(ownerUserId, { kind: 'uncertain', flowId, attempt, snapshot });
+        if (sameSubmissionSession() && flowIdRef.current === flowId) setReviewSnapshot(null);
         if (isCurrentAuthenticatedCustomer(ownerUserId)) {
-          reviewSheetRef.current?.dismiss();
+
           Alert.alert(
             'Chưa xác minh được kết quả',
             'Yêu cầu có thể đã được hệ thống ghi nhận. Không gửi lại. Hãy dùng kiểm tra lịch sử bên dưới để đối chiếu.',
@@ -501,6 +956,7 @@ export default function CustomerBookingCreateScreen() {
       if (found) {
         setOwnerCreateState(attempt.ownerUserId, {
           kind: 'created',
+          flowId: uncertainCreate.flowId,
           id: found.id,
           snapshot: uncertainCreate.snapshot,
         });
@@ -533,8 +989,43 @@ export default function CustomerBookingCreateScreen() {
     }
   };
 
-  const action = (label: string, onPress: () => void, disabled = false) => (
-    <TouchableOpacity accessibilityRole="button" disabled={disabled} onPress={onPress}
+  const showBookingStage = (next: 0 | 1 | 2) => {
+    setBookingStage(next);
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  };
+
+  const continueToAddress = () => {
+    if (reviewDisabled) return;
+    if (!selectedService) {
+      Alert.alert('Chưa chọn dịch vụ', 'Hãy chọn dịch vụ cần sửa trước khi tiếp tục.');
+      return;
+    }
+    setDescriptionTouched(true);
+    if (!description.trim()) {
+      descriptionInputRef.current?.focus();
+      return;
+    }
+    void Haptics.selectionAsync();
+    showBookingStage(1);
+  };
+
+  const continueToSchedule = () => {
+    if (reviewDisabled) return;
+    if (!selectedAddressReady) {
+      Alert.alert('Chưa xác nhận địa chỉ', 'Hãy chọn địa chỉ có vị trí ghim hợp lệ trước khi chọn ngày giờ.');
+      return;
+    }
+    void Haptics.selectionAsync();
+    showBookingStage(2);
+  };
+
+  const action = (label: string, onPress: () => void, disabled = false, accessibilityLabel = label) => (
+    <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
       style={[styles.action, { backgroundColor: disabled ? colors.border : colors.primary }]}>
       <Text style={[styles.actionText, { color: disabled ? colors.textSecondary : colors.surface }]}>{label}</Text>
     </TouchableOpacity>
@@ -542,7 +1033,15 @@ export default function CustomerBookingCreateScreen() {
 
   const backBtn = (
     <TouchableOpacity
-      onPress={() => navigation.goBack()}
+      disabled={isSubmitting}
+      accessibilityState={{ disabled: isSubmitting }}
+      onPress={() => addressEditorOpen
+        ? setAddressEditorOpen(false)
+        : visibleReviewSnapshot
+        ? dismissReview()
+        : bookingStage > 0 && !visibleCreatedBookingId
+          ? showBookingStage((bookingStage - 1) as 0 | 1)
+          : navigation.goBack()}
       style={styles.backBtn}
       accessibilityRole="button"
       accessibilityLabel="Quay lại"
@@ -551,6 +1050,58 @@ export default function CustomerBookingCreateScreen() {
       <Ionicons name="arrow-back" size={24} color={colors.text} />
     </TouchableOpacity>
   );
+
+  const addressEditor = customerOwnerId ? (
+              <CustomerBookingAddressEditor
+                key={customerOwnerId}
+                ownerUserId={customerOwnerId}
+                existingAddressIds={addresses.map((address) => address.id)}
+                lockedAttempt={addressAttemptsByOwner[customerOwnerId]}
+                onAttemptStart={(attempt) => {
+                  if (isCurrentAuthenticatedCustomer(customerOwnerId)) {
+                    rememberBookingAddressAttempt(customerOwnerId, attempt);
+                    setAddressAttemptsByOwner((previous) => ({ ...previous, [customerOwnerId]: attempt }));
+                  }
+                }}
+                onCreatedId={(id) => {
+                  if (!isCurrentAuthenticatedCustomer(customerOwnerId)) return;
+                  const latest = getBookingAddressAttempt(customerOwnerId);
+                  if (latest) rememberBookingAddressAttempt(customerOwnerId, { ...latest, knownId: id });
+                  setAddressAttemptsByOwner((previous) => {
+                    const attempt = previous[customerOwnerId];
+                    return attempt
+                      ? { ...previous, [customerOwnerId]: { ...attempt, knownId: id } }
+                      : previous;
+                  });
+                }}
+                onAttemptCleared={() => {
+                  if (!isCurrentAuthenticatedCustomer(customerOwnerId)) return;
+                  clearBookingAddressAttempt(customerOwnerId);
+                  setAddressAttemptsByOwner((previous) => {
+                    const next = { ...previous };
+                    delete next[customerOwnerId];
+                    return next;
+                  });
+                }}
+                isOwnerCurrent={isCurrentAuthenticatedCustomer}
+                onCancel={() => setAddressEditorOpen(false)}
+                onSaved={(saved, all) => {
+                  if (!isCurrentAuthenticatedCustomer(customerOwnerId)
+                    || saved.userId !== customerOwnerId
+                    || !addressReadyForBooking(saved)
+                    || !all.some((address) => address.id === saved.id && address.userId === customerOwnerId)) return;
+                  clearBookingAddressAttempt(customerOwnerId);
+                  setAddressAttemptsByOwner((previous) => {
+                    const next = { ...previous };
+                    delete next[customerOwnerId];
+                    return next;
+                  });
+                  setAddresses(all);
+                  setAddressId(saved.id);
+                  setAddressEditorOpen(false);
+                }}
+              />
+  ) : null;
 
   if (!isAuthenticated || userRole !== UserRole.CUSTOMER) {
     return (
@@ -562,17 +1113,51 @@ export default function CustomerBookingCreateScreen() {
     );
   }
 
+  if (addressEditorOpen && bookingStage === 1 && !visibleReviewSnapshot && !visibleCreatedBookingId) {
+    return (
+      <SafeAreaView style={[styles.page, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+        <View style={{ paddingHorizontal: 16 }}>
+          <View style={styles.bookingTopBar}>
+            {backBtn}
+            <View style={styles.bookingProgress}><BookingIntakeProgress active={1} colors={colors} /></View>
+          </View>
+          <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>Chọn địa chỉ</Text>
+        </View>
+        {addressEditor}
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.page, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
       >
-        {backBtn}
-        <Text style={[styles.title, { color: colors.text }]}>Đặt lịch sửa chữa</Text>
-        <Text style={[styles.note, { color: colors.textSecondary }]}>Chọn dịch vụ, địa chỉ đã lưu và khung giờ thật. AI chỉ hỗ trợ gợi ý, không tự đặt lịch.</Text>
-        {loading && <ActivityIndicator color={colors.primary} accessibilityLabel="Đang tải dịch vụ và địa chỉ" />}
+        <View style={styles.bookingTopBar}>
+          {backBtn}
+          {!visibleCreatedBookingId && (
+            <View style={styles.bookingProgress}>
+              <BookingIntakeProgress active={bookingStage} colors={colors} />
+            </View>
+          )}
+        </View>
+        {!visibleCreatedBookingId && (
+          <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>
+            {visibleReviewSnapshot ? 'Kiểm tra lần cuối'
+              : bookingStage === 0 ? 'Tình trạng cần sửa'
+              : bookingStage === 1 ? 'Chọn địa chỉ'
+                : 'Chọn ngày và giờ'}
+          </Text>
+        )}
+        {loading && (
+          <View style={styles.loadingRow} accessible accessibilityLabel="Đang tải dịch vụ và địa chỉ">
+            <ActivityIndicator color={colors.primary} accessibilityLabel="Đang tải dịch vụ và địa chỉ" />
+            <Text style={[styles.note, { color: colors.textSecondary }]}>Đang tải dịch vụ và địa chỉ đã lưu…</Text>
+          </View>
+        )}
         {!!loadError && (
           <View style={styles.section}>
             <Text style={{ color: colors.error }}>{loadError}</Text>
@@ -587,9 +1172,12 @@ export default function CustomerBookingCreateScreen() {
             </TouchableOpacity>
           </View>
         )}
-        {!loading && !loadError && !visibleCreatedBookingId && (
+        {!loading && !loadError && !visibleCreatedBookingId && !visibleReviewSnapshot && (
           <>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Dịch vụ</Text>
+            {bookingStage === 0 && (
+              <>
+
+            <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}>Dịch vụ</Text>
             {services.length === 0 && (
               <Text style={{ color: colors.textSecondary }}>
                 Chưa có dịch vụ khả dụng. Vui lòng thử lại sau.
@@ -599,11 +1187,34 @@ export default function CustomerBookingCreateScreen() {
             {!!selectedService ? (
               <TouchableOpacity
                 accessibilityRole="button"
+                accessibilityLabel={`Dịch vụ đã chọn: ${selectedService.name}. Chạm để đổi dịch vụ.`}
                 style={[styles.option, { borderColor: colors.primary, backgroundColor: colors.surface }]}
                 onPress={openPicker}
               >
-                <Text style={{ color: colors.text, fontWeight: '700' }}>{selectedService.name}</Text>
-                <Text style={{ color: colors.primary }}>Đổi dịch vụ</Text>
+                <View style={styles.serviceRow}>
+                  {selectedPresentation ? (
+                    <Image
+                      source={selectedPresentation.imageSource}
+                      style={[styles.serviceArt, { backgroundColor: colors.divider }]}
+                      resizeMode="contain"
+                      accessible={false}
+                      testID="booking-service-artwork"
+                    />
+                  ) : (
+                    <View
+                      style={[styles.serviceArt, styles.serviceArtFallback, { backgroundColor: colors.divider }]}
+                      accessible={false}
+                      testID="booking-service-artwork-fallback"
+                    >
+                      <Ionicons name="construct-outline" size={24} color={colors.textSecondary} />
+                    </View>
+                  )}
+                  <View style={styles.serviceCopy}>
+                    <Text style={[styles.serviceEyebrow, { color: colors.textSecondary }]}>DỊCH VỤ ĐÃ CHỌN</Text>
+                    <Text style={{ color: colors.text, fontWeight: '700' }}>{selectedService.name}</Text>
+                    <Text style={{ color: colors.primary }}>Đổi dịch vụ</Text>
+                  </View>
+                </View>
               </TouchableOpacity>
             ) : services.length > 0 ? (
               <TouchableOpacity
@@ -634,62 +1245,13 @@ export default function CustomerBookingCreateScreen() {
               </View>
             )}
 
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Địa chỉ sửa chữa đã lưu
-            </Text>
-            {addresses.length === 0 && (
-              <View style={styles.section}>
-                <Text style={{ color: colors.textSecondary }}>
-                  Chưa có địa chỉ. Hãy thêm địa chỉ có vị trí bản đồ trong Hồ sơ trước khi đặt lịch.
-                </Text>
-                {action('Mở Hồ sơ để thêm địa chỉ', openAddressEditor)}
-              </View>
-            )}
-            {!!selectedAddress ? (
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Đổi địa chỉ sửa chữa"
-                style={[styles.option, { borderColor: colors.primary, backgroundColor: colors.surface }]}
-                onPress={openAddressSheet}
-              >
-                <Text style={{ color: colors.text, fontWeight: '700' }}>
-                  {selectedAddress.label || 'Địa chỉ'}
-                </Text>
-                <Text style={{ color: colors.textSecondary }}>
-                  {[selectedAddress.line1, selectedAddress.ward, selectedAddress.district, selectedAddress.province]
-                    .filter(Boolean)
-                    .join(', ')}
-                </Text>
-                <Text style={{ color: selectedAddressReady ? colors.success : colors.error }}>
-                  {selectedAddressReady ? 'Đã có vị trí GPS để đặt lịch' : 'Cần cập nhật vị trí GPS'}
-                </Text>
-                <Text style={{ color: colors.primary }}>Đổi địa chỉ</Text>
-              </TouchableOpacity>
-            ) : addresses.length > 0 ? (
-              <TouchableOpacity
-                accessibilityRole="button"
-                style={[styles.option, { borderColor: colors.border, backgroundColor: colors.surface }]}
-                onPress={openAddressSheet}
-              >
-                <Text style={{ color: colors.textSecondary }}>Chọn địa chỉ...</Text>
-              </TouchableOpacity>
-            ) : null}
-            {!!selectedAddress && !selectedAddressReady && (
-              <View style={styles.section}>
-                <Text style={{ color: colors.error }}>
-                  Địa chỉ đang chọn chưa có tọa độ hợp lệ nên hệ thống không thể tạo yêu cầu an
-                  toàn.
-                </Text>
-                {action('Cập nhật địa chỉ trong Hồ sơ', openAddressEditor)}
-              </View>
-            )}
-
             <View
               onLayout={(event) => {
                 descriptionTopRef.current = event.nativeEvent.layout.y;
               }}
             >
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+
+              <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}>
                 {descriptionLabel}
               </Text>
               <TextInput
@@ -725,42 +1287,173 @@ export default function CustomerBookingCreateScreen() {
               )}
             </View>
 
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Ngày hẹn kỹ thuật viên tại nhà</Text>
+            <View style={[styles.photoSection, { backgroundColor: colors.surface }]}>
+
+              <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}>
+                Ảnh sự cố (không bắt buộc)
+              </Text>
+              <Text style={[styles.note, { color: colors.textSecondary }]}>
+                Thêm tối đa 5 ảnh JPEG, PNG hoặc WebP. Ảnh đã gửi cho AI chưa được đính kèm yêu cầu.
+              </Text>
+              <View style={styles.photoList}>
+                {bookingPhotos.map((photo, index) => (
+                  <View key={photo.uri} style={styles.photoItem}>
+                    <Image
+                      source={{ uri: photo.uri }}
+                      style={[styles.photoPreview, { backgroundColor: colors.divider }]}
+                      resizeMode="cover"
+                      accessible
+                      accessibilityLabel={`Ảnh sự cố ${index + 1}`}
+                    />
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel={`Xóa ảnh sự cố ${index + 1}`}
+                      accessibilityHint="Gỡ ảnh khỏi yêu cầu hiện tại"
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      disabled={reviewDisabled}
+                      onPress={() => removeBookingPhoto(photo.uri)}
+                      style={[styles.removePhotoButton, { backgroundColor: colors.surface }]}
+                    >
+                      <Ionicons name="close-circle" size={24} color={colors.error} />
+                    </TouchableOpacity>
+                    {uploadingPhotoUri === photo.uri && (
+                      <Text style={[styles.photoStatus, { color: colors.textSecondary }]}>
+                        Đang tải ảnh...
+                      </Text>
+                    )}
+                    {photo.uploadId && !photo.uploadUncertain && (
+                      <Text style={[styles.photoStatus, { color: colors.success }]}>
+                        Ảnh đã sẵn sàng
+                      </Text>
+                    )}
+                    {photo.uploadUncertain && (
+                      <Text style={[styles.photoStatus, { color: colors.error }]}>
+                        Chưa xác nhận lượt tải
+                      </Text>
+                    )}
+                  </View>
+                ))}
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Thêm ảnh sự cố"
+                  accessibilityHint={`Đã chọn ${bookingPhotos.length} trên ${MAX_BOOKING_PHOTOS} ảnh`}
+                  disabled={reviewDisabled || bookingPhotos.length >= MAX_BOOKING_PHOTOS}
+                  onPress={() => { void pickBookingPhotos(); }}
+                  style={[
+                    styles.addPhotoButton,
+                    {
+                      borderColor: colors.border,
+                      backgroundColor: colors.background,
+                      opacity: reviewDisabled || bookingPhotos.length >= MAX_BOOKING_PHOTOS ? 0.55 : 1,
+                    },
+                  ]}
+                >
+                  <Ionicons name="add" size={24} color={colors.primary} />
+                  <Text style={{ color: colors.primary, fontWeight: '600' }}>
+                    Thêm ảnh ({bookingPhotos.length}/{MAX_BOOKING_PHOTOS})
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {!!photoUploadError && (
+                <Text accessibilityRole="alert" style={[styles.photoError, { color: colors.error }]}>
+                  {photoUploadError}
+                </Text>
+              )}
+            </View>
+
+              </>
+            )}
+
+            {bookingStage === 1 && (
+              <>
+            {addressEditorOpen && customerOwnerId ? (
+              addressEditor
+            ) : (
+              <>
+
+
+            {addresses.length === 0 && (
+              <View style={styles.section}>
+                <Text style={{ color: colors.textSecondary }}>
+                  Chưa có địa chỉ đã lưu. Thêm địa chỉ mới với ghim chính xác ngay tại bước này.
+                </Text>
+                <TouchableOpacity accessibilityRole="button" onPress={openInlineAddressEditor} style={styles.stageEdit}>
+                  <Text style={{ color: colors.primary }}>Thêm địa chỉ mới</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {!!selectedAddress ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Đổi địa chỉ sửa chữa"
+                style={[styles.option, { borderColor: colors.primary, backgroundColor: colors.surface }]}
+                onPress={openAddressSheet}
+              >
+                <Text style={{ color: colors.text, fontWeight: '700' }}>
+                  {selectedAddress.label || 'Địa chỉ'}
+                </Text>
+                <Text style={{ color: colors.textSecondary }}>
+                  {[selectedAddress.line1, selectedAddress.ward, selectedAddress.district, selectedAddress.province]
+                    .filter(Boolean)
+                    .join(', ')}
+                </Text>
+                <Text style={{ color: selectedAddressReady ? colors.success : colors.error }}>
+                  {selectedAddressReady ? 'Đã có vị trí GPS để đặt lịch' : 'Cần cập nhật vị trí GPS'}
+                </Text>
+                <Text style={{ color: colors.primary }}>Đổi địa chỉ</Text>
+              </TouchableOpacity>
+            ) : addresses.length > 0 ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                style={[styles.option, { borderColor: colors.border, backgroundColor: colors.surface }]}
+                onPress={openAddressSheet}
+              >
+                <Text style={{ color: colors.textSecondary }}>Chọn địa chỉ...</Text>
+              </TouchableOpacity>
+            ) : null}
+            {!!selectedAddress && !selectedAddressReady && (
+              <View style={styles.section}>
+                <Text accessibilityRole="alert" style={{ color: colors.error }}>
+                  Địa chỉ đang chọn chưa có tọa độ hợp lệ nên hệ thống không thể tạo yêu cầu an
+                  toàn.
+                </Text>
+                {action('Cập nhật địa chỉ trong Hồ sơ', openAddressEditor)}
+              </View>
+            )}
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Thêm địa chỉ mới"
+              onPress={openInlineAddressEditor} style={styles.stageEdit}>
+              <Text style={{ color: colors.primary }}>+ Thêm địa chỉ mới tại đây</Text>
+            </TouchableOpacity>
+
+              </>
+            )}
+              </>
+            )}
+
+            {bookingStage === 2 && (
+              <>
             <BookingSchedulePicker
               colors={colors}
               date={bookingDate}
               time={startTime}
-              onDateChange={setBookingDate}
-              onTimeChange={setStartTime}
+              onDateChange={(date) => { setBookingDate(date); setReviewError(''); }}
+              onTimeChange={(time) => { setStartTime(time); setReviewError(''); }}
             />
+            {!!reviewError && (
+              <Text accessibilityRole="alert" style={[styles.note, { color: colors.error }]}>{reviewError}</Text>
+            )}
+            {!!photoUploadError && (
+              <View>
+                <Text accessibilityRole="alert" style={[styles.photoError, { color: colors.error }]}>
+                  {photoUploadError}
+                </Text>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Sửa ảnh sự cố"
+                  style={styles.stageEdit} onPress={() => setBookingStage(0)}>
+                  <Text style={{ color: colors.primary }}>Kiểm tra ảnh sự cố</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
-            <Text style={[styles.note, { color: colors.textSecondary }]}>
-              Ảnh dùng để hỏi trợ lý AI chưa được đính kèm yêu cầu. Bạn vẫn có thể đặt lịch không
-              có ảnh.
-            </Text>
-
-            <TouchableOpacity
-              accessibilityRole="button"
-              onPress={requestReview}
-              disabled={reviewDisabled}
-              style={[
-                styles.action,
-                { backgroundColor: reviewDisabled ? colors.border : colors.primary },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.actionText,
-                  { color: reviewDisabled ? colors.textSecondary : colors.surface },
-                ]}
-              >
-                {isSubmitting
-                  ? 'Đang gửi yêu cầu...'
-                  : visibleUncertainAttempt
-                    ? 'Chờ xác minh yêu cầu'
-                    : 'Xem lại yêu cầu'}
-              </Text>
-            </TouchableOpacity>
 
             {!!visibleUncertainAttempt && (
               <View style={[styles.section, { backgroundColor: colors.surface }]}>
@@ -773,6 +1466,7 @@ export default function CustomerBookingCreateScreen() {
                 </Text>
                 <TouchableOpacity
                   accessibilityRole="button"
+                  accessibilityState={{ disabled: isReconciling }}
                   disabled={isReconciling}
                   onPress={() => {
                     void reconcileUncertainCreate();
@@ -797,12 +1491,32 @@ export default function CustomerBookingCreateScreen() {
                 </TouchableOpacity>
               </View>
             )}
+              </>
+            )}
           </>
         )}
 
+        {visibleReviewSnapshot && !visibleCreatedBookingId && (
+          <View testID="booking-review-full-screen" style={[styles.section, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.note, { color: colors.textSecondary }]}>
+              Yêu cầu chưa được tạo. Thông tin và ảnh chỉ gửi sau khi bạn xác nhận.
+            </Text>
+            <BookingReviewSummary snapshot={visibleReviewSnapshot} colors={colors} />
+            {!!visibleReviewError && (
+              <Text accessibilityRole="alert" style={{ color: colors.error }}>{visibleReviewError}</Text>
+            )}
+            {!!photoUploadError && (
+              <Text accessibilityRole="alert" style={[styles.photoError, { color: colors.error }]}>
+                {photoUploadError}
+              </Text>
+            )}
+
+          </View>
+        )}
         {!!visibleCreatedBookingId && (
           <View style={[styles.section, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.sectionTitle, { color: colors.success }]}>
+            <Image source={CUSTOMER_UI_ARTWORK.bookingConfirmed} style={{ width: 144, height: 112, alignSelf: 'center' }} resizeMode="contain" accessible={false} testID="booking-confirmed-art" />
+            <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>
               Yêu cầu đặt lịch đã được xác nhận.
             </Text>
             <Text selectable style={{ color: colors.text }}>
@@ -815,15 +1529,47 @@ export default function CustomerBookingCreateScreen() {
             {visibleCreatedBooking && (
               <BookingReviewSummary snapshot={visibleCreatedBooking.snapshot} colors={colors} />
             )}
-            {action('Chọn kỹ thuật viên', () =>
-              navigation.navigate('CustomerMatching', {
-                bookingId: visibleCreatedBookingId,
-              }),
-            )}
-            {action('Về trang chủ', () => navigation.navigate('CustomerMain'))}
+
           </View>
         )}
       </ScrollView>
+      {((!loading && !loadError) || visibleReviewSnapshot || visibleCreatedBookingId) && (
+        <BookingActionBar>
+          {!visibleReviewSnapshot && !visibleCreatedBookingId && (
+            bookingStage === 0
+              ? <BookingPrimaryAction label="Tiếp tục: Chọn địa chỉ" onPress={continueToAddress} disabled={reviewDisabled} colors={colors} />
+              : bookingStage === 1
+                ? !addressEditorOpen && <BookingPrimaryAction label="Tiếp tục: Chọn ngày và giờ" onPress={continueToSchedule} disabled={reviewDisabled} colors={colors} />
+                : <BookingPrimaryAction label={isSubmitting ? 'Đang gửi yêu cầu...'
+                  : visibleUncertainAttempt ? 'Chờ xác minh yêu cầu' : 'Xem lại yêu cầu'}
+                  onPress={requestReview} disabled={reviewDisabled} colors={colors} />
+          )}
+          {visibleReviewSnapshot && !visibleCreatedBookingId && (
+            <>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Chỉnh sửa"
+                disabled={isSubmitting} accessibilityState={{ disabled: isSubmitting }}
+                style={styles.stageEdit} onPress={dismissReview}>
+                <Text style={{ color: colors.primary, fontWeight: '600' }}>Chỉnh sửa</Text>
+              </TouchableOpacity>
+              <BookingPrimaryAction label={isSubmitting ? 'Đang gửi yêu cầu...' : 'Xác nhận đặt lịch'} onPress={() => {
+                if (isSubmitting || hasUncertainReviewPhoto) return;
+                void submit(visibleReviewSnapshot);
+              }} disabled={isSubmitting || hasUncertainReviewPhoto} colors={colors} accessibilityLabel="Xác nhận đặt lịch" />
+            </>
+          )}
+          {visibleCreatedBookingId && (
+            <>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Về trang chủ"
+                style={styles.stageEdit} onPress={() => navigation.navigate('CustomerMain')}>
+                <Text style={{ color: colors.primary, fontWeight: '600' }}>Về trang chủ</Text>
+              </TouchableOpacity>
+              {action('Chọn kỹ thuật viên', () => navigation.navigate('CustomerMatching', {
+                bookingId: visibleCreatedBookingId,
+              }))}
+            </>
+          )}
+        </BookingActionBar>
+      )}
 
       <BottomSheetModal
         ref={pickerSheetRef}
@@ -940,43 +1686,79 @@ export default function CustomerBookingCreateScreen() {
         />
       </BottomSheetModal>
 
-      <BookingReviewSheet
-        sheetRef={reviewSheetRef}
-        snapshot={visibleReviewSnapshot}
-        colors={colors}
-        confirmDisabled={isSubmitting}
-        confirmLabel={isSubmitting ? 'Đang gửi yêu cầu...' : 'Xác nhận đặt lịch'}
-        onConfirm={() => {
-          if (!visibleReviewSnapshot) return;
-          const reviewedRequest = visibleReviewSnapshot;
-          reviewSheetRef.current?.dismiss();
-          setReviewSnapshot(null);
-          void submit(reviewedRequest);
-        }}
-        onEdit={() => {
-          reviewSheetRef.current?.dismiss();
-          setReviewSnapshot(null);
-        }}
-        onDismiss={() => setReviewSnapshot(null)}
-      />
+
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   page: { flex: 1 },
-  content: { padding: 18, paddingBottom: 40, gap: 12 },
-  backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  title: { fontSize: 23, fontWeight: '700', marginVertical: 8 },
-  section: { padding: 14, borderRadius: 12, gap: 12 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', marginTop: 12 },
-  note: { lineHeight: 21, fontSize: 13 },
-  option: { padding: 13, borderWidth: 1, borderRadius: 12, gap: 5 },
-  input: { minHeight: 94, padding: 12, borderWidth: 1, borderRadius: 12, textAlignVertical: 'top' },
-  fieldError: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 7 },
+  content: { padding: 16, paddingBottom: 32, gap: 16, flexGrow: 1 },
+  backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  bookingTopBar: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 58 },
+  bookingProgress: { flex: 1, minWidth: 0 },
+  stageEdit: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
+  title: { fontSize: 22, lineHeight: 30, fontWeight: '700', marginVertical: 8 },
+  stepEyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
+  section: { padding: 16, borderRadius: 14, gap: 12 },
+  sectionTitle: { fontSize: 16, lineHeight: 24, fontWeight: '700', marginTop: 8 },
+  note: { lineHeight: 20, fontSize: 13 },
+  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
+  option: { padding: 16, borderWidth: 1, borderRadius: 14, gap: 6, minHeight: 48, justifyContent: 'center' },
+  serviceRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  serviceArt: { width: 56, height: 56, borderRadius: 12 },
+  serviceArtFallback: { alignItems: 'center', justifyContent: 'center' },
+  serviceCopy: { flex: 1, gap: 2 },
+  serviceEyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
+  input: { minHeight: 94, padding: 12, borderWidth: 1, borderRadius: 14, textAlignVertical: 'top', fontSize: 16, lineHeight: 24 },
+  fieldError: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
   fieldErrorText: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '500' },
-  action: { padding: 15, marginTop: 7, borderRadius: 12, alignItems: 'center' },
-  actionText: { fontWeight: '700', fontSize: 15 },
+  photoSection: { padding: 16, borderRadius: 14, gap: 10 },
+  photoList: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 10 },
+  photoItem: { width: 78, gap: 4 },
+  photoPreview: { width: 72, height: 72, borderRadius: 12 },
+  removePhotoButton: {
+    position: 'absolute',
+    top: -8,
+    right: -7,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoStatus: { fontSize: 12, lineHeight: 16 },
+  addPhotoButton: {
+    minWidth: 112,
+    minHeight: 72,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
+    gap: 2,
+  },
+  photoError: { fontSize: 13, lineHeight: 19 },
+  action: { padding: 15, marginTop: 0, borderRadius: 14, alignItems: 'center', justifyContent: 'center', minHeight: 52 },
+  actionText: { fontWeight: '700', fontSize: 15, lineHeight: 22 },
   pickerHeader: { paddingHorizontal: 18, paddingBottom: 10, borderBottomWidth: 1, gap: 8 },
   pickerListContent: { padding: 18, paddingTop: 10, gap: 10 },
+});
+
+const progressStyles = StyleSheet.create({
+  track: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 4 },
+  step: { alignItems: 'center', gap: 4, minWidth: 64 },
+  dot: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dotText: { fontSize: 13, lineHeight: 18, fontWeight: '700' },
+  stepLabel: { fontSize: 12, lineHeight: 16, fontWeight: '500', textAlign: 'center' },
+  stepLabelActive: { fontWeight: '700' },
+  connector: { flex: 1, height: 2, borderRadius: 1, marginTop: 12, marginHorizontal: 4 },
 });

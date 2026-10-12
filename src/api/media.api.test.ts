@@ -118,3 +118,97 @@ describe('mediaApi.uploadPublicImage', () => {
     })).rejects.toThrow(/không hợp lệ/i);
   });
 });
+
+describe('mediaApi.uploadBookingPhoto', () => {
+  it('sends one file to the private Booking route and returns only its upload metadata', async () => {
+    post.mockResolvedValue({
+      status: 201,
+      data: {
+        data: {
+          uploadId: '8f9c9a41-bc0e-4a25-99a6-16e8d11c2c9a',
+          mimeType: 'image/jpeg',
+          sizeBytes: 2048,
+          objectRef: 'private/object/ref',
+          url: 'https://private.example/photo.jpg',
+        },
+      },
+    });
+
+    const result = await mediaApi.uploadBookingPhoto({
+      uri: 'file:///issue.jpg',
+      name: 'issue.jpg',
+      type: 'image/jpeg',
+    });
+
+    expect(result).toEqual({
+      uploadId: '8f9c9a41-bc0e-4a25-99a6-16e8d11c2c9a',
+      mimeType: 'image/jpeg',
+      sizeBytes: 2048,
+    });
+    expect(result).not.toHaveProperty('objectRef');
+    expect(result).not.toHaveProperty('url');
+    expect(post).toHaveBeenCalledTimes(1);
+    const [url, body, config] = post.mock.calls[0];
+    expect(url).toBe('/media/booking-photo-upload');
+    expect((body as FakeFormData).entries).toEqual([
+      ['file', {
+        uri: 'file:///issue.jpg',
+        name: 'issue.jpg',
+        type: 'image/jpeg',
+      }],
+    ]);
+    expect(config).toEqual({
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    });
+  });
+
+  it.each([
+    { uploadId: 'not-a-uuid', mimeType: 'image/jpeg', sizeBytes: 10 },
+    { uploadId: '8f9c9a41-bc0e-4a25-99a6-16e8d11c2c9a', mimeType: 'image/gif', sizeBytes: 10 },
+    { uploadId: '8f9c9a41-bc0e-4a25-99a6-16e8d11c2c9a', mimeType: 'image/png', sizeBytes: 0 },
+    { uploadId: '8f9c9a41-bc0e-4a25-99a6-16e8d11c2c9a', mimeType: 'image/webp', sizeBytes: 10 * 1024 * 1024 + 1 },
+  ])('fails closed on invalid private upload metadata %#', async (payload) => {
+    post.mockResolvedValue({ status: 201, data: { data: payload } });
+
+    await expect(mediaApi.uploadBookingPhoto({
+      uri: 'file:///issue.jpg',
+      name: 'issue.jpg',
+      type: 'image/jpeg',
+    })).rejects.toThrow(/không hợp lệ/i);
+  });
+
+  it('requires HTTP 201 and the exact wrapped response body', async () => {
+    post.mockResolvedValueOnce({
+      status: 200,
+      data: {
+        data: {
+          uploadId: '8f9c9a41-bc0e-4a25-99a6-16e8d11c2c9a',
+          mimeType: 'image/jpeg',
+          sizeBytes: 2048,
+        },
+      },
+    });
+
+    await expect(mediaApi.uploadBookingPhoto({
+      uri: 'file:///issue.jpg',
+      name: 'issue.jpg',
+      type: 'image/jpeg',
+    })).rejects.toThrow(/xác nhận/i);
+
+    post.mockResolvedValueOnce({
+      status: 201,
+      data: {
+        uploadId: '8f9c9a41-bc0e-4a25-99a6-16e8d11c2c9a',
+        mimeType: 'image/jpeg',
+        sizeBytes: 2048,
+      },
+    });
+
+    await expect(mediaApi.uploadBookingPhoto({
+      uri: 'file:///issue.jpg',
+      name: 'issue.jpg',
+      type: 'image/jpeg',
+    })).rejects.toThrow(/không hợp lệ/i);
+  });
+});

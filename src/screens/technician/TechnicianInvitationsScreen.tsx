@@ -69,8 +69,8 @@ export default function TechnicianInvitationsScreen() {
   const controllerRef = useRef<ReturnType<typeof createInvitationInbox> | null>(null);
   if (controllerRef.current === null) {
     controllerRef.current = createInvitationInbox(bookingsApi, {
-      getMyOrdersPage: ordersApi.getMyOrdersPage,
-      getOrder: ordersApi.getOrder,
+      getMyOrdersPage: ordersApi.getTechnicianJobsPage,
+      getOrder: ordersApi.getTechnicianOrder,
     }, setState, (notice, isCurrent) => {
       Alert.alert(notice.title, notice.message, notice.orderId ? [
         {

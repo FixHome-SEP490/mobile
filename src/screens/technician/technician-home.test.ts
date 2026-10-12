@@ -1,5 +1,5 @@
 import type { ServiceOrderItem } from '../../api/orders.api';
-import { pickPriorityJob, startOfWeekVn, weeklyStats } from './technician-home';
+import { createHomeOrdersReadGuard, pickPriorityJob, startOfWeekVn, weeklyStats } from './technician-home';
 
 const order = (id: string, status: string, over: Partial<ServiceOrderItem> = {}) =>
   ({ id, status, scheduledAt: '2026-09-30T03:00:00Z', laborTotal: 0, grandTotal: 0, ...over }) as ServiceOrderItem;
@@ -56,4 +56,58 @@ describe('weeklyStats', () => {
     expect(weeklyStats([], now)).toEqual({ completed: 0, earnings: 0 });
     expect(weeklyStats([order('bad', 'COMPLETED', { completionRequestedAt: 'x', scheduledAt: 'y' })], now)).toEqual({ completed: 0, earnings: 0 });
   });
+});
+
+it('excludes historical completion and income even if extra private fields arrive', () => {
+  const archived = order('archived', 'COMPLETED', { historical: true,
+    completionRequestedAt: '2026-09-29T05:00:00Z', laborTotal: 999 });
+  expect(weeklyStats([archived], Date.parse('2026-09-30T07:00:00Z'))).toEqual({ completed: 0, earnings: 0 });
+});
+
+
+it('prevents a late full-order GET from resurrecting revoked PII after a historical response', () => {
+  const guard = createHomeOrdersReadGuard();
+  const full = order('revoked', 'COMPLETED', {
+    customerName: 'PRIVATE_CUSTOMER', addressSummary: 'PRIVATE_ADDRESS', laborTotal: 900000,
+  });
+  const historical = {
+    id: full.id, code: 'SO-HIST', status: 'COMPLETED' as const,
+    createdAt: '2026-10-09T00:00:00Z', historical: true as const,
+  };
+  const oldRequest = guard.begin();
+  const newerRequest = guard.begin();
+  expect(guard.resolve(newerRequest, [historical])).toEqual({ orders: [], revokedIds: ['revoked'] });
+  expect(guard.resolve(oldRequest, [full])).toEqual({ orders: null, revokedIds: [] });
+  const freshAgain = guard.begin();
+  expect(guard.resolve(freshAgain, [full, order('unrelated', 'ACCEPTED')]))
+    .toEqual({ orders: [expect.objectContaining({ id: 'unrelated' })], revokedIds: [] });
+});
+
+it('ignores results after the Home loader is invalidated', () => {
+  const guard = createHomeOrdersReadGuard();
+  const oldRequest = guard.begin();
+  guard.invalidate();
+  expect(guard.isCurrent(oldRequest)).toBe(false);
+  expect(guard.resolve(oldRequest, [order('private', 'ACCEPTED')])).toEqual({ orders: null, revokedIds: [] });
+});
+
+
+it('uses stale historical confirmation to purge a full row even when newer GET fails', () => {
+  const guard = createHomeOrdersReadGuard();
+  const full = order('revoked-2', 'COMPLETED', {
+    customerName: 'PRIVATE', addressSummary: 'PRIVATE', laborTotal: 950000,
+  });
+  const initial = guard.begin();
+  expect(guard.resolve(initial, [full]).orders).toEqual([full]);
+  const stale = guard.begin();
+  const latest = guard.begin();
+  // Latest request fails; its generation remains current but cannot erase evidence from stale GET.
+  const observed = guard.resolve(stale, [{
+    id: full.id, code: 'SO-HIST', status: 'COMPLETED',
+    createdAt: '2026-10-09T00:00:00Z', historical: true,
+  }]);
+  expect(guard.isCurrent(latest)).toBe(true);
+  expect(observed).toEqual({ orders: null, revokedIds: ['revoked-2'] });
+  const next = guard.begin();
+  expect(guard.resolve(next, [full])).toEqual({ orders: [], revokedIds: [] });
 });

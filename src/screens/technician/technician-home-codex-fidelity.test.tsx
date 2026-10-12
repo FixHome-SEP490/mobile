@@ -54,7 +54,7 @@ jest.mock('../../hooks/useScrollHideTabBar', () => ({
 jest.mock('../../api/orders.api', () => ({
   isHistoricalOrder: (row: { historical?: boolean } | null) => row?.historical === true,
   ordersApi: {
-    getMyOrders: jest.fn(async () => {
+    getTechnicianJobs: jest.fn(async () => {
       if (mockJobs instanceof Error) throw mockJobs;
       if (mockJobsGate) await mockJobsGate.promise;
       return mockJobs;
@@ -275,8 +275,8 @@ describe('TechnicianHome Codex fidelity T-NATIVE-01A (mocked layout)', () => {
       await act(async () => {
         loadingRenderer = create(<TechnicianHomeScreen />);
       });
-      expect(ordersApi.getMyOrders).toHaveBeenCalledTimes(1);
-      const jobsPromise = (ordersApi.getMyOrders as jest.Mock).mock.results[0].value as
+      expect(ordersApi.getTechnicianJobs).toHaveBeenCalledTimes(1);
+      const jobsPromise = (ordersApi.getTechnicianJobs as jest.Mock).mock.results[0].value as
         Promise<ServiceOrderItem[]>;
       const jobsSettled = jest.fn();
       void jobsPromise.then(jobsSettled);

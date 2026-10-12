@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
@@ -10,6 +10,7 @@ import type { BookingReviewSnapshot } from '../screens/customer/customer-booking
 
 type BookingColors = {
   border: string;
+  divider: string;
   error: string;
   primary: string;
   surface: string;
@@ -34,14 +35,31 @@ export function BookingReviewSummary({
         colors={colors}
       />
       <SummaryRow
+        label="Mô tả sự cố"
+        value={snapshot.request.description}
+        colors={colors}
+      />
+      {snapshot.photos.length > 0 && (
+        <View style={styles.photoSummary}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Ảnh sự cố</Text>
+          <View style={styles.photoList}>
+            {snapshot.photos.map((photo, index) => (
+              <Image
+                key={`${photo.uri}-${index}`}
+                source={{ uri: photo.uri }}
+                style={[styles.photoPreview, { backgroundColor: colors.divider }]}
+                resizeMode="cover"
+                accessible
+                accessibilityLabel={`Ảnh đính kèm ${index + 1}`}
+              />
+            ))}
+          </View>
+        </View>
+      )}
+      <SummaryRow
         icon={<MapPin color={colors.primary} size={18} />}
         label="Địa chỉ sửa chữa"
         value={`${snapshot.addressLabel}${snapshot.addressDescription ? ` · ${snapshot.addressDescription}` : ''}`}
-        colors={colors}
-      />
-      <SummaryRow
-        label="Mô tả sự cố"
-        value={snapshot.request.description}
         colors={colors}
       />
       <SummaryRow
@@ -79,6 +97,7 @@ export default function BookingReviewSheet({
   colors,
   confirmDisabled,
   confirmLabel,
+  photoUploadError,
   onConfirm,
   onEdit,
   onDismiss,
@@ -88,6 +107,7 @@ export default function BookingReviewSheet({
   colors: BookingColors;
   confirmDisabled: boolean;
   confirmLabel: string;
+  photoUploadError?: string;
   onConfirm: () => void;
   onEdit: () => void;
   onDismiss: () => void;
@@ -113,7 +133,15 @@ export default function BookingReviewSheet({
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             Kiểm tra thông tin trước khi xác nhận đặt lịch.
           </Text>
+          <Text style={[styles.prestate, { color: colors.textSecondary }]}>
+            Yêu cầu chưa được tạo và ảnh chưa tải lên — chỉ gửi sau khi bạn xác nhận.
+          </Text>
           <BookingReviewSummary snapshot={snapshot} colors={colors} />
+          {!!photoUploadError && (
+            <Text accessibilityRole="alert" style={[styles.uploadError, { color: colors.error }]}>
+              {photoUploadError}
+            </Text>
+          )}
           <TouchableOpacity
             accessibilityRole="button"
             disabled={confirmDisabled}
@@ -171,6 +199,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 24, gap: 14 },
   title: { fontSize: 20, lineHeight: 27, fontWeight: '700' },
   subtitle: { fontSize: 13, lineHeight: 19 },
+  prestate: { fontSize: 12, lineHeight: 18 },
   summary: { gap: 13 },
   summaryRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   icon: { width: 22, alignItems: 'center', paddingTop: 2 },
@@ -180,6 +209,10 @@ const styles = StyleSheet.create({
   quantity: { paddingLeft: 32, fontSize: 14, fontWeight: '600' },
   note: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
   noteText: { fontSize: 13, lineHeight: 19 },
+  photoSummary: { gap: 7, paddingLeft: 32 },
+  photoList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  photoPreview: { width: 64, height: 64, borderRadius: 10 },
+  uploadError: { fontSize: 13, lineHeight: 19 },
   primaryAction: {
     minHeight: 48,
     borderRadius: 12,

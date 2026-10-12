@@ -17,7 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { AlertTriangle, Camera, ChevronLeft, Clock, ShieldCheck, XCircle, type LucideIcon } from 'lucide-react-native';
 import type { RootStackParamList } from '../../types';
-import { useAppTheme, type Tone } from '../../constants/theme';
+import { fontSize, spacing, useAppTheme, type Tone } from '../../constants/theme';
 import {
   technicianVerificationApi,
   type KycDocumentType,
@@ -274,23 +274,35 @@ export default function TechnicianKycScreen() {
           accessibilityRole="button"
           accessibilityLabel="Quay lại"
         >
-          <ChevronLeft size={26} color={colors.text} strokeWidth={1.75} />
+          <ChevronLeft size={24} color={colors.text} strokeWidth={1.75} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} accessibilityRole="header">Xác minh danh tính</Text>
+        <View style={styles.headerTitleGroup}>
+          <Text style={styles.headerEyebrow}>Xác minh danh tính</Text>
+          <Text style={styles.headerTitle} accessibilityRole="header">Hồ sơ rõ, việc vững</Text>
+        </View>
         <View style={styles.backBtn} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.bodySmall}>Theo dõi hồ sơ và cung cấp ảnh để xác minh danh tính của bạn.</Text>
         {loading ? (
-          <View style={styles.centerBlock}>
+          <View style={styles.centerBlock} accessibilityLiveRegion="polite" accessibilityState={{ busy: true }}>
             <ActivityIndicator color={colors.primaryStrong} />
             <Text style={styles.bodySmall}>Đang tải…</Text>
+            <Text style={styles.bodySmall}>Đang kiểm tra trạng thái hồ sơ của bạn.</Text>
           </View>
         ) : loadError ? (
           <View style={styles.centerBlock}>
             <AlertTriangle size={40} color={colors.error} strokeWidth={1.5} />
-            <Text style={styles.errorText}>Không thể tải trạng thái xác minh. Vui lòng thử lại.</Text>
-            <TouchableOpacity style={styles.secondaryBtn} onPress={retryLoad} accessibilityRole="button">
+            <Text style={styles.errorText} accessibilityRole="alert">Không thể tải trạng thái xác minh. Vui lòng thử lại.</Text>
+            <Text style={styles.bodySmall}>Chưa xác định được tình trạng hồ sơ của bạn.</Text>
+            <TouchableOpacity
+              style={styles.secondaryBtn}
+              onPress={retryLoad}
+              accessibilityRole="button"
+              accessibilityLabel="Thử lại trạng thái xác minh"
+              accessibilityHint="Kiểm tra lại tình trạng hồ sơ, không gửi ảnh."
+            >
               <Text style={styles.secondaryBtnText}>Thử lại</Text>
             </TouchableOpacity>
           </View>
@@ -312,7 +324,7 @@ export default function TechnicianKycScreen() {
                 tone={colors.tone.success}
                 Icon={ShieldCheck}
                 title="Đã xác minh danh tính"
-                body="Bạn có thể nhận việc bình thường."
+                body="Thông tin xác minh danh tính đã được duyệt."
               />
             )}
 
@@ -322,37 +334,55 @@ export default function TechnicianKycScreen() {
                 tone={colors.tone.danger}
                 Icon={XCircle}
                 title="Hồ sơ bị từ chối"
-                body={verification.rejectionReason || 'Ảnh không hợp lệ. Vui lòng nộp lại.'}
+                body={verification.rejectionReason || 'Quản trị viên chưa cung cấp lý do chi tiết. Bạn có thể cập nhật hồ sơ và nộp lại.'}
               />
             )}
 
             {showUploadForm && (
               <View style={styles.form}>
-                <Text style={styles.formTitle}>Nộp ảnh xác minh</Text>
-                <Text style={styles.bodySmall}>Ảnh JPEG, PNG hoặc WebP, tối đa 10MB mỗi ảnh.</Text>
+                {!verification && <Text style={styles.statusLabel} accessibilityRole="header">Chưa nộp hồ sơ</Text>}
+                <Text style={styles.formTitle} accessibilityRole="header">
+                  {verification?.status === 'REJECTED' ? 'Chọn ảnh để nộp lại' : 'Chuẩn bị 3 ảnh xác minh'}
+                </Text>
+                <Text style={styles.bodySmall}>
+                  Chụp rõ toàn bộ hai mặt CCCD và khuôn mặt, không che thông tin. Ảnh chân dung là ảnh tĩnh.
+                </Text>
+                <Text style={styles.caption}>Ảnh JPEG, PNG hoặc WebP, tối đa 10 MB mỗi ảnh.</Text>
 
-                {slots.map((slot) => (
-                  <TouchableOpacity
-                    key={slot.key}
-                    style={[styles.slotCard, slot.asset && styles.slotCardFilled]}
-                    onPress={() => handleSlotPress(slot)}
-                    disabled={submitting}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${slot.label}${slot.asset ? ', đã chọn ảnh. Bấm để đổi ảnh' : ', ' + slot.hint}`}
-                  >
-                    <View style={styles.slotThumb}>
-                      {slot.asset ? (
-                        <Image source={{ uri: slot.asset.uri }} style={styles.slotImage} accessibilityIgnoresInvertColors />
-                      ) : (
-                        <Camera size={26} color={colors.textSecondary} strokeWidth={1.75} />
-                      )}
-                    </View>
-                    <View style={styles.flex1}>
-                      <Text style={styles.slotLabel}>{slot.label}</Text>
-                      <Text style={styles.bodySmall}>{slot.asset ? 'Đã chọn ảnh · bấm để đổi' : slot.hint}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
+                {slots.map((slot) => {
+                  const displayLabel = slot.key === 'front'
+                    ? 'CCCD mặt trước'
+                    : slot.key === 'back'
+                      ? 'CCCD mặt sau'
+                      : 'Ảnh chân dung';
+                  const displayHint = slot.key === 'face' ? 'Chụp ảnh chân dung tĩnh' : 'Chọn ảnh có sẵn hoặc chụp mới';
+
+                  return (
+                    <TouchableOpacity
+                      key={slot.key}
+                      style={[styles.slotCard, slot.asset && styles.slotCardFilled]}
+                      onPress={() => handleSlotPress(slot)}
+                      disabled={submitting}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${displayLabel}, ${slot.asset ? 'đã chọn ảnh trên máy' : 'chưa chọn ảnh'}`}
+                      accessibilityHint={`${slot.asset ? 'Ảnh này chưa nộp. Bấm để đổi ảnh.' : displayHint + '.'}`}
+                      accessibilityState={{ disabled: submitting }}
+                    >
+                      <View style={styles.slotThumb}>
+                        {slot.asset ? (
+                          <Image source={{ uri: slot.asset.uri }} style={styles.slotImage} accessibilityIgnoresInvertColors accessible={false} />
+                        ) : (
+                          <Camera size={26} color={colors.textSecondary} strokeWidth={1.75} />
+                        )}
+                      </View>
+                      <View style={styles.flex1}>
+                        <Text style={styles.slotLabel}>{displayLabel}</Text>
+                        <Text style={styles.bodySmall}>{slot.asset ? 'Đã chọn ảnh trên máy' : displayHint}</Text>
+                        {slot.asset && <Text style={styles.caption}>Bấm để đổi ảnh</Text>}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
 
                 <Text style={styles.slotLabel}>Chứng chỉ nghề (không bắt buộc)</Text>
                 <Text style={[styles.bodySmall, { color: colors.tone.warning.fg }]}>Ảnh chứng chỉ phải chụp từ bản đã công chứng. Tối đa {MAX_CERTIFICATES} ảnh.</Text>
@@ -370,19 +400,26 @@ export default function TechnicianKycScreen() {
                     </TouchableOpacity>
                   ))}
                   {certificates.length < MAX_CERTIFICATES && (
-                    <TouchableOpacity style={styles.secondaryBtn} onPress={addCertificate} disabled={submitting} accessibilityRole="button">
+                    <TouchableOpacity style={styles.secondaryBtn} onPress={addCertificate} disabled={submitting} accessibilityRole="button" accessibilityLabel="Thêm ảnh chứng chỉ nghề">
                       <Text style={styles.secondaryBtnText}>+ Thêm ảnh chứng chỉ</Text>
                     </TouchableOpacity>
                   )}
                 </View>
 
+                <Text style={styles.bodySmall} accessibilityLiveRegion="polite">
+                  {canSubmit ? 'Đã chọn đủ 3 ảnh trên máy. Bạn có thể nộp hồ sơ.' : 'Chọn đủ 3 ảnh để nộp hồ sơ.'}
+                </Text>
+                <Text style={styles.caption}>Ảnh đã chọn chưa được nộp. Hồ sơ chỉ được ghi nhận sau khi gửi thành công.</Text>
                 <View style={styles.actionRow}>
                   {hasAnySelection && (
                     <TouchableOpacity
-                      style={[styles.secondaryBtn, styles.flex1]}
+                      style={styles.secondaryBtn}
                       disabled={submitting}
                       onPress={resetSlots}
                       accessibilityRole="button"
+                      accessibilityLabel="Chọn lại cả 3 ảnh"
+                      accessibilityHint="Xóa lựa chọn ảnh trên máy để chọn lại; không thay đổi hồ sơ đã nộp."
+                      accessibilityState={{ disabled: submitting }}
                     >
                       <Text style={styles.secondaryBtnText}>Chọn lại</Text>
                     </TouchableOpacity>
@@ -390,21 +427,22 @@ export default function TechnicianKycScreen() {
                   <TouchableOpacity
                     style={[
                       styles.primaryBtn,
-                      styles.flex2,
                       (!canSubmit || submitting) && styles.submitBtnDisabled,
                     ]}
                     disabled={!canSubmit || submitting}
                     onPress={handleSubmit}
                     accessibilityRole="button"
+                    accessibilityLabel="Nộp hồ sơ xác minh"
+                    accessibilityHint={canSubmit ? 'Gửi 3 ảnh đã chọn để quản trị viên xét duyệt hồ sơ.' : 'Chọn đủ 3 ảnh trước khi nộp hồ sơ.'}
                     accessibilityState={{ disabled: !canSubmit || submitting, busy: submitting }}
                   >
                     {submitting ? (
                       <>
-                        <ActivityIndicator color={colors.surface} />
-                        <Text style={styles.primaryBtnText}>Đang gửi hồ sơ…</Text>
+                        <ActivityIndicator color={colors.textSecondary} />
+                        <Text style={[styles.primaryBtnText, styles.disabledBtnText]}>Đang gửi hồ sơ…</Text>
                       </>
                     ) : (
-                      <Text style={styles.primaryBtnText}>Nộp hồ sơ xác minh</Text>
+                      <Text style={[styles.primaryBtnText, !canSubmit && styles.disabledBtnText]}>Nộp hồ sơ xác minh</Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -427,10 +465,14 @@ function StatusCard({ styles, tone, Icon, title, body }: {
   body: string;
 }) {
   return (
-    <View style={[styles.statusCard, { backgroundColor: tone.bg }]}>
+    <View
+      style={[styles.statusCard, { backgroundColor: tone.bg }]}
+      accessibilityRole="summary"
+      accessibilityLiveRegion="polite"
+    >
       <Icon size={22} color={tone.fg} strokeWidth={1.75} />
       <View style={styles.flex1}>
-        <Text style={[styles.statusTitle, { color: tone.text }]}>{title}</Text>
+        <Text style={[styles.statusTitle, { color: tone.text }]} accessibilityRole="header">{title}</Text>
         <Text style={[styles.statusBody, { color: tone.text }]}>{body}</Text>
       </View>
     </View>
@@ -439,8 +481,7 @@ function StatusCard({ styles, tone, Icon, title, body }: {
 
 const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  flex1: { flex: 1 },
-  flex2: { flex: 2 },
+  flex1: { flex: 1, minWidth: 0 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -449,47 +490,46 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
     paddingVertical: 4,
   },
   backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text },
-  content: { padding: 16, paddingBottom: 48, gap: 12 },
-  centerBlock: { alignItems: 'center', gap: 12, marginTop: 40 },
-  bodySmall: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
+  headerTitleGroup: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 1 },
+  headerEyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.textSecondary, textAlign: 'center' },
+  headerTitle: { fontSize: 20, lineHeight: 28, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  content: { padding: spacing.md, paddingBottom: spacing.xxl, gap: spacing.md },
+  centerBlock: { alignItems: 'center', gap: 12, marginTop: spacing.xl },
+  bodySmall: { fontSize: fontSize.sm, lineHeight: 20, color: colors.textSecondary },
+  caption: { fontSize: fontSize.xs, lineHeight: 16, color: colors.textSecondary },
+  statusLabel: { fontSize: fontSize.md, lineHeight: 24, fontWeight: '600', color: colors.textSecondary },
   errorText: { fontSize: 14, lineHeight: 20, color: colors.error, textAlign: 'center' },
   statusCard: { flexDirection: 'row', gap: 12, borderRadius: 14, padding: 16 },
   statusTitle: { fontSize: 16, lineHeight: 24, fontWeight: '700' },
   statusBody: { fontSize: 14, lineHeight: 20 },
-  form: {
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    gap: 12,
-  },
-  formTitle: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text },
+  form: { gap: spacing.md },
+  formTitle: { fontSize: fontSize.xl, lineHeight: 28, fontWeight: '600', color: colors.text },
   slotCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     minHeight: 88,
-    padding: 8,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: colors.textSecondary,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
-  slotCardFilled: { borderStyle: 'solid', borderColor: colors.tone.success.fg },
+  slotCardFilled: { borderColor: colors.primaryStrong, backgroundColor: colors.primarySoft },
   slotThumb: {
     width: 72,
     height: 72,
-    borderRadius: 8,
+    flexShrink: 0,
+    borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: colors.background,
+    backgroundColor: colors.primarySoft,
     justifyContent: 'center',
     alignItems: 'center',
   },
   slotImage: { width: '100%', height: '100%' },
   slotLabel: { fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.text },
-  actionRow: { flexDirection: 'row', gap: 12, marginTop: 4 },
+  actionRow: { gap: spacing.sm, marginTop: spacing.xs },
   primaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -499,18 +539,21 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
     borderRadius: 14,
     backgroundColor: colors.primaryStrong,
     paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  primaryBtnText: { color: colors.surface, fontSize: 16, lineHeight: 24, fontWeight: '600' },
+  primaryBtnText: { flexShrink: 1, textAlign: 'center', color: colors.surface, fontSize: fontSize.md, lineHeight: 24, fontWeight: '600' },
   secondaryBtn: {
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 48,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: colors.primaryStrong,
+    borderColor: colors.textSecondary,
     backgroundColor: colors.surface,
     paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  secondaryBtnText: { color: colors.primaryStrong, fontSize: 16, lineHeight: 24, fontWeight: '600' },
-  submitBtnDisabled: { opacity: 0.5 },
+  secondaryBtnText: { textAlign: 'center', color: colors.text, fontSize: fontSize.md, lineHeight: 24, fontWeight: '600' },
+  submitBtnDisabled: { backgroundColor: colors.border },
+  disabledBtnText: { color: colors.textSecondary },
 });

@@ -1,5 +1,5 @@
 // Pure view logic for the technician weekly schedule ("Lịch làm việc").
-import type { ServiceOrderItem } from '../../api/orders.api';
+import { isHistoricalOrder, type TechnicianOrderItem, type ServiceOrderItem } from '../../api/orders.api';
 import type { TechnicianTimeOff } from '../../api/technician-profile.api';
 import { vnParts } from '../../utils/vn-time';
 import { startOfWeekVn } from './technician-home';
@@ -25,17 +25,17 @@ export interface ScheduleDay {
 
 /** Orders that still matter on a calendar: not cancelled, not a sanitized archive row. */
 const isScheduled = (o: ServiceOrderItem) =>
-  !o.historical && String(o.status).toUpperCase() !== 'CANCELLED' && dayKeyVn(o.scheduledAt) !== null;
+  String(o.status).toUpperCase() !== 'CANCELLED' && dayKeyVn(o.scheduledAt) !== null;
 
 /** Seven days (Mon–Sun, VN time) of the week `weekOffset` weeks from the one containing `now`. */
 export function buildWeek(
-  orders: ServiceOrderItem[],
+  orders: TechnicianOrderItem[],
   timeOff: TechnicianTimeOff[],
   now: number,
   weekOffset = 0,
 ): ScheduleDay[] {
   const start = startOfWeekVn(now) + weekOffset * 7 * DAY_MS;
-  const usable = orders.filter(isScheduled);
+  const usable = orders.filter((o): o is ServiceOrderItem => !isHistoricalOrder(o)).filter(isScheduled);
   return Array.from({ length: 7 }, (_, i) => {
     const at = start + i * DAY_MS;
     const key = dayKeyVn(at)!;

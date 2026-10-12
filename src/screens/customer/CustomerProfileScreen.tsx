@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   Image,
   RefreshControl,
   ActivityIndicator,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import {
   BottomSheetModal,
@@ -32,16 +34,29 @@ import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store';
 import { authApi } from '../../api/auth.api';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
-import { usersApi, type AddressData } from '../../api/users.api';
+import { usersApi, type AddressData, type CreateAddressRequest } from '../../api/users.api';
 import { mediaApi } from '../../api/media.api';
 import { geoApi, type PlaceSuggestion } from '../../api/geo.api';
 import { useAppTheme } from '../../constants/theme';
 import { extractApiErrorMessage } from '../../utils/input-validation';
 import { persistCustomerAvatar } from './customer-avatar-upload';
 import { avatarErrorMessage, withPersistedAvatar } from '../../services/avatar-upload';
+import {
+  addressPinAfterManualEdit,
+  confirmExactPin,
+  isCurrentAddressAsyncResult,
+  isValidCoordinates,
+  makeCandidatePin,
+  makePendingPin,
+  resolveAddressSaveLocation,
+  resolveReverseLookup,
+  type AddressAsyncContext,
+  type ExactPinCoordinates,
+  type ExactPinState,
+} from './customer-exact-pin';
 
 export default function CustomerProfileScreen() {
-  const { user, token, setAuth, logout } = useAuthStore();
+  const { user, sessionGeneration, setAuth, logout } = useAuthStore();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const handleScroll = useScrollHideTabBar();
   const { colors, isDark } = useAppTheme();
@@ -54,7 +69,11 @@ export default function CustomerProfileScreen() {
   const [email] = useState(user?.email ?? '');
   const [phone, setPhone] = useState(user?.phoneNumber || '');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatarUrl || null);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarBusyGeneration, setAvatarBusyGeneration] = useState<number | null>(null);
+  const uploadingAvatar = avatarBusyGeneration === sessionGeneration;
+  const logoutPendingRef = useRef(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState('');
 
   // State for theme
 
@@ -62,6 +81,7 @@ export default function CustomerProfileScreen() {
   // States for addresses & Loading
   const [addresses, setAddresses] = useState<AddressData[]>([]);
   const [loadingAddresses, setLoadingAddresses] = useState(true);
+  const [addressLoadError, setAddressLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   // Modals visibility
@@ -73,6 +93,8 @@ export default function CustomerProfileScreen() {
 
   const handlePickImage = async () => {
     if (uploadingAvatar) return;
+    const session = useAuthStore.getState();
+    if (!isProfileSessionCurrent(session.user?.id, session.sessionGeneration)) return;
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
@@ -80,10 +102,11 @@ export default function CustomerProfileScreen() {
       aspect: [1, 1],
       quality: 0.8,
     });
-    if (result.canceled || !result.assets[0]) return;
+    if (result.canceled || !result.assets[0]
+      || !isProfileSessionCurrent(session.user?.id, session.sessionGeneration)) return;
 
     const asset = result.assets[0];
-    setUploadingAvatar(true);
+    setAvatarBusyGeneration(session.sessionGeneration);
     try {
       const persisted = await persistCustomerAvatar(
         {
@@ -93,25 +116,34 @@ export default function CustomerProfileScreen() {
         },
         {
           uploadImage: mediaApi.uploadPublicImage,
-          updateProfile: usersApi.updateProfile,
+          updateProfile: (payload) => {
+            if (!isProfileSessionCurrent(session.user?.id, session.sessionGeneration)) {
+              throw new Error('Profile session changed');
+            }
+            return usersApi.updateProfile(payload);
+          },
         },
       );
 
+      if (!isProfileSessionCurrent(session.user?.id, session.sessionGeneration)) return;
       setAvatarUrl(persisted.avatarUrl);
-      if (token && user) {
-        setAuth(token, withPersistedAvatar(user, persisted));
+      const current = useAuthStore.getState();
+      if (current.token && current.user) {
+        setAuth(current.token, withPersistedAvatar(current.user, persisted));
       }
       Alert.alert('Đã cập nhật ảnh đại diện', 'Ảnh mới đã được lưu vào hồ sơ của bạn.');
     } catch (err: unknown) {
+      if (!isProfileSessionCurrent(session.user?.id, session.sessionGeneration)) return;
       Alert.alert(
         'Không thể cập nhật ảnh đại diện',
         avatarErrorMessage(err),
       );
     } finally {
-      setUploadingAvatar(false);
+      if (isProfileSessionCurrent(session.user?.id, session.sessionGeneration)) setAvatarBusyGeneration(null);
     }
   };
-  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileBusyGeneration, setProfileBusyGeneration] = useState<number | null>(null);
+  const savingProfile = profileBusyGeneration === sessionGeneration;
   const [savingAddress, setSavingAddress] = useState(false);
 
   // Temp states for editing profile
@@ -131,50 +163,212 @@ export default function CustomerProfileScreen() {
   const [addressProvince, setAddressProvince] = useState('');
   const [addressProvinceCode, setAddressProvinceCode] = useState<string | undefined>(undefined);
   const [addressDistrictCode, setAddressDistrictCode] = useState<string | undefined>(undefined);
-  const [addressLat, setAddressLat] = useState<number | undefined>(undefined);
-  const [addressLng, setAddressLng] = useState<number | undefined>(undefined);
+  const [addressPin, setAddressPin] = useState<ExactPinState>({ status: 'none' });
   const [addressIsDefault, setAddressIsDefault] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState<PlaceSuggestion[]>([]);
   const [searchingAddress, setSearchingAddress] = useState(false);
+  const [addressSearchMessage, setAddressSearchMessage] = useState<string | null>(null);
+  const [addressPinMessage, setAddressPinMessage] = useState<string | null>(null);
+  const [reverseGeocodingAddress, setReverseGeocodingAddress] = useState(false);
+  const [addressReverseRetryAvailable, setAddressReverseRetryAvailable] = useState(false);
+  const [mapCameraVersion, setMapCameraVersion] = useState(0);
+  const [legacyAddress, setLegacyAddress] = useState<AddressData | null>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const addressRequestIdRef = useRef(0);
+  const addressSessionIdRef = useRef(0);
+  const addressSheetOpenRef = useRef(false);
+  const screenMountedRef = useRef(true);
+  const isProfileSessionCurrent = useCallback((ownerUserId: string | undefined, generation: number) => {
+    const current = useAuthStore.getState();
+    return screenMountedRef.current && current.isAuthenticated && Boolean(ownerUserId)
+      && current.user?.id === ownerUserId && current.sessionGeneration === generation;
+  }, []);
+  const ownerIdRef = useRef<string | null>(user?.id ?? null);
+  const previousOwnerIdRef = useRef<string | null>(user?.id ?? null);
+
+  useLayoutEffect(() => {
+    ownerIdRef.current = user?.id ?? null;
+  }, [user?.id]);
+
+  const mapCoordinates = addressPin.status !== 'none' && isValidCoordinates(addressPin.coordinates)
+    ? addressPin.coordinates
+    : null;
+  const addressSaveLocation = resolveAddressSaveLocation({
+    isCreating: !editAddressId,
+    addressText: addressDetail,
+    province: addressProvince,
+    district: addressDistrict,
+    provinceCode: addressProvinceCode,
+    districtCode: addressDistrictCode,
+    pin: addressPin,
+    legacyAddress: legacyAddress ?? undefined,
+  });
+  const canSaveAddress = Boolean(addressName.trim() && addressDetail.trim())
+    && addressSaveLocation.kind !== 'blocked'
+    && !savingAddress;
+
+  const clearAddressDebounce = useCallback(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = null;
+  }, []);
+
+  const invalidateAddressRequests = useCallback(() => {
+    clearAddressDebounce();
+    addressRequestIdRef.current += 1;
+    setSearchingAddress(false);
+    setReverseGeocodingAddress(false);
+    setGettingLocation(false);
+    return addressRequestIdRef.current;
+  }, [clearAddressDebounce, setSearchingAddress, setReverseGeocodingAddress, setGettingLocation]);
+
+  const captureAddressRequest = useCallback((requestId: number): AddressAsyncContext => ({
+    requestId,
+    sessionId: addressSessionIdRef.current,
+    ownerId: ownerIdRef.current,
+    mounted: screenMountedRef.current && addressSheetOpenRef.current,
+  }), []);
+
+  const isAddressRequestCurrent = useCallback((request: AddressAsyncContext) =>
+    isCurrentAddressAsyncResult(request, {
+      requestId: addressRequestIdRef.current,
+      sessionId: addressSessionIdRef.current,
+      ownerId: ownerIdRef.current,
+      mounted: screenMountedRef.current && addressSheetOpenRef.current,
+    }), []);
+
+  const resetAddressDraft = useCallback(() => {
+    setLegacyAddress(null);
+    setEditAddressId(null);
+    setAddressName('');
+    setAddressDetail('');
+    setAddressWard('');
+    setAddressDistrict('');
+    setAddressProvince('');
+    setAddressProvinceCode(undefined);
+    setAddressDistrictCode(undefined);
+    setAddressPin({ status: 'none' });
+    setAddressIsDefault(false);
+    setAddressSuggestions([]);
+    setAddressSearchMessage(null);
+    setAddressPinMessage(null);
+    setAddressReverseRetryAvailable(false);
+    setGettingLocation(false);
+    setSearchingAddress(false);
+    setReverseGeocodingAddress(false);
+    setSavingAddress(false);
+  }, [
+    setLegacyAddress,
+    setEditAddressId,
+    setAddressName,
+    setAddressDetail,
+    setAddressWard,
+    setAddressDistrict,
+    setAddressProvince,
+    setAddressProvinceCode,
+    setAddressDistrictCode,
+    setAddressPin,
+    setAddressIsDefault,
+    setAddressSuggestions,
+    setAddressSearchMessage,
+    setAddressPinMessage,
+    setAddressReverseRetryAvailable,
+    setGettingLocation,
+    setSearchingAddress,
+    setReverseGeocodingAddress,
+    setSavingAddress,
+  ]);
+
+  const finishAddressEditor = useCallback(() => {
+    addressSheetOpenRef.current = false;
+    addressSessionIdRef.current += 1;
+    invalidateAddressRequests();
+    resetAddressDraft();
+  }, [invalidateAddressRequests, resetAddressDraft]);
+
+  const handleAddressSheetAnimate = useCallback((_fromIndex: number, toIndex: number) => {
+    if (toIndex === -1 && addressSheetOpenRef.current) finishAddressEditor();
+  }, [finishAddressEditor]);
+
+  const startNewAddressEditor = useCallback(() => {
+    addressSessionIdRef.current += 1;
+    invalidateAddressRequests();
+    resetAddressDraft();
+    addressSheetOpenRef.current = true;
+    setMapCameraVersion((version) => version + 1);
+    addressSheetRef.current?.present();
+  }, [invalidateAddressRequests, resetAddressDraft, setMapCameraVersion]);
+
+  useEffect(() => {
+    screenMountedRef.current = true;
+    return () => {
+      screenMountedRef.current = false;
+      addressSheetOpenRef.current = false;
+      addressSessionIdRef.current += 1;
+      addressRequestIdRef.current += 1;
+      clearAddressDebounce();
+    };
+  }, [clearAddressDebounce]);
+
+  useLayoutEffect(() => {
+    const ownerId = user?.id ?? null;
+    if (previousOwnerIdRef.current === ownerId) return;
+    previousOwnerIdRef.current = ownerId;
+    addressSheetOpenRef.current = false;
+    addressSessionIdRef.current += 1;
+    invalidateAddressRequests();
+    resetAddressDraft();
+    addressSheetRef.current?.dismiss();
+  }, [user?.id, invalidateAddressRequests, resetAddressDraft]);
 
   const fetchProfileData = useCallback(async () => {
+    const session = useAuthStore.getState();
+    if (!isProfileSessionCurrent(session.user?.id, session.sessionGeneration)) return;
     try {
       const profile = await usersApi.getProfile();
-      if (profile) {
-        setName(profile.fullName || name);
-        setPhone(profile.phoneNumber || phone);
-        setAvatarUrl(profile.avatarUrl || avatarUrl);
-        if (token) setAuth(token, profile);
+      if (profile && profile.id === session.user?.id
+        && isProfileSessionCurrent(session.user?.id, session.sessionGeneration)) {
+        setName((previous) => profile.fullName || previous);
+        setPhone((previous) => profile.phoneNumber || previous);
+        setAvatarUrl((previous) => profile.avatarUrl || previous);
+        const currentToken = useAuthStore.getState().token;
+        if (currentToken) setAuth(currentToken, profile);
       }
     } catch {
       // Ignore
     }
-  }, [name, phone, avatarUrl, setAuth, token]);
+  }, [isProfileSessionCurrent, setAuth]);
 
   const refreshAddresses = useCallback(async () => {
+    const session = useAuthStore.getState();
+    if (!isProfileSessionCurrent(session.user?.id, session.sessionGeneration)) return;
+    setAddressLoadError(null);
     try {
       const list = await usersApi.getAddresses();
+      if (!isProfileSessionCurrent(session.user?.id, session.sessionGeneration)) return;
       setAddresses(Array.isArray(list) ? list : []);
     } catch {
-      // Ignored
+      if (isProfileSessionCurrent(session.user?.id, session.sessionGeneration)) {
+        setAddressLoadError('Không thể tải địa chỉ đã lưu. Vui lòng thử lại.');
+      }
     } finally {
-      setLoadingAddresses(false);
+      if (isProfileSessionCurrent(session.user?.id, session.sessionGeneration)) setLoadingAddresses(false);
     }
-  }, []);
+  }, [isProfileSessionCurrent]);
 
   useEffect(() => {
     let mounted = true;
+    const session = useAuthStore.getState();
     const loadData = async () => {
       await fetchProfileData();
+      if (!mounted || !isProfileSessionCurrent(session.user?.id, session.sessionGeneration)) return;
       await refreshAddresses();
     };
     if (mounted) {
       loadData();
     }
     return () => { mounted = false; };
-  }, [fetchProfileData, refreshAddresses]);
+  }, [fetchProfileData, refreshAddresses, isProfileSessionCurrent, user?.id]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -183,12 +377,14 @@ export default function CustomerProfileScreen() {
   };
 
   const handleSaveProfile = async () => {
+    const session = useAuthStore.getState();
+    if (!isProfileSessionCurrent(session.user?.id, session.sessionGeneration)) return;
     if (!editName.trim()) {
       Alert.alert('Lỗi', 'Vui lòng nhập họ và tên.');
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setSavingProfile(true);
+    setProfileBusyGeneration(session.sessionGeneration);
     try {
       const payload = {
         fullName: editName.trim(),
@@ -196,13 +392,15 @@ export default function CustomerProfileScreen() {
       };
 
       const updated = await usersApi.updateProfile(payload);
+      if (!isProfileSessionCurrent(session.user?.id, session.sessionGeneration)) return;
 
       setName(updated.fullName || editName.trim());
       setPhone(updated.phoneNumber || editPhone.trim());
 
-      if (token && user) {
-        setAuth(token, {
-          ...user,
+      const current = useAuthStore.getState();
+      if (current.token && current.user) {
+        setAuth(current.token, {
+          ...current.user,
           fullName: updated.fullName,
           phoneNumber: updated.phoneNumber,
           avatarUrl: avatarUrl || undefined,
@@ -211,67 +409,158 @@ export default function CustomerProfileScreen() {
       profileSheetRef.current?.dismiss();
       Alert.alert('Thành công', 'Cập nhật thông tin thành công!');
     } catch (err: unknown) {
+      if (!isProfileSessionCurrent(session.user?.id, session.sessionGeneration)) return;
       Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể cập nhật thông tin.'));
     } finally {
-      setSavingProfile(false);
+      if (isProfileSessionCurrent(session.user?.id, session.sessionGeneration)) setProfileBusyGeneration(null);
+    }
+  };
+
+  const clearAddressArea = () => {
+    setAddressWard('');
+    setAddressDistrict('');
+    setAddressProvince('');
+    setAddressProvinceCode(undefined);
+    setAddressDistrictCode(undefined);
+  };
+
+  const reverseAddressForPin = async (
+    coordinates: ExactPinCoordinates,
+    pin: ExactPinState,
+    request: AddressAsyncContext,
+  ) => {
+    setReverseGeocodingAddress(true);
+    try {
+      const place = await geoApi.reverse(coordinates.lat, coordinates.lng);
+      if (!isAddressRequestCurrent(request)) return;
+      const decision = resolveReverseLookup(pin, coordinates, place);
+      if (decision.kind !== 'resolved') return;
+
+      setAddressDetail(place.formattedAddress || '');
+      setAddressWard(place.ward || '');
+      setAddressDistrict(place.district || '');
+      setAddressProvince(place.province || '');
+      setAddressProvinceCode(place.provinceCode);
+      setAddressDistrictCode(place.districtCode);
+      const hasCompleteAddress = Boolean(
+        place.formattedAddress?.trim() && place.province?.trim() && place.district?.trim(),
+      );
+      setAddressPinMessage(hasCompleteAddress
+        ? 'Địa chỉ đã được tra cứu cho ghim bạn chọn. Hãy kiểm tra rồi xác nhận vị trí.'
+        : 'Ghim vẫn được giữ, nhưng chưa tra cứu đủ địa chỉ, quận/huyện và tỉnh/thành để lưu. Hãy thử lại hoặc chọn vị trí khác.');
+      setAddressReverseRetryAvailable(!hasCompleteAddress);
+    } catch {
+      if (!isAddressRequestCurrent(request)) return;
+      const decision = resolveReverseLookup(pin, coordinates, null);
+      if (decision.kind === 'failed') {
+        setAddressPinMessage('Không thể tra cứu địa chỉ cho ghim này. Ghim vẫn được giữ; hãy thử lại hoặc chọn vị trí khác.');
+        setAddressReverseRetryAvailable(true);
+      }
+    } finally {
+      if (isAddressRequestCurrent(request)) setReverseGeocodingAddress(false);
     }
   };
 
   const handleSaveAddress = async () => {
-    if (!addressName.trim() || !addressDetail.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ tên gợi nhớ và địa chỉ chi tiết.');
+    if (!addressName.trim() || !addressDetail.trim()) return;
+
+    const decision = resolveAddressSaveLocation({
+      isCreating: !editAddressId,
+      addressText: addressDetail,
+      province: addressProvince,
+      district: addressDistrict,
+      provinceCode: addressProvinceCode,
+      districtCode: addressDistrictCode,
+      pin: addressPin,
+      legacyAddress: legacyAddress ?? undefined,
+    });
+    if (decision.kind === 'blocked') {
+      setAddressPinMessage(decision.reason === 'administrative-area'
+        ? 'Chưa xác định đủ quận/huyện và tỉnh/thành cho vị trí này. Hãy thử lại hoặc chọn vị trí khác.'
+        : 'Hãy chọn vị trí chính xác trên bản đồ rồi xác nhận trước khi lưu.');
       return;
     }
 
+    const ownerId = ownerIdRef.current;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSavingAddress(true);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         label: addressName.trim(),
         line1: addressDetail.trim(),
-        ward: addressWard,
-        district: addressDistrict || addressWard || addressProvince,
-        province: addressProvince,
-        provinceCode: addressProvinceCode,
-        districtCode: addressDistrictCode,
-        lat: addressLat,
-        lng: addressLng,
         isDefault: addressIsDefault,
       };
 
-      if (editAddressId) {
-        await usersApi.updateAddress(editAddressId, payload);
-      } else {
-        if (!addressProvince) {
-          Alert.alert('Lỗi', 'Chưa xác định được tỉnh/thành. Vui lòng dùng vị trí hiện tại hoặc thử lại.');
-          setSavingAddress(false);
-          return;
+      if (decision.kind === 'confirmed') {
+        Object.assign(payload, {
+          ward: addressWard,
+          district: addressDistrict,
+          province: addressProvince,
+          provinceCode: addressProvinceCode,
+          districtCode: addressDistrictCode,
+          lat: decision.coordinates.lat,
+          lng: decision.coordinates.lng,
+        });
+      } else if (decision.kind === 'preserve-legacy') {
+        Object.assign(payload, {
+          ward: addressWard,
+          district: addressDistrict,
+          province: addressProvince,
+          provinceCode: addressProvinceCode,
+          districtCode: addressDistrictCode,
+        });
+        if (decision.coordinates) {
+          payload.lat = decision.coordinates.lat;
+          payload.lng = decision.coordinates.lng;
+        } else {
+          payload.lat = null;
+          payload.lng = null;
         }
-        await usersApi.createAddress(payload);
+      } else if (decision.kind === 'candidate-text-only') {
+        Object.assign(payload, {
+          ward: addressWard,
+          district: addressDistrict,
+          province: addressProvince,
+          provinceCode: addressProvinceCode,
+          districtCode: addressDistrictCode,
+          // The Backend DTO accepts null for its nullable coordinate columns.
+          // Candidate coordinates are never sent as an exact saved pin.
+          lat: null,
+          lng: null,
+        });
+      } else {
+        Object.assign(payload, {
+          ward: null,
+          // A manual edit has no verified pin. Backend accepts null for nullable coordinates.
+          // Keep the existing required service-area fields because this API cannot clear them.
+          lat: null,
+          lng: null,
+        });
       }
+
+      if (editAddressId) {
+        await usersApi.updateAddress(editAddressId, payload as unknown as Partial<CreateAddressRequest>);
+      } else {
+        await usersApi.createAddress(payload as unknown as CreateAddressRequest);
+      }
+      if (ownerIdRef.current !== ownerId) return;
       await refreshAddresses();
-      setAddressName('');
-      setAddressDetail('');
-      setAddressWard('');
-      setAddressDistrict('');
-      setAddressProvince('');
-      setAddressProvinceCode(undefined);
-      setAddressDistrictCode(undefined);
-      setAddressLat(undefined);
-      setAddressLng(undefined);
-      setAddressIsDefault(false);
-      setAddressSuggestions([]);
-      setEditAddressId(null);
+      if (ownerIdRef.current !== ownerId) return;
       addressSheetRef.current?.dismiss();
     } catch (err: unknown) {
-      Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể lưu địa chỉ.'));
+      if (ownerIdRef.current === ownerId) {
+        Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể lưu địa chỉ.'));
+      }
     } finally {
-      setSavingAddress(false);
+      if (ownerIdRef.current === ownerId) setSavingAddress(false);
     }
   };
 
   const handleEditAddress = (addr: AddressData) => {
     Haptics.selectionAsync();
+    addressSessionIdRef.current += 1;
+    invalidateAddressRequests();
+    setLegacyAddress(addr);
     setEditAddressId(addr.id);
     setAddressName(addr.label);
     setAddressDetail(addr.line1);
@@ -280,88 +569,173 @@ export default function CustomerProfileScreen() {
     setAddressProvince(addr.province || '');
     setAddressProvinceCode(addr.provinceCode);
     setAddressDistrictCode(addr.districtCode);
-    setAddressLat(addr.lat);
-    setAddressLng(addr.lng);
+    setAddressPin(addressPinAfterManualEdit(addr.line1, addr, { status: 'none' }));
     setAddressIsDefault(addr.isDefault);
     setAddressSuggestions([]);
+    setAddressSearchMessage(null);
+    setAddressPinMessage(isValidCoordinates({ lat: addr.lat, lng: addr.lng })
+      ? 'Ghim đã lưu được giữ nguyên khi địa chỉ không đổi.'
+      : 'Địa chỉ này chưa có ghim hợp lệ. Chưa có vị trí nào được chọn.');
+    setMapCameraVersion((version) => version + 1);
   };
 
   const handleAddressSearchChange = (text: string) => {
+    const addressChanged = text !== addressDetail;
+    const previousCoordinates = mapCoordinates;
+    const requestId = invalidateAddressRequests();
     setAddressDetail(text);
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    setAddressSearchMessage(null);
+
+    if (addressChanged) {
+      const nextPin = addressPinAfterManualEdit(text, legacyAddress, addressPin);
+      setAddressPin(nextPin);
+      setAddressSuggestions([]);
+      setAddressReverseRetryAvailable(false);
+      if (nextPin.status === 'legacy' && legacyAddress) {
+        setAddressWard(legacyAddress.ward || '');
+        setAddressDistrict(legacyAddress.district || '');
+        setAddressProvince(legacyAddress.province || '');
+        setAddressProvinceCode(legacyAddress.provinceCode);
+        setAddressDistrictCode(legacyAddress.districtCode);
+        setAddressPinMessage('Đang dùng vị trí đã lưu cho địa chỉ gốc.');
+      } else {
+        clearAddressArea();
+        setAddressPinMessage(previousCoordinates
+          ? 'Địa chỉ đã thay đổi nên ghim cũ bị bỏ. Hãy chọn lại vị trí chính xác trên bản đồ.'
+          : null);
+      }
+      if (previousCoordinates) setMapCameraVersion((version) => version + 1);
+    }
+
     const query = text.trim();
-    if (query.length < 3) { setAddressSuggestions([]); return; }
+    if (query.length < 3) {
+      setAddressSuggestions([]);
+      return;
+    }
+
+    const request = captureAddressRequest(requestId);
     searchDebounceRef.current = setTimeout(async () => {
+      searchDebounceRef.current = null;
+      if (!isAddressRequestCurrent(request)) return;
       setSearchingAddress(true);
       try {
-        setAddressSuggestions(await geoApi.autocomplete(query));
+        const suggestions = await geoApi.autocomplete(query);
+        if (!isAddressRequestCurrent(request)) return;
+        setAddressSuggestions(suggestions);
+        setAddressSearchMessage(suggestions.length === 0
+          ? 'Không tìm thấy gợi ý. Bạn có thể sửa nội dung hoặc thử tìm lại.'
+          : null);
       } catch {
-        setAddressSuggestions([]);
+        if (isAddressRequestCurrent(request)) {
+          setAddressSuggestions([]);
+          setAddressSearchMessage('Không thể tìm gợi ý địa chỉ. Hãy thử lại hoặc chọn vị trí trên bản đồ.');
+        }
       } finally {
-        setSearchingAddress(false);
+        if (isAddressRequestCurrent(request)) setSearchingAddress(false);
       }
     }, 350);
   };
 
-  const handleSelectSuggestion = (s: PlaceSuggestion) => {
+  const handleSelectSuggestion = (suggestion: PlaceSuggestion) => {
+    invalidateAddressRequests();
     setAddressSuggestions([]);
-    setAddressDetail(s.description);
-    setAddressWard(s.ward || '');
-    setAddressDistrict(s.district || '');
-    setAddressProvince(s.province || '');
-    setAddressLat(s.lat);
-    setAddressLng(s.lng);
+    setAddressSearchMessage(null);
+    setAddressReverseRetryAvailable(false);
+    setAddressDetail(suggestion.description);
+    setAddressWard(suggestion.ward || '');
+    setAddressDistrict(suggestion.district || '');
+    setAddressProvince(suggestion.province || '');
+    setAddressProvinceCode(undefined);
+    setAddressDistrictCode(undefined);
+    setAddressPin(makeCandidatePin({ lat: suggestion.lat, lng: suggestion.lng }));
+    setAddressPinMessage('Gợi ý tìm kiếm chưa phải là ghim chính xác. Chạm đúng vị trí trên bản đồ rồi xác nhận.');
+    setMapCameraVersion((version) => version + 1);
   };
 
   const handleGetLocation = async () => {
+    if (Platform.OS === 'web') {
+      setAddressPinMessage('Bản đồ trên trình duyệt không hỗ trợ chọn ghim. Hãy dùng ứng dụng di động để xác nhận vị trí.');
+      return;
+    }
+
+    const requestId = invalidateAddressRequests();
+    const request = captureAddressRequest(requestId);
     setGettingLocation(true);
+    setAddressPinMessage(null);
+    setAddressReverseRetryAvailable(false);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
+      if (!isAddressRequestCurrent(request)) return;
       if (status !== 'granted') {
-        Alert.alert('Quyền bị từ chối', 'Ứng dụng cần quyền truy cập vị trí để tự động lấy địa chỉ.');
-        setGettingLocation(false);
+        setAddressPinMessage('Quyền vị trí chưa được cấp. Bạn vẫn có thể tìm địa chỉ hoặc chọn điểm trên bản đồ.');
         return;
       }
-      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const lat = location.coords.latitude;
-      const lng = location.coords.longitude;
-      setAddressLat(lat);
-      setAddressLng(lng);
 
-      try {
-        const place = await geoApi.reverse(lat, lng);
-        setAddressDetail(place.formattedAddress || '');
-        setAddressWard(place.ward || '');
-        setAddressDistrict(place.district || '');
-        setAddressProvince(place.province || '');
-        setAddressProvinceCode(place.provinceCode);
-        setAddressDistrictCode(place.districtCode);
-      } catch {
-        // Just fail silently for geocoding if it fails but keep coordinates
+      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      if (!isAddressRequestCurrent(request)) return;
+      const coordinates = { lat: location.coords.latitude, lng: location.coords.longitude };
+      const pin = makePendingPin(coordinates, 'gps');
+      if (pin.status === 'none') {
+        setAddressPinMessage('Không thể xác nhận tọa độ vị trí hiện tại. Hãy chọn điểm trên bản đồ.');
+        return;
       }
+    setAddressPin(pin);
+    setAddressDetail('');
+    clearAddressArea();
+    setAddressSuggestions([]);
+    setMapCameraVersion((version) => version + 1);
+    setAddressReverseRetryAvailable(false);
+      setAddressPinMessage('Đang tra cứu địa chỉ cho vị trí hiện tại. Bạn cần kiểm tra và xác nhận ghim trước khi lưu.');
+      await reverseAddressForPin(coordinates, pin, request);
     } catch {
-      Alert.alert('Lỗi', 'Không thể lấy vị trí hiện tại.');
+      if (isAddressRequestCurrent(request)) {
+        setAddressPinMessage('Không thể lấy vị trí hiện tại. Bạn có thể thử lại hoặc chọn điểm trên bản đồ.');
+      }
     } finally {
-      setGettingLocation(false);
+      if (isAddressRequestCurrent(request)) setGettingLocation(false);
     }
   };
 
-  const handleMapPress = async (e: any) => {
-    const lat = e.nativeEvent.coordinate.latitude;
-    const lng = e.nativeEvent.coordinate.longitude;
-    setAddressLat(lat);
-    setAddressLng(lng);
-    try {
-      const place = await geoApi.reverse(lat, lng);
-      setAddressDetail(place.formattedAddress || '');
-      setAddressWard(place.ward || '');
-      setAddressDistrict(place.district || '');
-      setAddressProvince(place.province || '');
-      setAddressProvinceCode(place.provinceCode);
-      setAddressDistrictCode(place.districtCode);
-    } catch {
-      // Fail silently
+  const handleMapPress = (event: { nativeEvent: { coordinate: { latitude: number; longitude: number } } }) => {
+    const coordinates = {
+      lat: event.nativeEvent.coordinate.latitude,
+      lng: event.nativeEvent.coordinate.longitude,
+    };
+    const pin = makePendingPin(coordinates, 'map');
+    if (pin.status === 'none') {
+      setAddressPinMessage('Không thể dùng điểm này. Hãy chọn một tọa độ hợp lệ trên bản đồ.');
+      return;
     }
+    const requestId = invalidateAddressRequests();
+    const request = captureAddressRequest(requestId);
+    setAddressPin(pin);
+    setAddressDetail('');
+    clearAddressArea();
+    setAddressSuggestions([]);
+    setAddressSearchMessage(null);
+    setAddressReverseRetryAvailable(false);
+    setAddressPinMessage('Đang tra cứu địa chỉ cho ghim bạn chọn. Hãy kiểm tra rồi xác nhận vị trí.');
+    void reverseAddressForPin(coordinates, pin, request);
+  };
+
+  const handleConfirmAddressPin = () => {
+    const confirmed = confirmExactPin(addressPin);
+    if (confirmed === addressPin || confirmed.status !== 'confirmed') return;
+    setAddressPin(confirmed);
+    setAddressPinMessage('Đã xác nhận ghim bạn chọn. Hãy kiểm tra địa chỉ trước khi lưu.');
+  };
+
+  const retryAddressReverse = () => {
+    if (!mapCoordinates || (addressPin.status !== 'pending-confirmation' && addressPin.status !== 'confirmed')) return;
+    const requestId = invalidateAddressRequests();
+    const request = captureAddressRequest(requestId);
+    setAddressPinMessage('Đang thử tra cứu lại địa chỉ cho ghim đã chọn.');
+    void reverseAddressForPin(mapCoordinates, addressPin, request);
+  };
+
+  const cancelAddressEditor = () => {
+    finishAddressEditor();
+    addressSheetRef.current?.dismiss();
   };
 
   const handleDeleteAddress = async (id: string) => {
@@ -383,42 +757,73 @@ export default function CustomerProfileScreen() {
     ]);
   };
 
+  const performLogout = async () => {
+    if (logoutPendingRef.current) return;
+    const session = useAuthStore.getState();
+    if (!session.isAuthenticated || session.user?.id !== user?.id) return;
+    logoutPendingRef.current = true;
+    setLoggingOut(true);
+    setLogoutError('');
+    try {
+      const operation = authApi.logout();
+      // authApi synchronously advances the generation for this logout.
+      const logoutGeneration = useAuthStore.getState().sessionGeneration;
+      await operation;
+      const current = useAuthStore.getState();
+      if (current.user?.id === session.user?.id && current.sessionGeneration === logoutGeneration) logout();
+    } catch {
+      // authApi owns token removal; a storage failure must remain visible.
+      setLogoutError('Không thể hoàn tất đăng xuất. Vui lòng thử lại.');
+    } finally {
+      logoutPendingRef.current = false;
+      setLoggingOut(false);
+    }
+  };
+
   const handleLogout = () => {
+    if (logoutPendingRef.current) return;
+    if (Platform.OS === 'web') {
+      // Alert.alert does not open on React Native Web.
+      void performLogout();
+      return;
+    }
     Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất?', [
       { text: 'Hủy', style: 'cancel' },
-      {
-        text: 'Đăng xuất',
-        style: 'destructive',
-        onPress: async () => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-          await authApi.logout();
-          logout();
-          setTimeout(() => {
-            navigation.reset({ index: 0, routes: [{ name: 'Auth' }] });
-          }, 100);
-        },
-      },
+      { text: 'Đăng xuất', style: 'destructive', onPress: () => { void performLogout(); } },
     ]);
   };
 
   return (
-    <SafeAreaView style={[styles.container, isDarkMode && styles.containerDark]} edges={['top']}>
+    <SafeAreaView style={[styles.container, isDarkMode && styles.containerDark]} edges={['top', 'left', 'right']}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 40, paddingTop: 60 }} // Padding top của v2
+        contentContainerStyle={styles.scrollContent} // Padding top của v2
         onScroll={handleScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
         }
       >
         {/* Main Wrapper từ UI v2 */}
-        <View style={[styles.mainWrapperCard, isDarkMode && styles.cardDark]}>
+        <View style={styles.mainWrapperCard}>
+          <View style={[styles.pageIntro, styles.pageIntroRow]}>
+            <Text accessibilityRole="header" style={styles.pageTitle}>Tài khoản</Text>
+            <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}
+              disabled={loggingOut} accessibilityState={{ disabled: loggingOut, busy: loggingOut }}
+              accessibilityRole="button" accessibilityLabel="Đăng xuất khỏi FixHome">
+              <Ionicons name="log-out-outline" size={17} color={colors.error} />
+              <Text style={styles.logoutText}>{loggingOut ? 'Đang đăng xuất…' : 'Đăng xuất'}</Text>
+            </TouchableOpacity>
+          </View>
           
+          {!!logoutError && <Text accessibilityRole="alert" style={{ color: colors.error, fontSize: 14, lineHeight: 20 }}>{logoutError}</Text>}
+
           {/* Avatar Section từ v2 */}
           <View style={styles.avatarSection}>
             <View style={[styles.avatarBorder, isDarkMode ? styles.avatarBorderDark : styles.avatarBorderLight]}>
-              <TouchableOpacity onPress={() => avatarUrl && setAvatarModalVisible(true)} activeOpacity={0.8} style={styles.avatar}>
+              <TouchableOpacity onPress={() => avatarUrl && setAvatarModalVisible(true)} activeOpacity={0.8} style={styles.avatar} disabled={!avatarUrl} accessibilityRole="button" accessibilityLabel="Xem ảnh đại diện" accessibilityState={{ disabled: !avatarUrl }}>
                 {avatarUrl ? (
                   <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
                 ) : (
@@ -442,8 +847,22 @@ export default function CustomerProfileScreen() {
                  )}
               </TouchableOpacity>
             </View>
-            <Text style={[styles.name, isDarkMode && styles.textDark]}>{name}</Text>
-            <Text style={styles.phone}>{phone || 'Chưa cập nhật SĐT'}</Text>
+            <Text accessibilityRole="header" style={[styles.name, isDarkMode && styles.textDark]}>{name}</Text>
+            <Text style={styles.phone}>{phone || 'Chưa cập nhật số điện thoại'}</Text>
+            <TouchableOpacity
+              style={styles.heroEditBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Chỉnh sửa hồ sơ"
+              activeOpacity={0.8}
+              onPress={() => {
+                setEditName(name);
+                setEditPhone(phone);
+                setFocusedProfileField(null);
+                profileSheetRef.current?.present();
+              }}
+            >
+              <Text style={styles.heroEditText}>Chỉnh sửa hồ sơ</Text>
+            </TouchableOpacity>
           </View>
 
           <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Quản lý tài khoản</Text>
@@ -451,6 +870,8 @@ export default function CustomerProfileScreen() {
           <View style={[styles.menuContainer, isDarkMode && styles.cardDark]}>
             <TouchableOpacity
               style={styles.menuItem}
+              accessibilityRole="button"
+              accessibilityLabel="Mở thông tin cá nhân"
               onPress={() => {
                 setEditName(name);
                 setEditPhone(phone);
@@ -467,12 +888,16 @@ export default function CustomerProfileScreen() {
             </TouchableOpacity>
             <View style={styles.divider} />
 
-            <TouchableOpacity style={styles.menuItem} onPress={() => addressSheetRef.current?.present()}>
+            <TouchableOpacity style={styles.menuItem} onPress={startNewAddressEditor} accessibilityRole="button" accessibilityLabel="Quản lý địa chỉ sửa chữa">
               <Ionicons name="location-outline" size={22} color={colors.textSecondary} style={styles.menuIcon} />
               <View style={styles.menuContent}>
                 <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Địa chỉ sửa chữa</Text>
                 <Text style={styles.menuDesc}>
-                  {loadingAddresses ? 'Đang tải...' : `${addresses.length} địa chỉ đã lưu`}
+                  {loadingAddresses
+                    ? 'Đang tải...'
+                    : addressLoadError
+                      ? 'Không thể tải địa chỉ. Hãy mở để thử lại.'
+                      : `${addresses.length} địa chỉ đã lưu`}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.muted} />
@@ -530,11 +955,7 @@ export default function CustomerProfileScreen() {
 
 
 
-          <View style={styles.footer}>
-            <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-              <Text style={styles.logoutText}>Đăng xuất</Text>
-            </TouchableOpacity>
-          </View>
+
         </View>
       </ScrollView>
 
@@ -607,6 +1028,7 @@ export default function CustomerProfileScreen() {
                 onBlur={() => setFocusedProfileField(null)}
                 autoCapitalize="words"
                 returnKeyType="next"
+                accessibilityLabel="Họ và tên"
               />
             </View>
           </View>
@@ -633,6 +1055,7 @@ export default function CustomerProfileScreen() {
                 onBlur={() => setFocusedProfileField(null)}
                 keyboardType="phone-pad"
                 returnKeyType="done"
+                accessibilityLabel="Số điện thoại"
               />
             </View>
           </View>
@@ -705,6 +1128,8 @@ export default function CustomerProfileScreen() {
         snapPoints={addressSnapPoints}
         keyboardBehavior="interactive"
         keyboardBlurBehavior="restore"
+        onAnimate={handleAddressSheetAnimate}
+        onDismiss={finishAddressEditor}
         backdropComponent={(props) => (
           <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} />
         )}
@@ -715,7 +1140,31 @@ export default function CustomerProfileScreen() {
         >
           <Text style={[styles.modalTitle, isDarkMode && styles.textDark]}>Quản lý địa chỉ</Text>
           <View style={{ width: '100%', marginBottom: 16 }}>
-            {addresses.length === 0 ? (
+            {loadingAddresses ? (
+              <View style={styles.addressStateRow}>
+                <ActivityIndicator
+                  size="small"
+                  color={colors.primary}
+                  accessibilityLabel="Đang tải địa chỉ đã lưu"
+                />
+                <Text style={styles.addressStateText}>Đang tải địa chỉ đã lưu…</Text>
+              </View>
+            ) : addressLoadError ? (
+              <View
+                style={styles.addressErrorBox}
+                accessibilityRole="alert"
+              >
+                <Text style={styles.addressErrorText}>{addressLoadError}</Text>
+                <TouchableOpacity
+                  onPress={() => void refreshAddresses()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Thử tải lại địa chỉ đã lưu"
+                  style={styles.addressRetryBtn}
+                >
+                  <Text style={styles.addressRetryText}>Thử lại</Text>
+                </TouchableOpacity>
+              </View>
+            ) : addresses.length === 0 ? (
               <Text style={{ textAlign: 'center', color: colors.muted, marginVertical: 12 }}>
                 Chưa có địa chỉ nào được lưu.
               </Text>
@@ -733,13 +1182,18 @@ export default function CustomerProfileScreen() {
                       )}
                     </View>
                     <Text style={styles.addressDetail}>{addr.line1}</Text>
+                    <Text style={styles.addressPinStatus}>
+                      {isValidCoordinates({ lat: addr.lat, lng: addr.lng })
+                        ? 'Đã có ghim chính xác'
+                        : 'Chưa có ghim hợp lệ'}
+                    </Text>
                   </View>
                   <TouchableOpacity
                     onPress={() => handleEditAddress(addr)}
                     style={styles.iconBtn}
                     hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                     accessibilityRole="button"
-                    accessibilityLabel="Sửa địa chỉ"
+                    accessibilityLabel={`Sửa địa chỉ ${addr.label}`}
                   >
                     <Ionicons name="pencil" size={18} color={colors.primary} />
                   </TouchableOpacity>
@@ -748,7 +1202,7 @@ export default function CustomerProfileScreen() {
                     style={styles.iconBtn}
                     hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                     accessibilityRole="button"
-                    accessibilityLabel="Xoá địa chỉ"
+                    accessibilityLabel={`Xoá địa chỉ ${addr.label}`}
                   >
                     <Ionicons name="trash" size={18} color={colors.error} />
                   </TouchableOpacity>
@@ -766,6 +1220,7 @@ export default function CustomerProfileScreen() {
             placeholderTextColor={colors.muted}
             value={addressName}
             onChangeText={setAddressName}
+            accessibilityLabel="Tên gợi nhớ"
           />
           <View style={{ width: '100%' }}>
             <BottomSheetTextInput
@@ -774,12 +1229,43 @@ export default function CustomerProfileScreen() {
               placeholderTextColor={colors.muted}
               value={addressDetail}
               onChangeText={handleAddressSearchChange}
+              accessibilityLabel="Địa chỉ chi tiết"
+              accessibilityHint="Nhập địa chỉ để xem gợi ý. Gợi ý tìm kiếm chưa xác nhận vị trí chính xác."
             />
-            {searchingAddress && <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: -8, marginBottom: 8 }} />}
+            {searchingAddress && (
+              <ActivityIndicator
+                size="small"
+                color={colors.primary}
+                style={{ marginTop: -8, marginBottom: 8 }}
+                accessibilityLabel="Đang tìm gợi ý địa chỉ"
+              />
+            )}
+            {addressSearchMessage && (
+              <View style={{ marginTop: -4, marginBottom: 10, alignSelf: 'stretch' }}>
+                <Text accessibilityLiveRegion="polite" style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17 }}>
+                  {addressSearchMessage}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => handleAddressSearchChange(addressDetail)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Thử lại tìm địa chỉ"
+                  style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}
+                >
+                  <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '600' }}>Thử lại tìm kiếm</Text>
+                </TouchableOpacity>
+              </View>
+            )}
             {addressSuggestions.length > 0 && (
               <View style={[styles.suggestionBox, isDarkMode && styles.cardDark]}>
                 {addressSuggestions.map((s) => (
-                  <TouchableOpacity key={s.placeId} style={styles.suggestionItem} onPress={() => handleSelectSuggestion(s)}>
+                  <TouchableOpacity
+                    key={s.placeId}
+                    style={styles.suggestionItem}
+                    onPress={() => handleSelectSuggestion(s)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Chọn gợi ý địa chỉ: ${s.description}`}
+                    accessibilityHint="Vị trí gợi ý chưa được xác nhận."
+                  >
                     <Text style={[styles.suggestionText, isDarkMode && styles.textDark]} numberOfLines={2}>{s.description}</Text>
                   </TouchableOpacity>
                 ))}
@@ -794,42 +1280,103 @@ export default function CustomerProfileScreen() {
           ) : null}
 
           <Text style={{ fontSize: 13, color: colors.textSecondary, alignSelf: 'flex-start', marginBottom: 6, fontWeight: '500' }}>
-            Chọn trên bản đồ:
+            Chọn vị trí chính xác:
+          </Text>
+          <Text style={{ fontSize: 12, lineHeight: 17, color: colors.textSecondary, alignSelf: 'flex-start', marginBottom: 8 }}>
+            {Platform.OS === 'web'
+              ? 'Bản đồ không hỗ trợ chọn ghim trên trình duyệt. Bạn vẫn có thể quản lý địa chỉ đã lưu.'
+              : mapCoordinates
+                ? addressPin.status === 'candidate'
+                  ? 'Đây là vị trí gợi ý từ tìm kiếm, chưa phải ghim đã xác nhận. Chạm đúng điểm cần sửa trên bản đồ.'
+                  : addressPin.status === 'legacy'
+                    ? 'Đang hiển thị ghim đã lưu trước đây. Nếu đổi địa chỉ, hãy chọn và xác nhận ghim mới.'
+                    : 'Chạm bản đồ để đặt ghim tại vị trí cần sửa.'
+                : 'Chưa có vị trí được chọn. Khung bản đồ mặc định không phải vị trí hiện tại của bạn; hãy tìm địa chỉ để đưa bản đồ đến gần khu vực cần chọn.'}
           </Text>
           <View style={{ width: '100%', height: 200, borderRadius: 12, overflow: 'hidden', marginBottom: 12, borderWidth: 1, borderColor: colors.border }}>
             <MapView
+              key={mapCameraVersion}
               style={{ width: '100%', height: '100%' }}
               initialRegion={{
-                latitude: addressLat || 10.7769,
-                longitude: addressLng || 106.7009,
-                latitudeDelta: 0.05,
-                longitudeDelta: 0.05,
+                latitude: mapCoordinates?.lat ?? 0,
+                longitude: mapCoordinates?.lng ?? 0,
+                latitudeDelta: mapCoordinates ? 0.02 : 100,
+                longitudeDelta: mapCoordinates ? 0.02 : 100,
               }}
-              region={addressLat && addressLng ? {
-                latitude: addressLat,
-                longitude: addressLng,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-              } : undefined}
               onPress={handleMapPress}
             >
-              {addressLat && addressLng && (
-                <Marker coordinate={{ latitude: addressLat, longitude: addressLng }} />
+              {mapCoordinates && (
+                <Marker
+                  coordinate={{ latitude: mapCoordinates.lat, longitude: mapCoordinates.lng }}
+                  title={addressPin.status === 'candidate'
+                    ? 'Vị trí gợi ý, chưa xác nhận'
+                    : addressPin.status === 'legacy'
+                      ? 'Ghim đã lưu trước đây'
+                      : 'Vị trí bạn đã chọn'}
+                />
               )}
             </MapView>
           </View>
 
+          {reverseGeocodingAddress && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', marginBottom: 12 }}>
+              <ActivityIndicator size="small" color={colors.primary} accessibilityLabel="Đang tra cứu địa chỉ" />
+              <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Đang tra cứu địa chỉ cho ghim đã chọn…</Text>
+            </View>
+          )}
+          {addressPinMessage && (
+            <Text accessibilityLiveRegion="polite" style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17, alignSelf: 'stretch', marginBottom: 8 }}>
+              {addressPinMessage}
+            </Text>
+          )}
+          {(addressPin.status === 'pending-confirmation' || addressPin.status === 'confirmed') && (
+            <View style={{ flexDirection: 'row', alignSelf: 'stretch', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              {addressPin.status === 'pending-confirmation' ? (
+                <TouchableOpacity
+                  style={[styles.locationBtn, { marginBottom: 0, opacity: reverseGeocodingAddress ? 0.6 : 1 }]}
+                  onPress={handleConfirmAddressPin}
+                  disabled={reverseGeocodingAddress}
+                  accessibilityRole="button"
+                  accessibilityLabel="Xác nhận ghim đã chọn"
+                  accessibilityState={{ disabled: reverseGeocodingAddress, busy: reverseGeocodingAddress }}
+                >
+                  <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
+                  <Text style={styles.locationBtnText}>Xác nhận vị trí</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '600', minHeight: 44, textAlignVertical: 'center' }}>
+                  Đã xác nhận vị trí
+                </Text>
+              )}
+              {addressReverseRetryAvailable && (
+                <TouchableOpacity
+                  onPress={retryAddressReverse}
+                  disabled={reverseGeocodingAddress}
+                  accessibilityRole="button"
+                  accessibilityLabel="Thử lại tra cứu địa chỉ"
+                  accessibilityState={{ disabled: reverseGeocodingAddress, busy: reverseGeocodingAddress }}
+                  style={{ minHeight: 44, justifyContent: 'center' }}
+                >
+                  <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '600' }}>Thử lại</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
           <TouchableOpacity
-            style={[styles.locationBtn, isDarkMode && styles.cardDark]}
+            style={[styles.locationBtn, isDarkMode && styles.cardDark, Platform.OS === 'web' && { opacity: 0.55 }]}
             onPress={handleGetLocation}
-            disabled={gettingLocation}
+            disabled={gettingLocation || Platform.OS === 'web'}
+            accessibilityRole="button"
+            accessibilityLabel={Platform.OS === 'web' ? 'Dùng ứng dụng di động để chọn vị trí' : 'Dùng vị trí hiện tại'}
+            accessibilityState={{ disabled: gettingLocation || Platform.OS === 'web', busy: gettingLocation }}
           >
             {gettingLocation ? (
               <ActivityIndicator size="small" color={colors.primary} />
             ) : (
               <>
                 <Ionicons name="navigate-circle-outline" size={20} color={colors.primary} />
-                <Text style={styles.locationBtnText}>Dùng vị trí hiện tại</Text>
+                <Text style={styles.locationBtnText}>{Platform.OS === 'web' ? 'Chọn ghim trong ứng dụng di động' : 'Dùng vị trí hiện tại'}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -839,24 +1386,34 @@ export default function CustomerProfileScreen() {
             <Switch value={addressIsDefault} onValueChange={setAddressIsDefault} />
           </View>
 
+          {addressSaveLocation.kind === 'blocked' && (
+            <Text accessibilityLiveRegion="polite" style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17, alignSelf: 'stretch', marginBottom: 8 }}>
+              {!addressName.trim() || !addressDetail.trim()
+                ? 'Nhập tên gợi nhớ và địa chỉ chi tiết để tiếp tục.'
+                : addressSaveLocation.reason === 'administrative-area'
+                  ? 'Cần xác định đủ quận/huyện và tỉnh/thành trước khi lưu ghim.'
+                  : Platform.OS === 'web'
+                    ? 'Dùng ứng dụng di động để đặt và xác nhận ghim chính xác.'
+                    : editAddressId
+                      ? 'Địa chỉ đã đổi. Chọn gợi ý, đặt ghim mới trên bản đồ rồi xác nhận.'
+                      : 'Chọn gợi ý, đặt ghim chính xác trên bản đồ rồi xác nhận trước khi lưu.'}
+            </Text>
+          )}
+          {addressSaveLocation.kind === 'candidate-text-only' && (
+            <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17, alignSelf: 'stretch', marginBottom: 8 }}>
+              Lưu nội dung từ gợi ý sẽ bỏ ghim cũ; vị trí gợi ý chưa được lưu như ghim chính xác.
+            </Text>
+          )}
+          {addressSaveLocation.kind === 'legacy-text-only' && (
+            <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17, alignSelf: 'stretch', marginBottom: 8 }}>
+              Chỉ lưu nội dung địa chỉ; ghim cũ sẽ bị xóa và khu vực đã lưu trước đây được giữ lại. Dùng ứng dụng di động để cập nhật vị trí.
+            </Text>
+          )}
+
           <View style={styles.modalActions}>
             <TouchableOpacity
               style={styles.cancelBtn}
-              onPress={() => {
-                addressSheetRef.current?.dismiss();
-                setEditAddressId(null);
-                setAddressName('');
-                setAddressDetail('');
-                setAddressWard('');
-                setAddressDistrict('');
-                setAddressProvince('');
-                setAddressProvinceCode(undefined);
-                setAddressDistrictCode(undefined);
-                setAddressLat(undefined);
-                setAddressLng(undefined);
-                setAddressIsDefault(false);
-                setAddressSuggestions([]);
-              }}
+              onPress={cancelAddressEditor}
               disabled={savingAddress}
             >
               <Text style={styles.cancelBtnText}>Đóng</Text>
@@ -864,7 +1421,10 @@ export default function CustomerProfileScreen() {
             <TouchableOpacity
               style={[styles.saveBtn, savingAddress && { opacity: 0.7 }]}
               onPress={handleSaveAddress}
-              disabled={savingAddress}
+              disabled={!canSaveAddress}
+              accessibilityRole="button"
+              accessibilityLabel={editAddressId ? 'Cập nhật địa chỉ' : 'Thêm địa chỉ'}
+              accessibilityState={{ disabled: !canSaveAddress, busy: savingAddress }}
             >
               {savingAddress ? (
                 <ActivityIndicator size="small" color={colors.surface} />
@@ -883,29 +1443,40 @@ const getStyles = (colors: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   containerDark: { backgroundColor: colors.background },
   cardDark: { backgroundColor: '#1E293B' },
-  name: { fontSize: 20, fontWeight: '700', color: colors.text, marginBottom: 4 },
+  name: { fontSize: 21, lineHeight: 28, fontWeight: '700', color: colors.text, marginBottom: 5, textAlign: 'center' },
   textDark: { color: colors.text },
 
   // Giao diện Main Wrapper & Avatar của v2
+  scrollContent: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 108 },
+  pageIntro: { marginBottom: 14, paddingHorizontal: 2, gap: 4 },
+  pageIntroRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  pageOverline: { fontSize: 12, lineHeight: 16, fontWeight: '700', letterSpacing: 1, color: colors.textSecondary },
+  pageTitle: { fontSize: 22, lineHeight: 30, fontWeight: '700', color: colors.text },
+  pageDescription: { fontSize: 13, lineHeight: 19, color: colors.textSecondary },
   mainWrapperCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     flexGrow: 1,
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 40,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    marginTop: 20,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    marginTop: 0,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0,
     shadowRadius: 8,
-    elevation: 5,
+    elevation: 0,
   },
   avatarSection: {
     alignItems: 'center',
-    marginBottom: 24,
-    marginTop: -66,
+    marginBottom: 16,
+    marginTop: 0,
+    paddingVertical: 14,
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   avatarBorder: {
     width: 100, height: 100, borderRadius: 50,
@@ -920,18 +1491,20 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   avatarImage: { width: '100%', height: '100%' },
   avatarText: { fontSize: 36, fontWeight: '700', color: colors.primary },
-  phone: { fontSize: 14, color: colors.textSecondary, fontWeight: '500' },
+  phone: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, fontWeight: '500', textAlign: 'center' },
+  heroEditBtn: { minHeight: 48, justifyContent: 'center', alignItems: 'center', marginTop: 14, paddingHorizontal: 20, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  heroEditText: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.text },
   
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 12 },
-  menuContainer: { backgroundColor: colors.surface, borderRadius: 16, overflow: 'hidden', marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  menuItem: { flexDirection: 'row', padding: 16, alignItems: 'center' },
+  sectionTitle: { fontSize: 16, lineHeight: 23, fontWeight: '700', color: colors.text, marginBottom: 12, marginLeft: 2 },
+  menuContainer: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 16, overflow: 'hidden', marginBottom: 24 },
+  menuItem: { flexDirection: 'row', minHeight: 72, paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center' },
   menuIcon: { marginRight: 16 },
-  menuContent: { flex: 1 },
-  menuTitle: { fontSize: 15, fontWeight: '600', color: colors.text },
-  menuDesc: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+  menuContent: { flex: 1, minWidth: 0 },
+  menuTitle: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: colors.text },
+  menuDesc: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, marginTop: 3, flexShrink: 1 },
   divider: { height: 1, backgroundColor: colors.border, marginLeft: 54 },
   footer: { alignItems: 'center', marginTop: 12, marginBottom: 32 },
-  logoutBtn: { paddingVertical: 12, paddingHorizontal: 24 },
+  logoutBtn: { minHeight: 44, flexDirection: 'row', gap: 6, justifyContent: 'center', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 22, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   logoutText: { fontSize: 14, fontWeight: '600', color: colors.error },
 
   profileSheetContent: {
@@ -952,9 +1525,9 @@ const getStyles = (colors: any) => StyleSheet.create({
   profileSheetTitle: { fontSize: 20, lineHeight: 28, fontWeight: '700' },
   profileSheetSubtitle: { fontSize: 13, lineHeight: 19 },
   profileCloseButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1002,24 +1575,31 @@ const getStyles = (colors: any) => StyleSheet.create({
   input: { width: '100%', backgroundColor: colors.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, color: colors.text, marginBottom: 12 },
   inputDark: { backgroundColor: '#334155', color: colors.background },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', width: '100%', marginTop: 8, gap: 12 },
-  cancelBtn: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, backgroundColor: colors.border },
+  cancelBtn: { minHeight: 48, justifyContent: 'center', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, backgroundColor: colors.border },
   cancelBtnText: { color: colors.textSecondary, fontWeight: '600', fontSize: 14 },
-  saveBtn: { paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
+  saveBtn: { minHeight: 48, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
   saveBtnText: { color: colors.surface, fontWeight: '600', fontSize: 14 },
   addressItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, padding: 12, borderRadius: 12, marginBottom: 8 },
   addressName: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 4 },
   addressDetail: { fontSize: 12, color: colors.textSecondary },
-  iconBtn: { padding: 8, marginLeft: 4 },
-  locationBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: '#E0F2FE', borderRadius: 8, alignSelf: 'flex-start', marginBottom: 16 },
+  addressPinStatus: { fontSize: 12, lineHeight: 17, color: colors.textSecondary, marginTop: 4 },
+  addressStateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16 },
+  addressStateText: { fontSize: 13, lineHeight: 19, color: colors.textSecondary },
+  addressErrorBox: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, marginBottom: 8, backgroundColor: colors.background },
+  addressErrorText: { fontSize: 13, lineHeight: 19, color: colors.text, marginBottom: 4 },
+  addressRetryBtn: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
+  addressRetryText: { fontSize: 13, lineHeight: 19, fontWeight: '700', color: colors.primary },
+  iconBtn: { minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center', marginLeft: 4 },
+  locationBtn: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: colors.primaryTint, borderRadius: 12, alignSelf: 'flex-start', marginBottom: 16 },
   locationBtnText: { color: colors.primary, fontSize: 13, fontWeight: '600' },
   defaultBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: colors.primaryTint, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  defaultBadgeText: { fontSize: 10, fontWeight: '700', color: colors.primary },
+  defaultBadgeText: { fontSize: 12, lineHeight: 17, fontWeight: '700', color: colors.primaryStrong },
   suggestionBox: { width: '100%', backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border, marginTop: -8, marginBottom: 12, overflow: 'hidden' },
-  suggestionItem: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
+  suggestionItem: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
   suggestionText: { fontSize: 13, color: colors.text },
   defaultRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: 8 },
-  cameraIconBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: colors.primary, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: colors.surface },
+  cameraIconBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: colors.primaryStrong, width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: colors.surface },
   avatarModalContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
-  closeAvatarModalBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 8 },
+  closeAvatarModalBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10, width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   fullAvatarImage: { width: '100%', height: 400 },
 });

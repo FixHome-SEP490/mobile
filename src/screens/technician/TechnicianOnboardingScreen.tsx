@@ -43,6 +43,8 @@ import {
   SERVICE_RADIUS_OPTIONS_KM,
   detectArea,
   formatDobInput,
+  getKycSummaryLabel,
+  getOnboardingStepProgress,
   keysToServiceAreas,
   parseDob,
   resolveOnboardingView,
@@ -184,7 +186,9 @@ export default function TechnicianOnboardingScreen() {
     !status || (editingRejected && status.onboardingStatus === 'rejected')
       ? 'wizard'
       : resolveOnboardingView(status);
-  const reachedStep = Math.max(status?.currentStep ?? 1, step);
+  const stepProgress = status ? getOnboardingStepProgress(status, step) : [];
+  const kycRejected = status?.verificationStatus?.toLowerCase() === 'rejected';
+  const kycNeedsUpdate = !status?.kycSubmitted || kycRejected;
 
   const servicesByCategory = useMemo(() => {
     const names = new Map(categories.map((c) => [c.id, c.name]));
@@ -391,6 +395,7 @@ export default function TechnicianOnboardingScreen() {
           onChangeText={setFullName}
           placeholder="Nguyễn Văn An"
           placeholderTextColor={colors.muted}
+          accessibilityLabel="Họ và tên"
         />,
       )}
       {renderField(
@@ -404,6 +409,7 @@ export default function TechnicianOnboardingScreen() {
           placeholderTextColor={colors.muted}
           keyboardType="number-pad"
           maxLength={10}
+          accessibilityLabel="Ngày sinh, ngày tháng năm"
         />,
         'Bạn phải đủ 18 tuổi trở lên.',
       )}
@@ -416,6 +422,7 @@ export default function TechnicianOnboardingScreen() {
               style={[styles.chip, gender === g.value && styles.chipActive]}
               onPress={() => setGender(g.value)}
               accessibilityRole="radio"
+              accessibilityLabel={g.label}
               accessibilityState={{ selected: gender === g.value }}
             >
               <Text style={[styles.chipText, gender === g.value && styles.chipTextActive]}>
@@ -436,6 +443,7 @@ export default function TechnicianOnboardingScreen() {
           placeholderTextColor={colors.muted}
           keyboardType="number-pad"
           maxLength={12}
+          accessibilityLabel="Số căn cước công dân"
         />,
       )}
       {renderField(
@@ -448,6 +456,7 @@ export default function TechnicianOnboardingScreen() {
           placeholder="0901234567"
           placeholderTextColor={colors.muted}
           keyboardType="phone-pad"
+          accessibilityLabel="Số điện thoại"
         />,
       )}
     </>
@@ -461,28 +470,38 @@ export default function TechnicianOnboardingScreen() {
       <View
         style={[
           styles.notice,
-          { borderColor: status?.kycSubmitted ? colors.success : colors.warning },
+          { borderColor: kycRejected ? colors.error : status?.kycSubmitted ? colors.success : colors.warning },
         ]}
+        accessibilityLiveRegion="polite"
       >
         <Ionicons
-          name={status?.kycSubmitted ? 'checkmark-circle' : 'time-outline'}
+          name={kycRejected ? 'alert-circle' : status?.kycSubmitted ? 'checkmark-circle' : 'time-outline'}
           size={22}
-          color={status?.kycSubmitted ? colors.success : colors.warning}
+          color={kycRejected ? colors.error : status?.kycSubmitted ? colors.success : colors.warning}
         />
         <Text style={styles.noticeText}>
-          {status?.kycSubmitted ? 'Đã nộp hồ sơ xác minh danh tính' : 'Chưa nộp hồ sơ xác minh danh tính'}
+          {kycRejected
+            ? 'Hồ sơ xác minh cần được cập nhật'
+            : status?.kycSubmitted && status.verificationStatus?.toLowerCase() === 'verified'
+              ? 'Đã xác minh danh tính'
+              : status?.kycSubmitted && status.verificationStatus?.toLowerCase() === 'pending'
+                ? 'Hồ sơ xác minh đang chờ duyệt'
+                : status?.kycSubmitted
+                  ? 'Đã nộp hồ sơ xác minh danh tính'
+                  : 'Chưa nộp hồ sơ xác minh danh tính'}
         </Text>
       </View>
-      <TouchableOpacity
-        style={styles.secondaryBtn}
-        onPress={() => navigation.navigate('TechnicianKyc')}
-        accessibilityRole="button"
-      >
-        <Ionicons name="camera-outline" size={18} color={colors.primaryStrong} />
-        <Text style={styles.secondaryBtnText}>
-          {status?.kycSubmitted ? 'Xem hồ sơ xác minh' : 'Chụp và nộp ảnh xác minh'}
-        </Text>
-      </TouchableOpacity>
+      {status?.kycSubmitted && !kycRejected ? (
+        <TouchableOpacity
+          style={styles.secondaryBtn}
+          onPress={() => navigation.navigate('TechnicianKyc')}
+          accessibilityRole="button"
+          accessibilityLabel="Xem trạng thái xác minh danh tính"
+        >
+          <Ionicons name="document-text-outline" size={18} color={colors.primaryStrong} />
+          <Text style={styles.secondaryBtnText}>Xem trạng thái xác minh</Text>
+        </TouchableOpacity>
+      ) : null}
     </>
   );
 
@@ -504,6 +523,7 @@ export default function TechnicianOnboardingScreen() {
                   style={[styles.chip, selected && styles.chipActive]}
                   onPress={() => toggleService(service.id)}
                   accessibilityRole="checkbox"
+                  accessibilityLabel={service.name}
                   accessibilityState={{ checked: selected }}
                 >
                   <Text style={[styles.chipText, selected && styles.chipTextActive]}>
@@ -550,6 +570,7 @@ export default function TechnicianOnboardingScreen() {
           placeholderTextColor={colors.muted}
           multiline
           maxLength={2000}
+          accessibilityLabel="Giới thiệu bản thân"
         />,
       )}
     </>
@@ -567,6 +588,7 @@ export default function TechnicianOnboardingScreen() {
             onChangeText={onAddressChange}
             placeholder="Số nhà, đường, phường/xã…"
             placeholderTextColor={colors.muted}
+            accessibilityLabel="Địa chỉ của bạn"
           />
           {suggestions.slice(0, 5).map((s) => (
             <TouchableOpacity
@@ -574,6 +596,7 @@ export default function TechnicianOnboardingScreen() {
               style={styles.suggestion}
               onPress={() => pickSuggestion(s)}
               accessibilityRole="button"
+              accessibilityLabel={`Chọn địa chỉ: ${s.description}`}
             >
               <Ionicons name="location-outline" size={16} color={colors.textSecondary} />
               <Text style={styles.suggestionText}>{s.description}</Text>
@@ -592,6 +615,7 @@ export default function TechnicianOnboardingScreen() {
               style={[styles.chip, radiusKm === km && styles.chipActive]}
               onPress={() => setRadiusKm(km)}
               accessibilityRole="radio"
+              accessibilityLabel={`Bán kính phục vụ ${km} km`}
               accessibilityState={{ selected: radiusKm === km }}
             >
               <Text style={[styles.chipText, radiusKm === km && styles.chipTextActive]}>
@@ -608,6 +632,8 @@ export default function TechnicianOnboardingScreen() {
           style={styles.select}
           onPress={() => setProvincePickerOpen((open) => !open)}
           accessibilityRole="button"
+          accessibilityLabel={`Tỉnh/thành phố: ${activeProvince?.name ?? 'chưa chọn'}`}
+          accessibilityState={{ expanded: provincePickerOpen }}
         >
           <Text style={styles.selectText}>{activeProvince?.name ?? 'Chọn tỉnh/thành phố'}</Text>
           <Ionicons
@@ -624,6 +650,7 @@ export default function TechnicianOnboardingScreen() {
               onChangeText={setProvinceQuery}
               placeholder="Tìm tỉnh/thành phố"
               placeholderTextColor={colors.muted}
+              accessibilityLabel="Tìm tỉnh/thành phố"
             />
             {provinceMatches.map((p) => (
               <TouchableOpacity
@@ -635,6 +662,7 @@ export default function TechnicianOnboardingScreen() {
                   setProvinceQuery('');
                 }}
                 accessibilityRole="button"
+                accessibilityLabel={`Chọn tỉnh/thành phố ${p.name}`}
               >
                 <Text style={styles.suggestionText}>{p.name}</Text>
               </TouchableOpacity>
@@ -647,7 +675,11 @@ export default function TechnicianOnboardingScreen() {
         <View style={styles.rowBetween}>
           <Text style={styles.label}>Quận/huyện có thể phục vụ</Text>
           {activeDistricts.length > 0 && (
-            <TouchableOpacity onPress={toggleAllDistricts} accessibilityRole="button">
+            <TouchableOpacity
+              onPress={toggleAllDistricts}
+              accessibilityRole="button"
+              accessibilityLabel={allActiveSelected ? 'Bỏ chọn tất cả khu vực' : 'Chọn tất cả khu vực'}
+            >
               <Text style={styles.link}>{allActiveSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}</Text>
             </TouchableOpacity>
           )}
@@ -664,6 +696,7 @@ export default function TechnicianOnboardingScreen() {
                 style={[styles.chip, selected && styles.chipActive]}
                 onPress={() => toggleDistrict(d.code)}
                 accessibilityRole="checkbox"
+                accessibilityLabel={d.name}
                 accessibilityState={{ checked: selected }}
               >
                 <Text style={[styles.chipText, selected && styles.chipTextActive]}>{d.name}</Text>
@@ -682,7 +715,11 @@ export default function TechnicianOnboardingScreen() {
         <Text style={styles.summaryLabel}>{label}</Text>
         <Text style={styles.summaryValue}>{value}</Text>
       </View>
-      <TouchableOpacity onPress={() => setStep(targetStep)} accessibilityRole="button">
+      <TouchableOpacity
+        onPress={() => setStep(targetStep)}
+        accessibilityRole="button"
+        accessibilityLabel={`Sửa ${label}`}
+      >
         <Text style={styles.link}>Sửa</Text>
       </TouchableOpacity>
     </View>
@@ -698,16 +735,16 @@ export default function TechnicianOnboardingScreen() {
       )}
       {renderSummaryRow(
         'Xác minh danh tính',
-        status?.kycSubmitted ? 'Đã nộp ảnh' : 'Chưa nộp ảnh',
+        getKycSummaryLabel(status),
         2,
       )}
       {renderSummaryRow(
-        'Kỹ năng chuyên môn',
+        'Kỹ năng',
         status?.skillsSelected ? `${selectedServiceIds.length} dịch vụ, ${yearsExperience} năm` : 'Chưa chọn',
         3,
       )}
       {renderSummaryRow(
-        'Địa chỉ và khu vực',
+        'Địa chỉ & khu vực',
         status?.addressSet ? `${status.fullAddress ?? address} · ${areaKeys.length} khu vực` : 'Chưa cập nhật',
         4,
       )}
@@ -717,10 +754,30 @@ export default function TechnicianOnboardingScreen() {
     </>
   );
 
-  const primaryLabel = ['Lưu và tiếp tục', 'Tiếp tục', 'Lưu và tiếp tục', 'Lưu và tiếp tục', 'Gửi hồ sơ xét duyệt'][
-    step - 1
-  ];
-  const onPrimary = [saveStep1, continueFromKyc, saveStep3, saveStep4, submit][step - 1];
+  const primaryLabel = step === 2
+    ? kycRejected
+      ? 'Cập nhật hồ sơ xác minh'
+      : kycNeedsUpdate
+        ? 'Xác minh danh tính'
+        : 'Tiếp tục'
+    : ['Lưu và tiếp tục', '', 'Lưu và tiếp tục', 'Lưu và tiếp tục', 'Gửi hồ sơ xét duyệt'][step - 1];
+  const onPrimary = step === 2 && kycNeedsUpdate
+    ? () => navigation.navigate('TechnicianKyc')
+    : [saveStep1, continueFromKyc, saveStep3, saveStep4, submit][step - 1];
+
+  const renderRefreshError = () => error && status ? (
+    <View style={[styles.notice, { borderColor: colors.error }]} accessibilityLiveRegion="polite">
+      <Text style={[styles.noticeText, { color: colors.error }]}>{error}</Text>
+      <TouchableOpacity
+        style={styles.retryButton}
+        onPress={() => void refreshStatus()}
+        accessibilityRole="button"
+        accessibilityLabel="Thử tải lại trạng thái hồ sơ"
+      >
+        <Text style={styles.link}>Thử lại</Text>
+      </TouchableOpacity>
+    </View>
+  ) : null;
 
   const renderStateCard = (
     icon: React.ComponentProps<typeof Ionicons>['name'],
@@ -733,6 +790,7 @@ export default function TechnicianOnboardingScreen() {
       <Ionicons name={icon} size={44} color={tint} />
       <Text style={styles.stateTitle}>{title}</Text>
       <Text style={styles.stateBody}>{body}</Text>
+      {renderRefreshError()}
       {actions}
     </View>
   );
@@ -764,6 +822,30 @@ export default function TechnicianOnboardingScreen() {
         </TouchableOpacity>,
       );
     }
+    if (view === 'submitted' && kycRejected) {
+      return renderStateCard(
+        'alert-circle',
+        colors.error,
+        'Hồ sơ xác minh cần cập nhật',
+        status.rejectionReason || 'Trạng thái xác minh đã bị từ chối. Mở hồ sơ xác minh để xem hướng xử lý.',
+        <View style={styles.stateActions}>
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={() => navigation.navigate('TechnicianKyc')}
+            accessibilityRole="button"
+          >
+            <Text style={styles.primaryBtnText}>Cập nhật hồ sơ xác minh</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.secondaryBtn}
+            onPress={() => void refreshStatus()}
+            accessibilityRole="button"
+          >
+            <Text style={styles.secondaryBtnText}>Kiểm tra lại trạng thái</Text>
+          </TouchableOpacity>
+        </View>,
+      );
+    }
     if (view === 'submitted') {
       return renderStateCard(
         'time-outline',
@@ -780,7 +862,7 @@ export default function TechnicianOnboardingScreen() {
         'alert-circle',
         colors.error,
         'Hồ sơ chưa đạt yêu cầu',
-        status.rejectionReason || 'Vui lòng kiểm tra lại ảnh CCCD, ảnh chân dung và thông tin liên quan.',
+        status.rejectionReason || 'Quản trị viên chưa cung cấp lý do chi tiết. Bạn có thể chỉnh sửa hồ sơ trước khi gửi lại.',
         <TouchableOpacity
           style={styles.primaryBtn}
           onPress={() => {
@@ -795,11 +877,21 @@ export default function TechnicianOnboardingScreen() {
 
     return (
       <>
+        {(status.onboardingStatus === 'rejected' || kycRejected) && status.rejectionReason ? (
+          <View style={[styles.notice, { borderColor: colors.error }]} accessibilityLiveRegion="polite">
+            <Ionicons name="alert-circle" size={22} color={colors.error} />
+            <Text style={[styles.noticeText, { color: colors.error }]}>
+              Lý do cần cập nhật: {status.rejectionReason}
+            </Text>
+          </View>
+        ) : null}
+        {renderRefreshError()}
         <View style={styles.stepper5}>
           {ONBOARDING_STEPS.map((s) => {
-            const done = s.id < step;
-            const active = s.id === step;
-            const reachable = s.id <= reachedStep;
+            const progress = stepProgress[s.id - 1];
+            const done = progress?.completed ?? false;
+            const active = progress?.current ?? false;
+            const reachable = progress?.reachable ?? false;
             return (
               <TouchableOpacity
                 key={s.id}
@@ -807,7 +899,7 @@ export default function TechnicianOnboardingScreen() {
                 disabled={!reachable}
                 onPress={() => setStep(s.id)}
                 accessibilityRole="button"
-                accessibilityLabel={`Bước ${s.id}: ${s.title}`}
+                accessibilityLabel={`Bước ${s.id}: ${s.title}, ${progress?.statusLabel ?? 'Chưa bắt đầu'}`}
                 accessibilityState={{ selected: active, disabled: !reachable }}
               >
                 {done ? (
@@ -819,8 +911,11 @@ export default function TechnicianOnboardingScreen() {
             );
           })}
         </View>
-        <Text style={styles.stepTitle}>
+        <Text style={styles.stepTitle} accessibilityRole="header">
           Bước {step}/5: {ONBOARDING_STEPS[step - 1].title}
+        </Text>
+        <Text style={styles.hintText} accessibilityLiveRegion="polite">
+          {stepProgress[step - 1]?.statusLabel}
         </Text>
 
         <View style={styles.card}>
@@ -847,6 +942,8 @@ export default function TechnicianOnboardingScreen() {
             disabled={saving}
             onPress={onPrimary}
             accessibilityRole="button"
+            accessibilityState={{ disabled: saving, busy: saving }}
+            accessibilityLabel={primaryLabel}
           >
             {saving ? (
               <ActivityIndicator color="#FFFFFF" />
@@ -863,7 +960,7 @@ export default function TechnicianOnboardingScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Đăng ký kỹ thuật viên</Text>
-        <TouchableOpacity onPress={handleLogout} accessibilityRole="button">
+        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton} accessibilityRole="button">
           <Text style={styles.logout}>Đăng xuất</Text>
         </TouchableOpacity>
       </View>
@@ -894,6 +991,7 @@ const getStyles = (colors: ThemeColors) =>
       paddingVertical: 12,
     },
     headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
+    logoutButton: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center' },
     logout: { fontSize: 14, fontWeight: '600', color: colors.error },
     content: { padding: 16, paddingBottom: 48 },
     stepper5: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
@@ -991,6 +1089,7 @@ const getStyles = (colors: ThemeColors) =>
       marginBottom: 12,
     },
     noticeText: { flex: 1, fontSize: 14, color: colors.text },
+    retryButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
     summaryRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1032,6 +1131,7 @@ const getStyles = (colors: ThemeColors) =>
       padding: 24,
       marginTop: 24,
     },
+    stateActions: { width: '100%', gap: 8 },
     stateTitle: { fontSize: 20, fontWeight: '700', color: colors.text, textAlign: 'center' },
     stateBody: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', lineHeight: 20 },
   });

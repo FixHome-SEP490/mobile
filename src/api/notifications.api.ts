@@ -158,9 +158,11 @@ export const notificationsApi = {
   async getCountUnread(): Promise<number> {
     const res = await apiClient.get('/notifications/unread-count');
     const body = unwrapData(res.data);
-    if (!isRecord(body)) return 0;
-    const count = Number(body.count);
-    return Number.isInteger(count) && count >= 0 ? count : 0;
+    if (!isRecord(body) || typeof body.count !== 'number'
+      || !Number.isInteger(body.count) || body.count < 0) {
+      throw new Error('Số thông báo chưa đọc từ máy chủ không hợp lệ.');
+    }
+    return body.count;
   },
 
   async readNotification(id: string): Promise<void> {

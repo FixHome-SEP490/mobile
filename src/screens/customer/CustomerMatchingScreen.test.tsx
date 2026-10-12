@@ -86,6 +86,7 @@ jest.mock('../../constants/theme', () => ({
       primary: '#2563EB', primaryStrong: '#1D4ED8', primarySoft: '#EFF6FF',
       background: '#F8FAFC', surface: '#FFFFFF', text: '#0F172A',
       textSecondary: '#64748B', muted: '#94A3B8', border: '#E2E8F0', error: '#DC2626', success: '#059669',
+      divider: '#F1F5F9', tone: { success: { bg: '#E7F6F0', text: '#08734F' } },
     },
   }),
 }));
@@ -305,7 +306,9 @@ describe('Customer Matching presentation and privacy', () => {
     let tree!: ReactTestRenderer;
     act(() => { tree = create(screenElement()); });
 
-    expect(hasText(tree, 'Đang tìm kỹ thuật viên phù hợp gần bạn.')).toBe(true);
+    expect(hasText(tree, 'Đang tải danh sách kỹ thuật viên…')).toBe(true);
+    expect(tree.root.findByProps({ testID: 'matching-initial-skeleton' }).props.accessibilityLabel)
+      .toBe('Đang tải danh sách kỹ thuật viên');
     expect(tree.root.findAllByType(ActivityIndicator)).toHaveLength(0);
   });
 
@@ -765,12 +768,69 @@ describe('Customer Matching presentation and privacy', () => {
       [],
     );
     expect(hasText(tree, 'Xem đơn sửa chữa')).toBe(true);
+    expect(tree.root.findByProps({ testID: 'matching-accepted-handoff' })).toBeDefined();
+    expect(tree.root.findByProps({ testID: 'matching-accepted-scene' })).toBeDefined();
+    expect(tree.root.findAllByProps({ testID: 'matching-state-radar' })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ testID: 'matching-candidate-card-' + TECHNICIAN_A })).toHaveLength(0);
+    expect(hasText(tree, 'Kỹ thuật viên đã nhận đơn')).toBe(true);
 
     const primary = tree.root.findByProps({ testID: 'matching-waiting-primary' });
     await act(async () => primary.props.onPress());
     expect(mockNavigation.navigate).toHaveBeenCalledWith('CustomerOrderDetail', {
       serviceOrderId: ORDER_ID,
     });
+  });
+
+  it('opens only the verified owner Booking Detail while waiting and fences a stale press after logout', async () => {
+    const tree = await mountLoadedScreen(makeBooking({ status: 'MATCHING' }), []);
+    const detail = tree.root.findByProps({ testID: 'matching-booking-detail' });
+    await act(async () => detail.props.onPress());
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('CustomerBookingDetail', { bookingId: BOOKING_ID });
+    mockNavigation.navigate.mockClear();
+    mockAuthState.isAuthenticated = false;
+    mockAuthState.sessionGeneration += 1;
+    await act(async () => detail.props.onPress());
+    expect(mockNavigation.navigate).not.toHaveBeenCalled();
+    expect(mockSendShortlist).not.toHaveBeenCalled();
+    await act(async () => tree.unmount());
+  });
+
+  it.each(['SUBMITTED', 'MATCHING', 'MATCHED'] as const)(
+    'never shows the accepted handoff for %s without a verified linked ServiceOrder',
+    async (status) => {
+      const tree = await mountLoadedScreen(makeBooking({ status, invitations: [{
+        id: TECHNICIAN_A, bookingId: BOOKING_ID, priorityOrder: 1,
+        status: 'ACCEPTED', invitedAt: '2030-10-21T08:00:00.000Z', expiresAt: null,
+      }] }), []);
+      expect(tree.root.findAllByProps({ testID: 'matching-accepted-handoff' })).toHaveLength(0);
+      expect(hasText(tree, 'Xem đơn sửa chữa')).toBe(false);
+      expect(mockGetOrder).not.toHaveBeenCalled();
+      expect(mockSendShortlist).not.toHaveBeenCalled();
+      act(() => tree.unmount());
+    },
+  );
+
+  it.each(['CANCELLED', 'COMPLETED', 'EN_ROUTE'] as const)(
+    'does not present an accepted transition for linked order status %s',
+    async (status) => {
+      mockGetOrder.mockResolvedValue(makeOrder({ status }));
+      const tree = await mountLoadedScreen(makeBooking({ status: 'MATCHED', serviceOrderId: ORDER_ID }), []);
+      expect(tree.root.findAllByProps({ testID: 'matching-accepted-handoff' })).toHaveLength(0);
+      expect(mockSendShortlist).not.toHaveBeenCalled();
+      act(() => tree.unmount());
+    },
+  );
+
+  it('hides the accepted presentation immediately when authentication is removed', async () => {
+    mockGetOrder.mockResolvedValue(makeOrder());
+    const tree = await mountLoadedScreen(makeBooking({ status: 'MATCHED', serviceOrderId: ORDER_ID }), []);
+    expect(tree.root.findByProps({ testID: 'matching-accepted-handoff' })).toBeDefined();
+    mockAuthState = { ...mockAuthState, isAuthenticated: false };
+    act(() => tree.update(screenElement()));
+    expect(tree.root.findAllByProps({ testID: 'matching-accepted-handoff' })).toHaveLength(0);
+    expect(hasText(tree, 'Có người cùng bạn lo nhà.')).toBe(false);
+    expect(tree.root.findAllByProps({ testID: 'matching-waiting-primary' })).toHaveLength(0);
+    act(() => tree.unmount());
   });
 
   it('does not dispatch an initial shortlist when the same customer session changes during preflight', async () => {

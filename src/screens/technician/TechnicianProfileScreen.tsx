@@ -50,7 +50,7 @@ import { useAuthStore } from '../../store';
 import type { RootStackParamList } from '../../types';
 import { usersApi, type AddressData } from '../../api/users.api';
 import { mediaApi } from '../../api/media.api';
-import { ordersApi } from '../../api/orders.api';
+import { ordersApi, isHistoricalOrder, type ServiceOrderItem } from '../../api/orders.api';
 import { authApi } from '../../api/auth.api';
 import { geoApi, type PlaceSuggestion } from '../../api/geo.api';
 import { servicesApi, type ServiceItem, type CategoryItem } from '../../api/services.api';
@@ -61,6 +61,8 @@ import {
   type TechnicianServiceOffering,
   type TechnicianTimeOff,
 } from '../../api/technician-profile.api';
+import { technicianVerificationApi, type MyVerification } from '../../api/technician-verification.api';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
 import CategoryPills from '../../components/CategoryPills';
 import MapView, { Marker } from '../../components/AddressMap';
 import { useAppTheme } from '../../constants/theme';
@@ -81,6 +83,14 @@ const VERIFICATION_VIEW: Record<string, StatusView> = {
   pending: { label: 'Chờ duyệt', tone: 'warning', icon: 'Clock' },
   verified: { label: 'Đã duyệt', tone: 'success', icon: 'CheckCircle2' },
   rejected: { label: 'Bị từ chối', tone: 'danger', icon: 'XCircle' },
+};
+
+// Xác minh danh tính (KYC) ở Hồ sơ chỉ đọc trạng thái đã nộp từ server:
+// null/chưa nộp → “Chưa nộp hồ sơ”, không suy diễn từ pending mặc định.
+const KYC_VIEW: Record<MyVerification['status'], StatusView> = {
+  PENDING: { label: 'Đang chờ duyệt', tone: 'warning', icon: 'Clock' },
+  VERIFIED: { label: 'Đã xác minh', tone: 'success', icon: 'CheckCircle2' },
+  REJECTED: { label: 'Cần cập nhật', tone: 'danger', icon: 'XCircle' },
 };
 
 const renderBackdrop = (props: BottomSheetBackdropProps) => (
@@ -119,20 +129,36 @@ export default function TechnicianProfileScreen() {
   const { colors, isDark } = useAppTheme();
   const styles = getStyles(colors);
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReduceMotion();
   const logout = useAuthStore((state) => state.logout);
-  const { user } = useAuthStore();
+  const { user, sessionGeneration } = useAuthStore();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  // Giảm chuyển động: bỏ rung phản hồi, giữ nội dung tĩnh.
+  const tapFeedback = () => {
+    if (!reduceMotion) void Haptics.selectionAsync();
+  };
 
   const [fullName, setFullName] = useState(user?.fullName || 'Kỹ thuật viên');
-  const [phoneNumber, setPhoneNumber] = useState(user?.phoneNumber || '');
+  const [profilePhone, setProfilePhone] = useState<{
+    userId: string | undefined;
+    sessionGeneration: number;
+    phoneNumber: string;
+  } | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatarUrl || null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [earningsTotal, setEarningsTotal] = useState(0);
+  const [earningsLoading, setEarningsLoading] = useState(true);
+  const [earningsLoaded, setEarningsLoaded] = useState(false);
 
   const [isAvatarModalVisible, setAvatarModalVisible] = useState(false);
 
   // ---- Hồ sơ nghề nghiệp (skills / location & radius / schedule / time-off) ----
   const [technicianProfile, setTechnicianProfile] = useState<TechnicianProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [verification, setVerification] = useState<MyVerification | null>(null);
+  const [verificationLoading, setVerificationLoading] = useState(true);
+  const [verificationLoaded, setVerificationLoaded] = useState(false);
+  const [skillsLoaded, setSkillsLoaded] = useState(false);
   const [addresses, setAddresses] = useState<AddressData[]>([]);
   const technicianAddress = addresses.find((a) => a.isDefault) ?? addresses[0] ?? null;
 
@@ -144,6 +170,8 @@ export default function TechnicianProfileScreen() {
 
   // Skills
   const [loadingSkills, setLoadingSkills] = useState(false);
+  const [skillsSheetLoaded, setSkillsSheetLoaded] = useState(false);
+  const [skillsSheetError, setSkillsSheetError] = useState<string | null>(null);
   const [catalogServices, setCatalogServices] = useState<ServiceItem[]>([]);
   const [pickerCategories, setPickerCategories] = useState<CategoryItem[]>([]);
   const [pickerCategoryId, setPickerCategoryId] = useState<string | null>(null);
@@ -195,6 +223,7 @@ export default function TechnicianProfileScreen() {
   // Time off
   const [timeOffList, setTimeOffList] = useState<TechnicianTimeOff[]>([]);
   const [loadingTimeOff, setLoadingTimeOff] = useState(false);
+  const [timeOffLoadError, setTimeOffLoadError] = useState(false);
   const [savingTimeOff, setSavingTimeOff] = useState(false);
   const [newTimeOffStart, setNewTimeOffStart] = useState('');
   const [newTimeOffEnd, setNewTimeOffEnd] = useState('');
@@ -205,7 +234,7 @@ export default function TechnicianProfileScreen() {
   // until the server has confirmed the new one.
   const handlePickImage = async () => {
     if (uploadingAvatar) return;
-    Haptics.selectionAsync();
+    tapFeedback();
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
@@ -233,25 +262,47 @@ export default function TechnicianProfileScreen() {
 
   useEffect(() => {
     let mounted = true;
+    const requestedUserId = user?.id;
+    const requestedSessionGeneration = sessionGeneration;
     usersApi
       .getProfile()
       .then((profile) => {
-        if (mounted && profile) {
+        const currentAuth = useAuthStore.getState();
+        const isCurrentSession = currentAuth.user?.id === requestedUserId
+          && currentAuth.sessionGeneration === requestedSessionGeneration;
+        if (mounted && isCurrentSession && profile) {
           if (profile.fullName) setFullName(profile.fullName);
-          if (profile.phoneNumber) setPhoneNumber(profile.phoneNumber);
+          if (profile.phoneNumber) {
+            setProfilePhone({
+              userId: requestedUserId,
+              sessionGeneration: requestedSessionGeneration,
+              phoneNumber: profile.phoneNumber,
+            });
+          }
         }
       })
       .catch(() => {});
 
+    return () => {
+      mounted = false;
+    };
+  }, [sessionGeneration, user?.id]);
+
+  useEffect(() => {
+    let mounted = true;
     ordersApi
-      .getMyOrders()
+      .getTechnicianJobs()
       .then((orders) => {
         if (!mounted || !Array.isArray(orders)) return;
-        const completed = orders.filter((o) => String(o.status).toUpperCase() === 'COMPLETED');
+        const completed = orders.filter((o): o is ServiceOrderItem => !isHistoricalOrder(o) && String(o.status).toUpperCase() === 'COMPLETED');
         const earn = completed.reduce((sum, o) => sum + (o.laborTotal || o.grandTotal || 0), 0);
         setEarningsTotal(earn);
+        setEarningsLoaded(true);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setEarningsLoading(false);
+      });
 
     return () => {
       mounted = false;
@@ -260,14 +311,27 @@ export default function TechnicianProfileScreen() {
 
   const loadTechnicianProfile = useCallback(async () => {
     try {
-      const [profile, addrs] = await Promise.all([
+      const [profile, addrs, offeringsResult, verificationResult] = await Promise.all([
         technicianProfileApi.getMyProfile(),
         usersApi.getAddresses().catch(() => []),
+        // Lấy sớm để số lượng kỹ năng ở hàng tóm tắt là số thật từ server,
+        // không phải 0 mặc định trước khi mở sheet.
+        technicianProfileApi.getMyServices().then((data) => ({ loaded: true, data })).catch(() => ({ loaded: false, data: [] as TechnicianServiceOffering[] })),
+        technicianVerificationApi.getMyVerification().then((data) => ({ loaded: true, data })).catch(() => ({ loaded: false, data: null as MyVerification | null })),
       ]);
       setTechnicianProfile(profile);
       setAddresses(addrs);
+      const offeringsById: Record<string, TechnicianServiceOffering> = {};
+      for (const o of offeringsResult.data) offeringsById[o.serviceId] = o;
+      if (offeringsResult.loaded) setMyOfferings(offeringsById);
+      setSkillsLoaded(offeringsResult.loaded);
+      setVerification(verificationResult.data);
+      setVerificationLoaded(verificationResult.loaded);
     } catch {
       // Best-effort; menu rows just show no summary yet.
+    } finally {
+      setProfileLoading(false);
+      setVerificationLoading(false);
     }
   }, []);
 
@@ -278,9 +342,10 @@ export default function TechnicianProfileScreen() {
 
   // ---- Skills sheet ----
   const openSkillsSheet = async () => {
-    Haptics.selectionAsync();
+    tapFeedback();
     skillsSheetRef.current?.present();
     setLoadingSkills(true);
+    setSkillsSheetError(null);
     try {
       const [services, categories, offerings] = await Promise.all([
         servicesApi.getServices({ pageSize: 100 }),
@@ -303,8 +368,11 @@ export default function TechnicianProfileScreen() {
         };
       }
       setSkillDrafts(drafts);
+      setSkillsLoaded(true);
+      setSkillsSheetLoaded(true);
     } catch {
-      setCatalogServices([]);
+      // A failed request is not an empty catalog; keep the last confirmed data/drafts.
+      setSkillsSheetError('Không thể tải danh sách dịch vụ. Kiểm tra kết nối rồi thử lại.');
     } finally {
       setLoadingSkills(false);
     }
@@ -352,7 +420,7 @@ export default function TechnicianProfileScreen() {
   };
 
   const openLocationSheet = () => {
-    Haptics.selectionAsync();
+    tapFeedback();
     setLocationLine1(technicianAddress?.line1 ?? '');
     setLocationWard(technicianAddress?.ward ?? '');
     setLocationDistrict(technicianAddress?.district ?? '');
@@ -464,7 +532,7 @@ export default function TechnicianProfileScreen() {
 
   // ---- Schedule sheet ----
   const openScheduleSheet = () => {
-    Haptics.selectionAsync();
+    tapFeedback();
     const byDay = new Map((technicianProfile?.schedules ?? []).map((s) => [s.dayOfWeek, s]));
     setScheduleDraft(
       Array.from({ length: 7 }, (_, day) => {
@@ -495,20 +563,27 @@ export default function TechnicianProfileScreen() {
   };
 
   // ---- Time-off sheet ----
+  const loadMyTimeOff = async () => {
+    setLoadingTimeOff(true);
+    setTimeOffLoadError(false);
+    try {
+      setTimeOffList(await technicianProfileApi.getMyTimeOff());
+    } catch {
+      // A failed GET is not evidence of an empty leave list. Hide stale entries.
+      setTimeOffList([]);
+      setTimeOffLoadError(true);
+    } finally {
+      setLoadingTimeOff(false);
+    }
+  };
+
   const openTimeOffSheet = async () => {
-    Haptics.selectionAsync();
+    tapFeedback();
     setNewTimeOffStart('');
     setNewTimeOffEnd('');
     setNewTimeOffReason('');
     timeOffSheetRef.current?.present();
-    setLoadingTimeOff(true);
-    try {
-      setTimeOffList(await technicianProfileApi.getMyTimeOff());
-    } catch {
-      setTimeOffList([]);
-    } finally {
-      setLoadingTimeOff(false);
-    }
+    await loadMyTimeOff();
   };
 
   const handleAddTimeOff = async () => {
@@ -565,7 +640,7 @@ export default function TechnicianProfileScreen() {
         text: 'Đăng xuất',
         style: 'destructive',
         onPress: async () => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          if (!reduceMotion) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
           await authApi.logout();
           logout();
           setTimeout(() => {
@@ -576,15 +651,38 @@ export default function TechnicianProfileScreen() {
     ]);
   };
 
-  const phoneLine = phoneNumber || user?.email || 'Kỹ thuật viên FixHome';
+  const accountEmail = user?.email?.trim() || 'Chưa cập nhật';
+  const scopedProfilePhone = profilePhone
+    && profilePhone.userId === user?.id
+    && profilePhone.sessionGeneration === sessionGeneration
+    ? profilePhone.phoneNumber.trim()
+    : '';
+  const accountPhone = user?.phoneNumber?.trim() || scopedProfilePhone || 'Chưa cập nhật';
+  const phoneLine = accountPhone;
   // 0 reviews or a null average is "no rating yet", never an invented score.
   const rating = technicianProfile
     ? ratingValue(technicianProfile.averageRating, technicianProfile.ratingCount)
     : null;
   const activeSkillCount = Object.values(myOfferings).filter((o) => o.isActive).length;
+  const kycDesc = verificationLoading
+    ? 'Đang tải…'
+    : !verificationLoaded
+      ? 'Chưa tải được trạng thái xác minh'
+      : verification === null
+      ? 'Chưa nộp hồ sơ'
+      : verification.status === 'REJECTED' && verification.rejectionReason
+        ? `Bị từ chối: ${verification.rejectionReason}`
+        : KYC_VIEW[verification.status].label;
+  const skillDesc = !skillsLoaded && profileLoading
+    ? 'Đang tải…'
+    : activeSkillCount > 0
+      ? `${activeSkillCount} dịch vụ đang nhận`
+      : skillsLoaded
+        ? 'Chưa có dịch vụ đang nhận'
+        : 'Chưa tải được danh sách dịch vụ · Mở để thử lại';
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <ScrollView
         contentContainerStyle={[
@@ -593,7 +691,10 @@ export default function TechnicianProfileScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.pageTitle} accessibilityRole="header">Hồ sơ kỹ thuật viên</Text>
+        <View style={styles.pageHeading}>
+          <Text style={styles.pageEyebrow}>Hồ sơ kỹ thuật viên</Text>
+          <Text style={styles.pageTitle} accessibilityRole="header">Hồ sơ nghề nghiệp</Text>
+        </View>
 
         {/* Identity */}
         <View style={styles.identity}>
@@ -612,7 +713,7 @@ export default function TechnicianProfileScreen() {
               )}
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.cameraIconBadge, uploadingAvatar && { opacity: 0.75 }]}
+              style={[styles.cameraTouch, uploadingAvatar && { opacity: 0.75 }]}
               onPress={handlePickImage}
               disabled={uploadingAvatar}
               activeOpacity={0.8}
@@ -621,17 +722,21 @@ export default function TechnicianProfileScreen() {
               accessibilityState={{ disabled: uploadingAvatar, busy: uploadingAvatar }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              {uploadingAvatar ? (
-                <ActivityIndicator size="small" color={colors.surface} />
-              ) : (
-                <Camera size={14} color={colors.surface} strokeWidth={2} />
-              )}
+              <View style={styles.cameraIconBadge}>
+                {uploadingAvatar ? (
+                  <ActivityIndicator size="small" color={colors.surface} />
+                ) : (
+                  <Camera size={14} color={colors.surface} strokeWidth={2} />
+                )}
+              </View>
             </TouchableOpacity>
           </View>
           <View style={styles.identityText}>
             <Text style={styles.name} numberOfLines={2}>{fullName}</Text>
             <Text style={styles.phone}>{phoneLine}</Text>
-            {technicianProfile && (
+            {profileLoading && !technicianProfile ? (
+              <Text style={styles.caption}>Đang tải…</Text>
+            ) : technicianProfile ? (
               <View style={styles.chipRow}>
                 {rating !== null ? (
                   <View style={[styles.chip, { backgroundColor: colors.tone.warning.bg }]}>
@@ -653,14 +758,17 @@ export default function TechnicianProfileScreen() {
                   </View>
                 )}
               </View>
-            )}
+            ) : null}
           </View>
         </View>
 
         {/* Thu nhập & ví */}
         <View style={[styles.group, styles.incomeCard]}>
           <Text style={styles.caption}>Tổng thu nhập từ đơn đã hoàn thành</Text>
-          <Text style={styles.incomeValue}>{formatVnd(earningsTotal)}</Text>
+          <Text style={styles.incomeValue}>
+            {earningsLoading ? 'Đang tải…' : earningsLoaded ? formatVnd(earningsTotal) : 'Chưa tải được thu nhập'}
+          </Text>
+          <Text style={styles.caption}>Tính theo tiền công, nếu thiếu thì theo tổng đơn đã tải.</Text>
         </View>
         <View style={styles.group}>
           <MenuRow
@@ -698,27 +806,34 @@ export default function TechnicianProfileScreen() {
             Icon={MessageSquareText}
             title="Đánh giá từ khách hàng"
             desc={
-              technicianProfile
-                ? rating !== null
-                  ? `${formatRating(rating)} sao · ${technicianProfile.ratingCount} đánh giá`
-                  : NO_RATING_TEXT
-                : undefined
+              profileLoading && !technicianProfile
+                ? 'Đang tải…'
+                : technicianProfile
+                  ? rating !== null
+                    ? `${formatRating(rating)} sao · ${technicianProfile.ratingCount} đánh giá`
+                    : NO_RATING_TEXT
+                  : 'Mở để xem đánh giá'
             }
             onPress={() => navigation.navigate('TechnicianReviews')}
           />
         </View>
 
         {/* HỒ SƠ NGHỀ NGHIỆP */}
-        <Text style={styles.sectionTitle}>Hồ sơ nghề nghiệp</Text>
+        <Text style={styles.sectionTitle} accessibilityRole="header">Hồ sơ nghề nghiệp</Text>
         <View style={styles.group}>
           <MenuRow
             styles={styles}
             colors={colors}
             Icon={Wrench}
             title="Kỹ năng và dịch vụ nhận làm"
-            desc={activeSkillCount > 0 ? `${activeSkillCount} dịch vụ đang nhận` : 'Chọn dịch vụ bạn nhận làm'}
+            desc={skillDesc}
             onPress={openSkillsSheet}
           />
+          {verification !== null && (
+            <View style={styles.kycBadgeRow}>
+              <StatusBadge view={KYC_VIEW[verification.status]} />
+            </View>
+          )}
           <View style={styles.divider} />
           <MenuRow
             styles={styles}
@@ -726,11 +841,13 @@ export default function TechnicianProfileScreen() {
             Icon={MapPin}
             title="Vị trí và bán kính hoạt động"
             desc={
-              technicianAddress
-                ? technicianProfile?.serviceRadiusKm != null
-                  ? `${technicianAddress.line1} · ${technicianProfile.serviceRadiusKm} km`
-                  : technicianAddress.line1
-                : 'Chưa cập nhật vị trí'
+              profileLoading && !technicianProfile
+                ? 'Đang tải…'
+                : technicianAddress
+                  ? technicianProfile?.serviceRadiusKm != null
+                    ? `${technicianAddress.line1} · ${technicianProfile.serviceRadiusKm} km`
+                    : technicianAddress.line1
+                  : 'Chưa cập nhật vị trí'
             }
             onPress={openLocationSheet}
           />
@@ -748,8 +865,16 @@ export default function TechnicianProfileScreen() {
             styles={styles}
             colors={colors}
             Icon={CalendarDays}
-            title="Khung giờ nhận việc"
-            desc={technicianProfile ? `${technicianProfile.schedules.length} khung giờ trong tuần` : 'Đang tải…'}
+            title="Khung giờ nhận việc hằng tuần"
+            desc={
+              profileLoading && !technicianProfile
+                ? 'Đang tải…'
+                : technicianProfile
+                  ? technicianProfile.schedules.length > 0
+                    ? `${technicianProfile.schedules.length} khung giờ trong tuần`
+                    : 'Chưa đặt khung giờ'
+                  : 'Mở để xem khung giờ'
+            }
             onPress={openScheduleSheet}
           />
           <View style={styles.divider} />
@@ -764,16 +889,32 @@ export default function TechnicianProfileScreen() {
         </View>
 
         {/* TÀI KHOẢN */}
-        <Text style={styles.sectionTitle}>Tài khoản</Text>
+        <Text style={styles.sectionTitle} accessibilityRole="header">Tài khoản</Text>
+        <View style={styles.group}>
+          <View style={styles.accountField}>
+            <Text style={styles.accountLabel}>Email</Text>
+            <Text style={styles.accountValue}>{accountEmail}</Text>
+          </View>
+          <View style={styles.accountDivider} />
+          <View style={styles.accountField}>
+            <Text style={styles.accountLabel}>Số điện thoại</Text>
+            <Text style={styles.accountValue}>{accountPhone}</Text>
+          </View>
+        </View>
         <View style={styles.group}>
           <MenuRow
             styles={styles}
             colors={colors}
             Icon={ShieldCheck}
             title="Xác minh danh tính"
-            desc="Cập nhật CCCD và thông tin"
+            desc={kycDesc}
             onPress={() => navigation.navigate('TechnicianKyc')}
           />
+          {verification !== null && (
+            <View style={styles.kycBadgeRow}>
+              <StatusBadge view={KYC_VIEW[verification.status]} />
+            </View>
+          )}
         </View>
 
         <TouchableOpacity
@@ -799,8 +940,26 @@ export default function TechnicianProfileScreen() {
             <CategoryPills categories={pickerCategories} selectedId={pickerCategoryId} onSelect={setPickerCategoryId} />
           )}
         </View>
+        {skillsSheetError && (
+          <View style={styles.loadingBlock} accessibilityRole="alert">
+            <Text style={styles.emptyText}>{skillsSheetError}</Text>
+            <TouchableOpacity
+              onPress={openSkillsSheet}
+              style={styles.skillSaveBtn}
+              disabled={loadingSkills}
+              accessibilityRole="button"
+              accessibilityLabel="Thử lại danh sách dịch vụ"
+              accessibilityState={{ disabled: loadingSkills, busy: loadingSkills }}
+            >
+              <Text style={styles.skillSaveBtnText}>Thử lại</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         {loadingSkills ? (
-          <ActivityIndicator color={colors.primaryStrong} style={styles.sheetSpinner} />
+          <View style={styles.loadingBlock}>
+            <ActivityIndicator color={colors.primaryStrong} style={styles.sheetSpinner} />
+            <Text style={styles.emptyText}>Đang tải…</Text>
+          </View>
         ) : (
           <BottomSheetSectionList
             sections={skillSections}
@@ -893,7 +1052,9 @@ export default function TechnicianProfileScreen() {
                 </View>
               );
             }}
-            ListEmptyComponent={<Text style={styles.emptyText}>Không có dịch vụ nào.</Text>}
+            ListEmptyComponent={skillsSheetLoaded && !skillsSheetError
+              ? <Text style={styles.emptyText}>Không có dịch vụ nào.</Text>
+              : null}
           />
         )}
       </BottomSheetModal>
@@ -1014,9 +1175,16 @@ export default function TechnicianProfileScreen() {
         backdropComponent={renderBackdrop}
       >
         <BottomSheetScrollView contentContainerStyle={styles.modalContent}>
-          <Text style={styles.modalTitle} accessibilityRole="header">Khung giờ nhận việc theo tuần</Text>
+          <View style={styles.scheduleSheetIntro}>
+            <Text style={styles.scheduleSheetEyebrow}>Khung giờ nhận việc theo tuần</Text>
+            <Text style={styles.scheduleSheetHeroTitle} accessibilityRole="header">Chọn khung giờ phù hợp</Text>
+            <Text style={styles.scheduleSheetGuide}>
+              Chọn ngày và giờ dự kiến nhận việc. Chỉ cập nhật lên máy chủ khi chọn Lưu khung giờ.
+            </Text>
+            <Text style={styles.scheduleDraftCount}>Đang chọn {scheduleDraft.filter((slot) => slot.enabled).length}/7 ngày</Text>
+          </View>
           {scheduleDraft.map((slot, day) => (
-            <View key={day} style={styles.scheduleRow}>
+            <View key={day} style={[styles.scheduleRow, slot.enabled && styles.scheduleRowActive]}>
               <TouchableOpacity
                 style={styles.scheduleDayToggle}
                 onPress={() =>
@@ -1098,11 +1266,29 @@ export default function TechnicianProfileScreen() {
         backdropComponent={renderBackdrop}
       >
         <BottomSheetScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-          <Text style={styles.modalTitle} accessibilityRole="header">Ngày nghỉ</Text>
+          <View style={styles.scheduleSheetIntro}>
+            <Text style={styles.scheduleSheetEyebrow}>Ngày nghỉ</Text>
+            <Text style={styles.scheduleSheetHeroTitle} accessibilityRole="header">Quản lý ngày nghỉ</Text>
+            <Text style={styles.scheduleSheetGuide}>
+              Các khoảng ngày nghỉ được yêu cầu từ máy chủ khi mở mục này. Thêm hoặc xóa chỉ có hiệu lực khi máy chủ xác nhận.
+            </Text>
+          </View>
 
           <View style={styles.timeOffList}>
             {loadingTimeOff ? (
               <ActivityIndicator color={colors.primaryStrong} />
+            ) : timeOffLoadError ? (
+              <View style={styles.timeOffErrorCard}>
+                <Text style={styles.timeOffErrorText}>Không thể tải danh sách ngày nghỉ. Vui lòng thử lại.</Text>
+                <TouchableOpacity
+                  onPress={() => { void loadMyTimeOff(); }}
+                  style={styles.timeOffRetryBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Thử lại tải ngày nghỉ"
+                >
+                  <Text style={styles.timeOffRetryText}>Thử lại tải ngày nghỉ</Text>
+                </TouchableOpacity>
+              </View>
             ) : timeOffList.length === 0 ? (
               <Text style={styles.emptyText}>Chưa có ngày nghỉ nào.</Text>
             ) : (
@@ -1182,7 +1368,7 @@ export default function TechnicianProfileScreen() {
         </BottomSheetScrollView>
       </BottomSheetModal>
 
-      <Modal visible={isAvatarModalVisible} transparent={true} animationType="fade" onRequestClose={() => setAvatarModalVisible(false)}>
+      <Modal visible={isAvatarModalVisible} transparent={true} animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={() => setAvatarModalVisible(false)}>
         <View style={styles.avatarModalContainer}>
           <TouchableOpacity
             style={styles.closeAvatarModalBtn}
@@ -1208,16 +1394,18 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   fullWidth: { width: '100%', marginTop: 8 },
   disabled: { opacity: 0.5 },
   scrollContent: { padding: 16, gap: 12 },
-  pageTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
-  identity: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 8 },
-  identityText: { flex: 1, gap: 2 },
-  name: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text },
-  phone: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
+  pageHeading: { gap: 4, paddingBottom: 4 },
+  pageEyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.textSecondary },
+  pageTitle: { fontSize: 26, lineHeight: 34, fontWeight: '700', color: colors.text },
+  identity: { flexDirection: 'column', alignItems: 'center', gap: 14, paddingVertical: 24, paddingHorizontal: 16, backgroundColor: colors.primarySoft, borderRadius: 22, borderWidth: 1, borderColor: colors.primaryTint },
+  identityText: { width: '100%', alignItems: 'center', gap: 4 },
+  name: { fontSize: 20, lineHeight: 28, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  phone: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
+  chipRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 8, marginTop: 6 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 24, paddingHorizontal: 8, borderRadius: 8 },
   chipText: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
-  avatarBorder: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center' },
-  avatar: { width: '100%', height: '100%', borderRadius: 40, backgroundColor: colors.primaryTint, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  avatarBorder: { width: 88, height: 88, borderRadius: 44, justifyContent: 'center', alignItems: 'center' },
+  avatar: { width: '100%', height: '100%', minWidth: 44, minHeight: 44, borderRadius: 44, backgroundColor: colors.primaryTint, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   avatarImage: { width: '100%', height: '100%' },
   avatarText: { fontSize: 32, fontWeight: '700', color: colors.primaryStrong },
   caption: { fontSize: 12, lineHeight: 16, fontWeight: '500', color: colors.textSecondary },
@@ -1225,6 +1413,10 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   incomeValue: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
   sectionTitle: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text, marginTop: 12 },
   group: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
+  accountField: { paddingHorizontal: 16, paddingVertical: 12, gap: 2 },
+  accountLabel: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: colors.textSecondary },
+  accountValue: { fontSize: 15, lineHeight: 22, color: colors.text },
+  accountDivider: { height: 1, backgroundColor: colors.divider, marginHorizontal: 16 },
   menuItem: { flexDirection: 'row', minHeight: 56, paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center', gap: 12 },
   menuIconTile: { width: 36, height: 36, borderRadius: 8, backgroundColor: colors.primarySoft, justifyContent: 'center', alignItems: 'center' },
   menuContent: { flex: 1 },
@@ -1233,7 +1425,9 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   divider: { height: 1, backgroundColor: colors.divider, marginLeft: 64 },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48, marginTop: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   logoutText: { fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.error },
-  cameraIconBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: colors.primaryStrong, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: colors.background },
+  cameraTouch: { position: 'absolute', bottom: -8, right: -8, width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  cameraIconBadge: { backgroundColor: colors.primaryStrong, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: colors.background },
+  kycBadgeRow: { paddingHorizontal: 16, paddingBottom: 12 },
   avatarModalContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
   closeAvatarModalBtn: { position: 'absolute', top: 50, right: 12, zIndex: 10, width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   fullAvatarImage: { width: '100%', height: 400 },
@@ -1264,6 +1458,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
 
   sheetHeader: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 6, gap: 8 },
   sheetSpinner: { marginTop: 24 },
+  loadingBlock: { alignItems: 'center', paddingVertical: 24, gap: 8 },
   pickerListContent: { padding: 20, paddingTop: 10, gap: 12 },
   skillSectionHeader: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.textSecondary, marginTop: 6, marginBottom: 2 },
   skillSectionCount: { fontWeight: '500' },
@@ -1277,17 +1472,27 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   skillField: { minWidth: 120, flex: 1 },
   skillFieldInput: { minHeight: 44, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.textSecondary, borderRadius: 14, color: colors.text, fontSize: 16, backgroundColor: colors.surface },
 
-  scheduleRow: { width: '100%', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.divider, gap: 8 },
+  scheduleSheetIntro: { backgroundColor: colors.primarySoft, borderRadius: 18, padding: 18, gap: 6, marginBottom: 16 },
+  scheduleSheetEyebrow: { fontSize: 12, lineHeight: 18, fontWeight: '700', color: colors.primaryStrong },
+  scheduleSheetHeroTitle: { fontSize: 22, lineHeight: 30, fontWeight: '700', color: colors.text },
+  scheduleSheetGuide: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
+  scheduleDraftCount: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, backgroundColor: colors.surface, color: colors.primaryStrong, fontSize: 12, lineHeight: 18, fontWeight: '700' },
+  scheduleRow: { width: '100%', padding: 12, borderWidth: 1, borderRadius: 14, borderColor: colors.border, backgroundColor: colors.surface, gap: 8, marginBottom: 8 },
+  scheduleRowActive: { borderColor: colors.primaryStrong },
   scheduleDayToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
   scheduleDayText: { fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.text },
   scheduleTimesRow: { paddingLeft: 30, gap: 6 },
   scheduleChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  timeChip: { minHeight: 40, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
+  timeChip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
   timeChipActive: { backgroundColor: colors.primaryStrong, borderColor: colors.primaryStrong },
   timeChipText: { fontSize: 14, lineHeight: 20, color: colors.text },
   timeChipTextActive: { color: colors.surface, fontWeight: '700' },
 
   timeOffList: { width: '100%', marginBottom: 16 },
+  timeOffErrorCard: { padding: 16, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.primarySoft, gap: 12 },
+  timeOffErrorText: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.error },
+  timeOffRetryBtn: { minHeight: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.primaryStrong },
+  timeOffRetryText: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong },
   dateRow: { flexDirection: 'row', gap: 12, width: '100%' },
   timeOffItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingLeft: 12, borderRadius: 14, marginBottom: 8, width: '100%' },
   timeOffDates: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.text },

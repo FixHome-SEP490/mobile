@@ -10,6 +10,7 @@ import {
   RefreshControl,
   StatusBar,
   Image,
+  Modal,
   Alert,
   TextInput,
   Linking,
@@ -124,6 +125,10 @@ export default function CustomerOrderDetailScreen() {
   const [detailState, setDetailState] = useState(initialOrderDetailState);
   const { order, loading, refreshing, error } = detailState;
   const [evidenceState, setEvidenceState] = useState(initialEvidenceState);
+  const [selectedEvidencePhotoId, setSelectedEvidencePhotoId] = useState<string | null>(null);
+  const selectedEvidencePhoto = order?.id === serviceOrderId
+    ? evidenceState.photos.find((photo) => photo.id === selectedEvidencePhotoId) ?? null
+    : null;
   const [decisionState, setDecisionState] = useState(initialDecisionState);
   const focusAliveRef = useRef(false);
   const [invoiceState, setInvoiceState] = useState(initialInvoiceState);
@@ -419,6 +424,7 @@ export default function CustomerOrderDetailScreen() {
     void loaderRef.current?.focus(serviceOrderId);
     return () => {
       focusAliveRef.current = false;
+      setSelectedEvidencePhotoId(null);
       loaderRef.current?.blur();
       evidenceRef.current?.blurEvidence();
       invoiceRef.current?.blurInvoice();
@@ -856,11 +862,12 @@ export default function CustomerOrderDetailScreen() {
           onPress={() => navigation.goBack()}
           accessibilityRole="button"
           accessibilityLabel="Quay lại"
+          style={styles.headerBackBtn}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chi tiết đơn sửa chữa</Text>
+        <Text style={styles.headerTitle} accessibilityRole="header">Chi tiết đơn sửa chữa</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -872,13 +879,21 @@ export default function CustomerOrderDetailScreen() {
       ) : !order ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="receipt-outline" size={56} color="#CBD5E1" />
-          <Text style={styles.emptyTitle}>Không xem được đơn</Text>
+          <Text style={styles.emptyTitle} accessibilityRole="header">Không xem được đơn</Text>
           {!!error && <Text style={styles.emptyDesc}>{error}</Text>}
-          <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button" style={styles.retryBtn}>
+          <TouchableOpacity
+            onPress={onRefresh}
+            disabled={refreshing}
+            accessibilityRole="button"
+            accessibilityLabel="Thử tải lại chi tiết đơn"
+            accessibilityState={{ disabled: refreshing, busy: refreshing }}
+            style={styles.retryBtn}
+          >
             <Text style={styles.retryText}>Thử lại</Text>
           </TouchableOpacity>
         </View>
       ) : (
+        <>
         <ScrollView
           ref={detailScrollRef}
           contentContainerStyle={styles.scrollContent}
@@ -887,7 +902,14 @@ export default function CustomerOrderDetailScreen() {
           {!!error && (
             <View style={styles.errorBanner} accessibilityRole="alert">
               <Text style={styles.emptyDesc}>{error}</Text>
-              <TouchableOpacity onPress={onRefresh} disabled={refreshing} accessibilityRole="button">
+              <TouchableOpacity
+                onPress={onRefresh}
+                disabled={refreshing}
+                accessibilityRole="button"
+                accessibilityLabel="Thử tải lại chi tiết đơn"
+                accessibilityState={{ disabled: refreshing, busy: refreshing }}
+                style={styles.inlineRetryButton}
+              >
                 <Text style={styles.retryText}>Thử lại</Text>
               </TouchableOpacity>
             </View>
@@ -899,7 +921,7 @@ export default function CustomerOrderDetailScreen() {
                 {getStatusBadge(order.status).label}
               </Text>
             </View>
-            <Text style={styles.title}>Đơn #{order.code || order.id.slice(0, 8)}</Text>
+            <Text style={styles.title} accessibilityRole="header">Đơn #{order.code || order.id.slice(0, 8)}</Text>
             <Text style={styles.meta}>{order.serviceName || 'Dịch vụ sửa chữa'}</Text>
             {!!order.scheduledAt && (
               <Text style={styles.meta}>
@@ -919,6 +941,18 @@ export default function CustomerOrderDetailScreen() {
               <Text style={styles.meta}>Mô tả yêu cầu: {order.bookingDescription}</Text>
             )}
           </View>
+
+          {sections.hasTimeline && (
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Tiến độ</Text>
+              {order.timeline!.map((entry, index) => (
+                <View key={`${entry.status}-${entry.timestamp}-${index}`} style={styles.timelineRow}>
+                  <Text style={styles.timelineTitle}>{timelineEntryLabel(entry.title, entry.status)}</Text>
+                  <Text style={styles.timelineTime}>{vnDateTimeString(entry.timestamp)}</Text>
+                </View>
+              ))}
+            </View>
+          )}
 
           {!!orderSummaryAction && (
             <View
@@ -958,7 +992,7 @@ export default function CustomerOrderDetailScreen() {
             <View style={styles.card}>
               <View style={[styles.row, { alignItems: 'flex-start' }]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.sectionTitle}>Bảo hành sau sửa chữa</Text>
+                  <Text style={styles.sectionTitle} accessibilityRole="header">Bảo hành sau sửa chữa</Text>
                   <Text style={styles.meta}>
                     Xem các hạng mục bảo hành của đơn này, theo dõi yêu cầu đã gửi hoặc gửi yêu cầu mới khi có sự cố.
                   </Text>
@@ -1263,18 +1297,6 @@ export default function CustomerOrderDetailScreen() {
             </View>
           )}
 
-          {sections.hasTimeline && (
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Tiến độ</Text>
-              {order.timeline!.map((entry, index) => (
-                <View key={`${entry.status}-${entry.timestamp}-${index}`} style={styles.row}>
-                  <Text style={styles.meta}>{timelineEntryLabel(entry.title, entry.status)}</Text>
-                  <Text style={styles.meta}>{vnDateTimeString(entry.timestamp)}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
           {(sections.beforeCount !== null || sections.afterCount !== null) && (
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>Bằng chứng ảnh</Text>
@@ -1302,13 +1324,22 @@ export default function CustomerOrderDetailScreen() {
                       <Text style={styles.meta}>Không tải được ảnh. Nhấn “Tải lại ảnh” để lấy đường dẫn mới.</Text>
                     </View>
                   ) : (
-                    <Image
-                      source={{ uri: photo.uri }}
-                      style={styles.evidenceThumb}
-                      resizeMode="contain"
-                      accessibilityLabel={`Ảnh ${evidenceTypeLabel(photo.type)}`}
-                      onError={() => evidenceRef.current?.markImageFailed(photo.id)}
-                    />
+                    <TouchableOpacity
+                      testID={`order-evidence-zoom-${photo.id}`}
+                      style={styles.evidencePhotoButton}
+                      onPress={() => setSelectedEvidencePhotoId(photo.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Phóng to ảnh ${evidenceTypeLabel(photo.type)}`}
+                      accessibilityHint="Mở ảnh bằng chứng ở kích thước lớn"
+                    >
+                      <Image
+                        source={{ uri: photo.uri }}
+                        style={styles.evidenceThumb}
+                        resizeMode="contain"
+                        accessibilityLabel={`Ảnh ${evidenceTypeLabel(photo.type)}`}
+                        onError={() => evidenceRef.current?.markImageFailed(photo.id)}
+                      />
+                    </TouchableOpacity>
                   )}
                   {!!photo.note && <Text style={styles.meta}>{photo.note}</Text>}
                 </View>
@@ -1317,60 +1348,101 @@ export default function CustomerOrderDetailScreen() {
             {!!evidenceState.error && (
               <View style={styles.evidenceError}>
                 <Text style={styles.meta}>{evidenceState.error}</Text>
-                <TouchableOpacity onPress={onRetryEvidence} disabled={!evidenceState.canRetry} accessibilityRole="button">
+                <TouchableOpacity
+                  onPress={onRetryEvidence}
+                  disabled={!evidenceState.canRetry}
+                  accessibilityRole="button"
+                  accessibilityLabel="Tải lại ảnh bằng chứng"
+                  accessibilityState={{ disabled: !evidenceState.canRetry }}
+                  style={styles.inlineRetryButton}
+                >
                   <Text style={evidenceState.canRetry ? styles.retryText : styles.meta}>Tải lại ảnh</Text>
                 </TouchableOpacity>
               </View>
             )}
             {!evidenceState.error && Object.keys(evidenceState.failed).length > 0 && (
-              <TouchableOpacity onPress={onRetryEvidence} accessibilityRole="button">
+              <TouchableOpacity onPress={onRetryEvidence} accessibilityRole="button" accessibilityLabel="Tải lại ảnh bằng chứng" style={styles.inlineRetryButton}>
                 <Text style={styles.retryText}>Tải lại ảnh</Text>
               </TouchableOpacity>
             )}
           </View>
 
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Hóa đơn</Text>
+          <View style={[styles.card, styles.invoiceCard]}>
+            <View style={styles.invoiceHeader}>
+              <View style={styles.invoiceHeading}>
+                <Text style={styles.invoiceEyebrow}>CHI TIẾT CHI PHÍ</Text>
+                <Text style={styles.sectionTitle}>Hóa đơn</Text>
+              </View>
+              {invoiceState.invoice && (
+                <View
+                  testID="invoice-payment-status"
+                  accessible
+                  accessibilityRole="text"
+                  accessibilityLabel={"Trạng thái thanh toán: " + invoicePaymentLabel(invoiceState.invoice.paymentStatus)}
+                  style={[
+                    styles.statusChip,
+                    invoiceState.invoice.paymentStatus === 'PAID'
+                      ? styles.statusChipPaid
+                      : invoiceState.invoice.paymentStatus === 'UNPAID'
+                        ? styles.statusChipUnpaid
+                        : invoiceState.invoice.paymentStatus === 'REFUNDED'
+                          ? styles.statusChipInfo
+                          : styles.statusChipUnknown,
+                  ]}
+                >
+                  <Text style={[
+                    styles.statusChipText,
+                    invoiceState.invoice.paymentStatus === 'PAID'
+                      ? styles.statusChipTextPaid
+                      : invoiceState.invoice.paymentStatus === 'UNPAID'
+                        ? styles.statusChipTextUnpaid
+                        : invoiceState.invoice.paymentStatus === 'REFUNDED'
+                          ? styles.statusChipTextInfo
+                          : styles.statusChipTextUnknown,
+                  ]}>
+                    {invoicePaymentLabel(invoiceState.invoice.paymentStatus)}
+                  </Text>
+                </View>
+              )}
+            </View>
             {invoiceState.loading && !invoiceState.invoice && !invoiceState.error ? (
               <Text style={styles.meta}>Đang tải hóa đơn...</Text>
             ) : invoiceState.invoice ? (
               <>
-                <View style={styles.row}>
-                  <Text style={styles.meta}>Trạng thái thanh toán</Text>
-                  <Text style={styles.meta}>{invoicePaymentLabel(invoiceState.invoice.paymentStatus)}</Text>
+                <View style={styles.invoiceLines}>
+                  {invoiceState.invoice.items.map((item) => (
+                    <View key={item.id} style={styles.invoiceRow}>
+                      <Text style={styles.invoiceItemLabel}>{item.description} × {item.quantity}</Text>
+                      <Text style={styles.invoiceItemValue}>{item.lineTotalText ?? '—'}</Text>
+                    </View>
+                  ))}
+                  {invoiceState.invoice.laborText !== null && (
+                    <View style={styles.invoiceRow}>
+                      <Text style={styles.invoiceItemLabel}>Tiền công</Text>
+                      <Text style={styles.invoiceItemValue}>{invoiceState.invoice.laborText}</Text>
+                    </View>
+                  )}
+                  {invoiceState.invoice.partsText !== null && (
+                    <View style={styles.invoiceRow}>
+                      <Text style={styles.invoiceItemLabel}>Vật tư</Text>
+                      <Text style={styles.invoiceItemValue}>{invoiceState.invoice.partsText}</Text>
+                    </View>
+                  )}
                 </View>
-                {invoiceState.invoice.laborText !== null && (
-                  <View style={styles.row}>
-                    <Text style={styles.meta}>Tiền công</Text>
-                    <Text style={styles.meta}>{invoiceState.invoice.laborText}</Text>
-                  </View>
-                )}
-                {invoiceState.invoice.partsText !== null && (
-                  <View style={styles.row}>
-                    <Text style={styles.meta}>Vật tư</Text>
-                    <Text style={styles.meta}>{invoiceState.invoice.partsText}</Text>
-                  </View>
-                )}
                 {invoiceState.invoice.totalText !== null ? (
-                  <View style={styles.row}>
+                  <View testID="invoice-total" style={styles.invoiceTotalRow}>
                     <Text style={styles.totalLabel}>Tổng cộng</Text>
                     <Text style={styles.totalValue}>{invoiceState.invoice.totalText}</Text>
                   </View>
                 ) : (
-                  <Text style={styles.meta}>Chưa rõ tổng tiền.</Text>
+                  <Text style={styles.invoiceUnknownTotal}>Chưa rõ tổng tiền.</Text>
                 )}
                 {!!invoiceState.invoice.issuedText && (
                   <Text style={styles.meta}>Phát hành: {invoiceState.invoice.issuedText}</Text>
                 )}
                 {!!invoiceState.invoice.paidText && (
-                  <Text style={styles.meta}>Đã thanh toán: {invoiceState.invoice.paidText}</Text>
+                  <Text style={styles.meta}>Thanh toán lúc: {invoiceState.invoice.paidText}</Text>
                 )}
-                {invoiceState.invoice.items.map((item) => (
-                  <View key={item.id} style={styles.row}>
-                    <Text style={styles.meta}>{item.description} × {item.quantity}</Text>
-                    <Text style={styles.meta}>{item.lineTotalText ?? '—'}</Text>
-                  </View>
-                ))}
               </>
             ) : !invoiceState.error ? (
               <Text style={styles.meta}>Chưa có hóa đơn.</Text>
@@ -1378,13 +1450,19 @@ export default function CustomerOrderDetailScreen() {
             {!!invoiceState.error && (
               <View style={styles.evidenceError}>
                 <Text style={styles.meta}>{invoiceState.error}</Text>
-                <TouchableOpacity onPress={onRetryInvoice} disabled={!invoiceState.canRetry} accessibilityRole="button">
+                <TouchableOpacity
+                  onPress={onRetryInvoice}
+                  disabled={!invoiceState.canRetry}
+                  accessibilityRole="button"
+                  accessibilityLabel="Tải lại hóa đơn"
+                  accessibilityState={{ disabled: !invoiceState.canRetry }}
+                  style={styles.inlineRetryButton}
+                >
                   <Text style={invoiceState.canRetry ? styles.retryText : styles.meta}>Tải lại hóa đơn</Text>
                 </TouchableOpacity>
               </View>
             )}
           </View>
-
           {orderCancelEligible && (
             <View style={styles.card}>
               {/* K09_B_CUSTOMER_ORDER_CANCEL */}
@@ -1481,22 +1559,39 @@ export default function CustomerOrderDetailScreen() {
           )}
 
           {paymentEligible && (
-            <View onLayout={markActionSection('pay')} style={styles.card}>
+            <View onLayout={markActionSection('pay')} style={[styles.card, styles.paymentCard]}>
               {/* K08_CUSTOMER_PAYMENT */}
-              <Text style={styles.sectionTitle}>Thanh toán</Text>
+              <View style={styles.paymentHeader}>
+                <View style={styles.invoiceHeading}>
+                  <Text style={styles.invoiceEyebrow}>THANH TOÁN</Text>
+                  <Text style={styles.sectionTitle}>Thanh toán</Text>
+                </View>
+                <View style={[styles.statusChip, styles.statusChipInfo]}>
+                  <Text style={[styles.statusChipText, styles.statusChipTextInfo]}>Bước riêng</Text>
+                </View>
+              </View>
               <Text style={styles.meta}>
-                Nghiệm thu công việc đã được xác nhận. Thanh toán là bước riêng; chỉ khi hệ thống xác nhận đã thanh toán/hoàn thành mới được coi là thành công.
+                Công việc đã được nghiệm thu. Thanh toán là bước riêng; chỉ khi hệ thống xác nhận đã thanh toán hoặc hoàn thành thì mới được coi là thành công.
               </Text>
 
               {paymentState.loading ? (
                 <Text style={styles.meta}>Đang kiểm tra thanh toán tiền mặt...</Text>
               ) : paymentState.settlement?.status === 'PENDING_CONFIRMATION' ? (
-                <View style={styles.evidenceError}>
+                <View style={styles.cashPendingPanel}>
+                  <View
+                    testID="cash-settlement-status"
+                    accessible
+                    accessibilityRole="text"
+                    accessibilityLabel="Đối soát tiền mặt: Chờ khách xác nhận"
+                    style={[styles.statusChip, styles.statusChipUnpaid]}
+                  >
+                    <Text style={[styles.statusChipText, styles.statusChipTextUnpaid]}>Chờ khách xác nhận</Text>
+                  </View>
                   <Text style={styles.meta}>
-                    Kỹ thuật viên khai đã nhận {paymentState.settlement.declaredAmount.toLocaleString('vi-VN')}đ tiền mặt.
+                    Kỹ thuật viên khai báo đã nhận {paymentState.settlement.declaredAmount.toLocaleString('vi-VN')}đ tiền mặt. Hãy đối chiếu trước khi xác nhận.
                   </Text>
                   {!!paymentState.settlement.technicianNotes && (
-                    <Text style={styles.meta}>Ghi chú: {paymentState.settlement.technicianNotes}</Text>
+                    <Text style={styles.meta}>Ghi chú kỹ thuật viên: {paymentState.settlement.technicianNotes}</Text>
                   )}
                   <View style={styles.decisionBtnRow}>
                     <TouchableOpacity
@@ -1504,6 +1599,8 @@ export default function CustomerOrderDetailScreen() {
                       onPress={onPaymentConfirmCash}
                       disabled={paymentState.cashBusy || paymentState.cashNeedsVerify}
                       accessibilityRole="button"
+                      accessibilityLabel="Xác nhận đã trả tiền mặt"
+                      accessibilityState={{ disabled: paymentState.cashBusy || paymentState.cashNeedsVerify, busy: paymentState.cashBusy }}
                     >
                       <Text style={styles.decisionBtnText}>Xác nhận đã trả</Text>
                     </TouchableOpacity>
@@ -1512,35 +1609,73 @@ export default function CustomerOrderDetailScreen() {
                       onPress={onPaymentDisputeCash}
                       disabled={paymentState.cashBusy || paymentState.cashNeedsVerify}
                       accessibilityRole="button"
+                      accessibilityLabel="Báo sai số tiền mặt"
+                      accessibilityState={{ disabled: paymentState.cashBusy || paymentState.cashNeedsVerify, busy: paymentState.cashBusy }}
                     >
                       <Text style={styles.decisionBtnText}>Báo sai số tiền</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
               ) : paymentState.settlement?.status === 'DISPUTED' ? (
-                <Text style={[styles.meta, { color: '#B91C1C', fontWeight: '700' }]}>
-                  Đối soát tiền mặt đang tranh chấp và cần xử lý. Hóa đơn chưa được coi là đã thanh toán.
-                </Text>
+                <View style={styles.cashDisputedPanel}>
+                  <View
+                    testID="cash-settlement-status"
+                    accessible
+                    accessibilityRole="text"
+                    accessibilityLabel="Đối soát tiền mặt: Đang tranh chấp"
+                    style={[styles.statusChip, styles.statusChipDanger]}
+                  >
+                    <Text style={[styles.statusChipText, styles.statusChipTextDanger]}>Đang tranh chấp</Text>
+                  </View>
+                  <Text style={styles.meta}>
+                    Đối soát tiền mặt đang tranh chấp và cần xử lý. Hóa đơn chưa được coi là đã thanh toán.
+                  </Text>
+                </View>
               ) : paymentState.settlement?.status === 'CONFIRMED' ? (
-                <Text style={[styles.meta, { color: '#047857', fontWeight: '700' }]}>
-                  Hệ thống đã xác nhận đối soát tiền mặt.
-                </Text>
+                <View style={styles.cashConfirmedPanel}>
+                  <View
+                    testID="cash-settlement-status"
+                    accessible
+                    accessibilityRole="text"
+                    accessibilityLabel="Đối soát tiền mặt: Đã xác nhận"
+                    style={[styles.statusChip, styles.statusChipPaid]}
+                  >
+                    <Text style={[styles.statusChipText, styles.statusChipTextPaid]}>Đã xác nhận đối soát</Text>
+                  </View>
+                  <Text style={styles.meta}>
+                    Hệ thống đã xác nhận đối soát tiền mặt. Trạng thái hóa đơn được hiển thị riêng theo dữ liệu hệ thống.
+                  </Text>
+                </View>
               ) : (
                 <Text style={styles.meta}>Chưa có khai báo tiền mặt từ kỹ thuật viên.</Text>
               )}
 
               {paymentState.cashNeedsVerify && (
-                <TouchableOpacity onPress={onPaymentCheckCash} disabled={paymentState.cashBusy} accessibilityRole="button">
-                  <Text style={styles.retryText}>Kiểm tra đối soát tiền mặt</Text>
-                </TouchableOpacity>
+                <View style={styles.paymentRecovery}>
+                  <Text style={styles.meta}>
+                    Chưa xác định được kết quả đối soát tiền mặt. Kiểm tra lại trạng thái trước khi tiếp tục.
+                  </Text>
+                  <TouchableOpacity
+                    onPress={onPaymentCheckCash}
+                    disabled={paymentState.cashBusy}
+                    accessibilityRole="button"
+                    accessibilityLabel="Kiểm tra đối soát tiền mặt"
+                    accessibilityState={{ disabled: paymentState.cashBusy, busy: paymentState.cashBusy }}
+                    style={styles.paymentSecondaryButton}
+                  >
+                    <Text style={styles.retryText}>Kiểm tra đối soát tiền mặt</Text>
+                  </TouchableOpacity>
+                </View>
               )}
 
-              <View style={{ marginTop: 10, gap: 8 }}>
+              <View style={styles.paymentActions}>
                 <TouchableOpacity
-                  style={[styles.decisionBtn, { backgroundColor: colors.primaryStrong, alignSelf: 'flex-start' }]}
+                  style={[styles.decisionBtn, styles.paymentPrimaryButton, { backgroundColor: colors.primaryStrong }]}
                   onPress={onPaymentVnpay}
                   disabled={paymentState.onlineBusy || paymentState.onlinePending}
                   accessibilityRole="button"
+                  accessibilityLabel="Thanh toán qua VNPay"
+                  accessibilityState={{ disabled: paymentState.onlineBusy || paymentState.onlinePending, busy: paymentState.onlineBusy }}
                 >
                   {paymentState.onlineBusy ? (
                     <ActivityIndicator size="small" color={colors.surface} />
@@ -1549,14 +1684,30 @@ export default function CustomerOrderDetailScreen() {
                   )}
                 </TouchableOpacity>
                 {paymentState.onlinePending && (
-                  <>
+                  <View style={styles.paymentRecovery}>
+                    <View
+                      testID="online-payment-status"
+                      accessible
+                      accessibilityRole="text"
+                      accessibilityLabel="Trạng thái VNPay: Chờ hệ thống xác nhận"
+                      style={[styles.statusChip, styles.statusChipInfo]}
+                    >
+                      <Text style={[styles.statusChipText, styles.statusChipTextInfo]}>Chờ hệ thống xác nhận</Text>
+                    </View>
                     <Text style={styles.meta}>
-                      Đã tạo/mở một lần thanh toán VNPay. Quay lại ứng dụng không đồng nghĩa đã thanh toán thành công.
+                      Đã tạo hoặc mở một lần thanh toán VNPay. Quay lại ứng dụng không đồng nghĩa đã thanh toán thành công. Hãy kiểm tra trạng thái với hệ thống.
                     </Text>
-                    <TouchableOpacity onPress={onPaymentCheckOnline} disabled={paymentState.onlineBusy} accessibilityRole="button">
+                    <TouchableOpacity
+                      onPress={onPaymentCheckOnline}
+                      disabled={paymentState.onlineBusy}
+                      accessibilityRole="button"
+                      accessibilityLabel="Kiểm tra trạng thái thanh toán"
+                      accessibilityState={{ disabled: paymentState.onlineBusy, busy: paymentState.onlineBusy }}
+                      style={styles.paymentSecondaryButton}
+                    >
                       <Text style={styles.retryText}>Kiểm tra trạng thái thanh toán</Text>
                     </TouchableOpacity>
-                  </>
+                  </View>
                 )}
               </View>
 
@@ -1565,7 +1716,6 @@ export default function CustomerOrderDetailScreen() {
               )}
             </View>
           )}
-
           {reviewEligible && (
             <View onLayout={markActionSection('review')} style={styles.card}>
               {/* K09_A_SERVER_REVIEW */}
@@ -1789,7 +1939,14 @@ export default function CustomerOrderDetailScreen() {
             {!!costsState.error && (
               <View style={styles.evidenceError}>
                 <Text style={styles.meta}>{costsState.error}</Text>
-                <TouchableOpacity onPress={onRetryCosts} disabled={!costsState.canRetry} accessibilityRole="button">
+                <TouchableOpacity
+                  onPress={onRetryCosts}
+                  disabled={!costsState.canRetry}
+                  accessibilityRole="button"
+                  accessibilityLabel="Tải lại danh sách chi phí phát sinh"
+                  accessibilityState={{ disabled: !costsState.canRetry }}
+                  style={styles.inlineRetryButton}
+                >
                   <Text style={costsState.canRetry ? styles.retryText : styles.meta}>Tải lại chi phí</Text>
                 </TouchableOpacity>
               </View>
@@ -1802,6 +1959,39 @@ export default function CustomerOrderDetailScreen() {
             completedAt={order.completedAt ?? null}
           />
         </ScrollView>
+        <Modal
+          visible={!!selectedEvidencePhoto}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSelectedEvidencePhotoId(null)}
+          accessibilityViewIsModal
+        >
+          <View style={styles.evidenceViewerBackdrop}>
+            <TouchableOpacity
+              onPress={() => setSelectedEvidencePhotoId(null)}
+              style={styles.evidenceViewerClose}
+              accessibilityRole="button"
+              accessibilityLabel="Đóng ảnh"
+              accessibilityHint="Đóng ảnh bằng chứng đang phóng to"
+            >
+              <Ionicons name="close" size={24} color={colors.surface} />
+            </TouchableOpacity>
+            {!!selectedEvidencePhoto && (
+              <>
+                <Text style={styles.evidenceViewerTitle}>
+                  {evidenceTypeLabel(selectedEvidencePhoto.type)}
+                </Text>
+                <Image
+                  source={{ uri: selectedEvidencePhoto.uri }}
+                  style={styles.evidenceViewerImage}
+                  resizeMode="contain"
+                  accessibilityLabel={`Ảnh phóng to ${evidenceTypeLabel(selectedEvidencePhoto.type)}`}
+                />
+              </>
+            )}
+          </View>
+        </Modal>
+        </>
       )}
     </SafeAreaView>
   );
@@ -1823,16 +2013,23 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderBottomColor: colors.border,
   },
   headerTitle: {
+    flex: 1,
+    textAlign: 'center',
     fontSize: 18,
+    lineHeight: 25,
     fontWeight: '800',
     color: colors.text,
   },
+  headerBackBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
   headerSpacer: {
-    width: 24,
+    width: 44,
   },
   scrollContent: {
-    padding: 16,
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 72,
+    gap: 14,
+    flexGrow: 1,
   },
   loadingState: {
     flex: 1,
@@ -1852,7 +2049,8 @@ const getStyles = (colors: any) => StyleSheet.create({
     gap: 8,
   },
   emptyTitle: {
-    fontSize: 17,
+    fontSize: 18,
+    lineHeight: 26,
     fontWeight: '700',
     color: colors.text,
     marginTop: 16,
@@ -1861,12 +2059,20 @@ const getStyles = (colors: any) => StyleSheet.create({
     fontSize: 13,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 20,
   },
   retryBtn: {
-    padding: 12,
+    minHeight: 48,
+    minWidth: 116,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 8,
   },
+  inlineRetryButton: { minHeight: 44, minWidth: 88, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, alignSelf: 'center' },
   retryText: {
     fontSize: 13,
     fontWeight: '700',
@@ -1876,8 +2082,10 @@ const getStyles = (colors: any) => StyleSheet.create({
     padding: 16,
     gap: 8,
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    borderRadius: 8,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 14,
   },
   card: {
     backgroundColor: colors.surface,
@@ -1898,12 +2106,14 @@ const getStyles = (colors: any) => StyleSheet.create({
     marginBottom: 6,
   },
   badgeText: {
-    fontSize: 11,
+    fontSize: 12,
+    lineHeight: 18,
     fontWeight: '700',
   },
   title: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 17,
+    lineHeight: 25,
+    fontWeight: '800',
     color: colors.text,
   },
   actionSummaryTitle: {
@@ -1919,7 +2129,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   actionPrimaryButton: {
     alignSelf: 'flex-start',
-    minHeight: 42,
+    minHeight: 48,
     marginTop: 4,
     paddingHorizontal: 14,
     borderRadius: 10,
@@ -1941,19 +2151,28 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   meta: {
     fontSize: 13,
+    lineHeight: 20,
+    flexShrink: 1,
     color: colors.textSecondary,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
     gap: 12,
   },
+  timelineRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  timelineTitle: { flexGrow: 1, flexShrink: 1, minWidth: 130, fontSize: 13, lineHeight: 20, color: colors.text, fontWeight: '600' },
+  timelineTime: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, flexShrink: 0 },
   decisionBtnRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   decisionBtn: {
     flex: 1,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
@@ -1984,6 +2203,36 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderRadius: 10,
     backgroundColor: colors.divider,
   },
+  evidencePhotoButton: { width: '100%', borderRadius: 10, overflow: 'hidden' },
+  evidenceViewerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(8, 12, 20, 0.96)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  evidenceViewerClose: {
+    position: 'absolute',
+    top: 36,
+    right: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+  },
+  evidenceViewerTitle: {
+    position: 'absolute',
+    top: 48,
+    left: 18,
+    right: 74,
+    color: colors.surface,
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '700',
+  },
+  evidenceViewerImage: { width: '100%', height: '78%' },
   evidencePlaceholder: {
     height: 120,
     borderRadius: 12,
@@ -1995,9 +2244,167 @@ const getStyles = (colors: any) => StyleSheet.create({
   evidenceError: {
     gap: 8,
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    borderRadius: 8,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    padding: 14,
+  },
+  invoiceCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 18,
+    padding: 18,
+    gap: 12,
+  },
+  invoiceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  paymentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  invoiceHeading: {
+    flexShrink: 1,
+    gap: 2,
+  },
+  invoiceEyebrow: {
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 0.8,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  invoiceLines: {
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+    paddingTop: 10,
+    gap: 10,
+  },
+  invoiceRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  invoiceItemLabel: {
+    flex: 1,
+    minWidth: 120,
+    flexShrink: 1,
+    fontSize: 13,
+    lineHeight: 20,
+    color: colors.text,
+  },
+  invoiceItemValue: {
+    flexShrink: 1,
+    fontSize: 13,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  invoiceTotalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    marginTop: 2,
+    paddingTop: 12,
+  },
+  invoiceUnknownTotal: {
+    paddingVertical: 8,
+    fontSize: 13,
+    lineHeight: 20,
+    color: colors.textSecondary,
+  },
+  statusChip: {
+    alignSelf: 'flex-start',
+    minHeight: 28,
+    justifyContent: 'center',
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 99,
+  },
+  statusChipText: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '700',
+  },
+  statusChipPaid: { backgroundColor: colors.tone.success.bg },
+  statusChipTextPaid: { color: colors.tone.success.text },
+  statusChipUnpaid: { backgroundColor: colors.tone.warning.bg },
+  statusChipTextUnpaid: { color: colors.tone.warning.text },
+  statusChipDanger: { backgroundColor: colors.tone.danger.bg },
+  statusChipTextDanger: { color: colors.tone.danger.text },
+  statusChipInfo: { backgroundColor: colors.tone.info.bg },
+  statusChipTextInfo: { color: colors.tone.info.text },
+  statusChipUnknown: { backgroundColor: colors.tone.neutral.bg },
+  statusChipTextUnknown: { color: colors.tone.neutral.text },
+  paymentCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 12,
+  },
+  cashPendingPanel: {
+    gap: 10,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.tone.warning.bg,
+    backgroundColor: colors.tone.warning.bg,
+  },
+  cashDisputedPanel: {
+    gap: 8,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.tone.danger.bg,
+    backgroundColor: colors.tone.danger.bg,
+  },
+  cashConfirmedPanel: {
+    gap: 8,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.tone.success.bg,
+    backgroundColor: colors.tone.success.bg,
+  },
+  paymentActions: {
+    gap: 10,
+    marginTop: 2,
+  },
+  paymentPrimaryButton: {
+    flex: 0,
+    alignSelf: 'stretch',
+    minHeight: 48,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+  },
+  paymentRecovery: {
+    gap: 8,
     padding: 12,
+    borderRadius: 12,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  paymentSecondaryButton: {
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: colors.primarySoft,
   },
   totalLabel: {
     fontSize: 14,

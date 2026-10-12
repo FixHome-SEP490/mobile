@@ -29,6 +29,27 @@ export type CanonicalOrderStatus =
   | 'COMPLETED'
   | 'CANCELLED';
 
+export interface HistoricalOrderItem {
+  id: string;
+  code: string;
+  status: CanonicalOrderStatus;
+  createdAt: string;
+  completedAt?: string | null;
+  cancelledAt?: string | null;
+  historical: true;
+}
+
+export type TechnicianOrderItem = ServiceOrderItem | HistoricalOrderItem;
+export interface TechnicianOrdersPage {
+  data: TechnicianOrderItem[];
+  total: number;
+}
+
+export function isHistoricalOrder(order: unknown): order is HistoricalOrderItem {
+  return typeof order === 'object' && order !== null
+    && 'historical' in order && order.historical === true;
+}
+
 export interface ServiceOrderItem {
   id: string;
   code: string;
@@ -275,6 +296,18 @@ const normalizeOrder = (order: ServiceOrderItem): ServiceOrderItem => ({
     : undefined,
 });
 
+function normalizeTechnicianOrder(order: TechnicianOrderItem): TechnicianOrderItem {
+  if (isHistoricalOrder(order)) {
+    return {
+      id: order.id, code: order.code,
+      status: String(order.status).toUpperCase() as CanonicalOrderStatus,
+      createdAt: order.createdAt, completedAt: order.completedAt ?? null,
+      cancelledAt: order.cancelledAt ?? null, historical: true,
+    };
+  }
+  return normalizeOrder(order);
+}
+
 const get = async <T>(url: string): Promise<T> =>
   unwrap<T>((await apiClient.get(url)).data);
 
@@ -289,6 +322,30 @@ const del = async (url: string): Promise<void> => {
 };
 
 export const ordersApi = {
+  async getTechnicianJobs(): Promise<TechnicianOrderItem[]> {
+    return (await get<TechnicianOrderItem[]>('/service-orders/my')).map(normalizeTechnicianOrder);
+  },
+
+  async getTechnicianJobsPage(page = 1, pageSize = 20): Promise<TechnicianOrdersPage> {
+    const safePage = toPositiveInt(page, 1);
+    const safePageSize = Math.min(toPositiveInt(pageSize, 20), 100);
+    const res = await apiClient.get('/service-orders/my', { params: { page: safePage, pageSize: safePageSize } });
+    const body = res.data as { data?: TechnicianOrderItem[]; meta?: { total?: number } } | TechnicianOrderItem[];
+    const rows = Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : null;
+    if (rows === null) {
+      throw new Error('Danh sách đơn sửa chữa từ máy chủ không hợp lệ.');
+    }
+    const total = !Array.isArray(body)
+      && typeof body?.meta?.total === 'number' && body.meta.total >= 0
+      ? body.meta.total : rows.length;
+    return { data: rows.map(normalizeTechnicianOrder), total };
+  },
+
+  async getTechnicianOrder(id: string): Promise<TechnicianOrderItem> {
+    return normalizeTechnicianOrder(await get<TechnicianOrderItem>(`/service-orders/${id}`));
+  },
+
+
   async getMyOrders(): Promise<ServiceOrderItem[]> {
     return (await get<ServiceOrderItem[]>('/service-orders/my')).map(
       normalizeOrder,

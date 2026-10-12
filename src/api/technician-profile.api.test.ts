@@ -51,3 +51,23 @@ describe('technician profile normalization', () => {
     expect(profile.serviceRadiusKm).toBeNull();
   });
 });
+
+describe.each(['raw', 'wrapped'])('service offerings %s payload', (shape) => {
+  const body = (value: unknown) => shape === 'wrapped' ? { data: value } : value;
+  beforeEach(() => jest.resetAllMocks());
+
+  it.each([
+    [],
+    [{ id: 'offering-1', serviceId: 'service-1', listedLaborPrice: 0,
+      typicalWarrantyDays: null, level: 'basic', isActive: true, verificationStatus: 'pending' }],
+  ].map((value) => [value]))('preserves genuine array %# including an empty array', async (offerings) => {
+    mockedClient.get.mockResolvedValueOnce({ data: body(offerings) });
+    await expect(technicianProfileApi.getMyServices()).resolves.toEqual(offerings);
+  });
+
+  it.each([undefined, null, {}, { services: [] }, 0, false, '', 'invalid'])
+    ('rejects malformed body %# instead of reporting no skills', async (value) => {
+      mockedClient.get.mockResolvedValueOnce({ data: body(value) });
+      await expect(technicianProfileApi.getMyServices()).rejects.toThrow();
+    });
+});

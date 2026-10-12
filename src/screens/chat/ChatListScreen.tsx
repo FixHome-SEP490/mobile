@@ -91,6 +91,9 @@ export default function ChatListScreen() {
     <TouchableOpacity
       style={styles.row}
       activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`Cuộc trò chuyện với ${item.counterpart.fullName}`}
+      accessibilityHint="Mở cuộc trò chuyện để xem tin nhắn"
       onPress={() => {
         Haptics.selectionAsync();
         navigation.navigate('ChatThread', {
@@ -149,7 +152,8 @@ export default function ChatListScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
-      {/* Header */}
+      {/* Header: conversations open only from a received or active job,
+          so there is no compose action here. */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -160,15 +164,8 @@ export default function ChatListScreen() {
         >
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chat</Text>
-        <TouchableOpacity
-          style={styles.headerBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityRole="button"
-          accessibilityLabel="Soạn tin nhắn mới"
-        >
-          <Ionicons name="create-outline" size={24} color={colors.primary} />
-        </TouchableOpacity>
+        <Text style={styles.headerTitle} accessibilityRole="header">Tin nhắn</Text>
+        <View style={styles.headerBtn} />
       </View>
 
       {/* Search Bar */}
@@ -177,17 +174,37 @@ export default function ChatListScreen() {
           <Ionicons name="search" size={20} color={colors.muted} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Tìm kiếm"
+            placeholder="Tìm kiếm tin nhắn"
             placeholderTextColor={colors.muted}
             value={searchQuery}
             onChangeText={setSearchQuery}
+            accessibilityLabel="Tìm kiếm tin nhắn"
+            returnKeyType="search"
           />
         </View>
       </View>
 
+      {!!error && !loading && conversations.length > 0 && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorBannerText} numberOfLines={2}>
+            {error}
+          </Text>
+          <TouchableOpacity
+            style={styles.retryBtn}
+            onPress={() => load('refresh')}
+            accessibilityRole="button"
+            accessibilityLabel="Thử tải lại danh sách tin nhắn"
+            activeOpacity={0.7}
+          >
+            <Text style={styles.retryBtnText}>Thử lại</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Đang tải…</Text>
         </View>
       ) : (
         <FlatList
@@ -208,6 +225,17 @@ export default function ChatListScreen() {
                 {error ??
                   'Cuộc trò chuyện sẽ mở ra sau khi bạn đặt lịch và thợ nhận được yêu cầu.'}
               </Text>
+              {!!error && (
+                <TouchableOpacity
+                  style={[styles.retryBtn, styles.emptyRetryBtn]}
+                  onPress={() => load('refresh')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Thử tải lại danh sách tin nhắn"
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.retryBtnText}>Thử lại</Text>
+                </TouchableOpacity>
+              )}
             </View>
           }
         />
@@ -229,12 +257,10 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderBottomColor: colors.border,
   },
   headerBtn: {
-    width: 60,
+    width: 44,
+    height: 44,
     alignItems: 'center',
-  },
-  headerBtnText: {
-    color: colors.primaryStrong,
-    fontSize: 17,
+    justifyContent: 'center',
   },
   headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   searchContainer: {
@@ -248,16 +274,56 @@ const getStyles = (colors: any) => StyleSheet.create({
     backgroundColor: colors.divider,
     borderRadius: 10,
     paddingHorizontal: 12,
-    height: 36,
+    minHeight: 44,
   },
   searchInput: {
     flex: 1,
     marginLeft: 8,
-    fontSize: 15,
+    fontSize: 16,
     color: colors.text,
+    paddingVertical: 10,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: colors.tone.danger.bg,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.tone.danger.text,
+  },
+  retryBtn: {
+    minWidth: 88,
+    minHeight: 44,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  retryBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primaryStrong,
+  },
+  emptyRetryBtn: { marginTop: 16 },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: colors.textSecondary,
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  listContent: { paddingVertical: 0 },
+  listContent: { paddingVertical: 4, paddingBottom: 16 },
   emptyWrap: { flexGrow: 1 },
   emptyTitle: {
     marginTop: 16,
@@ -274,6 +340,8 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 76,
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: colors.surface,
@@ -300,15 +368,15 @@ const getStyles = (colors: any) => StyleSheet.create({
   preview: { flex: 1, fontSize: 14, color: colors.textSecondary },
   previewUnread: { color: colors.text, fontWeight: '600' },
   badge: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
     paddingHorizontal: 6,
-    backgroundColor: '#EF4444',
+    backgroundColor: colors.error,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,
   },
-  badgeText: { color: colors.surface, fontSize: 11, fontWeight: '700' },
-  readOnlyTag: { marginTop: 4, fontSize: 12, color: '#F59E0B' },
+  badgeText: { color: colors.surface, fontSize: 12, fontWeight: '700' },
+  readOnlyTag: { marginTop: 4, fontSize: 12, color: colors.tone.warning.text },
 });
