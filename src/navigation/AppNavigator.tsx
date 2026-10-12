@@ -31,6 +31,10 @@ import TechnicianNotificationsScreen from '../screens/technician/TechnicianNotif
 import ChatListScreen from '../screens/chat/ChatListScreen';
 import ChatThreadScreen from '../screens/chat/ChatThreadScreen';
 
+import CustomerRoleChoiceScreen from '../screens/onboarding/CustomerRoleChoiceScreen';
+import CustomerOnboardingScreen from '../screens/onboarding/CustomerOnboardingScreen';
+import CustomerGuestHomeScreen from '../screens/guest/CustomerGuestHomeScreen';
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function AppNavigator() {
@@ -69,8 +73,11 @@ export default function AppNavigator() {
           </>
         ) : (
           <>
-            {/* Khi vừa mở app: Vào ngay Trang chủ Khách hàng (theo chuẩn Vua Thợ / Xanh SM) */}
+            {/* Display-only entry routes; preserve the existing Auth boot and role handoff. */}
             <Stack.Screen name="Auth" component={AuthNavigator} />
+            <Stack.Screen name="CustomerRoleChoice" component={CustomerRoleChoiceScreen} />
+            <Stack.Screen name="CustomerOnboarding" component={CustomerOnboardingScreen} />
+            <Stack.Screen name="CustomerGuestHome" component={CustomerGuestHomeScreen} />
             <Stack.Screen name="CustomerMain" component={CustomerNavigator} />
             <Stack.Screen name="TechnicianMain" component={TechnicianNavigator} />
             {/* Đăng ký/đăng nhập reset về màn này ngay sau setAuth, lúc nhánh vẫn là chưa đăng nhập. */}

@@ -1,6 +1,9 @@
 // src/types/navigation.types.ts
 export type RootStackParamList = {
   Auth: undefined;
+  CustomerRoleChoice: undefined;
+  CustomerOnboarding: undefined;
+  CustomerGuestHome: undefined;
   CustomerMain: undefined;
   TechnicianMain: undefined;
   CustomerServices: { query?: string; categoryCode?: string } | undefined;

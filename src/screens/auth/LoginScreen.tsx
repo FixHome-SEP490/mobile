@@ -205,6 +205,17 @@ export default function LoginScreen() {
               disabled={loading}
             />
 
+            <TouchableOpacity
+              style={[styles.forgotPasswordRow, { minHeight: 48, justifyContent: 'center' }]}
+              onPress={() => navigation.navigate('CustomerRoleChoice')}
+              disabled={loading || googleLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Khám phá dịch vụ trước khi đăng nhập"
+              accessibilityState={{ disabled: loading || googleLoading }}
+            >
+              <Text style={styles.forgotPasswordText}>Khám phá dịch vụ trước khi đăng nhập</Text>
+            </TouchableOpacity>
+
             <View style={[styles.registerRow, { marginTop: 20 }]}>
               <Text style={styles.registerText}>Chưa có tài khoản? </Text>
               <TouchableOpacity onPress={() => navigation.navigate('Register')}>
