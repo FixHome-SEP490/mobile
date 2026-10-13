@@ -2,7 +2,7 @@
 // Component rendering, device and HTTP E2E are NOT VERIFIED here.
 import { createInvitationInbox, isActionable, type InboxState } from './invitation-inbox';
 import type { InvitationItem } from '../../api/bookings.api';
-import type { OrdersPage, ServiceOrderItem } from '../../api/orders.api';
+import type { TechnicianOrdersPage, TechnicianOrderItem, ServiceOrderItem } from '../../api/orders.api';
 
 const BOOKING_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const ORDER_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
@@ -75,10 +75,10 @@ function setup(
   };
   const orders = {
     getMyOrdersPage: jest
-      .fn<Promise<OrdersPage>, [number?, number?]>()
+      .fn<Promise<TechnicianOrdersPage>, [number?, number?]>()
       .mockResolvedValue({ data: [], total: 0 }),
     getOrder: jest
-      .fn<Promise<ServiceOrderItem>, [string]>()
+      .fn<Promise<TechnicianOrderItem>, [string]>()
       .mockImplementation(async (id) =>
         makeOrder(id, auth.getUserId() ?? 'logged-out'),
       ),
@@ -384,12 +384,16 @@ it('recovers lost ACCEPT ACK from paginated own Jobs and verifies exact active a
   h.api.respondInvitation.mockRejectedValue(new Error('timeout'));
   h.orders.getMyOrdersPage
     .mockResolvedValueOnce({
-      data: [makeOrder(OTHER_ORDER_ID, owner, { bookingId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' })],
-      total: 2,
+      data: [
+        { id: 'historical-only', code: 'SO-HISTORY', status: 'COMPLETED',
+          createdAt: '2030-01-01T00:00:00Z', historical: true },
+        makeOrder(OTHER_ORDER_ID, owner, { bookingId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }),
+      ],
+      total: 3,
     })
     .mockResolvedValueOnce({
       data: [makeOrder(ORDER_ID, owner)],
-      total: 2,
+      total: 3,
     });
   h.orders.getOrder.mockResolvedValue(makeOrder(ORDER_ID, owner));
 
@@ -440,13 +444,14 @@ it('rejects wrong-booking, historical, or other-technician detail as accepted CT
   expect(h.state().acceptedOrderId).toBeNull();
 
   const h2 = setup();
-  const owner2 = h2.auth.getUserId()!;
+  // Historical summary has no technician identity or private assignment fields.
   await h2.controller.focus();
   h2.api.respondInvitation.mockResolvedValue({
     serviceOrder: { id: ORDER_ID },
   });
   h2.orders.getOrder.mockResolvedValue(
-    makeOrder(ORDER_ID, owner2, { historical: true }),
+    { id: ORDER_ID, code: 'SO-HISTORY', status: 'COMPLETED',
+      createdAt: '2030-01-01T00:00:00Z', historical: true },
   );
   await h2.controller.respond(invitation.id, 'ACCEPT');
   expect(h2.state().acceptedOrderId).toBeNull();
@@ -467,7 +472,7 @@ it('ignores stale order reconciliation after account switch', async () => {
   const h = setup();
   const owner = h.auth.getUserId()!;
   await h.controller.focus();
-  const page = deferred<OrdersPage>();
+  const page = deferred<TechnicianOrdersPage>();
   h.api.respondInvitation.mockRejectedValue(new Error('timeout'));
   h.orders.getMyOrdersPage.mockReturnValue(page.promise);
 

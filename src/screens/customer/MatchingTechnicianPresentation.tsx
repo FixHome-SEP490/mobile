@@ -118,7 +118,7 @@ export function MatchingTechnicianSkeleton() {
       testID="matching-initial-skeleton"
       accessible
       accessibilityRole="progressbar"
-      accessibilityLabel="Đang tìm kỹ thuật viên phù hợp gần bạn."
+      accessibilityLabel="Đang tải danh sách kỹ thuật viên"
       style={styles.skeletonGroup}
     >
       {[0, 1, 2].map((item) => (
@@ -134,7 +134,7 @@ export function MatchingTechnicianSkeleton() {
           </View>
         </View>
       ))}
-      <Text style={[styles.skeletonCaption, { color: colors.textSecondary }]}>Đang tìm kỹ thuật viên phù hợp gần bạn.</Text>
+      <Text style={[styles.skeletonCaption, { color: colors.textSecondary }]}>Đang tải danh sách kỹ thuật viên…</Text>
     </View>
   );
 }
@@ -201,22 +201,27 @@ export function MatchingTechnicianCard({
           <View style={styles.candidateInfo}>
             <Text style={[styles.candidateName, { color: colors.text }]}>{name}</Text>
             <Text style={[styles.priorityLabel, { color: priority ? colors.primaryStrong : colors.textSecondary }]}>
-              {priority === 1 ? 'Ưu tiên 1 · Mời trước' : priority === 2 ? 'Ưu tiên 2 · Dự phòng' : 'Chạm thẻ để xem thông tin'}
+              {priority === 1 ? 'Ưu tiên 1 · Mời trước' : priority === 2 ? 'Ưu tiên 2 · Dự phòng' : 'Xem hồ sơ'}
             </Text>
+            {candidate.isAvailable === false && (
+              <Text style={[styles.metadataText, { color: colors.textSecondary }]}>Hiện không sẵn sàng</Text>
+            )}
             <View style={styles.candidateMetadata}>
               <Text style={[styles.metadataText, { color: colors.textSecondary }]}>
                 {rating.value === null ? rating.text : `★ ${rating.text}`}
               </Text>
               {distance && (
-                <Text style={[styles.metadataText, { color: colors.textSecondary }]}>• {distance}</Text>
+                <Text style={[styles.metadataText, { color: colors.textSecondary }]}>• {distance} tham khảo</Text>
               )}
             </View>
+            {priority > 0 && <Text style={[styles.priorityLabel, { color: colors.primaryStrong }]}>Xem hồ sơ</Text>}
           </View>
         </TouchableOpacity>
         <TouchableOpacity
           testID={`matching-candidate-select-${candidate.userId}`}
           accessibilityRole="checkbox"
           accessibilityLabel={`${priority ? 'Bỏ chọn' : 'Chọn'} ${name}`}
+          accessibilityHint="Chọn tối đa 2 người theo thứ tự ưu tiên. Người thứ nhất được mời trước."
           accessibilityState={{ checked: priority > 0, disabled: selectionDisabled }}
           disabled={selectionDisabled}
           onPress={onToggleSelection}
@@ -254,6 +259,7 @@ export function MatchingTechnicianDetailSheet({
   onClose: () => void;
 }) {
   const { colors } = useAppTheme();
+  const reduceMotion = useReduceMotion(true);
   const name = candidate ? displayName(candidate) : '';
   const rating = candidate ? displayRating(candidate) : null;
   const distance = candidate ? displayDistance(candidate) : null;
@@ -368,7 +374,7 @@ export function MatchingTechnicianDetailSheet({
     <Modal
       visible={candidate != null}
       transparent
-      animationType="slide"
+      animationType={reduceMotion ? 'none' : 'slide'}
       statusBarTranslucent
       onRequestClose={onClose}
     >
@@ -399,11 +405,18 @@ export function MatchingTechnicianDetailSheet({
                 <View style={styles.detailTitleGroup}>
                   <Text style={[styles.detailTitle, { color: colors.text }]}>Thông tin kỹ thuật viên</Text>
                   <Text style={[styles.candidateName, { color: colors.text }]}>{name}</Text>
-                  <Text style={[styles.availability, { color: colors.success }]}>
+                  <Text style={[styles.availability, { color: candidate.isAvailable ? colors.success : colors.textSecondary }]}>
                     {candidate.isAvailable ? 'Có thể nhận lời mời' : 'Hiện chưa thể nhận lời mời'}
                   </Text>
                 </View>
-                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Đóng thông tin kỹ thuật viên" onPress={onClose} hitSlop={12}>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Đóng thông tin kỹ thuật viên"
+                  accessibilityHint="Đóng và quay lại danh sách kỹ thuật viên"
+                  onPress={onClose}
+                  hitSlop={12}
+                  style={styles.detailCloseButton}
+                >
                   <Ionicons name="close" size={22} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
@@ -533,6 +546,7 @@ export function MatchingTechnicianDetailSheet({
                 testID="matching-detail-select"
                 accessibilityRole="button"
                 accessibilityLabel={priority ? 'Bỏ chọn ' + name : 'Chọn ' + name}
+                accessibilityHint="Chọn tối đa 2 người theo thứ tự ưu tiên. Người thứ nhất được mời trước."
                 accessibilityState={{ selected: priority > 0, disabled: selectionDisabled }}
                 disabled={selectionDisabled}
                 onPress={onToggleSelection}
@@ -580,7 +594,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   candidateCardSelected: { borderWidth: 2 },
-  candidateBody: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 11, minHeight: 68 },
+  candidateBody: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 11, minHeight: 68 },
   candidateAvatarWrap: { position: 'relative' },
   priorityBadge: {
     position: 'absolute',
@@ -595,15 +609,15 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#FFFFFF',
   },
-  priorityBadgeText: { color: '#FFFFFF', fontSize: 10, lineHeight: 12, fontWeight: '900' },
-  candidateInfo: { flex: 1, gap: 3 },
+  priorityBadgeText: { color: '#FFFFFF', fontSize: 12, lineHeight: 16, fontWeight: '900' },
+  candidateInfo: { flex: 1, minWidth: 0, gap: 3 },
   candidateName: { fontSize: 16, lineHeight: 21, fontWeight: '700' },
   priorityLabel: { fontSize: 12, lineHeight: 17, fontWeight: '600' },
   candidateMetadata: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingTop: 1 },
   metadataText: { fontSize: 12, lineHeight: 17 },
   selectControl: {
     minWidth: 62,
-    minHeight: 36,
+    minHeight: 44,
     borderWidth: 1,
     borderRadius: 18,
     paddingHorizontal: 11,
@@ -629,6 +643,7 @@ const styles = StyleSheet.create({
   detailHandle: { width: 42, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 10 },
   detailContent: { padding: 20, paddingTop: 14, paddingBottom: 30, gap: 18 },
   detailHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  detailCloseButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   detailTitleGroup: { flex: 1, gap: 3 },
   detailTitle: { fontSize: 20, lineHeight: 28, fontWeight: '700' },
   availability: { fontSize: 13, lineHeight: 18, fontWeight: '600' },
@@ -638,7 +653,7 @@ const styles = StyleSheet.create({
   metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   metricCard: { minWidth: '30%', flexGrow: 1, borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 12, gap: 2 },
   metricValue: { fontSize: 18, lineHeight: 24, fontWeight: '800' },
-  metricLabel: { fontSize: 11, lineHeight: 16, fontWeight: '600' },
+  metricLabel: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
   bioCard: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 8 },
   bioText: { fontSize: 13, lineHeight: 20 },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
@@ -650,7 +665,7 @@ const styles = StyleSheet.create({
   reviewStateCard: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 9, alignItems: 'flex-start' },
   reviewStateText: { fontSize: 12, lineHeight: 18 },
   reviewEmptyTitle: { fontSize: 13, lineHeight: 18, fontWeight: '800' },
-  retryButton: { minHeight: 36, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
+  retryButton: { minWidth: 44, minHeight: 44, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
   retryText: { fontSize: 12, lineHeight: 17, fontWeight: '800' },
   reviewList: { gap: 10 },
   reviewCard: { borderWidth: 1, borderRadius: 14, padding: 13, gap: 9 },
@@ -659,9 +674,9 @@ const styles = StyleSheet.create({
   reviewAvatarText: { fontSize: 13, lineHeight: 17, fontWeight: '800' },
   reviewIdentity: { flex: 1, gap: 1 },
   reviewCustomer: { fontSize: 13, lineHeight: 18, fontWeight: '700' },
-  reviewDate: { fontSize: 10, lineHeight: 14 },
+  reviewDate: { fontSize: 12, lineHeight: 16 },
   reviewRatingPill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 },
-  reviewRatingText: { fontSize: 11, lineHeight: 15, fontWeight: '800' },
+  reviewRatingText: { fontSize: 12, lineHeight: 16, fontWeight: '800' },
   reviewComment: { fontSize: 12, lineHeight: 19 },
   detailAction: { minHeight: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 },
   actionText: { color: '#FFFFFF', fontSize: 15, lineHeight: 22, fontWeight: '700', textAlign: 'center' },

@@ -2,11 +2,20 @@ import {
   HOME_POPULAR_SERVICES_PAGE_SIZE,
   HOME_POPULAR_SERVICE_TARGETS,
   chunkHomePopularServices,
+  getHomePopularGridColumns,
   getHomePopularPagerLayout,
   getHomePopularPagerPage,
 } from './customer-home-pager';
 
 describe('customer home popular-services pager (NEW-CUX-27)', () => {
+  it('shows four columns at 360/390/430 dp and adapts to two for enlarged text or narrow widths', () => {
+    expect(getHomePopularGridColumns(360, 1)).toBe(4);
+    expect(getHomePopularGridColumns(390, 1)).toBe(4);
+    expect(getHomePopularGridColumns(430, 1)).toBe(4);
+    expect(getHomePopularGridColumns(390, 1.2)).toBe(2);
+    expect(getHomePopularGridColumns(359, 1)).toBe(2);
+  });
+
   it('uses four tiles per page', () => {
     expect(HOME_POPULAR_SERVICES_PAGE_SIZE).toBe(4);
   });

@@ -27,17 +27,24 @@ import TechnicianReviewsScreen from '../screens/technician/TechnicianReviewsScre
 import TechnicianScheduleScreen from '../screens/technician/TechnicianScheduleScreen';
 import TechnicianServiceAreasScreen from '../screens/technician/TechnicianServiceAreasScreen';
 import TechnicianEarningsScreen from '../screens/technician/TechnicianEarningsScreen';
+import TechnicianNotificationsScreen from '../screens/technician/TechnicianNotificationsScreen';
 import ChatListScreen from '../screens/chat/ChatListScreen';
 import ChatThreadScreen from '../screens/chat/ChatThreadScreen';
 
+import CustomerRoleChoiceScreen from '../screens/onboarding/CustomerRoleChoiceScreen';
+import CustomerOnboardingScreen from '../screens/onboarding/CustomerOnboardingScreen';
+import CustomerGuestHomeScreen from '../screens/guest/CustomerGuestHomeScreen';
+import { appEntryRoute } from './app-entry';
+import { flushAuthHandoff, rootNavigationRef } from './root-navigation';
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export default function AppNavigator() {
-  const { isAuthenticated, user } = useAuthStore();
+export default function AppNavigator({ firstRunSeen = false }: { firstRunSeen?: boolean }) {
+  const { isAuthenticated, user, sessionGeneration } = useAuthStore();
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <NavigationContainer ref={rootNavigationRef} onReady={flushAuthHandoff} onStateChange={flushAuthHandoff}>
+      <Stack.Navigator key={isAuthenticated ? `${user?.role}:${user?.id}` : 'guest'} initialRouteName={appEntryRoute(isAuthenticated, user?.role ?? null, firstRunSeen, sessionGeneration)} screenOptions={{ headerShown: false }}>
         {isAuthenticated && user?.role === UserRole.TECHNICIAN ? (
           <>
             <Stack.Screen name="TechnicianMain" component={TechnicianNavigator} />
@@ -61,20 +68,25 @@ export default function AppNavigator() {
             <Stack.Screen name="TechnicianSchedule" component={TechnicianScheduleScreen} />
             <Stack.Screen name="TechnicianServiceAreas" component={TechnicianServiceAreasScreen} />
             <Stack.Screen name="TechnicianEarnings" component={TechnicianEarningsScreen} />
+            <Stack.Screen name="TechnicianNotifications" component={TechnicianNotificationsScreen} />
             <Stack.Screen name="ChatList" component={ChatListScreen} />
             <Stack.Screen name="ChatThread" component={ChatThreadScreen} />
             <Stack.Screen name="Auth" component={AuthNavigator} />
           </>
         ) : (
           <>
-            {/* Khi vừa mở app: Vào ngay Trang chủ Khách hàng (theo chuẩn Vua Thợ / Xanh SM) */}
+            {/* Public guest routes never mount account/order/AI screens. */}
             <Stack.Screen name="Auth" component={AuthNavigator} />
+            <Stack.Screen name="CustomerRoleChoice" component={CustomerRoleChoiceScreen} />
+            <Stack.Screen name="CustomerOnboarding" component={CustomerOnboardingScreen} />
+            <Stack.Screen name="CustomerGuestHome" component={CustomerGuestHomeScreen} />
+            <Stack.Screen name="CustomerServices" component={CustomerServicesScreen} />
+            <Stack.Screen name="CustomerServiceDetail" component={CustomerServiceDetailScreen} />
+            {isAuthenticated && user?.role === UserRole.CUSTOMER && <>
             <Stack.Screen name="CustomerMain" component={CustomerNavigator} />
             <Stack.Screen name="TechnicianMain" component={TechnicianNavigator} />
             {/* Đăng ký/đăng nhập reset về màn này ngay sau setAuth, lúc nhánh vẫn là chưa đăng nhập. */}
             <Stack.Screen name="TechnicianOnboarding" component={TechnicianOnboardingScreen} />
-            <Stack.Screen name="CustomerServices" component={CustomerServicesScreen} />
-            <Stack.Screen name="CustomerServiceDetail" component={CustomerServiceDetailScreen} />
             <Stack.Screen name="CustomerAIDiagnosis" component={CustomerAIDiagnosisScreen} />
             <Stack.Screen name="CustomerBookingCreate" component={CustomerBookingCreateScreen} />
             <Stack.Screen name="CustomerAIChat" component={CustomerAIChatScreen} />
@@ -87,6 +99,7 @@ export default function AppNavigator() {
             <Stack.Screen name="TechnicianOrderDetail" component={TechnicianOrderDetailScreen} />
             <Stack.Screen name="ChatList" component={ChatListScreen} />
             <Stack.Screen name="ChatThread" component={ChatThreadScreen} />
+            </>}
           </>
         )}
       </Stack.Navigator>

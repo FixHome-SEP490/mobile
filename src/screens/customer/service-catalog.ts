@@ -1,5 +1,6 @@
 import type { ServiceItem } from '../../api/services.api';
 import { SERVICES_PAGE_SIZE } from '../../api/services.api';
+import { formatVnd } from '../../utils/format';
 
 /**
  * P0-3 trusted service-catalog flow. Lists and details come only from the
@@ -48,10 +49,6 @@ function validMoney(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
-function moneyText(value: number): string {
-  return `${value.toLocaleString('vi-VN')}đ`;
-}
-
 /**
  * Backend-only price display. Fixed price renders only when documented;
  * otherwise a documented min/max range; otherwise the honest survey fallback.
@@ -60,18 +57,18 @@ function moneyText(value: number): string {
 export function resolveServicePrice(
   service: Pick<ServiceItem, 'pricingMode' | 'fixedPrice' | 'minPrice' | 'maxPrice'> | null,
 ): ServicePriceView {
-  const fallback: ServicePriceView = { kind: 'survey', text: 'Giá sẽ được báo sau khi khảo sát' };
+  const fallback: ServicePriceView = { kind: 'survey', text: 'Cần khảo sát để xác định chi phí' };
   if (!service) return fallback;
   if (service.pricingMode === 'fixed_price') {
     const fixed = validMoney(service.fixedPrice);
-    return fixed === null ? fallback : { kind: 'fixed', text: moneyText(fixed) };
+    return fixed === null ? fallback : { kind: 'fixed', text: formatVnd(fixed) };
   }
   if (service.pricingMode === 'inspection_required') {
     const min = validMoney(service.minPrice);
     const max = validMoney(service.maxPrice);
     return min === null || max === null
       ? fallback
-      : { kind: 'range', text: `Từ ${moneyText(min)} đến ${moneyText(max)}` };
+      : { kind: 'range', text: `Từ ${formatVnd(min)} đến ${formatVnd(max)}` };
   }
   return fallback;
 }
@@ -104,6 +101,40 @@ const catalogFailedMessage = 'Không tải được danh sách dịch vụ. Vui 
 export interface CatalogPage {
   data: ServiceItem[];
   total: number;
+}
+
+/** Load every Browse row with bounded sequential requests and fail closed on an incomplete catalog. */
+export async function fetchAllCatalogServices(
+  getServices: (params: { search: string; page: number; pageSize: number; categoryId?: string }) => Promise<CatalogPage>,
+  shouldContinue: () => boolean = () => true,
+): Promise<ServiceItem[]> {
+  const pageSize = 100;
+  const maxPages = 100;
+  const rows: ServiceItem[] = [];
+  const ids = new Set<string>();
+  let total = 0;
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    if (!shouldContinue()) throw new Error('Services catalog request cancelled');
+    const result = await getServices({ search: '', page, pageSize });
+    if (!shouldContinue()) throw new Error('Services catalog request cancelled');
+    if (!Array.isArray(result?.data) || typeof result.total !== 'number' || !Number.isFinite(result.total) || result.total < 0) {
+      throw new Error('Invalid services page');
+    }
+    total = result.total;
+    if (result.data.length === 0 && rows.length < total) {
+      throw new Error('Incomplete services catalog');
+    }
+    for (const service of result.data) {
+      if (ids.has(service.id)) throw new Error('Repeated services page');
+      ids.add(service.id);
+      rows.push(service);
+    }
+    if (rows.length >= total) return rows;
+    if (page === maxPages) throw new Error('Services catalog exceeds page limit');
+  }
+
+  throw new Error('Services catalog exceeds page limit');
 }
 
 /**

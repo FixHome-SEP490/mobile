@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, TouchableOpacity } from 'react-native';
+import { Text, TextInput, TouchableOpacity } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 const ORDER_ID = '11111111-1111-4111-8111-111111111111';
@@ -157,5 +157,59 @@ describe('CustomerWarrantiesScreen', () => {
     expect(createButtons.length).toBeGreaterThan(0);
     act(() => createButtons[0].props.onPress());
     expect(tree.root.findAllByType(Text).some((node) => node.props.children === 'Mô tả sự cố')).toBe(true);
+  });
+
+  it('never presents a failed initial history GET as no warranty coverage', async () => {
+    mockGetRepairHistory.mockRejectedValueOnce(new Error('offline'));
+    const tree = await mountScreen();
+    try {
+      const labels = tree.root.findAllByType(Text).map(x => String(x.props.children ?? ''));
+      expect(labels).not.toContain('Chưa có hạng mục bảo hành');
+      expect(labels).not.toContain('Không tìm thấy kết quả');
+      expect(tree.root.findAllByType(TouchableOpacity).some(x => x.props.accessibilityLabel === 'Thử tải lại bảo hành')).toBe(true);
+      expect(mockCreateWarrantyClaim).not.toHaveBeenCalled();
+    } finally { act(() => tree.unmount()); }
+  });
+
+  it('never presents a failed coverage GET as no warranty coverage', async () => {
+    mockGetRepairHistory.mockResolvedValue({
+      data: [{ orderId: ORDER_ID, bookingId: 'booking-1', code: 'FH-001',
+        status: 'completed', serviceName: 'Vệ sinh máy lạnh', technicianName: 'Thợ A',
+        laborTotal: 0, partsTotal: 0, grandTotal: 0, completedAt: '2026-09-29T00:00:00.000Z' }],
+      total: 1,
+    });
+    mockGetOrderWarranties.mockRejectedValueOnce(new Error('offline'));
+    const tree = await mountScreen();
+    try {
+      const labels = tree.root.findAllByType(Text).map(x => String(x.props.children ?? ''));
+      expect(labels).toContain('Một số thông tin bảo hành chưa tải được. Bạn có thể kéo xuống để thử lại.');
+      expect(labels).not.toContain('Chưa có hạng mục bảo hành');
+      expect(tree.root.findAllByType(TouchableOpacity).some(x => x.props.accessibilityLabel === 'Thử tải lại bảo hành')).toBe(true);
+    } finally { act(() => tree.unmount()); }
+  });
+
+  it('explains search is limited to downloaded pages, preserving load more', async () => {
+    mockGetRepairHistory.mockResolvedValue({
+      data: [{ orderId: ORDER_ID, bookingId: 'booking-1', code: 'FH-001',
+        status: 'completed', serviceName: 'Vệ sinh máy lạnh', technicianName: 'Thợ A',
+        laborTotal: 0, partsTotal: 0, grandTotal: 0, completedAt: '2026-09-29T00:00:00.000Z' }],
+      total: 20,
+    });
+    mockGetOrderWarranties.mockResolvedValue([{ id: COVERAGE_ID, serviceOrderId: ORDER_ID,
+      note: 'Công sửa chữa', warrantyDaysSnapshot: 30,
+      startsAt: '2026-09-29T00:00:00.000Z', expiresAt: '2026-10-29T00:00:00.000Z',
+      status: 'ACTIVE' }]);
+    const tree = await mountScreen();
+    try {
+      await act(async () => tree.root.findByType(TextInput).props.onChangeText('not-in-loaded-history'));
+      const labels = tree.root.findAllByType(Text).map(x => String(x.props.children ?? ''));
+      expect(labels).toContain('Không có kết quả trong bảo hành đã tải');
+      expect(labels).toContain('Tìm kiếm chỉ áp dụng cho các đơn đã tải. Bạn có thể tải thêm để tìm tiếp.');
+      const actions = tree.root.findAllByType(TouchableOpacity);
+      expect(actions.some(x => x.props.accessibilityLabel === 'Tải thêm đơn đã hoàn tất')).toBe(true);
+      expect(actions.find(x => x.props.accessibilityLabel === 'Xóa tìm kiếm')?.props.style.minWidth).toBeGreaterThanOrEqual(44);
+      expect(mockCreateWarrantyClaim).not.toHaveBeenCalled();
+      expect(mockRespondWarrantyClaim).not.toHaveBeenCalled();
+    } finally { act(() => tree.unmount()); }
   });
 });

@@ -12,10 +12,81 @@ import type { Province, District } from '../../api/geo.api';
 export const ONBOARDING_STEPS = [
   { id: 1, title: 'Thông tin cá nhân' },
   { id: 2, title: 'Xác minh danh tính' },
-  { id: 3, title: 'Kỹ năng chuyên môn' },
-  { id: 4, title: 'Địa chỉ và khu vực' },
+  { id: 3, title: 'Kỹ năng' },
+  { id: 4, title: 'Địa chỉ & khu vực' },
   { id: 5, title: 'Gửi duyệt' },
 ] as const;
+
+export interface OnboardingStepProgress {
+  id: (typeof ONBOARDING_STEPS)[number]['id'];
+  title: string;
+  completed: boolean;
+  current: boolean;
+  reachable: boolean;
+  statusLabel: string;
+}
+
+/** Progress labels come from persisted onboarding fields; the selected screen step is not proof of completion. */
+export function getOnboardingStepProgress(
+  status: OnboardingStatusResponse,
+  selectedStep: number,
+): OnboardingStepProgress[] {
+  const clampStep = (value: number) =>
+    Number.isFinite(value) ? Math.min(5, Math.max(1, Math.trunc(value))) : 1;
+  const persistedStep = clampStep(status.currentStep);
+  const currentStep = clampStep(selectedStep);
+  const verificationStatus = status.verificationStatus?.toLowerCase();
+  const completedByStep = [
+    status.personalInfoCompleted,
+    status.kycSubmitted && verificationStatus !== 'rejected',
+    status.skillsSelected,
+    status.addressSet,
+    status.onboardingStatus === 'submitted' ||
+      status.onboardingStatus === 'approved',
+  ];
+  const reachableThrough = Math.max(persistedStep, currentStep);
+
+  return ONBOARDING_STEPS.map(({ id, title }) => {
+    const completed = completedByStep[id - 1];
+    const current = id === currentStep;
+    const statusLabel = current
+      ? completed
+        ? 'Đang xem · đã hoàn tất'
+        : 'Đang thực hiện'
+      : completed
+        ? 'Đã hoàn tất'
+        : id < persistedStep
+          ? 'Cần hoàn tất'
+          : 'Chưa bắt đầu';
+
+    return {
+      id,
+      title,
+      completed,
+      current,
+      reachable: id <= reachableThrough,
+      statusLabel,
+    };
+  });
+}
+
+/** Describes KYC from the submitted flag first; backend's default pending status alone is not a submission. */
+export function getKycSummaryLabel(
+  status: Pick<OnboardingStatusResponse, 'kycSubmitted' | 'verificationStatus'> | null | undefined,
+): string {
+  if (!status?.kycSubmitted) return 'Chưa nộp hồ sơ';
+
+  switch (status.verificationStatus?.toLowerCase()) {
+    case 'rejected':
+      return 'Cần cập nhật';
+    case 'verified':
+      return 'Đã xác minh danh tính';
+    case 'pending':
+      return 'Đang chờ duyệt';
+    default:
+      return 'Đã nộp hồ sơ';
+  }
+}
 
 export const SERVICE_RADIUS_OPTIONS_KM = [5, 10, 15, 20, 30, 40];
 

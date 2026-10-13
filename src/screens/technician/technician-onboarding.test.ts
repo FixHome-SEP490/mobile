@@ -1,7 +1,10 @@
 import {
   detectArea,
   formatDobInput,
+  getKycSummaryLabel,
+  getOnboardingStepProgress,
   keysToServiceAreas,
+  ONBOARDING_STEPS,
   parseDob,
   resolveOnboardingView,
   serviceAreasToKeys,
@@ -46,6 +49,151 @@ describe('resolveOnboardingView', () => {
     [{ onboardingStatus: 'submitted', verificationStatus: 'verified' }, 'approved'],
   ] as const)('%j -> %s', (overrides, expected) => {
     expect(resolveOnboardingView(status(overrides))).toBe(expected);
+  });
+});
+
+describe('getOnboardingStepProgress', () => {
+  it('keeps the five owner-locked titles and derives completion from saved fields', () => {
+    expect(ONBOARDING_STEPS.map((step) => step.title)).toEqual([
+      'Thông tin cá nhân',
+      'Xác minh danh tính',
+      'Kỹ năng',
+      'Địa chỉ & khu vực',
+      'Gửi duyệt',
+    ]);
+
+    const progress = getOnboardingStepProgress(
+      status({
+        currentStep: 4,
+        personalInfoCompleted: true,
+        kycSubmitted: true,
+        skillsSelected: true,
+      }),
+      4,
+    );
+
+    expect(progress.map(({ completed, current, reachable, statusLabel }) => ({
+      completed,
+      current,
+      reachable,
+      statusLabel,
+    }))).toEqual([
+      { completed: true, current: false, reachable: true, statusLabel: 'Đã hoàn tất' },
+      { completed: true, current: false, reachable: true, statusLabel: 'Đã hoàn tất' },
+      { completed: true, current: false, reachable: true, statusLabel: 'Đã hoàn tất' },
+      { completed: false, current: true, reachable: true, statusLabel: 'Đang thực hiện' },
+      { completed: false, current: false, reachable: false, statusLabel: 'Chưa bắt đầu' },
+    ]);
+  });
+
+  it('does not turn an incomplete earlier step into completed progress', () => {
+    const progress = getOnboardingStepProgress(
+      status({ currentStep: 3, personalInfoCompleted: true }),
+      3,
+    );
+
+    expect(progress[1]).toMatchObject({
+      completed: false,
+      reachable: true,
+      statusLabel: 'Cần hoàn tất',
+    });
+    expect(progress[2]).toMatchObject({
+      completed: false,
+      current: true,
+      statusLabel: 'Đang thực hiện',
+    });
+    expect(progress[3]).toMatchObject({ completed: false, reachable: false });
+  });
+
+  it('keeps rejected submission incomplete while allowing recovery through persisted steps', () => {
+    const progress = getOnboardingStepProgress(
+      status({
+        onboardingStatus: 'rejected',
+        currentStep: 5,
+        personalInfoCompleted: true,
+        kycSubmitted: true,
+        skillsSelected: true,
+        addressSet: true,
+      }),
+      1,
+    );
+
+    expect(progress[0]).toMatchObject({
+      completed: true,
+      current: true,
+      statusLabel: 'Đang xem · đã hoàn tất',
+    });
+    expect(progress[4]).toMatchObject({ completed: false, reachable: true });
+  });
+
+  it('keeps a rejected KYC submission incomplete without inventing document-level results', () => {
+    const progress = getOnboardingStepProgress(
+      status({
+        onboardingStatus: 'rejected',
+        verificationStatus: 'rejected',
+        currentStep: 5,
+        personalInfoCompleted: true,
+        kycSubmitted: true,
+        skillsSelected: true,
+        addressSet: true,
+      }),
+      2,
+    );
+
+    expect(progress[1]).toMatchObject({
+      completed: false,
+      current: true,
+      statusLabel: 'Đang thực hiện',
+    });
+    expect(progress[4]).toMatchObject({ completed: false, reachable: true });
+  });
+
+  it.each(['submitted', 'approved'] as const)(
+    'marks the review step complete only for server status %s',
+    (onboardingStatus) => {
+      const progress = getOnboardingStepProgress(
+        status({ onboardingStatus, currentStep: 5 }),
+        5,
+      );
+
+      expect(progress[4]).toMatchObject({
+        completed: true,
+        current: true,
+        statusLabel: 'Đang xem · đã hoàn tất',
+      });
+    },
+  );
+
+  it('does not infer review submission from KYC verification alone', () => {
+    const progress = getOnboardingStepProgress(
+      status({
+        onboardingStatus: 'in_progress',
+        verificationStatus: 'verified',
+        currentStep: 5,
+      }),
+      5,
+    );
+
+    expect(progress[4]).toMatchObject({ completed: false, statusLabel: 'Đang thực hiện' });
+  });
+});
+
+describe('getKycSummaryLabel', () => {
+  it('does not report the backend default pending status as submitted KYC', () => {
+    expect(getKycSummaryLabel(status())).toBe('Chưa nộp hồ sơ');
+  });
+
+  it('reports pending only after KYC was submitted', () => {
+    expect(getKycSummaryLabel(status({ kycSubmitted: true }))).toBe('Đang chờ duyệt');
+  });
+
+  it('uses the overall rejection state and actual verified status only for submitted KYC', () => {
+    expect(getKycSummaryLabel(status({ kycSubmitted: true, verificationStatus: 'rejected' })))
+      .toBe('Cần cập nhật');
+    expect(getKycSummaryLabel(status({ kycSubmitted: true, verificationStatus: 'VERIFIED' })))
+      .toBe('Đã xác minh danh tính');
+    expect(getKycSummaryLabel(status({ kycSubmitted: true, verificationStatus: 'unknown' })))
+      .toBe('Đã nộp hồ sơ');
   });
 });
 

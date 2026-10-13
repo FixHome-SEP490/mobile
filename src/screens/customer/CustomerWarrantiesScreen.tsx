@@ -450,7 +450,9 @@ export default function CustomerWarrantiesScreen() {
         <View style={styles.footerRow}>
           <TouchableOpacity
             onPress={() => navigation.navigate('CustomerOrderDetail', { serviceOrderId: group.orderId })}
+            style={styles.linkButton}
             accessibilityRole="button"
+            accessibilityLabel={`Xem đơn sửa chữa ${group.orderCode}`}
           >
             <Text style={styles.linkText}>Xem đơn sửa chữa</Text>
           </TouchableOpacity>
@@ -459,6 +461,8 @@ export default function CustomerWarrantiesScreen() {
             onPress={() => openCreateClaim(group)}
             disabled={!canCreate}
             accessibilityRole="button"
+            accessibilityLabel={`Yêu cầu bảo hành cho ${group.orderCode}`}
+            accessibilityState={{ disabled: !canCreate }}
           >
             <Ionicons name="shield-checkmark-outline" size={17} color="#FFFFFF" />
             <Text style={styles.primaryButtonText}>Yêu cầu bảo hành</Text>
@@ -478,7 +482,7 @@ export default function CustomerWarrantiesScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerCopy}>
-          <Text style={styles.headerTitle}>Bảo hành</Text>
+          <Text style={styles.headerTitle} accessibilityRole="header">Bảo hành</Text>
           <Text style={styles.headerSubtitle}>Theo dõi bảo hành theo từng đơn đã hoàn tất</Text>
         </View>
       </View>
@@ -492,9 +496,10 @@ export default function CustomerWarrantiesScreen() {
             placeholder="Tìm mã đơn, dịch vụ, kỹ thuật viên..."
             placeholderTextColor={colors.muted}
             style={styles.searchInput}
+            accessibilityLabel="Tìm trong bảo hành đã tải"
           />
           {!!query && (
-            <TouchableOpacity onPress={() => setQuery('')} accessibilityRole="button" accessibilityLabel="Xóa tìm kiếm">
+            <TouchableOpacity onPress={() => setQuery('')} style={styles.searchResetButton} accessibilityRole="button" accessibilityLabel="Xóa tìm kiếm">
               <Ionicons name="close-circle" size={20} color={colors.muted} />
             </TouchableOpacity>
           )}
@@ -512,6 +517,11 @@ export default function CustomerWarrantiesScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void loadFirst(true)} />}
         >
+          {!!query.trim() && sourceLoaded < sourceTotal && (
+            <Text style={styles.searchScopeNote}>
+              Tìm kiếm chỉ áp dụng cho các đơn đã tải. Bạn có thể tải thêm để tìm tiếp.
+            </Text>
+          )}
           {!!error && (
             <View style={styles.warningBox}>
               <Ionicons name="alert-circle-outline" size={18} color={colors.warning} />
@@ -519,7 +529,21 @@ export default function CustomerWarrantiesScreen() {
             </View>
           )}
 
-          {groups.length === 0 && sourceLoaded >= sourceTotal ? (
+          {!!error && groups.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>Chưa thể xác nhận danh sách bảo hành</Text>
+              <Text style={styles.emptyText}>Một số thông tin chưa tải được. Hãy thử lại để kiểm tra trạng thái bảo hành mới nhất.</Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={() => void loadFirst(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Thử tải lại bảo hành"
+              >
+                <Ionicons name="refresh-outline" size={18} color={colors.primary} />
+                <Text style={styles.linkText}>Thử tải lại</Text>
+              </TouchableOpacity>
+            </View>
+          ) : groups.length === 0 && sourceLoaded >= sourceTotal ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyIcon}>
                 <Ionicons name="shield-checkmark-outline" size={32} color={colors.primary} />
@@ -531,8 +555,18 @@ export default function CustomerWarrantiesScreen() {
             </View>
           ) : visibleGroups.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>Không tìm thấy kết quả</Text>
-              <Text style={styles.emptyText}>Thử tìm theo mã đơn, dịch vụ hoặc kỹ thuật viên khác.</Text>
+              <Text style={styles.emptyTitle}>
+                {query.trim() && sourceLoaded < sourceTotal
+                  ? 'Không có kết quả trong bảo hành đã tải'
+                  : sourceLoaded < sourceTotal
+                    ? 'Chưa có bảo hành trong các đơn đã tải'
+                    : 'Không tìm thấy kết quả'}
+              </Text>
+              <Text style={styles.emptyText}>
+                {sourceLoaded < sourceTotal
+                  ? 'Có thể còn hạng mục bảo hành trong những đơn chưa tải.'
+                  : 'Thử tìm theo mã đơn, dịch vụ hoặc kỹ thuật viên khác.'}
+              </Text>
             </View>
           ) : (
             visibleGroups.map(renderGroup)
@@ -544,6 +578,8 @@ export default function CustomerWarrantiesScreen() {
               onPress={() => void onLoadMore()}
               disabled={loadingMore}
               accessibilityRole="button"
+              accessibilityLabel="Tải thêm đơn đã hoàn tất"
+              accessibilityState={{ disabled: loadingMore }}
             >
               {loadingMore
                 ? <ActivityIndicator size="small" color={colors.primary} />
@@ -561,7 +597,7 @@ export default function CustomerWarrantiesScreen() {
                 <Text style={styles.modalTitle}>Yêu cầu bảo hành</Text>
                 <Text style={styles.helperText}>{claimOrder?.orderCode} · {claimOrder?.serviceName}</Text>
               </View>
-              <TouchableOpacity onPress={closeCreateClaim} disabled={claimBusy} accessibilityRole="button" accessibilityLabel="Đóng">
+              <TouchableOpacity onPress={closeCreateClaim} style={styles.modalCloseButton} disabled={claimBusy} accessibilityRole="button" accessibilityLabel="Đóng biểu mẫu bảo hành" accessibilityState={{ disabled: claimBusy }}>
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
@@ -620,6 +656,7 @@ export default function CustomerWarrantiesScreen() {
                 placeholderTextColor={colors.muted}
                 style={styles.textArea}
                 textAlignVertical="top"
+                accessibilityLabel="Mô tả sự cố cần bảo hành"
               />
               <Text style={styles.helperText}>Tối thiểu 10 ký tự. Hãy mô tả rõ hiện tượng lỗi để quá trình kiểm tra thuận tiện hơn.</Text>
               {!!claimError && <Text style={styles.errorText}>{claimError}</Text>}
@@ -651,7 +688,7 @@ export default function CustomerWarrantiesScreen() {
                 <Text style={styles.modalTitle}>{disputeClaim ? warrantyCustomerPromptCopy(disputeClaim).dispute : 'Phản đối'}</Text>
                 <Text style={styles.helperText}>{disputeClaim ? warrantyCustomerPromptCopy(disputeClaim).reason : ''}</Text>
               </View>
-              <TouchableOpacity onPress={() => !responseBusyId && setDisputeClaim(null)} accessibilityRole="button" accessibilityLabel="Đóng">
+              <TouchableOpacity onPress={() => !responseBusyId && setDisputeClaim(null)} style={styles.modalCloseButton} disabled={!!responseBusyId} accessibilityRole="button" accessibilityLabel="Đóng biểu mẫu phản đối" accessibilityState={{ disabled: !!responseBusyId }}>
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
@@ -665,6 +702,7 @@ export default function CustomerWarrantiesScreen() {
               placeholderTextColor={colors.muted}
               style={styles.textArea}
               textAlignVertical="top"
+              accessibilityLabel="Lý do phản đối kết quả bảo hành"
             />
             {!!disputeError && <Text style={styles.errorText}>{disputeError}</Text>}
             <View style={styles.modalActions}>
@@ -700,9 +738,12 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
   },
   searchInput: { flex: 1, fontSize: 14, color: colors.text, paddingVertical: 0 },
-  content: { padding: 16, paddingBottom: 40 },
+  searchResetButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  searchScopeNote: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, paddingHorizontal: 4, paddingBottom: 8 },
+  content: { padding: 16, paddingBottom: 72, flexGrow: 1 },
   centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 32 },
-  emptyState: { alignItems: 'center', paddingHorizontal: 28, paddingVertical: 56 },
+  emptyState: { alignItems: 'center', paddingHorizontal: 16, paddingVertical: 40, gap: 8 },
+  retryButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 18, borderRadius: 12, backgroundColor: colors.primarySoft, marginTop: 10 },
   emptyIcon: {
     width: 58, height: 58, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
     backgroundColor: colors.primarySoft, marginBottom: 14,
@@ -713,18 +754,18 @@ const getStyles = (colors: any) => StyleSheet.create({
     backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
     borderRadius: 18, padding: 16, marginBottom: 14,
   },
-  orderHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 14 },
+  orderHeader: { flexDirection: 'row', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 14 },
   orderHeaderCopy: { flex: 1 },
-  orderCode: { fontSize: 11, fontWeight: '800', color: colors.primary, marginBottom: 3 },
+  orderCode: { fontSize: 12, lineHeight: 18, fontWeight: '800', color: colors.primary, marginBottom: 3 },
   orderTitle: { fontSize: 16, lineHeight: 22, fontWeight: '800', color: colors.text, marginBottom: 4 },
   orderStatusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 9 },
-  orderStatusText: { fontSize: 10, fontWeight: '800' },
+  orderStatusText: { fontSize: 12, lineHeight: 17, fontWeight: '800' },
   coverageBox: { borderRadius: 14, backgroundColor: colors.background, padding: 12, gap: 8 },
   subheading: { fontSize: 13, fontWeight: '800', color: colors.text, marginBottom: 2 },
   coverageRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   coverageCopy: { flex: 1 },
   coverageTitle: { fontSize: 13, fontWeight: '700', color: colors.text },
-  coverageState: { fontSize: 11, fontWeight: '700' },
+  coverageState: { fontSize: 12, lineHeight: 18, fontWeight: '700' },
   helperText: { fontSize: 12, lineHeight: 17, color: colors.textSecondary },
   claimsWrap: { marginTop: 14, gap: 8 },
   claimCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 12, gap: 8 },
@@ -732,8 +773,8 @@ const getStyles = (colors: any) => StyleSheet.create({
   claimTitleWrap: { flex: 1 },
   claimTitle: { fontSize: 13, fontWeight: '800', color: colors.text },
   statusLine: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
-  statusText: { fontSize: 11, fontWeight: '700' },
-  dateText: { fontSize: 11, color: colors.textSecondary },
+  statusText: { fontSize: 12, lineHeight: 18, fontWeight: '700' },
+  dateText: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
   bodyText: { fontSize: 13, lineHeight: 19, color: colors.text },
   warningBox: {
     flexDirection: 'row', gap: 8, padding: 11, borderRadius: 12,
@@ -742,15 +783,16 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   warningText: { fontSize: 12, lineHeight: 17, color: colors.text },
   responseBox: { backgroundColor: colors.background, borderRadius: 10, padding: 10 },
-  responseLabel: { fontSize: 11, fontWeight: '800', color: colors.textSecondary, marginBottom: 3 },
+  responseLabel: { fontSize: 12, lineHeight: 18, fontWeight: '800', color: colors.textSecondary, marginBottom: 3 },
   customerPrompt: { borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: 10, gap: 8 },
   promptText: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: colors.text },
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   footerRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10,
     marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.divider,
   },
   linkText: { fontSize: 13, fontWeight: '700', color: colors.primary },
+  linkButton: { minHeight: 44, minWidth: 132, justifyContent: 'center', paddingHorizontal: 4 },
   primaryButton: {
     minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     paddingHorizontal: 14, borderRadius: 12, backgroundColor: colors.primary,
@@ -758,7 +800,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   primaryButtonText: { fontSize: 13, fontWeight: '800', color: '#FFFFFF' },
   disabledButton: { opacity: 0.45 },
   secondaryButton: {
-    minHeight: 42, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14,
+    minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14,
     borderRadius: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
   },
   secondaryButtonText: { fontSize: 13, fontWeight: '700', color: colors.text },
@@ -766,14 +808,15 @@ const getStyles = (colors: any) => StyleSheet.create({
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15,23,42,0.45)' },
   modalCard: {
     maxHeight: '88%', backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingHorizontal: 18, paddingTop: 18, paddingBottom: 26,
+    paddingHorizontal: 18, paddingTop: 18, paddingBottom: 44,
   },
   modalHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 16 },
   modalHeaderCopy: { flex: 1 },
+  modalCloseButton: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center' },
   modalTitle: { fontSize: 18, fontWeight: '800', color: colors.text, marginBottom: 3 },
   fieldLabel: { fontSize: 13, fontWeight: '800', color: colors.text, marginBottom: 8, marginTop: 4 },
   coverageChoice: {
-    flexDirection: 'row', alignItems: 'center', gap: 9, borderWidth: 1, borderColor: colors.border,
+    minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 9, borderWidth: 1, borderColor: colors.border,
     borderRadius: 12, padding: 11, marginBottom: 8,
   },
   textArea: {
@@ -782,5 +825,5 @@ const getStyles = (colors: any) => StyleSheet.create({
     marginBottom: 6,
   },
   errorText: { fontSize: 12, lineHeight: 17, color: colors.error, marginTop: 8 },
-  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 16 },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 8, marginTop: 16 },
 });

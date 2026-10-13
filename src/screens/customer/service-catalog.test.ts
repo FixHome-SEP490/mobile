@@ -2,6 +2,7 @@ import {
   OTHER_SERVICE_CODE,
   isOtherService,
   createServiceCatalogLoader,
+  fetchAllCatalogServices,
   createServiceDetailLoader,
   initialCatalogState,
   initialServiceDetailState,
@@ -64,7 +65,7 @@ describe('serviceDetailTarget (real UUID gate)', () => {
 describe('resolveServicePrice (Backend-only pricing display)', () => {
   it('shows the documented fixed price for fixed_price services', () => {
     expect(resolveServicePrice(catalogRow())).toMatchObject({ kind: 'fixed' });
-    expect(resolveServicePrice(catalogRow()).text).toContain('150');
+    expect(resolveServicePrice(catalogRow()).text).toBe('150.000\u00a0₫');
   });
 
   it('shows a min/max range when documented, never inventing a single price', () => {
@@ -75,8 +76,7 @@ describe('resolveServicePrice (Backend-only pricing display)', () => {
       maxPrice: 300000,
     }));
     expect(view.kind).toBe('range');
-    expect(view.text).toContain('100');
-    expect(view.text).toContain('300');
+    expect(view.text).toBe('Từ 100.000\u00a0₫ đến 300.000\u00a0₫');
   });
 
   it.each([
@@ -89,7 +89,7 @@ describe('resolveServicePrice (Backend-only pricing display)', () => {
     const service = overrides === null ? null : catalogRow(overrides as Record<string, unknown>);
     const view = resolveServicePrice(service as Parameters<typeof resolveServicePrice>[0]);
     expect(view.kind).toBe('survey');
-    expect(view.text).toBe('Giá sẽ được báo sau khi khảo sát');
+    expect(view.text).toBe('Cần khảo sát để xác định chi phí');
   });
 
   it('never promises ETA or warranty text', () => {
@@ -200,6 +200,74 @@ describe('createServiceCatalogLoader (paged search, stale-safe)', () => {
 
   it('shares the initial state shape', () => {
     expect(initialCatalogState).toMatchObject({ services: [], total: 0, page: 1, loading: true, error: null });
+  });
+});
+
+describe('fetchAllCatalogServices (complete Browse catalog)', () => {
+  const row = (id: string) => ({ ...catalogRow(), id }) as unknown as ServiceItem;
+
+  it('fetches page two when the server total is greater than 100', async () => {
+    const first = Array.from({ length: 100 }, (_, index) => row(`service-${index}`));
+    const last = row('service-100');
+    const getServices = jest.fn()
+      .mockResolvedValueOnce({ data: first, total: 101 })
+      .mockResolvedValueOnce({ data: [last], total: 101 });
+
+    await expect(fetchAllCatalogServices(getServices)).resolves.toEqual([...first, last]);
+    expect(getServices.mock.calls.map(([params]) => params)).toEqual([
+      { search: '', page: 1, pageSize: 100 },
+      { search: '', page: 2, pageSize: 100 },
+    ]);
+  });
+
+  it('does not fetch another page for the current 34-service catalog', async () => {
+    const rows = Array.from({ length: 34 }, (_, index) => row(`service-${index}`));
+    const getServices = jest.fn().mockResolvedValue({ data: rows, total: 34 });
+
+    await expect(fetchAllCatalogServices(getServices)).resolves.toEqual(rows);
+    expect(getServices).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed if a later page fails', async () => {
+    const getServices = jest.fn()
+      .mockResolvedValueOnce({ data: Array.from({ length: 100 }, (_, index) => row(`service-${index}`)), total: 101 })
+      .mockRejectedValueOnce(new Error('offline'));
+
+    await expect(fetchAllCatalogServices(getServices)).rejects.toThrow('offline');
+  });
+
+  it('does not request the next page after the Browse request becomes stale', async () => {
+    const secondPage = deferred<{ data: ServiceItem[]; total: number }>();
+    const getServices = jest.fn()
+      .mockResolvedValueOnce({ data: Array.from({ length: 100 }, (_, index) => row(`first-${index}`)), total: 201 })
+      .mockReturnValueOnce(secondPage.promise);
+    let current = true;
+    const loading = fetchAllCatalogServices(getServices, () => current);
+    await Promise.resolve();
+    await Promise.resolve();
+    current = false;
+    secondPage.resolve({ data: Array.from({ length: 100 }, (_, index) => row(`second-${index}`)), total: 201 });
+
+    await expect(loading).rejects.toThrow(/cancelled/i);
+    expect(getServices).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops when the server repeats a page instead of looping forever', async () => {
+    const repeated = row('same-service');
+    const getServices = jest.fn().mockResolvedValue({ data: [repeated], total: 101 });
+
+    await expect(fetchAllCatalogServices(getServices)).rejects.toThrow(/repeated/i);
+    expect(getServices).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails with a bounded fallback when an unreasonable catalog exceeds the page cap', async () => {
+    const getServices = jest.fn(({ page }: { page: number }) => Promise.resolve({
+      data: Array.from({ length: 100 }, (_, index) => row(`service-${page}-${index}`)),
+      total: 10001,
+    }));
+
+    await expect(fetchAllCatalogServices(getServices)).rejects.toThrow(/page limit/i);
+    expect(getServices).toHaveBeenCalledTimes(100);
   });
 });
 

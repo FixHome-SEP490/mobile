@@ -1,6 +1,9 @@
 // src/types/navigation.types.ts
 export type RootStackParamList = {
   Auth: undefined;
+  CustomerRoleChoice: undefined;
+  CustomerOnboarding: undefined;
+  CustomerGuestHome: undefined;
   CustomerMain: undefined;
   TechnicianMain: undefined;
   CustomerServices: { query?: string; categoryCode?: string } | undefined;
@@ -58,6 +61,7 @@ export type RootStackParamList = {
   TechnicianSchedule: undefined;
   TechnicianServiceAreas: undefined;
   TechnicianEarnings: undefined;
+  TechnicianNotifications: undefined;
   ChatList: undefined;
   ChatThread: {
     conversationId: string;
@@ -85,6 +89,6 @@ export type TechnicianTabParamList = {
   Home: undefined;
   Invitations: undefined;
   Jobs: undefined;
-  Notifications: undefined;
+  Wallet: undefined;
   Profile: undefined;
 };

@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-09 00:17 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: feat/technician-certificates
+> Cập nhật lần cuối: 2026-10-13 02:11 (UTC+7) · Người cập nhật (git): foxonworld · Nhánh: integration/mobile-v2-gate-review
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -94,6 +94,8 @@ Luật nghiệp vụ gốc nằm ở tài liệu dự án (bản chính thức c
 
 ### Khách hàng
 
+SEP-137/139: editor địa chỉ Booking phân biệt ghim đã xác nhận với địa chỉ đủ điều kiện lưu; tỉnh/quận thiếu được chọn rõ ràng từ GET `/geo/provinces`, không tự gán khu vực. Giữ createAddress một lần và đối chiếu GET/owner trước khi dùng địa chỉ. Booking review giữ snapshot bất biến; success hiển thị “Đã gửi yêu cầu”, chưa phải ServiceOrder. Matching giữ tối đa hai ưu tiên và lời mời tuần tự theo server. Customer Order detail hiển thị một section theo action/status hiện tại; progress sheet chỉ đọc, các controller giữ guard/readback riêng. Thanh hành động dưới scroll điều hướng đến section hiện hành, không thay thế các nút xác nhận trong section. Thiết bị và visual 320–430dp CHƯA KIỂM CHỨNG; không có POST thực trong kiểm thử.
+
 - Đặt lịch thường: Dịch vụ → Chi tiết dịch vụ → Tạo booking (địa chỉ đã lưu, ngày giờ) → `POST /bookings`.
 - Đặt lịch có AI: màn chẩn đoán nhận mô tả và tối đa 3 ảnh, chuyển sang trò chuyện với AI; AI không tự đặt lịch mà điền sẵn dịch vụ, mô tả và `aiSessionId` vào màn tạo booking.
 - Chọn đúng 2 kỹ thuật viên theo thứ tự ở màn tìm thợ.
@@ -101,6 +103,8 @@ Luật nghiệp vụ gốc nằm ở tài liệu dự án (bản chính thức c
 - Lịch sử sửa chữa, trung tâm bảo hành, hỗ trợ, chat với kỹ thuật viên, thông báo có phân trang, hồ sơ và địa chỉ có bản đồ, màn bảo mật (đổi mật khẩu bằng OTP).
 
 ### Kỹ thuật viên
+
+Lịch làm việc hiển thị bảy ngày dọc T2–CN từ GET, chỉ mở editor khi chọn ngày; hỗ trợ nhiều khung giờ và bản xem trước sao chép T2–T6, giữ T7/CN. Preset chỉ là gợi ý, mọi thay đổi lịch phải nhấn Lưu; tuần trống không tự thêm khung giờ. Khai báo nghỉ mở theo yêu cầu, chỉ dùng khoảng nghỉ trọn ngày theo API hiện tại. Trang tài khoản hai role dùng cùng nút Đăng xuất viền đỏ ở cuối nội dung cuộn, phía trên thanh tab; giữ menu riêng và logic đăng xuất hiện có. Visual QA 320–430dp và thiết bị CHƯA KIỂM CHỨNG.
 
 Onboarding năm bước (thông tin, KYC tải lên URL ký sẵn, kỹ năng, địa chỉ và khu vực, gửi duyệt), lời mời, công việc (đi đến, check-in GPS có kiểm độ chính xác, ảnh trước và sau, báo giá, chi phí phát sinh, bắt đầu sửa, yêu cầu hoàn tất, tiền mặt, linh kiện có quét QR bằng camera), ví (nạp, tài khoản ngân hàng, rút), hồ sơ (nhận việc, lịch tuần, ngày nghỉ, giá công), thu nhập, đánh giá, ghi chú riêng theo đơn (lưu trên máy).
 
@@ -128,7 +132,7 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 
 ### Các bước của thợ trong đơn (08/10/2026, nhánh `feat/technician-order-steps`)
 
-- Màn đơn của thợ: "Check-in và chụp ảnh" kiểm GPS rồi mở camera chụp sản phẩm; không còn nút "Bắt đầu sửa chữa" (backend tự chuyển, màn hiện "Đơn đang chuyển sang sửa chữa" + Tải lại); "Hoàn thành: chụp ảnh sau sửa" trước khi gửi nghiệm thu. Ảnh đơn chỉ chụp bằng camera (bỏ nút chọn từ thư viện).
+- Màn đơn của thợ: check-in phải được xác minh GPS; ảnh trước/sau tải và đối chiếu theo server. `EN_ROUTE` đủ guard chỉ cho phép mở xác nhận; nút bắt đầu sửa gọi explicit `POST /service-orders/:id/start-repair` qua controller hiện có, sau đó đọc lại đơn. Kết quả chưa rõ giữ khóa đến GET xác minh; không tự chuyển trạng thái. Footer CTA nằm ngoài vùng cuộn; progress mở riêng; xem lại ảnh không có nút xóa. Ảnh đơn chỉ chụp bằng camera.
 - Thẻ "Cần thay đổi thợ" sau check-in: nhập lý do, tạo support case `technician_replacement` (khẩn).
 
 ### Chứng chỉ khi đăng ký thợ (08/10/2026, nhánh `feat/technician-certificates`)
@@ -140,10 +144,18 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 
 Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng `WebBrowser.openAuthSessionAsync`, nhận mã sống 60 giây rồi đổi ở `/auth/google/exchange`. App không cần Google client id.
 
+### Đối chiếu source SEP-132 trên nhánh integration
+
+- `ordersApi.getMyOrdersPage` từ chối body không có mảng danh sách; mảng rỗng hợp lệ vẫn trả trang rỗng. Giữ `bookingMode`, `slot`, `customerNote`, `departAvailableAt` và parser tiền/status hiện hành.
+- `GlassTabBar` giữ liquid glass tap/pan và indicator; `TechnicianNavigator` bật `technicianResponsive`, giữ năm tab với Ví ở vị trí thứ tư và `useTechnicianLocationPing`. Thông báo/badge mở từ chuông Home. Customer dùng `CustomerAnimatedBottomBar` với bốn tab và lựa chọn đặt lịch thường/AI; lựa chọn chỉ điều hướng, không tạo booking.
+- Root giữ `TechnicianNotifications` sau guard kỹ thuật viên và `TechnicianServiceAreas`; không còn tab Notifications.
+- SEP-135/136: splash logo chạy theo bootstrap thật. Không có phiên: first-run mở chọn vai trò; tiếp tục khách hàng hoặc bỏ qua mở Guest Home, lần sau mở Guest Home. Phiên hợp lệ mở Home đúng vai trò. Guest tái sử dụng `CustomerHomeScreen`, chỉ duyệt danh mục công khai; AI, đặt lịch và tab riêng mở Auth. Logout remount về Guest; Login Back giữ đường duyệt, Khám phá mở Guest. Handoff Login/Google/OTP chờ root đăng ký route đúng phiên và vai trò.
+- Tích hợp Customer Booking Create/Detail/Matching/Order/Profile, địa chỉ chính xác, ảnh booking và recovery controller; giữ gia hạn matching và các mutation controller hiện hành. Tích hợp Technician Jobs, work-order, chat, Profile/KYC/onboarding, ví/thu nhập và test production. Các GET `getTechnicianJobs`, `getTechnicianJobsPage`, `getTechnicianOrder` dùng cùng endpoint hiện hành; history chỉ chiếu trường tóm tắt được phép, full order vẫn dùng parser tiền dev. Notifications chỉ cập nhật trạng thái đọc sau API xác nhận và chặn GET cũ ghi đè trạng thái mới. Không nhập developer preview hoặc thay dependency/Expo.
+
 ## 4. Kiến trúc và thư mục chính
 
 - `src/api/`: axios dùng chung (`client.ts`) và khoảng 20 module gọi API, có test.
-- `src/navigation/`: App, Auth, Customer, Technician navigator. Tab khách: Trang chủ, Đơn của tôi, Thông báo, Hồ sơ (thêm nút trợ lý AI). Tab kỹ thuật viên: Trang chủ, Lời mời, Công việc, Thông báo, Hồ sơ.
+- `src/navigation/`: App, Auth, Customer, Technician navigator. Tab khách: Trang chủ, Đơn của tôi, Thông báo, Hồ sơ (thêm nút trợ lý AI). Tab kỹ thuật viên: Trang chủ, Lời mời, Công việc, Ví, Hồ sơ. Chuông Home mở Thông báo.
 - `src/screens/`: `auth`, `chat`, `customer`, `technician`. Logic thuần đặt trong file `kebab-case.ts` cạnh màn hình, có `.test.ts` đi kèm.
 - `src/services/`: `storage.service.ts` (SecureStore), `chat-socket.service.ts`, `google-auth.service.ts`, `image-for-ai.ts` (thu ảnh về 1280 px, base64).
 - `src/store/`: Zustand `auth.store`, `badge.store`, `ui.store`.
@@ -152,7 +164,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 5. Hợp đồng với repo khác
 
-- REST tới `backend` qua `EXPO_PUBLIC_API_BASE_URL`; để trống thì dùng `http://10.0.2.2:3000/api/v1` trên Android emulator và `http://localhost:3000/api/v1` nơi khác. Token lưu bằng `expo-secure-store`, không dùng AsyncStorage cho thông tin đăng nhập.
+- REST tới `backend` qua `EXPO_PUBLIC_API_BASE_URL`; override rõ ràng luôn ưu tiên. Native development suy ra host LAN từ Expo/Metro và dùng cổng backend mặc định; Web giữ localhost, Android emulator với Metro loopback giữ bridge emulator. Không suy ra host từ tunnel hoặc ở production. Token vẫn lưu bằng `expo-secure-store`; session refresh không đổi.
 - Gặp 401 thì gọi một lần `POST /auth/refresh` dùng chung; chỉ chạy lại yêu cầu GET, HEAD, OPTIONS, không tự chạy lại thao tác ghi.
 - Danh sách gửi `page` và `pageSize` hoặc `limit` không quá 100; `status` viết thường đúng enum.
 - Socket.IO tới `{origin}/chat` (origin là base URL bỏ `/api/v1`), chỉ dùng cho chat: gửi `conversation:join`, `typing`; nhận `message:*`, `conversation:updated`, `typing`; tự vào lại phòng khi kết nối lại.
@@ -162,7 +174,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 6. Chạy, kiểm thử và cổng chất lượng
 
-- Node 22.13 trở lên (`.nvmrc` 22.15.0). `npm ci`, `npm start`, quét mã QR bằng Expo Go. Dùng backend trên máy khác trong mạng LAN: đặt `EXPO_PUBLIC_API_BASE_URL=http://<LAN-IP>:3000/api/v1` rồi khởi động lại Metro (thêm `--clear` nếu bundle cũ). Đăng nhập Google trên Android emulator cần `adb reverse tcp:3000 tcp:3000`.
+- Node 22.13 trở lên (`.nvmrc` 22.15.0). `npm ci`, `npm start`, quét mã QR LAN bằng Expo Go. Backend cùng máy với Metro: để trống `EXPO_PUBLIC_API_BASE_URL` như `.env.example`. Backend máy khác, cổng khác hoặc Expo tunnel: cấu hình URL rõ ràng trong env cục bộ không theo dõi; coordinator khởi động lại Metro hiện có khi đổi env. Đăng nhập Google trên Android emulator cần `adb reverse tcp:3000 tcp:3000`.
 - Cài thư viện native bằng `npx expo install`, không eject hay prebuild.
 - Gate trước mỗi commit: `npm run check:expo`, `npm run lint`, `npm run typecheck`, `npm test`. CI chạy đúng các bước này.
 - Quy trình nhánh: tách nhánh từ `dev`, PR vào `dev`, CI xanh mới merge; không merge vào `main`.
@@ -179,15 +191,35 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 8. Việc đang dở và rủi ro đã biết
 
+- SEP-135/136 Auth được phép triển khai: first-run, session bootstrap và logout dùng root stack theo phiên/vai trò. Backend source xác nhận login `identifier` nhận email hoặc số điện thoại; UI phản ánh đúng contract. Không đổi token storage, interceptor refresh hoặc quyền Backend. Kiểm tra đăng nhập trên iPhone thật còn CHƯA KIỂM CHỨNG.
+- FH-MAIN-01 HOLD Finance: `src/api/orders.api.ts` giữ `toMoney` dev; các test WIP yêu cầu từ chối null/invalid monetary fields trong `src/api/orders.api.test.ts` chưa nhập, cần Finance owner quyết định trước khi đổi parser. Test GET history/privacy và malformed page đã nhập. Glass giữ liquid glass, responsive opt-in và năm tab Technician; bổ sung prop nhãn tùy chọn, chưa bật trên Technician.
+- SEP-139: Mobile nối thao tác bắt đầu sửa qua endpoint hiện có và readback; Backend vẫn là nguồn quyết định. UI một section Customer/Technician, progress sheet và footer sticky đã được cập nhật source. Technician có scene full-details riêng, giữ bước trước đó khi đóng bằng nút Back hoặc Android Back. Tương tác thiết bị, bố cục thực tế và parity Web CHƯA KIỂM CHỨNG; reviewer cần xác nhận trước khi đóng. `src/screens/technician/technician-onboarding.ts` giữ bán kính tối đa 40 km và lời nhắc đến trụ sở.
+- FH-MAIN-01: Web parity, visual/runtime và thiết bị/E2E CHƯA KIỂM CHỨNG; coordinator làm QA cuối và Git. Không khởi động hoặc dừng Expo/backend. Giữ mapping asset tối ưu hiện có; không nhập hai ảnh onboarding legacy vì runtime đã dùng asset tương đương được theo dõi.
+
 - Thay đổi ngày 07/10/2026 mới chạy gate, CHƯA KIỂM CHỨNG trên thiết bị (ảnh đại diện kỹ thuật viên, nút gửi AI, ví).
-- Mở lại app khi đã có token, khách có thể rơi vào màn đăng nhập vì nhánh không phải kỹ thuật viên bắt đầu ở `Auth`. CHƯA KIỂM CHỨNG trên thiết bị.
-- Chưa có push notification (`expo-notifications` đã cài nhưng chưa dùng); booking thường chưa gửi kèm ảnh; khu vực phục vụ chỉ đặt được trong onboarding.
+- SEP-136: một màn Lịch làm việc chứa editor khung giờ tuần theo ngày, preset/giờ chính xác, ngày nghỉ với chọn ngày và lịch đơn hiện có. Một màn Khu vực hoạt động chứa vị trí/bán kính và quận/huyện. Giữ payload lưu hiện hành, ngày tuần Sunday=0, khoảng giờ đã lưu, giới hạn 40 km, GPS/camera và tài chính. Bàn phím/safe area đã xử lý trong source; thiết bị còn CHƯA KIỂM CHỨNG.
+- Chưa có push notification (`expo-notifications` đã cài nhưng chưa dùng); ảnh booking đã có upload adapter/controller nhưng runtime CHƯA KIỂM CHỨNG; khu vực phục vụ có màn chỉnh sau onboarding.
 - Chưa có cấu hình EAS, bundle id, hay `linking` cho deep link ngoài luồng Google.
 - Các hàm API chưa dùng: `completeRepair`, `payInvoice`, `getStatusHistory`, `getWarranties`.
 - Repo đang theo dõi `CLAUDE.md` và `.claude/settings.json` từ commit đầu; luật chung của nhóm không đưa cấu hình công cụ AI vào repo. Chờ PO quyết có gỡ hay không.
 - Tài liệu audit ngày 23 và 24/09 trong `docs/` là ảnh chụp lịch sử, không phản ánh hiện trạng.
 
 ## 9. Nhật ký cập nhật context
+
+- 2026-10-13 02:11 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | SEP-139 Technician mở toàn bộ chi tiết thành scene riêng, Back khôi phục chính xác bước trước; thêm regression test, device QA còn chờ.
+
+- 2026-10-13 02:04 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | SEP-139 nối explicit start-repair và readback, chuyển order detail sang stage/action hiện hành với progress sheet; full-details, thiết bị và review cuối còn CHƯA KIỂM CHỨNG.
+
+- 2026-10-13 00:48 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | SEP-137 bổ sung hoàn thiện khu vực địa chỉ Booking, rút gọn Booking/Matching và timeline Customer Order theo dữ kiện GET, giữ toàn bộ chi tiết và safety controllers.
+
+- 2026-10-12 23:42 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | SEP-136 đổi lịch tuần dọc, editor theo yêu cầu và sao chép bản nháp T2–T6; đồng bộ account shell và nút đăng xuất cuối scroll của hai role, giữ API và auth guards.
+
+- 2026-10-12 23:03 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | SEP-135 sửa API native dev theo host Metro; SEP-136 triển khai first-run/Guest Home dùng chung, handoff auth, lịch/khu vực hợp nhất và tab Ví; giữ guard dev, thiết bị chờ QA.
+
+- 2026-10-12 21:52 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | Tích hợp source production Customer và Technician, GET history an toàn, giữ guard dev và ghi hunk Auth/Finance/workflow HOLD cùng giới hạn QA.
+
+- 2026-10-12 21:10 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | Port UI demo hai vai trò, giới thiệu/Guest qua Login và hai thanh tab, giữ API dev, role handoff, các gate Auth/Finance và thiết bị chưa kiểm chứng.
+- 2026-10-12 20:45 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | Đối chiếu source SEP-132: page fail-closed, glass responsive opt-in, route thông báo thợ và các gate Auth/Finance còn chờ.
 
 - 2026-10-09 00:17 (UTC+7) | ToanAltF4 | feat/technician-certificates | Đăng ký thợ: chứng chỉ không bắt buộc (bản công chứng), câu nhắc đến trụ sở sau khi nộp hồ sơ.
 - 2026-10-09 00:08 (UTC+7) | ToanAltF4 | feat/technician-order-steps | Thợ: check-in mở camera chụp sản phẩm, bỏ nút bắt đầu sửa, hoàn thành kèm ảnh, chỉ dùng camera, nút cần thay đổi thợ.

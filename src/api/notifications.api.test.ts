@@ -93,12 +93,12 @@ describe('notificationsApi', () => {
     await expect(notificationsApi.getNotificationRows()).rejects.toThrow();
   });
 
-  it('unwraps unread count and clamps malformed count to zero', async () => {
+  it('unwraps unread count and rejects a negative count', async () => {
     api.get.mockResolvedValueOnce({ data: { data: { count: 4 } } });
     await expect(notificationsApi.getCountUnread()).resolves.toBe(4);
 
     api.get.mockResolvedValueOnce({ data: { data: { count: -1 } } });
-    await expect(notificationsApi.getCountUnread()).resolves.toBe(0);
+    await expect(notificationsApi.getCountUnread()).rejects.toThrow();
   });
 
   it('uses the existing read endpoints', async () => {
@@ -109,5 +109,23 @@ describe('notificationsApi', () => {
 
     expect(api.patch).toHaveBeenNthCalledWith(1, `/notifications/${ID}/read`);
     expect(api.patch).toHaveBeenNthCalledWith(2, '/notifications/read-all');
+  });
+});
+
+describe.each(['raw', 'wrapped'])('unread count %s payload', (shape) => {
+  const body = (value: unknown) => shape === 'wrapped' ? { data: value } : value;
+
+  it.each([0, 1, 42])('preserves genuine integer %s', async (count) => {
+    api.get.mockResolvedValueOnce({ data: body({ count }) });
+    await expect(notificationsApi.getCountUnread()).resolves.toBe(count);
+  });
+
+  it.each([
+    undefined, null, {}, [], 0, 'invalid',
+    ...[undefined, null, -1, 1.5, NaN, Infinity, -Infinity, '', ' ', '0', '4', true, {}, []]
+      .map((count) => ({ count })),
+  ].map((value) => [value]))('rejects malformed body %# instead of reporting zero', async (value) => {
+    api.get.mockResolvedValueOnce({ data: body(value) });
+    await expect(notificationsApi.getCountUnread()).rejects.toThrow();
   });
 });

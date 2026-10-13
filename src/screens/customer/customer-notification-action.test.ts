@@ -103,6 +103,24 @@ describe('prepareCustomerNotificationAction', () => {
     expect(d.getSupportCase).not.toHaveBeenCalled();
   });
 
+  it('does not claim a single notification read before PATCH confirmation', async () => {
+    const d = deps();
+    let confirm!: () => void;
+    d.markReadRemote.mockReturnValueOnce(new Promise<void>((resolve) => { confirm = resolve; }));
+    const item = row({ referenceType: 'BOOKING', referenceId: BOOKING_ID });
+    await expect(prepareCustomerNotificationAction(item, d)).resolves.toEqual({
+      name: 'CustomerBookingDetail',
+      params: { bookingId: BOOKING_ID },
+    });
+    expect(d.markReadRemote).toHaveBeenCalledWith(item.id);
+    expect(d.markReadLocal).not.toHaveBeenCalled();
+    confirm();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(d.markReadLocal).toHaveBeenCalledTimes(1);
+    expect(d.markReadLocal).toHaveBeenCalledWith(item.id);
+  });
+
   it('reports remote read failure without blocking a safe direct target', async () => {
     const d = deps();
     const error = new Error('offline');
@@ -117,5 +135,6 @@ describe('prepareCustomerNotificationAction', () => {
     });
     await Promise.resolve();
     expect(d.onMarkReadError).toHaveBeenCalledWith(error);
+    expect(d.markReadLocal).not.toHaveBeenCalled();
   });
 });

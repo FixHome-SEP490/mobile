@@ -8,7 +8,7 @@ import {
 import { technicianJobsUserId } from './technician-jobs-loader';
 import { resolveOrderDetailSections } from '../customer/customer-order-detail';
 import { UserRole, type UserInfo } from '../../types/auth.types';
-import type { ServiceOrderItem } from '../../api/orders.api';
+import type { ServiceOrderItem, TechnicianOrderItem, HistoricalOrderItem } from '../../api/orders.api';
 import type { OrderDetailState } from '../customer/customer-order-detail';
 
 const ORDER_ID = '11111111-1111-4111-8111-111111111111';
@@ -22,7 +22,7 @@ const order = (overrides: Partial<ServiceOrderItem> = {}): ServiceOrderItem => (
   ...overrides,
 } as ServiceOrderItem);
 
-const historicalRow = () => ({
+const historicalRow = (): HistoricalOrderItem & { customerName: string; customerPhone: string; addressSummary: string; bookingId: string; laborTotal: number; grandTotal: number } => ({
   id: ORDER_ID, code: 'SO-1', status: 'COMPLETED', createdAt: '2030-10-20T09:00:00Z',
   completedAt: '2030-10-21T12:00:00Z', cancelledAt: null, historical: true,
   customerName: 'LEAK', customerPhone: 'LEAK', addressSummary: 'LEAK', bookingId: 'LEAK',
@@ -45,7 +45,7 @@ function setup() {
     subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
     change(id: string | null) { userId = id; listeners.forEach((listener) => listener()); },
   };
-  const getOrder = jest.fn<Promise<ServiceOrderItem>, [string]>().mockResolvedValue(order());
+  const getOrder = jest.fn<Promise<TechnicianOrderItem>, [string]>().mockResolvedValue(order());
   const write = jest.fn<void, [OrderDetailState]>();
   const loader = createTechOrderDetailLoader(getOrder, write, session);
   const state = () => write.mock.calls[write.mock.calls.length - 1][0];
@@ -95,7 +95,7 @@ describe('technician detail loader (production)', () => {
 
   it('suppresses a historical GET response without rendering any private fields', async () => {
     const h = setup();
-    h.getOrder.mockResolvedValue(historicalRow() as unknown as ServiceOrderItem);
+    h.getOrder.mockResolvedValue(historicalRow());
     await h.loader.focus(ORDER_ID);
     expect(h.getOrder).toHaveBeenCalledWith(ORDER_ID);
     expect(h.state().order).toBeNull();
@@ -253,7 +253,7 @@ describe('refreshVerified receipt on the tech loader (review remediation)', () =
   it('resolves false for a historical GET response without leaking private fields', async () => {
     const h = setup();
     await h.loader.focus(ORDER_ID);
-    h.getOrder.mockResolvedValueOnce(historicalRow() as unknown as ServiceOrderItem);
+    h.getOrder.mockResolvedValueOnce(historicalRow());
     await expect(h.loader.refreshVerified()).resolves.toBe(false);
     expect(h.state().order).toBeNull();
     expect(JSON.stringify(h.state())).not.toMatch(/LEAK/);
@@ -275,4 +275,14 @@ describe('refreshVerified receipt on the tech loader (review remediation)', () =
     gate.resolve(order());
     await expect(attempt).resolves.toBe(false);
   });
+});
+
+it('clears active private detail and refuses a verified receipt when assignment becomes historical', async () => {
+  const h = setup();
+  await h.loader.focus(ORDER_ID);
+  h.getOrder.mockResolvedValue({ id: ORDER_ID, code: 'H', status: 'COMPLETED',
+    createdAt: '2030-10-20T09:00:00Z', historical: true });
+  expect(await h.loader.refreshVerified()).toBe(false);
+  expect(h.state()).toMatchObject({ order: null, loading: false, refreshing: false });
+  expect(h.state().error).toContain('tóm tắt lưu trữ');
 });

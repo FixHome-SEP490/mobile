@@ -466,7 +466,7 @@ export default function CustomerAIChatScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerTitleBox}>
-          <Text style={styles.headerTitle}>Trợ lý FixHome</Text>
+          <Text style={styles.headerTitle} accessibilityRole="header">Trợ lý FixHome</Text>
           <Text style={styles.headerSubtitle}>
             {turnCount > 0
               ? `Đang nhớ cuộc trò chuyện · quên sau ${SESSION_IDLE_MINUTES} phút`
@@ -480,6 +480,8 @@ export default function CustomerAIChatScreen() {
           hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           accessibilityRole="button"
           accessibilityLabel="Bắt đầu phiên chat mới"
+          accessibilityState={{ disabled: turnCount === 0 }}
+          accessibilityHint="Xóa ngữ cảnh của cuộc trò chuyện hiện tại khi bắt đầu phiên mới"
         >
           <Ionicons
             name="refresh"
@@ -518,6 +520,9 @@ export default function CustomerAIChatScreen() {
             <TouchableOpacity
               style={styles.pinnedBtn}
               activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Xem dịch vụ ${pinnedService.nameVi} để tiếp tục đặt lịch`}
+              accessibilityHint="Mở bước lựa chọn dịch vụ; chưa tạo yêu cầu đặt lịch"
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 goToBooking(pinnedService);
@@ -547,14 +552,14 @@ export default function CustomerAIChatScreen() {
                   }}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   accessibilityRole="button"
-                  accessibilityLabel="Bỏ ảnh này"
+                  accessibilityLabel={`Bỏ ảnh thứ ${index + 1}`}
                 >
                   <Ionicons name="close" size={12} color={colors.surface} />
                 </TouchableOpacity>
               </View>
             ))}
             <Text style={styles.trayHint}>
-              {pendingImages.length}/{AI_MAX_IMAGES} ảnh
+              {`${pendingImages.length}/${AI_MAX_IMAGES} ảnh`}
             </Text>
           </ScrollView>
         )}
@@ -587,7 +592,9 @@ export default function CustomerAIChatScreen() {
           <TextInput
             style={styles.input}
             placeholder="Nhà mình đang gặp vấn đề gì ạ?"
-            placeholderTextColor="#000000"
+            placeholderTextColor={colors.muted}
+            accessibilityLabel="Nhắn tin cho trợ lý FixHome"
+            accessibilityHint="Mô tả thiết bị hoặc hiện tượng cần tư vấn trước khi gửi"
             value={input}
             onChangeText={setInput}
             multiline
@@ -600,7 +607,7 @@ export default function CustomerAIChatScreen() {
             }}
             disabled={!canSend}
             accessibilityRole="button"
-            accessibilityLabel="Gửi"
+            accessibilityLabel="Gửi tin nhắn cho trợ lý"
             accessibilityState={{ disabled: !canSend, busy: isThinking }}
             accessibilityHint={needsDescription ? AI_DESCRIPTION_REQUIRED_HINT : undefined}
           >
@@ -738,6 +745,9 @@ function DiagnosisCard({
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             onBook(service);
           }}
+          accessibilityRole="button"
+          accessibilityLabel={`Tiếp tục chọn lịch với dịch vụ ${service.nameVi}`}
+          accessibilityHint="Mở bước chọn dịch vụ; chưa đặt lịch tự động"
         >
           <Ionicons name="calendar-outline" size={16} color={colors.surface} />
           <Text style={styles.bookBtnText}>Đặt thợ · {service.nameVi}</Text>
@@ -783,24 +793,24 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
     paddingVertical: 10,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   headerBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerBtnMuted: { opacity: 0.5 },
   headerTitleBox: { flex: 1, paddingHorizontal: 4 },
   headerTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
-  headerSubtitle: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
+  headerSubtitle: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, marginTop: 3 },
 
-  listContent: { paddingVertical: 16, paddingBottom: 24 },
+  listContent: { paddingVertical: 18, paddingBottom: 28 },
 
   bubble: {
     maxWidth: '100%',
@@ -863,7 +873,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   section: { marginTop: 10 },
   sectionLabel: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.textSecondary,
     textTransform: 'uppercase',
@@ -919,9 +929,10 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   priceLabel: { fontSize: 12, color: colors.textSecondary },
   priceValue: { fontSize: 15, fontWeight: '800', color: colors.text },
-  priceNote: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
+  priceNote: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, marginTop: 5 },
 
   bookBtn: {
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -933,7 +944,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   bookBtnText: { color: colors.surface, fontWeight: '700', fontSize: 14 },
 
-  disclaimer: { fontSize: 10, color: colors.muted, marginTop: 10, lineHeight: 15 },
+  disclaimer: { fontSize: 12, color: colors.textSecondary, marginTop: 12, lineHeight: 19 },
 
   pinnedBar: {
     flexDirection: 'row',
@@ -947,15 +958,16 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   pinnedText: { flex: 1 },
   pinnedLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.primaryDark,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   pinnedValue: { fontSize: 14, fontWeight: '700', color: colors.text, marginTop: 2 },
-  pinnedHint: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
+  pinnedHint: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, marginTop: 3 },
   pinnedBtn: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -967,26 +979,26 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   pinnedBtnText: { color: colors.surface, fontWeight: '700', fontSize: 13 },
 
   tray: {
-    maxHeight: 86,
+    maxHeight: 116,
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  trayContent: { alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
-  trayItem: { width: 64, height: 64 },
-  trayThumb: { width: 64, height: 64, borderRadius: 10, backgroundColor: colors.border },
+  trayContent: { alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, gap: 10 },
+  trayItem: { width: 88, height: 88 },
+  trayThumb: { width: 80, height: 80, borderRadius: 13, backgroundColor: colors.border },
   trayRemove: {
     position: 'absolute',
     top: -4,
     right: -4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.text,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  trayHint: { fontSize: 11, color: colors.textSecondary, marginLeft: 4 },
+  trayHint: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, marginLeft: 4 },
   descriptionHint: {
     fontSize: 12,
     color: colors.tone.warning.text,
@@ -997,6 +1009,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   composer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
+    gap: 3,
     paddingHorizontal: 8,
     paddingVertical: 8,
     backgroundColor: colors.surface,
@@ -1004,7 +1017,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     borderTopColor: colors.border,
   },
   composerBtn: {
-    width: 40,
+    width: 44,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1013,7 +1026,9 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     flex: 1,
     minHeight: 44,
     maxHeight: 120,
-    backgroundColor: colors.border,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: 22,
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 12 : 8,

@@ -10,7 +10,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AlertTriangle, Bell, BellOff, Briefcase, CheckCheck, Tag, Wallet } from 'lucide-react-native';
+import { AlertTriangle, Bell, BellOff, Briefcase, CheckCheck, ChevronLeft, Tag, Wallet } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
@@ -43,7 +43,7 @@ function pageItems(res: Awaited<ReturnType<typeof notificationsApi.getNotificati
   if (!res.success) return null;
   if (res.data && Array.isArray(res.data.data)) return res.data.data;
   if (Array.isArray(res.data)) return res.data;
-  return [];
+  return null;
 }
 
 export default function TechnicianNotificationsScreen() {
@@ -62,14 +62,35 @@ export default function TechnicianNotificationsScreen() {
   // Day grouping is evaluated at fetch time (render must stay pure).
   const [loadedAt, setLoadedAt] = useState(0);
   const pageRef = useRef(1);
+  const pendingReadIdsRef = useRef(new Set<string>());
+  const mutationEpochRef = useRef(0);
+  const countRequestRef = useRef(0);
+  const feedEpochRef = useRef(0);
+  const firstPageRequestRef = useRef(0);
+  const firstPagePendingRef = useRef(false);
+  const moreRequestRef = useRef<object | null>(null);
+  const markingAllRef = useRef(false);
 
   const syncUnreadCount = useCallback(() => {
-    notificationsApi.getCountUnread().then(setUnreadCount).catch(() => {});
+    const request = ++countRequestRef.current;
+    const epoch = mutationEpochRef.current;
+    void notificationsApi.getCountUnread().then((count) => {
+      if (request === countRequestRef.current && epoch === mutationEpochRef.current) {
+        setUnreadCount(count);
+      }
+    }).catch(() => {});
   }, [setUnreadCount]);
 
   const fetchFirstPage = useCallback(async () => {
+    const epoch = ++feedEpochRef.current;
+    const request = ++firstPageRequestRef.current;
+    firstPagePendingRef.current = true;
+    // A refresh replaces the paging session, including any pending next page.
+    moreRequestRef.current = null;
+    setLoadingMore(false);
     try {
       const items = pageItems(await notificationsApi.getNotifications(1, PAGE_SIZE));
+      if (epoch !== feedEpochRef.current) return;
       if (items === null) {
         setLoadError(LOAD_ERROR);
       } else {
@@ -82,10 +103,14 @@ export default function TechnicianNotificationsScreen() {
       }
     } catch {
       // A failed load is not an empty inbox: keep the last list and show retry.
-      setLoadError(LOAD_ERROR);
+      if (epoch === feedEpochRef.current) setLoadError(LOAD_ERROR);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      // A confirmed PATCH invalidates rows, but this request still owns its spinner.
+      if (request === firstPageRequestRef.current) {
+        firstPagePendingRef.current = false;
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [syncUnreadCount]);
 
@@ -99,37 +124,64 @@ export default function TechnicianNotificationsScreen() {
     void fetchFirstPage();
   };
 
+  const onBackPress = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    navigation.navigate('TechnicianMain');
+  };
+
   const onEndReached = async () => {
-    if (!hasMore || loadingMore || loading || refreshing) return;
+    if (!hasMore || moreRequestRef.current || firstPagePendingRef.current || loading || refreshing) return;
+    const request = {};
+    moreRequestRef.current = request;
+    const epoch = feedEpochRef.current;
     setLoadingMore(true);
     try {
       const next = pageRef.current + 1;
       const items = pageItems(await notificationsApi.getNotifications(next, PAGE_SIZE));
-      if (items === null) return;
+      if (epoch !== feedEpochRef.current) return;
+      if (items === null) {
+        setLoadError(LOAD_ERROR);
+        return;
+      }
       pageRef.current = next;
       setNotifications((prev) => mergeNotificationPage(prev, items));
       setHasMore(items.length >= PAGE_SIZE);
+      setLoadError(null);
     } catch {
       // Keep what is loaded; scrolling to the end again retries.
+      if (epoch === feedEpochRef.current) setLoadError(LOAD_ERROR);
     } finally {
-      setLoadingMore(false);
+      if (request === moreRequestRef.current) {
+        moreRequestRef.current = null;
+        setLoadingMore(false);
+      }
     }
   };
 
   const [markingAll, setMarkingAll] = useState(false);
+  // Huy hiệu chỉ từ hai nguồn server đã xác nhận: /unread-count và cờ
+  // isRead của trang đã tải. Không tự suy diễn push hay unread khác.
   const localUnread = notifications.filter((n) => n.isRead === false).length;
   const totalUnread = Math.max(unreadCount, localUnread);
 
   const onMarkAllRead = async () => {
-    if (markingAll) return;
+    if (loading || markingAllRef.current) return;
+    markingAllRef.current = true;
     setMarkingAll(true);
     try {
       await notificationsApi.readAll();
+      // Only confirmed mutations invalidate GETs; no optimistic read/count changes.
+      mutationEpochRef.current += 1;
+      feedEpochRef.current += 1;
       setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
       setUnreadCount(0);
     } catch {
       setLoadError('Không thể đánh dấu đã đọc. Vui lòng thử lại.');
     } finally {
+      markingAllRef.current = false;
       setMarkingAll(false);
     }
   };
@@ -138,15 +190,24 @@ export default function TechnicianNotificationsScreen() {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead } : n)));
 
   const onNotificationPress = (item: NotificationItem) => {
-    if (item.isRead === false && item.id) {
+    if (item.isRead === false && item.id && !pendingReadIdsRef.current.has(item.id)) {
       const id = item.id;
-      setRead(id, true);
-      setUnreadCount(unreadCount - 1);
-      notificationsApi.readNotification(id).catch(() => {
-        // Roll back so the badge never claims something the server has not recorded.
-        setRead(id, false);
-        syncUnreadCount();
-      });
+      pendingReadIdsRef.current.add(id);
+
+      void notificationsApi.readNotification(id)
+        .then(() => {
+          mutationEpochRef.current += 1;
+          feedEpochRef.current += 1;
+          setRead(id, true);
+          pendingReadIdsRef.current.delete(id);
+          syncUnreadCount();
+        })
+        .catch(() => {
+          // Keep unread state until the server confirms the PATCH.
+          pendingReadIdsRef.current.delete(id);
+          setLoadError('Không thể đánh dấu đã đọc. Vui lòng thử lại.');
+          syncUnreadCount();
+        });
     }
     const serviceOrderId = technicianNotificationOrderId(item);
     if (serviceOrderId) navigation.navigate('TechnicianOrderDetail', { serviceOrderId });
@@ -157,6 +218,7 @@ export default function TechnicianNotificationsScreen() {
   const renderItem = ({ item }: { item: NotificationItem }) => {
     const isUnread = item.isRead === false;
     const { tone, Icon } = TYPE_VIEW[item.type ?? ''] ?? DEFAULT_VIEW;
+    // Tiêu đề/nội dung lấy nguyên văn từ server; thiếu thì dùng câu trung tính.
     const title = item.title || 'Thông báo mới';
     const body = item.body || item.message || 'Bạn có một thông báo từ FixHome.';
     return (
@@ -166,6 +228,7 @@ export default function TechnicianNotificationsScreen() {
         onPress={() => onNotificationPress(item)}
         accessibilityRole="button"
         accessibilityLabel={`${isUnread ? 'Chưa đọc. ' : ''}${title}. ${body}`}
+        accessibilityState={{ selected: isUnread }}
       >
         <View style={[styles.iconTile, { backgroundColor: colors.tone[tone].bg }]}>
           <Icon size={20} color={colors.tone[tone].fg} strokeWidth={1.75} />
@@ -216,20 +279,29 @@ export default function TechnicianNotificationsScreen() {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
 
       <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={onBackPress}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Quay lại"
+          accessibilityHint="Quay về màn hình trước"
+        >
+          <ChevronLeft size={22} color={colors.text} strokeWidth={1.75} />
+        </TouchableOpacity>
         <View style={styles.headerText}>
           <Text style={styles.headerTitle} accessibilityRole="header">Thông báo</Text>
-          {!loading && totalUnread > 0 && (
-            <Text style={styles.headerSubtitle}>{totalUnread} chưa đọc</Text>
-          )}
+          {!loading && totalUnread > 0 && <Text style={styles.headerSubtitle}>{totalUnread} chưa đọc</Text>}
         </View>
         {totalUnread > 0 && (
           <TouchableOpacity
-            style={[styles.markAllBtn, markingAll && styles.disabled]}
+            style={[styles.markAllBtn, (loading || markingAll) && styles.disabled]}
             activeOpacity={0.7}
             onPress={onMarkAllRead}
-            disabled={markingAll}
+            disabled={loading || markingAll}
             accessibilityRole="button"
             accessibilityLabel="Đánh dấu đã đọc tất cả"
+            accessibilityState={{ disabled: loading || markingAll, busy: markingAll }}
           >
             <CheckCheck size={18} color={colors.primaryStrong} strokeWidth={1.75} />
             <Text style={styles.markAllText}>Đã đọc tất cả</Text>
@@ -248,6 +320,7 @@ export default function TechnicianNotificationsScreen() {
 
       {loading && !refreshing ? (
         <View style={styles.skeletonWrap}>
+          <Text style={styles.loadingText} accessibilityRole="text">Đang tải…</Text>
           <CustomerSkeleton variant="notification" />
         </View>
       ) : (
@@ -255,7 +328,9 @@ export default function TechnicianNotificationsScreen() {
           sections={sections}
           keyExtractor={(item, index) => item.id?.toString() || index.toString()}
           renderItem={renderItem}
-          renderSectionHeader={({ section }) => <Text style={styles.sectionTitle}>{section.title}</Text>}
+          renderSectionHeader={({ section }) => (
+            <Text style={styles.sectionTitle} accessibilityRole="header">{section.title}</Text>
+          )}
           stickySectionHeadersEnabled={false}
           ListEmptyComponent={renderEmpty}
           ListFooterComponent={loadingMore ? <ActivityIndicator style={styles.footerSpinner} color={colors.primaryStrong} /> : null}
@@ -281,7 +356,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 8,
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 12,
@@ -289,7 +364,8 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
     borderBottomWidth: 1,
     borderBottomColor: colors.divider,
   },
-  headerText: { flex: 1 },
+  backButton: { width: 44, height: 44, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  headerText: { flex: 1, gap: 2 },
   headerTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
   headerSubtitle: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, marginTop: 2 },
   markAllBtn: {
@@ -314,6 +390,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   },
   errorBannerText: { flex: 1, fontSize: 14, lineHeight: 20 },
   skeletonWrap: { flex: 1, padding: 16 },
+  loadingText: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, marginBottom: 8 },
   sectionTitle: {
     fontSize: 12,
     lineHeight: 16,
@@ -328,21 +405,24 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    minHeight: 72,
-    paddingHorizontal: 16,
+    minHeight: 80,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 14,
     paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
     backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
   },
-  rowUnread: { backgroundColor: colors.primarySoft },
-  iconTile: { width: 40, height: 40, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-  rowContent: { flex: 1, gap: 2 },
+  rowUnread: { backgroundColor: colors.primarySoft, borderColor: colors.primaryTint },
+  iconTile: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  rowContent: { flex: 1, gap: 2, minWidth: 0 },
   rowTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
-  title: { flex: 1, fontSize: 14, lineHeight: 20, fontWeight: '500', color: colors.text },
+  title: { flex: 1, flexShrink: 1, fontSize: 14, lineHeight: 20, fontWeight: '500', color: colors.text },
   titleUnread: { fontWeight: '700' },
   desc: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
-  timeText: { fontSize: 12, lineHeight: 16, fontWeight: '500', color: colors.textSecondary },
+  timeText: { flexShrink: 0, fontSize: 12, lineHeight: 16, fontWeight: '500', color: colors.textSecondary },
   unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primaryStrong },
   emptyFlex: { flexGrow: 1 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 8 },

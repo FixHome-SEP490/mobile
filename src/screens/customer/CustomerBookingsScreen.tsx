@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
+  Image,
   Text,
   StyleSheet,
   ScrollView,
@@ -10,6 +11,7 @@ import {
   RefreshControl,
   StatusBar,
   Modal,
+  AccessibilityInfo,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,9 +20,11 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAppTheme } from '../../constants/theme';
+import { CUSTOMER_UI_ARTWORK } from '../../constants/customer-artwork';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { useAuthStore } from '../../store/auth.store';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
+import CustomerActivitySectionHeader from '../../components/customer/CustomerActivitySectionHeader';
 import { bookingsApi, type BookingItem } from '../../api/bookings.api';
 import { ordersApi, type ServiceOrderItem, type CanonicalOrderStatus } from '../../api/orders.api';
 import {
@@ -28,9 +32,9 @@ import {
   customerBookingsUserId,
   getCachedHistoryState,
   linkedReplacementState,
-  orderTotalText,
   resolveBookingsView,
   resumeTargetFor,
+  type BookingsTab,
   type HistoryCard,
 } from './customer-bookings-history';
 import { orderDetailTarget } from './customer-order-detail';
@@ -41,7 +45,7 @@ import {
   cancelBookingConservative,
   rescheduleBookingConservative,
 } from './customer-booking-manage';
-import { vnDateString } from '../../utils/vn-time';
+import { vnDateString, vnTimeString } from '../../utils/vn-time';
 
 const MANAGE_DATE_OFFSETS = [0, 1, 2, 3, 7] as const;
 const MANAGE_START_TIMES = ['08:00', '09:00', '10:00', '13:00', '14:00', '15:00', '16:00'] as const;
@@ -63,6 +67,25 @@ export default function CustomerBookingsScreen() {
   const [rescheduleTime, setRescheduleTime] = useState('09:00');
   const [manageBusy, setManageBusy] = useState(false);
   const [manageError, setManageError] = useState<string | null>(null);
+  const [activityTab, setActivityTab] = useState<BookingsTab>('in_progress');
+  const [activitySearch, setActivitySearch] = useState('');
+  const [expandedRequests, setExpandedRequests] = useState<Record<string, boolean>>({});
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled?.()
+      .then((enabled) => { if (mounted) setReduceMotion(enabled ?? false); })
+      .catch(() => undefined);
+    const subscription = (AccessibilityInfo as unknown as {
+      addEventListener?: (event: string, handler: (enabled: boolean) => void) => { remove: () => void };
+    }).addEventListener?.('reduceMotionChanged', (enabled) => {
+      if (mounted) setReduceMotion(enabled);
+    });
+    return () => {
+      mounted = false;
+      subscription?.remove();
+    };
+  }, []);
   const [historyState, setHistoryState] = useState(getCachedHistoryState);
   const { bookings, total, loading, refreshing, loadingMore, loadingMoreOrders, error, ordersError } = historyState;
   const [loader] = useState(() => createBookingsHistoryLoader(
@@ -213,18 +236,18 @@ export default function CustomerBookingsScreen() {
     const s = String(status).toUpperCase();
     switch (s) {
       case 'EN_ROUTE':
-        return { label: 'Đang di chuyển', bg: '#FEF3C7', color: '#D97706' };
+        return { label: 'Đang di chuyển', bg: colors.tone.warning.bg, color: colors.tone.warning.text };
       case 'UNDER_REPAIR':
       case 'IN_PROGRESS':
-        return { label: 'Đang sửa chữa', bg: colors.primaryTint, color: colors.primary };
+        return { label: 'Đang sửa chữa', bg: colors.tone.repair.bg, color: colors.tone.repair.text };
       case 'ACCEPTED':
-        return { label: 'Đã nhận đơn', bg: '#E0E7FF', color: '#4F46E5' };
+        return { label: 'Đã nhận đơn', bg: colors.tone.info.bg, color: colors.tone.info.text };
       case 'COMPLETED':
-        return { label: 'Hoàn thành', bg: '#DCFCE7', color: '#16A34A' };
+        return { label: 'Hoàn thành', bg: colors.tone.success.bg, color: colors.tone.success.text };
       case 'CANCELLED':
-        return { label: 'Đã hủy', bg: '#FEE2E2', color: colors.error };
+        return { label: 'Đã hủy', bg: colors.tone.neutral.bg, color: colors.tone.neutral.text };
       default:
-        return { label: s, bg: colors.border, color: colors.textSecondary };
+        return { label: 'Trạng thái chưa xác định', bg: colors.tone.neutral.bg, color: colors.tone.neutral.text };
     }
   };
 
@@ -232,24 +255,36 @@ export default function CustomerBookingsScreen() {
     const s = String(status).toUpperCase();
     switch (s) {
       case 'SUBMITTED':
-        return { label: 'Đã gửi yêu cầu', bg: '#E0E7FF', color: '#4F46E5' };
+        return { label: 'Đã gửi yêu cầu', bg: colors.tone.info.bg, color: colors.tone.info.text };
       case 'MATCHING':
-        return { label: 'Đang tìm kỹ thuật viên', bg: '#FEF3C7', color: '#D97706' };
+        return { label: 'Đang tìm kỹ thuật viên', bg: colors.tone.warning.bg, color: colors.tone.warning.text };
       case 'MATCHED':
-        return { label: 'Đã ghép kỹ thuật viên', bg: '#DCFCE7', color: '#16A34A' };
+        return { label: 'Đã ghép kỹ thuật viên', bg: colors.tone.success.bg, color: colors.tone.success.text };
       case 'CONFIRMED':
-        return { label: 'Đã xác nhận', bg: colors.primaryTint, color: colors.primary };
+        return { label: 'Đã xác nhận', bg: colors.tone.info.bg, color: colors.tone.info.text };
       case 'CLOSED':
         return { label: 'Vòng tìm kỹ thuật viên đã kết thúc', bg: colors.divider, color: colors.textSecondary };
       case 'CANCELLED':
-        return { label: 'Đã hủy', bg: '#FEE2E2', color: colors.error };
+        return { label: 'Đã hủy', bg: colors.tone.neutral.bg, color: colors.tone.neutral.text };
       default:
-        return { label: s, bg: colors.divider, color: colors.textSecondary };
+        return { label: 'Trạng thái chưa xác định', bg: colors.tone.neutral.bg, color: colors.tone.neutral.text };
     }
   };
 
-  const view = resolveBookingsView(historyState, '', 'in_progress');
+  const view = resolveBookingsView(historyState, activitySearch, activityTab);
   const { filtered: filteredCards, showList, emptyNote, showLoadMore, showLoadMoreOrders } = view;
+  const secondarySectionTitle = activityTab === 'completed'
+    ? 'Lịch sử sửa chữa'
+    : activityTab === 'all' ? 'Yêu cầu và đơn khác' : 'Đang diễn ra';
+  const emptyTitle = activitySearch.trim()
+    ? 'Không có kết quả trong phần đã tải'
+    : activityTab === 'completed' ? 'Chưa có lịch sử sửa chữa'
+      : activityTab === 'all' ? 'Chưa có yêu cầu hoặc đơn nào' : 'Không có đơn đang diễn ra';
+  const emptyDescription = activitySearch.trim()
+    ? 'Hãy đổi từ khóa hoặc tải thêm trang để tìm tiếp.'
+    : activityTab === 'completed' ? 'Các yêu cầu đã kết thúc và đơn sửa chữa hoàn thành sẽ xuất hiện tại đây.'
+      : activityTab === 'all' ? 'Yêu cầu đặt lịch và đơn sửa chữa của bạn sẽ xuất hiện tại đây.'
+        : 'Khi có yêu cầu hoặc đơn sửa chữa đang xử lý, chúng sẽ xuất hiện tại đây.';
 
   const renderOrderSummary = (
     order: ServiceOrderItem,
@@ -257,7 +292,6 @@ export default function CustomerBookingsScreen() {
     showDetailAffordance = false,
   ) => {
     const badge = getStatusBadge(order.status);
-    const totalText = orderTotalText(order);
     const dateStr = order.createdAt
       ? vnDateString(order.createdAt)
       : 'Gần đây';
@@ -275,18 +309,8 @@ export default function CustomerBookingsScreen() {
               {order.serviceName || `Đơn #${order.code}`}
             </Text>
             <Text style={styles.meta}>
-              {dateStr}{totalText ? ` · ${totalText}` : ''}
+              {dateStr}
             </Text>
-            {!totalText && (
-              <Text style={styles.meta}>Chưa có thông tin giá</Text>
-            )}
-            {order.technician?.fullName && (
-              <Text style={styles.meta}>Kỹ thuật viên {order.technician.fullName}</Text>
-            )}
-            <Text style={styles.meta}>Mã tham chiếu: {order.code || order.id.slice(0, 8)}</Text>
-            {bookingId && (
-              <Text style={styles.meta}>Thuộc yêu cầu #{bookingId.slice(0, 8)}</Text>
-            )}
           </View>
           {showDetailAffordance && (
             <Ionicons
@@ -305,9 +329,10 @@ export default function CustomerBookingsScreen() {
   const renderBookingCard = (booking: BookingItem) => {
     const badge = getBookingBadge(booking.status);
     const resumeId = resumeTargetFor(booking, !view.ordersCoverageComplete);
-    const dateStr = booking.createdAt
-      ? vnDateString(booking.createdAt)
-      : 'Gần đây';
+    const schedule = booking.preferredStartAt && Number.isFinite(Date.parse(booking.preferredStartAt))
+      ? booking.preferredStartAt : null;
+    const dateStr = schedule ? `${vnDateString(schedule)} · ${vnTimeString(schedule)}`
+      : booking.createdAt ? vnDateString(booking.createdAt) : 'Chưa có thời gian';
     const waiting = String(booking.status).toUpperCase() === 'MATCHING';
     return (
       <View style={styles.card}>
@@ -329,7 +354,7 @@ export default function CustomerBookingsScreen() {
             <Text style={styles.title} numberOfLines={1}>
               {booking.serviceName || `Yêu cầu #${booking.id.slice(0, 8)}`}
             </Text>
-            {!!booking.addressSummary && (
+            {expandedRequests[booking.id] && !!booking.addressSummary && (
               <View style={styles.metaRow}>
                 <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
                 <Text style={styles.metaRowText} numberOfLines={1}>{booking.addressSummary}</Text>
@@ -339,7 +364,7 @@ export default function CustomerBookingsScreen() {
               <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
               <Text style={styles.metaRowText}>{dateStr}</Text>
             </View>
-            {waiting && (
+            {waiting && expandedRequests[booking.id] && (
               <View style={styles.waitingNote}>
                 <Text style={styles.waitingNoteText}>
                   Đang chờ kỹ thuật viên phản hồi — không cần gửi lại.
@@ -349,8 +374,20 @@ export default function CustomerBookingsScreen() {
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
         </TouchableOpacity>
+        {(canCancelBookingConservative(booking) || canRescheduleBookingConservative(booking) || waiting || booking.addressSummary) && (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Tùy chọn yêu cầu"
+            accessibilityState={{ expanded: !!expandedRequests[booking.id] }}
+            style={styles.requestOptions}
+            onPress={() => setExpandedRequests((current) => ({ ...current, [booking.id]: !current[booking.id] }))}
+          >
+            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Tùy chọn yêu cầu</Text>
+            <Ionicons name={expandedRequests[booking.id] ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textSecondary} />
+          </TouchableOpacity>
+        )}
         {/* K09_B_BOOKING_MANAGE */}
-        {(canCancelBookingConservative(booking) ||
+        {expandedRequests[booking.id] && (canCancelBookingConservative(booking) ||
           canRescheduleBookingConservative(booking)) && (
           <View style={[styles.cardActionsRow, { marginTop: 12 }]}>
             {canRescheduleBookingConservative(booking) && (
@@ -383,7 +420,7 @@ export default function CustomerBookingsScreen() {
         <Modal
           visible={manageBookingId === booking.id && manageMode === 'cancel'}
           transparent
-          animationType="slide"
+          animationType={reduceMotion ? 'none' : 'slide'}
           onRequestClose={closeBookingManage}
         >
           <View style={styles.manageModalBackdrop}>
@@ -416,7 +453,9 @@ export default function CustomerBookingsScreen() {
                   { backgroundColor: colors.error, flex: 1 },
                 ]}
                 onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                  if (!reduceMotion) {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                  }
                   void handleBookingCancel(booking);
                 }}
                 disabled={manageBusy}
@@ -447,7 +486,7 @@ export default function CustomerBookingsScreen() {
         <Modal
           visible={manageBookingId === booking.id && manageMode === 'reschedule'}
           transparent
-          animationType="slide"
+          animationType={reduceMotion ? 'none' : 'slide'}
           onRequestClose={closeBookingManage}
         >
           <View style={styles.manageModalBackdrop}>
@@ -528,7 +567,9 @@ export default function CustomerBookingsScreen() {
                   { backgroundColor: colors.primary, flex: 1 },
                 ]}
                 onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  if (!reduceMotion) {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  }
                   void handleBookingReschedule(booking);
                 }}
                 disabled={manageBusy}
@@ -578,9 +619,10 @@ export default function CustomerBookingsScreen() {
   ) => {
     const badge = getBookingBadge(booking.status);
     const detailId = orderDetailTarget(order.id);
-    const dateStr = booking.createdAt
-      ? vnDateString(booking.createdAt)
-      : 'Gần đây';
+    const schedule = booking.preferredStartAt && Number.isFinite(Date.parse(booking.preferredStartAt))
+      ? booking.preferredStartAt : null;
+    const dateStr = schedule ? `${vnDateString(schedule)} · ${vnTimeString(schedule)}`
+      : booking.createdAt ? vnDateString(booking.createdAt) : 'Chưa có thời gian';
     const message = replacement === 'waiting'
       ? 'Đang tìm kỹ thuật viên thay thế; đang chờ kỹ thuật viên phản hồi; làm mới để cập nhật'
       : 'Lượt mời kỹ thuật viên thay thế đã kết thúc. Xem khả năng chọn lại; hệ thống sẽ kiểm tra trước khi gửi.';
@@ -604,7 +646,7 @@ export default function CustomerBookingsScreen() {
             <Text style={styles.title} numberOfLines={1}>
               {booking.serviceName || order.serviceName || `Yêu cầu #${booking.id.slice(0, 8)}`}
             </Text>
-            {!!booking.addressSummary && (
+            {expandedRequests[booking.id] && !!booking.addressSummary && (
               <View style={styles.metaRow}>
                 <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
                 <Text style={styles.metaRowText} numberOfLines={1}>{booking.addressSummary}</Text>
@@ -614,11 +656,19 @@ export default function CustomerBookingsScreen() {
               <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
               <Text style={styles.metaRowText}>{dateStr}</Text>
             </View>
-            <View style={styles.waitingNote}>
-              <Text style={styles.waitingNoteText}>{message}</Text>
-            </View>
+            {expandedRequests[booking.id] && (
+              <View style={styles.waitingNote}>
+                <Text style={styles.waitingNoteText}>{message}</Text>
+              </View>
+            )}
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+        </TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Thông tin lời mời"
+          accessibilityState={{ expanded: !!expandedRequests[booking.id] }} style={styles.requestOptions}
+          onPress={() => setExpandedRequests((current) => ({ ...current, [booking.id]: !current[booking.id] }))}>
+          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Thông tin lời mời</Text>
+          <Ionicons name={expandedRequests[booking.id] ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textSecondary} />
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.resumeBtn, { backgroundColor: colors.primary }]}
@@ -683,25 +733,53 @@ export default function CustomerBookingsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerCopy}>
-          <Text style={styles.headerTitle}>Đơn của tôi</Text>
-          <Text style={styles.headerSubtitle}>Theo dõi những yêu cầu và đơn sửa chữa đang diễn ra</Text>
+          <Text accessibilityRole="header" style={styles.headerTitle}>Hoạt động</Text>
         </View>
-        <TouchableOpacity
-          style={styles.historyButton}
-          onPress={() => navigation.navigate('CustomerRepairHistory')}
-          accessibilityRole="button"
-          accessibilityLabel="Mở lịch sử sửa chữa"
-        >
-          <Ionicons name="time-outline" size={18} color={colors.primary} />
-          <Text style={styles.historyButtonText}>Lịch sử</Text>
-        </TouchableOpacity>
+
+      </View>
+
+      <View style={styles.activityControls}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
+          <TextInput
+            value={activitySearch}
+            onChangeText={setActivitySearch}
+            placeholder="Tìm yêu cầu hoặc đơn sửa chữa"
+            placeholderTextColor={colors.textSecondary}
+            accessibilityLabel="Tìm yêu cầu hoặc đơn sửa chữa"
+            returnKeyType="search"
+            style={styles.searchInput}
+          />
+        </View>
+        <View style={styles.segmentContainer} accessibilityRole="tablist">
+          {([
+            { id: 'in_progress', label: 'Đang mở', testID: 'activity-filter-open' },
+            { id: 'completed', label: 'Lịch sử', testID: 'activity-filter-history' },
+            { id: 'all', label: 'Tất cả', testID: 'activity-filter-all' },
+          ] as const).map((tab) => {
+            const selected = activityTab === tab.id;
+            return (
+              <TouchableOpacity
+                key={tab.id}
+                testID={tab.testID}
+                style={[styles.segmentBtn, selected && styles.segmentActive]}
+                onPress={() => setActivityTab(tab.id)}
+                accessibilityRole="tab"
+                accessibilityLabel={tab.label}
+                accessibilityState={{ selected }}
+              >
+                <Text style={selected ? styles.segmentTextActive : styles.segmentText}>{tab.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
 
       {/* Content List */}
       {loading ? (
         <View style={styles.loadingState}>
           <CustomerSkeleton variant="booking" rows={3} />
-          <Text style={styles.loadingText} accessibilityLiveRegion="polite">Đang tải đơn của tôi...</Text>
+          <Text style={styles.loadingText} accessibilityLiveRegion="polite">Đang tải hoạt động...</Text>
         </View>
       ) : showList ? (
         <ScrollView
@@ -729,39 +807,47 @@ export default function CustomerBookingsScreen() {
           {filteredCards.length === 0 && emptyNote === 'more-pages' && (
             <View style={styles.emptyContainer}>
               <Ionicons name="layers-outline" size={56} color={colors.muted} />
-              <Text style={styles.emptyTitle}>Chưa thấy đơn đang diễn ra trong phần đã tải</Text>
+              <Text style={styles.emptyTitle}>{emptyTitle}</Text>
               <Text style={styles.emptyDesc}>Còn dữ liệu ở các trang tiếp theo. Tải thêm để kiểm tra.</Text>
             </View>
           )}
           {filteredCards.length === 0 && emptyNote === 'no-match' && (
             <View style={styles.emptyContainer}>
-              <Ionicons name="checkmark-done-outline" size={56} color={colors.muted} />
-              <Text style={styles.emptyTitle}>Không có đơn đang diễn ra</Text>
-              <Text style={styles.emptyDesc}>Khi có yêu cầu hoặc đơn sửa chữa đang xử lý, chúng sẽ xuất hiện tại đây.</Text>
-              <TouchableOpacity
-                style={[styles.bookNowBtn, { backgroundColor: colors.primary }]}
-                onPress={() => navigation.navigate('CustomerServices')}
-                accessibilityRole="button"
-              >
-                <Ionicons name="add-circle-outline" size={18} color={colors.surface} />
-                <Text style={styles.bookNowText}>Đặt dịch vụ mới</Text>
-              </TouchableOpacity>
+              <Image source={CUSTOMER_UI_ARTWORK.emptySearch} style={{ width: 144, height: 112 }} resizeMode="contain" accessible={false} testID="activity-empty-art" />
+              <Text style={styles.emptyTitle}>{emptyTitle}</Text>
+              <Text style={styles.emptyDesc}>{emptyDescription}</Text>
+              {!activitySearch.trim() && activityTab === 'in_progress' && (
+                <TouchableOpacity
+                  style={[styles.bookNowBtn, { backgroundColor: colors.primary }]}
+                  onPress={() => navigation.navigate('CustomerServices')}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="add-circle-outline" size={18} color={colors.surface} />
+                  <Text style={styles.bookNowText}>Đặt dịch vụ mới</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
           {actionRequiredCards.length > 0 && (
             <>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Cần bạn xử lý</Text>
-                <Text style={styles.sectionCount}>{actionRequiredCards.length}</Text>
-              </View>
+              <CustomerActivitySectionHeader
+                title="Cần bạn xử lý"
+                count={actionRequiredCards.length}
+                icon="alert"
+                testID="activity-action-required-section"
+              />
               {actionRequiredCards.map(renderActiveCard)}
             </>
           )}
           {ongoingCards.length > 0 && (
             <>
-              <View style={[styles.sectionHeader, actionRequiredCards.length > 0 && styles.sectionHeaderSpaced]}>
-                <Text style={styles.sectionTitle}>Đang diễn ra</Text>
-                <Text style={styles.sectionCount}>{ongoingCards.length}</Text>
+              <View style={actionRequiredCards.length > 0 && styles.sectionHeaderSpaced}>
+                <CustomerActivitySectionHeader
+                  title={secondarySectionTitle}
+                  count={ongoingCards.length}
+                  icon="ongoing"
+                  testID="activity-ongoing-section"
+                />
               </View>
               {ongoingCards.map(renderActiveCard)}
             </>
@@ -799,9 +885,9 @@ export default function CustomerBookingsScreen() {
         </ScrollView>
       ) : (
         <View style={styles.emptyContainer}>
-          <Ionicons name="receipt-outline" size={56} color="#CBD5E1" />
-          <Text style={styles.emptyTitle}>Chưa có đơn nào</Text>
-          <Text style={styles.emptyDesc}>Đặt lịch ngay để kỹ thuật viên FixHome kiểm tra tại nhà bạn.</Text>
+          <Image source={CUSTOMER_UI_ARTWORK.emptySearch} style={{ width: 144, height: 112 }} resizeMode="contain" accessible={false} testID="activity-empty-art" />
+          <Text style={styles.emptyTitle}>{emptyTitle}</Text>
+          <Text style={styles.emptyDesc}>{emptyDescription}</Text>
           <TouchableOpacity
             style={[styles.bookNowBtn, { backgroundColor: colors.primary }]}
             onPress={() => navigation.navigate('CustomerServices')}
@@ -835,16 +921,10 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   headerTitle: {
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '700',
     color: colors.text,
   },
   headerCopy: { flex: 1, paddingRight: 12 },
-  headerSubtitle: {
-    fontSize: 12,
-    lineHeight: 17,
-    color: colors.textSecondary,
-    marginTop: 3,
-  },
   historyButton: {
     minHeight: 44,
     flexDirection: 'row',
@@ -867,20 +947,25 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   sectionHeaderSpaced: { marginTop: 8 },
   sectionTitle: { fontSize: 14, fontWeight: '800', color: colors.text },
   sectionCount: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
+  activityControls: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 4,
+    gap: 10,
+  },
   searchFilterContainer: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     paddingHorizontal: 16,
     paddingTop: 16,
     gap: 12,
   },
   searchBar: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
     borderRadius: 12,
     paddingHorizontal: 12,
-    height: 44,
+    minHeight: 44,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -893,14 +978,16 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   segmentContainer: {
     flexDirection: 'row',
     backgroundColor: colors.border,
-    margin: 16,
+    margin: 0,
     padding: 4,
     borderRadius: 12,
   },
   segmentBtn: {
     flex: 1,
+    minHeight: 44,
     paddingVertical: 8,
     alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 8,
   },
   segmentActive: {
@@ -958,6 +1045,8 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   bookNowBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
     gap: 8,
     paddingHorizontal: 20,
     paddingVertical: 12,
@@ -971,6 +1060,9 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   retryBtn: {
     padding: 12,
     marginTop: 8,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   retryText: {
     fontSize: 13,
@@ -987,7 +1079,9 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   loadMoreBtn: {
     padding: 14,
+    minHeight: 44,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   coverageText: {
     fontSize: 12,
@@ -998,8 +1092,10 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   resumeBtn: {
     marginTop: 12,
     paddingVertical: 10,
+    minHeight: 44,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   resumeText: {
     color: '#FFFFFF', // chữ trên nút nền primary/error, luôn trắng bất kể theme
@@ -1009,8 +1105,10 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   secondaryBtn: {
     marginTop: 8,
     paddingVertical: 10,
+    minHeight: 44,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
   },
   secondaryText: {
@@ -1022,6 +1120,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     gap: 8,
     marginTop: 8,
   },
+  requestOptions: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
   cardActionsRow: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
@@ -1031,6 +1130,8 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   pillBtn: {
     paddingHorizontal: 14,
     paddingVertical: 8,
+    minHeight: 44,
+    justifyContent: 'center',
     borderRadius: 20,
     borderWidth: 1,
   },
@@ -1088,6 +1189,8 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   manageChip: {
     paddingHorizontal: 10,
     paddingVertical: 8,
+    minHeight: 44,
+    justifyContent: 'center',
     borderWidth: 1,
     borderRadius: 8,
   },
@@ -1126,7 +1229,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     marginBottom: 6,
   },
   badgeText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
   },
   title: {

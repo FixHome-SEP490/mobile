@@ -165,7 +165,10 @@ export const technicianProfileApi = {
       { data: TechnicianServiceOffering[] } | TechnicianServiceOffering[]
     >('/technicians/me/services');
     const result = unwrap(res.data);
-    return Array.isArray(result) ? result : [];
+    if (!Array.isArray(result)) {
+      throw new Error('Danh sách dịch vụ từ máy chủ không hợp lệ.');
+    }
+    return result;
   },
 
   async setSkillPricing(

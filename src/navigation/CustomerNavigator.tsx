@@ -7,7 +7,7 @@ import CustomerHomeScreen from '../screens/customer/CustomerHomeScreen';
 import CustomerBookingsScreen from '../screens/customer/CustomerBookingsScreen';
 import CustomerNotificationsScreen from '../screens/customer/CustomerNotificationsScreen';
 import CustomerProfileScreen from '../screens/customer/CustomerProfileScreen';
-import { GlassTabBar } from '../components/navigation/GlassTabBar';
+import CustomerAnimatedBottomBar from '../components/navigation/CustomerAnimatedBottomBar';
 import { AvatarTabIcon } from '../components/navigation/AvatarTabIcon';
 import { useAuthStore } from '../store';
 import { notificationsApi } from '../api/notifications.api';
@@ -31,7 +31,7 @@ export default function CustomerNavigator() {
 
   return (
     <Tab.Navigator
-      tabBar={(props) => <GlassTabBar {...props} />}
+      tabBar={(props) => <CustomerAnimatedBottomBar {...props} mode="authenticated" />}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarIcon: ({ focused, color, size }) => {

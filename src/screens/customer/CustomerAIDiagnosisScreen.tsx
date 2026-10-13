@@ -3,6 +3,8 @@ import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
+  KeyboardAvoidingView,
+  Platform,
   StyleSheet,
   TouchableOpacity,
   TextInput,
@@ -12,12 +14,11 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
-import { LinearGradient } from 'expo-linear-gradient';
 import { AI_MAX_IMAGES } from '../../api/ai.api';
 import { pickImagesForAi } from '../../services/image-for-ai';
 import {
@@ -29,8 +30,8 @@ import {
 type DiagnosisRoute = RouteProp<RootStackParamList, 'CustomerAIDiagnosis'>;
 
 export default function CustomerAIDiagnosisScreen() {
-  const { colors, spacing, fontSize, isDark } = useAppTheme();
-  const styles = getStyles(colors, spacing, fontSize);
+  const { colors, isDark } = useAppTheme();
+  const styles = getStyles(colors);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<DiagnosisRoute>();
 
@@ -90,7 +91,7 @@ export default function CustomerAIDiagnosisScreen() {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     // Use real catalog and saved address rather than legacy placeholder steps.
-    navigation.navigate('CustomerBookingCreate', {
+    navigation.push('CustomerBookingCreate', {
       prefill: { ...prefill, description: description.trim() },
     });
   };
@@ -98,341 +99,147 @@ export default function CustomerAIDiagnosisScreen() {
     navigation.goBack();
   };
 
-  const renderStep1 = () => (
-    <>
-      <Text style={styles.mainTitle}>Nhà mình đang gặp vấn đề gì?</Text>
-      <Text style={styles.helperText}>Thêm mô tả để kỹ thuật viên chuẩn bị tốt hơn. Bạn có thể dùng ảnh để nhận gợi ý kiểm tra.</Text>
-
-      {prefill?.serviceName && (
-        <View style={styles.prefillCard}>
-          <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-          <View style={styles.prefillText}>
-            <Text style={styles.prefillLabel}>Trợ lý đã chọn dịch vụ</Text>
-            <Text style={styles.prefillValue}>{prefill.serviceName}</Text>
-          </View>
-        </View>
-      )}
-
-      <TouchableOpacity style={styles.uploadArea} activeOpacity={0.7} onPress={pickImages}>
-        <View style={styles.camIcon}>
-          <Ionicons name="camera-outline" size={24} color={colors.primary} />
-        </View>
-        <Text style={styles.uploadTitle}>Thêm ảnh thiết bị</Text>
-        <Text style={styles.uploadHelper}>Ảnh toàn cảnh và vị trí có vấn đề</Text>
-        {/* The assistant takes three images of 8 MB; promising five of ten
-            would fail on the fourth. */}
-        <Text style={styles.uploadHelper}>
-          Tối đa {AI_MAX_IMAGES} ảnh · JPG, PNG · 8 MB/ảnh
-        </Text>
-      </TouchableOpacity>
-
-      {images.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.thumbRow}
-        >
-          {images.map((uri, index) => (
-            <View key={index} style={styles.thumbBox}>
-              <Image source={{ uri }} style={styles.thumb} />
-              <TouchableOpacity
-                style={styles.thumbRemove}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setImages((prev) => prev.filter((_, i) => i !== index));
-                }}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                accessibilityRole="button"
-                accessibilityLabel="Bỏ ảnh này"
-              >
-                <Ionicons name="close" size={12} color={colors.surface} />
-              </TouchableOpacity>
-            </View>
-          ))}
-        </ScrollView>
-      )}
-
-      <View style={styles.field}>
-        <Text style={styles.fieldLabel}>Mô tả sự cố <Text style={styles.inlineTag}>· bắt buộc khi đặt lịch</Text></Text>
-        <TextInput
-          style={styles.textArea}
-          placeholder="Ví dụ: Điều hòa vẫn chạy nhưng không lạnh, có tiếng kêu nhẹ…"
-          multiline
-          numberOfLines={4}
-          value={description}
-          onChangeText={setDescription}
-          placeholderTextColor={colors.muted}
-        />
-      </View>
-
-      <TouchableOpacity
-        testID="ai-diagnosis-ask"
-        style={[styles.secondaryBtn, !assistantReady && styles.secondaryBtnDisabled]}
-        onPress={askTheAssistant}
-        disabled={!assistantReady}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityState={{ disabled: !assistantReady }}
-        accessibilityHint={assistantReady ? undefined : AI_DESCRIPTION_REQUIRED_HINT}
-      >
-        <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.primary} />
-        <Text style={styles.secondaryBtnText}>
-          {images.length > 0 ? 'Gửi ảnh cho trợ lý xem giúp' : 'Nhờ trợ lý chẩn đoán'}
-        </Text>
-      </TouchableOpacity>
-      {showDescriptionHint({ text: description, imageCount: images.length }, true) && (
-        <Text style={styles.requiredHint}>{AI_DESCRIPTION_REQUIRED_HINT}</Text>
-      )}
-      <Text style={styles.assistantHint}>
-        Trợ lý sẽ xem ảnh, hỏi lại nếu cần và gợi ý dịch vụ. Bạn vẫn có thể
-        đặt lịch thẳng bên dưới mà không cần chẩn đoán.
-      </Text>
-
-    </>
-  );
-
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={handleBack}
-          style={styles.backBtn}
-          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-          accessibilityRole="button"
-          accessibilityLabel="Quay lại"
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>AI Hỗ trợ chẩn đoán</Text>
-        <View style={styles.aiBadge}>
-          <MaterialCommunityIcons name="robot-outline" size={14} color={colors.primary} />
-          <Text style={styles.aiBadgeText}>AI 2.0</Text>
-        </View>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content}>
-        {renderStep1()}
-      </ScrollView>
-
-      <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.bookBtn} activeOpacity={0.8} onPress={handleNextStep}>
-          <LinearGradient colors={[colors.primaryDark, colors.primary]} style={styles.bookBtnGradient}>
+      <KeyboardAvoidingView style={styles.screenBody} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={handleBack} style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Quay lại">
+              <Ionicons name="arrow-back" size={24} color={colors.text} />
+            </TouchableOpacity>
+            <View style={styles.headerCopy}>
+              <Text style={styles.eyebrow}>GỢI Ý CHỌN DỊCH VỤ</Text>
+              <Text style={styles.mainTitle} accessibilityRole="header">Kể FixHome nghe</Text>
+              <Text style={styles.headerSubtitle}>Trợ lý FixHome</Text>
+            </View>
+          </View>
+          <View style={styles.advisoryArt}>
+            <Ionicons name="sparkles-outline" size={36} color={colors.primaryStrong} />
+            <Text style={styles.artTitle}>Nhà đang gặp chuyện gì?</Text>
+          </View>
+          <Text style={styles.helperText}>Mô tả dấu hiệu bạn thấy. Bạn quyết định dịch vụ phù hợp.</Text>
+          {prefill?.serviceName && (
+            <View style={styles.prefillCard}>
+              <Ionicons name="checkmark-circle-outline" size={20} color={colors.tone.success.text} />
+              <View style={styles.prefillText}>
+                <Text style={styles.prefillLabel}>Dịch vụ đã chọn</Text>
+                <Text style={styles.prefillValue}>{prefill.serviceName}</Text>
+              </View>
+            </View>
+          )}
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>Mô tả sự cố <Text style={styles.inlineTag}>· bắt buộc</Text></Text>
+            <TextInput
+              style={styles.textArea}
+              placeholder="Ví dụ: Điều hòa vẫn chạy nhưng không lạnh…"
+              multiline numberOfLines={4} maxLength={2000}
+              value={description} onChangeText={setDescription}
+              placeholderTextColor={colors.textSecondary}
+              accessibilityLabel="Mô tả sự cố thiết bị"
+              accessibilityHint="Nhập mô tả bắt buộc trước khi trò chuyện AI hoặc tiếp tục đặt lịch"
+            />
+            <Text style={styles.fieldHint}>Thiết bị nào, dấu hiệu gì và xảy ra từ khi nào?</Text>
+          </View>
+          <TouchableOpacity style={styles.uploadArea} activeOpacity={0.7} onPress={pickImages}
+            accessibilityRole="button" accessibilityLabel="Chọn ảnh thiết bị cho trợ lý"
+            accessibilityHint={`Tối đa ${AI_MAX_IMAGES} ảnh, JPG hoặc PNG. Ảnh chỉ gửi vào cuộc trò chuyện AI.`}>
+            <Ionicons name="camera-outline" size={24} color={colors.text} />
+            <View style={styles.uploadCopy}>
+              <Text style={styles.uploadTitle}>Thêm ảnh thiết bị · không bắt buộc</Text>
+              <Text style={styles.uploadHelper}>Đã chọn {images.length}/{AI_MAX_IMAGES} ảnh</Text>
+            </View>
+            <Ionicons name="add" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+          <Text style={styles.fieldHint}>JPG, PNG · tối đa 8 MB/ảnh. Chỉ chọn ảnh liên quan đến sự cố.</Text>
+          {images.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbRow}>
+              {images.map((uri, index) => (
+                <View key={index} style={styles.thumbBox}>
+                  <Image source={{ uri }} style={styles.thumb} accessibilityLabel={`Ảnh sự cố thứ ${index + 1}`} />
+                  <TouchableOpacity style={styles.thumbRemove}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setImages((prev) => prev.filter((_, i) => i !== index));
+                    }}
+                    accessibilityRole="button" accessibilityLabel={`Bỏ ảnh thứ ${index + 1}`}>
+                    <Ionicons name="close" size={20} color={colors.surface} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+          {showDescriptionHint({ text: description, imageCount: images.length }, true) && (
+            <Text style={styles.requiredHint}>{AI_DESCRIPTION_REQUIRED_HINT}</Text>
+          )}
+          <View style={styles.advisoryStrip}>
+            <Ionicons name="information-circle-outline" size={20} color={colors.textSecondary} />
+            <Text style={styles.advisoryText}>AI chỉ đưa ra gợi ý, không tự đặt lịch hoặc xác nhận giá.</Text>
+          </View>
+          <Text style={styles.assistantHint}>Trợ lý có thể hỏi thêm để làm rõ tình trạng. Bạn vẫn có thể tiếp tục chọn lịch mà không cần trò chuyện AI.</Text>
+        </ScrollView>
+        <View style={styles.bottomBar}>
+          <TouchableOpacity testID="ai-diagnosis-ask"
+            style={[styles.askBtn, !assistantReady && styles.askBtnDisabled]}
+            onPress={askTheAssistant} disabled={!assistantReady} activeOpacity={0.8}
+            accessibilityRole="button" accessibilityLabel="Nhờ trợ lý tư vấn"
+            accessibilityState={{ disabled: !assistantReady }}
+            accessibilityHint={assistantReady ? undefined : AI_DESCRIPTION_REQUIRED_HINT}>
+            <Text style={[styles.askBtnText, !assistantReady && styles.askBtnTextDisabled]}>Nhờ trợ lý tư vấn</Text>
+            <Ionicons name="arrow-forward" size={20} color={assistantReady ? colors.surface : colors.textSecondary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.bookBtn} activeOpacity={0.8} onPress={handleNextStep}
+            accessibilityRole="button" accessibilityLabel="Tiếp tục chọn lịch sửa chữa"
+            accessibilityHint="Cần có mô tả sự cố, chưa gửi yêu cầu đặt lịch ở bước này">
             <Text style={styles.bookBtnText}>Tiếp tục chọn lịch</Text>
-            <Ionicons name="arrow-forward" size={16} color={colors.surface} />
-          </LinearGradient>
-        </TouchableOpacity>
-        <Text style={styles.ctaNote}>Ảnh chỉ dùng cho trợ lý AI; hiện chưa đính kèm vào yêu cầu đặt lịch.</Text>
-      </View>
+          </TouchableOpacity>
+          <Text style={styles.ctaNote}>Ảnh chỉ dùng cho trợ lý AI; hiện chưa đính kèm vào yêu cầu đặt lịch.</Text>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
+const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border
-  },
-  backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text, flex: 1, textAlign: 'center' },
-  aiBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primaryTint, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 4 },
-  aiBadgeText: { color: colors.primary, fontSize: 12, fontWeight: '700' },
-  content: { padding: 16, paddingBottom: 100 },
-  progressWrap: { marginBottom: 16 },
-  progressLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  progressLabel: { fontSize: 12, color: colors.textSecondary, fontWeight: '500' },
-  steps: { flexDirection: 'row', gap: 6 },
-  dot: { height: 4, flex: 1, backgroundColor: colors.border, borderRadius: 2 },
-  dotOn: { backgroundColor: colors.primary },
-  mainTitle: { fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: 8 },
-  helperText: { fontSize: 14, color: colors.textSecondary, lineHeight: 20, marginBottom: 16 },
-  uploadArea: {
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    marginBottom: 16,
-  },
-  camIcon: { width: 48, height: 48, borderRadius: 12, backgroundColor: colors.primarySoft, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-  uploadTitle: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 4 },
-  uploadHelper: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
-  thumbRow: { gap: 8, paddingVertical: 10 },
-  thumbBox: { width: 72, height: 72 },
-  thumb: { width: 72, height: 72, borderRadius: 10, backgroundColor: colors.border },
-  thumbRemove: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.text,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  assistantHint: { fontSize: 12, color: colors.textSecondary, lineHeight: 18, marginTop: 8 },
-  prefillCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-  },
-  prefillText: { flex: 1 },
-  prefillLabel: { fontSize: 11, color: '#15803D', fontWeight: '700' },
-  prefillValue: { fontSize: 14, color: colors.text, fontWeight: '600', marginTop: 2 },
-  field: { marginBottom: 16 },
-  fieldLabel: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 8 },
+  screenBody: { flex: 1 },
+  content: { padding: 16, gap: 16, paddingBottom: 24 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
+  headerCopy: { flex: 1, minWidth: 0, gap: 4 },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.divider, alignItems: 'center', justifyContent: 'center' },
+  eyebrow: { fontSize: 12, lineHeight: 18, fontWeight: '600', letterSpacing: 0.5, color: colors.textSecondary },
+  mainTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
+  headerSubtitle: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
+  advisoryArt: { minHeight: 88, borderRadius: 24, backgroundColor: colors.primarySoft, flexDirection: 'row', alignItems: 'center', gap: 16, padding: 24 },
+  artTitle: { flex: 1, fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.primaryStrong },
+  helperText: { fontSize: 14, lineHeight: 24, color: colors.textSecondary },
+  field: { gap: 8 },
+  fieldLabel: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.text },
   inlineTag: { fontSize: 12, color: colors.textSecondary, fontWeight: '400' },
-  textArea: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 14,
-    color: colors.text,
-    minHeight: 100,
-    textAlignVertical: 'top'
-  },
-  secondaryBtn: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  secondaryBtnText: { fontSize: 14, fontWeight: '600', color: colors.text },
-  secondaryBtnDisabled: { opacity: 0.5 },
-  requiredHint: { fontSize: 12, color: colors.tone.warning.text, lineHeight: 18, marginTop: 8 },
-  aiResultCard: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 8,
-  },
-  scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  badgeSuccess: { backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  badgeTextSuccess: { color: colors.success, fontSize: 12, fontWeight: '700' },
-  aiResultTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 8 },
-  aiResultDesc: { fontSize: 14, color: '#475569', lineHeight: 22, marginBottom: 12 },
-  quoteRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: colors.border, marginBottom: 8 },
-  quoteLabel: { fontSize: 14, color: colors.textSecondary },
-  quoteValue: { fontSize: 14, fontWeight: '700', color: colors.text },
-  aiResultNote: { fontSize: 12, color: colors.textSecondary, fontStyle: 'italic' },
-  bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: colors.surface,
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  bookBtn: { borderRadius: 12, overflow: 'hidden', marginBottom: 8 },
-  bookBtnGradient: { paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 },
-  bookBtnText: { color: colors.surface, fontSize: 16, fontWeight: '700' },
-  ctaNote: { textAlign: 'center', fontSize: 12, color: colors.textSecondary },
-  
-  // Step 2 & 3 styles
-  card: { backgroundColor: colors.surface, borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: colors.border },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  label: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 8 },
-  link: { fontSize: 14, color: colors.primary, fontWeight: '600' },
-  addressBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, padding: 12, borderRadius: 12 },
-  addressTitle: { fontSize: 14, fontWeight: '600', color: colors.text },
-  addressDesc: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
-  dateStrip: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
-  dateChip: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface },
-  dateChipActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
-  dateText: { fontSize: 14, color: colors.textSecondary, fontWeight: '500' },
-  timeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  timeChip: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, width: '31%', alignItems: 'center' },
-  timeChipActive: { borderColor: colors.primary, backgroundColor: colors.primary },
-  timeText: { fontSize: 14, color: colors.text, fontWeight: '500' },
-  textActive: { color: colors.surface, fontWeight: '700' },
-  quantityBox: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  qtyBtn: { width: 36, height: 36, borderRadius: 12, borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
-  qtyText: { fontSize: 18, fontWeight: '700', color: colors.text },
-  
-  serviceTitle: { fontSize: 12, color: colors.textSecondary, marginBottom: 4 },
-  serviceName: { fontSize: 18, fontWeight: '700', color: colors.text },
-  divider: { height: 1, backgroundColor: colors.border, marginVertical: 12 },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  summaryLabel: { fontSize: 14, color: colors.textSecondary },
-  summaryValue: { fontSize: 14, fontWeight: '600', color: colors.text },
-  totalLabel: { fontSize: 16, fontWeight: '700', color: colors.text },
-  totalValue: { fontSize: 18, fontWeight: '700', color: colors.primary },
-
-  // Step 3 new styles
-  summaryCard: { backgroundColor: colors.surface, borderRadius: 24, padding: 20, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  timelineItem: { flexDirection: 'row', marginBottom: 24, minHeight: 50 },
-  timelineLeftIconBox: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.primarySoft, justifyContent: 'center', alignItems: 'center', marginRight: 12, marginTop: -2 },
-  timelineContent: { flex: 1, paddingRight: 16 },
-  timelineLabel: { fontSize: 12, color: colors.textSecondary, marginBottom: 4, fontWeight: '500' },
-  redAsterisk: { color: colors.error },
-  timelineValue: { fontSize: 14, color: '#334155', lineHeight: 22 },
-  timelineValueTitle: { fontSize: 14, fontWeight: '700', color: colors.text, lineHeight: 22 },
-  timelineSubText: { fontSize: 12, color: colors.muted, marginTop: 4 },
-  timelineRight: { width: 24, alignItems: 'center' },
-  timelineLine: { width: 2, flex: 1, backgroundColor: '#60A5FA', marginTop: 4, borderRadius: 1 },
-
-  optionsCard: { backgroundColor: colors.surface, borderRadius: 24, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  optionsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  optionsHeaderLeft: { flexDirection: 'row', alignItems: 'center' },
-  optionsIconBox: { width: 44, height: 44, borderRadius: 16, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  optionsTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
-  optionsSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  optionsBody: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border },
-  optionSection: { marginBottom: 20 },
-  optionSectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  optionsIconBoxSmall: { width: 24, height: 24, justifyContent: 'center', alignItems: 'center', marginRight: 8 },
-  optionSectionTitle: { fontSize: 14, fontWeight: '600', color: colors.text },
-  optionSectionSub: { fontSize: 12, color: colors.textSecondary, fontWeight: '400' },
-  addImageBtn: { width: 80, height: 80, borderRadius: 16, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', marginLeft: 32 },
-  addImageText: { fontSize: 12, color: colors.textSecondary, marginTop: 4, fontWeight: '500' },
-  optionItemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, paddingRight: 4 },
-
-  step3BottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: colors.surface, padding: 16, paddingBottom: 32, borderTopWidth: 1, borderTopColor: colors.border },
-  quoteCardWrapper: { backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.border, marginBottom: 16, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 3 },
-  quoteHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
-  quoteTitle: { fontSize: 13, color: colors.textSecondary, fontWeight: '600', marginBottom: 4 },
-  quotePrice: { fontSize: 20, fontWeight: '700', color: colors.text },
-  quoteExpandedBody: { padding: 20, paddingTop: 0 },
-  quoteDivider: { height: 1, backgroundColor: colors.border, marginBottom: 16 },
-  quoteRowItem: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  quoteLabelText: { fontSize: 14, color: colors.textSecondary, fontWeight: '500' },
-  quoteValueText: { fontSize: 14, fontWeight: '700', color: colors.text },
-  quoteMaterialsBox: { backgroundColor: colors.background, borderRadius: 16, padding: 16, marginTop: 8 },
-  quoteMaterialsTitle: { fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 12 },
-  quoteMaterialsTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  quoteMaterialTag: { backgroundColor: colors.surface, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 100, borderWidth: 1, borderColor: colors.border, maxWidth: '100%' },
-  quoteMaterialTagText: { fontSize: 12, color: '#475569', fontWeight: '500' },
-  quoteInfoRow: { flexDirection: 'row', gap: 8, marginTop: 16, alignItems: 'flex-start' },
-  quoteInfoText: { fontSize: 12, color: colors.textSecondary, flex: 1, lineHeight: 18 },
-  startBtn: { backgroundColor: colors.primary, paddingVertical: 16, borderRadius: 100, alignItems: 'center' },
-  startBtnText: { fontSize: 16, fontWeight: '700', color: colors.surface },
+  textArea: { minHeight: 112, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, fontSize: 16, lineHeight: 24, color: colors.text, textAlignVertical: 'top' },
+  fieldHint: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
+  uploadArea: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.surface },
+  uploadCopy: { flex: 1, minWidth: 0, gap: 4 },
+  uploadTitle: { fontSize: 14, lineHeight: 20, fontWeight: '500', color: colors.text },
+  uploadHelper: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
+  thumbRow: { gap: 12, paddingTop: 4 },
+  thumbBox: { width: 96, height: 96 },
+  thumb: { width: 96, height: 96, borderRadius: 16, backgroundColor: colors.border },
+  thumbRemove: { position: 'absolute', top: 0, right: 0, width: 44, height: 44, borderRadius: 22, backgroundColor: colors.text, alignItems: 'center', justifyContent: 'center' },
+  prefillCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16, backgroundColor: colors.tone.success.bg },
+  prefillText: { flex: 1, minWidth: 0, gap: 4 },
+  prefillLabel: { fontSize: 12, lineHeight: 18, fontWeight: '600', color: colors.tone.success.text },
+  prefillValue: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.text },
+  advisoryStrip: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingTop: 16, borderTopWidth: 1, borderColor: colors.border },
+  advisoryText: { flex: 1, fontSize: 12, lineHeight: 20, color: colors.textSecondary },
+  requiredHint: { fontSize: 12, lineHeight: 20, color: colors.tone.warning.text },
+  assistantHint: { fontSize: 12, lineHeight: 20, color: colors.textSecondary },
+  bottomBar: { padding: 16, gap: 8, backgroundColor: colors.background, borderTopWidth: 1, borderColor: colors.border },
+  askBtn: { minHeight: 56, padding: 16, borderRadius: 16, backgroundColor: colors.primaryStrong, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  askBtnDisabled: { backgroundColor: colors.border },
+  askBtnText: { flex: 1, fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.surface },
+  askBtnTextDisabled: { color: colors.textSecondary },
+  bookBtn: { minHeight: 48, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  bookBtnText: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.text },
+  ctaNote: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, textAlign: 'center' },
 });
-
-

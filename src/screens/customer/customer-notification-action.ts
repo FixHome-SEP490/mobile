@@ -17,8 +17,10 @@ export async function prepareCustomerNotificationAction(
   deps: CustomerNotificationActionDeps,
 ): Promise<CustomerNotificationTarget | null> {
   if (!item.isRead) {
-    deps.markReadLocal(item.id);
-    void deps.markReadRemote(item.id).catch(deps.onMarkReadError);
+    // A remote read is not confirmed until the server accepts the PATCH.
+    void deps.markReadRemote(item.id)
+      .then(() => deps.markReadLocal(item.id))
+      .catch(deps.onMarkReadError);
   }
 
   return resolveCustomerNotificationTarget(item, {

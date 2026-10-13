@@ -1,6 +1,6 @@
 // Pure aggregation for the technician earnings screen. Money math stays display-only:
 // it sums what the Backend already returned on completed orders.
-import type { ServiceOrderItem } from '../../api/orders.api';
+import { isHistoricalOrder, type TechnicianOrderItem, type ServiceOrderItem } from '../../api/orders.api';
 import { completedAt, orderIncome, startOfWeekVn } from './technician-home';
 import { dayKeyVn } from './technician-schedule';
 
@@ -13,18 +13,36 @@ export const EARNINGS_MAX_PAGES = 5;
  * list short, so the screen can say the totals only cover the newest orders.
  */
 export async function fetchAllOrders(
-  getPage: (page: number, pageSize: number) => Promise<{ data: ServiceOrderItem[]; total: number }>,
+  getPage: (page: number, pageSize: number) => Promise<{ data: TechnicianOrderItem[]; total: number }>,
   maxPages = EARNINGS_MAX_PAGES,
+  onConfirmedHistorical?: (ids: readonly string[]) => void,
 ): Promise<{ orders: ServiceOrderItem[]; truncated: boolean }> {
-  const orders: ServiceOrderItem[] = [];
+  const byId = new Map<string, ServiceOrderItem>();
+  const seenIds = new Set<string>();
+  const revokedIds = new Set<string>();
   let total = 0;
   for (let page = 1; page <= maxPages; page += 1) {
     const res = await getPage(page, EARNINGS_PAGE_SIZE);
     total = res.total;
-    orders.push(...res.data);
-    if (res.data.length < EARNINGS_PAGE_SIZE || orders.length >= total) return { orders, truncated: false };
+    const newlyHistorical: string[] = [];
+    for (const item of res.data) {
+      seenIds.add(item.id);
+      if (isHistoricalOrder(item)) {
+        revokedIds.add(item.id);
+        byId.delete(item.id);
+        newlyHistorical.push(item.id);
+      } else if (!revokedIds.has(item.id)) {
+        byId.set(item.id, item);
+      }
+    }
+    // Each successful page proves revocation regardless of what later GETs do.
+    if (newlyHistorical.length) onConfirmedHistorical?.([...new Set(newlyHistorical)]);
+    // Offset pagination may overlap after concurrent inserts. Count DISTINCT IDs.
+    if (res.data.length < EARNINGS_PAGE_SIZE || seenIds.size >= total) {
+      return { orders: [...byId.values()], truncated: seenIds.size < total };
+    }
   }
-  return { orders, truncated: orders.length < total };
+  return { orders: [...byId.values()], truncated: seenIds.size < total };
 }
 
 export interface EarningsBucket {
@@ -42,14 +60,14 @@ export interface EarningsSummary {
   best: { id: string; code: string; serviceName: string; amount: number } | null;
 }
 
-const completedOrders = (orders: ServiceOrderItem[]) =>
-  orders.filter(
-    (o) => !o.historical && String(o.status).toUpperCase() === 'COMPLETED' && dayKeyVn(completedAt(o)) !== null,
+const completedOrders = (orders: TechnicianOrderItem[]) =>
+  orders.filter((o): o is ServiceOrderItem => !isHistoricalOrder(o)).filter(
+    (o) => String(o.status).toUpperCase() === 'COMPLETED' && dayKeyVn(completedAt(o)) !== null,
   );
 
 /** Last `weekCount` weeks (oldest first, Mon–Sun VN) and last `monthCount` months, plus overall figures. */
 export function summarizeEarnings(
-  orders: ServiceOrderItem[],
+  orders: TechnicianOrderItem[],
   now: number,
   weekCount = 8,
   monthCount = 6,

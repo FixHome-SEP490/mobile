@@ -71,6 +71,7 @@ export default function ChatThreadScreen() {
 
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [sending, setSending] = useState(false);
   const [nextBefore, setNextBefore] = useState<string | null>(null);
@@ -81,7 +82,8 @@ export default function ChatThreadScreen() {
   const typingStopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const peerTypingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const canSend = conversation?.canSend ?? true;
+  // Fail closed until the backend confirms permission for this job-scoped chat.
+  const canSend = conversation?.canSend === true;
 
   const upsert = useCallback((incoming: ChatMessage) => {
     setMessages((prev) => {
@@ -100,6 +102,8 @@ export default function ChatThreadScreen() {
 
   // ------------------------------------------------------------ initial load
 
+  const [reloadKey, setReloadKey] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -114,9 +118,7 @@ export default function ChatThreadScreen() {
         setNextBefore(page.nextBefore);
         await messagingApi.markRead(conversationId);
       } catch {
-        if (!cancelled) {
-          Alert.alert('Không mở được cuộc trò chuyện', 'Vui lòng thử lại sau.');
-        }
+        if (!cancelled) setLoadFailed(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -124,7 +126,7 @@ export default function ChatThreadScreen() {
     return () => {
       cancelled = true;
     };
-  }, [conversationId]);
+  }, [conversationId, reloadKey]);
 
   // --------------------------------------------------------------- realtime
 
@@ -362,7 +364,7 @@ export default function ChatThreadScreen() {
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.headerIconBtn}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           accessibilityRole="button"
           accessibilityLabel="Quay lại"
         >
@@ -396,6 +398,27 @@ export default function ChatThreadScreen() {
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Đang tải…</Text>
+          </View>
+        ) : loadFailed && messages.length === 0 ? (
+          <View style={styles.center}>
+            <Text style={styles.loadErrorTitle}>Không tải được cuộc trò chuyện</Text>
+            <Text style={styles.loadErrorText}>
+              Vui lòng kiểm tra kết nối rồi thử lại.
+            </Text>
+            <TouchableOpacity
+              style={[styles.retryBtn, styles.loadErrorRetryBtn]}
+              onPress={() => {
+                setLoadFailed(false);
+                setLoading(true);
+                setReloadKey((key) => key + 1);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Thử tải lại cuộc trò chuyện"
+              activeOpacity={0.7}
+            >
+              <Text style={styles.retryBtnText}>Thử lại</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <FlatList
@@ -414,7 +437,7 @@ export default function ChatThreadScreen() {
             ListHeaderComponent={peerTyping ? <TypingDots /> : null}
             ListFooterComponent={
               loadingOlder ? (
-                <ActivityIndicator style={styles.olderSpinner} color="#8E8E93" />
+                <ActivityIndicator style={styles.olderSpinner} color={colors.muted} />
               ) : null
             }
             ListEmptyComponent={
@@ -455,6 +478,7 @@ export default function ChatThreadScreen() {
               value={draft}
               onChangeText={onChangeDraft}
               placeholderTextColor={colors.muted}
+              accessibilityLabel="Nhập tin nhắn"
               multiline
               maxLength={2000}
             />
@@ -478,7 +502,11 @@ export default function ChatThreadScreen() {
           <View style={[styles.readOnlyBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
             <Ionicons name="lock-closed-outline" size={16} color={colors.textSecondary} />
             <Text style={styles.readOnlyText}>
-              Cuộc trò chuyện này chỉ còn xem lại được.
+              {conversation === null
+                ? (loadFailed
+                  ? 'Chưa xác minh được quyền nhắn tin. Vui lòng thử lại.'
+                  : 'Đang xác minh quyền nhắn tin…')
+                : 'Cuộc trò chuyện này chỉ còn xem lại được.'}
             </Text>
           </View>
         )}
@@ -491,6 +519,41 @@ const getStyles = (colors: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: colors.muted,
+  },
+  loadErrorTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  loadErrorText: {
+    marginTop: 8,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    minWidth: 88,
+    minHeight: 44,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  retryBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primaryStrong,
+  },
+  loadErrorRetryBtn: { marginTop: 16 },
   emptyText: {
     fontSize: 14,
     color: colors.muted,
@@ -507,7 +570,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  headerIconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerIconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   headerProfile: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 },
   headerAvatar: { width: 38, height: 38, borderRadius: 19, marginRight: 10 },
   headerAvatarFallback: {
@@ -537,7 +600,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     elevation: 1,
   },
   bubbleMine: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryStrong,
     borderBottomRightRadius: 4,
   },
   bubbleTheirs: {
@@ -547,13 +610,13 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderColor: colors.border
   },
   bubbleDeleted: { backgroundColor: colors.divider, borderColor: colors.border, borderWidth: 1, borderRadius: 16 },
-  msgText: { fontSize: 15, lineHeight: 22 },
+  msgText: { fontSize: 16, lineHeight: 24 },
   msgTextMine: { color: colors.surface },
   msgTextTheirs: { color: colors.text },
   msgTextDeleted: { color: colors.muted, fontStyle: 'italic' },
   metaRow: { flexDirection: 'row', alignSelf: 'flex-end', marginTop: 4 },
-  metaText: { fontSize: 11 },
-  metaTextMine: { color: 'rgba(255,255,255,0.7)' },
+  metaText: { fontSize: 12 },
+  metaTextMine: { color: colors.surface },
   metaTextTheirs: { color: colors.muted },
 
   editBanner: {
@@ -577,12 +640,6 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  attachBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   input: {
     flex: 1,
     maxHeight: 120,
@@ -592,16 +649,16 @@ const getStyles = (colors: any) => StyleSheet.create({
     paddingBottom: 10,
     borderRadius: 21,
     backgroundColor: colors.divider,
-    fontSize: 15,
+    fontSize: 16,
     color: colors.text,
     marginHorizontal: 4,
   },
   sendIconBtn: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 21,
+    borderRadius: 22,
     backgroundColor: colors.primarySoft,
   },
 
@@ -616,66 +673,4 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderTopColor: colors.border,
   },
   readOnlyText: { fontSize: 13, color: colors.textSecondary },
-
-  sheet: {
-    backgroundColor: colors.surface,
-    flex: 1,
-    paddingBottom: 20,
-  },
-  sheetItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingHorizontal: 22,
-    paddingVertical: 16,
-  },
-  sheetDivider: { height: 1, backgroundColor: colors.divider, marginHorizontal: 22 },
-  sheetText: { fontSize: 16, color: colors.text },
-  sheetTextDanger: { color: '#EF4444' },
-
-  attachmentGrid: {
-    flexDirection: 'row',
-    padding: 24,
-    gap: 24,
-  },
-  attachOption: {
-    alignItems: 'center',
-    width: 64,
-  },
-  attachIconBg: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  attachOptionText: {
-    fontSize: 13,
-    color: colors.text,
-    fontWeight: '500',
-  },
-
-  menuOptionsContainer: {
-    borderRadius: 12,
-    paddingVertical: 4,
-    width: 160,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  menuOptionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  menuOptionText: {
-    fontSize: 15,
-    color: colors.text,
-    fontWeight: '500',
-  }
 });

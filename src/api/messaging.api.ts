@@ -20,6 +20,34 @@ function unwrap<T>(payload: unknown): T {
   return current as T;
 }
 
+function requireArray<T>(payload: unknown, resource: string): T[] {
+  if (!Array.isArray(payload)) {
+    throw new Error('Invalid ' + resource + ' response');
+  }
+  return payload as T[];
+}
+
+function unwrapMessagePage(payload: unknown): { data: unknown; meta: unknown } {
+  let current = payload;
+  let meta: unknown;
+
+  while (current && typeof current === 'object' && !Array.isArray(current)) {
+    const envelope = current as Record<string, unknown>;
+    if ('meta' in envelope) meta = envelope.meta;
+    if (!('data' in envelope)) return { data: undefined, meta };
+
+    const data = envelope.data;
+    if (Array.isArray(data)) return { data, meta };
+    if (data && typeof data === 'object') {
+      current = data;
+      continue;
+    }
+    return { data, meta };
+  }
+
+  return { data: undefined, meta };
+}
+
 export type ConversationStatus = 'active' | 'read_only' | 'closed';
 
 export interface ConversationParticipant {
@@ -64,7 +92,7 @@ export interface MessagePage {
 export const messagingApi = {
   async listConversations(): Promise<ConversationItem[]> {
     const res = await apiClient.get('/conversations');
-    return unwrap<ConversationItem[]>(res.data) ?? [];
+    return requireArray<ConversationItem>(unwrap<unknown>(res.data), 'conversations');
   },
 
   async getConversation(id: string): Promise<ConversationItem> {
@@ -80,10 +108,11 @@ export const messagingApi = {
     const res = await apiClient.get(`/conversations/${conversationId}/messages`, {
       params,
     });
-    const body = res.data as { data?: ChatMessage[]; meta?: { nextBefore?: string | null } };
+    const body = unwrapMessagePage(res.data);
+    const meta = body.meta as { nextBefore?: string | null } | null | undefined;
     return {
-      data: body?.data ?? [],
-      nextBefore: body?.meta?.nextBefore ?? null,
+      data: requireArray<ChatMessage>(body.data, 'messages'),
+      nextBefore: meta?.nextBefore ?? null,
     };
   },
 
