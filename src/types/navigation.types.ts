@@ -53,7 +53,11 @@ export type RootStackParamList = {
   CustomerRepairHistory: undefined;
   CustomerWarranties: { orderId?: string } | undefined;
   CustomerSecurity: undefined;
+  /** Customer-only FixHome wallet (overview + top-up). No Technician equivalent at this route. */
+  CustomerWallet: undefined;
   TechnicianOrderDetail: { serviceOrderId: string };
+  /** Internal M2 reader preview, registered only in __DEV__; role comes from authenticated state. */
+  OrderFlowDevPreview: { serviceOrderId: string };
   TechnicianKyc: undefined;
   TechnicianOnboarding: undefined;
   TechnicianWallet: undefined;

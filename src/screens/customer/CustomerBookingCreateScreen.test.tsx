@@ -6,6 +6,21 @@ import type { BookingItem } from '../../api/bookings.api';
 import type { ServiceItem } from '../../api/services.api';
 import type { AddressData } from '../../api/users.api';
 import { vnWallClockToDate } from '../../utils/vn-time';
+import { createEntryAttemptJournal, type EntryAttemptJournal } from '../../features/order-flow/runtime/entry-attempt-journal';
+let mockEntryJournal: EntryAttemptJournal;
+const mockGetBooking = jest.fn();
+jest.mock('../../features/order-flow/runtime/entry-attempt-production', () => {
+  const { createBookingAttemptController } = jest.requireActual('../../features/order-flow/customer/booking-create-attempt');
+  let sequence = 0;
+  return {
+    entryAttemptJournal: {
+      restore: () => mockEntryJournal.restore(), blocked: (...args: Parameters<EntryAttemptJournal['blocked']>) => mockEntryJournal.blocked(...args),
+      list: (owner: string) => mockEntryJournal.list(owner), subscribe: (fn: () => void) => mockEntryJournal.subscribe(fn),
+    },
+    createProductionBookingAttempt: (isCurrent: (owner: string) => boolean) => createBookingAttemptController({ journal: mockEntryJournal,
+      api: { createBooking: (...args: unknown[]) => mockCreateBooking(...args), getBooking: (...args: unknown[]) => mockGetBooking(...args) }, isCurrent, newIntentId: () => `test-intent-${++sequence}` }),
+  };
+});
 
 const SERVICE_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_SERVICE_ID = '55555555-5555-4555-8555-555555555555';
@@ -72,6 +87,7 @@ jest.mock('../../api/bookings.api', () => ({
   bookingsApi: {
     getMyBookingsPage: (...args: unknown[]) => mockGetMyBookingsPage(...args),
     createBooking: (...args: unknown[]) => mockCreateBooking(...args),
+    getBooking: (...args: unknown[]) => mockGetBooking(...args),
   },
 }));
 
@@ -331,6 +347,9 @@ async function renderScreen(): Promise<TestRenderer> {
 }
 
 beforeEach(() => {
+  let raw: string | null = null;
+  mockEntryJournal = createEntryAttemptJournal({ getItem: async () => raw, setItem: async (_, value) => { raw = value; } });
+  mockGetBooking.mockImplementation(async (id: string) => ({ id, customerId: mockAuthState.user.id }));
   jest.useFakeTimers().setSystemTime(vnWallClockToDate(2026, 9, 27, 8, 0));
   jest.clearAllMocks();
   mockAuthState.user.id = 'customer-a';
@@ -354,6 +373,16 @@ beforeEach(() => {
     id: 'booking-created',
     customerId: 'customer-a',
   } satisfies Partial<BookingItem>);
+});
+
+it('restored unknown create marker blocks a new Booking after runtime snapshot is gone', async () => {
+  await mockEntryJournal.restore();
+  await mockEntryJournal.begin({ ownerUserId: 'customer-a', intentId: 'prior', kind: 'booking-create', baselineIds: null, createdAt: 1 });
+  const tree = await renderScreen();
+  expect(textContent(tree.root)).toContain('Không gửi lại');
+  expect(textContent(tree.root)).toContain('Mở lịch sử yêu cầu');
+  expect(mockCreateBooking).not.toHaveBeenCalled();
+  await act(async () => tree.unmount());
 });
 
 afterEach(() => {
@@ -618,7 +647,7 @@ it('keeps new-address save outside the scroll body and Back returns to the saved
   }
 });
 
-it('retains Review and the actionable definite POST error after remount while awaiting the response', async () => {
+it('keeps a rejected POST locked after remount until explicit authoritative readback', async () => {
   const pending = deferred<Partial<BookingItem>>();
   mockCreateBooking.mockReturnValueOnce(pending.promise);
   let renderer = await renderScreen();
@@ -633,14 +662,9 @@ it('retains Review and the actionable definite POST error after remount while aw
       pending.reject({ response: { status: 400 } });
       await flushPromises();
     });
-    expect(textContent(renderer.root)).toContain('Retained Review');
-    expect(findActions(renderer, 'Xác nhận đặt lịch')[0]?.props.disabled).toBe(false);
-    expect(renderer.root.findAll((node) => node.props.accessibilityRole === 'alert').length).toBeGreaterThan(0);
-    await act(async () => (findActions(renderer, 'Chỉnh sửa')[0].props.onPress as () => void)());
-    expect(findActions(renderer, 'Xem lại yêu cầu')).toHaveLength(1);
-    await act(async () => (findAccessibleActions(renderer, 'Quay lại')[0].props.onPress as () => void)());
-    await act(async () => (findAccessibleActions(renderer, 'Quay lại')[0].props.onPress as () => void)());
-    expect(findDescriptionInput(renderer)?.props.value).toBe('Retained Review');
+    expect(findActions(renderer, 'Chờ xác minh yêu cầu')[0]?.props.disabled).toBe(true);
+    expect(findActions(renderer, 'Xác nhận đặt lịch')).toHaveLength(0);
+    expect(findActions(renderer, 'Kiểm tra lịch sử')).toHaveLength(1);
     expect(mockCreateBooking).toHaveBeenCalledTimes(1);
   } finally {
     await act(async () => renderer.unmount());
@@ -709,7 +733,7 @@ it('merges the owner uncertain URI lock into a cached photo when editing after s
 it.each([
   ['definitive', { response: { status: 400 } }],
   ['uncertain', new Error('Network request failed')],
-])('keeps %s POST errors actionable without losing the reviewed draft or resending', async (kind, error) => {
+])('keeps %s POST errors locked without resending', async (_kind, error) => {
   mockCreateBooking.mockRejectedValueOnce(error);
   const renderer = await renderScreen();
   try {
@@ -717,18 +741,12 @@ it.each([
       (findDescriptionInput(renderer)!.props.onChangeText as (value: string) => void)('Reviewed error');
     });
     await openAndConfirmReview(renderer);
-    if (kind === 'definitive') {
-      expect(textContent(renderer.root)).toContain('Reviewed error');
-      expect(findActions(renderer, 'Xác nhận đặt lịch')[0]?.props.disabled).toBe(false);
-      expect(renderer.root.findAll((node) => node.props.accessibilityRole === 'alert').length).toBeGreaterThan(0);
-    } else {
-      expect(findActions(renderer, 'Kiểm tra lịch sử')).toHaveLength(1);
+    expect(findActions(renderer, 'Kiểm tra lịch sử')).toHaveLength(1);
       await act(async () => {
         (findActions(renderer, 'Kiểm tra lịch sử')[0].props.onPress as () => void)();
         await flushPromises();
       });
       expect(findActions(renderer, 'Chờ xác minh yêu cầu')[0]?.props.disabled).toBe(true);
-    }
     expect(mockCreateBooking).toHaveBeenCalledTimes(1);
   } finally {
     await act(async () => renderer.unmount());
@@ -1247,6 +1265,33 @@ it('dismisses and clears an open review immediately when the account changes', a
   await act(async () => renderer.unmount());
 });
 
+it('held durable save followed by session rotation leaves no POST or uncertain UI lock when the original owner returns', async () => {
+  const saving = deferred<void>(), release = deferred<void>(); let raw: string | null = null, first = true;
+  mockEntryJournal = createEntryAttemptJournal({ getItem: async () => raw, setItem: async (_, value) => {
+    if (first) { first = false; saving.resolve(); await release.promise; }
+    raw = value;
+  } });
+  const renderer = await renderScreen();
+  try {
+    await act(async () => { (findDescriptionInput(renderer)!.props.onChangeText as (value: string) => void)('unsent request'); });
+    await advanceToSchedule(renderer);
+    await act(async () => { (findActions(renderer, 'Xem lại yêu cầu')[0].props.onPress as () => void)(); await flushPromises(); });
+    await act(async () => { (findActions(renderer, 'Xác nhận đặt lịch')[0].props.onPress as () => void)(); await saving.promise; });
+    await switchOwner(renderer, 'customer-b');
+    await act(async () => { release.resolve(); for (let i = 0; i < 30; i++) await Promise.resolve(); });
+    expect(mockCreateBooking).not.toHaveBeenCalled();
+    await switchOwner(renderer, 'customer-a');
+    expect(findActions(renderer, 'Chờ xác minh yêu cầu').length).toBe(0);
+    expect(mockEntryJournal.blocked('customer-a', 'booking-create')).toBe(false);
+    await act(async () => { (findDescriptionInput(renderer)!.props.onChangeText as (value: string) => void)('fresh request after unsent'); });
+    await advanceToSchedule(renderer);
+    expect(findActions(renderer, 'Xem lại yêu cầu')[0].props.disabled).toBe(false);
+    await act(async () => { (findActions(renderer, 'Xem lại yêu cầu')[0].props.onPress as () => void)(); await flushPromises(); });
+    await act(async () => { (findActions(renderer, 'Xác nhận đặt lịch')[0].props.onPress as () => void)(); for (let i = 0; i < 30; i++) await Promise.resolve(); });
+    expect(mockCreateBooking).toHaveBeenCalledTimes(1);
+  } finally { await act(async () => renderer.unmount()); }
+});
+
 it('retains a successful in-flight create under its original owner across an account change', async () => {
   const renderer = await renderScreen();
   const input = findDescriptionInput(renderer);
@@ -1281,6 +1326,11 @@ it('retains a successful in-flight create under its original owner across an acc
   expect(textContent(renderer.root)).not.toContain('customer A confirmed request');
 
   await switchOwner(renderer, 'customer-a');
+  expect(textContent(renderer.root)).not.toContain('Đã gửi yêu cầu');
+  await act(async () => {
+    (findActions(renderer, 'Kiểm tra lịch sử')[0].props.onPress as () => void)();
+    await flushPromises();
+  });
   expect(textContent(renderer.root)).toContain('Đã gửi yêu cầu');
   expect(textContent(renderer.root)).toContain('customer A confirmed request');
   expect(mockCreateBooking).toHaveBeenCalledTimes(1);

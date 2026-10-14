@@ -38,6 +38,7 @@ import { useTechnicianAvailability } from '../../hooks/useTechnicianAvailability
 import { isSameVnDay, vnDateTimeString, vnTimeString } from '../../utils/vn-time';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import StatusBadge from '../../components/StatusBadge';
+import InvitationDecisionView from '../../features/order-flow/technician/InvitationDecisionView';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -151,12 +152,6 @@ export default function TechnicianInvitationsScreen() {
     }
     void controller.respond(inv.id, action);
   };
-  const handleDecline = (inv: InvitationItem) => {
-    Alert.alert('Từ chối lời mời?', 'Bạn sẽ không nhận đơn này.', [
-      { text: 'Giữ lại lời mời', style: 'cancel' },
-      { text: 'Từ chối', style: 'destructive', onPress: () => respond(inv, 'DECLINE') },
-    ]);
-  };
 
   const renderItem = ({ item: inv }: { item: InvitationItem }) => {
     const actionable = isActionable(inv);
@@ -182,7 +177,6 @@ export default function TechnicianInvitationsScreen() {
     const location = [b?.district, b?.province].filter(Boolean).join(', ');
     const timeWindow = formatWindow(b?.preferredStartAt, b?.preferredEndAt);
     const reviewing = reviewingInvitationId === inv.id;
-    const decisionDisabled = !actionable || !!inFlight;
 
     return (
       // Privacy: only allowlisted preview fields are rendered.
@@ -286,38 +280,18 @@ export default function TechnicianInvitationsScreen() {
           )}
 
           {reviewing && (
-            <View style={styles.reviewSurface}>
-              <Text style={styles.reviewTitle}>Trước khi nhận việc</Text>
-              <Text style={styles.reviewText}>
-                Bạn đang xem các thông tin cần để quyết định. Địa chỉ chi tiết và thông tin riêng của khách hàng chỉ mở sau khi nhận việc thành công.
-              </Text>
-              {!actionable && <Text style={styles.lockText}>{closedView.label}. Bạn không thể phản hồi lời mời này.</Text>}
-              <View style={styles.actionRow}>
-                <TouchableOpacity
-                  style={[styles.btnAccept, decisionDisabled ? styles.btnDisabled : null]}
-                  disabled={decisionDisabled}
-                  onPress={() => respond(inv, 'ACCEPT')}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Nhận việc ${serviceName}`}
-                  accessibilityState={{ disabled: decisionDisabled, busy: inFlight === 'ACCEPT' }}
-                >
-                  {inFlight === 'ACCEPT' ? <ActivityIndicator size="small" color={colors.surface} /> : null}
-                  <Text style={styles.btnAcceptText}>{inFlight === 'ACCEPT' ? 'Đang xác minh…' : 'Nhận việc'}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.btnDecline, decisionDisabled ? styles.btnDisabled : null]}
-                  disabled={decisionDisabled}
-                  onPress={() => handleDecline(inv)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Từ chối lời mời ${serviceName}`}
-                  accessibilityState={{ disabled: decisionDisabled, busy: inFlight === 'DECLINE' }}
-                >
-                  {inFlight === 'DECLINE' ? <ActivityIndicator size="small" color={colors.textSecondary} /> : null}
-                  <Text style={styles.btnDeclineText}>{inFlight === 'DECLINE' ? 'Đang xác minh…' : 'Từ chối lời mời'}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+            <InvitationDecisionView
+              invitation={inv}
+              actionable={actionable}
+              closedLabel={closedView.label}
+              countdownLabel={countdown?.label ?? null}
+              countdownUrgent={countdown?.urgent ?? false}
+              inFlight={inFlight ?? null}
+              onAccept={() => respond(inv, 'ACCEPT')}
+              onDecline={() => respond(inv, 'DECLINE')}
+              onBack={() => setReviewingInvitationId(null)}
+              onRefresh={onRefresh}
+            />
           )}
         </View>
       </View>
@@ -342,7 +316,7 @@ export default function TechnicianInvitationsScreen() {
           isFocused ? (
             <View style={styles.headerStack}>
               <View style={styles.focusedTopBar}>
-                <TouchableOpacity
+                {(focusedMissing || loading || Boolean(error)) ? <TouchableOpacity
                   style={styles.backBtn}
                   onPress={() => setReviewingInvitationId(null)}
                   accessibilityRole="button"
@@ -351,7 +325,7 @@ export default function TechnicianInvitationsScreen() {
                 >
                   <ChevronLeft size={20} color={colors.text} strokeWidth={1.75} />
                   <Text style={styles.backBtnText}>Quay lại</Text>
-                </TouchableOpacity>
+                </TouchableOpacity> : null}
               </View>
 
               {availability.isAvailable === false && (

@@ -38,6 +38,7 @@ import {
   type HistoryCard,
 } from './customer-bookings-history';
 import { orderDetailTarget } from './customer-order-detail';
+import OrderFlowDevPreviewAction from '../../features/order-flow/navigation/OrderFlowDevPreviewAction';
 import { buildBookingWindow } from '../../utils/booking-window';
 import {
   canCancelBookingConservative,
@@ -708,15 +709,18 @@ export default function CustomerBookingsScreen() {
     const detailId = orderDetailTarget(order.id);
     if (!detailId) return <View key={key}>{renderOrderSummary(order, bookingId)}</View>;
     return (
-      <TouchableOpacity
-        key={key}
-        onPress={() => navigation.navigate('CustomerOrderDetail', { serviceOrderId: detailId })}
-        accessibilityRole="button"
-        accessibilityLabel="Xem chi tiết đơn sửa chữa"
-        activeOpacity={0.8}
-      >
-        {renderOrderSummary(order, bookingId, true)}
-      </TouchableOpacity>
+      <View key={key} style={{ gap: 8 }}>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('CustomerOrderDetail', { serviceOrderId: detailId })}
+          accessibilityRole="button"
+          accessibilityLabel="Xem chi tiết đơn sửa chữa"
+          activeOpacity={0.8}
+        >
+          {renderOrderSummary(order, bookingId, true)}
+        </TouchableOpacity>
+        {__DEV__ && ['ACCEPTED', 'EN_ROUTE', 'UNDER_REPAIR'].includes(order.status) &&
+          <OrderFlowDevPreviewAction serviceOrderId={detailId} />}
+      </View>
     );
   };
 

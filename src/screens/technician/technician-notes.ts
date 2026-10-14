@@ -4,6 +4,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const NOTE_MAX_LENGTH = 2000;
 
+const pendingNoteOperations = new WeakMap<NoteStorage, Map<string, Promise<void>>>();
+
 export interface NoteStorage {
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
@@ -12,6 +14,25 @@ export interface NoteStorage {
 
 export const noteKey = (userId: string, orderId: string) => `tech-note:${userId}:${orderId}`;
 
+function enqueueNoteOperation<T>(storage: NoteStorage, key: string, operation: () => Promise<T>): Promise<T> {
+  let operations = pendingNoteOperations.get(storage);
+  if (!operations) {
+    operations = new Map();
+    pendingNoteOperations.set(storage, operations);
+  }
+
+  const previous = operations.get(key) ?? Promise.resolve();
+  const current = previous.then(operation);
+  const settled = current.then(() => undefined, () => undefined);
+  operations.set(key, settled);
+  void settled.then(() => {
+    if (operations?.get(key) !== settled) return;
+    operations.delete(key);
+    if (operations.size === 0) pendingNoteOperations.delete(storage);
+  });
+  return current;
+}
+
 export async function loadNote(
   userId: string | null,
   orderId: string,
@@ -19,7 +40,8 @@ export async function loadNote(
 ): Promise<string> {
   if (!userId) return '';
   try {
-    return (await storage.getItem(noteKey(userId, orderId))) ?? '';
+    const key = noteKey(userId, orderId);
+    return await enqueueNoteOperation(storage, key, async () => (await storage.getItem(key)) ?? '');
   } catch {
     return '';
   }
@@ -34,10 +56,13 @@ export async function saveNote(
 ): Promise<boolean> {
   if (!userId) return false;
   const value = text.trim().slice(0, NOTE_MAX_LENGTH);
+  const key = noteKey(userId, orderId);
   try {
-    if (value) await storage.setItem(noteKey(userId, orderId), value);
-    else await storage.removeItem(noteKey(userId, orderId));
-    return true;
+    return await enqueueNoteOperation(storage, key, async () => {
+      if (value) await storage.setItem(key, value);
+      else await storage.removeItem(key);
+      return true;
+    });
   } catch {
     return false;
   }

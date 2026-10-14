@@ -1,5 +1,6 @@
 // src/api/orders.api.ts
 import apiClient from './client';
+import type { CheckInDto, UpdateLocationDto, EvidenceUploadMetadata, CompletionRequestDto, OrderStatusHistoryResponse } from '../types/api.types';
 
 // Backend's Cloudinary round-trip for evidence photos is observed at 30s+
 // (see service-orders.service.ts uploadEvidence comment); the shared 15s
@@ -91,6 +92,7 @@ export interface ServiceOrderItem {
   paymentStatus: 'UNPAID' | 'PAID' | 'REFUNDED';
   createdAt: string;
   completedAt?: string;
+  completionNote?: string | null;
   timeline?: {
     status: string;
     title: string;
@@ -130,7 +132,8 @@ export interface QuotationLineItem {
 export interface EvidenceResponse {
   id: string;
   serviceOrderId: string;
-  type: 'BEFORE' | 'AFTER' | 'ADDITIONAL';
+  type: 'BEFORE' | 'AFTER' | 'ADDITIONAL' | 'CHECKIN_FACE';
+  uploaderId?: string;
   mediaUrl: string;
   note?: string;
   capturedAt?: string;
@@ -148,6 +151,31 @@ export interface CreateQuotationLaborItem {
   description: string;
   quantity: number;
   unitPrice: number;
+  warrantyDays?: number;
+}
+
+export interface CreateQuotationFixHomePartItem {
+  type: 'parts_equipment';
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  partSource: 'fixhome';
+  partCatalogId: string;
+  partNameSnapshot?: string;
+  partSku?: string;
+  warrantyPolicy?: string;
+}
+
+export interface CreateQuotationExternalPartItem {
+  type: 'parts_equipment';
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  partSource: 'external';
+  partWarrantyOption: 'no_warranty';
+  warrantyDays?: number;
+  warrantyFee?: number;
+  warrantyTermDays?: number;
 }
 
 export interface CreateQuotationTechnicianPartItem {
@@ -163,6 +191,8 @@ export interface CreateQuotationTechnicianPartItem {
 
 export type CreateQuotationItem =
   | CreateQuotationLaborItem
+  | CreateQuotationFixHomePartItem
+  | CreateQuotationExternalPartItem
   | CreateQuotationTechnicianPartItem;
 
 export interface CreateQuotationPayload {
@@ -175,9 +205,14 @@ export interface CreateAdditionalCostItem {
   description: string;
   quantity: number;
   unitPrice: number;
-  partSource?: 'fixhome';
+  partSource?: 'fixhome' | 'technician' | 'external';
   partCatalogId?: string;
   partNameSnapshot?: string;
+  partSku?: string;
+  warrantyPolicy?: string;
+  partWarrantyOption?: 'no_warranty' | 'technician_free' | 'paid_warranty';
+  warrantyFee?: number;
+  warrantyTermDays?: number;
   warrantyDays?: number;
 }
 
@@ -185,6 +220,7 @@ export interface CreateAdditionalCostPayload {
   reason: string;
   items: CreateAdditionalCostItem[];
   note?: string;
+  evidenceUrls?: string[];
   fulfillmentMethod?: 'pickup' | 'delivery';
   shippingFee?: number;
 }
@@ -192,13 +228,29 @@ export interface CreateAdditionalCostPayload {
 export interface CostRequest {
   id: string;
   serviceOrderId: string;
+  technicianId?: string;
   status: string;
+  /** Compatibility only; AdditionalCostRequest has NO version in Backend. Must not drive authority. */
+  version?: number;
+  supersedesId?: string | null;
   reason: string;
   totalLaborDelta: number;
   totalPartsDelta: number;
   createdAt: string;
   expiresAt?: string;
-  items: (QuotationLineItem & { id: string; lineTotal: number })[];
+  decidedAt?: string | null;
+  decidedByCustomerId?: string | null;
+  evidenceUrls?: string[] | null;
+  fulfillmentMethod?: 'pickup' | 'delivery' | null;
+  shippingFee?: number;
+  items: (QuotationLineItem & {
+    id: string;
+    lineTotal: number;
+    partSource?: string | null;
+    partWarrantyOption?: string | null;
+    warrantyFee?: number | null;
+    warrantyTermDays?: number | null;
+  })[];
 }
 
 export interface RepairHistoryItem {
@@ -377,16 +429,20 @@ export const ordersApi = {
 
   async checkIn(
     id: string,
-    coords: { lat: number; lng: number; accuracyMeters: number },
+    coords: CheckInDto,
   ) {
     return post(`/service-orders/${id}/check-in`, coords);
+  },
+
+  async updateOrderLocation(id: string, coords: UpdateLocationDto) {
+    return unwrap((await apiClient.patch(`/service-orders/${id}/location`, coords)).data);
   },
 
   async startRepair(id: string) {
     return post(`/service-orders/${id}/start-repair`);
   },
 
-  async requestCompletion(id: string, body?: { completionNote?: string }) {
+  async requestCompletion(id: string, body?: CompletionRequestDto) {
     return post(`/service-orders/${id}/request-completion`, body);
   },
 
@@ -440,6 +496,21 @@ export const ordersApi = {
     return unwrap(res.data);
   },
 
+  async uploadCheckInFace(
+    id: string,
+    image: EvidenceUploadImage,
+    metadata: EvidenceUploadMetadata = {},
+  ): Promise<unknown> {
+    const form = new FormData();
+    form.append('type', 'checkin_face');
+    form.append('file', { uri: image.uri, name: image.name, type: image.type } as unknown as Blob);
+    if (metadata.note !== undefined) form.append('note', metadata.note);
+    if (metadata.capturedAt !== undefined) form.append('capturedAt', metadata.capturedAt);
+    return unwrap((await apiClient.post(`/service-orders/${id}/evidence`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' }, timeout: EVIDENCE_UPLOAD_TIMEOUT,
+    })).data);
+  },
+
   /**
    * AFTER-only evidence upload. Same per-request multipart pattern as the
    * BEFORE helper with exact lowercase `type='after'`; the BEFORE helper is
@@ -465,6 +536,10 @@ export const ordersApi = {
     return get(`/service-orders/${id}/quotations`);
   },
 
+  async getQuotation(id: string): Promise<unknown> {
+    return get(`/quotations/${id}`);
+  },
+
   /**
    * Labor-only quotation proposal for INSPECTION_REQUIRED orders. This is a
    * proposal only — never payment, approval, or repair start. The 201 body is
@@ -483,6 +558,10 @@ export const ordersApi = {
    */
   async createAdditionalCostProposal(orderId: string, payload: CreateAdditionalCostPayload): Promise<unknown> {
     return post(`/service-orders/${orderId}/additional-costs`, payload);
+  },
+
+  async reviseAdditionalCost(proposalId: string, payload: CreateAdditionalCostPayload): Promise<unknown> {
+    return post(`/additional-costs/${proposalId}/revise`, payload);
   },
 
   async approveQuotation(
@@ -533,8 +612,8 @@ export const ordersApi = {
     return { data: unwrap(res.data), total: res.data.meta?.total ?? 0 };
   },
 
-  async getStatusHistory(id: string) {
-    return get(`/service-orders/${id}/status-history`);
+  async getStatusHistory(id: string): Promise<OrderStatusHistoryResponse[]> {
+    return get<OrderStatusHistoryResponse[]>(`/service-orders/${id}/status-history`);
   },
 
   async getOrderWarranties(id: string): Promise<WarrantyCoverageItem[]> {
@@ -601,6 +680,10 @@ export const ordersApi = {
 
   async payInvoice(id: string, idempotencyKey: string) {
     return post(`/invoices/${id}/pay`, { idempotencyKey });
+  },
+
+  async payInvoiceWithWallet(id: string): Promise<unknown> {
+    return unwrap((await apiClient.post(`/invoices/${id}/pay-with-wallet`)).data);
   },
 
   async createVnpayUrl(id: string): Promise<string> {

@@ -18,13 +18,17 @@ const gate = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const fillValid = (h: Harness) => {
+const fillFields = (h: Harness) => {
   const controller = h.controller;
   controller.setField('reason', 'Phát hiện thêm mối hàn hở');
   controller.setField('description', 'Gia cố mối hàn');
   controller.setField('quantity', '1');
   controller.setField('unitPrice', '120000');
-  controller.requestConfirm();
+};
+
+const fillValid = (h: Harness) => {
+  fillFields(h);
+  h.controller.requestConfirm();
 };
 
 function deferred<T>() {
@@ -78,10 +82,10 @@ const notified = (h: Harness) => h.deps.notify as jest.Mock;
 const refreshed = (h: Harness) => h.deps.refreshCosts as jest.Mock;
 const denied = (h: Harness) => h.deps.onAccessDenied as jest.Mock;
 
-it('exposes only the proposal surface: no decide/revise/payment', () => {
+it('exposes only the proposal and revise surface: no decide/payment', () => {
   const { controller } = setup();
   expect(Object.keys(controller).sort()).toEqual(
-    ['cancelConfirm', 'markReverified', 'requestConfirm', 'reset', 'setField', 'submit'].sort(),
+    ['cancelConfirm', 'markReverified', 'requestConfirm', 'requestReviseConfirm', 'reset', 'setField', 'submit'].sort(),
   );
 });
 
@@ -154,18 +158,15 @@ it('forwards a trimmed note within limit and omits it when blank', async () => {
   });
 });
 
-it.each([
-  ['live PENDING_APPROVAL blocks a duplicate', ['PENDING_APPROVAL']],
-  ['lowercase pending blocks case-insensitively', ['pending_approval']],
-  ['mixed list with one pending blocks', ['APPROVED', 'Pending_Approval']],
-])('%s', async (_label, statuses) => {
-  const h = setup();
-  h.setStatuses(statuses);
-  fillValid(h);
-  expect(h.state().confirming).toBe(false);
-  await h.controller.submit();
-  expect(post(h)).not.toHaveBeenCalled();
-  expect(notified(h).mock.calls[0][0]).toBe('Chưa thể đề xuất chi phí');
+it('allows multiple independent pending roots valid for new proposals', async () => {
+  for (const statuses of [['PENDING_APPROVAL'], ['pending_approval'], ['APPROVED', 'Pending_Approval']]) {
+    const h = setup();
+    h.setStatuses(statuses);
+    fillValid(h);
+    expect(h.state().confirming).toBe(true);
+    await h.controller.submit();
+    expect(post(h)).toHaveBeenCalledTimes(1);
+  }
 });
 
 it('allows a new proposal when prior requests are decided or expired', async () => {
@@ -269,6 +270,68 @@ it('drops a stale success response after logout without notify or refresh', asyn
   expect(h.state().sent).toBe(false);
 });
 
+describe('revised lineage and approved immutable (M5 brief requirements)', () => {
+  const TARGET_COST_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  it('revising an unexpired pending proposal captures new ID and supersedes lineage', async () => {
+    const h = setup();
+    const reviseProposal = jest.fn().mockResolvedValue({ id: 'ac-revised-2' });
+    h.deps.reviseProposal = reviseProposal;
+    h.deps.getCostRequest = (id) =>
+      id === TARGET_COST_ID
+        ? { status: 'PENDING_APPROVAL', expiresAt: new Date(Date.now() + 3600000).toISOString() }
+        : null;
+
+    fillFields(h);
+    h.controller.requestReviseConfirm(TARGET_COST_ID);
+    expect(h.state().confirming).toBe(true);
+    expect(h.state().revisingId).toBe(TARGET_COST_ID);
+
+    await h.controller.submit();
+    expect(reviseProposal).toHaveBeenCalledTimes(1);
+    expect(reviseProposal).toHaveBeenCalledWith(TARGET_COST_ID, expect.objectContaining({ reason: 'Phát hiện thêm mối hàn hở' }));
+    expect(post(h)).not.toHaveBeenCalled();
+    expect(h.state().sent).toBe(true);
+    expect(h.state().createdProposalId).toBe('ac-revised-2');
+    expect(notified(h).mock.calls[0][0]).toBe('Đã gửi bản sửa đề xuất');
+  });
+
+  it('approved proposal is immutable and rejects revise confirmation', async () => {
+    const h = setup();
+    h.deps.getCostRequest = (id) =>
+      id === TARGET_COST_ID ? { status: 'APPROVED', expiresAt: new Date(Date.now() + 3600000).toISOString() } : null;
+
+    fillFields(h);
+    h.controller.requestReviseConfirm(TARGET_COST_ID);
+    expect(h.state().confirming).toBe(false);
+    expect(h.state().revisingId).toBeNull();
+    expect(notified(h).mock.calls[0][0]).toBe('Không thể sửa đề xuất');
+  });
+
+  it('expired proposal rejects revise confirmation', async () => {
+    const h = setup();
+    h.deps.getCostRequest = (id) =>
+      id === TARGET_COST_ID ? { status: 'PENDING_APPROVAL', expiresAt: new Date(Date.now() - 3600000).toISOString() } : null;
+
+    fillFields(h);
+    h.controller.requestReviseConfirm(TARGET_COST_ID);
+    expect(h.state().confirming).toBe(false);
+    expect(h.state().revisingId).toBeNull();
+    expect(notified(h).mock.calls[0][0]).toBe('Không thể sửa đề xuất');
+  });
+
+  it('lost create ID stays unresolved/needsVerify without fabricating success', async () => {
+    const h = setup();
+    fillFields(h);
+    h.controller.requestConfirm();
+    post(h).mockResolvedValue({}); // Missing entity id in 201 response body
+    await h.controller.submit();
+    expect(post(h)).toHaveBeenCalledTimes(1);
+    expect(h.state().sent).toBe(false);
+    expect(h.state().needsVerify).toBe(true);
+    expect(h.state().error).toMatch(/Chưa xác nhận đề xuất đã được tạo hay chưa/);
+  });
+});
+
 it.each([401, 403])('purges the draft on %s with re-login copy', async (status) => {
   const h = setup();
   fillValid(h);
@@ -307,15 +370,14 @@ it.each([
   expect(h.state().needsVerify).toBe(true);
   expect(h.state().error).toMatch(/tải lại chi phí phát sinh/);
   expect(refreshed(h)).toHaveBeenCalledTimes(1);
-  // Locked: confirm + submit do nothing; a pending GET result blocks repost.
+  // Locked: confirm + submit do nothing until reverified
   h.controller.requestConfirm();
   await h.controller.submit();
   expect(post(h)).toHaveBeenCalledTimes(1);
-  h.setStatuses(['PENDING_APPROVAL']);
   h.controller.markReverified();
   fillValid(h);
   await h.controller.submit();
-  expect(post(h)).toHaveBeenCalledTimes(1);
+  expect(post(h)).toHaveBeenCalledTimes(2);
 });
 
 it('reset clears the draft on blur/order change', () => {
@@ -343,8 +405,8 @@ describe('costProposalTarget (production gate)', () => {
     expect(costProposalTarget(order, () => [])).toBe(expected ? ORDER_ID : null);
   });
 
-  it.each([[['PENDING_APPROVAL'], false], [['pending_approval'], false], [['APPROVED'], true], [[], true]])(
-    'pending statuses %s',
+  it.each([[['PENDING_APPROVAL'], true], [['pending_approval'], true], [['APPROVED'], true], [[], true]])(
+    'pending statuses %s allow target because multiple independent roots are valid',
     (statuses, expected) => {
       expect(costProposalTarget(gate(), () => statuses)).toBe(expected ? ORDER_ID : null);
     },
@@ -467,17 +529,17 @@ describe('ambiguous-proposal retry path (review remediation)', () => {
     expect(post(s.proposal)).toHaveBeenCalledTimes(1);
   });
 
-  it('fresh GET with a new PENDING blocks a duplicate in the same tick', async () => {
+  it('fresh GET with a new PENDING allows deliberate proposal once unlocked', async () => {
     const s = screenSetup();
     await lockAfterAmbiguous(s);
     s.getAdditionalCosts.mockResolvedValueOnce([pendingRecord]);
     await s.fixedOnRefresh();
-    // Lock may clear, but the synchronously mirrored PENDING blocks resubmit.
     expect(s.statuses()).toEqual(['PENDING_APPROVAL']);
-    s.proposal.controller.requestConfirm();
-    await s.proposal.controller.submit();
-    expect(post(s.proposal)).toHaveBeenCalledTimes(1);
     expect(s.proposal.state().needsVerify).toBe(false);
+    fillValid(s.proposal);
+    post(s.proposal).mockResolvedValue({ id: 'ac-new' });
+    await s.proposal.controller.submit();
+    expect(post(s.proposal)).toHaveBeenCalledTimes(2);
   });
 
   it('fresh valid GET without pending permits a deliberate retry', async () => {

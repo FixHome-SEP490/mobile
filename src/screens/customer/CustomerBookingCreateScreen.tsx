@@ -1,5 +1,5 @@
 import BookingActionBar from '../../components/BookingActionBar';
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -39,11 +39,9 @@ import { servicesApi, type ServiceItem, type CategoryItem } from '../../api/serv
 import CategoryPills from '../../components/CategoryPills';
 import {
   addressReadyForBooking,
-  bookingCreateErrorStatus,
-  classifyBookingCreatePostError,
-  findCreatedBookingEvidence,
   type BookingCreationAttempt,
 } from './customer-booking-create';
+import { createProductionBookingAttempt, entryAttemptJournal } from '../../features/order-flow/runtime/entry-attempt-production';
 
 import {
   isOtherService,
@@ -82,6 +80,9 @@ type CustomerCreateState =
 // Process-local, owner-keyed safety state: leaving/re-entering the Booking route
 // must not erase a possibly committed POST or an unresolved photo upload.
 let runtimeCreateStates: Record<string, CustomerCreateState> = {};
+function getOwnerCreateState(ownerId: string): CustomerCreateState | undefined {
+  return runtimeCreateStates[ownerId];
+}
 const runtimeCompletedCreates = new Map<string, Map<string, Extract<CustomerCreateState, { kind: 'created' }>>>();
 const runtimeSubmittingOwners = new Set<string>();
 const runtimeReviewSnapshots = new Map<string, { flowId: string; snapshot: BookingReviewSnapshot; error?: string }>();
@@ -137,19 +138,6 @@ function bookingPhotoName(
   if (name) return name;
   const extension = type === 'image/jpeg' ? 'jpg' : type.slice('image/'.length);
   return `booking-photo.${extension}`;
-}
-
-function definitiveCreateMessage(status?: number): string {
-  if (status === 401) {
-    return 'Phiên đăng nhập không hợp lệ nên hệ thống chưa tạo yêu cầu. Hãy đăng nhập lại rồi chủ động gửi lại.';
-  }
-  if (status === 403) {
-    return 'Hệ thống đã từ chối trước khi tạo yêu cầu. Hãy kiểm tra quyền hoặc trạng thái tài khoản trước khi thử lại.';
-  }
-  if (status === 404) {
-    return 'Dịch vụ hoặc địa chỉ đã lưu không còn hợp lệ. Hãy tải lại và chọn dữ liệu hiện có trước khi thử lại.';
-  }
-  return 'Hệ thống đã từ chối dữ liệu trước khi tạo yêu cầu. Hãy sửa thông tin rồi chủ động gửi lại.';
 }
 
 function isCurrentAuthenticatedCustomer(ownerUserId: string): boolean {
@@ -257,6 +245,9 @@ export default function CustomerBookingCreateScreen() {
   const userId = useAuthStore((state) => state.user?.id ?? null);
   const customerOwnerId =
     isAuthenticated && userRole === UserRole.CUSTOMER ? userId : null;
+  const durableBlocked = useSyncExternalStore(entryAttemptJournal.subscribe,
+    () => !customerOwnerId || entryAttemptJournal.blocked(customerOwnerId, 'booking-create'));
+  useEffect(() => { void entryAttemptJournal.restore().catch(() => undefined); }, []);
   const prefill = route.params?.prefill;
   const prefillServiceId = prefill?.serviceId;
   // Stack pushes create a new initiation; service identity also fences route reuse.
@@ -566,6 +557,7 @@ export default function CustomerBookingCreateScreen() {
     : 'Mô tả thiết bị và vấn đề cần sửa';
   const reviewDisabled =
     isSubmitting ||
+    durableBlocked ||
     Boolean(currentOwnerCreateState) ||
     loading ||
     Boolean(loadError);
@@ -774,6 +766,7 @@ export default function CustomerBookingCreateScreen() {
         || runtimeCreateStates[ownerUserId].flowId === flowId)) ||
       loading ||
       loadError ||
+      durableBlocked ||
       snapshot.ownerUserId !== customerOwnerId
     ) {
       return;
@@ -908,26 +901,23 @@ export default function CustomerBookingCreateScreen() {
       setOwnerCreateState(ownerUserId, { kind: 'in-flight', flowId, attempt, snapshot });
       try {
         // AI preview photos are local data URIs, NOT private Booking upload IDs.
-        const booking = await bookingsApi.createBooking(request);
-        if (!booking.id) {
+        const result = await createProductionBookingAttempt(owner => owner === ownerUserId && sameSubmissionSession()).create(ownerUserId, request, baselineIds);
+        if (result.provenUnsent) {
+          const original = getOwnerCreateState(ownerUserId);
+          if (original?.kind === 'in-flight' && original.flowId === flowId && original.attempt === attempt) {
+            const originalReview = runtimeReviewSnapshots.get(ownerUserId);
+            if (originalReview?.flowId === flowId && originalReview.snapshot === snapshot) runtimeReviewSnapshots.delete(ownerUserId);
+            setOwnerCreateState(ownerUserId, null);
+          }
+          if (sameSubmissionSession()) setReviewSnapshot(null);
+          return;
+        }
+        if (result.phase !== 'resolved' || !result.bookingId) {
           throw new Error('Hệ thống chưa xác nhận mã yêu cầu.');
         }
         runtimeReviewSnapshots.delete(ownerUserId);
-        setOwnerCreateState(ownerUserId, { kind: 'created', flowId, id: booking.id, snapshot });
-      } catch (error) {
-        if (classifyBookingCreatePostError(error) === 'definitive') {
-          runtimeReviewSnapshots.set(ownerUserId, { flowId, snapshot, error: definitiveCreateMessage(bookingCreateErrorStatus(error)) });
-          setOwnerCreateState(ownerUserId, null);
-          if (sameSubmissionSession() && flowIdRef.current === flowId) {
-            setReviewError(definitiveCreateMessage(bookingCreateErrorStatus(error)));
-            Alert.alert(
-              'Yêu cầu chưa được tạo',
-              definitiveCreateMessage(bookingCreateErrorStatus(error)),
-            );
-          }
-          return;
-        }
-
+        setOwnerCreateState(ownerUserId, { kind: 'created', flowId, id: result.bookingId, snapshot });
+      } catch {
         runtimeReviewSnapshots.delete(ownerUserId);
         setOwnerCreateState(ownerUserId, { kind: 'uncertain', flowId, attempt, snapshot });
         if (sameSubmissionSession() && flowIdRef.current === flowId) setReviewSnapshot(null);
@@ -948,37 +938,40 @@ export default function CustomerBookingCreateScreen() {
     const uncertainCreate = visibleUncertainAttempt;
     if (!uncertainCreate || isReconciling) return;
     const { attempt } = uncertainCreate;
+    const originGeneration = useAuthStore.getState().sessionGeneration;
+    const sameReconciliationSession = (owner: string) => isCurrentAuthenticatedCustomer(owner)
+      && useAuthStore.getState().sessionGeneration === originGeneration;
 
     setOwnerReconciling(attempt.ownerUserId, true);
     try {
-      const history = await bookingsApi.getMyBookingsPage(1, 100);
-      const found = findCreatedBookingEvidence(attempt, history.data);
-      if (found) {
+      const result = await createProductionBookingAttempt(sameReconciliationSession).verify(attempt.ownerUserId);
+      if (!sameReconciliationSession(attempt.ownerUserId)) return;
+      if (result.phase === 'resolved' && result.bookingId) {
         setOwnerCreateState(attempt.ownerUserId, {
           kind: 'created',
           flowId: uncertainCreate.flowId,
-          id: found.id,
+          id: result.bookingId,
           snapshot: uncertainCreate.snapshot,
         });
-        if (isCurrentAuthenticatedCustomer(attempt.ownerUserId)) {
+        if (sameReconciliationSession(attempt.ownerUserId)) {
           Alert.alert(
             'Đã xác minh yêu cầu',
-            'Lịch sử của chính tài khoản này có một yêu cầu mới khớp chính xác. Không cần gửi lại.',
+            'Đã đọc lại đúng mã yêu cầu do hệ thống trả về và xác minh chủ tài khoản. Không cần gửi lại.',
           );
         }
         return;
       }
+      // History is navigation/recovery context only, never correlation by content.
+      await bookingsApi.getMyBookingsPage(1, 100);
 
-      if (isCurrentAuthenticatedCustomer(attempt.ownerUserId)) {
+      if (sameReconciliationSession(attempt.ownerUserId)) {
         Alert.alert(
           'Chưa có bằng chứng đủ chắc chắn',
-          attempt.baselineIds
-            ? 'Lịch sử chưa cho thấy duy nhất một yêu cầu mới khớp. Giữ nguyên khóa và không gửi lại.'
-            : 'Không có mốc lịch sử trước khi gửi nên không thể tự xác nhận an toàn. Giữ nguyên khóa và không gửi lại.',
+          'Chưa có mã yêu cầu được xác minh cho lần gửi này. Giữ nguyên khóa; hãy mở lịch sử hoặc liên hệ hỗ trợ. Không gửi lại.',
         );
       }
     } catch {
-      if (isCurrentAuthenticatedCustomer(attempt.ownerUserId)) {
+      if (sameReconciliationSession(attempt.ownerUserId)) {
         Alert.alert(
           'Không kiểm tra được lịch sử',
           'Kiểm tra lịch sử thất bại. Giữ nguyên khóa và không gửi lại.',
@@ -1144,6 +1137,27 @@ export default function CustomerBookingCreateScreen() {
             </View>
           )}
         </View>
+        {durableBlocked && !isSubmitting && !visibleCreatedBookingId && !visibleUncertainAttempt && (
+          <View style={styles.section}>
+            <Text accessibilityRole="alert" style={{ color: colors.error }}>Chưa xác minh được lần gửi trước hoặc bộ nhớ bảo vệ. Không gửi lại.</Text>
+            <TouchableOpacity accessibilityRole="button" onPress={() => {
+              const root = navigation as unknown as { navigate: (name: 'CustomerMain', params: { screen: 'Bookings' }) => void };
+              root.navigate('CustomerMain', { screen: 'Bookings' });
+            }}>
+              <Text style={{ color: colors.primary }}>Mở lịch sử yêu cầu</Text>
+            </TouchableOpacity>
+            <TouchableOpacity accessibilityRole="button" onPress={() => {
+              const owner = customerOwnerId;
+              if (!owner) return;
+              const generation = useAuthStore.getState().sessionGeneration;
+              void createProductionBookingAttempt(id => isCurrentAuthenticatedCustomer(id) && useAuthStore.getState().sessionGeneration === generation)
+                .verify(owner).then(result => {
+                  if (result.phase === 'resolved' && result.bookingId && isCurrentAuthenticatedCustomer(owner)
+                    && useAuthStore.getState().sessionGeneration === generation) navigation.navigate('CustomerBookingDetail', { bookingId: result.bookingId });
+                });
+            }}><Text style={{ color: colors.primary }}>Kiểm tra yêu cầu</Text></TouchableOpacity>
+          </View>
+        )}
         {!visibleCreatedBookingId && (
           <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>
             {visibleReviewSnapshot ? 'Kiểm tra lần cuối'
@@ -1461,8 +1475,8 @@ export default function CustomerBookingCreateScreen() {
                   Kết quả lần gửi vừa rồi chưa xác định.
                 </Text>
                 <Text style={[styles.note, { color: colors.textSecondary }]}>
-                  Không gửi lại. Chỉ kiểm tra lịch sử của chính tài khoản này để tìm
-                  một yêu cầu mới khớp chính xác.
+                  Không gửi lại. Kiểm tra đúng mã yêu cầu được hệ thống trả về;
+                  lịch sử trùng nội dung không xác minh được lần gửi này.
                 </Text>
                 <TouchableOpacity
                   accessibilityRole="button"

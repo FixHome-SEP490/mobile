@@ -66,10 +66,8 @@ describe('customer booking create safety helpers', () => {
     ).toBe(false);
   });
 
-  it('accepts exactly one new exact owned-history row as positive evidence', () => {
-    expect(findCreatedBookingEvidence(attempt, [booking()])?.id).toBe(
-      'new-booking',
-    );
+  it('does not correlate a unique matching row created by another device with this attempt', () => {
+    expect(findCreatedBookingEvidence(attempt, [booking()])).toBeNull();
   });
 
   it('does not treat a baseline booking as new evidence', () => {

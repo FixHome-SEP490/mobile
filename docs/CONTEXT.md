@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-13 02:11 (UTC+7) · Người cập nhật (git): foxonworld · Nhánh: integration/mobile-v2-gate-review
+> Cập nhật lần cuối: 2026-10-14 14:23 (UTC+7) · Người cập nhật (git): foxonworld · Nhánh: foxonworld/sep139-order-flow-redesign
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -152,8 +152,15 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEP-135/136: splash logo chạy theo bootstrap thật. Không có phiên: first-run mở chọn vai trò; tiếp tục khách hàng hoặc bỏ qua mở Guest Home, lần sau mở Guest Home. Phiên hợp lệ mở Home đúng vai trò. Guest tái sử dụng `CustomerHomeScreen`, chỉ duyệt danh mục công khai; AI, đặt lịch và tab riêng mở Auth. Logout remount về Guest; Login Back giữ đường duyệt, Khám phá mở Guest. Handoff Login/Google/OTP chờ root đăng ký route đúng phiên và vai trò.
 - Tích hợp Customer Booking Create/Detail/Matching/Order/Profile, địa chỉ chính xác, ảnh booking và recovery controller; giữ gia hạn matching và các mutation controller hiện hành. Tích hợp Technician Jobs, work-order, chat, Profile/KYC/onboarding, ví/thu nhập và test production. Các GET `getTechnicianJobs`, `getTechnicianJobsPage`, `getTechnicianOrder` dùng cùng endpoint hiện hành; history chỉ chiếu trường tóm tắt được phép, full order vẫn dùng parser tiền dev. Notifications chỉ cập nhật trạng thái đọc sau API xác nhận và chặn GET cũ ghi đè trạng thái mới. Không nhập developer preview hoặc thay dependency/Expo.
 
+- SEP-139 redesign M1–M4 đã triển khai source: session/resource/journal, navigation native, Booking/lời mời/di chuyển/check-in/face/BEFORE và báo giá hai vai trò. Bản xem trước `OrderFlowDevPreview` chỉ mở trong `__DEV__` từ danh sách đơn, lấy vai trò từ phiên đăng nhập. Chi tiết, lịch sử, ảnh, phạm vi và hóa đơn mở riêng; footer ngoài vùng cuộn. Báo giá dùng editor chung, danh mục thật, tiền hợp lệ, xác nhận ở footer và phạm vi bảo hành đã được server lưu. M5 có controller/recovery và UI phát sinh/linh kiện: confirmation theo target, DTO/giá hợp lệ, QR camera và thao tác footer. Chọn ảnh đơn đã xác minh được hỗ trợ; chụp ảnh phát sinh mới chuyển tiếp sang M6 AFTER. Ghi chú kỹ thuật viên vẫn riêng trên thiết bị, tuần tự hóa ghi và bảo vệ bản nháp khi đổi phiên/đơn. UI production chưa cutover; hai màn chi tiết cũ còn giữ đến M8. Preview Web đã đăng nhập và mở danh sách đơn rỗng hai vai trò ở 320/360/390/430px, không tràn ngang; chưa kiểm chứng màn công việc M5, thanh toán M6 hoặc native.
+
+- M6 dùng controller/hooks production riêng trong `features/order-flow`, cùng provider/coordinator hiện có. Customer wallet HTTP có lớp `{success,statusCode,message,data}` do TransformInterceptor dù controller trả DTO trực tiếp; adapter đọc đúng lớp bọc. Cash giữ actor/timestamp để chặn confirmation cũ; journal không chứa signed URL, QR hay payload tài chính. Không có mutation khi Back/focus/resume; pending tài chính chỉ GET đối soát.
+
+- M6 source: màn bàn giao/thanh toán ba phương thức, ví Customer riêng từ Tài khoản, AFTER và khai báo tiền mặt đã nối hooks frozen. Parser VND không đổi thập phân thành số tiền khác; ảnh gửi xác nhận không gửi lại draft, quay lại đề xuất giữ route/draft cũ. Web export thực đã kiểm chứng GET ví, nhập lỗi, mở/hủy xác nhận và footer ở 320/360/390/430px với dữ liệu QA thật, không POST thanh toán. Đơn QA rỗng; nghiệp vụ đơn, ảnh/native và gateway chưa runtime kiểm chứng.
+
 ## 4. Kiến trúc và thư mục chính
 
+- `src/features/order-flow/`: domain/runtime và shared/navigation cho redesign, một provider/reader mỗi phiên đơn. M3 có controller và task screens di chuyển/check-in/face/BEFORE, bằng chứng đúng ID/chủ ảnh và tracker chỉ bật tại màn di chuyển. M4 có controller/hook báo giá, editor và quyết định hai vai trò. M5 dùng controller/hook phát sinh và linh kiện, journal lưu ID trả về thật và kết quả sử dụng cần đối soát; không lưu QR hoặc payload nhạy cảm. Recovery ưu tiên intent chưa rõ, chỉ GET đúng phạm vi. Booking/lời mời phân biệt chắc chắn chưa gửi với POST chưa rõ. Preview vẫn chưa thay route production.
 - `src/api/`: axios dùng chung (`client.ts`) và khoảng 20 module gọi API, có test.
 - `src/navigation/`: App, Auth, Customer, Technician navigator. Tab khách: Trang chủ, Đơn của tôi, Thông báo, Hồ sơ (thêm nút trợ lý AI). Tab kỹ thuật viên: Trang chủ, Lời mời, Công việc, Ví, Hồ sơ. Chuông Home mở Thông báo.
 - `src/screens/`: `auth`, `chat`, `customer`, `technician`. Logic thuần đặt trong file `kebab-case.ts` cạnh màn hình, có `.test.ts` đi kèm.
@@ -172,6 +179,9 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - Ảnh đại diện phải tải lên `POST /media/upload` trước rồi mới gửi URL http(s) vào `PATCH /users/me`; `backend` từ chối đường dẫn ảnh trên máy.
 - Biến môi trường (chỉ tên): `EXPO_PUBLIC_API_BASE_URL`, `EXPO_PUBLIC_APP_NAME`. Mọi biến `EXPO_PUBLIC_*` đều công khai trong app.
 
+- SEP-139 redesign lấy Backend dev `2c92d6d1a62302c3a2aaa697b05ef4a54f3fa255` làm target. Đã bổ sung contract `checkin_face`, uploaderId, order location, revise phát sinh và status-history; giữ completionNote/paidWarrantyItemIds. GET/readback quyết định trạng thái; POST timeout/401 hoặc GET xác minh lỗi giữ kết quả chưa rõ, không replay tự động.
+- Phát sinh không có version: nhiều đề xuất độc lập có thể chờ duyệt, revision tạo ID mới. Đọc lại qua `GET /service-orders/:id/additional-costs` và đối soát ID đã nhận; mất ID không được đoán từ đề xuất mới nhất. Linh kiện dùng `GET /part-requests/:id`; nhận phải đúng pickup/ready hoặc delivery/delivering, sử dụng đúng yêu cầu received và item. Resource lỗi/thiếu không được coi là mảng rỗng cho phép ghi.
+
 ## 6. Chạy, kiểm thử và cổng chất lượng
 
 - Node 22.13 trở lên (`.nvmrc` 22.15.0). `npm ci`, `npm start`, quét mã QR LAN bằng Expo Go. Backend cùng máy với Metro: để trống `EXPO_PUBLIC_API_BASE_URL` như `.env.example`. Backend máy khác, cổng khác hoặc Expo tunnel: cấu hình URL rõ ràng trong env cục bộ không theo dõi; coordinator khởi động lại Metro hiện có khi đổi env. Đăng nhập Google trên Android emulator cần `adb reverse tcp:3000 tcp:3000`.
@@ -189,22 +199,45 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - Giao diện theo `FIXHOME-DESIGN-SYSTEM.md`: thuật ngữ tiếng Việt thống nhất, tiền dạng `1.250.000 ₫`, giờ theo UTC+7 qua `utils/vn-time`, không hiện mã lỗi cho người dùng.
 - Quản lý dịch vụ và admin không có giao diện trên mobile.
 
+- SEP-139 owner đã duyệt redesign toàn bộ hai role trên Backend dev mới: auto-start theo server, không bắt buộc khách nghiệm thu trước thanh toán, hỗ trợ Ví FixHome/VNPay/tiền mặt; invoice PAID khác order COMPLETED.
+- Ảnh check-in khuôn mặt không được hiển thị cho Customer. Chặn upload ảnh hỗ trợ/bảo hành mới đến khi Backend có phương án riêng tư được duyệt; không dùng media public làm đường thay thế.
+
 ## 8. Việc đang dở và rủi ro đã biết
 
 - SEP-135/136 Auth được phép triển khai: first-run, session bootstrap và logout dùng root stack theo phiên/vai trò. Backend source xác nhận login `identifier` nhận email hoặc số điện thoại; UI phản ánh đúng contract. Không đổi token storage, interceptor refresh hoặc quyền Backend. Kiểm tra đăng nhập trên iPhone thật còn CHƯA KIỂM CHỨNG.
 - FH-MAIN-01 HOLD Finance: `src/api/orders.api.ts` giữ `toMoney` dev; các test WIP yêu cầu từ chối null/invalid monetary fields trong `src/api/orders.api.test.ts` chưa nhập, cần Finance owner quyết định trước khi đổi parser. Test GET history/privacy và malformed page đã nhập. Glass giữ liquid glass, responsive opt-in và năm tab Technician; bổ sung prop nhãn tùy chọn, chưa bật trên Technician.
-- SEP-139: Mobile nối thao tác bắt đầu sửa qua endpoint hiện có và readback; Backend vẫn là nguồn quyết định. UI một section Customer/Technician, progress sheet và footer sticky đã được cập nhật source. Technician có scene full-details riêng, giữ bước trước đó khi đóng bằng nút Back hoặc Android Back. Tương tác thiết bị, bố cục thực tế và parity Web CHƯA KIỂM CHỨNG; reviewer cần xác nhận trước khi đóng. `src/screens/technician/technician-onboarding.ts` giữ bán kính tối đa 40 km và lời nhắc đến trụ sở.
+- SEP-139 redesign: source M1–M5 đã đạt gate scoped cho các chức năng hiện có; chụp ảnh phát sinh mới chuyển tiếp M6 AFTER, M6 logic AFTER/completion/ví/VNPay/tiền mặt và hooks production đã bàn giao với 9 suites/118 tests, typecheck/owned lint đạt; review tài chính độc lập phát hiện một lỗi HTTP400/422; OpenCode sửa scoped, lead kiểm chứng lại 33 tests và đóng M6 logic source gate. M6 UI/capture return/root wallet linking đã đạt source gate sau sửa scoped; còn M7–M8 aftercare/cutover và QA luồng thật. M6 request-completion chỉ mở retry cho lỗi 409/EVIDENCE_REQUIRED_AFTER đã chứng minh rollback, không áp dụng tiền mặt hoặc 409 khác. Route production chưa thay. QA Backend riêng đúng target đã khởi động và seed/migration trên database mới; sau checkpoint server ngừng, đã khôi phục đúng sandbox trên tiến trình QA riêng sau khi owner mở Docker Desktop, không chạy lại migration/seed; runtime đơn, device/Web parity, bàn phím/safe area và payment sandbox CHƯA KIỂM CHỨNG. Target Backend auto-start; start-repair chỉ recovery có điều kiện, không thêm gate thủ công bình thường. Giữ giới hạn onboarding 40 km hiện có.
 - FH-MAIN-01: Web parity, visual/runtime và thiết bị/E2E CHƯA KIỂM CHỨNG; coordinator làm QA cuối và Git. Không khởi động hoặc dừng Expo/backend. Giữ mapping asset tối ưu hiện có; không nhập hai ảnh onboarding legacy vì runtime đã dùng asset tương đương được theo dõi.
 
 - Thay đổi ngày 07/10/2026 mới chạy gate, CHƯA KIỂM CHỨNG trên thiết bị (ảnh đại diện kỹ thuật viên, nút gửi AI, ví).
 - SEP-136: một màn Lịch làm việc chứa editor khung giờ tuần theo ngày, preset/giờ chính xác, ngày nghỉ với chọn ngày và lịch đơn hiện có. Một màn Khu vực hoạt động chứa vị trí/bán kính và quận/huyện. Giữ payload lưu hiện hành, ngày tuần Sunday=0, khoảng giờ đã lưu, giới hạn 40 km, GPS/camera và tài chính. Bàn phím/safe area đã xử lý trong source; thiết bị còn CHƯA KIỂM CHỨNG.
 - Chưa có push notification (`expo-notifications` đã cài nhưng chưa dùng); ảnh booking đã có upload adapter/controller nhưng runtime CHƯA KIỂM CHỨNG; khu vực phục vụ có màn chỉnh sau onboarding.
-- Chưa có cấu hình EAS, bundle id, hay `linking` cho deep link ngoài luồng Google.
-- Các hàm API chưa dùng: `completeRepair`, `payInvoice`, `getStatusHistory`, `getWarranties`.
+- Chưa có cấu hình EAS và bundle id. Root đã xử lý cold/warm return `fixhome://app/wallet` bằng đích an toàn cho Customer và GET-only refresh, bỏ mọi query payload; luồng Google/Technician giữ nguyên. OS delivery/native chưa kiểm chứng.
+- Các hàm API chưa dùng trong UI production: `completeRepair`, `payInvoice`, `getWarranties`. `getStatusHistory` đã nối vào adapter redesign nhưng UI chưa cutover.
 - Repo đang theo dõi `CLAUDE.md` và `.claude/settings.json` từ commit đầu; luật chung của nhóm không đưa cấu hình công cụ AI vào repo. Chờ PO quyết có gỡ hay không.
 - Tài liệu audit ngày 23 và 24/09 trong `docs/` là ảnh chụp lịch sử, không phản ánh hiện trạng.
 
+- SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload support/warranty mới bị khóa theo quyết định owner. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
+
 ## 9. Nhật ký cập nhật context
+
+- 2026-10-14 14:23 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Đóng source M6 với các sửa tiền/return/capture/recovery, ghi render ví thật và giới hạn runtime; M7–M8 chưa triển khai, không publish.
+
+- 2026-10-14 13:03 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Đóng M6 logic source gate sau review tài chính và sửa rollback ví HTTP422, lead xác minh 33 tests; M6 UI/root linking/capture return còn chờ.
+
+- 2026-10-14 12:49 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Bàn giao M6 logic và gate 118 tests, ghi review tài chính đang chờ, sửa wallet HTTP envelope và cập nhật QA/render danh sách rỗng hai vai trò; UI/cutover/native/payment còn chưa kiểm chứng.
+
+- 2026-10-14 05:55 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Đóng source gate UI M5, giữ capture mới chuyển tiếp M6 AFTER; QA sandbox đã khôi phục và Expo Web dev export thực đạt, native/render chưa kiểm chứng.
+
+- 2026-10-14 04:23 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Cập nhật source M3–M4, controller/recovery M5 và gate UI/runtime còn chờ; sửa guard phát sinh độc lập, dữ liệu thiếu và nhận linh kiện sau storage; ghi QA sandbox ngừng chạy.
+
+- 2026-10-13 22:30 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 đóng ba bản sửa logic M3 về booking/lời mời chưa gửi và departure bị từ chối trước ghi; UI M3, thiết bị và cutover còn chưa hoàn tất.
+
+- 2026-10-13 17:50 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 sửa số tiền dạng chuỗi, tuần tự hóa ghi chú và thêm làm mới chi tiết; runtime và cutover chưa kiểm chứng.
+
+- 2026-10-13 17:30 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 bổ sung preview native chỉ đọc theo role, chi tiết tải một lần và ghi chú bảo vệ phiên; UI production và runtime còn chưa cutover/kiểm chứng.
+
+- 2026-10-13 13:32 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 thêm nền session/resolver/readback và journal, cập nhật contract Backend dev/privacy owner; UI cutover và runtime còn chưa kiểm chứng.
 
 - 2026-10-13 02:11 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | SEP-139 Technician mở toàn bộ chi tiết thành scene riêng, Back khôi phục chính xác bước trước; thêm regression test, device QA còn chờ.
 
