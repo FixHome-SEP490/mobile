@@ -741,4 +741,12 @@ describe('Customer logout', () => {
     expect(mockLogout).toHaveBeenCalledTimes(1);
     expect(mockLogoutStore).toHaveBeenCalledTimes(1);
   });
+
+  it('wallet menu row navigates to the Customer-only wallet route without fetching', async () => {
+    const tree = await mountScreen();
+    const button = findButton(tree, 'Mở ví FixHome');
+    expect(button).toBeTruthy();
+    await act(async () => { button!.props.onPress(); });
+    expect(mockNavigate).toHaveBeenCalledWith('CustomerWallet');
+  });
 });

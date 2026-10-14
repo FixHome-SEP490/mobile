@@ -1,4 +1,5 @@
 import { orderDetailTarget } from '../customer/customer-order-detail';
+import { isCostDecisionBlocked } from '../customer/customer-additional-cost-decision';
 import type { CreateAdditionalCostPayload } from '../../api/orders.api';
 import { validateQuoteDraft, type QuoteFieldErrors } from './technician-quotation-create';
 
@@ -37,12 +38,16 @@ export interface CostProposalState {
   draft: CostProposalDraft;
   fieldErrors: CostProposalFieldErrors;
   confirming: boolean;
+  /** Exact pending request under revision, or null for a new proposal. */
+  revisingId: string | null;
   busy: boolean;
   error: string | null;
   /** Ambiguous POST lock: reload costs/detail before any retry. */
   needsVerify: boolean;
   /** Last submit returned 201 and reconciled. */
   sent: boolean;
+  /** Exact server ID captured from the 201 body; absent when the ID was lost. */
+  createdProposalId?: string;
   proposedTotalText: string | null;
 }
 
@@ -58,6 +63,7 @@ export const initialCostProposalState: CostProposalState = {
   draft: emptyDraft(),
   fieldErrors: {},
   confirming: false,
+  revisingId: null,
   busy: false,
   error: null,
   needsVerify: false,
@@ -69,9 +75,13 @@ export interface CostProposalDeps {
   getOrder: () => CostProposalOrderGate | null;
   getTechnicianId: () => string | null;
   isFocused: () => boolean;
-  /** Current costs-list statuses for the duplicate-pending guard. */
+  /** Retained for callers; multiple independent pending roots are valid so it no longer gates. */
   getCostStatuses: () => unknown[];
   createProposal: (orderId: string, payload: CreateAdditionalCostPayload) => Promise<unknown>;
+  /** Current pending request under revision, if the screen tracks one. */
+  getCostRequest?: (costId: string) => { status: unknown; expiresAt?: unknown } | null;
+  /** Revision POST; absent callers only create. */
+  reviseProposal?: (costId: string, payload: CreateAdditionalCostPayload) => Promise<unknown>;
   /** GET-only reconciliation: reload the costs list (and detail). */
   refreshCosts: () => Promise<void>;
   onAccessDenied: () => void;
@@ -90,10 +100,6 @@ function statusOf(error: unknown): number | undefined {
   return (error as { response?: { status?: number } } | null)?.response?.status;
 }
 
-function hasPendingCosts(getCostStatuses: () => unknown[]): boolean {
-  return getCostStatuses().some((status) => String(status ?? '').toUpperCase() === 'PENDING_APPROVAL');
-}
-
 /**
  * Full proposal total: the labor line plus any FixHome part lines and delivery
  * shipping fee — everything the payload actually sends and the customer must
@@ -109,18 +115,42 @@ function proposedTotal(lineTotal: number, deps: CostProposalDeps): number {
   return lineTotal + partsTotal + shippingFee;
 }
 
-/** Proposal gate: same tech/focus/real order, UNDER_REPAIR, open, no live pending. */
+/** Proposal gate: same tech/focus/real order, UNDER_REPAIR, open.
+ * Multiple independent pending roots are valid — the Backend owns duplicate
+ * policy — so a live PENDING_APPROVAL elsewhere never blocks a new proposal. */
 export function costProposalTarget(
   order: CostProposalOrderGate | null,
-  getCostStatuses: () => unknown[],
+  _getCostStatuses?: () => unknown[],
 ): string | null {
   if (!order || order.historical === true) return null;
   const target = orderDetailTarget(order.id);
   if (!target) return null;
   if (String(order.status).toUpperCase() !== 'UNDER_REPAIR') return null;
   if (!!order.completionRequestedAt) return null;
-  if (hasPendingCosts(getCostStatuses)) return null;
   return target;
+}
+
+/**
+ * Revision target: only a still-PENDING_APPROVAL, unexpired request may be
+ * revised. APPROVED is immutable (create a new proposal instead); expired
+ * requests restart as new proposals, never revisions.
+ */
+export function reviseProposalTarget(existing: { status: unknown; expiresAt?: unknown } | null | undefined): boolean {
+  if (!existing) return false;
+  if (String(existing.status ?? '').toUpperCase() !== 'PENDING_APPROVAL') return false;
+  return !isCostDecisionBlocked(existing.expiresAt);
+}
+
+/** Exact server record ID captured from a 201 body; null when the ID was lost. */
+export function createdProposalIdOf(response: unknown): string | null {
+  const body = response && typeof response === 'object' && 'data' in (response as Record<string, unknown>)
+    ? (response as Record<string, unknown>).data
+    : response;
+  if (body && typeof body === 'object' && typeof (body as Record<string, unknown>).id === 'string') {
+    const id = ((body as Record<string, unknown>).id as string).trim();
+    return id ? id : null;
+  }
+  return null;
 }
 
 export function validateCostProposalDraft(draft: CostProposalDraft): {
@@ -173,6 +203,7 @@ export function createCostProposalController(
       draft: { ...state.draft, [field]: value },
       fieldErrors: { ...state.fieldErrors, [field]: undefined },
       confirming: false,
+      revisingId: null,
       proposedTotalText: null,
       sent: false,
     });
@@ -183,17 +214,45 @@ export function createCostProposalController(
     if (!deps.getTechnicianId() || !deps.isFocused()) return;
     const target = costProposalTarget(deps.getOrder(), deps.getCostStatuses);
     if (!target) {
-      deps.notify('Chưa thể đề xuất chi phí', 'Đơn chưa đủ điều kiện đề xuất chi phí phát sinh (cần đang sửa, chưa yêu cầu hoàn thành, không có yêu cầu chờ duyệt).');
+      deps.notify('Chưa thể đề xuất chi phí', 'Đơn chưa đủ điều kiện đề xuất chi phí phát sinh (cần đang sửa, chưa yêu cầu hoàn thành).');
       return;
     }
     const { reason, line, errors } = validateCostProposalDraft(state.draft);
     if (!reason || !line) {
-      publish({ fieldErrors: errors, confirming: false, proposedTotalText: null });
+      publish({ fieldErrors: errors, confirming: false, revisingId: null, proposedTotalText: null });
       return;
     }
     publish({
       fieldErrors: {},
       confirming: true,
+      revisingId: null,
+      proposedTotalText: `${proposedTotal(line.total, deps).toLocaleString('vi-VN')}đ`,
+      error: null,
+    });
+  }
+
+  function requestReviseConfirm(costId: string): void {
+    if (busy || state.needsVerify) return;
+    if (!deps.getTechnicianId() || !deps.isFocused()) return;
+    if (!orderDetailTarget(costId)) return;
+    const target = costProposalTarget(deps.getOrder(), deps.getCostStatuses);
+    if (!target) {
+      deps.notify('Chưa thể đề xuất chi phí', 'Đơn chưa đủ điều kiện đề xuất chi phí phát sinh (cần đang sửa, chưa yêu cầu hoàn thành).');
+      return;
+    }
+    if (!reviseProposalTarget(deps.getCostRequest?.(costId) ?? null)) {
+      deps.notify('Không thể sửa đề xuất', 'Chỉ đề xuất đang chờ duyệt và còn hạn mới được sửa. Đề xuất đã duyệt không thể sửa.');
+      return;
+    }
+    const { reason, line, errors } = validateCostProposalDraft(state.draft);
+    if (!reason || !line) {
+      publish({ fieldErrors: errors, confirming: false, revisingId: null, proposedTotalText: null });
+      return;
+    }
+    publish({
+      fieldErrors: {},
+      confirming: true,
+      revisingId: costId,
       proposedTotalText: `${proposedTotal(line.total, deps).toLocaleString('vi-VN')}đ`,
       error: null,
     });
@@ -201,7 +260,7 @@ export function createCostProposalController(
 
   function cancelConfirm(): void {
     if (busy) return;
-    publish({ confirming: false, proposedTotalText: null });
+    publish({ confirming: false, revisingId: null, proposedTotalText: null });
   }
 
   async function submit(): Promise<void> {
@@ -214,12 +273,28 @@ export function createCostProposalController(
     const target = costProposalTarget(deps.getOrder(), deps.getCostStatuses);
     if (!target || deps.getOrder()?.id !== target) {
       reset();
-      deps.notify('Chưa thể đề xuất chi phí', 'Đơn chưa đủ điều kiện đề xuất chi phí phát sinh (cần đang sửa, chưa yêu cầu hoàn thành, không có yêu cầu chờ duyệt).');
+      deps.notify('Chưa thể đề xuất chi phí', 'Đơn chưa đủ điều kiện đề xuất chi phí phát sinh (cần đang sửa, chưa yêu cầu hoàn thành).');
+      return;
+    }
+    const revisingId = state.revisingId;
+    if (revisingId && !reviseProposalTarget(deps.getCostRequest?.(revisingId) ?? null)) {
+      reset();
+      deps.notify('Đề xuất đã thay đổi', 'Đề xuất đang sửa không còn ở trạng thái chờ duyệt. Vui lòng tải lại chi phí phát sinh.');
+      return;
+    }
+    if (revisingId && !deps.reviseProposal) {
+      publish({
+        busy: false,
+        confirming: false,
+        revisingId: null,
+        proposedTotalText: null,
+        error: 'Sửa đề xuất chưa được hỗ trợ. Vui lòng tạo đề xuất mới.',
+      });
       return;
     }
     const { reason, line, note, errors } = validateCostProposalDraft(state.draft);
     if (!reason || !line) {
-      publish({ fieldErrors: errors, confirming: false, proposedTotalText: null });
+      publish({ fieldErrors: errors, confirming: false, revisingId: null, proposedTotalText: null });
       return;
     }
     busy = true;
@@ -228,7 +303,8 @@ export function createCostProposalController(
       deps.getTechnicianId() === technicianId &&
       deps.isFocused() &&
       deps.getOrder()?.id === target &&
-      costProposalTarget(deps.getOrder(), deps.getCostStatuses) === target;
+      costProposalTarget(deps.getOrder(), deps.getCostStatuses) === target &&
+      (revisingId ? reviseProposalTarget(deps.getCostRequest?.(revisingId) ?? null) : true);
     try {
       const extraParts = deps.getExtraPartItems?.() ?? [];
       const hasFixHomeParts = extraParts.some((item) => item.partSource === 'fixhome');
@@ -242,15 +318,37 @@ export function createCostProposalController(
         ...(note !== null ? { note } : {}),
         ...(fulfillment ? { fulfillmentMethod: fulfillment.method, shippingFee: fulfillment.method === 'delivery' ? fulfillment.shippingFee : 0 } : {}),
       };
-      await deps.createProposal(target, payload);
+      const response = revisingId && deps.reviseProposal
+        ? await deps.reviseProposal(revisingId, payload)
+        : await deps.createProposal(target, payload);
       if (!sameSession()) {
         reset();
         return;
       }
-      state = { ...initialCostProposalState, draft: emptyDraft(), fieldErrors: {}, sent: true };
-      write(state);
-      deps.notify('Đã gửi đề xuất', 'Đã gửi đề xuất chi phí, khách cần duyệt, chưa thanh toán.');
+      // Exact record ID from the 201 body; a lost ID stays locked, never sent.
+      const recordId = createdProposalIdOf(response);
       await deps.refreshCosts();
+      if (!sameSession()) {
+        reset();
+        return;
+      }
+      if (!recordId) {
+        publish({
+          busy: false,
+          confirming: false,
+          revisingId: null,
+          proposedTotalText: null,
+          needsVerify: true,
+          error: 'Chưa xác nhận đề xuất đã được tạo hay chưa. Hãy tải lại chi phí phát sinh để kiểm tra trước khi thử lại.',
+        });
+        return;
+      }
+      state = { ...initialCostProposalState, draft: emptyDraft(), fieldErrors: {}, sent: true, createdProposalId: recordId };
+      write(state);
+      deps.notify(
+        revisingId ? 'Đã gửi bản sửa đề xuất' : 'Đã gửi đề xuất',
+        'Đã gửi đề xuất chi phí, khách cần duyệt, chưa thanh toán.',
+      );
     } catch (error) {
       if (!sameSession()) {
         reset();
@@ -274,8 +372,8 @@ export function createCostProposalController(
         return;
       }
       // Ambiguous POST (timeout/offline/5xx/lost response): the proposal may
-      // exist server-side — never auto-repost. Lock until a fresh costs GET;
-      // if that GET finds a pending request, the gate blocks any second POST.
+      // exist server-side — never auto-repost. Lock until a fresh costs GET
+      // reconciliation; only an exact captured ID proves this intent.
       publish({
         busy: false,
         confirming: false,
@@ -293,6 +391,7 @@ export function createCostProposalController(
   return {
     setField,
     requestConfirm,
+    requestReviseConfirm,
     cancelConfirm,
     submit,
     reset,

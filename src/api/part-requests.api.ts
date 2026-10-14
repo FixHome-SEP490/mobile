@@ -72,6 +72,13 @@ export const partRequestsApi = {
     return Array.isArray(result) ? result : [];
   },
 
+  async getById(requestId: string): Promise<PartRequest> {
+    const res = await apiClient.get<{ data: PartRequest } | PartRequest>(
+      `/part-requests/${requestId}`,
+    );
+    return unwrap(res.data);
+  },
+
   async receiveByQr(requestId: string, qrToken: string): Promise<PartRequest> {
     const res = await apiClient.post<{ data: PartRequest } | PartRequest>(
       `/part-requests/${requestId}/receive`,

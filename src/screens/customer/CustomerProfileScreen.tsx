@@ -1021,6 +1021,22 @@ export default function CustomerProfileScreen() {
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.muted} />
             </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => navigation.navigate('CustomerWallet')}
+              accessibilityRole="button"
+              accessibilityLabel="Mở ví FixHome"
+            >
+              <View style={styles.menuIconTile}><Ionicons name="wallet-outline" size={20} color={colors.primaryStrong} /></View>
+              <View style={styles.menuContent}>
+                <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Ví FixHome</Text>
+                <Text style={styles.menuDesc}>Số dư và lịch sử giao dịch</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+            </TouchableOpacity>
           </View>
 
 

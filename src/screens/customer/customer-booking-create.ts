@@ -57,44 +57,17 @@ export interface BookingCreationAttempt {
   preferredStartAt: string;
   preferredEndAt: string;
   baselineIds: readonly string[] | null;
-}
-
-function sameInstant(left?: string | null, right?: string | null): boolean {
-  if (!left || !right) return false;
-  const leftMs = Date.parse(left);
-  const rightMs = Date.parse(right);
-  return Number.isFinite(leftMs) && Number.isFinite(rightMs)
-    ? leftMs === rightMs
-    : left === right;
+  confirmedBookingId?: string;
 }
 
 /**
- * Positive-only reconciliation after an ambiguous create POST.
- *
- * Absence is never proof of failure. We only accept one exact owned-history row
- * whose ID did not exist in the pre-POST baseline. Without a baseline, or with
- * zero/multiple exact new rows, the caller must keep the no-repost lock.
+ * Only a real server-returned ID correlates this attempt. A unique history row
+ * matching content/baseline can belong to another device's identical request.
  */
 export function findCreatedBookingEvidence(
   attempt: BookingCreationAttempt,
   rows: readonly BookingItem[],
 ): BookingItem | null {
-  if (!attempt.baselineIds) return null;
-  const baseline = new Set(attempt.baselineIds);
-
-  const matches = rows.filter(
-    (booking) =>
-      !baseline.has(booking.id) &&
-      booking.customerId === attempt.ownerUserId &&
-      booking.serviceId === attempt.serviceId &&
-      booking.addressId === attempt.addressId &&
-      booking.description === attempt.description &&
-      sameInstant(
-        booking.preferredStartAt ?? booking.preferredAt,
-        attempt.preferredStartAt,
-      ) &&
-      sameInstant(booking.preferredEndAt, attempt.preferredEndAt),
-  );
-
-  return matches.length === 1 ? matches[0] : null;
+  if (!attempt.confirmedBookingId) return null;
+  return rows.find(booking => booking.id === attempt.confirmedBookingId && booking.customerId === attempt.ownerUserId) ?? null;
 }
