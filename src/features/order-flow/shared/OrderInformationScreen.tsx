@@ -1,5 +1,5 @@
 import React from 'react';
-import { View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { isHistoricalOrder } from '../../../api/orders.api';
@@ -40,5 +40,12 @@ export default function OrderInformationScreen() {
       <DetailRow label="Tổng tiền máy chủ trả về" value={formatVnd(typeof order.grandTotal === 'number' ? order.grandTotal : Number.isFinite(Number(order.grandTotal)) ? Number(order.grandTotal) : undefined)} />
       {order.scopeDescription ? <DetailRow label="Phạm vi ban đầu" value={order.scopeDescription} /> : null}
     </View>}
+    {order && !history ? <View style={{ gap: 8 }}>
+      <Pressable testID="order-support-entry" accessibilityRole="button" onPress={() => navigation.navigate('SupportCases')} style={entry}><Text style={entryText}>Yêu cầu hỗ trợ ›</Text></Pressable>
+      <Pressable testID="order-cancel-entry" accessibilityRole="button" onPress={() => navigation.navigate('OrderException')} style={entry}><Text style={entryText}>Hủy đơn hoặc kiểm tra điều kiện ›</Text></Pressable>
+    </View> : null}
   </TaskScreenShell>;
 }
+
+const entry = { minHeight: 52, justifyContent: 'center' as const, paddingHorizontal: spacing.md, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border };
+const entryText = { color: colors.primaryStrong, fontSize: 15, fontWeight: '600' as const };

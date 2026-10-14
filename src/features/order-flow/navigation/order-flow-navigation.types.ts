@@ -13,9 +13,17 @@ export type CustomerOrderFlowParamList = {
   WalletPayment: undefined;
   /** Manual handover review. Lets the customer inspect handover before paying; never an automatic OrderTask taskId. */
   HandoverReview: undefined;
+  CustomerReview: undefined;
+  CustomerWarranty: undefined;
+  WarrantyClaimCreate: { coverageId: string };
+  CustomerWarrantyClaim: { claimId: string };
+  SupportCases: undefined;
+  SupportCreate: undefined;
+  SupportCaseDetail: { caseId: string };
+  OrderException: undefined;
 };
 
-export type TechnicianOrderFlowParamList = Omit<CustomerOrderFlowParamList, 'OrderTask'> & {
+export type TechnicianOrderFlowParamList = Omit<CustomerOrderFlowParamList, 'OrderTask' | 'CustomerReview' | 'CustomerWarranty' | 'WarrantyClaimCreate' | 'CustomerWarrantyClaim'> & {
   OrderTask: { taskId?: TechnicianTaskId } | undefined;
   /** Manual T04 arrival verification. Distinct route, never an automatic OrderTask taskId. */
   ArrivalCheckIn: undefined;
@@ -37,4 +45,6 @@ export type TechnicianOrderFlowParamList = Omit<CustomerOrderFlowParamList, 'Ord
   CompletionRequest: undefined;
   /** Manual T15a cash declaration. Distinct route, never an automatic OrderTask taskId. */
   CashDeclaration: undefined;
+  TechnicianWarrantyInbox: undefined;
+  TechnicianWarrantyTask: { claimId: string };
 };

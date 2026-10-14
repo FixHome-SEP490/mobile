@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-14 14:23 (UTC+7) · Người cập nhật (git): foxonworld · Nhánh: foxonworld/sep139-order-flow-redesign
+> Cập nhật lần cuối: 2026-10-14 21:14 (UTC+7) · Người cập nhật (git): foxonworld · Nhánh: foxonworld/sep139-order-flow-redesign
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -207,6 +207,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEP-135/136 Auth được phép triển khai: first-run, session bootstrap và logout dùng root stack theo phiên/vai trò. Backend source xác nhận login `identifier` nhận email hoặc số điện thoại; UI phản ánh đúng contract. Không đổi token storage, interceptor refresh hoặc quyền Backend. Kiểm tra đăng nhập trên iPhone thật còn CHƯA KIỂM CHỨNG.
 - FH-MAIN-01 HOLD Finance: `src/api/orders.api.ts` giữ `toMoney` dev; các test WIP yêu cầu từ chối null/invalid monetary fields trong `src/api/orders.api.test.ts` chưa nhập, cần Finance owner quyết định trước khi đổi parser. Test GET history/privacy và malformed page đã nhập. Glass giữ liquid glass, responsive opt-in và năm tab Technician; bổ sung prop nhãn tùy chọn, chưa bật trên Technician.
 - SEP-139 redesign: source M1–M5 đã đạt gate scoped cho các chức năng hiện có; chụp ảnh phát sinh mới chuyển tiếp M6 AFTER, M6 logic AFTER/completion/ví/VNPay/tiền mặt và hooks production đã bàn giao với 9 suites/118 tests, typecheck/owned lint đạt; review tài chính độc lập phát hiện một lỗi HTTP400/422; OpenCode sửa scoped, lead kiểm chứng lại 33 tests và đóng M6 logic source gate. M6 UI/capture return/root wallet linking đã đạt source gate sau sửa scoped; còn M7–M8 aftercare/cutover và QA luồng thật. M6 request-completion chỉ mở retry cho lỗi 409/EVIDENCE_REQUIRED_AFTER đã chứng minh rollback, không áp dụng tiền mặt hoặc 409 khác. Route production chưa thay. QA Backend riêng đúng target đã khởi động và seed/migration trên database mới; sau checkpoint server ngừng, đã khôi phục đúng sandbox trên tiến trình QA riêng sau khi owner mở Docker Desktop, không chạy lại migration/seed; runtime đơn, device/Web parity, bàn phím/safe area và payment sandbox CHƯA KIỂM CHỨNG. Target Backend auto-start; start-repair chỉ recovery có điều kiện, không thêm gate thủ công bình thường. Giữ giới hạn onboarding 40 km hiện có.
+- SEP-139 M7 UI đã nối màn Customer đánh giá tùy chọn, bảo hành/yêu cầu/phản hồi, support theo đơn/booking, hủy đơn/booking và inbox/tác vụ bảo hành Technician với hook production đã khóa. Booking dùng bookingId riêng; claim warranty dùng claimId riêng; Support chỉ hiển thị số yêu cầu đang mở đã biết là lower bound; P6 tiếp tục chặn upload ảnh mới. M7 source UI chưa cutover alias production. `CustomerWarrantiesScreen.submitClaim` vẫn gọi trực tiếp `ordersApi.createWarrantyClaim` sau helper `isWarrantyCoverageClaimable`; cần migrate đường cũ sang hook M7 ở M8 để tránh hai luồng ghi. Backend runtime cổng 3000 đang thiếu meta mine theo cảnh báo 14/10; không nới validator hoặc đổi server, warranty runtime CHƯA KIỂM CHỨNG. Confirmation UI khóa toàn bộ bản nháp trong lúc xác minh, chờ xác nhận và gửi; người dùng phải chọn sửa để hủy DTO đã chuẩn bị. Khi đổi bookingId, coverageId hoặc claimId, màn hình xóa bản nháp cục bộ và confirmation cũ; thao tác chuẩn bị của Technician nằm ở footer cố định. Chưa kiểm chứng runtime hoặc thiết bị.
 - FH-MAIN-01: Web parity, visual/runtime và thiết bị/E2E CHƯA KIỂM CHỨNG; coordinator làm QA cuối và Git. Không khởi động hoặc dừng Expo/backend. Giữ mapping asset tối ưu hiện có; không nhập hai ảnh onboarding legacy vì runtime đã dùng asset tương đương được theo dõi.
 
 - Thay đổi ngày 07/10/2026 mới chạy gate, CHƯA KIỂM CHỨNG trên thiết bị (ảnh đại diện kỹ thuật viên, nút gửi AI, ví).
@@ -220,6 +221,9 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload support/warranty mới bị khóa theo quyết định owner. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-10-14 21:14 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Khóa bản nháp sau prepare, thêm thao tác sửa confirmation, dọn state khi đổi mục tiêu Booking/claim và chuyển CTA Technician vào footer; kiểm thử source đạt, thiết bị/runtime CHƯA KIỂM CHỨNG.
+
+- 2026-10-14 20:54 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Bổ sung UI hậu mãi M7 nối hook đã khóa và ghi rõ đường tạo claim trực tiếp cũ cần parity M8; runtime warranty chưa xác minh.
 
 - 2026-10-14 14:23 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Đóng source M6 với các sửa tiền/return/capture/recovery, ghi render ví thật và giới hạn runtime; M7–M8 chưa triển khai, không publish.
 

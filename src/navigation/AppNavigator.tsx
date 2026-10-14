@@ -1,7 +1,7 @@
 // src/navigation/AppNavigator.tsx
 import React, { useEffect } from 'react';
 import { Linking } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, useRoute } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../types';
 import { useAuthStore } from '../store';
@@ -40,6 +40,14 @@ import { appEntryRoute } from './app-entry';
 import { flushAuthHandoff, rootNavigationRef } from './root-navigation';
 import { handleWalletUrl, settleWalletQueue, type WalletReturnNav } from './customer-wallet-return';
 import OrderFlowEntry from '../features/order-flow/navigation/OrderFlowEntry';
+import M7AftercareDevPreviewScreen from '../features/order-flow/aftercare/M7AftercareDevPreviewScreen';
+import BookingAftercareScreen from '../features/order-flow/customer/BookingAftercareScreen';
+import { TechnicianWarrantyInboxScreen, TechnicianWarrantyTaskScreen } from '../features/order-flow/technician/TechnicianWarrantyScreens';
+
+function TechnicianWarrantyDevPreviewScreen() {
+  const route = useRoute<any>();
+  return route.params?.claimId ? <TechnicianWarrantyTaskScreen /> : <TechnicianWarrantyInboxScreen />;
+}
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -101,6 +109,9 @@ export default function AppNavigator({ firstRunSeen = false }: { firstRunSeen?: 
             <Stack.Screen name="CustomerSecurity" component={CustomerSecurityScreen} />
             <Stack.Screen name="TechnicianOrderDetail" component={TechnicianOrderDetailScreen} />
             {__DEV__ && <Stack.Screen name="OrderFlowDevPreview" component={OrderFlowEntry} />}
+            {__DEV__ && <Stack.Screen name="M7AftercareDevPreview" component={M7AftercareDevPreviewScreen} />}
+            {__DEV__ && <Stack.Screen name="BookingAftercareDevPreview" component={BookingAftercareScreen} />}
+            {__DEV__ && <Stack.Screen name="TechnicianWarrantyDevPreview" component={TechnicianWarrantyDevPreviewScreen} />}
             <Stack.Screen name="TechnicianKyc" component={TechnicianKycScreen} />
             <Stack.Screen name="TechnicianOnboarding" component={TechnicianOnboardingScreen} />
             <Stack.Screen name="TechnicianWallet" component={TechnicianWalletScreen} />
@@ -139,6 +150,8 @@ export default function AppNavigator({ firstRunSeen = false }: { firstRunSeen?: 
             <Stack.Screen name="CustomerWallet" component={CustomerWalletScreen} />
             <Stack.Screen name="TechnicianOrderDetail" component={TechnicianOrderDetailScreen} />
             {__DEV__ && <Stack.Screen name="OrderFlowDevPreview" component={OrderFlowEntry} />}
+            {__DEV__ && <Stack.Screen name="M7AftercareDevPreview" component={M7AftercareDevPreviewScreen} />}
+            {__DEV__ && <Stack.Screen name="BookingAftercareDevPreview" component={BookingAftercareScreen} />}
             <Stack.Screen name="ChatList" component={ChatListScreen} />
             <Stack.Screen name="ChatThread" component={ChatThreadScreen} />
             </>}

@@ -3,7 +3,10 @@ import type { OrderJournalStorage } from './order-command-journal';
 export type EntryAttempt = {
   ownerUserId: string; intentId: string; createdAt: number; confirmedId?: string; resolved?: boolean;
 } & ({ kind: 'booking-create'; baselineIds: string[] | null }
-  | { kind: 'invitation'; invitationId: string; bookingId: string; action: 'ACCEPT' | 'DECLINE' });
+  | { kind: 'invitation'; invitationId: string; bookingId: string; action: 'ACCEPT' | 'DECLINE' }
+  | { kind: 'support-create'; role: 'customer' | 'technician'; contextKind: 'booking' | 'order'; contextId: string }
+  | { kind: 'booking-cancel'; bookingId: string }
+  | { kind: 'warranty-command'; claimId: string; expectedVisitId?: string; operation: 'accept' | 'decline' | 'check-in' | 'propose' | 'complete' });
 const STORE_KEY = 'fixhome.entry-command-intents.v1';
 const id = (v: unknown): v is string => typeof v === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(v);
 function sanitize(value: unknown): EntryAttempt {
@@ -17,7 +20,22 @@ function sanitize(value: unknown): EntryAttempt {
     return { ...common, kind: r.kind, baselineIds: r.baselineIds && [...r.baselineIds] };
   if (r.kind === 'invitation' && id(r.invitationId) && id(r.bookingId) && ['ACCEPT', 'DECLINE'].includes(r.action))
     return { ...common, kind: r.kind, invitationId: r.invitationId, bookingId: r.bookingId, action: r.action };
+  if (r.kind === 'support-create' && id(r.contextId) && ['booking', 'order'].includes(r.contextKind) && ['customer', 'technician'].includes(r.role))
+    return { ...common, kind: r.kind, contextKind: r.contextKind, contextId: r.contextId, role: r.role };
+  if (r.kind === 'booking-cancel' && id(r.bookingId)) return { ...common, kind: r.kind, bookingId: r.bookingId };
+  if (r.kind === 'warranty-command' && id(r.claimId) && ['accept', 'decline', 'check-in', 'propose', 'complete'].includes(r.operation)
+    && (r.expectedVisitId === undefined || id(r.expectedVisitId))) return { ...common, kind: r.kind, claimId: r.claimId, operation: r.operation,
+      ...(r.expectedVisitId === undefined ? {} : { expectedVisitId: r.expectedVisitId }) };
   throw Error('Invalid entry intent');
+}
+function scope(row: EntryAttempt): string {
+  switch (row.kind) {
+    case 'booking-create': return row.kind;
+    case 'invitation': return `${row.kind}:${row.invitationId}`;
+    case 'support-create': return `${row.kind}:${row.role}:${row.contextKind}:${row.contextId}`;
+    case 'booking-cancel': return `${row.kind}:${row.bookingId}`;
+    case 'warranty-command': return `${row.kind}:${row.claimId}`;
+  }
 }
 /** Locks only; never an offline queue or stored Booking/camera snapshot. */
 export function createEntryAttemptJournal(storage: OrderJournalStorage) {
@@ -45,15 +63,15 @@ export function createEntryAttemptJournal(storage: OrderJournalStorage) {
         } catch (error) { damaged = true; throw error; }
       })();
     },
-    blocked(owner: string, kind: EntryAttempt['kind'], invitationId?: string): boolean {
+    blocked(owner: string, kind: EntryAttempt['kind'], entityId?: string, role?: 'customer' | 'technician'): boolean {
       return !loaded || damaged || rows.some(r => r.ownerUserId === owner && r.kind === kind && !r.resolved
-        && (r.kind !== 'invitation' || invitationId === undefined || r.invitationId === invitationId));
+        && (entityId === undefined || (r.kind === 'invitation' ? r.invitationId === entityId : r.kind === 'support-create' ? r.contextId === entityId && (role === undefined || r.role === role) : r.kind === 'booking-cancel' ? r.bookingId === entityId : r.kind === 'warranty-command' ? r.claimId === entityId : true)));
     },
     list(owner: string): EntryAttempt[] { ready(); return rows.filter(r => r.ownerUserId === owner).map(sanitize); },
     async begin(input: EntryAttempt): Promise<boolean> {
       ready(); const row = sanitize(input);
       if (rows.some(r => r.ownerUserId === row.ownerUserId && (r.intentId === row.intentId
-        || (!r.resolved && r.kind === row.kind && (r.kind === 'booking-create' || (row.kind === 'invitation' && r.invitationId === row.invitationId)))))) return false;
+        || (!r.resolved && scope(r) === scope(row))))) return false;
       rows = [...rows, row]; emit(); await persist(); return true;
     },
     async recordId(owner: string, intentId: string, confirmedId: string) {

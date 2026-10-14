@@ -23,6 +23,10 @@ import HandoverReviewScreen from '../customer/HandoverReviewScreen';
 import AfterEvidenceScreen from '../technician/AfterEvidenceScreen';
 import CompletionRequestScreen from '../technician/CompletionRequestScreen';
 import CashDeclarationScreen from '../technician/CashDeclarationScreen';
+import OrderExceptionScreen from '../shared/OrderExceptionScreen';
+import { CustomerReviewScreen, CustomerWarrantyScreen, CustomerWarrantyClaimScreen, WarrantyClaimCreateScreen } from '../aftercare/CustomerAftercareScreens';
+import { SupportCaseListScreen, SupportCaseCreateScreen, SupportCaseDetailScreen } from '../aftercare/SupportCaseScreens';
+import { TechnicianWarrantyInboxScreen, TechnicianWarrantyTaskScreen } from '../technician/TechnicianWarrantyScreens';
 
 const CustomerStack = createNativeStackNavigator<CustomerOrderFlowParamList>();
 const TechnicianStack = createNativeStackNavigator<TechnicianOrderFlowParamList>();
@@ -37,6 +41,10 @@ function Screens({ Stack, role, reduceMotion }: { Stack: { Navigator: React.Comp
     <Stack.Screen name="ScopeDetail" component={ScopeDetailScreen} />
     <Stack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />
     <Stack.Screen name="ProposalDetail" component={ProposalDetailScreen} />
+    <Stack.Screen name="SupportCases" component={SupportCaseListScreen} />
+    <Stack.Screen name="SupportCreate" component={SupportCaseCreateScreen} />
+    <Stack.Screen name="SupportCaseDetail" component={SupportCaseDetailScreen} />
+    <Stack.Screen name="OrderException" component={OrderExceptionScreen} />
     {role === 'technician' && <Stack.Screen name="ArrivalCheckIn" component={ArrivalCheckInScreen} />}
     {role === 'technician' && <Stack.Screen name="BeforeCapture" component={BeforeEvidenceScreen} />}
     {role === 'technician' && <Stack.Screen name="PersonalOrderNotes" component={PersonalOrderNotesScreen} />}
@@ -50,6 +58,12 @@ function Screens({ Stack, role, reduceMotion }: { Stack: { Navigator: React.Comp
     {role === 'technician' && <Stack.Screen name="CashDeclaration" component={CashDeclarationScreen} />}
     {role === 'customer' && <Stack.Screen name="WalletPayment" component={WalletPaymentScreen} />}
     {role === 'customer' && <Stack.Screen name="HandoverReview" component={HandoverReviewScreen} />}
+    {role === 'customer' && <Stack.Screen name="CustomerReview" component={CustomerReviewScreen} />}
+    {role === 'customer' && <Stack.Screen name="CustomerWarranty" component={CustomerWarrantyScreen} />}
+    {role === 'customer' && <Stack.Screen name="WarrantyClaimCreate" component={WarrantyClaimCreateScreen} />}
+    {role === 'customer' && <Stack.Screen name="CustomerWarrantyClaim" component={CustomerWarrantyClaimScreen} />}
+    {role === 'technician' && <Stack.Screen name="TechnicianWarrantyInbox" component={TechnicianWarrantyInboxScreen} />}
+    {role === 'technician' && <Stack.Screen name="TechnicianWarrantyTask" component={TechnicianWarrantyTaskScreen} />}
   </Stack.Navigator>;
 }
 
