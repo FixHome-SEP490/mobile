@@ -64,6 +64,7 @@
     "check:expo": "expo install --check"
   },
   "jest": {
-    "preset": "jest-expo"
+    "preset": "jest-expo",
+    "setupFiles": ["<rootDir>/jest.setup.ts"]
   }
 }

@@ -316,7 +316,7 @@ export default function TechnicianInvitationsScreen() {
           isFocused ? (
             <View style={styles.headerStack}>
               <View style={styles.focusedTopBar}>
-                <TouchableOpacity
+                {(focusedMissing || loading || Boolean(error)) ? <TouchableOpacity
                   style={styles.backBtn}
                   onPress={() => setReviewingInvitationId(null)}
                   accessibilityRole="button"
@@ -325,7 +325,7 @@ export default function TechnicianInvitationsScreen() {
                 >
                   <ChevronLeft size={20} color={colors.text} strokeWidth={1.75} />
                   <Text style={styles.backBtnText}>Quay lại</Text>
-                </TouchableOpacity>
+                </TouchableOpacity> : null}
               </View>
 
               {availability.isAvailable === false && (
