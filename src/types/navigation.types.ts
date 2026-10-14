@@ -49,7 +49,8 @@ export type RootStackParamList = {
     | undefined;
   CustomerMatching: { bookingId: string };
   CustomerBookingDetail: { bookingId: string };
-  CustomerOrderDetail: { serviceOrderId: string };
+  /** `screen` opens a Customer OrderFlow child directly (e.g. the warranty list from the Warranties tab). */
+  CustomerOrderDetail: { serviceOrderId: string; screen?: 'CustomerWarranty' };
   CustomerRepairHistory: undefined;
   CustomerWarranties: { orderId?: string } | undefined;
   CustomerSecurity: undefined;

@@ -16,12 +16,10 @@ import CustomerBookingCreateScreen from '../screens/customer/CustomerBookingCrea
 import CustomerAIChatScreen from '../screens/customer/CustomerAIChatScreen';
 import CustomerMatchingScreen from '../screens/customer/CustomerMatchingScreen';
 import CustomerBookingDetailScreen from '../screens/customer/CustomerBookingDetailScreen';
-import CustomerOrderDetailScreen from '../screens/customer/CustomerOrderDetailScreen';
 import CustomerRepairHistoryScreen from '../screens/customer/CustomerRepairHistoryScreen';
 import CustomerWarrantiesScreen from '../screens/customer/CustomerWarrantiesScreen';
 import CustomerSecurityScreen from '../screens/customer/CustomerSecurityScreen';
 import CustomerWalletScreen from '../features/order-flow/customer/CustomerWalletScreen';
-import TechnicianOrderDetailScreen from '../screens/technician/TechnicianOrderDetailScreen';
 import TechnicianKycScreen from '../screens/technician/TechnicianKycScreen';
 import TechnicianOnboardingScreen from '../screens/technician/TechnicianOnboardingScreen';
 import TechnicianWalletScreen from '../screens/technician/TechnicianWalletScreen';
@@ -40,6 +38,7 @@ import { appEntryRoute } from './app-entry';
 import { flushAuthHandoff, rootNavigationRef } from './root-navigation';
 import { handleWalletUrl, settleWalletQueue, type WalletReturnNav } from './customer-wallet-return';
 import OrderFlowEntry from '../features/order-flow/navigation/OrderFlowEntry';
+import { CustomerOrderDetailEntry, TechnicianOrderDetailEntry } from '../features/order-flow/navigation/OrderDetailEntry';
 import M7AftercareDevPreviewScreen from '../features/order-flow/aftercare/M7AftercareDevPreviewScreen';
 import BookingAftercareScreen from '../features/order-flow/customer/BookingAftercareScreen';
 import { TechnicianWarrantyInboxScreen, TechnicianWarrantyTaskScreen } from '../features/order-flow/technician/TechnicianWarrantyScreens';
@@ -103,11 +102,11 @@ export default function AppNavigator({ firstRunSeen = false }: { firstRunSeen?: 
             <Stack.Screen name="CustomerAIChat" component={CustomerAIChatScreen} />
             <Stack.Screen name="CustomerMatching" component={CustomerMatchingScreen} />
             <Stack.Screen name="CustomerBookingDetail" component={CustomerBookingDetailScreen} />
-            <Stack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
+            <Stack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailEntry} />
             <Stack.Screen name="CustomerRepairHistory" component={CustomerRepairHistoryScreen} />
             <Stack.Screen name="CustomerWarranties" component={CustomerWarrantiesScreen} />
             <Stack.Screen name="CustomerSecurity" component={CustomerSecurityScreen} />
-            <Stack.Screen name="TechnicianOrderDetail" component={TechnicianOrderDetailScreen} />
+            <Stack.Screen name="TechnicianOrderDetail" component={TechnicianOrderDetailEntry} />
             {__DEV__ && <Stack.Screen name="OrderFlowDevPreview" component={OrderFlowEntry} />}
             {__DEV__ && <Stack.Screen name="M7AftercareDevPreview" component={M7AftercareDevPreviewScreen} />}
             {__DEV__ && <Stack.Screen name="BookingAftercareDevPreview" component={BookingAftercareScreen} />}
@@ -143,12 +142,12 @@ export default function AppNavigator({ firstRunSeen = false }: { firstRunSeen?: 
             <Stack.Screen name="CustomerAIChat" component={CustomerAIChatScreen} />
             <Stack.Screen name="CustomerMatching" component={CustomerMatchingScreen} />
             <Stack.Screen name="CustomerBookingDetail" component={CustomerBookingDetailScreen} />
-            <Stack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailScreen} />
+            <Stack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailEntry} />
             <Stack.Screen name="CustomerRepairHistory" component={CustomerRepairHistoryScreen} />
             <Stack.Screen name="CustomerWarranties" component={CustomerWarrantiesScreen} />
             <Stack.Screen name="CustomerSecurity" component={CustomerSecurityScreen} />
             <Stack.Screen name="CustomerWallet" component={CustomerWalletScreen} />
-            <Stack.Screen name="TechnicianOrderDetail" component={TechnicianOrderDetailScreen} />
+            <Stack.Screen name="TechnicianOrderDetail" component={TechnicianOrderDetailEntry} />
             {__DEV__ && <Stack.Screen name="OrderFlowDevPreview" component={OrderFlowEntry} />}
             {__DEV__ && <Stack.Screen name="M7AftercareDevPreview" component={M7AftercareDevPreviewScreen} />}
             {__DEV__ && <Stack.Screen name="BookingAftercareDevPreview" component={BookingAftercareScreen} />}

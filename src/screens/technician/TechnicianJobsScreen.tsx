@@ -49,7 +49,6 @@ import StatusBadge from '../../components/StatusBadge';
 import ContactActions from '../../components/ContactActions';
 import { serviceOrderStatusView } from './technician-status';
 import { formatVnd } from '../../utils/format';
-import OrderFlowDevPreviewAction from '../../features/order-flow/navigation/OrderFlowDevPreviewAction';
 
 import { vnDateTimeString } from '../../utils/vn-time';
 
@@ -446,8 +445,6 @@ export default function TechnicianJobsScreen() {
                     ) : (
                       info
                     )}
-                    {__DEV__ && detailId && !isHistoricalOrder(job) && ['ACCEPTED', 'EN_ROUTE', 'UNDER_REPAIR'].includes(job.status) &&
-                      <OrderFlowDevPreviewAction serviceOrderId={detailId} />}
 
                     {/* Actions depending on status */}
                     {hasActions && (

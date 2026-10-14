@@ -38,7 +38,6 @@ import {
   type HistoryCard,
 } from './customer-bookings-history';
 import { orderDetailTarget } from './customer-order-detail';
-import OrderFlowDevPreviewAction from '../../features/order-flow/navigation/OrderFlowDevPreviewAction';
 import { buildBookingWindow } from '../../utils/booking-window';
 import {
   canCancelBookingConservative,
@@ -718,8 +717,6 @@ export default function CustomerBookingsScreen() {
         >
           {renderOrderSummary(order, bookingId, true)}
         </TouchableOpacity>
-        {__DEV__ && ['ACCEPTED', 'EN_ROUTE', 'UNDER_REPAIR'].includes(order.status) &&
-          <OrderFlowDevPreviewAction serviceOrderId={detailId} />}
       </View>
     );
   };
