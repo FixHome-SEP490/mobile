@@ -58,6 +58,10 @@ export type RootStackParamList = {
   TechnicianOrderDetail: { serviceOrderId: string };
   /** Internal M2 reader preview, registered only in __DEV__; role comes from authenticated state. */
   OrderFlowDevPreview: { serviceOrderId: string };
+  /** Internal M7 entry points, registered only in __DEV__; IDs still pass through production ownership checks. */
+  M7AftercareDevPreview: undefined;
+  BookingAftercareDevPreview: { bookingId: string };
+  TechnicianWarrantyDevPreview: { claimId?: string };
   TechnicianKyc: undefined;
   TechnicianOnboarding: undefined;
   TechnicianWallet: undefined;

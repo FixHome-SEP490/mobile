@@ -72,7 +72,7 @@ export default function CompletedOrderScreen({ role }: { role: 'customer' | 'tec
         <DetailRow label="Thanh toán" value={invoice ? String(invoice.paymentStatus).toUpperCase() === 'PAID' ? 'Đã thanh toán' : String(invoice.paymentStatus) : 'Chưa có dữ liệu'} />
       </View>
       {role === 'customer' ? (
-        <ReadOnlyNotice>Đơn đã hoàn thành theo xác nhận của máy chủ. Đánh giá dịch vụ sẽ có ở bản cập nhật sau.</ReadOnlyNotice>
+        <ReadOnlyNotice>Đơn đã hoàn thành theo xác nhận của máy chủ. Bạn có thể đánh giá khi sẵn sàng; đây là bước tùy chọn.</ReadOnlyNotice>
       ) : (
         <ReadOnlyNotice>Đơn đã hoàn thành theo xác nhận của máy chủ. Không còn thao tác nào cần gửi cho đơn này.</ReadOnlyNotice>
       )}
@@ -83,6 +83,7 @@ export default function CompletedOrderScreen({ role }: { role: 'customer' | 'tec
             ['InvoiceDetail', 'Xem hóa đơn'],
             ['EvidenceGallery', 'Xem ảnh và bằng chứng'],
             ['OrderProgressHistory', 'Xem tiến độ'],
+            ...(role === 'customer' ? [['CustomerReview', 'Đánh giá dịch vụ'], ['CustomerWarranty', 'Xem bảo hành'], ['SupportCases', 'Yêu cầu hỗ trợ']] as const : [['TechnicianWarrantyInbox', 'Công việc bảo hành'], ['SupportCases', 'Yêu cầu hỗ trợ']] as const),
           ] as const
         ).map(([screen, label]) => (
           <TouchableOpacity

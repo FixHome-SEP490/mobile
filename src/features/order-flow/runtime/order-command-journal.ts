@@ -3,7 +3,8 @@ import type { OrderRole, OrderSessionKey } from '../domain/order-session.types';
 export type OrderCommandOperation = 'en-route' | 'check-in' | 'face-upload' | 'before-upload' | 'after-upload' | 'repair-recovery' | 'evidence-delete'
   | 'quote-create' | 'quote-decision' | 'extra-create' | 'extra-revise' | 'extra-decision'
   | 'parts-create' | 'parts-receive' | 'parts-usage' | 'parts-cancel' | 'request-completion'
-  | 'wallet-pay' | 'vnpay-url' | 'cash-declare' | 'cash-confirm' | 'support-create' | 'review-create' | 'warranty-create';
+  | 'wallet-pay' | 'vnpay-url' | 'cash-declare' | 'cash-confirm' | 'support-create' | 'review-create' | 'warranty-create'
+  | 'order-cancel' | 'warranty-respond-agree' | 'warranty-respond-dispute';
 export type OrderCommandStatus = 'submitting' | 'verifying' | 'unknown' | 'resolved' | 'failed-known';
 export interface OrderCommandIntent {
   intentId: string;
@@ -24,7 +25,7 @@ export interface OrderJournalStorage {
   setItem: (key: string, value: string) => Promise<void>;
 }
 const STORE_KEY = 'fixhome.order-command-intents.v1';
-const operations: OrderCommandOperation[] = ['en-route', 'check-in', 'face-upload', 'before-upload', 'after-upload', 'repair-recovery', 'evidence-delete', 'quote-create', 'quote-decision', 'extra-create', 'extra-revise', 'extra-decision', 'parts-create', 'parts-receive', 'parts-usage', 'parts-cancel', 'request-completion', 'wallet-pay', 'vnpay-url', 'cash-declare', 'cash-confirm', 'support-create', 'review-create', 'warranty-create'];
+const operations: OrderCommandOperation[] = ['en-route', 'check-in', 'face-upload', 'before-upload', 'after-upload', 'repair-recovery', 'evidence-delete', 'quote-create', 'quote-decision', 'extra-create', 'extra-revise', 'extra-decision', 'parts-create', 'parts-receive', 'parts-usage', 'parts-cancel', 'request-completion', 'wallet-pay', 'vnpay-url', 'cash-declare', 'cash-confirm', 'support-create', 'review-create', 'warranty-create', 'order-cancel', 'warranty-respond-agree', 'warranty-respond-dispute'];
 const statuses: OrderCommandStatus[] = ['submitting', 'verifying', 'unknown', 'resolved', 'failed-known'];
 const identifier = (value: unknown): value is string => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(value);
 const stableKeyValid = (value: unknown): value is string => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._:-]{7,127}$/.test(value);
