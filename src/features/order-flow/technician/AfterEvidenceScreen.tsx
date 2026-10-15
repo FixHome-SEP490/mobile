@@ -44,7 +44,9 @@ export default function AfterEvidenceScreen() {
   const order = orderValue && !isHistoricalOrder(orderValue) ? orderValue : null;
   const assignmentValid = !!order && !!key && order.technician?.id === key.userId && order.id === key.serviceOrderId;
   const underRepair = order?.status === 'UNDER_REPAIR' && !order?.completionRequestedAt;
-  const revoked = !snapshot || snapshot.access !== 'current' || !key || !order || !assignmentValid || !underRepair;
+  // A foreground refresh drops the order to 'loading' for a moment; that is not a revocation, so keep the draft.
+  const orderLoading = snapshot?.order.status === 'loading';
+  const revoked = !snapshot || snapshot.access !== 'current' || !key || (!orderLoading && (!order || !assignmentValid || !underRepair));
   const owner = key ? `${key.userId}/${key.sessionGeneration}/${key.serviceOrderId}` : null;
   const evidenceReady = snapshot?.resources.evidence.status === 'ready';
   const evidenceLoading = snapshot?.resources.evidence.status === 'loading';

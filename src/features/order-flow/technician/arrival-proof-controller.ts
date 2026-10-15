@@ -64,6 +64,17 @@ export function createArrivalProofController(deps: ArrivalProofDependencies) {
     return currentOrder(key) && s?.resources.evidence.status === 'ready'
       ? s.resources.evidence.data.filter(e => e.serviceOrderId === key.serviceOrderId && e.uploaderId === key.userId) : null;
   };
+  /** Dev-only: which guard blocked a command (no PII, booleans only). */
+  function why(key: OrderSessionKey, operation: OrderCommandOperation) {
+    if (!__DEV__) return;
+    const s = deps.coordinator.getSnapshot(), o = currentOrder(key), ev = s?.resources.evidence;
+    console.warn('[arrival-proof] blocked', operation, JSON.stringify({
+      active: deps.isActive(), readerKey: sameOrderSession(deps.getKey(), key), snapshotKey: sameOrderSession(s?.key ?? null, key), access: s?.access, order: !!o, status: o?.status, arrivalVerified: o?.arrivalVerified,
+      completionRequested: !!o?.completionRequestedAt, evidence: ev?.status,
+      ownFace: ev?.status === 'ready' ? ev.data.some(e => e.uploaderId === key.userId && e.type === 'CHECKIN_FACE') : null,
+      evidenceRows: ev?.status === 'ready' ? ev.data.length : null,
+    }));
+  }
   function allowed(key: OrderSessionKey, operation: OrderCommandOperation, entityId?: string): boolean {
     const order = currentOrder(key); if (!order || order.completionRequestedAt) return false;
     if (operation === 'en-route') {
@@ -111,6 +122,7 @@ export function createArrivalProofController(deps: ArrivalProofDependencies) {
       if (deps.journal.hasUnresolved(key)) { publish({ phase: 'unknown', operation, message: unknownMessage }); return; }
       await refresh(key, resources);
       if (!allowed(key, operation, entityId)) {
+        why(key, operation);
         publish({ phase: 'denied', operation, message: operation === 'repair-recovery' && !deps.coordinator.getSnapshot()?.proofPolicy
           ? 'Chưa xác minh được số ảnh hệ thống yêu cầu. Hãy làm mới, chụp thêm ảnh khi cần hoặc liên hệ hỗ trợ.' : 'Điều kiện hiện tại chưa cho phép thao tác. Hãy làm mới hoặc kiểm tra phân công, vị trí và bằng chứng.' }); return;
       }
@@ -119,7 +131,7 @@ export function createArrivalProofController(deps: ArrivalProofDependencies) {
       publish({ phase: 'submitting', operation, message: null });
       await adapter.dispatch(key, { intentId, entityId: entityId ?? key.serviceOrderId, operation }, async () => {
         // Storage and resource awaits can cross a reassignment or phase change.
-        if (!allowed(key, operation, entityId) || !inputCurrent()) return;
+        if (!allowed(key, operation, entityId) || !inputCurrent()) { why(key, operation); return; }
         sent = true; return command(key, intentId);
       }, () => {
         if (!sent) return 'failed-known';
@@ -134,8 +146,9 @@ export function createArrivalProofController(deps: ArrivalProofDependencies) {
       }
       if (!sameKey(key)) return;
       const marker = deps.journal.list(key.userId).find(m => m.intentId === intentId);
+      if (__DEV__) console.warn('[arrival-proof] result', operation, JSON.stringify({ sent, marker: marker?.status }));
       publish({ phase: marker?.status === 'resolved' ? 'resolved' : marker?.status === 'failed-known' ? 'denied' : 'unknown', operation,
-        message: marker?.status === 'unknown' ? unknownMessage : null });
+        message: marker?.status === 'unknown' ? unknownMessage : !sent && marker?.status === 'failed-known' ? 'Chưa gửi được: điều kiện hiện tại chưa cho phép. Hãy làm mới đơn rồi thử lại.' : null });
     } catch { if (sameKey(key)) publish({ phase: 'unknown', operation, message: unknownMessage }); }
     finally { busy = false; }
   }
@@ -146,7 +159,14 @@ export function createArrivalProofController(deps: ArrivalProofDependencies) {
     }
     await run(operation, async (key, intentId) => {
       const image = { uri: asset.uri, name: asset.name, type: asset.type };
-      const result = await (operation === 'face-upload' ? deps.transport.uploadFace : deps.transport.uploadBefore)(key.serviceOrderId, image);
+      let result: unknown;
+      try {
+        result = await (operation === 'face-upload' ? deps.transport.uploadFace : deps.transport.uploadBefore)(key.serviceOrderId, image);
+      } catch (error) {
+        if (__DEV__) { const e = error as { code?: string; message?: string; response?: { status?: number } }; console.warn('[arrival-proof] POST failed', operation, JSON.stringify({ status: e.response?.status, code: e.code, message: e.message })); }
+        throw error;
+      }
+      if (__DEV__) console.warn('[arrival-proof] POST ok', operation, JSON.stringify({ hasId: typeof responseRecord(result)?.id === 'string' }));
       const id = responseRecord(result)?.id;
       if (typeof id === 'string') await deps.journal.recordEntity(key.userId, intentId, id);
     }, ['evidence']);

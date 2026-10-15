@@ -687,7 +687,8 @@ export const ordersApi = {
   },
 
   async createVnpayUrl(id: string): Promise<string> {
-    const payload = await post(`/invoices/${id}/vnpay-url`);
+    // The marker makes the backend deep-link back to the app after VNPay instead of the web page.
+    const payload = unwrap((await apiClient.post(`/invoices/${id}/vnpay-url`, {}, { headers: { 'x-client-platform': 'mobile' } })).data);
     const url = typeof payload.paymentUrl === 'string'
       ? payload.paymentUrl.trim()
       : '';

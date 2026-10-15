@@ -29,6 +29,7 @@ jest.mock('./useCustomerOrderPayment', () => ({
       submitConfirmation: (...args: unknown[]) => mockSubmitConfirmation(...args),
       cancelConfirmation: (...args: unknown[]) => mockCancelConfirmation(...args),
       openPaymentUrl: (...args: unknown[]) => mockOpenPaymentUrl(...args),
+      verify: async () => {},
     },
     state: mockPaymentState,
   }),

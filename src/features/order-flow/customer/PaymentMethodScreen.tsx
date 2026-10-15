@@ -89,9 +89,10 @@ export default function PaymentMethodScreen() {
     setSheet(null);
     setSheetMethod(null);
     void controller.submitConfirmation().then(() => {
-      // VNPay initiation only creates the link; cash confirm only sends the
-      // captured declaration. The dispatcher shows the honest outcome.
-      if (method === 'vnpay' || method === 'cash') navigation.navigate('OrderTask');
+      // VNPay initiation only creates the link; this explicit confirmation opens it once.
+      // Cash confirm only sends the captured declaration; the dispatcher shows the outcome.
+      if (method === 'vnpay') void controller.openPaymentUrl();
+      else if (method === 'cash') navigation.navigate('OrderTask');
     });
   };
 
@@ -130,7 +131,7 @@ export default function PaymentMethodScreen() {
         unknown
           ? { label: 'Kiểm tra kết quả', testID: 'payment-check-result', disabled: busy,
               accessibilityHint: 'Đối chiếu kết quả thanh toán chưa rõ từ máy chủ',
-              onPress: () => navigation.navigate('OrderTask') }
+              onPress: () => { void controller.verify(); navigation.navigate('OrderTask'); } }
           : sheetValid && sheetMethod
             ? { label: sheetMethod === 'vnpay' ? 'Xác nhận mở VNPay' : 'Xác nhận tiền mặt',
                 testID: 'payment-confirm-submit', disabled: busy, onPress: submitSheet }

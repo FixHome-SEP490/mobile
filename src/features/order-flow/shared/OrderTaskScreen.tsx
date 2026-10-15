@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { resolveCustomerTask, resolveTechnicianTask } from '../domain/order-task-resolver';
@@ -84,11 +84,31 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
   const { key, snapshot, loadResource, journal } = useOrderSession();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const resolution: OrderTaskResolution | null = snapshot
+  const liveResolution: OrderTaskResolution | null = snapshot
     ? role === 'customer'
       ? resolveCustomerTask(snapshot)
       : resolveTechnicianTask(snapshot)
     : null;
+  // A refresh briefly drops the order to 'loading'. Unmounting the task then would destroy its
+  // controller mid-command (the command's owner turns inactive and the POST is never sent), so
+  // keep the last task mounted; its guards stay closed until the order is ready again.
+  // Resources reload right after the order does; resolving then flips the task to the TR/TX fallback.
+  const refreshing = snapshot?.access === 'current'
+    && (snapshot.order.status === 'loading' || Object.values(snapshot.resources).some(r => r.status === 'loading'));
+  const [lastTask, setLastTask] = useState<OrderTaskResolution | null>(null);
+  // A camera upload writes its pending marker, which resolves to TR; the capture screen owns that
+  // command and already renders the pending/verify state, so it must not be unmounted underneath it.
+  // Likewise C09 owns the VNPay link its own submit just created; the marker must not swap the screen away.
+  const hold = refreshing || (snapshot?.pendingIntent === true && (
+    (liveResolution?.taskId === 'TR' && (lastTask?.taskId === 'T05' || lastTask?.taskId === 'T06'))
+    || ((liveResolution?.taskId === 'C11' || liveResolution?.taskId === 'CX') && lastTask?.taskId === 'C09')));
+  if (liveResolution && !hold && lastTask?.taskId !== liveResolution.taskId) setLastTask(liveResolution);
+  const resolution = hold && lastTask ? lastTask : liveResolution;
+  const shownTask = resolution?.taskId, orderState = snapshot?.order.status, accessState = snapshot?.access, pending = snapshot?.pendingIntent;
+  useEffect(() => {
+    if (__DEV__) console.warn('[order-task]', JSON.stringify({ live: liveResolution?.taskId, shown: shownTask, blockers: liveResolution?.blockers, order: orderState, access: accessState, pending, refreshing }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveResolution?.taskId, shownTask, orderState, accessState, pending, refreshing]);
   const resolutionTaskId = resolution?.taskId;
 
   useEffect(() => {
@@ -108,7 +128,7 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
     }
   }, [navigation, resolution, resolutionTaskId, snapshot, route.name, route.params?.taskId]);
 
-  if (!snapshot || snapshot.access !== 'current' || snapshot.order.status !== 'ready' || !resolution) {
+  if (!snapshot || snapshot.access !== 'current' || (snapshot.order.status !== 'ready' && !(hold && lastTask)) || !resolution) {
     return (
       <TaskScreenShell title="Đơn dịch vụ" stage={null} onBack={() => navigation.goBack()}>
         <ReadOnlyNotice>

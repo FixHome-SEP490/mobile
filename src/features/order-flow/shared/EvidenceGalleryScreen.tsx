@@ -7,6 +7,8 @@ import { ReadOnlyNotice, TaskScreenShell } from './TaskScreenShell';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from './useLoadUnloadedResources';
 
+const typeLabel: Record<string, string> = { BEFORE: 'Trước sửa chữa', AFTER: 'Sau sửa chữa', CHECKIN_FACE: 'Ảnh khuôn mặt' };
+
 export default function EvidenceGalleryScreen() {
   const { key, snapshot, refresh, loadResource } = useOrderSession();
   const navigation = useNavigation<any>();
@@ -24,10 +26,10 @@ export default function EvidenceGalleryScreen() {
     {current && resource?.status === 'error' && <ReadOnlyNotice>Chưa tải được ảnh. Dữ liệu lỗi không được xem như danh sách rỗng.</ReadOnlyNotice>}
     {current && resource?.status === 'ready' && photos.length === 0 && <ReadOnlyNotice>Đơn chưa có ảnh hiển thị cho tài khoản này.</ReadOnlyNotice>}
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-      {photos.map(photo => <TouchableOpacity key={photo.id} accessibilityRole="button" accessibilityLabel={`Mở ảnh ${photo.type.toLowerCase()}`}
+      {photos.map(photo => <TouchableOpacity key={photo.id} accessibilityRole="button" accessibilityLabel={`Mở ${(typeLabel[photo.type] ?? 'ảnh bổ sung').toLowerCase()}`}
         onPress={() => navigation.push('EvidenceViewer', { evidenceId: photo.id })} style={{ width: '48%', minHeight: 130, backgroundColor: colors.surface, borderRadius: 12, overflow: 'hidden' }}>
         <Image source={{ uri: photo.mediaUrl }} resizeMode="cover" style={{ height: 112, width: '100%' }} />
-        <Text style={{ color: colors.text, padding: 8, fontWeight: '600' }}>{photo.type === 'BEFORE' ? 'Trước sửa chữa' : photo.type === 'AFTER' ? 'Sau sửa chữa' : 'Ảnh bổ sung'}</Text>
+        <Text style={{ color: colors.text, padding: 8, fontWeight: '600' }}>{typeLabel[photo.type] ?? 'Ảnh bổ sung'}</Text>
       </TouchableOpacity>)}
     </View>
   </TaskScreenShell>;

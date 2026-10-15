@@ -13,8 +13,13 @@ export function useTechnicianArrivalProof({ trackLocation = false }: { trackLoca
   const controller = useMemo(() => createProductionArrivalProofController(runtime), [runtime]);
   const tracker = useMemo(() => createProductionOrderLocationTracker(runtime), [runtime]);
   const state = useSyncExternalStore(controller.subscribe, controller.getState, controller.getState);
+  useEffect(() => {
+    if (__DEV__) console.warn('[arrival-proof] hook mounted');
+    return () => { if (__DEV__) console.warn('[arrival-proof] hook UNMOUNTED'); };
+  }, []);
   useLayoutEffect(() => {
     ownership.active = focused && foreground;
+    if (__DEV__) console.warn('[arrival-proof] active=' + ownership.active, JSON.stringify({ focused, foreground }));
     return () => { ownership.active = false; };
   }, [ownership, focused, foreground]);
   useEffect(() => {

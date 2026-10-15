@@ -27,6 +27,7 @@ export interface OrderPaymentState {
   wallet: Resource<CustomerWalletSummary>; urlReady: boolean;
 }
 const paymentOperations = ['wallet-pay', 'vnpay-url', 'cash-confirm'];
+const VNPAY_LINK_TTL_MS = 15 * 60 * 1000;
 /** Exclusive durable order/invoice lock. No amount or redirect data is persisted. */
 export function createOrderPaymentController(deps: OrderPaymentDependencies) {
   let state: OrderPaymentState = { phase: 'idle', method: null, target: null, confirmation: null, result: 'unverified', message: null,
@@ -97,7 +98,11 @@ export function createOrderPaymentController(deps: OrderPaymentDependencies) {
       if (cash.status === 'disputed') return 'resolved';
       return cash.status === 'confirmed' && invoice?.status === 'paid' ? 'resolved' : 'unresolved';
     }
-    return invoice?.id === marker.entityId && invoice.status === 'paid' ? 'resolved' : 'unresolved';
+    if (invoice?.id === marker.entityId && invoice.status === 'paid') return 'resolved';
+    // A VNPay link only starts a payment and expires; once it has, an unpaid invoice proves nothing is in flight.
+    if (marker.operation === 'vnpay-url' && invoice?.id === marker.entityId && invoice.status === 'unpaid'
+      && (deps.now ?? Date.now)() - marker.dispatchedAt > VNPAY_LINK_TTL_MS) return 'failed-known';
+    return 'unresolved';
   }
   function finish(key: OrderSessionKey, marker: OrderCommandMarker | undefined) {
     if (!same(key)) return;

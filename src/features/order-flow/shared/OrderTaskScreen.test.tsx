@@ -341,3 +341,17 @@ it('dispatches M5 customer C07 extra decision and scoped recovery', async () => 
   expect(renderer.root.findByProps({ testID: 'dispatched-C07' })).toBeTruthy();
   await act(async () => renderer.unmount());
 });
+
+it('keeps the current task mounted while a refresh drops the order to loading', async () => {
+  mockRole = 'technician';
+  let renderer!: ReturnType<typeof create>;
+  mockSnapshot = snapshotFor('technician', baseOrder('EN_ROUTE', { arrivalVerified: true }));
+  await act(async () => { renderer = create(<OrderTaskScreen role={mockRole} />); });
+  const mounted = renderer.root.findByProps({ testID: 'dispatched-T05' });
+
+  mockSnapshot = { ...mockSnapshot, order: { status: 'loading', requestSeq: 2 } };
+  await act(async () => { renderer.update(<OrderTaskScreen role={mockRole} />); });
+  // Same instance: unmounting here destroys the controller that is mid-command.
+  expect(renderer.root.findByProps({ testID: 'dispatched-T05' })).toBe(mounted);
+  await act(async () => renderer.unmount());
+});
