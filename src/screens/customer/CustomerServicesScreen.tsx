@@ -196,7 +196,7 @@ export default function CustomerServicesScreen() {
       {/* Page header */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => navigation.goBack()}
+          onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate(useAuthStore.getState().isAuthenticated ? 'CustomerMain' : 'CustomerGuestHome'))}
           style={styles.backBtn}
           accessibilityRole="button"
           accessibilityLabel="Quay lại"

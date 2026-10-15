@@ -104,7 +104,7 @@ describe('ExtraWaitingScreen (T11)', () => {
       reason: 'Hỏng van ga',
       totalLaborDelta: 100000,
       totalPartsDelta: 200000,
-      expiresAt: '2026-10-15T00:00:00Z',
+      expiresAt: '2099-10-15T00:00:00Z',
     };
     const { key, snapshot } = createBaseSnapshot([cost]);
     mockKey = key;
@@ -129,7 +129,7 @@ describe('ExtraWaitingScreen (T11)', () => {
       reason: 'Hỏng van ga',
       totalLaborDelta: 100000,
       totalPartsDelta: 200000,
-      expiresAt: '2026-10-15T00:00:00Z',
+      expiresAt: '2099-10-15T00:00:00Z',
     };
     const { key, snapshot } = createBaseSnapshot([cost]);
     mockKey = key;
@@ -182,7 +182,7 @@ describe('ExtraWaitingScreen (T11)', () => {
       technicianId: 'tech-1',
       status: 'PENDING_APPROVAL',
       reason: 'Hỏng van ga',
-      expiresAt: '2026-10-15T00:00:00Z',
+      expiresAt: '2099-10-15T00:00:00Z',
     };
     const { key, snapshot } = createBaseSnapshot([cost]);
     mockKey = key;

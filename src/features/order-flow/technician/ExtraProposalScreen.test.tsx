@@ -341,7 +341,7 @@ describe('ExtraProposalScreen (T10)', () => {
       technicianId: 'tech-1',
       status: 'PENDING_APPROVAL',
       reason: 'Bản cũ',
-      expiresAt: '2026-10-15T00:00:00Z',
+      expiresAt: '2099-10-15T00:00:00Z',
       items: [],
     };
     const { key, snapshot } = createBaseSnapshot([existingCost]);

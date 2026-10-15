@@ -163,7 +163,7 @@ describe('ExtraDecisionScreen (C07)', () => {
         status: 'PENDING_APPROVAL',
         reason: 'Hỏng van áp suất gas',
         totalAmount: 350000,
-        expiresAt: '2026-10-15T00:00:00Z',
+        expiresAt: '2099-10-15T00:00:00Z',
         items: [
           {
             id: 'item-1',
@@ -212,7 +212,7 @@ describe('ExtraDecisionScreen (C07)', () => {
         status: 'PENDING_APPROVAL',
         reason: 'Phát sinh 1',
         totalAmount: 100000,
-        expiresAt: '2026-10-15T00:00:00Z',
+        expiresAt: '2099-10-15T00:00:00Z',
         items: [{ id: 'item-1', type: 'labor', description: 'Công 1', quantity: 1, unitPrice: 100000 }],
       },
       {
@@ -222,7 +222,7 @@ describe('ExtraDecisionScreen (C07)', () => {
         status: 'PENDING_APPROVAL',
         reason: 'Phát sinh 2',
         totalAmount: 200000,
-        expiresAt: '2026-10-15T00:00:00Z',
+        expiresAt: '2099-10-15T00:00:00Z',
         items: [{ id: 'item-2', type: 'labor', description: 'Công 2', quantity: 1, unitPrice: 200000 }],
       },
     ];
@@ -257,7 +257,7 @@ describe('ExtraDecisionScreen (C07)', () => {
         status: 'PENDING_APPROVAL',
         reason: 'Lý do hợp lý',
         totalAmount: 150000,
-        expiresAt: '2026-10-15T00:00:00Z',
+        expiresAt: '2099-10-15T00:00:00Z',
         items: [{ id: 'item-1', type: 'labor', description: 'Công', quantity: 1, unitPrice: 150000 }],
       },
     ];
@@ -300,7 +300,7 @@ describe('ExtraDecisionScreen (C07)', () => {
         status: 'PENDING_APPROVAL',
         reason: 'Thay dây đồng',
         totalAmount: 120000,
-        expiresAt: '2026-10-15T00:00:00Z',
+        expiresAt: '2099-10-15T00:00:00Z',
         items: [{ id: 'item-1', type: 'labor', description: 'Công', quantity: 1, unitPrice: 120000 }],
       },
     ];
@@ -374,7 +374,7 @@ describe('ExtraDecisionScreen (C07)', () => {
         status: 'PENDING_APPROVAL',
         reason: 'Lý do',
         totalAmount: 150000,
-        expiresAt: '2026-10-15T00:00:00Z',
+        expiresAt: '2099-10-15T00:00:00Z',
         items: [{ id: 'item-1', type: 'labor', description: 'Công', quantity: 1, unitPrice: 150000 }],
       },
     ];

@@ -11,6 +11,8 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -532,7 +534,7 @@ export default function CustomerWarrantiesScreen() {
       )}
 
       <Modal visible={!!disputeClaim} transparent animationType="slide" onRequestClose={() => !responseBusyId && setDisputeClaim(null)}>
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView style={styles.modalBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderCopy}>
@@ -567,7 +569,7 @@ export default function CustomerWarrantiesScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
