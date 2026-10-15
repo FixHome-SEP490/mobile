@@ -21,7 +21,6 @@ import {
   AlertCircle,
   AlertTriangle,
   ArrowDownToLine,
-  ChevronLeft,
   Landmark,
   Plus,
   type LucideIcon,
@@ -47,6 +46,7 @@ import {
 } from './technician-wallet';
 import { getWalletSummaryDisplayRows, maskAccountNumber } from './technician-wallet-presentation';
 import { vnDateTimeString } from '../../utils/vn-time';
+import BackButton from '../../components/BackButton';
 
 const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 const TOP_UP_PRESETS = [100_000, 200_000, 500_000, 1_000_000];
@@ -265,14 +265,7 @@ export default function TechnicianWalletScreen({ route }: { route?: { name: stri
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => isTab ? (navigation as unknown as { navigate: (name: string) => void }).navigate('Home') : navigation.goBack()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Quay lại"
-        >
-          <ChevronLeft size={26} color={colors.text} strokeWidth={1.75} />
-        </TouchableOpacity>
+        <BackButton onPress={() => isTab ? (navigation as unknown as { navigate: (name: string) => void }).navigate('Home') : navigation.goBack()} />
         <View style={styles.headerTitleGroup}>
           <Text style={styles.headerEyebrow}>Ví của tôi</Text>
           <Text style={styles.headerTitle} accessibilityRole="header">Ví rõ từng khoản</Text>

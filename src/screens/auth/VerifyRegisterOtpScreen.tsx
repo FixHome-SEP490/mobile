@@ -16,20 +16,19 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
-import type { AuthStackParamList, RootStackParamList } from '../../types';
+import type { AuthStackParamList } from '../../types';
 import { authApi } from '../../api/auth.api';
 import { useAuthStore } from '../../store';
 import { UserRole } from '../../types';
 import { handoffAuthenticatedRoute } from '../../navigation/root-navigation';
 import { extractApiErrorMessage } from '../../utils/input-validation';
+import BackButton from '../../components/BackButton';
 
 export default function VerifyRegisterOtpScreen() {
   const { colors, spacing, fontSize } = useAppTheme();
   const styles = getStyles(colors, spacing, fontSize);
-  const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList & RootStackParamList>>();
   const route = useRoute<RouteProp<AuthStackParamList, 'VerifyRegisterOtp'>>();
   const { email, password } = route.params;
   const { setAuth } = useAuthStore();
@@ -115,15 +114,7 @@ export default function VerifyRegisterOtpScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <View style={styles.brandBar}><TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => navigation.goBack()}
-            accessibilityRole="button"
-            accessibilityLabel="Quay lại"
-            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity><View style={styles.brandRow}><Image source={require('../../../assets/icon.png')} style={styles.brandLogo} /><Text style={styles.brandText}>Fix<Text style={styles.accent}>Home</Text></Text></View></View>
+          <View style={styles.brandBar}><BackButton /><View style={styles.brandRow}><Image source={require('../../../assets/icon.png')} style={styles.brandLogo} /><Text style={styles.brandText}>Fix<Text style={styles.accent}>Home</Text></Text></View></View>
 
           <View style={styles.header}>
             <View style={styles.iconWrapper}>

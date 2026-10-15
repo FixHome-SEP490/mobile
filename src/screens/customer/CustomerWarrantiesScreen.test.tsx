@@ -119,7 +119,7 @@ describe('CustomerWarrantiesScreen', () => {
     expect(tree.root.findAllByType(Text).some((node) => node.props.children === 'Chưa có hạng mục bảo hành')).toBe(true);
   });
 
-  it('loads completed-order coverage and opens the real claim form', async () => {
+  it('loads completed-order coverage and routes claim creation into the order flow without a direct POST', async () => {
     mockGetRepairHistory.mockResolvedValue({
       data: [{
         orderId: ORDER_ID,
@@ -156,7 +156,8 @@ describe('CustomerWarrantiesScreen', () => {
     );
     expect(createButtons.length).toBeGreaterThan(0);
     act(() => createButtons[0].props.onPress());
-    expect(tree.root.findAllByType(Text).some((node) => node.props.children === 'Mô tả sự cố')).toBe(true);
+    expect(mockNavigate).toHaveBeenCalledWith('CustomerOrderDetail', { serviceOrderId: ORDER_ID, screen: 'CustomerWarranty' });
+    expect(mockCreateWarrantyClaim).not.toHaveBeenCalled();
   });
 
   it('never presents a failed initial history GET as no warranty coverage', async () => {

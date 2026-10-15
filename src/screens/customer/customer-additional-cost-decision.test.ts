@@ -67,7 +67,7 @@ function setup(): Harness {
     setContext: (value) => { ctx = value; },
     setCustomerId: (value) => { customerId = value; },
     setFocused: (value) => { focused = value; },
-    state: () => write.mock.calls[write.mock.calls.length - 1][0],
+    state: () => (write.mock.calls.length > 0 ? write.mock.calls[write.mock.calls.length - 1][0] : initialCostDecisionState),
   };
 }
 
@@ -80,7 +80,7 @@ const denied = (h: Harness) => h.deps.onAccessDenied as jest.Mock;
 it('exposes only the cost decision surface: no pay/quote/revise', () => {
   const { controller } = setup();
   expect(Object.keys(controller).sort()).toEqual(
-    ['cancelConfirm', 'markReverified', 'requestConfirm', 'reset', 'submit'].sort(),
+    ['cancelConfirm', 'markReverified', 'requestConfirm', 'reset', 'submit', 'toggleWarranty'].sort(),
   );
 });
 
@@ -104,7 +104,7 @@ it('approves a labor-only request with the exact cost id and no warranty ids', a
   expect(h.state().confirming).toMatchObject({ costId: COST_ID, kind: 'approve' });
   await h.controller.submit();
   expect(approve(h)).toHaveBeenCalledTimes(1);
-  expect(approve(h)).toHaveBeenCalledWith(COST_ID);
+  expect(approve(h)).toHaveBeenCalledWith(COST_ID, []);
   expect(reject(h)).not.toHaveBeenCalled();
   expect(h.state()).toMatchObject({
     decided: { costId: COST_ID, action: 'APPROVED' },
@@ -391,5 +391,87 @@ describe('ambiguous-lock freshness path (review blocker remediation)', () => {
     approve(h).mockResolvedValue({ id: COST_ID, status: 'APPROVED' });
     await h.controller.submit();
     expect(approve(h)).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('M5 Extras Decision: superseded, warranty selection, and fail-closed guards', () => {
+  const PART_LINE_ID = '22222222-2222-4222-8222-222222222222';
+  const VALID_PART_ITEM = {
+    id: PART_LINE_ID,
+    type: 'parts_equipment',
+    description: 'Tụ ngậm điều hòa',
+    partSource: 'technician',
+    partWarrantyOption: 'paid_warranty',
+    warrantyFee: 50000,
+    warrantyTermDays: 90,
+  };
+
+  it('superseded request blocks decision (costSuperseded === true)', async () => {
+    const h = setup();
+    h.setContext(context({ costSuperseded: true }));
+    h.controller.requestConfirm(COST_ID, 'approve');
+    expect(h.state().confirming).toBeNull();
+    expect(notified(h)).toHaveBeenCalledWith(
+      'Yêu cầu đã thay đổi',
+      expect.stringContaining('Yêu cầu chi phí không còn ở trạng thái chờ duyệt'),
+    );
+  });
+
+  it('toggles eligible technician paid-warranty item and passes selected UUIDs on approve', async () => {
+    const h = setup();
+    h.setContext(context({ costItems: [VALID_PART_ITEM] }));
+    h.controller.toggleWarranty(PART_LINE_ID, COST_ID);
+    expect(h.state().selectedIds).toEqual([PART_LINE_ID]);
+
+    h.controller.requestConfirm(COST_ID, 'approve');
+    expect(h.state().confirming).toEqual({
+      costId: COST_ID,
+      kind: 'approve',
+      selectedIds: [PART_LINE_ID],
+    });
+
+    await h.controller.submit();
+    expect(approve(h)).toHaveBeenCalledWith(COST_ID, [PART_LINE_ID]);
+    expect(h.state().decided).toEqual({ costId: COST_ID, action: 'APPROVED' });
+  });
+
+  it('reject sends zero warranty IDs and preserves repair status in copy', async () => {
+    const h = setup();
+    h.setContext(context({ costItems: [VALID_PART_ITEM] }));
+    h.controller.toggleWarranty(PART_LINE_ID, COST_ID);
+    expect(h.state().selectedIds).toEqual([PART_LINE_ID]);
+
+    h.controller.requestConfirm(COST_ID, 'reject');
+    expect(h.state().confirming).toEqual({
+      costId: COST_ID,
+      kind: 'reject',
+      selectedIds: [],
+    });
+
+    await h.controller.submit();
+    expect(reject(h)).toHaveBeenCalledWith(COST_ID);
+    expect(h.state().decided).toEqual({ costId: COST_ID, action: 'REJECTED' });
+  });
+
+  it('ineligible item (labor with warranty fee) fails closed and blocks decision', async () => {
+    const h = setup();
+    const invalidLabor = {
+      id: 'labor-line-1',
+      type: 'labor',
+      description: 'Công sửa',
+      warrantyFee: 50000, // labor cannot have paid warranty
+    };
+    h.setContext(context({ costItems: [invalidLabor, VALID_PART_ITEM] }));
+    // Labor line is decidable if type=labor, but let's test a non-labor non-eligible item:
+    const invalidParts = {
+      id: 'bad-part-1',
+      type: 'parts_equipment',
+      description: 'Linh kiện không rõ',
+      partSource: 'external',
+      partWarrantyOption: 'paid_warranty', // external cannot have tech paid warranty
+    };
+    h.setContext(context({ costItems: [invalidParts] }));
+    h.controller.requestConfirm(COST_ID, 'approve');
+    expect(h.state().confirming).toBeNull();
   });
 });

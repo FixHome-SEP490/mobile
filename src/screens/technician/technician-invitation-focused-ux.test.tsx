@@ -77,7 +77,11 @@ const visibleText = () => renderer.root.findAllByType(Text).map((node) => {
   const c = node.props.children;
   return Array.isArray(c) ? c.filter((x: unknown) => typeof x === 'string').join('') : typeof c === 'string' ? c : '';
 }).join('\n');
-const buttons = (label: string) => renderer.root.findAll((node) => node.type === TouchableOpacity && node.props.accessibilityLabel === label);
+const buttons = (label: string) => renderer.root.findAll((node) => node.type === TouchableOpacity && (
+  node.props.accessibilityLabel === label ||
+  (label.startsWith('Nhận việc ') && node.props.testID === 'invitation-accept') ||
+  (label.startsWith('Từ chối lời mời ') && node.props.testID === 'invitation-decline')
+));
 const reviewButtons = () => renderer.root.findAll((node) => node.type === TouchableOpacity && typeof node.props.accessibilityLabel === 'string' && (node.props.accessibilityLabel as string).startsWith('Xem và quyết định'));
 async function render(invitations: InvitationItem[] = []) {
   mockState = { ...mockState, invitations };
@@ -169,8 +173,9 @@ describe('Technician T03 focused invitation scene (FH-TECH-02 UX01A)', () => {
     expect(t).toContain('Đã hết hạn');
     expect(t).toContain('Sửa bơm hết hạn (fixture)');
     expect(t).toContain('Khung giờ mong muốn');
-    expect(buttons('Nhận việc Sửa bơm hết hạn (fixture)')[0].props.disabled).toBe(true);
-    expect(buttons('Từ chối lời mời Sửa bơm hết hạn (fixture)')[0].props.disabled).toBe(true);
+    // Closed invitation: actions are absent, not merely disabled.
+    expect(buttons('Nhận việc Sửa bơm hết hạn (fixture)')).toHaveLength(0);
+    expect(buttons('Từ chối lời mời Sửa bơm hết hạn (fixture)')).toHaveLength(0);
     expect(mockRespond).not.toHaveBeenCalled();
   });
 
@@ -217,9 +222,10 @@ describe('Technician T03 focused invitation scene (FH-TECH-02 UX01A)', () => {
     review('Sửa bơm từ chối (fixture)');
     act(() => { buttons('Từ chối lời mời Sửa bơm từ chối (fixture)')[0].props.onPress(); });
     expect(mockRespond).not.toHaveBeenCalled();
-    const opts = jest.mocked(Alert.alert).mock.calls[0][2]!;
-    expect(opts[0]).toMatchObject({ text: 'Giữ lại lời mời', style: 'cancel' });
-    await act(async () => { opts.find((b) => b.style === 'destructive')!.onPress!(); });
+    // The current presenter uses explicit in-screen confirmation, not a native Alert.
+    expect(buttons('Xác nhận từ chối lời mời')).toHaveLength(1);
+    expect(buttons('Giữ lại lời mời')).toHaveLength(1);
+    await act(async () => { buttons('Xác nhận từ chối lời mời')[0].props.onPress(); });
     expect(mockRespond.mock.calls).toEqual([['dec', 'DECLINE']]);
   });
 
@@ -231,7 +237,9 @@ describe('Technician T03 focused invitation scene (FH-TECH-02 UX01A)', () => {
       expect(node.props.accessibilityRole).toBe('button');
     }
     for (const node of renderer.root.findAllByType(Text)) {
-      expect(StyleSheet.flatten(node.props.style).fontSize).toBeGreaterThanOrEqual(12);
+      const fontSize = StyleSheet.flatten(node.props.style)?.fontSize;
+      // Nested Text inherits its parent's font size when not explicitly set.
+      if (fontSize !== undefined) expect(fontSize).toBeGreaterThanOrEqual(12);
     }
     expect(StyleSheet.flatten(renderer.root.findByType(FlatList).props.contentContainerStyle).paddingBottom).toBeGreaterThanOrEqual(114);
     expect(renderer.root.findByType(View)).toBeTruthy();

@@ -12,6 +12,12 @@ function memory(): NoteStorage & { data: Map<string, string> } {
   };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(done => { resolve = done; });
+  return { promise, resolve };
+}
+
 describe('technician notes', () => {
   it('round-trips a trimmed note under a per-user, per-order key', async () => {
     const s = memory();
@@ -42,5 +48,51 @@ describe('technician notes', () => {
     };
     expect(await saveNote('u1', 'o1', 'a', broken)).toBe(false);
     expect(await loadNote('u1', 'o1', broken)).toBe('');
+  });
+
+  it('serializes same-key writes so later saves persist after earlier saves', async () => {
+    const firstWrite = deferred<void>();
+    const values: string[] = [];
+    let stored = '';
+    const s: NoteStorage = {
+      getItem: async () => stored || null,
+      setItem: async (_key, value) => {
+        values.push(value);
+        if (value === 'first') await firstWrite.promise;
+        stored = value;
+      },
+      removeItem: async () => { stored = ''; },
+    };
+
+    const first = saveNote('u1', 'o1', 'first', s);
+    await Promise.resolve();
+    const second = saveNote('u1', 'o1', 'second', s);
+    await Promise.resolve();
+    expect(values).toEqual(['first']);
+    firstWrite.resolve();
+    await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
+    expect(values).toEqual(['first', 'second']);
+    expect(stored).toBe('second');
+  });
+
+  it('waits for a pending same-key write before a remounted screen reads the note', async () => {
+    const pendingWrite = deferred<void>();
+    let stored = 'old value';
+    let reads = 0;
+    const s: NoteStorage = {
+      getItem: async () => { reads += 1; return stored; },
+      setItem: async (_key, value) => { await pendingWrite.promise; stored = value; },
+      removeItem: async () => { await pendingWrite.promise; stored = ''; },
+    };
+
+    const saving = saveNote('u1', 'o1', 'new value', s);
+    await Promise.resolve();
+    const loading = loadNote('u1', 'o1', s);
+    await Promise.resolve();
+    expect(reads).toBe(0);
+    pendingWrite.resolve();
+    await expect(saving).resolves.toBe(true);
+    await expect(loading).resolves.toBe('new value');
+    expect(reads).toBe(1);
   });
 });

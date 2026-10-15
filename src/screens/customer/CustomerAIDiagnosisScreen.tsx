@@ -26,6 +26,7 @@ import {
   canSendToAssistant,
   showDescriptionHint,
 } from './ai-diagnosis-input';
+import BackButton from '../../components/BackButton';
 
 type DiagnosisRoute = RouteProp<RootStackParamList, 'CustomerAIDiagnosis'>;
 
@@ -105,9 +106,7 @@ export default function CustomerAIDiagnosisScreen() {
       <KeyboardAvoidingView style={styles.screenBody} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
-            <TouchableOpacity onPress={handleBack} style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Quay lại">
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
-            </TouchableOpacity>
+            <BackButton onPress={handleBack} />
             <View style={styles.headerCopy}>
               <Text style={styles.eyebrow}>GỢI Ý CHỌN DỊCH VỤ</Text>
               <Text style={styles.mainTitle} accessibilityRole="header">Kể FixHome nghe</Text>

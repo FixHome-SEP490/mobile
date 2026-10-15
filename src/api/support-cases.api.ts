@@ -142,6 +142,9 @@ function normalizeMine(value: unknown): MySupportCase {
   };
 }
 
+/** Participant-only projection shared by the bounded aftercare controller. */
+export { normalizeMine as normalizeMySupportCase };
+
 function normalizePositiveInt(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0
     ? value

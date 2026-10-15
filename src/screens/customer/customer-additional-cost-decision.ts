@@ -1,14 +1,15 @@
 import { orderDetailTarget } from './customer-order-detail';
 
 /**
- * P3B13 bounded CUSTOMER additional-cost APPROVE/REJECT, one LABOR proposal
- * only. Runs for the signed-in customer on the same focused real ServiceOrder
- * in UNDER_REPAIR with no completion requested, on a PENDING_APPROVAL cost
- * whose every line is a validated genuine LABOR item. APPROVE adds the
- * approved delta to server totals but does NOT pay/settle; REJECT affects
- * ONLY that cost request — the order keeps its repair status (unlike quote
- * REJECT, which closes the whole order). Paid-warranty ids are always empty:
- * anything non-labor fails closed instead of being approved blindly.
+ * P3B13 bounded CUSTOMER additional-cost APPROVE/REJECT. Runs for the signed-in
+ * customer on the same focused real ServiceOrder in UNDER_REPAIR with no
+ * completion requested, on a PENDING_APPROVAL, unexpired, non-superseded cost
+ * whose every line is validated genuine LABOR or an eligible TECHNICIAN
+ * PAID_WARRANTY part line. APPROVE adds the approved delta to server totals
+ * but does NOT pay/settle; REJECT affects ONLY that cost request — the order
+ * keeps its repair status (unlike quote REJECT, which closes the whole order).
+ * Paid-warranty approval sends only exact eligible line IDs (default OFF);
+ * anything else fails closed instead of being approved blindly.
  */
 
 /** Exact whole-request-only reject copy; screen renders this verbatim. */
@@ -20,6 +21,22 @@ export const APPROVE_COST_NOT_PAYMENT_NOTE = 'Duyệt chi phí chưa phải than
 
 export interface CostDecisionItem {
   itemType: unknown;
+  /** Alternate wire field name for the line type. */
+  type?: unknown;
+  id?: unknown;
+  description?: unknown;
+  partSource?: unknown;
+  partWarrantyOption?: unknown;
+  warrantyFee?: unknown;
+  warrantyTermDays?: unknown;
+}
+
+export interface ExtraWarrantyOption {
+  itemId: string;
+  description: string;
+  fee: number;
+  feeText: string;
+  termDays: number;
 }
 
 export interface CostDecisionContext {
@@ -30,12 +47,16 @@ export interface CostDecisionContext {
   costStatus: unknown;
   costExpiresAt: unknown;
   costItems: unknown;
+  /** True when this request was superseded by a newer revision. */
+  costSuperseded?: unknown;
 }
 
 export type CostDecisionKind = 'approve' | 'reject';
 
 export interface CostDecisionState {
-  confirming: { costId: string; kind: CostDecisionKind } | null;
+  confirming: { costId: string; kind: CostDecisionKind; selectedIds: string[] } | null;
+  /** Exact valid UUIDs from eligible paid-warranty lines only; default OFF (empty). */
+  selectedIds: string[];
   busy: boolean;
   error: string | null;
   /** Ambiguous POST lock: reload costs/detail before any retry. */
@@ -45,6 +66,7 @@ export interface CostDecisionState {
 
 export const initialCostDecisionState: CostDecisionState = {
   confirming: null,
+  selectedIds: [],
   busy: false,
   error: null,
   needsVerify: false,
@@ -55,7 +77,7 @@ export interface CostDecisionDeps {
   getContext: (costId: string) => CostDecisionContext | null;
   getCustomerId: () => string | null;
   isFocused: () => boolean;
-  approveCost: (costId: string) => Promise<unknown>;
+  approveCost: (costId: string, paidWarrantyItemIds: string[]) => Promise<unknown>;
   rejectCost: (costId: string) => Promise<unknown>;
   /** GET-only reconciliation: reload costs list (and detail). */
   refreshCosts: () => Promise<void>;
@@ -82,6 +104,61 @@ export function isLaborOnlyItems(items: unknown): boolean {
   });
 }
 
+export function decisionMoneyText(amount: number): string {
+  return `${amount.toLocaleString('vi-VN')}đ`;
+}
+
+/**
+ * Genuinely eligible paid-warranty lines only: PARTS type, real UUID id,
+ * partSource technician, partWarrantyOption paid_warranty, finite nonnegative
+ * fee, positive integer term, non-empty description. Anything else is excluded.
+ */
+export function eligibleExtraWarrantyOptions(items: unknown): ExtraWarrantyOption[] {
+  if (!Array.isArray(items)) return [];
+  const options: ExtraWarrantyOption[] = [];
+  for (const entry of items) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const record = entry as Record<string, unknown>;
+    const rawType = typeof record.itemType === 'string'
+      ? record.itemType
+      : typeof record.type === 'string' ? record.type : '';
+    const normalized = rawType.toLowerCase();
+    if (normalized !== 'parts' && normalized !== 'parts_equipment') continue;
+    const id = typeof record.id === 'string' ? record.id.trim() : '';
+    if (!id || !orderDetailTarget(id)) continue;
+    const partSource = typeof record.partSource === 'string' ? record.partSource.toLowerCase() : '';
+    const warrantyOption = typeof record.partWarrantyOption === 'string' ? record.partWarrantyOption.toLowerCase() : '';
+    if (partSource !== 'technician' || warrantyOption !== 'paid_warranty') continue;
+    const fee = record.warrantyFee;
+    if (typeof fee !== 'number' || !Number.isFinite(fee) || fee < 0) continue;
+    const termRaw = record.warrantyTermDays;
+    if (typeof termRaw !== 'number' || !Number.isInteger(termRaw) || termRaw <= 0) continue;
+    const description = typeof record.description === 'string' ? record.description.trim() : '';
+    if (!description) continue;
+    options.push({ itemId: id, description, fee, feeText: decisionMoneyText(fee), termDays: termRaw });
+  }
+  return options;
+}
+
+/**
+ * Decidable line sets: every line is LABOR or an eligible paid-warranty PARTS
+ * line. Anything else fails closed instead of being approved blindly.
+ */
+export function isDecidableExtraItems(items: unknown): boolean {
+  if (!Array.isArray(items) || items.length === 0) return false;
+  const paidIds = new Set(eligibleExtraWarrantyOptions(items).map((option) => option.itemId));
+  return (items as unknown[]).every((entry) => {
+    if (typeof entry !== 'object' || entry === null) return false;
+    const record = entry as Record<string, unknown>;
+    const rawType = typeof record.itemType === 'string'
+      ? record.itemType
+      : typeof record.type === 'string' ? record.type : '';
+    if (typeof rawType === 'string' && rawType.toLowerCase() === 'labor') return true;
+    const id = typeof record.id === 'string' ? record.id.trim() : '';
+    return id !== '' && paidIds.has(id);
+  });
+}
+
 /**
  * Expiry decision block: true means the client must NOT decide. Missing,
  * invalid, or past server expiry all fail closed — the Backend always
@@ -96,7 +173,7 @@ export function isCostDecisionBlocked(expiresAt: unknown): boolean {
   return time < Date.now();
 }
 
-/** Decision gate: same customer, focus, real UNDER_REPAIR open order, pending labor-only cost. */
+/** Decision gate: same customer, focus, real UNDER_REPAIR open order, pending decidable cost. */
 export function costDecisionTarget(
   ctx: CostDecisionContext | null,
 ): { orderId: string; costId: string } | null {
@@ -107,8 +184,9 @@ export function costDecisionTarget(
   if (!!ctx.completionRequestedAt) return null;
   if (typeof ctx.costId !== 'string' || !orderDetailTarget(ctx.costId)) return null;
   if (String(ctx.costStatus ?? '').toUpperCase() !== 'PENDING_APPROVAL') return null;
+  if (ctx.costSuperseded === true) return null;
   if (isCostDecisionBlocked(ctx.costExpiresAt)) return null;
-  if (!isLaborOnlyItems(ctx.costItems)) return null;
+  if (!isDecidableExtraItems(ctx.costItems)) return null;
   return { orderId, costId: ctx.costId };
 }
 
@@ -135,10 +213,24 @@ export function createCostDecisionController(
     if (!deps.getCustomerId() || !deps.isFocused()) return;
     const target = costDecisionTarget(deps.getContext(costId));
     if (!target) {
-      deps.notify('Yêu cầu đã thay đổi', 'Yêu cầu chi phí không còn ở trạng thái chờ duyệt nhân công. Vui lòng tải lại chi tiết đơn.');
+      deps.notify('Yêu cầu đã thay đổi', 'Yêu cầu chi phí không còn ở trạng thái chờ duyệt. Vui lòng tải lại chi tiết đơn.');
       return;
     }
-    publish({ confirming: { costId: target.costId, kind }, error: null });
+    const eligibleIds = new Set(eligibleExtraWarrantyOptions(deps.getContext(costId)?.costItems).map((option) => option.itemId));
+    const selectedIds = kind === 'approve' ? state.selectedIds.filter((id) => eligibleIds.has(id)) : [];
+    publish({ confirming: { costId: target.costId, kind, selectedIds }, error: null });
+  }
+
+  function toggleWarranty(itemId: string, costId?: string): void {
+    if (busy || state.needsVerify) return;
+    if (!deps.getCustomerId() || !deps.isFocused()) return;
+    const ctx = deps.getContext(costId ?? state.confirming?.costId ?? '');
+    const eligible = eligibleExtraWarrantyOptions(ctx?.costItems);
+    if (!eligible.some((option) => option.itemId === itemId)) return;
+    const selected = state.selectedIds.includes(itemId)
+      ? state.selectedIds.filter((id) => id !== itemId)
+      : [...state.selectedIds, itemId];
+    publish({ selectedIds: selected, confirming: null, decided: null });
   }
 
   function cancelConfirm(): void {
@@ -168,7 +260,7 @@ export function createCostDecisionController(
       costDecisionTarget(deps.getContext(confirming.costId))?.costId === target.costId;
     try {
       if (confirming.kind === 'approve') {
-        await deps.approveCost(target.costId);
+        await deps.approveCost(target.costId, confirming.selectedIds ?? []);
       } else {
         await deps.rejectCost(target.costId);
       }
@@ -225,6 +317,7 @@ export function createCostDecisionController(
 
   return {
     requestConfirm,
+    toggleWarranty,
     cancelConfirm,
     submit,
     reset,

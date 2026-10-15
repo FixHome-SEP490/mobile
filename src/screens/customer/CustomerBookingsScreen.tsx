@@ -12,6 +12,8 @@ import {
   StatusBar,
   Modal,
   AccessibilityInfo,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -423,7 +425,7 @@ export default function CustomerBookingsScreen() {
           animationType={reduceMotion ? 'none' : 'slide'}
           onRequestClose={closeBookingManage}
         >
-          <View style={styles.manageModalBackdrop}>
+          <KeyboardAvoidingView style={styles.manageModalBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <View style={[styles.manageModalSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={styles.manageTitle}>Hủy yêu cầu đặt lịch</Text>
             <Text style={styles.meta}>
@@ -480,7 +482,7 @@ export default function CustomerBookingsScreen() {
               </TouchableOpacity>
             </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
 
         <Modal
@@ -489,7 +491,7 @@ export default function CustomerBookingsScreen() {
           animationType={reduceMotion ? 'none' : 'slide'}
           onRequestClose={closeBookingManage}
         >
-          <View style={styles.manageModalBackdrop}>
+          <KeyboardAvoidingView style={styles.manageModalBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <View style={[styles.manageModalSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <ScrollView keyboardShouldPersistTaps="handled">
             <Text style={styles.manageTitle}>
@@ -595,7 +597,7 @@ export default function CustomerBookingsScreen() {
             </View>
               </ScrollView>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
 
         {!!resumeId && (
@@ -708,15 +710,16 @@ export default function CustomerBookingsScreen() {
     const detailId = orderDetailTarget(order.id);
     if (!detailId) return <View key={key}>{renderOrderSummary(order, bookingId)}</View>;
     return (
-      <TouchableOpacity
-        key={key}
-        onPress={() => navigation.navigate('CustomerOrderDetail', { serviceOrderId: detailId })}
-        accessibilityRole="button"
-        accessibilityLabel="Xem chi tiết đơn sửa chữa"
-        activeOpacity={0.8}
-      >
-        {renderOrderSummary(order, bookingId, true)}
-      </TouchableOpacity>
+      <View key={key} style={{ gap: 8 }}>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('CustomerOrderDetail', { serviceOrderId: detailId })}
+          accessibilityRole="button"
+          accessibilityLabel="Xem chi tiết đơn sửa chữa"
+          activeOpacity={0.8}
+        >
+          {renderOrderSummary(order, bookingId, true)}
+        </TouchableOpacity>
+      </View>
     );
   };
 

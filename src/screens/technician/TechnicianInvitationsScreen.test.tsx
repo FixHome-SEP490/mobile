@@ -3,6 +3,7 @@
 import { createInvitationInbox, isActionable, type InboxState } from './invitation-inbox';
 import type { InvitationItem } from '../../api/bookings.api';
 import type { TechnicianOrdersPage, TechnicianOrderItem, ServiceOrderItem } from '../../api/orders.api';
+jest.mock('@react-native-async-storage/async-storage', () => jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 
 const BOOKING_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const ORDER_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
@@ -18,6 +19,7 @@ function deferred<T>() {
   const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 }
+async function drain() { for (let i = 0; i < 30; i++) await Promise.resolve(); }
 let accountSequence = 0;
 function session(userId: string | null = `technician-${++accountSequence}`) {
   let id = userId;
@@ -68,7 +70,7 @@ function setup(
       .mockResolvedValue([invitation]),
     respondInvitation: jest
       .fn<
-        Promise<{ serviceOrder?: { id: string } }>,
+        Promise<{ serviceOrder?: { id: string }; invitation?: { id: string; bookingId: string; status: string } }>,
         [string, 'ACCEPT' | 'DECLINE']
       >()
       .mockResolvedValue({}),
@@ -98,6 +100,7 @@ it.each(['ACCEPT', 'DECLINE'] as const)('locks synchronous concurrent %s and opp
   const post = deferred<{ serviceOrder?: { id: string } }>();
   h.api.respondInvitation.mockReturnValue(post.promise);
   const first = h.controller.respond(invitation.id, action);
+  await drain();
   await h.controller.respond(invitation.id, action === 'ACCEPT' ? 'DECLINE' : 'ACCEPT');
   expect(h.api.respondInvitation).toHaveBeenCalledTimes(1);
   expect(h.state().actionInFlight[invitation.id]).toBe(action);
@@ -112,7 +115,7 @@ it.each([undefined, 500])(
     h.api.respondInvitation.mockRejectedValue({
       response: { status, data: { message: 'PRIVATE' } },
     });
-    h.api.getMyInvitations.mockRejectedValueOnce(new Error('offline'));
+    h.api.getMyInvitations.mockResolvedValueOnce([invitation]).mockRejectedValueOnce(new Error('offline'));
     await h.controller.respond(invitation.id, 'ACCEPT');
     await h.controller.respond(invitation.id, 'ACCEPT');
     await h.controller.load();
@@ -129,7 +132,7 @@ it.each([undefined, 500])(
 );
 
 it.each([400, 401, 403, 404, 409, 422])(
-  'treats server rejection %s as terminal and never exposes an accepted order',
+  'keeps server rejection %s unresolved and never exposes an accepted order',
   async status => {
     const h = setup();
     await h.controller.focus();
@@ -137,8 +140,8 @@ it.each([400, 401, 403, 404, 409, 422])(
     await h.controller.respond(invitation.id, 'ACCEPT');
     expect(h.api.respondInvitation).toHaveBeenCalledTimes(1);
     expect(h.state().acceptedOrderId).toBeNull();
-    expect(h.state().actionInFlight).toEqual({});
-    expect(h.state().recoveryPending).toBe(false);
+    expect(h.state().actionInFlight[invitation.id]).toBe('ACCEPT');
+    expect(h.state().recoveryPending).toBe(true);
     await h.controller.respond(invitation.id, 'ACCEPT');
     expect(h.api.respondInvitation).toHaveBeenCalledTimes(1);
   },
@@ -148,6 +151,7 @@ it.each(['success', 'error'])('ignores older GET %s including error/loading writ
   const old = deferred<InvitationItem[]>();
   h.api.getMyInvitations.mockReturnValueOnce(old.promise);
   const initial = h.controller.focus();
+  await drain();
   await h.controller.load();
   h.write.mockClear();
   if (outcome === 'success') old.resolve([]); else old.reject(new Error('stale'));
@@ -159,6 +163,7 @@ it.each(['success', 'error'])('ignores GET %s after blur/unmount and refocus', a
   const old = deferred<InvitationItem[]>();
   h.api.getMyInvitations.mockReturnValueOnce(old.promise);
   const initial = h.controller.focus();
+  await drain();
   h.controller.blur();
   await h.controller.focus();
   h.write.mockClear();
@@ -172,6 +177,7 @@ it.each([true, false])('suppresses late POST effects after blur (success=%s)', a
   const post = deferred<{ serviceOrder?: { id: string } }>();
   h.api.respondInvitation.mockReturnValue(post.promise);
   const request = h.controller.respond(invitation.id, 'ACCEPT');
+  await drain();
   h.controller.blur();
   h.write.mockClear();
   if (success) post.resolve({ serviceOrder: { id: ORDER_ID } }); else post.reject(new Error('offline'));
@@ -188,6 +194,7 @@ it('invalidates GET started before POST so it cannot restore the responded row',
   const old = deferred<InvitationItem[]>();
   h.api.getMyInvitations.mockReturnValueOnce(old.promise).mockResolvedValue([]);
   const refresh = h.controller.load();
+  await drain();
   await h.controller.respond(invitation.id, 'DECLINE');
   h.write.mockClear();
   old.resolve([invitation]);
@@ -247,7 +254,9 @@ it('does not let an old GET clear loading while the newest refresh is pending', 
   const newest = deferred<InvitationItem[]>();
   h.api.getMyInvitations.mockReturnValueOnce(old.promise).mockReturnValueOnce(newest.promise);
   const first = h.controller.focus();
+  await drain();
   const second = h.controller.load();
+  await drain();
   old.reject(new Error('old failure'));
   await first;
   expect(h.state()).toMatchObject({ refreshing: true, error: null });
@@ -263,6 +272,7 @@ it('locks by invitation ID without blocking a different invitation', async () =>
   h.api.respondInvitation.mockReturnValue(post.promise);
   const first = h.controller.respond(invitation.id, 'ACCEPT');
   const second = h.controller.respond('inv-2', 'DECLINE');
+  await drain();
   expect(h.api.respondInvitation.mock.calls).toEqual([['inv-1', 'ACCEPT'], ['inv-2', 'DECLINE']]);
   post.resolve({});
   await Promise.all([first, second]);
@@ -273,6 +283,7 @@ it('an old POST cannot affect a new focus session or its GET', async () => {
   const post = deferred<{ serviceOrder?: { id: string } }>();
   h.api.respondInvitation.mockReturnValue(post.promise);
   const response = h.controller.respond(invitation.id, 'ACCEPT');
+  await drain();
   h.controller.blur();
   await h.controller.focus();
   h.write.mockClear();
@@ -288,6 +299,7 @@ it.each(['ACCEPT', 'DECLINE'] as const)('blocks %s from a second controller whil
   const post = deferred<{ serviceOrder?: { id: string } }>();
   first.api.respondInvitation.mockReturnValue(post.promise);
   const pending = first.controller.respond(invitation.id, 'ACCEPT');
+  await drain();
   first.controller.blur();
   const second = setup(true, first.auth);
   await second.controller.focus();
@@ -323,8 +335,10 @@ it('isolates account locks and suppresses old-account GET, POST and notification
   const get = deferred<InvitationItem[]>();
   first.api.respondInvitation.mockReturnValue(post.promise);
   const response = first.controller.respond(invitation.id, 'ACCEPT');
+  await drain();
   first.api.getMyInvitations.mockReturnValue(get.promise);
   const refresh = first.controller.load();
+  await drain();
   first.auth.change(`other-${++accountSequence}`);
   expect(first.state().invitations).toEqual([]);
   const second = setup(true, first.auth);
@@ -342,6 +356,7 @@ it('isolates account locks and suppresses old-account GET, POST and notification
   expect(second.state().actionInFlight[invitation.id]).toBe('DECLINE');
   first.auth.change(user);
   const third = setup(true, first.auth);
+  third.orders.getOrder.mockRejectedValue(new Error('offline'));
   await third.controller.focus();
   expect(third.state().invitations.map((item) => item.id)).toEqual([invitation.id]);
   expect(third.state().actionInFlight[invitation.id]).toBe('ACCEPT');
@@ -351,7 +366,7 @@ it('isolates account locks and suppresses old-account GET, POST and notification
 it.each(['ACCEPT', 'DECLINE'] as const)('clears the waiting lock on proven %s result but retains a terminal replay guard', async action => {
   const first = setup();
   await first.controller.focus();
-  first.api.respondInvitation.mockResolvedValue(action === 'ACCEPT' ? { serviceOrder: { id: ORDER_ID } } : {});
+  first.api.respondInvitation.mockResolvedValue(action === 'ACCEPT' ? { serviceOrder: { id: ORDER_ID } } : { invitation: { id: invitation.id, bookingId: BOOKING_ID, status: 'DECLINED' } });
   await first.controller.respond(invitation.id, action);
   const second = setup(true, first.auth);
   await second.controller.focus();
@@ -364,7 +379,7 @@ it('does not clear ambiguity from an empty GET, failed GET, or ACCEPT lacking a 
   const first = setup();
   await first.controller.focus();
   first.api.respondInvitation.mockResolvedValue({});
-  first.api.getMyInvitations.mockResolvedValue([]);
+  first.api.getMyInvitations.mockResolvedValueOnce([invitation]).mockResolvedValue([]);
   await first.controller.respond(invitation.id, 'ACCEPT');
   first.controller.blur();
   const second = setup(true, first.auth);
@@ -416,7 +431,7 @@ it('does not treat disappearing inbox item or incomplete Jobs scan as proof of A
   const h = setup();
   await h.controller.focus();
   h.api.respondInvitation.mockRejectedValue(new Error('timeout'));
-  h.api.getMyInvitations.mockResolvedValue([]);
+  h.api.getMyInvitations.mockResolvedValueOnce([invitation]).mockResolvedValue([]);
   h.orders.getMyOrdersPage.mockResolvedValue({ data: [], total: 0 });
 
   await h.controller.respond(invitation.id, 'ACCEPT');

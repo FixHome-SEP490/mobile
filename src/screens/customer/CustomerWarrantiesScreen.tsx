@@ -11,6 +11,8 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,6 +36,7 @@ import {
   type CustomerWarrantyGroup,
   type WarrantyClaimTone,
 } from './customer-warranty';
+import BackButton from '../../components/BackButton';
 
 const PAGE_SIZE = 10;
 type WarrantyRoute = RouteProp<RootStackParamList, 'CustomerWarranties'>;
@@ -63,12 +66,6 @@ export default function CustomerWarrantiesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const [claimOrder, setClaimOrder] = useState<CustomerWarrantyGroup | null>(null);
-  const [selectedCoverageId, setSelectedCoverageId] = useState('');
-  const [claimDescription, setClaimDescription] = useState('');
-  const [claimError, setClaimError] = useState<string | null>(null);
-  const [claimBusy, setClaimBusy] = useState(false);
 
   const [disputeClaim, setDisputeClaim] = useState<WarrantyClaimView | null>(null);
   const [disputeNote, setDisputeNote] = useState('');
@@ -181,60 +178,9 @@ export default function CustomerWarrantiesScreen() {
     );
   }, [groups, query]);
 
+  /** Claims are created only by the order-flow warranty screens (idempotent controller), never by a direct POST from this list. */
   const openCreateClaim = (group: CustomerWarrantyGroup) => {
-    const selectable = group.coverages.filter((coverage) => isWarrantyCoverageClaimable(coverage, group.claims));
-    const first = selectable.find((coverage) => warrantyCoverageUiStatus(coverage) === 'ACTIVE') ?? selectable[0];
-    setClaimOrder(group);
-    setSelectedCoverageId(first?.id ?? '');
-    setClaimDescription('');
-    setClaimError(null);
-  };
-
-  const closeCreateClaim = () => {
-    if (claimBusy) return;
-    setClaimOrder(null);
-    setSelectedCoverageId('');
-    setClaimDescription('');
-    setClaimError(null);
-  };
-
-  const submitClaim = async () => {
-    if (!claimOrder || claimBusy) return;
-    const coverage = claimOrder.coverages.find((item) => item.id === selectedCoverageId);
-    if (!coverage || !isWarrantyCoverageClaimable(coverage, claimOrder.claims)) {
-      setClaimError('Vui lòng chọn hạng mục bảo hành có thể gửi yêu cầu.');
-      return;
-    }
-    const validation = validateWarrantyText(claimDescription);
-    if (validation) {
-      setClaimError(validation);
-      return;
-    }
-    setClaimBusy(true);
-    setClaimError(null);
-    try {
-      const created = await ordersApi.createWarrantyClaim(claimOrder.orderId, {
-        warrantyCoverageId: coverage.id,
-        description: claimDescription.trim(),
-      });
-      setGroups((current) => current.map((group) =>
-        group.orderId === claimOrder.orderId
-          ? { ...group, claims: [created, ...group.claims] }
-          : group,
-      ));
-      setClaimOrder(null);
-      setSelectedCoverageId('');
-      setClaimDescription('');
-      setClaimError(null);
-      Alert.alert('Đã gửi yêu cầu', 'FixHome đã ghi nhận yêu cầu bảo hành của bạn.');
-    } catch (reason) {
-      setClaimError(extractApiErrorMessage(
-        reason,
-        'Chưa xác nhận được kết quả. Vui lòng tải lại trạng thái trước khi gửi lại.',
-      ));
-    } finally {
-      setClaimBusy(false);
-    }
+    navigation.navigate('CustomerOrderDetail', { serviceOrderId: group.orderId, screen: 'CustomerWarranty' });
   };
 
   const applyClaimUpdate = (updated: WarrantyClaimView) => {
@@ -472,15 +418,12 @@ export default function CustomerWarrantiesScreen() {
     );
   };
 
-  const selectedCoverage = claimOrder?.coverages.find((coverage) => coverage.id === selectedCoverageId) ?? null;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Quay lại">
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <BackButton />
         <View style={styles.headerCopy}>
           <Text style={styles.headerTitle} accessibilityRole="header">Bảo hành</Text>
           <Text style={styles.headerSubtitle}>Theo dõi bảo hành theo từng đơn đã hoàn tất</Text>
@@ -589,99 +532,8 @@ export default function CustomerWarrantiesScreen() {
         </ScrollView>
       )}
 
-      <Modal visible={!!claimOrder} transparent animationType="slide" onRequestClose={closeCreateClaim}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHeaderCopy}>
-                <Text style={styles.modalTitle}>Yêu cầu bảo hành</Text>
-                <Text style={styles.helperText}>{claimOrder?.orderCode} · {claimOrder?.serviceName}</Text>
-              </View>
-              <TouchableOpacity onPress={closeCreateClaim} style={styles.modalCloseButton} disabled={claimBusy} accessibilityRole="button" accessibilityLabel="Đóng biểu mẫu bảo hành" accessibilityState={{ disabled: claimBusy }}>
-                <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.fieldLabel}>Hạng mục cần bảo hành</Text>
-              {claimOrder?.coverages.map((coverage) => {
-                const claimable = isWarrantyCoverageClaimable(coverage, claimOrder.claims);
-                const selected = selectedCoverageId === coverage.id;
-                return (
-                  <TouchableOpacity
-                    key={coverage.id}
-                    style={[
-                      styles.coverageChoice,
-                      selected && { borderColor: colors.primary, backgroundColor: colors.primarySoft },
-                      !claimable && { opacity: 0.55 },
-                    ]}
-                    onPress={() => claimable && setSelectedCoverageId(coverage.id)}
-                    disabled={!claimable || claimBusy}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: selected, disabled: !claimable }}
-                  >
-                    <Ionicons
-                      name={selected ? 'radio-button-on' : 'radio-button-off'}
-                      size={20}
-                      color={selected ? colors.primary : colors.textSecondary}
-                    />
-                    <View style={styles.coverageCopy}>
-                      <Text style={styles.coverageTitle}>{warrantyCoverageLabel(coverage)}</Text>
-                      <Text style={styles.helperText}>
-                        Hạn {formatWarrantyDate(coverage.expiresAt)}
-                        {!claimable ? ' · Không thể gửi thêm lúc này' : ''}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-
-              {selectedCoverage && warrantyCoverageUiStatus(selectedCoverage) === 'EXPIRED' && (
-                <View style={styles.warningBox}>
-                  <Ionicons name="alert-circle-outline" size={18} color={colors.warning} />
-                  <Text style={styles.warningText}>
-                    Hạng mục đã hết hạn. Bạn vẫn có thể gửi yêu cầu; quản lý dịch vụ sẽ xem xét.
-                  </Text>
-                </View>
-              )}
-
-              <Text style={styles.fieldLabel}>Mô tả sự cố</Text>
-              <TextInput
-                value={claimDescription}
-                onChangeText={setClaimDescription}
-                editable={!claimBusy}
-                multiline
-                maxLength={2000}
-                placeholder="Mô tả hiện tượng lỗi xuất hiện lại sau khi sửa"
-                placeholderTextColor={colors.muted}
-                style={styles.textArea}
-                textAlignVertical="top"
-                accessibilityLabel="Mô tả sự cố cần bảo hành"
-              />
-              <Text style={styles.helperText}>Tối thiểu 10 ký tự. Hãy mô tả rõ hiện tượng lỗi để quá trình kiểm tra thuận tiện hơn.</Text>
-              {!!claimError && <Text style={styles.errorText}>{claimError}</Text>}
-
-              <View style={styles.modalActions}>
-                <TouchableOpacity style={styles.secondaryButton} onPress={closeCreateClaim} disabled={claimBusy}>
-                  <Text style={styles.secondaryButtonText}>Đóng</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.primaryButton, (!selectedCoverageId || claimBusy) && styles.disabledButton]}
-                  onPress={() => void submitClaim()}
-                  disabled={!selectedCoverageId || claimBusy}
-                >
-                  {claimBusy
-                    ? <ActivityIndicator size="small" color="#FFFFFF" />
-                    : <Text style={styles.primaryButtonText}>Gửi yêu cầu</Text>}
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
       <Modal visible={!!disputeClaim} transparent animationType="slide" onRequestClose={() => !responseBusyId && setDisputeClaim(null)}>
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView style={styles.modalBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderCopy}>
@@ -716,7 +568,7 @@ export default function CustomerWarrantiesScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

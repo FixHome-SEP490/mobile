@@ -27,6 +27,7 @@ import {
 } from './service-catalog';
 import { getServicePresentation } from '../../constants/service-presentation';
 import { useAuthStore } from '../../store/auth.store';
+import BackButton from '../../components/BackButton';
 
 type DetailRoute = RouteProp<RootStackParamList, 'CustomerServiceDetail'>;
 
@@ -76,15 +77,7 @@ export default function CustomerServiceDetailScreen() {
 
       {/* Top nav bar */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Quay lại"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <BackButton />
         <View style={styles.headerTitleBlock}>
           <Text accessibilityRole="header" style={styles.headerTitle}>Chi tiết dịch vụ</Text>
         </View>

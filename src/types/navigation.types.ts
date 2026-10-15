@@ -49,11 +49,20 @@ export type RootStackParamList = {
     | undefined;
   CustomerMatching: { bookingId: string };
   CustomerBookingDetail: { bookingId: string };
-  CustomerOrderDetail: { serviceOrderId: string };
+  /** `screen` opens a Customer OrderFlow child directly (e.g. the warranty list from the Warranties tab). */
+  CustomerOrderDetail: { serviceOrderId: string; screen?: 'CustomerWarranty' };
   CustomerRepairHistory: undefined;
   CustomerWarranties: { orderId?: string } | undefined;
   CustomerSecurity: undefined;
+  /** Customer-only FixHome wallet (overview + top-up). No Technician equivalent at this route. */
+  CustomerWallet: undefined;
   TechnicianOrderDetail: { serviceOrderId: string };
+  /** Internal M2 reader preview, registered only in __DEV__; role comes from authenticated state. */
+  OrderFlowDevPreview: { serviceOrderId: string };
+  /** Internal M7 entry points, registered only in __DEV__; IDs still pass through production ownership checks. */
+  M7AftercareDevPreview: undefined;
+  BookingAftercareDevPreview: { bookingId: string };
+  TechnicianWarrantyDevPreview: { claimId?: string };
   TechnicianKyc: undefined;
   TechnicianOnboarding: undefined;
   TechnicianWallet: undefined;

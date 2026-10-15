@@ -21,6 +21,7 @@ import { messagingApi, type ConversationItem } from '../../api/messaging.api';
 import { useAppTheme } from '../../constants/theme';
 import { chatSocketService } from '../../services/chat-socket.service';
 import { vnDateString } from '../../utils/vn-time';
+import BackButton from '../../components/BackButton';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -155,15 +156,7 @@ export default function ChatListScreen() {
       {/* Header: conversations open only from a received or active job,
           so there is no compose action here. */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.headerBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityRole="button"
-          accessibilityLabel="Quay lại"
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <BackButton />
         <Text style={styles.headerTitle} accessibilityRole="header">Tin nhắn</Text>
         <View style={styles.headerBtn} />
       </View>

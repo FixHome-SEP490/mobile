@@ -27,6 +27,7 @@ import {
   initialBookingDetailState,
 } from './customer-booking-detail';
 import { vnDateTimeString, vnTimeString } from '../../utils/vn-time';
+import BackButton from '../../components/BackButton';
 
 type BookingDetailRoute = RouteProp<RootStackParamList, 'CustomerBookingDetail'>;
 
@@ -120,15 +121,7 @@ export default function CustomerBookingDetailScreen() {
         backgroundColor={colors.background}
       />
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Quay lại"
-          style={styles.headerBackBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <BackButton />
         <Text style={styles.headerTitle} accessibilityRole="header">Chi tiết yêu cầu đặt lịch</Text>
         <View style={styles.headerSpacer} />
       </View>

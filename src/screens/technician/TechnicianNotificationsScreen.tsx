@@ -10,7 +10,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AlertTriangle, Bell, BellOff, Briefcase, CheckCheck, ChevronLeft, Tag, Wallet } from 'lucide-react-native';
+import { AlertTriangle, Bell, BellOff, Briefcase, CheckCheck, Tag, Wallet } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
@@ -24,6 +24,7 @@ import {
   mergeNotificationPage,
   technicianNotificationOrderId,
 } from './technician-notifications';
+import BackButton from '../../components/BackButton';
 
 const PAGE_SIZE = 20;
 // Floating GlassTabBar: 64pt pill + breathing room, plus the bottom inset (min 16).
@@ -279,16 +280,7 @@ export default function TechnicianNotificationsScreen() {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
 
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={onBackPress}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Quay lại"
-          accessibilityHint="Quay về màn hình trước"
-        >
-          <ChevronLeft size={22} color={colors.text} strokeWidth={1.75} />
-        </TouchableOpacity>
+        <BackButton onPress={onBackPress} />
         <View style={styles.headerText}>
           <Text style={styles.headerTitle} accessibilityRole="header">Thông báo</Text>
           {!loading && totalUnread > 0 && <Text style={styles.headerSubtitle}>{totalUnread} chưa đọc</Text>}

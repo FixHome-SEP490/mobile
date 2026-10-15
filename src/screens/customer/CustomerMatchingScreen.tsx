@@ -44,6 +44,7 @@ import {
 } from './customer-initial-shortlist-attempt';
 import { vnDateTimeString } from '../../utils/vn-time';
 import CustomerMatchingAcceptedScene from './CustomerMatchingAcceptedScene';
+import BackButton from '../../components/BackButton';
 
 type MatchingRoute = RouteProp<RootStackParamList, 'CustomerMatching'>;
 type CandidateDetailTarget = { bookingId: string; ownerId: string; candidateUserId: string };
@@ -1000,16 +1001,7 @@ export default function CustomerMatchingScreen() {
     <SafeAreaView style={[styles.page, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={[styles.backBtn, { backgroundColor: colors.divider }]}
-          accessibilityRole="button"
-          accessibilityLabel="Quay lại"
-          accessibilityHint="Quay lại màn hình trước"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <BackButton />
         <View style={styles.headerCopy}>
           <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>
             {acceptedHandoff ? 'Có người cùng bạn lo nhà.' : isAuthenticated && role === UserRole.CUSTOMER && waiting ? 'Trạng thái lời mời' : 'Chọn kỹ thuật viên'}

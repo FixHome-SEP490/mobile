@@ -23,7 +23,6 @@ import {
   Camera,
   Check,
   ChevronDown,
-  ChevronLeft,
   ChevronUp,
   Circle,
   CircleDot,
@@ -119,6 +118,7 @@ import {
   technicianCashTarget,
 } from './technician-cash-settlement';
 import { vnDateTimeString } from '../../utils/vn-time';
+import BackButton from '../../components/BackButton';
 
 const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 type DetailRoute = RouteProp<RootStackParamList, 'TechnicianOrderDetail'>;
@@ -1622,14 +1622,7 @@ export default function TechnicianOrderDetailScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
       <View style={styles.header} testID={isAllDetails ? 'technician-all-details-header' : undefined}>
-        <TouchableOpacity
-          style={styles.headerBtn}
-          onPress={() => isAllDetails ? closeAllDetails() : navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel={isAllDetails ? 'Đóng toàn bộ chi tiết' : 'Quay lại'}
-        >
-          <ChevronLeft size={26} color={colors.text} strokeWidth={1.75} />
-        </TouchableOpacity>
+        <BackButton label={isAllDetails ? 'Đóng toàn bộ chi tiết' : 'Quay lại'} onPress={() => isAllDetails ? closeAllDetails() : navigation.goBack()} />
         <Text style={styles.headerTitle} accessibilityRole="header">{isAllDetails ? 'Toàn bộ chi tiết' : isStageFocus ? `Bước ${Math.max(1, staged.steps.findIndex(step => step.id === activeStage) + 1)}/${staged.steps.length} · ${sceneTitle}` : 'Chi tiết công việc'}</Text>
         <View style={styles.headerBtn} accessible={false} />
       </View>
@@ -3276,7 +3269,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   acItemFieldsRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-end' },
   acItemFieldLabel: { fontSize: 12, lineHeight: 16, color: colors.textSecondary, marginBottom: 4 },
   qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  qtyBtnSmall: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  qtyBtnSmall: { width: 44, height: 44, borderRadius: 10, backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' },
   qtyTextSmall: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: colors.text, minWidth: 24, textAlign: 'center' },
   acPriceText: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.text },
   radioRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },

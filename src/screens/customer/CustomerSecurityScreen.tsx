@@ -26,6 +26,7 @@ import {
   isSameCustomerSecuritySession,
   validateCustomerPasswordReset,
 } from './customer-security';
+import BackButton from '../../components/BackButton';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -188,15 +189,7 @@ export default function CustomerSecurityScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Quay lại"
-            onPress={() => navigation.goBack()}
-            style={styles.headerButton}
-            hitSlop={8}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
+          <BackButton />
           <View style={styles.headerText}>
             <Text style={[styles.title, { color: colors.text }]}>Bảo mật tài khoản</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
@@ -432,7 +425,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderBottomWidth: 1,
     backgroundColor: colors.surface,
   },
-  headerButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
+  headerButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   headerText: { flex: 1, paddingRight: 42 },
   title: { fontSize: 20, lineHeight: 27, fontWeight: '800' },
   subtitle: { fontSize: 12, lineHeight: 17, marginTop: 1 },
@@ -465,7 +458,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   passwordInputWrap: { minHeight: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', gap: 8 },
   passwordInput: { flex: 1, fontSize: 14, minHeight: 46 },
   passwordRule: { fontSize: 11, lineHeight: 17, marginTop: -4 },
-  secondaryActions: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  secondaryActions: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   secondaryLink: { fontSize: 12, lineHeight: 17, fontWeight: '700' },
   infoNote: { borderWidth: 1, borderRadius: 13, padding: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 9 },
   infoText: { flex: 1, fontSize: 12, lineHeight: 18 },

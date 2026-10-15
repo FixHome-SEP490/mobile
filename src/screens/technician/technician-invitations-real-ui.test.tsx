@@ -263,17 +263,18 @@ describe('TechnicianInvitationsScreen real-UI presentation (T-RUI3)', () => {
     const decline = renderer.root.findAll(
       (node) =>
         node.type === TouchableOpacity &&
-        node.props.accessibilityLabel === 'Từ chối lời mời Sửa điều hòa',
+        node.props.testID === 'invitation-decline',
     );
     expect(decline).toHaveLength(1);
     act(() => {
       decline[0].props.onPress();
     });
-    expect(Alert.alert).toHaveBeenCalledWith(
-      'Từ chối lời mời?',
-      expect.any(String),
-      expect.any(Array),
+    // Inline confirmation is required; the first press never posts.
+    const confirm = renderer.root.findAll(
+      (node) => node.type === TouchableOpacity && node.props.testID === 'invitation-decline-confirm',
     );
+    expect(confirm).toHaveLength(1);
+    expect(Alert.alert).not.toHaveBeenCalled();
     await act(async () => renderer.unmount());
   });
 

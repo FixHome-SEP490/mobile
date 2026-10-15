@@ -22,6 +22,7 @@ import {
   repairHistoryDate,
   repairHistoryTotal,
 } from './customer-repair-history';
+import BackButton from '../../components/BackButton';
 
 const PAGE_SIZE = 20;
 
@@ -100,14 +101,7 @@ export default function CustomerRepairHistoryScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Quay lại"
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <BackButton />
         <View style={styles.headerCopy}>
           <Text style={styles.headerOverline}>LỊCH SỬ & BẢO HÀNH</Text>
           <Text style={styles.headerTitle} accessibilityRole="header">Lịch sử sửa chữa</Text>

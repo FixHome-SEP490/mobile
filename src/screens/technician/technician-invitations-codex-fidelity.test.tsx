@@ -75,7 +75,11 @@ function invitation(id: string, name: string, minutes: number): InvitationItem {
 const text = () => renderer.root.findAllByType(Text).map(node =>
   Array.isArray(node.props.children) ? node.props.children.filter((c: unknown) => typeof c === 'string').join('') : node.props.children,
 ).join('\n');
-const buttons = (label: string) => renderer.root.findAll(node => node.type === TouchableOpacity && node.props.accessibilityLabel === label);
+const buttons = (label: string) => renderer.root.findAll(node => node.type === TouchableOpacity && (
+  node.props.accessibilityLabel === label ||
+  (label.startsWith('Nhận việc ') && node.props.testID === 'invitation-accept') ||
+  (label.startsWith('Từ chối lời mời ') && node.props.testID === 'invitation-decline')
+));
 async function render(invitations: InvitationItem[] = []) {
   mockState = { ...mockState, invitations };
   await act(async () => { renderer = create(<Screen />); });
@@ -167,9 +171,10 @@ it('declines only after the protected confirmation, using the same invitation ID
   review();
   act(() => buttons('Từ chối lời mời Kiểm tra bơm (fixture)')[0].props.onPress());
   expect(mockRespond).not.toHaveBeenCalled();
-  const confirmation = jest.mocked(Alert.alert).mock.calls[0][2]!;
-  expect(confirmation[0]).toMatchObject({ text: 'Giữ lại lời mời', style: 'cancel' });
-  await act(async () => confirmation.find(button => button.style === 'destructive')!.onPress!());
+  // Inline confirmation must be explicit before the controller receives DECLINE.
+  expect(buttons('Xác nhận từ chối lời mời')).toHaveLength(1);
+  expect(buttons('Giữ lại lời mời')).toHaveLength(1);
+  await act(async () => buttons('Xác nhận từ chối lời mời')[0].props.onPress());
   expect(mockRespond.mock.calls).toEqual([['decline-id', 'DECLINE']]);
 });
 
@@ -194,8 +199,9 @@ it('retains the review metadata after server expiry and disables both decisions'
   await act(async () => { jest.advanceTimersByTime(90000); });
   expect(text()).toContain('Đã hết hạn');
   expect(text()).toContain('Khung giờ mong muốn');
-  expect(buttons('Nhận việc Kiểm tra bơm (fixture)')[0].props.disabled).toBe(true);
-  expect(buttons('Từ chối lời mời Kiểm tra bơm (fixture)')[0].props.disabled).toBe(true);
+  // No active action is mounted after the server deadline expires.
+  expect(buttons('Nhận việc Kiểm tra bơm (fixture)')).toHaveLength(0);
+  expect(buttons('Từ chối lời mời Kiểm tra bơm (fixture)')).toHaveLength(0);
   expect(mockRespond).not.toHaveBeenCalled();
 });
 
@@ -236,7 +242,8 @@ it('uses native touch/text floors and leaves content clear of the existing tab b
     expect(node.props.accessibilityRole).toBe('button');
   }
   for (const node of renderer.root.findAllByType(Text)) {
-    expect(StyleSheet.flatten(node.props.style).fontSize).toBeGreaterThanOrEqual(12);
+    const fontSize = StyleSheet.flatten(node.props.style)?.fontSize;
+    if (fontSize !== undefined) expect(fontSize).toBeGreaterThanOrEqual(12);
     expect(node.props.allowFontScaling).not.toBe(false);
   }
   expect(StyleSheet.flatten(renderer.root.findByType(FlatList).props.contentContainerStyle).paddingBottom).toBeGreaterThanOrEqual(114);

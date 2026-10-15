@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AlertTriangle, ChevronLeft, ChevronRight, Info, WalletCards } from 'lucide-react-native';
+import { AlertTriangle, ChevronRight, Info, WalletCards } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
@@ -10,6 +10,7 @@ import { ordersApi, type ServiceOrderItem } from '../../api/orders.api';
 import { formatVnd } from '../../utils/format';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import { fetchAllOrders, summarizeEarnings, type EarningsBucket } from './technician-earnings';
+import BackButton from '../../components/BackButton';
 
 type Period = 'week' | 'month';
 const CHART_HEIGHT = 140;
@@ -83,9 +84,7 @@ export default function TechnicianEarningsScreen({ embedded = false }: { embedde
         {embedded ? (
           <View style={styles.iconBtn} />
         ) : (
-          <TouchableOpacity style={styles.iconBtn} onPress={() => rootNavigation.goBack()} accessibilityRole="button" accessibilityLabel="Quay lại">
-            <ChevronLeft size={26} color={colors.text} strokeWidth={1.75} />
-          </TouchableOpacity>
+          <BackButton />
         )}
         <View style={styles.headerTitleWrapper}>
           <Text style={styles.headerTitle} accessibilityRole="header">Thu nhập</Text>
