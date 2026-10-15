@@ -32,6 +32,7 @@ import { loginErrorMessage } from './login-error';
 import { technicianLandingRoute } from '../technician/technician-onboarding';
 import { handoffAuthenticatedRoute } from '../../navigation/root-navigation';
 import { markCustomerFirstRunSeen } from '../../services/customer-first-run';
+import BackButton from '../../components/BackButton';
 
 export default function LoginScreen() {
   const { colors, spacing, fontSize, isDark } = useAppTheme();
@@ -136,7 +137,7 @@ export default function LoginScreen() {
       >
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         
-          <View style={styles.brandBar}><TouchableOpacity style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Quay lại" onPress={goGuestHome} disabled={loading || googleLoading}><Ionicons name="arrow-back" size={20} color={colors.text} /></TouchableOpacity><View style={styles.brandRow}><Image source={require('../../../assets/icon.png')} style={styles.brandLogo} /><Text style={styles.brandText}>Fix<Text style={styles.accent}>Home</Text></Text></View></View>
+          <View style={styles.brandBar}><BackButton onPress={goGuestHome} /><View style={styles.brandRow}><Image source={require('../../../assets/icon.png')} style={styles.brandLogo} /><Text style={styles.brandText}>Fix<Text style={styles.accent}>Home</Text></Text></View></View>
           <View style={styles.header}>
             <Text style={styles.heroTitle} accessibilityRole="header">Chào bạn.{'\n'}<Text style={styles.accent}>Về với FixHome.</Text></Text>
           </View>

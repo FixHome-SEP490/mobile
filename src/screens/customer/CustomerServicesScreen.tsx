@@ -33,6 +33,7 @@ import { CUSTOMER_UI_ARTWORK } from '../../constants/customer-artwork';
 import { customerDiscoveryColumns, displayCustomerServiceName } from '../../constants/customer-display';
 import { groupCustomerServices } from './customer-service-discovery';
 import { useAuthStore } from '../../store';
+import BackButton from '../../components/BackButton';
 
 type ServicesRoute = RouteProp<RootStackParamList, 'CustomerServices'>;
 
@@ -195,15 +196,7 @@ export default function CustomerServicesScreen() {
 
       {/* Page header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate(useAuthStore.getState().isAuthenticated ? 'CustomerMain' : 'CustomerGuestHome'))}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Quay lại"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <BackButton />
         <Text style={styles.headerTitle} numberOfLines={1}>
           {browseMode ? selectedCategoryName ?? 'Khám phá dịch vụ' : selectedCategoryName ?? 'Kết quả tìm kiếm'}
         </Text>

@@ -27,6 +27,7 @@ import { buildWeek, dayKeyVn } from './technician-schedule';
 
 import { vnDateString, vnTimeString } from '../../utils/vn-time';
 import TechnicianAvailabilityEditor from './TechnicianAvailabilityEditor';
+import BackButton from '../../components/BackButton';
 
 const VN_DATE = { day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 const VN_TIME = { hour: '2-digit', minute: '2-digit' } as const;
@@ -110,9 +111,7 @@ export default function TechnicianScheduleScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
       <View style={styles.header}>
-        <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Quay lại">
-          <ChevronLeft size={26} color={colors.text} strokeWidth={1.75} />
-        </TouchableOpacity>
+        <BackButton />
         <View style={styles.headerTitleGroup}>
           <Text style={styles.headerEyebrow}>Công việc trong tuần</Text>
           <Text style={styles.headerTitle} accessibilityRole="header">Lịch làm việc</Text>

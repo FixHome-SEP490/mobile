@@ -35,6 +35,7 @@ import {
   validateFullName,
   validatePhoneNumber,
 } from '../../utils/input-validation';
+import BackButton from '../../components/BackButton';
 
 
 export default function RegisterScreen() {
@@ -189,7 +190,7 @@ export default function RegisterScreen() {
       >
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       
-          <View style={styles.brandBar}><TouchableOpacity style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Quay lại đăng nhập" onPress={() => navigation.navigate('Login')} disabled={isLoading || googleLoading}><Ionicons name="arrow-back" size={20} color={colors.text} /></TouchableOpacity><View style={styles.brandRow}><Image source={require('../../../assets/icon.png')} style={styles.brandLogo} /><Text style={styles.brandText}>Fix<Text style={styles.accent}>Home</Text></Text></View></View>
+          <View style={styles.brandBar}><BackButton onPress={() => navigation.navigate('Login')} /><View style={styles.brandRow}><Image source={require('../../../assets/icon.png')} style={styles.brandLogo} /><Text style={styles.brandText}>Fix<Text style={styles.accent}>Home</Text></Text></View></View>
           <View style={styles.header}>
             <Text style={styles.title}>Đăng ký tài khoản</Text><Text style={styles.heroTitle} accessibilityRole="header">Chào bạn mới.{'\n'}<Text style={styles.accent}>Cùng bắt đầu nhé.</Text></Text>
             <Text style={styles.subtitle}>

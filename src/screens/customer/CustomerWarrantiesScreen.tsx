@@ -36,6 +36,7 @@ import {
   type CustomerWarrantyGroup,
   type WarrantyClaimTone,
 } from './customer-warranty';
+import BackButton from '../../components/BackButton';
 
 const PAGE_SIZE = 10;
 type WarrantyRoute = RouteProp<RootStackParamList, 'CustomerWarranties'>;
@@ -422,9 +423,7 @@ export default function CustomerWarrantiesScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Quay lại">
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <BackButton />
         <View style={styles.headerCopy}>
           <Text style={styles.headerTitle} accessibilityRole="header">Bảo hành</Text>
           <Text style={styles.headerSubtitle}>Theo dõi bảo hành theo từng đơn đã hoàn tất</Text>

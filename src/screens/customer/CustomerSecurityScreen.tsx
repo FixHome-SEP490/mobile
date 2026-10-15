@@ -26,6 +26,7 @@ import {
   isSameCustomerSecuritySession,
   validateCustomerPasswordReset,
 } from './customer-security';
+import BackButton from '../../components/BackButton';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -188,15 +189,7 @@ export default function CustomerSecurityScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Quay lại"
-            onPress={() => navigation.goBack()}
-            style={styles.headerButton}
-            hitSlop={8}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
+          <BackButton />
           <View style={styles.headerText}>
             <Text style={[styles.title, { color: colors.text }]}>Bảo mật tài khoản</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>

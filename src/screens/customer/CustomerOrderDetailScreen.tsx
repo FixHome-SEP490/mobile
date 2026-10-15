@@ -100,6 +100,7 @@ import { vnDateTimeString } from '../../utils/vn-time';
 import { findChatForBooking } from '../technician/technician-chat-shortcut';
 import CustomerOrderTimeline from './CustomerOrderTimeline';
 import { actionDetailSection, customerActiveOrderSection, customerOrderTimeline, type OrderDetailSection } from './customer-order-timeline';
+import BackButton from '../../components/BackButton';
 
 type DetailRoute = RouteProp<RootStackParamList, 'CustomerOrderDetail'>;
 
@@ -885,15 +886,7 @@ export default function CustomerOrderDetailScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Quay lại"
-          style={styles.headerBackBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <BackButton />
         <Text style={styles.headerTitle} accessibilityRole="header">{`Bước · ${orderSummaryAction?.title ?? 'Chi tiết đơn sửa chữa'}`}</Text>
         <View style={styles.headerSpacer} />
       </View>

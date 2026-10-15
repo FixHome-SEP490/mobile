@@ -1,20 +1,19 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft } from 'lucide-react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAppTheme } from '../../constants/theme';
 import { geoApi, type Province } from '../../api/geo.api';
 import { technicianProfileApi } from '../../api/technician-profile.api';
 import { areasChanged, initialProvince, keysToServiceAreas, serviceAreasToKeys, toAreaKey } from './technician-service-areas';
 import TechnicianLocationEditor from './TechnicianLocationEditor';
+import BackButton from '../../components/BackButton';
 
 /** The technician edits the districts they serve after onboarding (same picker as onboarding). */
 export default function TechnicianServiceAreasScreen() {
   const { colors } = useAppTheme();
   const styles = getStyles(colors);
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
   const [provinces, setProvinces] = useState<Province[]>([]);
   const [saved, setSaved] = useState<{ provinceCode: string; districtCode: string }[]>([]);
   const [keys, setKeys] = useState<string[]>([]);
@@ -82,9 +81,7 @@ export default function TechnicianServiceAreasScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Quay lại">
-          <ChevronLeft size={26} color={colors.text} strokeWidth={1.75} />
-        </TouchableOpacity>
+        <BackButton />
         <Text style={styles.headerTitle} accessibilityRole="header">Khu vực hoạt động</Text>
         <View style={styles.iconBtn} />
       </View>

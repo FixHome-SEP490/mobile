@@ -2,6 +2,7 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardInset } from '../../../hooks/useKeyboardInset';
+import BackButton from '../../../components/BackButton';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 
 export interface TaskAction {
@@ -50,11 +51,9 @@ export function TaskScreenShell({ title, stage, children, primary, secondary, on
   const keyboardInset = useKeyboardInset();
   return <SafeAreaView edges={['top', 'left', 'right']} style={styles.page}>
     <View style={styles.header}>
-      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Quay lại" onPress={onBack} style={styles.backButton}>
-        <Text style={styles.backGlyph}>‹</Text>
-      </TouchableOpacity>
+      <BackButton onPress={onBack ?? (() => {})} />
       <Text accessibilityRole="header" style={styles.headerTitle}>{title}</Text>
-      <View style={styles.backButton} />
+      <View style={{ width: 44, height: 44 }} />
     </View>
     {stage !== undefined && <StageHeader stage={stage} />}
     <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, contentStyle]} keyboardShouldPersistTaps="handled">
@@ -76,8 +75,6 @@ export function DetailRow({ label, value }: { label: string; value: React.ReactN
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.background },
   header: { minHeight: 56, paddingHorizontal: spacing.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: { width: 48, height: 48, justifyContent: 'center', alignItems: 'center' },
-  backGlyph: { color: colors.text, fontSize: 34, lineHeight: 38 },
   headerTitle: { flex: 1, textAlign: 'center', color: colors.text, fontSize: 18, fontWeight: '700' },
   stageWrap: { paddingHorizontal: spacing.md, paddingBottom: spacing.md },
   stageTrack: { flexDirection: 'row', gap: 5 },

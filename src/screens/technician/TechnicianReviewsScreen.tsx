@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AlertTriangle, ChevronLeft, ChevronRight, MessageSquareOff, Star } from 'lucide-react-native';
+import { AlertTriangle, ChevronRight, MessageSquareOff, Star } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
@@ -27,6 +27,7 @@ import {
 
 import { vnDateString } from '../../utils/vn-time';
 import { NO_RATING_TEXT, formatRating, ratingValue } from '../../utils/rating';
+import BackButton from '../../components/BackButton';
 
 const VN_DATE = { day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 const PAGE_SIZE = 20;
@@ -209,14 +210,7 @@ export default function TechnicianReviewsScreen() {
     <SafeAreaView style={styles2.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
       <View style={styles2.header}>
-        <TouchableOpacity
-          style={styles2.backBtn}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Quay lại"
-        >
-          <ChevronLeft size={26} color={colors.text} strokeWidth={1.75} />
-        </TouchableOpacity>
+        <BackButton />
         <Text style={styles2.headerTitle} accessibilityRole="header">Đánh giá từ khách hàng</Text>
         <View style={styles2.backBtn} />
       </View>

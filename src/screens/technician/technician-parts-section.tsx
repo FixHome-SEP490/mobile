@@ -663,7 +663,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   resultPrice: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong },
   spotlightCard: { borderWidth: 2, borderColor: colors.primaryStrong, backgroundColor: colors.primarySoft, borderRadius: 14, padding: 10, gap: 6 },
   qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  qtyBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  qtyBtn: { width: 44, height: 44, borderRadius: 10, backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' },
   qtyText: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: colors.text, minWidth: 24, textAlign: 'center' },
   selectedRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
   formActionsRow: { flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' },

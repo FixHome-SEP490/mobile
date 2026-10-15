@@ -65,6 +65,7 @@ import CustomerBookingAddressEditor, {
   rememberBookingAddressAttempt,
   type BookingAddressCreateAttempt,
 } from './CustomerBookingAddressEditor';
+import BackButton from '../../components/BackButton';
 
 type CreateRoute = RouteProp<RootStackParamList, 'CustomerBookingCreate'>;
 type UncertainBookingCreate = {
@@ -1025,23 +1026,13 @@ export default function CustomerBookingCreateScreen() {
   );
 
   const backBtn = (
-    <TouchableOpacity
-      disabled={isSubmitting}
-      accessibilityState={{ disabled: isSubmitting }}
-      onPress={() => addressEditorOpen
+    <BackButton onPress={() => addressEditorOpen
         ? setAddressEditorOpen(false)
         : visibleReviewSnapshot
         ? dismissReview()
         : bookingStage > 0 && !visibleCreatedBookingId
           ? showBookingStage((bookingStage - 1) as 0 | 1)
-          : navigation.goBack()}
-      style={styles.backBtn}
-      accessibilityRole="button"
-      accessibilityLabel="Quay lại"
-      hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-    >
-      <Ionicons name="arrow-back" size={24} color={colors.text} />
-    </TouchableOpacity>
+          : navigation.goBack()} />
   );
 
   const addressEditor = customerOwnerId ? (

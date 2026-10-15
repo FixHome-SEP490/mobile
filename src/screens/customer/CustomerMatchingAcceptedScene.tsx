@@ -6,6 +6,7 @@ import type { BookingItem } from '../../api/bookings.api';
 import type { ServiceOrderItem } from '../../api/orders.api';
 import { useAppTheme } from '../../constants/theme';
 import { vnDateTimeString } from '../../utils/vn-time';
+import BackButton from '../../components/BackButton';
 
 type Props = {
   booking: BookingItem;
@@ -29,10 +30,7 @@ export default function CustomerMatchingAcceptedScene({
     <View testID="matching-accepted-scene" style={styles.root}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.top}>
-          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Quay lại"
-            onPress={onBack} style={[styles.back, { backgroundColor: colors.divider }]}>
-            <Ionicons name="arrow-back" color={colors.text} size={24} />
-          </TouchableOpacity>
+          <BackButton onPress={onBack} />
           <Text accessibilityRole="header" style={{ fontSize: 22, fontWeight: '700', color: colors.text }}>Kỹ thuật viên đã nhận đơn</Text>
         </View>
         <View testID="matching-accepted-handoff" style={[styles.hero, { backgroundColor: colors.surface, borderColor: colors.border }]}>

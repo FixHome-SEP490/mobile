@@ -53,6 +53,7 @@ import {
   hasDescription,
   showDescriptionHint,
 } from './ai-diagnosis-input';
+import BackButton from '../../components/BackButton';
 
 /** The AI drops a session after an hour of silence. Told, not discovered. */
 const SESSION_IDLE_MINUTES = 60;
@@ -456,15 +457,7 @@ export default function CustomerAIChatScreen() {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.headerBtn}
-          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-          accessibilityRole="button"
-          accessibilityLabel="Quay lại"
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <BackButton />
         <View style={styles.headerTitleBox}>
           <Text style={styles.headerTitle} accessibilityRole="header">Trợ lý FixHome</Text>
           <Text style={styles.headerSubtitle}>

@@ -17,7 +17,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useKeyboardInset } from '../../hooks/useKeyboardInset';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { useRoute, type RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store/auth.store';
 import {
@@ -29,6 +29,7 @@ import { chatSocketService } from '../../services/chat-socket.service';
 import TypingDots from './TypingDots';
 import { useAppTheme } from '../../constants/theme';
 import { vnTimeString } from '../../utils/vn-time';
+import BackButton from '../../components/BackButton';
 
 type ThreadRoute = RouteProp<RootStackParamList, 'ChatThread'>;
 
@@ -49,7 +50,6 @@ function newClientMessageId(): string {
 export default function ChatThreadScreen() {
   const { colors, isDark } = useAppTheme();
   const styles = getStyles(colors);
-  const navigation = useNavigation();
   const route = useRoute<ThreadRoute>();
   const { conversationId, counterpartName, serviceName } = route.params;
   const myId = useAuthStore((state) => state.user?.id);
@@ -361,15 +361,7 @@ export default function ChatThreadScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.headerIconBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityRole="button"
-          accessibilityLabel="Quay lại"
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <BackButton />
 
         <View style={styles.headerProfile}>
           {conversation?.counterpart.avatarUrl ? (

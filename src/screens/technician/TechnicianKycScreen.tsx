@@ -11,12 +11,9 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import { AlertTriangle, Camera, ChevronLeft, Clock, ShieldCheck, XCircle, type LucideIcon } from 'lucide-react-native';
-import type { RootStackParamList } from '../../types';
+import { AlertTriangle, Camera, Clock, ShieldCheck, XCircle, type LucideIcon } from 'lucide-react-native';
 import { fontSize, spacing, useAppTheme, type Tone } from '../../constants/theme';
 import {
   technicianVerificationApi,
@@ -25,6 +22,7 @@ import {
   type MyVerification,
   type SubmitDocumentPayload,
 } from '../../api/technician-verification.api';
+import BackButton from '../../components/BackButton';
 
 const ALLOWED_MIME_TYPES: KycMimeType[] = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -88,7 +86,6 @@ export const OFFICE_VISIT_NOTE = 'Vui lòng đến trụ sở trong thời gian 
 export default function TechnicianKycScreen() {
   const { colors } = useAppTheme();
   const styles = getStyles(colors);
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -268,14 +265,7 @@ export default function TechnicianKycScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Quay lại"
-        >
-          <ChevronLeft size={24} color={colors.text} strokeWidth={1.75} />
-        </TouchableOpacity>
+        <BackButton />
         <View style={styles.headerTitleGroup}>
           <Text style={styles.headerEyebrow}>Xác minh danh tính</Text>
           <Text style={styles.headerTitle} accessibilityRole="header">Hồ sơ rõ, việc vững</Text>
