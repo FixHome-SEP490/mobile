@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Switch,
   StatusBar,
   BackHandler,
 } from 'react-native';
@@ -395,6 +396,18 @@ export default function TechnicianInvitationsScreen() {
               )}
             </View>
 
+            {availability.autoAccept !== null && (
+              <View style={styles.autoRow}>
+                <Text style={styles.autoLabel}>Tự nhận việc</Text>
+                <Switch
+                  value={availability.autoAccept}
+                  disabled={availability.togglingAuto}
+                  onValueChange={() => { void availability.toggleAutoAccept().then((ok) => { if (ok) onRefresh(); }); }}
+                  accessibilityLabel="Tự nhận việc"
+                />
+              </View>
+            )}
+
             {availability.isAvailable === false && (
               <View style={[styles.banner, { backgroundColor: colors.tone.warning.bg }]}>
                 <AlertTriangle size={18} color={colors.tone.warning.fg} strokeWidth={1.75} />
@@ -532,6 +545,8 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
     padding: 12,
     borderRadius: 14,
   },
+  autoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 },
+  autoLabel: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.text },
   bannerText: { flex: 1, fontSize: 14, lineHeight: 20, fontWeight: '500' },
   bannerAction: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center' },
   bannerActionText: { fontSize: 14, lineHeight: 20, fontWeight: '700' },

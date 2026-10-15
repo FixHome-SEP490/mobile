@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react';
+import ReputationCard from '../../components/ReputationCard';
 import {
   View,
   Text,
@@ -934,6 +935,8 @@ export default function CustomerProfileScreen() {
               <Text style={styles.heroEditText}>Chỉnh sửa hồ sơ</Text>
             </TouchableOpacity>
           </View>
+
+          <ReputationCard role="customer" />
 
           <Text style={[styles.sectionTitle, isDarkMode && styles.textDark]}>Quản lý tài khoản</Text>
 

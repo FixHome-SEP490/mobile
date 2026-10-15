@@ -7,6 +7,7 @@ import { DetailRow, ReadOnlyNotice, TaskScreenShell } from './TaskScreenShell';
 import { formatVnd } from '../../../utils/format';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+import RebookSheet from '../../../components/RebookSheet';
 import { findChatForBooking } from '../../../screens/technician/technician-chat-shortcut';
 
 export default function OrderInformationScreen() {
@@ -18,6 +19,8 @@ export default function OrderInformationScreen() {
   const history = snapshot?.access === 'historical' && snapshot.key.role === 'technician' && !!orderValue && isHistoricalOrder(orderValue);
   const order = orderValue && !isHistoricalOrder(orderValue) ? orderValue : null;
   const [openingChat, setOpeningChat] = useState(false);
+  const [rebookOpen, setRebookOpen] = useState(false);
+  const canRebook = snapshot?.key.role === 'customer' && !!order?.bookingId && ['COMPLETED', 'CANCELLED'].includes(String(order.status).toUpperCase());
   const openChat = async (bookingId: string) => {
     if (openingChat) return;
     setOpeningChat(true);
@@ -57,9 +60,11 @@ export default function OrderInformationScreen() {
     </View>}
     {order && !history ? <View style={{ gap: 8 }}>
       {order.bookingId ? <Pressable testID="order-chat-entry" accessibilityRole="button" disabled={openingChat} onPress={() => void openChat(order.bookingId)} style={entry}><Text style={entryText}>{openingChat ? 'Đang mở…' : 'Nhắn tin ›'}</Text></Pressable> : null}
+      {canRebook ? <Pressable testID="order-rebook-entry" accessibilityRole="button" onPress={() => setRebookOpen(true)} style={entry}><Text style={entryText}>Đặt lại thợ ›</Text></Pressable> : null}
       <Pressable testID="order-support-entry" accessibilityRole="button" onPress={() => navigation.navigate('SupportCases')} style={entry}><Text style={entryText}>Yêu cầu hỗ trợ ›</Text></Pressable>
       <Pressable testID="order-cancel-entry" accessibilityRole="button" onPress={() => navigation.navigate('OrderException')} style={entry}><Text style={entryText}>Hủy đơn hoặc kiểm tra điều kiện ›</Text></Pressable>
     </View> : null}
+    {canRebook ? <RebookSheet bookingId={order!.bookingId} visible={rebookOpen} onClose={() => setRebookOpen(false)} /> : null}
   </TaskScreenShell>;
 }
 

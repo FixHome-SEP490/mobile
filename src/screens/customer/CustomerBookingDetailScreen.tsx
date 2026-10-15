@@ -28,6 +28,7 @@ import {
 } from './customer-booking-detail';
 import { vnDateTimeString, vnTimeString } from '../../utils/vn-time';
 import BackButton from '../../components/BackButton';
+import RebookSheet from '../../components/RebookSheet';
 
 type BookingDetailRoute = RouteProp<RootStackParamList, 'CustomerBookingDetail'>;
 
@@ -77,6 +78,7 @@ export default function CustomerBookingDetailScreen() {
   }, [bookingId, loader]));
 
   const { booking, loading, refreshing, error } = state;
+  const [rebookOpen, setRebookOpen] = useState(false);
   const nextAction = booking ? bookingNextAction(booking) : null;
   const [extending, setExtending] = useState(false);
   const [extensionNotice, setExtensionNotice] = useState('');
@@ -228,6 +230,21 @@ export default function CustomerBookingDetailScreen() {
               </Text>
             </View>
           </View>
+
+          {booking.status === 'CANCELLED' && (
+            <TouchableOpacity
+              testID="booking-rebook"
+              onPress={() => setRebookOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Đặt lại thợ"
+              style={styles.primaryButton}
+            >
+              <Text style={styles.primaryButtonText}>Đặt lại thợ</Text>
+            </TouchableOpacity>
+          )}
+          {booking.status === 'CANCELLED' && (
+            <RebookSheet bookingId={booking.id} visible={rebookOpen} onClose={() => setRebookOpen(false)} />
+          )}
 
           {nextAction && (
             <View style={styles.actionCard} accessibilityRole="summary">

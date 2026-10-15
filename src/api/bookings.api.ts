@@ -148,7 +148,36 @@ const normalizeBooking = (booking: RawBooking): BookingItem => ({
     : booking.media?.map((m) => m.url) || [],
 });
 
+export type BookingSlot = 'morning' | 'afternoon';
+
+export interface SessionOption {
+  date: string;
+  slot: BookingSlot;
+  label: string;
+  available: boolean;
+  reason: string | null;
+}
+
 export const bookingsApi = {
+  /** Next 14 days of sessions; with `previous` it tells whether the former technician is free in each. */
+  async availableSessions(bookingId: string, previous = false): Promise<{ technicianId: string | null; sessions: SessionOption[] }> {
+    const res = await apiClient.get(`/bookings/${bookingId}/available-slots`, {
+      params: { days: 14, ...(previous ? { previous: 1 } : {}) },
+    });
+    const data = unwrap<{ technicianId?: string | null; sessions?: SessionOption[] }>(res.data);
+    return { technicianId: data?.technicianId ?? null, sessions: data?.sessions ?? [] };
+  },
+
+  /** New booking with the same service and address; the former technician is invited when free. */
+  async rebook(
+    bookingId: string,
+    dto: { date: string; slot: BookingSlot; customerNote?: string },
+  ): Promise<{ booking: BookingItem; previousTechnicianInvited: boolean }> {
+    const res = await apiClient.post(`/bookings/${bookingId}/rebook`, { mode: 'scheduled', ...dto });
+    const { previousTechnicianInvited, ...booking } = unwrap<RawBooking & { previousTechnicianInvited?: boolean }>(res.data);
+    return { booking: normalizeBooking(booking), previousTechnicianInvited: previousTechnicianInvited === true };
+  },
+
   async createBooking(dto: CreateBookingDto): Promise<BookingItem> {
     const urgencyMap: Record<string, string> = {
       LOW: 'low',

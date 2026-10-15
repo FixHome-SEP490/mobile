@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import ReputationCard from '../../components/ReputationCard';
+import DefaultWarrantyCard from './DefaultWarrantyCard';
 import {
   View,
   Text,
@@ -316,7 +318,7 @@ export default function TechnicianProfileScreen() {
         drafts[service.id] = {
           enabled: offering?.isActive ?? false,
           listedLaborPrice: offering?.listedLaborPrice != null ? String(offering.listedLaborPrice) : '',
-          typicalWarrantyDays: offering?.typicalWarrantyDays != null ? String(offering.typicalWarrantyDays) : '30',
+          typicalWarrantyDays: offering?.typicalWarrantyDays != null ? String(offering.typicalWarrantyDays) : String(technicianProfile?.defaultLaborWarrantyDays ?? 30),
           level: offering?.level ?? 'INTERMEDIATE',
         };
       }
@@ -480,6 +482,16 @@ export default function TechnicianProfileScreen() {
             ) : null}
           </View>
         </View>
+
+        <ReputationCard role="technician" />
+
+        {technicianProfile && (
+          <DefaultWarrantyCard
+            key={technicianProfile.defaultLaborWarrantyDays ?? 'unset'}
+            saved={technicianProfile.defaultLaborWarrantyDays}
+            onSaved={(days) => setTechnicianProfile({ ...technicianProfile, defaultLaborWarrantyDays: days })}
+          />
+        )}
 
         {/* Thu nhập & ví */}
         <View style={[styles.group, styles.incomeCard]}>

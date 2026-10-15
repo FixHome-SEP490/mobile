@@ -11,6 +11,7 @@ import { formatVnd } from '../../utils/format';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import { fetchAllOrders, summarizeEarnings, type EarningsBucket } from './technician-earnings';
 import BackButton from '../../components/BackButton';
+import EarningsPeriodPanel from './EarningsPeriodPanel';
 
 type Period = 'week' | 'month';
 const CHART_HEIGHT = 140;
@@ -222,6 +223,8 @@ export default function TechnicianEarningsScreen({ embedded = false }: { embedde
           {summary.totalCount === 0 && (
             <Text style={styles.emptyInline}>Chưa có đơn hoàn thành trong các đơn đã tải.</Text>
           )}
+
+          <EarningsPeriodPanel />
 
         </ScrollView>
       ) : null}

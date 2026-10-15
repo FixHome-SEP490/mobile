@@ -35,6 +35,10 @@ export interface TechnicianProfile {
   reliabilityScore: number | null;
   /** null until the technician has set a service radius. */
   serviceRadiusKm: number | null;
+  /** "Tự nhận việc": the backend accepts invitations for the technician. */
+  autoAcceptInvitations: boolean;
+  /** Labor warranty (days) given when a service has none of its own; null until set. */
+  defaultLaborWarrantyDays: number | null;
   schedules: TechnicianScheduleSlot[];
 }
 
@@ -43,6 +47,7 @@ export interface UpdateTechnicianProfileRequest {
   isAvailable?: boolean;
   yearsExperience?: number;
   serviceRadiusKm?: number;
+  autoAcceptInvitations?: boolean;
 }
 
 export interface UpdateSkillPricingRequest {
@@ -82,6 +87,8 @@ export function normalizeProfile(
     ratingCount: ratingCount !== null && Number.isInteger(ratingCount) && ratingCount > 0 ? ratingCount : 0,
     reliabilityScore: numberOrNull(profile?.reliabilityScore),
     serviceRadiusKm: numberOrNull(profile?.serviceRadiusKm),
+    autoAcceptInvitations: profile?.autoAcceptInvitations === true,
+    defaultLaborWarrantyDays: numberOrNull(profile?.defaultLaborWarrantyDays),
     schedules: Array.isArray(profile?.schedules) ? (profile.schedules as TechnicianScheduleSlot[]) : [],
   };
 }
@@ -100,6 +107,12 @@ export const technicianProfileApi = {
       data,
     );
     return normalizeProfile(unwrap(res.data));
+  },
+
+  /** applyToAllServices also overwrites every service's own warranty. Max 365 days is enforced by the backend. */
+  async setDefaultLaborWarranty(days: number, applyToAllServices: boolean): Promise<{ defaultLaborWarrantyDays: number; servicesUpdated: number }> {
+    const res = await apiClient.put('/technicians/me/warranty-default', { days, applyToAllServices });
+    return unwrap<{ defaultLaborWarrantyDays: number; servicesUpdated: number }>(res.data);
   },
 
   /** Last GPS position while the app is open; the backend offers urgent jobs nearby. */

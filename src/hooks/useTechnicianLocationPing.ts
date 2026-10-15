@@ -4,10 +4,12 @@ import * as Location from 'expo-location';
 import { technicianProfileApi } from '../api/technician-profile.api';
 
 const EVERY_MS = 5 * 60_000;
+// Backend ignores fixes worse than 1 km; do not send them.
+const MAX_ACCURACY_M = 1000;
 
 /**
  * While the technician app is in the foreground, report the GPS position every
- * five minutes (PO 08/10/2026: urgent jobs go to whoever is nearby, using a fix
+ * five minutes, only while "nhận việc" is on (PO 08/10/2026: urgent jobs go to whoever is nearby, using a fix
  * younger than 15 minutes). Never prompts on its own: it uses the permission
  * the technician already gave for check-in and directions.
  */
@@ -19,8 +21,10 @@ export function useTechnicianLocationPing(enabled: boolean): void {
       try {
         const permission = await Location.getForegroundPermissionsAsync();
         if (cancelled || permission.status !== 'granted') return;
+        // Re-read each tick so the Home switch takes effect without sharing state.
+        if (!(await technicianProfileApi.getMyProfile()).isAvailable || cancelled) return;
         const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        if (cancelled) return;
+        if (cancelled || (position.coords.accuracy ?? 0) > MAX_ACCURACY_M) return;
         await technicianProfileApi.reportLocation({
           lat: position.coords.latitude,
           lng: position.coords.longitude,
