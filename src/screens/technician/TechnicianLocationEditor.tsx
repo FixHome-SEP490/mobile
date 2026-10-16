@@ -155,7 +155,7 @@ export default function TechnicianLocationEditor() {
         serviceRadiusKm: radiusKm,
       });
       await loadTechnicianProfile();
-
+      Alert.alert('Đã lưu', 'Vị trí và bán kính hoạt động đã được cập nhật.');
     } catch (err: unknown) {
       Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể lưu vị trí.'));
     } finally {

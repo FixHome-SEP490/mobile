@@ -69,6 +69,7 @@ export function DecisionSummary({
               {item.quantity} × {quoteMoneyText(item.unitPrice)}
               {item.lineTotal !== undefined ? ` · Thành tiền: ${quoteMoneyText(item.lineTotal)}` : ''}
             </Text>
+            {item.warrantyDays ? <Text style={styles.meta}>Bảo hành {item.warrantyDays} ngày</Text> : null}
             {isEligible && interactive ? (
               <TouchableOpacity
                 testID={`warranty-toggle-${key}`}

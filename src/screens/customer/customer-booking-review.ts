@@ -5,6 +5,7 @@ import type { AddressData } from '../../api/users.api';
 import { resolveServicePrice } from './service-catalog';
 import { addressReadyForBooking } from './customer-booking-create';
 import { buildCustomerBookingWindow, validateBookingFields } from '../../utils/booking-window';
+import { buildScheduleWindow, scheduleSummary, type BookingSchedule } from '../../utils/booking-session';
 
 const WEEKDAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'] as const;
 
@@ -41,6 +42,8 @@ export function buildBookingReviewSnapshot({
   description,
   date,
   time,
+  schedule,
+  customerNote,
   now,
   aiSessionId,
   photos = [],
@@ -49,8 +52,11 @@ export function buildBookingReviewSnapshot({
   service: ServiceItem;
   address: AddressData;
   description: string;
-  date: Date;
-  time: string;
+  /** Legacy picker (date + start time); ignored when `schedule` is given. */
+  date?: Date;
+  time?: string;
+  schedule?: BookingSchedule;
+  customerNote?: string;
   now?: Date;
   aiSessionId?: string | null;
   photos?: readonly BookingPhotoPreview[];
@@ -74,7 +80,10 @@ export function buildBookingReviewSnapshot({
     );
   }
 
-  const window = buildCustomerBookingWindow({ date, time, now });
+  if (!schedule && (!date || !time)) throw new Error('Vui lòng chọn ngày và buổi (sáng hoặc chiều).');
+  const window = schedule ? buildScheduleWindow(schedule, now) : buildCustomerBookingWindow({ date: date!, time: time!, now });
+  const note = customerNote?.trim() ?? '';
+  if (note.length > 1000) throw new Error('Ghi chú cho thợ tối đa 1000 ký tự.');
   // Only a session id the assistant could have issued; anything else is dropped
   // and the booking goes through as a plain one.
   const session = aiSessionId && AI_SESSION_PATTERN.test(aiSessionId) ? aiSessionId : null;
@@ -82,6 +91,7 @@ export function buildBookingReviewSnapshot({
     ...fields,
     ...window,
     urgency: 'NORMAL',
+    ...(note ? { customerNote: note } : {}),
     ...(session ? { aiSessionId: session } : {}),
   });
   const price = resolveServicePrice(service);
@@ -91,9 +101,15 @@ export function buildBookingReviewSnapshot({
       : service.pricingMode === 'inspection_required'
         ? `Cần khảo sát/báo giá: ${price.text}`
         : price.text;
-  const [startHour, startMinute] = time.split(':').map(Number);
-  const endHour = String(startHour + 2).padStart(2, '0');
-  const endMinute = String(startMinute).padStart(2, '0');
+  let scheduleLabel: string;
+  if (schedule) {
+    scheduleLabel = scheduleSummary(schedule);
+  } else {
+    const [startHour, startMinute] = time!.split(':').map(Number);
+    const endHour = String(startHour + 2).padStart(2, '0');
+    const endMinute = String(startMinute).padStart(2, '0');
+    scheduleLabel = `${formatBookingDate(date!)} · ${time}–${endHour}:${endMinute}`;
+  }
 
   return Object.freeze({
     ownerUserId,
@@ -103,7 +119,7 @@ export function buildBookingReviewSnapshot({
     addressDescription: [address.line1, address.ward, address.district, address.province]
       .filter(Boolean)
       .join(', '),
-    scheduleLabel: `${formatBookingDate(date)} · ${time}–${endHour}:${endMinute}`,
+    scheduleLabel,
     pricingLabel,
     photos: Object.freeze(photos.map((photo) => Object.freeze({ ...photo }))),
     hasAiSummary: session !== null,

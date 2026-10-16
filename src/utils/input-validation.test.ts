@@ -124,12 +124,12 @@ describe('extractApiErrorMessage', () => {
     )
   })
 
-  it('dùng error.message khi không có details', () => {
+  it('dịch câu tiếng Anh đã biết của backend sang tiếng Việt', () => {
     const err = {
       response: { data: { error: { message: 'Invalid email or password' } } },
     }
     expect(extractApiErrorMessage(err, 'du phong')).toBe(
-      'Invalid email or password',
+      'Email, số điện thoại hoặc mật khẩu không đúng.',
     )
   })
 
@@ -138,5 +138,27 @@ describe('extractApiErrorMessage', () => {
       'du phong',
     )
     expect(extractApiErrorMessage(undefined, 'du phong')).toBe('du phong')
+  })
+})
+
+describe('extractApiErrorMessage — câu tiếng Anh của backend', () => {
+  const fail = (message: string) => ({ response: { data: { error: { message } } } })
+
+  it('dịch các lỗi luồng đặt lịch', () => {
+    expect(extractApiErrorMessage(fail('Invitation expired'), 'x')).toBe('Lời mời đã hết hạn.')
+    expect(extractApiErrorMessage(fail('Booking already assigned.'), 'x')).toBe(
+      'Yêu cầu này đã có kỹ thuật viên nhận.',
+    )
+  })
+
+  it('đổi thời hạn khóa tài khoản sang giờ Việt Nam', () => {
+    const out = extractApiErrorMessage(fail('Account suspended until 2030-10-21T03:00:00.000Z'), 'x')
+    expect(out).toContain('10:00 21/10/2030')
+    expect(out).not.toContain('suspended')
+  })
+
+  it('câu tiếng Anh lạ rơi về câu dự phòng, câu tiếng Việt được giữ', () => {
+    expect(extractApiErrorMessage(fail('Something odd happened'), 'du phong')).toBe('du phong')
+    expect(extractApiErrorMessage(fail('Không đủ số dư.'), 'du phong')).toBe('Không đủ số dư.')
   })
 })

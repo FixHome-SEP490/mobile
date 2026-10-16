@@ -332,7 +332,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
       {isAccepted && !hasActivePreRepair && (
         <View style={styles.createBox}>
           {!showCreateForm ? (
-            <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowCreateForm(true)}>
+            <TouchableOpacity accessibilityRole="button" style={styles.primaryBtn} onPress={() => setShowCreateForm(true)}>
               <Plus size={16} color={colors.surface} strokeWidth={2} />
               <Text style={styles.primaryBtnText}>Tạo yêu cầu linh kiện</Text>
             </TouchableOpacity>
@@ -340,13 +340,13 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
             <>
               <Text style={styles.fieldLabel}>Phương thức nhận linh kiện</Text>
               <View style={styles.chipRow}>
-                <TouchableOpacity
+                <TouchableOpacity accessibilityRole="button"
                   style={[styles.chip, fulfillmentMethod === 'pickup' && styles.chipActive]}
                   onPress={() => setFulfillmentMethod('pickup')}
                 >
                   <Text style={[styles.chipText, fulfillmentMethod === 'pickup' && styles.chipTextActive]}>Tự lấy tại kho</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
+                <TouchableOpacity accessibilityRole="button"
                   style={[styles.chip, fulfillmentMethod === 'delivery' && styles.chipActive]}
                   onPress={() => setFulfillmentMethod('delivery')}
                 >
@@ -366,7 +366,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
               <Text style={styles.fieldLabel}>Tìm linh kiện FixHome</Text>
               <View style={styles.chipRow}>
                 {CATEGORY_TABS.map((cat) => (
-                  <TouchableOpacity
+                  <TouchableOpacity accessibilityRole="button"
                     key={cat.value}
                     style={[styles.chip, activeCategory === cat.value && styles.chipActive]}
                     onPress={() => selectCategory(cat.value)}
@@ -386,7 +386,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
               {searchResults.length > 0 && (
                 <View style={styles.resultsBox}>
                   {searchResults.map((part) => (
-                    <TouchableOpacity key={part.id} style={styles.resultItem} onPress={() => selectPartForForm(part)}>
+                    <TouchableOpacity accessibilityRole="button" key={part.id} style={styles.resultItem} onPress={() => selectPartForForm(part)}>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.resultName}>{part.name}{part.sku ? ` (${part.sku})` : ''}</Text>
                       </View>
@@ -430,7 +430,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                     placeholder="Ghi chú (không bắt buộc)"
                     placeholderTextColor={colors.muted}
                   />
-                  <TouchableOpacity style={styles.primaryBtn} onPress={addItemToForm}>
+                  <TouchableOpacity accessibilityRole="button" style={styles.primaryBtn} onPress={addItemToForm}>
                     <Plus size={16} color={colors.surface} strokeWidth={2} />
                     <Text style={styles.primaryBtnText}>Thêm vào danh sách</Text>
                   </TouchableOpacity>
@@ -482,10 +482,10 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
               )}
 
               <View style={styles.formActionsRow}>
-                <TouchableOpacity style={styles.ghostBtn} onPress={() => setShowCreateForm(false)}>
+                <TouchableOpacity accessibilityRole="button" style={styles.ghostBtn} onPress={() => setShowCreateForm(false)}>
                   <Text style={styles.ghostBtnText}>Hủy bỏ</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
+                <TouchableOpacity accessibilityRole="button"
                   style={[styles.primaryBtn, (selectedItems.length === 0 || submitting) && { opacity: 0.6 }]}
                   onPress={submitPreRepairRequest}
                   disabled={selectedItems.length === 0 || submitting}
@@ -545,21 +545,21 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                         autoCapitalize="none"
                       />
                       <View style={styles.formActionsRow}>
-                        <TouchableOpacity style={styles.ghostBtn} onPress={() => { setReceivingId(null); setQrTokenInput(''); }}>
+                        <TouchableOpacity accessibilityRole="button" style={styles.ghostBtn} onPress={() => { setReceivingId(null); setQrTokenInput(''); }}>
                           <Text style={styles.ghostBtnText}>Hủy</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.primaryBtn} onPress={() => confirmReceive(pr.id, qrTokenInput)}>
+                        <TouchableOpacity accessibilityRole="button" style={styles.primaryBtn} onPress={() => confirmReceive(pr.id, qrTokenInput)}>
                           <Text style={styles.primaryBtnText}>Xác nhận đã nhận</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
                   ) : (
                     <View style={styles.formActionsRow}>
-                      <TouchableOpacity style={styles.primaryBtn} onPress={() => openScanner(pr.id)}>
+                      <TouchableOpacity accessibilityRole="button" style={styles.primaryBtn} onPress={() => openScanner(pr.id)}>
                         <QrCode size={16} color={colors.surface} strokeWidth={1.75} />
                         <Text style={styles.primaryBtnText}>Quét mã QR nhận hàng</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.ghostBtn} onPress={() => setReceivingId(pr.id)}>
+                      <TouchableOpacity accessibilityRole="button" style={styles.ghostBtn} onPress={() => setReceivingId(pr.id)}>
                         <Text style={styles.ghostBtnText}>Nhập mã thủ công</Text>
                       </TouchableOpacity>
                     </View>
@@ -584,14 +584,14 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                     </View>
                     {isUnderRepair && pr.status === 'received' ? (
                       <View style={styles.usageBtnRow}>
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button"
                           style={[styles.usageBtn, item.usageStatus === 'used' && styles.usageBtnActiveGreen]}
                           disabled={updatingItemId === item.id}
                           onPress={() => handleUpdateUsage(pr.id, item.id, 'used')}
                         >
                           <Text style={[styles.usageBtnText, item.usageStatus === 'used' && { color: colors.surface }]}>Đã dùng</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button"
                           style={[styles.usageBtn, item.usageStatus === 'returned' && styles.usageBtnActiveAmber]}
                           disabled={updatingItemId === item.id}
                           onPress={() => handleUpdateUsage(pr.id, item.id, 'returned')}

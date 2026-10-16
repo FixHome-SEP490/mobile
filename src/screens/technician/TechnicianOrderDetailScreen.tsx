@@ -2295,7 +2295,7 @@ export default function TechnicianOrderDetailScreen() {
                       {row.kind === 'part' && (
                         <View style={{ marginTop: 4 }}>
                           {quotePartSearchRowKey !== row.key ? (
-                            <TouchableOpacity
+                            <TouchableOpacity accessibilityRole="button"
                               onPress={() => { setQuotePartSearchRowKey(row.key); setQuotePartQuery(''); setQuotePartResults([]); }}
                               disabled={readOnly}
                             >
@@ -2328,7 +2328,7 @@ export default function TechnicianOrderDetailScreen() {
                               />
                               {quotePartSearching && <ActivityIndicator size="small" color={colors.primary} />}
                               {quotePartResults.map((part) => (
-                                <TouchableOpacity
+                                <TouchableOpacity accessibilityRole="button"
                                   key={part.id}
                                   style={styles.acPartResultItem}
                                   onPress={() => {
@@ -2356,7 +2356,7 @@ export default function TechnicianOrderDetailScreen() {
                                   <Text style={styles.acPriceText}>{formatVnd(part.sellingPrice)}</Text>
                                 </TouchableOpacity>
                               ))}
-                              <TouchableOpacity onPress={() => setQuotePartSearchRowKey(null)}>
+                              <TouchableOpacity accessibilityRole="button" onPress={() => setQuotePartSearchRowKey(null)}>
                                 <Text style={styles.retryText}>Đóng tìm kiếm</Text>
                               </TouchableOpacity>
                             </View>
@@ -2561,7 +2561,7 @@ export default function TechnicianOrderDetailScreen() {
                 <View style={styles.acItemsHeaderRow}>
                   <Text style={styles.fieldLabel}>Hạng mục chi phí phát sinh:</Text>
                   {!acShowPartSearch && (
-                    <TouchableOpacity
+                    <TouchableOpacity accessibilityRole="button"
                       onPress={() => setAcShowPartSearch(true)}
                       disabled={proposalState.busy || proposalState.needsVerify}
                     >
@@ -2690,7 +2690,7 @@ export default function TechnicianOrderDetailScreen() {
                     />
                     {acPartSearching && <ActivityIndicator size="small" color={colors.primary} />}
                     {acPartResults.map((part) => (
-                      <TouchableOpacity
+                      <TouchableOpacity accessibilityRole="button"
                         key={part.id}
                         style={styles.acPartResultItem}
                         onPress={() => {
@@ -2719,7 +2719,7 @@ export default function TechnicianOrderDetailScreen() {
                         <Text style={styles.jobMeta}>{formatVnd(part.sellingPrice)}</Text>
                       </TouchableOpacity>
                     ))}
-                    <TouchableOpacity onPress={() => { setAcShowPartSearch(false); setAcPartQuery(''); setAcPartResults([]); }}>
+                    <TouchableOpacity accessibilityRole="button" onPress={() => { setAcShowPartSearch(false); setAcPartQuery(''); setAcPartResults([]); }}>
                       <Text style={styles.retryText}>Đóng tìm kiếm</Text>
                     </TouchableOpacity>
                   </View>
@@ -2731,11 +2731,11 @@ export default function TechnicianOrderDetailScreen() {
                       <Package size={16} color={colors.primaryStrong} strokeWidth={1.75} />
                       <Text style={[styles.fieldLabel, { marginTop: 0 }]}>Phương thức nhận linh kiện FixHome:</Text>
                     </View>
-                    <TouchableOpacity style={styles.radioRow} onPress={() => setAcFulfillment('pickup')}>
+                    <TouchableOpacity accessibilityRole="radio" accessibilityState={{ checked: acFulfillment === 'pickup' }} style={styles.radioRow} onPress={() => setAcFulfillment('pickup')}>
                       {acFulfillment === 'pickup' ? <CircleDot size={20} color={colors.primaryStrong} strokeWidth={1.75} /> : <Circle size={20} color={colors.primaryStrong} strokeWidth={1.75} />}
                       <Text style={styles.jobMeta}>Nhận tại kho FixHome (Tự đến lấy — 0đ)</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.radioRow} onPress={() => setAcFulfillment('delivery')}>
+                    <TouchableOpacity accessibilityRole="radio" accessibilityState={{ checked: acFulfillment === 'delivery' }} style={styles.radioRow} onPress={() => setAcFulfillment('delivery')}>
                       {acFulfillment === 'delivery' ? <CircleDot size={20} color={colors.primaryStrong} strokeWidth={1.75} /> : <Circle size={20} color={colors.primaryStrong} strokeWidth={1.75} />}
                       <Text style={styles.jobMeta}>Giao đến tận nơi</Text>
                     </TouchableOpacity>

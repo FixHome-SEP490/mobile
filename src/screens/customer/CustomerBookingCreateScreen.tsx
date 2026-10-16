@@ -51,14 +51,14 @@ import {
 import { usersApi, type AddressData } from '../../api/users.api';
 import { useAuthStore } from '../../store';
 import { UserRole, type RootStackParamList } from '../../types';
-import BookingSchedulePicker from '../../components/BookingSchedulePicker';
+import BookingSessionPicker from '../../components/BookingSessionPicker';
+import type { BookingSchedule } from '../../utils/booking-session';
 import { BookingReviewSummary } from '../../components/BookingReviewSheet';
 import {
   buildBookingReviewSnapshot,
   type BookingPhotoPreview,
   type BookingReviewSnapshot,
 } from './customer-booking-review';
-import { vnParts, vnTodayCalendarDate } from '../../utils/vn-time';
 import CustomerBookingAddressEditor, {
   clearBookingAddressAttempt,
   getBookingAddressAttempt,
@@ -264,10 +264,9 @@ export default function CustomerBookingCreateScreen() {
   const uncertainPhotoUrisByOwnerRef = useRef(runtimeUncertainPhotoUris);
   const [photoUploadError, setPhotoUploadError] = useState('');
   const [uploadingPhotoUri, setUploadingPhotoUri] = useState<string | null>(null);
-  const [bookingDate, setBookingDate] = useState(() => {
-    return vnTodayCalendarDate();
-  });
-  const [startTime, setStartTime] = useState<string>('09:00');
+  // Session booking (web parity): a morning/afternoon of a day, or "tới ngay". Nothing is pre-selected.
+  const [schedule, setSchedule] = useState<BookingSchedule | null>(null);
+  const [customerNote, setCustomerNote] = useState('');
   // Keep one owner-bound draft while moving between dedicated booking scenes.
   const [bookingStage, setBookingStage] = useState<0 | 1 | 2>(() =>
     customerOwnerId && (runtimeCreateStates[customerOwnerId]?.flowId === flowId
@@ -390,10 +389,8 @@ export default function CustomerBookingCreateScreen() {
     setBookingStage((customerOwnerId && runtimeCompletedCreates.get(customerOwnerId)?.has(flowId))
       || (state && (state.kind === 'uncertain' || state.flowId === flowId)) ? 2 : 0);
     setAddressEditorOpen(false);
-    setBookingDate(() => {
-      return vnTodayCalendarDate();
-    });
-    setStartTime('09:00');
+    setSchedule(null);
+    setCustomerNote('');
     setLoadError('');
     setLoading(Boolean(customerOwnerId));
   }, [customerOwnerId, flowId, prefill?.description]);
@@ -500,11 +497,9 @@ export default function CustomerBookingCreateScreen() {
       setServiceId(request.serviceId);
       setAddressId(request.addressId);
       setDescription(request.description);
-      if (request.preferredStartAt) {
-        const parts = vnParts(request.preferredStartAt);
-        setBookingDate(vnTodayCalendarDate(request.preferredStartAt));
-        setStartTime(`${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`);
-      }
+      if (request.mode === 'urgent') setSchedule({ mode: 'urgent' });
+      else if (request.date && request.slot) setSchedule({ mode: 'scheduled', date: request.date, slot: request.slot });
+      setCustomerNote(request.customerNote ?? '');
       const restoredPhotos = photos.map((photo) => {
         const cached = bookingPhotosRef.current.find((item) => item.uri === photo.uri);
         return {
@@ -735,8 +730,8 @@ export default function CustomerBookingCreateScreen() {
         service: selectedService,
         address: selectedAddress,
         description,
-        date: bookingDate,
-        time: startTime,
+        schedule: schedule ?? undefined,
+        customerNote,
         aiSessionId: prefill?.aiSessionId ?? null,
         photos: bookingPhotos.map(({ uri, name, type, sizeBytes }) => ({
           uri,
@@ -1437,12 +1432,21 @@ export default function CustomerBookingCreateScreen() {
 
             {bookingStage === 2 && (
               <>
-            <BookingSchedulePicker
-              colors={colors}
-              date={bookingDate}
-              time={startTime}
-              onDateChange={(date) => { setBookingDate(date); setReviewError(''); }}
-              onTimeChange={(time) => { setStartTime(time); setReviewError(''); }}
+            <BookingSessionPicker
+              value={schedule}
+              onChange={(next) => { setSchedule(next); setReviewError(''); }}
+            />
+            <Text style={[styles.note, { color: colors.textSecondary }]}>Ghi chú cho thợ (không bắt buộc)</Text>
+            <TextInput
+              testID="customer-note"
+              accessibilityLabel="Ghi chú cho thợ"
+              value={customerNote}
+              onChangeText={(t) => { setCustomerNote(t); setReviewError(''); }}
+              maxLength={1000}
+              multiline
+              placeholder="Ví dụ: gọi trước khi tới, nhà trong hẻm, gửi xe ở đâu…"
+              placeholderTextColor={colors.textSecondary}
+              style={{ minHeight: 64, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, color: colors.text, textAlignVertical: 'top' }}
             />
             {!!reviewError && (
               <Text accessibilityRole="alert" style={[styles.note, { color: colors.error }]}>{reviewError}</Text>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { paymentStatusLabel } from './payment-status-label';
 import { Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
@@ -32,7 +33,7 @@ export default function InvoiceDetailScreen() {
     {state?.kind === 'invoice' && <View style={{ backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: spacing.md }}>
       <DetailRow label="Mã hóa đơn" value={state.invoice.id} />
       <DetailRow label="Tổng tiền do máy chủ trả về" value={money(state.total)} />
-      <DetailRow label="Trạng thái thanh toán" value={state.paymentStatus.toUpperCase() === 'PAID' ? 'Đã thanh toán' : state.paymentStatus} />
+      <DetailRow label="Trạng thái thanh toán" value={paymentStatusLabel(state.paymentStatus)} />
       <ReadOnlyNotice>Thanh toán và hoàn tất đơn là hai trạng thái riêng. Màn hình này chỉ đọc, không gửi yêu cầu thanh toán hay xác nhận hoàn tất.</ReadOnlyNotice>
       {state.invoice.items === undefined && <Text style={{ color: colors.textSecondary, paddingVertical: spacing.md }}>Hóa đơn cũ chưa có danh sách dòng hàng.</Text>}
       {state.invoice.items?.map(item => <DetailRow key={item.id} label={`${item.description} · ${item.quantity}`} value={money(item.lineTotal)} />)}

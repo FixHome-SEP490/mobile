@@ -155,6 +155,23 @@ describe('CustomerBookingDetail REAL read-only presentation', () => {
     } finally { act(() => tree.unmount()); }
   });
 
+  it('shows the session wording and the note for the technician like the web', async () => {
+    Object.assign(mockState, {
+      booking: {
+        id: BOOKING_ID, customerId: 'customer-1', serviceName: 'Sửa điều hòa',
+        status: 'SUBMITTED', urgency: 'NORMAL', createdAt: '2030-10-20T08:00:00.000Z',
+        preferredAt: '2030-10-21T01:00:00.000Z', preferredStartAt: '2030-10-21T01:00:00.000Z',
+        bookingMode: 'scheduled', slot: 'morning', customerNote: 'Gọi trước 15 phút',
+      },
+      error: null,
+    });
+    const tree = await mount();
+    try {
+      expect(textValues(tree).some((t) => t.startsWith('Buổi sáng (8:00 - 12:00), '))).toBe(true);
+      expect(textValues(tree)).toContain('Ghi chú cho thợ: Gọi trước 15 phút');
+    } finally { act(() => tree.unmount()); }
+  });
+
   it('shows Booking progress separately from a ServiceOrder that does not exist yet', async () => {
     Object.assign(mockState, {
       booking: {

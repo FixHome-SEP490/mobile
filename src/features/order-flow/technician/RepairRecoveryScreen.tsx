@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { serviceOrderStatusView } from '../../../screens/technician/technician-status';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
@@ -85,7 +86,7 @@ export default function RepairRecoveryScreen() {
     >
       <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }}>
         <DetailRow label="Mã đơn" value={order?.code} />
-        <DetailRow label="Trạng thái máy chủ" value={order?.status === 'EN_ROUTE' ? 'Đang di chuyển' : order?.status} />
+        <DetailRow label="Trạng thái máy chủ" value={serviceOrderStatusView(order?.status).label} />
         <DetailRow label="Ảnh khuôn mặt" value={hasOwnFace ? 'Đã có ảnh của bạn' : 'Chưa có ảnh của bạn'} />
         <DetailRow label="Ảnh trước sửa chữa của bạn" value={evidenceReady ? String(beforeCount) : 'Đang tải…'} />
       </View>

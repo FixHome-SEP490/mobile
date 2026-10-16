@@ -1,4 +1,5 @@
 import React from 'react';
+import { serviceOrderStatusView } from '../../../screens/technician/technician-status';
 import { Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
@@ -6,6 +7,14 @@ import { DetailRow, ReadOnlyNotice, TaskScreenShell } from './TaskScreenShell';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from './useLoadUnloadedResources';
+
+const ACTOR_LABELS: Record<string, string> = {
+  customer: 'Khách hàng',
+  technician: 'Kỹ thuật viên',
+  admin: 'Quản trị viên',
+  service_manager: 'Quản lý dịch vụ',
+  system: 'Hệ thống',
+};
 
 export default function OrderProgressHistoryScreen() {
   const { key, snapshot, refresh, loadResource } = useOrderSession();
@@ -25,10 +34,10 @@ export default function OrderProgressHistoryScreen() {
     {current && resource?.status === 'error' && <ReadOnlyNotice>Chưa tải được lịch sử. Hãy nhấn “Làm mới dữ liệu” để thử lại.</ReadOnlyNotice>}
     {current && resource?.status === 'ready' && resource.data.length === 0 && <ReadOnlyNotice>Máy chủ chưa có mục lịch sử tiến độ cho đơn này.</ReadOnlyNotice>}
     {current && resource?.status === 'ready' && resource.data.map(entry => <View key={entry.id} style={{ backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md }}>
-      <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>{entry.toStatus}</Text>
+      <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>{serviceOrderStatusView(entry.toStatus).label}</Text>
       <DetailRow label="Thời điểm" value={vnDateTimeString(entry.createdAt)} />
-      {entry.fromStatus && <DetailRow label="Trạng thái trước" value={entry.fromStatus} />}
-      {entry.actorRole && <DetailRow label="Vai trò thực hiện" value={entry.actorRole} />}
+      {entry.fromStatus && <DetailRow label="Trạng thái trước" value={serviceOrderStatusView(entry.fromStatus).label} />}
+      {entry.actorRole && <DetailRow label="Vai trò thực hiện" value={ACTOR_LABELS[String(entry.actorRole).toLowerCase()] ?? 'Hệ thống'} />}
       {entry.reason && <DetailRow label="Ghi chú máy chủ" value={entry.reason} />}
     </View>)}
   </TaskScreenShell>;
