@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-15 14:41 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/sep139-m8-cutover
+> Cập nhật lần cuối: 2026-10-16 11:21 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/sep139-group-b
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -96,7 +96,7 @@ Luật nghiệp vụ gốc nằm ở tài liệu dự án (bản chính thức c
 
 SEP-137/139: editor địa chỉ Booking phân biệt ghim đã xác nhận với địa chỉ đủ điều kiện lưu; tỉnh/quận thiếu được chọn rõ ràng từ GET `/geo/provinces`, không tự gán khu vực. Giữ createAddress một lần và đối chiếu GET/owner trước khi dùng địa chỉ. Booking review giữ snapshot bất biến; success hiển thị “Đã gửi yêu cầu”, chưa phải ServiceOrder. Matching giữ tối đa hai ưu tiên và lời mời tuần tự theo server. Customer Order detail hiển thị một section theo action/status hiện tại; progress sheet chỉ đọc, các controller giữ guard/readback riêng. Thanh hành động dưới scroll điều hướng đến section hiện hành, không thay thế các nút xác nhận trong section. Thiết bị và visual 320–430dp CHƯA KIỂM CHỨNG; không có POST thực trong kiểm thử.
 
-- Đặt lịch thường: Dịch vụ → Chi tiết dịch vụ → Tạo booking (địa chỉ đã lưu, ngày giờ) → `POST /bookings`.
+- Đặt lịch thường: Dịch vụ → Chi tiết dịch vụ → Tạo booking (địa chỉ đã lưu, chọn buổi sáng 8-12 hoặc chiều 13-18 trong 14 ngày tới, hoặc `Tới ngay`, ghi chú cho thợ tùy chọn) → `POST /bookings` gửi `mode`, `date`, `slot`, `customerNote` kèm cửa sổ giờ đã tính (`BookingSessionPicker`, `utils/booking-session.ts`); không còn chọn giờ bắt đầu tự do.
 - Đặt lịch có AI: màn chẩn đoán nhận mô tả và tối đa 3 ảnh, chuyển sang trò chuyện với AI; AI không tự đặt lịch mà điền sẵn dịch vụ, mô tả và `aiSessionId` vào màn tạo booking.
 - Chọn đúng 2 kỹ thuật viên theo thứ tự ở màn tìm thợ.
 - Đơn: duyệt báo giá và chi phí phát sinh, huỷ, xác nhận hoàn tất, hoá đơn, tiền mặt, mở VNPay, đánh giá, xem bằng chứng.
@@ -128,7 +128,7 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 ### Phía kỹ thuật viên theo buổi (08/10/2026, nhánh `feat/technician-sessions`)
 
 - `utils/booking-session.ts`: nhãn buổi (sáng 8-12, chiều 13-18, "Tới ngay") và `canDepartNow`. Màn đơn của thợ hiện lịch hẹn theo buổi, ghi chú của khách, nút Bắt đầu di chuyển chỉ bật từ `departAvailableAt` (1 giờ trước giờ hẹn).
-- `hooks/useTechnicianLocationPing.ts` (gắn ở `TechnicianNavigator`): khi app đang mở và đã có quyền vị trí, gửi GPS mỗi 5 phút (`PATCH /technicians/me/location`), không tự hỏi quyền. Bán kính 1-40 km.
+- `hooks/useTechnicianLocationPing.ts` (gắn ở `TechnicianNavigator`): khi app đang mở và đã có quyền vị trí, gửi GPS mỗi 5 phút (`PATCH /technicians/me/location`) chỉ khi công tắc nhận việc (`isAvailable`) đang bật và bỏ fix có độ chính xác trên 1 km, không tự hỏi quyền. Bán kính 1-40 km.
 
 ### Các bước của thợ trong đơn (08/10/2026, nhánh `feat/technician-order-steps`)
 
@@ -139,6 +139,15 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 
 - Màn Xác minh danh tính (`TechnicianKycScreen`): phần "Chứng chỉ nghề" không bắt buộc, tối đa 5 ảnh, ghi chú "bản đã công chứng"; gửi kèm hồ sơ với `documentType: certificate`.
 - Sau khi nộp và ở trạng thái chờ duyệt (cả màn onboarding): "Vui lòng đến trụ sở trong thời gian sớm nhất để tiến hành xác minh thông tin và bắt đầu công việc." (`OFFICE_VISIT_NOTE`); bỏ câu hứa duyệt trong 24 giờ.
+
+### Nhóm B SEP-139: đối chiếu web (16/10/2026, nhánh `feat/sep139-group-b`)
+
+- Lời mời: công tắc "Tự nhận việc" (`autoAcceptInvitations` qua `PATCH /technicians/me/profile`), "Ưu tiên số N", lịch hẹn theo buổi hoặc "Tới ngay" bằng `sessionLabel`.
+- "Đặt lại thợ" (`RebookSheet`, `GET /bookings/:id/available-slots?previous=1`, `POST /bookings/:id/rebook`) ở Thông tin đơn (COMPLETED/CANCELLED) và booking đã hủy; thông báo "đã mời thợ cũ" hoặc "chọn thợ khác" qua param `rebooked`.
+- Điểm uy tín (`GET /reputation/me`, `ReputationCard`) ở hồ sơ hai vai trò; bảo hành mặc định (`PUT /technicians/me/warranty-default`, tối đa 365 ngày) ở hồ sơ thợ.
+- Thu nhập theo kỳ ngày/tuần/tháng từ `GET /technicians/me/earnings` có phân trang (`EarningsPeriodPanel`); biểu đồ cũ vẫn là ước tính từ danh sách đơn. Lịch có lưới giờ một ngày (6–22h, khối đơn 2 giờ) với vạch giờ hiện tại.
+- Báo giá của khách hiện số ngày bảo hành từng dòng; chi tiết booking hiện ghi chú và tự tải lại mỗi 5 giây khi đang chờ thợ; nhãn trạng thái, giá, thanh toán và vai trò tiếng Việt thay mã thô; `extractApiErrorMessage` dịch câu tiếng Anh đã biết của backend (`utils/api-error-messages.ts`), câu tiếng Anh lạ rơi về câu dự phòng của màn.
+- `useScrollHideTabBar` bật lại thanh tab khi màn rời focus. Thiết bị và E2E CHƯA KIỂM CHỨNG.
 
 ### Đăng nhập Google
 
@@ -221,6 +230,8 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload support/warranty mới bị khóa theo quyết định owner. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-10-16 11:21 (UTC+7) | Hgnv11 | feat/sep139-group-b | Tạo booking chọn buổi sáng/chiều hoặc Tới ngay và ghi chú cho thợ như web, bỏ chọn giờ bắt đầu tự do; thiết bị CHƯA KIỂM CHỨNG.
+- 2026-10-16 11:06 (UTC+7) | Hgnv11 | feat/sep139-group-b | Nhóm B SEP-139 (tự nhận việc, đặt lại thợ, uy tín, bảo hành mặc định, thu nhập theo kỳ, lưới lịch) và nhãn/thông báo tiếng Việt theo web; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-15 14:41 (UTC+7) | Hgnv11 | feat/sep139-m8-cutover | Màn nhiệm vụ không bị gỡ khi đơn hoặc tài nguyên tải lại hay có lệnh chờ (ảnh khuôn mặt, ảnh trước/sau, link VNPay); VNPay mở tự động sau xác nhận và gửi header x-client-platform mobile để backend trả về fixhome://app/order-payment; dấu lệnh VNPay quá 15 phút mà hoá đơn chưa trả thì mở khoá; thư viện ảnh gọi ảnh khuôn mặt đúng tên; thiết bị và E2E CHƯA KIỂM CHỨNG
 - 2026-10-15 10:04 (UTC+7) | Hgnv11 | feat/sep139-m8-cutover | Mọi header dùng một nút Quay lại chung `components/BackButton` (44pt, mũi tên Ionicons, về Home đúng vai trò khi không có màn trước); nút số lượng linh kiện 44pt; thiết bị CHƯA KIỂM CHỨNG.
 

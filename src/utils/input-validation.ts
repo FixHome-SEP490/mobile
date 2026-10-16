@@ -1,3 +1,4 @@
+import { looksUntranslated, translateApiMessage } from './api-error-messages'
 // src/utils/input-validation.ts
 //
 // Bản sao phía client của luật ký tự trong
@@ -112,7 +113,11 @@ export function extractApiErrorMessage(err: unknown, fallback: string): string {
 
   const message = response?.error?.message ?? response?.message;
   if (Array.isArray(message)) return message.join('. ');
-  if (typeof message === 'string' && message) return message;
+  if (typeof message === 'string' && message) {
+    // Known English backend sentences become Vietnamese; other English text is a
+    // developer message, so the screen's own fallback is clearer.
+    return translateApiMessage(message) ?? (looksUntranslated(message) ? fallback : message);
+  }
 
   return fallback;
 }

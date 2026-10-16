@@ -803,7 +803,7 @@ export default function TechnicianOnboardingScreen() {
         colors.warning,
         'Không thể tải hồ sơ',
         error ?? 'Vui lòng thử lại.',
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => void refreshStatus()}>
+        <TouchableOpacity accessibilityRole="button" style={styles.primaryBtn} onPress={() => void refreshStatus()}>
           <Text style={styles.primaryBtnText}>Thử lại</Text>
         </TouchableOpacity>,
       );
@@ -814,7 +814,7 @@ export default function TechnicianOnboardingScreen() {
         colors.success,
         'Hồ sơ đã được duyệt',
         'Bạn đã trở thành kỹ thuật viên của FixHome và có thể bắt đầu nhận việc.',
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button"
           style={styles.primaryBtn}
           onPress={() => navigation.reset({ index: 0, routes: [{ name: 'TechnicianMain' }] })}
         >
@@ -852,7 +852,7 @@ export default function TechnicianOnboardingScreen() {
         colors.warning,
         'Đang chờ xét duyệt',
         'Hồ sơ của bạn đã được tiếp nhận. Vui lòng đến trụ sở trong thời gian sớm nhất để tiến hành xác minh thông tin và bắt đầu công việc.',
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => void refreshStatus()}>
+        <TouchableOpacity accessibilityRole="button" style={styles.primaryBtn} onPress={() => void refreshStatus()}>
           <Text style={styles.primaryBtnText}>Kiểm tra lại trạng thái</Text>
         </TouchableOpacity>,
       );
@@ -863,7 +863,7 @@ export default function TechnicianOnboardingScreen() {
         colors.error,
         'Hồ sơ chưa đạt yêu cầu',
         status.rejectionReason || 'Quản trị viên chưa cung cấp lý do chi tiết. Bạn có thể chỉnh sửa hồ sơ trước khi gửi lại.',
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button"
           style={styles.primaryBtn}
           onPress={() => {
             setEditingRejected(true);

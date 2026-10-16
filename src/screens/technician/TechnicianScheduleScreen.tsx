@@ -28,6 +28,7 @@ import { buildWeek, dayKeyVn } from './technician-schedule';
 import { vnDateString, vnTimeString } from '../../utils/vn-time';
 import TechnicianAvailabilityEditor from './TechnicianAvailabilityEditor';
 import BackButton from '../../components/BackButton';
+import ScheduleDayTimeline from './ScheduleDayTimeline';
 
 const VN_DATE = { day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 const VN_TIME = { hour: '2-digit', minute: '2-digit' } as const;
@@ -209,6 +210,14 @@ export default function TechnicianScheduleScreen() {
               </Text>
             </View>
           ))}
+
+          {selected && (
+            <ScheduleDayTimeline
+              day={selected}
+              now={loadedAt}
+              onOpenOrder={(id) => navigation.navigate('TechnicianOrderDetail', { serviceOrderId: id })}
+            />
+          )}
 
           {selected && selected.orders.length === 0 ? (
             <View style={styles.center}>

@@ -47,8 +47,10 @@ export type RootStackParamList = {
         };
       }
     | undefined;
-  CustomerMatching: { bookingId: string };
-  CustomerBookingDetail: { bookingId: string };
+  /** `rebooked: 'choose'` after "Đặt lại thợ" when the former technician was not free. */
+  CustomerMatching: { bookingId: string; rebooked?: 'choose' };
+  /** `rebooked: 'invited'` after "Đặt lại thợ" when the former technician was invited. */
+  CustomerBookingDetail: { bookingId: string; rebooked?: 'invited' };
   /** `screen` opens a Customer OrderFlow child directly (e.g. the warranty list from the Warranties tab). */
   CustomerOrderDetail: { serviceOrderId: string; screen?: 'CustomerWarranty' };
   CustomerRepairHistory: undefined;

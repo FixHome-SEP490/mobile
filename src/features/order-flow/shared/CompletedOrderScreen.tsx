@@ -1,4 +1,5 @@
 import React from 'react';
+import { paymentStatusLabel } from './payment-status-label';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
@@ -69,12 +70,12 @@ export default function CompletedOrderScreen({ role }: { role: 'customer' | 'tec
           label="Tổng tiền"
           value={typeof order.grandTotal === 'number' ? formatVnd(order.grandTotal) : quoteMoneyText(order.grandTotal)}
         />
-        <DetailRow label="Thanh toán" value={invoice ? String(invoice.paymentStatus).toUpperCase() === 'PAID' ? 'Đã thanh toán' : String(invoice.paymentStatus) : 'Chưa có dữ liệu'} />
+        <DetailRow label="Thanh toán" value={invoice ? paymentStatusLabel(invoice.paymentStatus) : 'Chưa có dữ liệu'} />
       </View>
       {role === 'customer' ? (
         <ReadOnlyNotice>Đơn đã hoàn thành theo xác nhận của máy chủ. Bạn có thể đánh giá khi sẵn sàng; đây là bước tùy chọn.</ReadOnlyNotice>
       ) : (
-        <ReadOnlyNotice>Đơn đã hoàn thành theo xác nhận của máy chủ. Không còn thao tác nào cần gửi cho đơn này.</ReadOnlyNotice>
+        <ReadOnlyNotice>Đơn đã hoàn thành theo xác nhận của máy chủ. Tiền công đã được ghi nhận vào ví của bạn; không còn thao tác nào cần gửi cho đơn này.</ReadOnlyNotice>
       )}
       <View style={{ gap: 8 }}>
         {(

@@ -178,7 +178,8 @@ export function createBookingDetailLoader(
   };
   const denyAccess = () => clearWith(deniedMessage);
 
-  function refresh(force = false): Promise<void> {
+  /** `quiet`: background poll — no spinner, and a failed read keeps the last good booking. */
+  function refresh(force = false, quiet = false): Promise<void> {
     if (!active || !authorized() || !bookingId) return Promise.resolve();
     const target = bookingDetailTarget(bookingId);
     if (!target) {
@@ -189,7 +190,7 @@ export function createBookingDetailLoader(
 
     const generation = ++requestGeneration;
     const valid = () => active && authorized() && generation === requestGeneration;
-    publish({ loading: !loaded, refreshing: loaded, error: null });
+    if (!quiet || !loaded) publish({ loading: !loaded, refreshing: loaded, error: null });
 
     const request = (async () => {
       try {
@@ -216,9 +217,9 @@ export function createBookingDetailLoader(
           clearWith(notFoundMessage);
           return;
         }
-        publish({ error: 'Không thể tải chi tiết yêu cầu đặt lịch. Vui lòng thử lại.' });
+        if (!quiet) publish({ error: 'Không thể tải chi tiết yêu cầu đặt lịch. Vui lòng thử lại.' });
       } finally {
-        if (valid()) publish({ loading: false, refreshing: false });
+        if (valid() && !(quiet && loaded)) publish({ loading: false, refreshing: false });
       }
     })();
 

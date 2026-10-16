@@ -7,7 +7,15 @@ import { DetailRow, ReadOnlyNotice, TaskScreenShell } from './TaskScreenShell';
 import { formatVnd } from '../../../utils/format';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+import RebookSheet from '../../../components/RebookSheet';
+import { serviceOrderStatusView } from '../../../screens/technician/technician-status';
+import { sessionLabel } from '../../../utils/booking-session';
 import { findChatForBooking } from '../../../screens/technician/technician-chat-shortcut';
+
+const PRICING_LABELS: Record<string, string> = {
+  FIXED_PRICE: 'Giá cố định',
+  INSPECTION_REQUIRED: 'Báo giá sau khi kiểm tra',
+};
 
 export default function OrderInformationScreen() {
   const { key, snapshot, refresh } = useOrderSession();
@@ -18,6 +26,8 @@ export default function OrderInformationScreen() {
   const history = snapshot?.access === 'historical' && snapshot.key.role === 'technician' && !!orderValue && isHistoricalOrder(orderValue);
   const order = orderValue && !isHistoricalOrder(orderValue) ? orderValue : null;
   const [openingChat, setOpeningChat] = useState(false);
+  const [rebookOpen, setRebookOpen] = useState(false);
+  const canRebook = snapshot?.key.role === 'customer' && !!order?.bookingId && ['COMPLETED', 'CANCELLED'].includes(String(order.status).toUpperCase());
   const openChat = async (bookingId: string) => {
     if (openingChat) return;
     setOpeningChat(true);
@@ -38,7 +48,7 @@ export default function OrderInformationScreen() {
     {!order && <ReadOnlyNotice>{snapshot?.access === 'revoked' ? 'Quyền truy cập đã thay đổi; dữ liệu đơn đã được xóa.' : 'Đang tải hoặc chưa có quyền xem dữ liệu đơn.'}</ReadOnlyNotice>}
     {historicalOrder && <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }}>
       <DetailRow label="Mã đơn" value={historicalOrder.code} />
-      <DetailRow label="Trạng thái" value={historicalOrder.status} />
+      <DetailRow label="Trạng thái" value={serviceOrderStatusView(historicalOrder.status).label} />
       <DetailRow label="Tạo lúc" value={vnDateTimeString(historicalOrder.createdAt)} />
       <DetailRow label="Hoàn tất lúc" value={historicalOrder.completedAt ? vnDateTimeString(historicalOrder.completedAt) : 'Không có dữ liệu'} />
       <DetailRow label="Hủy lúc" value={historicalOrder.cancelledAt ? vnDateTimeString(historicalOrder.cancelledAt) : 'Không có dữ liệu'} />
@@ -48,18 +58,25 @@ export default function OrderInformationScreen() {
     {order && !history && <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }}>
       <DetailRow label="Mã đơn" value={order.code} />
       <DetailRow label="Dịch vụ" value={order.serviceName} />
-      <DetailRow label="Trạng thái" value={order.status} />
-      <DetailRow label="Lịch hẹn" value={vnDateTimeString(order.scheduledAt)} />
+      <DetailRow label="Trạng thái" value={serviceOrderStatusView(order.status).label} />
+      <DetailRow label="Lịch hẹn" value={order.bookingMode || order.slot ? sessionLabel({ bookingMode: order.bookingMode, slot: order.slot, start: order.scheduledAt }) : vnDateTimeString(order.scheduledAt)} />
       <DetailRow label="Địa chỉ" value={order.addressSummary} />
-      <DetailRow label="Hình thức giá" value={order.pricingMode} />
-      <DetailRow label="Tổng tiền máy chủ trả về" value={formatVnd(typeof order.grandTotal === 'number' ? order.grandTotal : Number.isFinite(Number(order.grandTotal)) ? Number(order.grandTotal) : undefined)} />
+      {snapshot?.key.role === 'customer'
+        ? <DetailRow label="Kỹ thuật viên" value={order.technician ? [order.technician.fullName, order.technician.phoneNumber].filter(Boolean).join(' · ') : 'Chưa có kỹ thuật viên'} />
+        : <DetailRow label="Khách hàng" value={[order.customerName, order.customerPhone].filter(Boolean).join(' · ') || 'Chưa có thông tin'} />}
+      {order.customerNote ? <DetailRow label="Ghi chú của khách" value={order.customerNote} /> : null}
+      <DetailRow label="Hình thức giá" value={PRICING_LABELS[String(order.pricingMode ?? '').toUpperCase()] ?? 'Chưa xác định'} />
+      {order.laborWarrantyDays ? <DetailRow label="Bảo hành tiền công" value={`${order.laborWarrantyDays} ngày`} /> : null}
+      <DetailRow label="Tổng tiền" value={formatVnd(typeof order.grandTotal === 'number' ? order.grandTotal : Number.isFinite(Number(order.grandTotal)) ? Number(order.grandTotal) : undefined)} />
       {order.scopeDescription ? <DetailRow label="Phạm vi ban đầu" value={order.scopeDescription} /> : null}
     </View>}
     {order && !history ? <View style={{ gap: 8 }}>
       {order.bookingId ? <Pressable testID="order-chat-entry" accessibilityRole="button" disabled={openingChat} onPress={() => void openChat(order.bookingId)} style={entry}><Text style={entryText}>{openingChat ? 'Đang mở…' : 'Nhắn tin ›'}</Text></Pressable> : null}
+      {canRebook ? <Pressable testID="order-rebook-entry" accessibilityRole="button" onPress={() => setRebookOpen(true)} style={entry}><Text style={entryText}>Đặt lại thợ ›</Text></Pressable> : null}
       <Pressable testID="order-support-entry" accessibilityRole="button" onPress={() => navigation.navigate('SupportCases')} style={entry}><Text style={entryText}>Yêu cầu hỗ trợ ›</Text></Pressable>
       <Pressable testID="order-cancel-entry" accessibilityRole="button" onPress={() => navigation.navigate('OrderException')} style={entry}><Text style={entryText}>Hủy đơn hoặc kiểm tra điều kiện ›</Text></Pressable>
     </View> : null}
+    {canRebook ? <RebookSheet bookingId={order!.bookingId} visible={rebookOpen} onClose={() => setRebookOpen(false)} /> : null}
   </TaskScreenShell>;
 }
 

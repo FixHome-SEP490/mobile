@@ -1,4 +1,5 @@
 import BookingActionBar from '../../components/BookingActionBar';
+import { sessionLabel } from '../../utils/booking-session';
 import React, { useCallback, useRef, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -1047,10 +1048,19 @@ export default function CustomerMatchingScreen() {
                       </Text>
                       <Text style={[styles.heading, { color: colors.text }]}>{booking.serviceName || 'Yêu cầu dịch vụ'}</Text>
                       {!!booking.preferredStartAt && Number.isFinite(Date.parse(booking.preferredStartAt)) && (
-                        <Text style={[styles.note, { color: colors.textSecondary }]}>Giờ mong muốn: {vnDateTimeString(booking.preferredStartAt)}</Text>
+                        <Text style={[styles.note, { color: colors.textSecondary }]}>
+                          {booking.bookingMode || booking.slot ? 'Buổi hẹn' : 'Giờ mong muốn'}: {booking.bookingMode || booking.slot
+                            ? sessionLabel({ bookingMode: booking.bookingMode, slot: booking.slot, start: booking.preferredStartAt })
+                            : vnDateTimeString(booking.preferredStartAt)}
+                        </Text>
                       )}
                     </View>
                   </View>
+                )}
+                {route.params.rebooked === 'choose' && (
+                  <Text testID="rebook-choose-notice" accessibilityRole="alert" style={[styles.note, { color: colors.tone.warning.text }]}>
+                    Thợ cũ không rảnh buổi bạn chọn. Vui lòng chọn thợ khác cho yêu cầu mới.
+                  </Text>
                 )}
                 <Text style={[styles.note, { color: colors.textSecondary }]}>{describeBooking(booking)}</Text>
                 {verifiedOrderId && (

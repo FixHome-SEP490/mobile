@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   RefreshControl,
@@ -28,6 +28,10 @@ import {
 } from './customer-booking-detail';
 import { vnDateTimeString, vnTimeString } from '../../utils/vn-time';
 import BackButton from '../../components/BackButton';
+import RebookSheet from '../../components/RebookSheet';
+import { sessionLabel } from '../../utils/booking-session';
+
+const MATCH_POLL_MS = 5000;
 
 type BookingDetailRoute = RouteProp<RootStackParamList, 'CustomerBookingDetail'>;
 
@@ -77,6 +81,16 @@ export default function CustomerBookingDetailScreen() {
   }, [bookingId, loader]));
 
   const { booking, loading, refreshing, error } = state;
+
+  // Like the web page: while waiting for a technician, look again every 5 s so the
+  // order appears without a manual pull. Quiet: no spinner, errors keep the last data.
+  const waiting = !!booking && !booking.serviceOrderId && ['MATCHING', 'MATCHED'].includes(String(booking.status).toUpperCase());
+  useEffect(() => {
+    if (!waiting) return undefined;
+    const timer = setInterval(() => { void loader.refresh(false, true); }, MATCH_POLL_MS);
+    return () => clearInterval(timer);
+  }, [waiting, loader]);
+  const [rebookOpen, setRebookOpen] = useState(false);
   const nextAction = booking ? bookingNextAction(booking) : null;
   const [extending, setExtending] = useState(false);
   const [extensionNotice, setExtensionNotice] = useState('');
@@ -177,9 +191,17 @@ export default function CustomerBookingDetailScreen() {
             <View style={styles.infoRow}>
               <Ionicons name="calendar-outline" size={17} color={colors.textSecondary} />
               <Text style={styles.infoText}>
-                {formatWindow(booking.preferredStartAt || booking.preferredAt, booking.preferredEndAt)}
+                {booking.bookingMode || booking.slot
+                  ? sessionLabel({ bookingMode: booking.bookingMode, slot: booking.slot, start: booking.preferredStartAt || booking.preferredAt })
+                  : formatWindow(booking.preferredStartAt || booking.preferredAt, booking.preferredEndAt)}
               </Text>
             </View>
+            {!!booking.customerNote && (
+              <View style={styles.infoRow}>
+                <Ionicons name="chatbubble-ellipses-outline" size={17} color={colors.textSecondary} />
+                <Text style={styles.infoText}>Ghi chú cho thợ: {booking.customerNote}</Text>
+              </View>
+            )}
             <View style={styles.infoRow}>
               <Ionicons name="speedometer-outline" size={17} color={colors.textSecondary} />
               <Text style={styles.infoText}>Mức độ: {urgencyLabel(booking.urgency)}</Text>
@@ -229,6 +251,21 @@ export default function CustomerBookingDetailScreen() {
             </View>
           </View>
 
+          {booking.status === 'CANCELLED' && (
+            <TouchableOpacity
+              testID="booking-rebook"
+              onPress={() => setRebookOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Đặt lại thợ"
+              style={styles.primaryButton}
+            >
+              <Text style={styles.primaryButtonText}>Đặt lại thợ</Text>
+            </TouchableOpacity>
+          )}
+          {booking.status === 'CANCELLED' && (
+            <RebookSheet bookingId={booking.id} visible={rebookOpen} onClose={() => setRebookOpen(false)} />
+          )}
+
           {nextAction && (
             <View style={styles.actionCard} accessibilityRole="summary">
               <Text style={styles.actionEyebrow}>Bước tiếp theo</Text>
@@ -274,6 +311,11 @@ export default function CustomerBookingDetailScreen() {
             </TouchableOpacity>
           )}
           {!!extensionNotice && <Text style={styles.actionDetail}>{extensionNotice}</Text>}
+          {route.params.rebooked === 'invited' && (
+            <Text testID="booking-rebooked-notice" accessibilityRole="alert" style={styles.actionDetail}>
+              Đã gửi lời mời cho thợ cũ cho buổi bạn chọn, đang chờ thợ xác nhận.
+            </Text>
+          )}
 
           <View style={styles.noteCard}>
             <Ionicons name="information-circle-outline" size={20} color={colors.primaryStrong} />

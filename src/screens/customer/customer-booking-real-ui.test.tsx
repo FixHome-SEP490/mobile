@@ -217,6 +217,13 @@ async function goToSchedule(renderer: TestRenderer) {
     (next?.props.onPress as () => void)();
     await flushPromises();
   });
+  await pickAfternoon(renderer);
+}
+
+// Nothing is pre-selected; the frozen 08:00 leaves this afternoon open.
+async function pickAfternoon(renderer: TestRenderer) {
+  const slot = renderer.root.findAll((node) => node.props.testID === 'session-slot-afternoon' && typeof node.props.onPress === 'function')[0];
+  if (slot) await act(async () => { (slot.props.onPress as () => void)(); await flushPromises(); });
 }
 
 beforeEach(() => {
@@ -298,6 +305,7 @@ it('never submits a real booking on render and presents the 3-stage flow with cl
     await flushPromises();
   });
   expect(textContent(renderer.root)).toContain('Chọn ngày và giờ');
+  await pickAfternoon(renderer);
   expect(textContent(renderer.root)).not.toContain('ĐỊA CHỈ SỬA CHỮA');
   expect(mockCreateBooking).not.toHaveBeenCalled();
   for (let number = 1; number <= 5; number++) {
