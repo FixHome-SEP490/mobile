@@ -513,12 +513,12 @@ describe('CustomerProfileScreen C16 account presentation', () => {
   });
   it('retains the edit and exposes a definitive update error', async () => {
     mockGetAddresses.mockResolvedValue([saved]); mockReverse.mockResolvedValue({ formattedAddress: 'New street' });
-    mockUpdateAddress.mockRejectedValueOnce({ response: { status: 400, data: { message: 'Invalid address' } } });
+    mockUpdateAddress.mockRejectedValueOnce({ response: { status: 400, data: { message: 'Địa chỉ không hợp lệ.' } } });
     const tree = await mountScreen(); await movePin(tree); await pickCanonical(tree);
     await act(async () => { findButton(tree, 'Cập nhật địa chỉ')?.props.onPress(); await flushPromises(); });
     expect(findTextInput(tree, 'Địa chỉ chi tiết')?.props.value).toBe('New street');
     expect(findButton(tree, 'Cập nhật địa chỉ')?.props.disabled).toBe(false);
-    expect(tree.root.findAllByType(Text).some(node => node.props.children === 'Invalid address')).toBe(true);
+    expect(tree.root.findAllByType(Text).some(node => node.props.children === 'Địa chỉ không hợp lệ.')).toBe(true);
   });
   it('rejects a late reverse response after the owner selected administrative fields', async () => {
     let resolve!: (value: unknown) => void;
