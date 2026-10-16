@@ -8,7 +8,14 @@ import { formatVnd } from '../../../utils/format';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import RebookSheet from '../../../components/RebookSheet';
+import { serviceOrderStatusView } from '../../../screens/technician/technician-status';
+import { sessionLabel } from '../../../utils/booking-session';
 import { findChatForBooking } from '../../../screens/technician/technician-chat-shortcut';
+
+const PRICING_LABELS: Record<string, string> = {
+  FIXED_PRICE: 'Giá cố định',
+  INSPECTION_REQUIRED: 'Báo giá sau khi kiểm tra',
+};
 
 export default function OrderInformationScreen() {
   const { key, snapshot, refresh } = useOrderSession();
@@ -51,11 +58,16 @@ export default function OrderInformationScreen() {
     {order && !history && <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }}>
       <DetailRow label="Mã đơn" value={order.code} />
       <DetailRow label="Dịch vụ" value={order.serviceName} />
-      <DetailRow label="Trạng thái" value={order.status} />
-      <DetailRow label="Lịch hẹn" value={vnDateTimeString(order.scheduledAt)} />
+      <DetailRow label="Trạng thái" value={serviceOrderStatusView(order.status).label} />
+      <DetailRow label="Lịch hẹn" value={order.bookingMode || order.slot ? sessionLabel({ bookingMode: order.bookingMode, slot: order.slot, start: order.scheduledAt }) : vnDateTimeString(order.scheduledAt)} />
       <DetailRow label="Địa chỉ" value={order.addressSummary} />
-      <DetailRow label="Hình thức giá" value={order.pricingMode} />
-      <DetailRow label="Tổng tiền máy chủ trả về" value={formatVnd(typeof order.grandTotal === 'number' ? order.grandTotal : Number.isFinite(Number(order.grandTotal)) ? Number(order.grandTotal) : undefined)} />
+      {snapshot?.key.role === 'customer'
+        ? <DetailRow label="Kỹ thuật viên" value={order.technician ? [order.technician.fullName, order.technician.phoneNumber].filter(Boolean).join(' · ') : 'Chưa có kỹ thuật viên'} />
+        : <DetailRow label="Khách hàng" value={[order.customerName, order.customerPhone].filter(Boolean).join(' · ') || 'Chưa có thông tin'} />}
+      {order.customerNote ? <DetailRow label="Ghi chú của khách" value={order.customerNote} /> : null}
+      <DetailRow label="Hình thức giá" value={PRICING_LABELS[String(order.pricingMode ?? '').toUpperCase()] ?? 'Chưa xác định'} />
+      {order.laborWarrantyDays ? <DetailRow label="Bảo hành tiền công" value={`${order.laborWarrantyDays} ngày`} /> : null}
+      <DetailRow label="Tổng tiền" value={formatVnd(typeof order.grandTotal === 'number' ? order.grandTotal : Number.isFinite(Number(order.grandTotal)) ? Number(order.grandTotal) : undefined)} />
       {order.scopeDescription ? <DetailRow label="Phạm vi ban đầu" value={order.scopeDescription} /> : null}
     </View>}
     {order && !history ? <View style={{ gap: 8 }}>

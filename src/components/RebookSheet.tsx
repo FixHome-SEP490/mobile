@@ -46,7 +46,10 @@ export default function RebookSheet({ bookingId, visible, onClose }: { bookingId
         date: selected.date, slot: selected.slot, ...(note.trim() ? { customerNote: note.trim() } : {}),
       });
       onClose();
-      navigation.navigate(r.previousTechnicianInvited ? 'CustomerBookingDetail' : 'CustomerMatching', { bookingId: r.booking.id });
+      navigation.navigate(
+        r.previousTechnicianInvited ? 'CustomerBookingDetail' : 'CustomerMatching',
+        { bookingId: r.booking.id, rebooked: r.previousTechnicianInvited ? 'invited' : 'choose' },
+      );
     } catch (e) {
       setError(extractApiErrorMessage(e, 'Chưa đặt lại được, thử lại sau.'));
     } finally {

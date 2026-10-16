@@ -40,7 +40,7 @@ describe('RebookSheet', () => {
     await act(async () => { r.root.findByProps({ testID: 'rebook-confirm' }).props.onPress(); });
     await flush();
     expect(api.rebook).toHaveBeenCalledWith('b1', { date: '2030-10-21', slot: 'morning' });
-    expect(mockNavigate).toHaveBeenCalledWith('CustomerBookingDetail', { bookingId: 'nb' });
+    expect(mockNavigate).toHaveBeenCalledWith('CustomerBookingDetail', { bookingId: 'nb', rebooked: 'invited' });
     act(() => r.unmount());
   });
 
@@ -50,7 +50,7 @@ describe('RebookSheet', () => {
     act(() => r.root.findByProps({ testID: 'rebook-session-2030-10-21-morning' }).props.onPress());
     await act(async () => { r.root.findByProps({ testID: 'rebook-confirm' }).props.onPress(); });
     await flush();
-    expect(mockNavigate).toHaveBeenCalledWith('CustomerMatching', { bookingId: 'nb' });
+    expect(mockNavigate).toHaveBeenCalledWith('CustomerMatching', { bookingId: 'nb', rebooked: 'choose' });
     act(() => r.unmount());
   });
 });

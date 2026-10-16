@@ -34,6 +34,10 @@ export interface BookingItem {
   status: 'PENDING' | 'MATCHING' | 'CONFIRMED' | 'CANCELLED' | 'SUBMITTED' | 'CLOSED' | 'MATCHED';
   preferredStartAt?: string;
   preferredEndAt?: string;
+  /** scheduled = one session (sáng/chiều), urgent = tới ngay. */
+  bookingMode?: 'scheduled' | 'urgent';
+  slot?: BookingSlot | null;
+  customerNote?: string | null;
   createdAt: string;
   mediaUrls?: string[];
   diagnosis?: {
@@ -113,6 +117,8 @@ export interface TechnicianBookingPreview {
   urgency: string;
   preferredStartAt: string | null;
   preferredEndAt: string | null;
+  bookingMode?: 'scheduled' | 'urgent';
+  slot?: BookingSlot | null;
 }
 
 export interface InvitationItem {

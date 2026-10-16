@@ -36,6 +36,7 @@ import { ordersApi } from '../../api/orders.api';
 import { useAppTheme } from '../../constants/theme';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useTechnicianAvailability } from '../../hooks/useTechnicianAvailability';
+import { sessionLabel } from '../../utils/booking-session';
 import { isSameVnDay, vnDateTimeString, vnTimeString } from '../../utils/vn-time';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import StatusBadge from '../../components/StatusBadge';
@@ -176,7 +177,11 @@ export default function TechnicianInvitationsScreen() {
       ? { label: countdown.label, tone: countdown.urgent ? 'danger' : 'warning', icon: 'Clock' }
       : null;
     const location = [b?.district, b?.province].filter(Boolean).join(', ');
-    const timeWindow = formatWindow(b?.preferredStartAt, b?.preferredEndAt);
+    // Same wording as the web: "Buổi sáng (8:00 - 12:00), 21/10/2026" / "Tới ngay"; older bookings keep the plain window.
+    const timeWindow = b && (b.bookingMode || b.slot)
+      ? sessionLabel({ bookingMode: b.bookingMode, slot: b.slot, start: b.preferredStartAt })
+      : formatWindow(b?.preferredStartAt, b?.preferredEndAt);
+    const priority = `Ưu tiên số ${inv.priorityOrder}`;
     const reviewing = reviewingInvitationId === inv.id;
 
     return (
@@ -212,6 +217,7 @@ export default function TechnicianInvitationsScreen() {
 
         <View style={[styles.cardContent, reviewing ? styles.detailContent : null]}>
           <StatusBadge view={statusView} />
+          {actionable ? <Text style={styles.priorityText}>{priority}</Text> : null}
           <Text style={[styles.serviceName, reviewing ? styles.detailServiceName : null]} accessibilityRole="header">
             {serviceName}
           </Text>
@@ -545,6 +551,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
     padding: 12,
     borderRadius: 14,
   },
+  priorityText: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: colors.primaryStrong },
   autoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 },
   autoLabel: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.text },
   bannerText: { flex: 1, fontSize: 14, lineHeight: 20, fontWeight: '500' },

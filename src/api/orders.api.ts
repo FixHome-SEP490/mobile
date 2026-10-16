@@ -77,6 +77,8 @@ export interface ServiceOrderItem {
   bookingMode?: 'scheduled' | 'urgent';
   slot?: 'morning' | 'afternoon' | null;
   customerNote?: string | null;
+  /** Labor warranty (days) fixed when the technician was assigned. */
+  laborWarrantyDays?: number | null;
   /** The technician may set out from this instant (one hour before the appointment). */
   departAvailableAt?: string | null;
   technician?: {
