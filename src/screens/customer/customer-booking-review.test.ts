@@ -133,3 +133,35 @@ describe('booking from the assistant', () => {
     expect(snapshot.hasAiSummary).toBe(false);
   });
 });
+
+describe('session schedule', () => {
+  const now = new Date('2026-10-15T03:00:00Z'); // 10:00 Vietnam
+  const base = () => ({
+    ownerUserId: 'owner-1',
+    service: { id: '11111111-1111-4111-8111-111111111111', name: 'Sửa máy lạnh', isActive: true, pricingMode: 'fixed_price', basePrice: 1, fixedPrice: 1 } as never,
+    address: { id: '22222222-2222-4222-8222-222222222222', userId: 'owner-1', label: 'Nhà', line1: '1 Đường A', district: 'Q1', province: 'HCM', lat: 10.7, lng: 106.7 } as never,
+    description: 'Máy lạnh không mát',
+    now,
+  });
+
+  it('carries mode/date/slot, the resolved window and a trimmed note', () => {
+    const snap = buildBookingReviewSnapshot({ ...base(), schedule: { mode: 'scheduled', date: '2026-10-16', slot: 'morning' }, customerNote: '  Gọi trước  ' });
+    expect(snap.request).toMatchObject({
+      mode: 'scheduled', date: '2026-10-16', slot: 'morning', customerNote: 'Gọi trước',
+      preferredStartAt: '2026-10-16T01:00:00.000Z', preferredEndAt: '2026-10-16T05:00:00.000Z',
+    });
+    expect(snap.scheduleLabel).toBe('Thứ 6, 16/10 · Sáng 8:00 - 12:00');
+  });
+
+  it('builds an urgent request without date or slot', () => {
+    const snap = buildBookingReviewSnapshot({ ...base(), schedule: { mode: 'urgent' } });
+    expect(snap.request.mode).toBe('urgent');
+    expect(snap.request.date).toBeUndefined();
+    expect(snap.request.customerNote).toBeUndefined();
+    expect(snap.scheduleLabel).toContain('Tới ngay');
+  });
+
+  it('asks for a session when none was chosen', () => {
+    expect(() => buildBookingReviewSnapshot(base())).toThrow('chọn ngày và buổi');
+  });
+});

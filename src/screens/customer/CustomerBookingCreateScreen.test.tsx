@@ -334,6 +334,9 @@ async function advanceToSchedule(renderer: TestRenderer) {
       await flushPromises();
     });
   }
+  // Nothing is pre-selected: pick this afternoon (the morning has started at the frozen 08:00).
+  const slot = renderer.root.findAll((node) => node.props.testID === 'session-slot-afternoon' && typeof node.props.onPress === 'function')[0];
+  if (slot) await act(async () => { (slot.props.onPress as () => void)(); await flushPromises(); });
   expect(findActions(renderer, 'Xem lại yêu cầu')).toHaveLength(1);
 }
 
@@ -461,7 +464,7 @@ it('keeps review local, then creates exactly the immutable reviewed request on c
   expect(textContent(renderer.root)).toContain('Sửa máy lạnh');
   expect(textContent(renderer.root)).toContain('Nhà riêng');
   expect(textContent(renderer.root)).toContain('Máy lạnh chảy nước');
-  expect(textContent(renderer.root)).toContain('09:00–11:00');
+  expect(textContent(renderer.root)).toContain('Chiều 13:00 - 18:00');
   expect(textContent(renderer.root)).toContain('Số lượng: 1');
 
   // The wizard hides Intake while reviewing: there is no background editable
@@ -482,8 +485,11 @@ it('keeps review local, then creates exactly the immutable reviewed request on c
     serviceId: SERVICE_ID,
     addressId: ADDRESS_ID,
     description: 'Máy lạnh chảy nước',
-    preferredStartAt: vnWallClockToDate(2026, 9, 27, 9, 0).toISOString(),
-    preferredEndAt: vnWallClockToDate(2026, 9, 27, 11, 0).toISOString(),
+    mode: 'scheduled',
+    date: '2026-09-27',
+    slot: 'afternoon',
+    preferredStartAt: vnWallClockToDate(2026, 9, 27, 13, 0).toISOString(),
+    preferredEndAt: vnWallClockToDate(2026, 9, 27, 18, 0).toISOString(),
     quantity: 1,
     urgency: 'NORMAL',
   });
@@ -870,34 +876,46 @@ it('does not create a Booking after an uncertain photo upload and allows recover
   await act(async () => renderer.unmount());
 });
 
-it('shows invalid past schedule inline and allows selecting a future custom-minute window before review', async () => {
+it('shows a started session inline and allows choosing a later session before review', async () => {
   const tree = await renderScreen();
   await act(async () => {
     (findDescriptionInput(tree)!.props.onChangeText as (value: string) => void)('Máy lạnh chảy nước');
   });
   await advanceToSchedule(tree);
-  jest.setSystemTime(vnWallClockToDate(2026, 9, 27, 12, 0));
+  jest.setSystemTime(vnWallClockToDate(2026, 9, 27, 14, 0));
   await act(async () => { (findActions(tree, 'Xem lại yêu cầu')[0].props.onPress as () => void)(); });
-  expect(textContent(tree.root)).toContain('Vui lòng chọn thời gian hẹn trong tương lai.');
+  expect(textContent(tree.root)).toContain('Buổi bạn chọn đã bắt đầu. Vui lòng chọn buổi khác.');
   expect(mockCreateBooking).not.toHaveBeenCalled();
-  const dateButton = tree.root.findAll((node) => typeof node.props.onPress === 'function'
-    && String(node.props.accessibilityLabel).startsWith('Ngày hẹn,'))[0];
-  await act(async () => { (dateButton.props.onPress as () => void)(); });
-  const nextDay = tree.root.findAll((node) => typeof node.props.onPress === 'function'
-    && String(node.props.accessibilityLabel).startsWith('Chọn ngày '))[1];
-  await act(async () => { (nextDay.props.onPress as () => void)(); });
-  const timeButton = tree.root.findAll((node) => typeof node.props.onPress === 'function'
-    && String(node.props.accessibilityLabel).startsWith('Khung giờ dự kiến,'))[0];
-  await act(async () => { (timeButton.props.onPress as () => void)(); });
-  await act(async () => { (tree.root.findAll((node) => node.props.accessibilityLabel === 'Chọn giờ cụ thể' && typeof node.props.onPress === 'function')[0].props.onPress as () => void)(); });
-  const customInput = tree.root.findAll((node) => node.props.accessibilityLabel === 'Nhập giờ bắt đầu cụ thể')[0];
-  await act(async () => { (customInput.props.onChangeText as (value: string) => void)('0937'); });
-  await act(async () => { (tree.root.findAll((node) => node.props.accessibilityLabel === 'Áp dụng giờ cụ thể' && typeof node.props.onPress === 'function')[0].props.onPress as () => void)(); });
+  const press = (id: string) => tree.root.findAll((node) => node.props.testID === id && typeof node.props.onPress === 'function')[0].props.onPress as () => void;
+  await act(async () => { press('session-day-2026-09-28')(); });
+  await act(async () => { press('session-slot-morning')(); });
   await act(async () => { (findActions(tree, 'Xem lại yêu cầu')[0].props.onPress as () => void)(); });
-  expect(textContent(tree.root)).toContain('09:37–11:37');
+  expect(textContent(tree.root)).toContain('Sáng 8:00 - 12:00');
   expect(findActions(tree, 'Xác nhận đặt lịch')[0].props.disabled).toBe(false);
   expect(mockUploadBookingPhoto).not.toHaveBeenCalled();
   expect(mockCreateBooking).not.toHaveBeenCalled();
+  await act(async () => tree.unmount());
+});
+
+it('sends "tới ngay" and the note for the technician', async () => {
+  mockCreateBooking.mockResolvedValue({ id: 'new-booking', customerId: 'customer-a' } as BookingItem);
+  const tree = await renderScreen();
+  await act(async () => {
+    (findDescriptionInput(tree)!.props.onChangeText as (value: string) => void)('Máy lạnh chảy nước');
+  });
+  await advanceToSchedule(tree);
+  const find = (id: string) => tree.root.findAll((node) => node.props.testID === id && typeof node.props.onPress === 'function')[0];
+  await act(async () => { (find('mode-urgent').props.onPress as () => void)(); });
+  await act(async () => {
+    (tree.root.findAll((node) => node.props.testID === 'customer-note')[0].props.onChangeText as (v: string) => void)('  Gọi trước 15 phút ');
+  });
+  await act(async () => { (findActions(tree, 'Xem lại yêu cầu')[0].props.onPress as () => void)(); });
+  expect(textContent(tree.root)).toContain('Tới ngay');
+  await act(async () => { (findActions(tree, 'Xác nhận đặt lịch')[0].props.onPress as () => void)(); await flushPromises(); });
+  expect(mockCreateBooking).toHaveBeenCalledWith(expect.objectContaining({ mode: 'urgent', customerNote: 'Gọi trước 15 phút' }));
+  const sent = mockCreateBooking.mock.calls[0][0] as { date?: string; slot?: string };
+  expect(sent.date).toBeUndefined();
+  expect(sent.slot).toBeUndefined();
   await act(async () => tree.unmount());
 });
 

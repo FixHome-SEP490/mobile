@@ -64,6 +64,11 @@ export interface CreateBookingDto {
   description: string;
   preferredStartAt: string;
   preferredEndAt: string;
+  /** Session booking (web parity): the server takes the window from `date` + `slot`, or starts now when urgent. */
+  mode?: 'scheduled' | 'urgent';
+  date?: string;
+  slot?: BookingSlot;
+  customerNote?: string;
   quantity?: number;
   urgency: 'LOW' | 'NORMAL' | 'HIGH' | 'EMERGENCY';
   mediaUrls?: string[];
