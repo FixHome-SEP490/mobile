@@ -289,7 +289,7 @@ export default function QuoteDecisionScreen() {
           <DetailRow label="Mã báo giá" value={sheet.quoteId} />
           <DetailRow label="Phiên bản" value={sheet.quoteVersion ?? 'Chưa rõ'} />
           {sheet.action === 'APPROVE' ? (
-            <DetailRow label="Bảo hành đã chọn" value={sheet.selectedIds.length ? sheet.selectedIds.join(', ') : 'Không chọn'} />
+            <DetailRow label="Bảo hành có phí đã chọn" value={sheet.selectedIds.length ? `${sheet.selectedIds.length} hạng mục` : 'Không chọn'} />
           ) : (
             <Text accessibilityRole="alert" style={{ color: colors.error, fontSize: 14, lineHeight: 21 }}>
               {REJECT_WHOLE_ORDER_WARNING}
