@@ -48,7 +48,7 @@ export default function OrderInformationScreen() {
     {!order && <ReadOnlyNotice>{snapshot?.access === 'revoked' ? 'Quyền truy cập đã thay đổi; dữ liệu đơn đã được xóa.' : 'Đang tải hoặc chưa có quyền xem dữ liệu đơn.'}</ReadOnlyNotice>}
     {historicalOrder && <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }}>
       <DetailRow label="Mã đơn" value={historicalOrder.code} />
-      <DetailRow label="Trạng thái" value={historicalOrder.status} />
+      <DetailRow label="Trạng thái" value={serviceOrderStatusView(historicalOrder.status).label} />
       <DetailRow label="Tạo lúc" value={vnDateTimeString(historicalOrder.createdAt)} />
       <DetailRow label="Hoàn tất lúc" value={historicalOrder.completedAt ? vnDateTimeString(historicalOrder.completedAt) : 'Không có dữ liệu'} />
       <DetailRow label="Hủy lúc" value={historicalOrder.cancelledAt ? vnDateTimeString(historicalOrder.cancelledAt) : 'Không có dữ liệu'} />

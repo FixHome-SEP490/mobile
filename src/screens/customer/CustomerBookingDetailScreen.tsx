@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   RefreshControl,
@@ -30,6 +30,8 @@ import { vnDateTimeString, vnTimeString } from '../../utils/vn-time';
 import BackButton from '../../components/BackButton';
 import RebookSheet from '../../components/RebookSheet';
 import { sessionLabel } from '../../utils/booking-session';
+
+const MATCH_POLL_MS = 5000;
 
 type BookingDetailRoute = RouteProp<RootStackParamList, 'CustomerBookingDetail'>;
 
@@ -79,6 +81,15 @@ export default function CustomerBookingDetailScreen() {
   }, [bookingId, loader]));
 
   const { booking, loading, refreshing, error } = state;
+
+  // Like the web page: while waiting for a technician, look again every 5 s so the
+  // order appears without a manual pull. Quiet: no spinner, errors keep the last data.
+  const waiting = !!booking && !booking.serviceOrderId && ['MATCHING', 'MATCHED'].includes(String(booking.status).toUpperCase());
+  useEffect(() => {
+    if (!waiting) return undefined;
+    const timer = setInterval(() => { void loader.refresh(false, true); }, MATCH_POLL_MS);
+    return () => clearInterval(timer);
+  }, [waiting, loader]);
   const [rebookOpen, setRebookOpen] = useState(false);
   const nextAction = booking ? bookingNextAction(booking) : null;
   const [extending, setExtending] = useState(false);

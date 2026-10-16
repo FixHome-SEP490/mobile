@@ -116,3 +116,28 @@ it('clears detail when the customer session changes', async () => {
   expect(h.state().booking).toBeNull();
   expect(h.state().error).toContain('quyền');
 });
+
+describe('quiet background refresh', () => {
+  const session = { getUserId: () => CUSTOMER_ID, subscribe: () => () => undefined };
+
+  it('updates the booking without a spinner and keeps it when a poll fails', async () => {
+    const states: BookingDetailState[] = [];
+    const get = jest.fn()
+      .mockResolvedValueOnce(booking({ status: 'MATCHING' }))
+      .mockResolvedValueOnce(booking({ status: 'MATCHED', serviceOrderId: ORDER_ID }))
+      .mockRejectedValueOnce(new Error('offline'));
+    const loader = createBookingDetailLoader(get, (s) => states.push(s), session);
+    await loader.focus(BOOKING_ID);
+
+    states.length = 0;
+    await loader.refresh(false, true);
+    expect(states.some((s) => s.refreshing)).toBe(false);
+    expect(states[states.length - 1].booking?.serviceOrderId).toBe(ORDER_ID);
+
+    await loader.refresh(false, true);
+    const last = states[states.length - 1];
+    expect(last.error).toBeNull();
+    expect(last.booking?.serviceOrderId).toBe(ORDER_ID);
+    loader.blur();
+  });
+});
