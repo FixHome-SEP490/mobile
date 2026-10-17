@@ -307,6 +307,7 @@ beforeEach(() => {
 });
 
 describe('Customer Matching presentation and privacy', () => {
+  // This first mount includes cold module loading on CI; keep the budget local to this test.
   it('shows the radar only for an eligible live invite while focused and foregrounded', async () => {
     mockReduceMotionPreference = true;
     const appStateSpy = jest.spyOn(AppState, 'addEventListener').mockImplementation(((_event, listener) => {
@@ -320,29 +321,39 @@ describe('Customer Matching presentation and privacy', () => {
         invitedAt: '2026-09-25T04:00:00.000Z', expiresAt: '2030-10-21T11:00:00.000Z',
       }],
     });
-    const tree = await mountLoadedScreen(matching, []);
+    let tree!: ReactTestRenderer;
     try {
+      mockRunFocusEffect = true;
+      mockGetBooking.mockResolvedValue(matching);
+      mockGetCandidates.mockResolvedValue([]);
+      await act(async () => {
+        tree = create(screenElement());
+        await flushPromises();
+      });
       expect(mockAppStateListener).toBeDefined();
-      await act(async () => mockAppStateListener?.('active'));
+      act(() => mockAppStateListener?.('active'));
       expect(tree.root.findAllByProps({ testID: 'matching-state-radar' }).length).toBeGreaterThan(0);
       mockIsScreenFocused = false;
-      await act(async () => tree.update(screenElement()));
+      act(() => tree.update(screenElement()));
       expect(tree.root.findAllByProps({ testID: 'matching-state-radar' })).toHaveLength(0);
 
       mockIsScreenFocused = true;
-      await act(async () => tree.update(screenElement()));
+      act(() => tree.update(screenElement()));
       expect(tree.root.findAllByProps({ testID: 'matching-state-radar' }).length).toBeGreaterThan(0);
 
       expect(mockAppStateListener).toBeDefined();
-      await act(async () => mockAppStateListener?.('background'));
+      act(() => mockAppStateListener?.('background'));
       expect(tree.root.findAllByProps({ testID: 'matching-state-radar' })).toHaveLength(0);
-      await act(async () => mockAppStateListener?.('active'));
+      act(() => mockAppStateListener?.('active'));
       expect(tree.root.findAllByProps({ testID: 'matching-state-radar' }).length).toBeGreaterThan(0);
     } finally {
-      act(() => tree.unmount());
-      appStateSpy.mockRestore();
+      try {
+        act(() => tree?.unmount());
+      } finally {
+        appStateSpy.mockRestore();
+      }
     }
-  });
+  }, 15_000);
 
   it('shows an initial Matching skeleton instead of a lone spinner', () => {
     let tree!: ReactTestRenderer;

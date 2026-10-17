@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-17 18:20 (UTC+7) · Người cập nhật (git): foxonworld · Nhánh: integration/mobile-c50-c45-20261017
+> Cập nhật lần cuối: 2026-10-17 20:08 (UTC+7) · Người cập nhật (git): foxonworld · Nhánh: integration/mobile-c50-c45-reviewed-20261017
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -231,6 +231,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - Node 22.13 trở lên (`.nvmrc` 22.15.0). `npm ci`, `npm start`, quét mã QR LAN bằng Expo Go. Backend cùng máy với Metro: để trống `EXPO_PUBLIC_API_BASE_URL` như `.env.example`. Backend máy khác, cổng khác hoặc Expo tunnel: cấu hình URL rõ ràng trong env cục bộ không theo dõi; coordinator khởi động lại Metro hiện có khi đổi env. Đăng nhập Google trên Android emulator cần `adb reverse tcp:3000 tcp:3000`.
 - Cài thư viện native bằng `npx expo install`, không eject hay prebuild.
 - Gate trước mỗi commit: `npm run check:expo`, `npm run lint`, `npm run typecheck`, `npm test`. CI chạy đúng các bước này.
+- Test radar lifecycle trong `CustomerMatchingScreen.test.tsx` dùng `act` đồng bộ cho focus/AppState, cleanup cả khi mount lỗi và timeout riêng 15 giây cho cold module loading; timeout Jest chung và các assertion giữ nguyên. GitHub Ubuntu sau sửa CHƯA KIỂM CHỨNG.
 - Quy trình nhánh: tách nhánh từ `dev`, PR vào `dev`, CI xanh mới merge; không merge vào `main`.
 - Tính năng mới hoặc sửa tính năng phải làm và kiểm tra trên cả `mobile` lẫn `web` khi vai trò đó có trên cả hai.
 
@@ -272,6 +273,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-17 20:08 (UTC+7) | foxonworld | integration/mobile-c50-c45-reviewed-20261017 | Thu hẹp async act, bảo đảm cleanup và đặt timeout riêng 15 giây cho test radar Matching; CI Ubuntu sau sửa CHƯA KIỂM CHỨNG.
 - 2026-10-17 18:20 (UTC+7) | foxonworld | integration/mobile-c50-c45-20261017 | Tích hợp lịch tháng và CTA với UI/clearance, lịch nhận việc và ký quỹ từ dev; giữ C50/C45, lịch sử hai nhánh và dọn cleanup test bộ lọc thông báo; runtime CHƯA KIỂM CHỨNG.
 - 2026-10-17 17:48 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | Booking Customer giữ hai buổi sáng/chiều; lịch 14 ngày có lịch tháng, không chọn buổi ngầm và làm mới theo focus/app/time.
 - 2026-10-17 16:50 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | Polish Customer: reset shortcut, đủ mã vệ sinh catalog, nhãn TV đúng phạm vi, cutout plumbing riêng, catalog dễ đọc, CTA trong vùng chạm và sheet uy tín truy cập được; chờ AGY recapture viewport thật.
@@ -311,12 +313,12 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-14 04:23 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Cập nhật source M3–M4, controller/recovery M5 và gate UI/runtime còn chờ; sửa guard phát sinh độc lập, dữ liệu thiếu và nhận linh kiện sau storage; ghi QA sandbox ngừng chạy.
 - 2026-10-13 22:30 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 đóng ba bản sửa logic M3 về booking/lời mời chưa gửi và departure bị từ chối trước ghi; UI M3, thiết bị và cutover còn chưa hoàn tất.
 - 2026-10-13 17:50 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 sửa số tiền dạng chuỗi, tuần tự hóa ghi chú và thêm làm mới chi tiết; runtime và cutover chưa kiểm chứng.
-- 2026-10-13 17:30 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 bổ sung preview native chỉ đọc theo role, chi tiết tải một lần và ghi chú bảo vệ phiên; UI production và runtime còn chưa cutover/kiểm chứng.
 
 ### Lịch sử giữ lại khi tích hợp
 
 40 mục mới nhất ở trên; các mục cũ dưới đây được giữ nguyên từ hai nhánh để không mất lịch sử.
 
+> - 2026-10-13 17:30 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 bổ sung preview native chỉ đọc theo role, chi tiết tải một lần và ghi chú bảo vệ phiên; UI production và runtime còn chưa cutover/kiểm chứng.
 > - 2026-10-13 13:32 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 thêm nền session/resolver/readback và journal, cập nhật contract Backend dev/privacy owner; UI cutover và runtime còn chưa kiểm chứng.
 > - 2026-10-13 02:11 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | SEP-139 Technician mở toàn bộ chi tiết thành scene riêng, Back khôi phục chính xác bước trước; thêm regression test, device QA còn chờ.
 > - 2026-10-13 02:04 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | SEP-139 nối explicit start-repair và readback, chuyển order detail sang stage/action hiện hành với progress sheet; full-details, thiết bị và review cuối còn CHƯA KIỂM CHỨNG.
