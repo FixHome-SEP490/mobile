@@ -218,6 +218,20 @@ describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
     }
   });
 
+  it('puts wallet and warranty one tap from Home for a signed-in customer only', () => {
+    const tree = mountScreen();
+    try {
+      act(() => tree.root.findByProps({ testID: 'home-quick-CustomerWallet' }).props.onPress());
+      expect(mockNavigate).toHaveBeenCalledWith('CustomerWallet');
+      act(() => tree.root.findByProps({ testID: 'home-quick-CustomerWarranties' }).props.onPress());
+      expect(mockNavigate).toHaveBeenCalledWith('CustomerWarranties');
+    } finally { act(() => tree.unmount()); }
+    storeMock.useAuthStore.mockImplementation(() => ({ user: null, isAuthenticated: false }));
+    const guest = mountScreen();
+    try {
+      expect(guest.root.findAllByProps({ testID: 'home-quick-CustomerWallet' })).toHaveLength(0);
+    } finally { act(() => guest.unmount()); }
+  });
   it('opens discovery from the Home search without mounting a focusable input', () => {
     const tree = mountScreen();
     try {

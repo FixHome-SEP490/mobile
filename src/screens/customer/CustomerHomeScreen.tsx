@@ -428,6 +428,29 @@ export default function CustomerHomeScreen() {
           <Ionicons name="chevron-forward" size={20} color={colors.muted} />
         </TouchableOpacity>
 
+        {/* Like the web account menu: wallet and warranty one tap from Home (Profile keeps them too). */}
+        {!isGuest && (
+          <View style={styles.quickRow}>
+            {([
+              ['CustomerWallet', 'wallet-outline', 'Ví của tôi'],
+              ['CustomerWarranties', 'shield-checkmark-outline', 'Bảo hành'],
+            ] as const).map(([route, icon, label]) => (
+              <TouchableOpacity
+                key={route}
+                testID={`home-quick-${route}`}
+                style={styles.quickItem}
+                activeOpacity={0.8}
+                onPress={() => navigation.navigate(route)}
+                accessibilityRole="button"
+                accessibilityLabel={label}
+              >
+                <Ionicons name={icon} size={22} color={colors.primaryStrong} />
+                <Text style={styles.quickLabel}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
         {/* 9. Restrained, source-honest info */}
 
         {isGuest && <TouchableOpacity style={[styles.searchBar, { margin: 16, justifyContent: 'center' }]} accessibilityRole="button" accessibilityLabel="Đăng nhập hoặc tạo tài khoản" onPress={() => navigation.navigate('Auth')}><Text style={{ color: colors.primaryStrong, fontWeight: '600' }}>Đăng nhập / Tạo tài khoản</Text></TouchableOpacity>}
@@ -875,6 +898,9 @@ const getStyles = (
   },
 
   // 8. Other service card
+  quickRow: { flexDirection: 'row', gap: 12, marginHorizontal: 16, marginBottom: 8 },
+  quickItem: { flex: 1, minHeight: 56, paddingHorizontal: 14, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  quickLabel: { fontSize: 15, fontWeight: '600', color: colors.text },
   otherServiceCard: {
     marginHorizontal: 16,
     marginTop: 4,

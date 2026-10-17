@@ -469,7 +469,7 @@ export function MatchingTechnicianDetailSheet({
                 <View style={[styles.detailCard, { borderColor: colors.border, backgroundColor: colors.background }]}>
                   {distance && candidate.distanceKm != null && <DetailRow label="Khoảng cách tham khảo" value={numberFormat.format(candidate.distanceKm) + ' km'} colors={colors} />}
                   {experience && <DetailRow label="Kinh nghiệm" value={experience} colors={colors} />}
-                  {listedPrice && <DetailRow label="Giá công tham khảo" value={listedPrice} colors={colors} />}
+                  <DetailRow label="Giá công tham khảo" value={listedPrice ?? 'Theo báo giá'} colors={colors} />
                   {warranty && <DetailRow label="Bảo hành tham khảo" value={warranty} colors={colors} />}
                 </View>
               </View>
