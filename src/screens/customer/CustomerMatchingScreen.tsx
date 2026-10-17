@@ -1,11 +1,11 @@
 import BookingActionBar from '../../components/BookingActionBar';
 import { sessionLabel } from '../../utils/booking-session';
-import React, { useCallback, useRef, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { bookingsApi, type BookingItem, type TechnicianCandidate } from '../../api/bookings.api';
@@ -46,6 +46,8 @@ import {
 import { vnDateTimeString } from '../../utils/vn-time';
 import CustomerMatchingAcceptedScene from './CustomerMatchingAcceptedScene';
 import BackButton from '../../components/BackButton';
+import CustomerMatchingRadar from './CustomerMatchingRadar';
+import { canShowCustomerMatchingRadar } from './customer-matching-radar-state';
 
 type MatchingRoute = RouteProp<RootStackParamList, 'CustomerMatching'>;
 type CandidateDetailTarget = { bookingId: string; ownerId: string; candidateUserId: string };
@@ -107,6 +109,8 @@ export default function CustomerMatchingScreen() {
   const { colors } = useAppTheme();
   const route = useRoute<MatchingRoute>();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const isFocused = useIsFocused();
+  const [isForeground, setIsForeground] = useState(AppState.currentState === 'active');
   const bookingId = route.params.bookingId;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const role = useAuthStore((state) => state.user?.role);
@@ -135,6 +139,13 @@ export default function CustomerMatchingScreen() {
   const sessionKeyRef = useRef('');
   const loadedContextKeyRef = useRef('');
   const loadGeneration = useRef(0);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      setIsForeground(state === 'active');
+    });
+    return () => subscription?.remove();
+  }, []);
 
   const clearCandidateView = useCallback(() => {
     setCandidates([]);
@@ -957,6 +968,18 @@ export default function CustomerMatchingScreen() {
     && (canChooseTechnicians(booking) || linkedTentative) && !waiting;
   const pickerActionsEnabled = candidateFlowAvailable && !loading && !refreshing && !error;
   const pickerVisible = candidateFlowAvailable;
+  const radarActive = canShowCustomerMatchingRadar(booking, {
+    authenticatedCustomer: isAuthenticated && role === UserRole.CUSTOMER,
+    ownsBooking: ownsVisibleBooking,
+    focused: isFocused,
+    foreground: isForeground,
+    loading,
+    refreshing,
+    hasError: Boolean(error),
+    uncertainSend,
+    attemptLocked,
+    rejectedDefinitive,
+  });
   const linkedMode = !!booking?.serviceOrderId;
   const candidateState = candidateAvailabilityState(candidates.length);
   const verifiedOrderId = verifiedLinkedOrderId(booking, linkedOrder, userId);
@@ -1040,7 +1063,9 @@ export default function CustomerMatchingScreen() {
                   </View>
                 ) : (
                   <View style={styles.matchingVisual}>
-                    <Image source={CUSTOMER_UI_ARTWORK.technicianMatch} style={{ width: 64, height: 64 }} resizeMode="contain" accessible={false} testID="matching-status-art" />
+                    {radarActive
+                      ? <CustomerMatchingRadar active />
+                      : <Image source={CUSTOMER_UI_ARTWORK.technicianMatch} style={{ width: 64, height: 64 }} resizeMode="contain" accessible={false} testID="matching-status-art" />}
                     <View style={styles.visualCopy}>
                       <Text style={[styles.statusPill, { backgroundColor: colors.primarySoft, color: colors.primaryStrong }]}>
                         {booking.status === 'MATCHING' && booking.invitations?.some((invite) => invite.status === 'PENDING')

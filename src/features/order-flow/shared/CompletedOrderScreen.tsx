@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
+import * as Clipboard from 'expo-clipboard';
+import { Ionicons } from '@expo/vector-icons';
 import { paymentStatusLabel } from './payment-status-label';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -18,6 +20,7 @@ import { useLoadUnloadedResources } from './useLoadUnloadedResources';
 export default function CompletedOrderScreen({ role }: { role: 'customer' | 'technician' }) {
   const { key, snapshot, refresh, loadResource } = useOrderSession();
   const navigation = useNavigation<any>();
+  const [copyMessage, setCopyMessage] = useState<string | null>(null);
   useLoadUnloadedResources(snapshot, ['invoice'], loadResource);
 
   const orderValue = snapshot?.order.status === 'ready' ? snapshot.order.data : null;
@@ -29,6 +32,18 @@ export default function CompletedOrderScreen({ role }: { role: 'customer' | 'tec
   const refreshing = snapshot?.order.status === 'loading';
   const canRefresh = snapshot?.access === 'current' && !!key && !refreshing;
   const invoice = snapshot?.resources.invoice.status === 'ready' ? snapshot.resources.invoice.data : null;
+  const orderCode = order && typeof order.code === 'string' && order.code.trim().length > 0 ? order.code : null;
+  const canCopyCode = role === 'customer' && !!orderCode;
+
+  const copyOrderCode = async () => {
+    if (!canCopyCode || !orderCode) return;
+    try {
+      await Clipboard.setStringAsync(orderCode);
+      setCopyMessage('Đã sao chép mã đơn.');
+    } catch {
+      setCopyMessage('Chưa sao chép được mã đơn. Vui lòng thử lại.');
+    }
+  };
 
   if (!current || !order) {
     return (
@@ -60,7 +75,39 @@ export default function CompletedOrderScreen({ role }: { role: 'customer' | 'tec
       }}
     >
       <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }}>
-        <DetailRow label="Mã đơn" value={order.code} />
+        <View testID="completed-order-code-row" style={{ paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: colors.border, gap: 5 }}>
+          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Mã đơn</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+            <Text testID="completed-order-code" selectable style={{ flex: 1, color: colors.text, fontSize: 15, lineHeight: 22 }}>
+              {orderCode ?? 'Chưa có mã đơn'}
+            </Text>
+            {canCopyCode ? (
+              <TouchableOpacity
+                testID="completed-copy-order-code"
+                accessibilityRole="button"
+                accessibilityLabel="Sao chép mã đơn"
+                accessibilityHint="Sao chép mã đơn đầy đủ vào bộ nhớ tạm"
+                accessibilityState={{ busy: false, disabled: false }}
+                onPress={() => void copyOrderCode()}
+                activeOpacity={0.75}
+                style={{ minHeight: 44, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: 8, backgroundColor: colors.primarySoft }}
+              >
+                <Ionicons name="copy-outline" size={16} color={colors.primaryStrong} />
+                <Text style={{ color: colors.primaryStrong, fontSize: 13, fontWeight: '600' }}>Sao chép</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+          {copyMessage ? (
+            <Text
+              testID="completed-copy-feedback"
+              accessibilityRole="alert"
+              accessibilityLiveRegion="polite"
+              style={{ color: copyMessage.startsWith('Đã') ? colors.success : colors.error, fontSize: 13, lineHeight: 18 }}
+            >
+              {copyMessage}
+            </Text>
+          ) : null}
+        </View>
         <DetailRow label="Dịch vụ" value={order.serviceName} />
         {order.completionRequestedAt ? (
           <DetailRow label="Thời điểm bàn giao" value={vnDateTimeString(order.completionRequestedAt)} />

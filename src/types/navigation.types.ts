@@ -4,9 +4,10 @@ export type RootStackParamList = {
   CustomerRoleChoice: undefined;
   CustomerOnboarding: undefined;
   CustomerGuestHome: undefined;
+  PublicOrderTracking: undefined;
   CustomerMain: undefined;
   TechnicianMain: undefined;
-  CustomerServices: { query?: string; categoryCode?: string } | undefined;
+  CustomerServices: { query?: string; categoryCode?: string; serviceCode?: string; serviceAlias?: string } | undefined;
   CustomerServiceDetail: { serviceId: string };
   /**
    * The booking flow. `prefill` is how the assistant hands a customer over:
@@ -58,6 +59,10 @@ export type RootStackParamList = {
   CustomerSecurity: undefined;
   /** Customer-only FixHome wallet (overview + top-up). No Technician equivalent at this route. */
   CustomerWallet: undefined;
+  /** Customer-only identity verification; never exposed to guests or Technicians. */
+  CustomerKyc: undefined;
+  /** Customer-only bank account, withdrawal confirmation, and paged history. */
+  CustomerWithdraw: undefined;
   TechnicianOrderDetail: { serviceOrderId: string };
   /** Internal M2 reader preview, registered only in __DEV__; role comes from authenticated state. */
   OrderFlowDevPreview: { serviceOrderId: string };

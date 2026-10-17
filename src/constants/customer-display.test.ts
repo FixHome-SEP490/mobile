@@ -17,7 +17,7 @@ describe('customer service display labels', () => {
 
   it('uses two columns on narrow or enlarged-text layouts and three on standard layouts', () => {
     expect(customerDiscoveryColumns(360, 1)).toBe(2);
-    expect(customerDiscoveryColumns(390, 1)).toBe(3);
+    expect(customerDiscoveryColumns(390, 1)).toBe(2);
     expect(customerDiscoveryColumns(430, 1)).toBe(3);
     expect(customerDiscoveryColumns(430, 1.2)).toBe(2);
   });

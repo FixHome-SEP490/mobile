@@ -15,12 +15,10 @@ interface ServiceArtworkProps {
 const ARTWORK_RADIUS = 14;
 const DEFAULT_SIZE = 64;
 
-// Home quick actions use the owner's four category motifs. Catalog, Detail and
-// Booking use the specific canonical service image instead.
+// Home keeps the owner's category motifs where appropriate. Plumbing uses the
+// distinct catalog cutouts instead of the shared sink motif's white backplate.
 const TRANSPARENT_CUTOUTS: Record<string, ImageSourcePropType> = {
   VE_SINH_DIEU_HOA_1HP: CUSTOMER_UI_ARTWORK.aircon,
-  SUA_RO_RI_NUOC: CUSTOMER_UI_ARTWORK.plumbing,
-  THAY_VOI_NUOC: CUSTOMER_UI_ARTWORK.plumbing,
   THAY_CONG_TAC_DIEN: CUSTOMER_UI_ARTWORK.electrical,
   SUA_MAY_GIAT: CUSTOMER_UI_ARTWORK.washingMachine,
 };

@@ -1,9 +1,12 @@
 import React from 'react';
-import { act, create } from 'react-test-renderer';
+import { Text } from 'react-native';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import * as Clipboard from 'expo-clipboard';
 import { createOrderSessionSnapshot, readyResource, type OrderSessionSnapshot } from '../domain/order-session.types';
 import OrderInformationScreen from './OrderInformationScreen';
 
 let mockSnapshot: OrderSessionSnapshot;
+const mockSetClipboard = Clipboard.setStringAsync as jest.Mock;
 jest.mock('../runtime/OrderSessionProvider', () => ({ useOrderSession: () => ({ key: mockSnapshot.key, snapshot: mockSnapshot, refresh: jest.fn() }) }));
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn() }) }));
 jest.mock('react-native-safe-area-context', () => {
@@ -11,8 +14,9 @@ jest.mock('react-native-safe-area-context', () => {
   return { SafeAreaView: Native.View, useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) };
 });
 jest.mock('../../../hooks/useKeyboardInset', () => ({ useKeyboardInset: () => 0 }));
+jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => {}) }));
 
-function render(role: 'customer' | 'technician') {
+function renderTree(role: 'customer' | 'technician'): ReactTestRenderer {
   const key = { userId: 'u1', role, sessionGeneration: 1, serviceOrderId: 'order-1' };
   mockSnapshot = createOrderSessionSnapshot(key);
   mockSnapshot.access = 'current';
@@ -25,7 +29,14 @@ function render(role: 'customer' | 'technician') {
   }, 1, 1);
   let r!: ReturnType<typeof create>;
   act(() => { r = create(<OrderInformationScreen />); });
-  return JSON.stringify(r.toJSON()).replace(/","/g, '');
+  return r;
+}
+
+function render(role: 'customer' | 'technician') {
+  const tree = renderTree(role);
+  const output = JSON.stringify(tree.toJSON()).replace(/","/g, '');
+  act(() => tree.unmount());
+  return output;
 }
 
 describe('OrderInformationScreen content', () => {
@@ -42,5 +53,14 @@ describe('OrderInformationScreen content', () => {
   it('shows the customer to the technician', () => {
     const out = render('technician');
     expect(out).toContain('An · 0900');
+    expect(out).not.toContain('order-code-copy');
+  });
+
+  it('lets only the customer copy the full backend order code', async () => {
+    const tree = renderTree('customer');
+    await act(async () => { await tree.root.findByProps({ testID: 'order-code-copy' }).props.onPress(); });
+    expect(mockSetClipboard).toHaveBeenCalledWith('SO-1');
+    expect(tree.root.findAllByType(Text).map(node => String(node.props.children)).join(' ')).toContain('Đã sao chép mã đơn.');
+    act(() => tree.unmount());
   });
 });

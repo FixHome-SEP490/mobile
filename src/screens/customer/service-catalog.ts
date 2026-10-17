@@ -201,6 +201,16 @@ export function createServiceCatalogLoader(
   return {
     /** New search (or initial load): resets to page one. */
     search,
+    /** Invalidate in-flight work when the screen receives a new navigation intent. */
+    cancel(): void {
+      generation += 1;
+      query = '';
+      categoryId = undefined;
+      loaded = false;
+      searchPending = false;
+      state = initialCatalogState;
+      write(state);
+    },
     /** Next page only while loaded rows are fewer than the known total. */
     loadMore(): Promise<void> {
       if (state.loading || state.loadingMore || searchPending) return Promise.resolve();

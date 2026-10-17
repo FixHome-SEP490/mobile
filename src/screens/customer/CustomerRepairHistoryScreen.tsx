@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -39,6 +40,7 @@ export default function CustomerRepairHistoryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copyMessageForOrder, setCopyMessageForOrder] = useState<string | null>(null);
 
   const loadFirstPage = useCallback(async (refresh = false) => {
     const generation = ++generationRef.current;
@@ -96,6 +98,16 @@ export default function CustomerRepairHistoryScreen() {
     () => filterCompletedRepairHistory(rows, query),
     [rows, query],
   );
+
+  const copyOrderCode = async (event: { stopPropagation?: unknown }, orderId: string, code: string) => {
+    if (typeof event.stopPropagation === 'function') event.stopPropagation();
+    try {
+      await Clipboard.setStringAsync(code);
+      setCopyMessageForOrder(orderId);
+    } catch {
+      setCopyMessageForOrder(`failed:${orderId}`);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -227,9 +239,23 @@ export default function CustomerRepairHistoryScreen() {
                       </Text>
                     </View>
                     <View style={styles.cardBottom}>
-                      <View>
+                      <View style={{ flex: 1 }}>
                         <Text style={styles.referenceLabel}>Mã đơn</Text>
-                        <Text style={styles.referenceText}>{item.code || item.orderId.slice(0, 8)}</Text>
+                        <Text style={styles.referenceText}>{item.code || 'Chưa có mã đơn'}</Text>
+                        {item.code ? (
+                          <TouchableOpacity
+                            testID={`repair-history-copy-code-${item.orderId}`}
+                            style={styles.copyCodeButton}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Sao chép mã đơn ${item.code}`}
+                            onPress={event => void copyOrderCode(event, item.orderId, item.code)}
+                          >
+                            <Ionicons name="copy-outline" size={15} color={colors.primaryStrong} />
+                            <Text style={styles.copyCodeText}>Sao chép</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                        {copyMessageForOrder === item.orderId ? <Text style={styles.copyCodeFeedback} accessibilityLiveRegion="polite">Đã sao chép mã đơn.</Text> : null}
+                        {copyMessageForOrder === `failed:${item.orderId}` ? <Text style={styles.copyCodeFeedback} accessibilityRole="alert">Không thể sao chép mã đơn.</Text> : null}
                       </View>
                       <View style={styles.totalBlock}>
                         <Text style={styles.referenceLabel}>Tổng thanh toán</Text>
@@ -368,6 +394,9 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   referenceLabel: { fontSize: 12, lineHeight: 17, textTransform: 'uppercase', fontWeight: '700', color: colors.textSecondary },
   referenceText: { fontSize: 12, fontWeight: '700', color: colors.text, marginTop: 2 },
+  copyCodeButton: { minHeight: 44, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 4 },
+  copyCodeText: { fontSize: 12, fontWeight: '600', color: colors.primaryStrong },
+  copyCodeFeedback: { fontSize: 11, color: colors.textSecondary },
   totalBlock: { flex: 1, alignItems: 'flex-end' },
   totalText: { fontSize: 14, fontWeight: '800', color: colors.primaryStrong, marginTop: 2 },
   loadMoreButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 4 },

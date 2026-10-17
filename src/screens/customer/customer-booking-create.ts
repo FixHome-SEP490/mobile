@@ -49,6 +49,25 @@ export function addressReadyForBooking(
   );
 }
 
+const DEFAULT_DESCRIPTION_SUGGESTIONS = ['Thiết bị', 'Dấu hiệu', 'Thời điểm phát hiện'] as const;
+
+/** Editable prompts only; these never become booking fields until the customer edits the description. */
+export function getBookingDescriptionSuggestions(serviceCode?: string): readonly string[] {
+  const code = serviceCode?.trim().toLocaleUpperCase('en-US') ?? '';
+  if (code.startsWith('VE_SINH_DIEU_HOA') || code.startsWith('SUA_DIEU_HOA')) {
+    return ['Máy lạnh', 'Dấu hiệu', 'Thời điểm phát hiện'];
+  }
+  if (code === 'SUA_RO_RI_NUOC') return ['Vị trí rò rỉ', 'Dấu hiệu', 'Thời điểm phát hiện'];
+  if (code === 'LAP_TV_GIA_TREO') return ['Kích thước TV', 'Loại tường', 'Vị trí lắp đặt'];
+  return DEFAULT_DESCRIPTION_SUGGESTIONS;
+}
+
+export function appendBookingDescriptionSuggestion(description: string, suggestion: string): string {
+  const prompt = `${suggestion.trim().replace(/:\s*$/, '')}: `;
+  const separator = description.length === 0 || description.endsWith('\n') ? '' : '\n';
+  return `${description}${separator}${prompt}`;
+}
+
 export interface BookingCreationAttempt {
   ownerUserId: string;
   serviceId: string;

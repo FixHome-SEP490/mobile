@@ -52,8 +52,8 @@ describe('ServiceArtwork', () => {
   });
 
   it.each([
-    ['SUA_RO_RI_NUOC', require('../../../assets/optimized/ui/service-plumbing.png')],
-    ['THAY_VOI_NUOC', require('../../../assets/optimized/ui/service-plumbing.png')],
+    ['SUA_RO_RI_NUOC', require('../../../assets/optimized/services/svc-sua-ro-ri-nuoc.png')],
+    ['THAY_VOI_NUOC', require('../../../assets/optimized/services/svc-thay-voi-nuoc.png')],
     ['THAY_CONG_TAC_DIEN', require('../../../assets/optimized/ui/service-electrical.png')],
     ['SUA_MAY_GIAT', require('../../../assets/optimized/ui/service-washing-machine.png')],
   ])('uses the correct original cutout for %s', (code, expectedSource) => {

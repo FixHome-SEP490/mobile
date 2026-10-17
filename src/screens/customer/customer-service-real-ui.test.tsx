@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text, TextInput, TouchableOpacity } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import type { ServiceItem } from '../../api/services.api';
 
 const fs = jest.requireActual<{
   readFileSync: (file: string, encoding: string) => string;
@@ -218,8 +219,8 @@ describe('customer service loader behavior (mocked servicesApi, C-RUI3 M1)', () 
         .findAllByType(Text)
         .filter((node) => node.props.children === 'Vệ sinh điều hòa âm trần');
       expect(nameNodes.length).toBeGreaterThanOrEqual(1);
-      // Visible titles stay compact while the touch target retains the canonical name.
-      expect(nameNodes[0].props.numberOfLines).toBe(2);
+      // Long service variants remain readable; the touch target retains the canonical name.
+      expect(nameNodes[0].props.numberOfLines).toBeUndefined();
       expect(flatStyle(nameNodes[0]).lineHeight).toBe(16);
 
       const row = tree.root.findAllByType(TouchableOpacity).find(
@@ -366,6 +367,150 @@ describe('customer service loader behavior (mocked servicesApi, C-RUI3 M1)', () 
       expect(servicesMock.servicesApi.getServices).toHaveBeenCalledWith(
         expect.objectContaining({ search: 'máy lạnh', page: 1, categoryId: mockCategory.id }),
       );
+    } finally {
+      act(() => tree.unmount());
+    }
+  });
+
+  it('follows the Home catalog intent across pages and opens a real returned service row', async () => {
+    mockRouteParams = {
+      categoryCode: 'DIEN_LANH',
+      serviceCode: 'VE_SINH_DIEU_HOA_1HP',
+      serviceAlias: 'Vệ sinh máy lạnh',
+    };
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({
+      ...mockService,
+      id: `catalog-${index}`,
+      code: `OTHER_${index}`,
+      name: `Dịch vụ danh mục ${index}`,
+    }));
+    const secondPage = [
+      { ...mockService, id: 'aircon-1', code: 'VE_SINH_DIEU_HOA_1HP', name: 'Vệ sinh máy lạnh 1HP' },
+      { ...mockService, id: 'aircon-2', code: 'VE_SINH_DIEU_HOA_2HP', name: 'Vệ sinh máy lạnh 2HP' },
+      { ...mockService, id: 'aircon-ceiling', code: 'VE_SINH_DIEU_HOA_AM_TRAN', name: 'Vệ sinh điều hòa âm trần' },
+    ];
+    servicesMock.servicesApi.getServices.mockImplementation(async ({ page }) => ({
+      data: page === 1 ? firstPage : secondPage,
+      total: 103,
+    }));
+
+    let tree!: ReactTestRenderer;
+    act(() => { tree = create(listElement()); });
+    try {
+      await settle(300);
+      expect(servicesMock.servicesApi.getServices).toHaveBeenCalledWith({ search: '', page: 1, pageSize: 100 });
+      expect(servicesMock.servicesApi.getServices).toHaveBeenCalledWith({ search: '', page: 2, pageSize: 100 });
+      expect(servicesMock.servicesApi.getServices.mock.calls.every(([params]) => params.search === '')).toBe(true);
+      expect(tree.root.findByProps({ accessibilityLabel: 'Vệ sinh máy lạnh 1HP' })).toBeDefined();
+      expect(tree.root.findByProps({ accessibilityLabel: 'Vệ sinh máy lạnh 2HP' })).toBeDefined();
+      expect(tree.root.findByProps({ accessibilityLabel: 'Vệ sinh điều hòa âm trần' })).toBeDefined();
+      expect(tree.root.findAllByProps({ accessibilityLabel: 'Sửa máy lạnh' })).toHaveLength(0);
+
+      act(() => tree.root.findByProps({ accessibilityLabel: 'Vệ sinh điều hòa âm trần' }).props.onPress());
+      expect(mockNavigate).toHaveBeenCalledWith('CustomerServiceDetail', { serviceId: 'aircon-ceiling' });
+    } finally {
+      act(() => tree.unmount());
+    }
+  });
+
+  it('applies changed route params and ignores an older search response', async () => {
+    mockRouteParams = { query: 'máy lạnh', categoryCode: 'DIEN_LANH' };
+    const staleSearch = deferred<{ data: ServiceItem[]; total: number }>();
+    servicesMock.servicesApi.getServices.mockImplementation(({ search }) => search
+      ? staleSearch.promise
+      : Promise.resolve({
+        data: [{ ...mockService, id: 'live-tv-1', code: 'LAP_TV_GIA_TREO', name: 'Lắp đặt tivi treo tường' }],
+        total: 1,
+      }));
+
+    let tree!: ReactTestRenderer;
+    act(() => { tree = create(listElement()); });
+    try {
+      await waitForServicesCall();
+      expect(servicesMock.servicesApi.getServices).toHaveBeenCalledWith(
+        expect.objectContaining({ search: 'máy lạnh', categoryId: mockCategory.id }),
+      );
+
+      mockRouteParams = {
+        categoryCode: 'DIEN_LANH',
+        serviceCode: 'LAP_TV_GIA_TREO',
+        serviceAlias: 'Lắp TV treo tường',
+      };
+      act(() => tree.update(listElement()));
+      await settle(400);
+      staleSearch.resolve({ data: [{ ...mockService, name: 'STALE ROUTE SERVICE' } as ServiceItem], total: 1 });
+      await settle(30);
+
+      expect(tree.root.findByType(TextInput).props.value).toBe('');
+      expect(tree.root.findByProps({ accessibilityLabel: 'Lắp đặt tivi treo tường' })).toBeDefined();
+      expect(tree.root.findAllByProps({ accessibilityLabel: 'STALE ROUTE SERVICE' })).toHaveLength(0);
+      expect(servicesMock.servicesApi.getServices.mock.calls.some(([params]) => params.search === '')).toBe(true);
+    } finally {
+      act(() => tree.unmount());
+    }
+  });
+
+  it.each([undefined, 'DIEN_LANH'])('clears the popular shortcut and category when browsing all categories (%s)', async (categoryCode) => {
+    mockRouteParams = { serviceCode: 'VE_SINH_DIEU_HOA_1HP', categoryCode };
+    const electricalCategory = { ...mockCategory, id: 'cat-electrical', code: 'DIEN_NUOC', name: 'Điện & Nước' };
+    servicesMock.servicesApi.getCategories.mockResolvedValue([mockCategory, electricalCategory]);
+    servicesMock.servicesApi.getServices.mockResolvedValue({ data: [
+      { ...mockService, code: 'VE_SINH_DIEU_HOA_1HP', name: 'Vệ sinh máy lạnh' },
+      { ...mockService, id: 'repair-ac', code: 'SUA_DIEU_HOA', name: 'Sửa máy lạnh' },
+      { ...mockService, id: 'repair-leak', categoryId: electricalCategory.id, code: 'SUA_RO_RI_NUOC', name: 'Sửa rò rỉ nước' },
+    ], total: 3 });
+    let tree!: ReactTestRenderer;
+    act(() => { tree = create(listElement()); });
+    try {
+      await settle(50);
+      expect(tree.root.findAllByProps({ accessibilityLabel: 'Sửa máy lạnh' })).toHaveLength(0);
+      act(() => tree.root.findByProps({ accessibilityLabel: 'Xem tất cả danh mục dịch vụ' }).props.onPress());
+      expect(tree.root.findByProps({ accessibilityLabel: 'Sửa máy lạnh' })).toBeDefined();
+      expect(tree.root.findByProps({ accessibilityLabel: 'Sửa rò rỉ nước' })).toBeDefined();
+      expect(tree.root.findByType(TextInput).props.value).toBe('');
+    } finally {
+      act(() => tree.unmount());
+    }
+  });
+
+  it('opens the entire category from a popular subset', async () => {
+    mockRouteParams = { serviceCode: 'VE_SINH_DIEU_HOA_1HP', categoryCode: 'DIEN_LANH' };
+    servicesMock.servicesApi.getServices.mockResolvedValue({ data: [
+      { ...mockService, code: 'VE_SINH_DIEU_HOA_1HP', name: 'Vệ sinh máy lạnh' },
+      { ...mockService, id: 'repair-ac', code: 'SUA_DIEU_HOA', name: 'Sửa máy lạnh' },
+    ], total: 2 });
+    let tree!: ReactTestRenderer;
+    act(() => { tree = create(listElement()); });
+    try {
+      await settle(50);
+      act(() => tree.root.findByProps({ accessibilityLabel: 'Xem trong nhóm Điện lạnh' }).props.onPress());
+      expect(tree.root.findByProps({ accessibilityLabel: 'Sửa máy lạnh' })).toBeDefined();
+    } finally {
+      act(() => tree.unmount());
+    }
+  });
+
+  it('keeps deliberate search when changing category and does not restore a shortcut when cleared', async () => {
+    mockRouteParams = { serviceCode: 'VE_SINH_DIEU_HOA_1HP', categoryCode: 'DIEN_LANH' };
+    servicesMock.servicesApi.getServices.mockResolvedValue({ data: [
+      { ...mockService, code: 'VE_SINH_DIEU_HOA_1HP', name: 'Vệ sinh máy lạnh' },
+      { ...mockService, id: 'repair-ac', code: 'SUA_DIEU_HOA', name: 'Sửa máy lạnh' },
+    ], total: 2 });
+    let tree!: ReactTestRenderer;
+    act(() => { tree = create(listElement()); });
+    try {
+      await settle(50);
+      act(() => tree.root.findByType(TextInput).props.onChangeText('điện'));
+      await settle(350);
+      act(() => tree.root.findByProps({ accessibilityLabel: 'Danh mục Tất cả' }).props.onPress());
+      await settle(350);
+      expect(tree.root.findByType(TextInput).props.value).toBe('điện');
+      expect(servicesMock.servicesApi.getServices).toHaveBeenLastCalledWith(
+        expect.objectContaining({ search: 'điện', categoryId: undefined }),
+      );
+      act(() => tree.root.findByProps({ accessibilityLabel: 'Xóa nội dung tìm kiếm' }).props.onPress());
+      await settle(50);
+      expect(tree.root.findByProps({ accessibilityLabel: 'Sửa máy lạnh' })).toBeDefined();
     } finally {
       act(() => tree.unmount());
     }

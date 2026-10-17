@@ -1,4 +1,5 @@
 import React from 'react';
+import { Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { OrderSessionSnapshot } from '../domain/order-session.types';
 import { createOrderSessionSnapshot, readyResource } from '../domain/order-session.types';
@@ -8,6 +9,9 @@ let mockSnapshot: OrderSessionSnapshot;
 const mockNavigate: jest.Mock = jest.fn();
 const mockGoBack: jest.Mock = jest.fn();
 const mockRefresh: jest.Mock = jest.fn(async () => {});
+const mockClipboardSetString: jest.Mock = jest.fn(async () => {});
+
+jest.mock('expo-clipboard', () => ({ setStringAsync: (value: string) => mockClipboardSetString(value) }));
 
 jest.mock('../runtime/OrderSessionProvider', () => ({
   useOrderSession: () => ({
@@ -44,7 +48,7 @@ function snapshotFor(role: 'customer' | 'technician', status: string): OrderSess
   return snapshot;
 }
 
-beforeEach(() => { mockNavigate.mockClear(); mockGoBack.mockClear(); mockRefresh.mockClear(); });
+beforeEach(() => { mockNavigate.mockClear(); mockGoBack.mockClear(); mockRefresh.mockClear(); mockClipboardSetString.mockClear(); });
 
 it.each(['customer', 'technician'] as const)('completed order shows server facts and role-safe links without writes (%s)', async role => {
   mockSnapshot = snapshotFor(role, 'COMPLETED');
@@ -59,6 +63,50 @@ it.each(['customer', 'technician'] as const)('completed order shows server facts
     expect(mockNavigate).toHaveBeenCalledWith(screen);
   }
   expect(mockRefresh).not.toHaveBeenCalled();
+  await act(async () => renderer.unmount());
+});
+
+it('lets only the Customer copy the full backend order code and reports success', async () => {
+  mockSnapshot = snapshotFor('customer', 'COMPLETED');
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<CompletedOrderScreen role="customer" />); });
+
+  const copy = renderer.root.findByProps({ testID: 'completed-copy-order-code' });
+  expect(copy.props.accessibilityRole).toBe('button');
+  expect(copy.props.accessibilityLabel).toBe('Sao chép mã đơn');
+  expect(copy.findAllByType(Text).some(node => node.props.children === 'Sao chép')).toBe(true);
+  await act(async () => { await copy.props.onPress(); });
+
+  expect(mockClipboardSetString).toHaveBeenCalledWith('SO-1');
+  expect(JSON.stringify(renderer.toJSON())).toContain('Đã sao chép mã đơn.');
+  await act(async () => renderer.unmount());
+});
+
+it('does not expose copy for Technician or when the real order code is missing', async () => {
+  mockSnapshot = snapshotFor('technician', 'COMPLETED');
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<CompletedOrderScreen role="technician" />); });
+  expect(renderer.root.findAllByProps({ testID: 'completed-copy-order-code' })).toHaveLength(0);
+  await act(async () => renderer.unmount());
+
+  mockSnapshot = snapshotFor('customer', 'COMPLETED');
+  mockSnapshot.order.status === 'ready' && (mockSnapshot.order.data.code = '');
+  await act(async () => { renderer = create(<CompletedOrderScreen role="customer" />); });
+  expect(renderer.root.findAllByProps({ testID: 'completed-copy-order-code' })).toHaveLength(0);
+  expect(JSON.stringify(renderer.toJSON())).toContain('Chưa có mã đơn');
+  expect(JSON.stringify(renderer.toJSON())).not.toContain('order-1');
+  await act(async () => renderer.unmount());
+  expect(mockClipboardSetString).not.toHaveBeenCalled();
+});
+
+it('shows a safe error when the clipboard cannot copy the order code', async () => {
+  mockSnapshot = snapshotFor('customer', 'COMPLETED');
+  mockClipboardSetString.mockRejectedValueOnce(new Error('clipboard unavailable'));
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<CompletedOrderScreen role="customer" />); });
+  await act(async () => { await renderer.root.findByProps({ testID: 'completed-copy-order-code' }).props.onPress(); });
+  expect(JSON.stringify(renderer.toJSON())).toContain('Chưa sao chép được mã đơn. Vui lòng thử lại.');
+  expect(JSON.stringify(renderer.toJSON())).not.toContain('clipboard unavailable');
   await act(async () => renderer.unmount());
 });
 

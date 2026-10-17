@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-16 11:21 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/sep139-group-b
+> Cập nhật lần cuối: 2026-10-17 17:48 (UTC+7) · Người cập nhật (git): foxonworld · Nhánh: feat/mobile-c50-c45-20261017
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -94,13 +94,33 @@ Luật nghiệp vụ gốc nằm ở tài liệu dự án (bản chính thức c
 
 ### Khách hàng
 
-SEP-137/139: editor địa chỉ Booking phân biệt ghim đã xác nhận với địa chỉ đủ điều kiện lưu; tỉnh/quận thiếu được chọn rõ ràng từ GET `/geo/provinces`, không tự gán khu vực. Giữ createAddress một lần và đối chiếu GET/owner trước khi dùng địa chỉ. Booking review giữ snapshot bất biến; success hiển thị “Đã gửi yêu cầu”, chưa phải ServiceOrder. Matching giữ tối đa hai ưu tiên và lời mời tuần tự theo server. Customer Order detail hiển thị một section theo action/status hiện tại; progress sheet chỉ đọc, các controller giữ guard/readback riêng. Thanh hành động dưới scroll điều hướng đến section hiện hành, không thay thế các nút xác nhận trong section. Thiết bị và visual 320–430dp CHƯA KIỂM CHỨNG; không có POST thực trong kiểm thử.
+SEP-137/139: editor địa chỉ Booking phân biệt ghim đã xác nhận với địa chỉ đủ điều kiện lưu; tỉnh/quận thiếu được chọn rõ ràng từ GET `/geo/provinces`, không tự gán khu vực. Giữ createAddress một lần và đối chiếu GET/owner trước khi dùng địa chỉ. Booking Create có hai bước nhập Tình trạng và Địa chỉ & thời gian, giữ bước review snapshot bất biến riêng; chỉ nút xác nhận cuối mới tải ảnh và POST Booking. Receipt sau gửi dùng chi tiết đã lưu trong snapshot, chưa phải ServiceOrder. Matching hiển thị toàn bộ candidate server trả; khách chọn một hoặc hai TECH user ID khác nhau theo thứ tự, Backend xử lý ưu tiên đầu PENDING và ưu tiên hai STANDBY. Radar chỉ hiển thị cho Booking thuộc khách đang đăng nhập, status Backend MATCHING và có invitation PENDING hợp lệ khi màn focus, app foreground, không lỗi/ACK chưa rõ/khóa; Reduce Motion chặn pulse. Customer Order detail hiển thị một section theo action/status hiện tại; progress sheet chỉ đọc, các controller giữ guard/readback riêng. Thanh hành động dưới scroll điều hướng đến section hiện hành, không thay thế các nút xác nhận trong section. Thiết bị và visual 320–430dp CHƯA KIỂM CHỨNG; không có POST Booking/matching thực trong kiểm thử.
 
-- Đặt lịch thường: Dịch vụ → Chi tiết dịch vụ → Tạo booking (địa chỉ đã lưu, chọn buổi sáng 8-12 hoặc chiều 13-18 trong 14 ngày tới, hoặc `Tới ngay`, ghi chú cho thợ tùy chọn) → `POST /bookings` gửi `mode`, `date`, `slot`, `customerNote` kèm cửa sổ giờ đã tính (`BookingSessionPicker`, `utils/booking-session.ts`); không còn chọn giờ bắt đầu tự do.
+- Home chọn dịch vụ phổ biến theo service code/alias cục bộ và category fallback có thật; danh mục tra cứu catalog động, không gửi text hint thành query Backend. Đặt lịch thường: Dịch vụ → Chi tiết dịch vụ → Tạo booking hai bước (địa chỉ đã lưu có GPS, chọn buổi sáng 8-12 hoặc chiều 13-18 trong 14 ngày tới, hoặc `Tới ngay`, ghi chú cho thợ tùy chọn) → review snapshot → xác nhận cuối mới tải tối đa 5 ảnh và `POST /bookings` gửi `mode`, `date`, `slot`, `customerNote` kèm cửa sổ giờ đã tính (`BookingSessionPicker`, `utils/booking-session.ts`); mô tả tối đa 5.000 ký tự, gợi ý là văn bản sửa được; không còn chọn giờ bắt đầu tự do.
 - Đặt lịch có AI: màn chẩn đoán nhận mô tả và tối đa 3 ảnh, chuyển sang trò chuyện với AI; AI không tự đặt lịch mà điền sẵn dịch vụ, mô tả và `aiSessionId` vào màn tạo booking.
-- Chọn đúng 2 kỹ thuật viên theo thứ tự ở màn tìm thợ.
+- Có thể chọn 1 hoặc 2 TECH user ID khác nhau theo thứ tự ở màn tìm thợ; mọi candidate còn khả dụng do Backend trả đều hiển thị. Không gửi lời mời thứ hai song song.
 - Đơn: duyệt báo giá và chi phí phát sinh, huỷ, xác nhận hoàn tất, hoá đơn, tiền mặt, mở VNPay, đánh giá, xem bằng chứng.
 - Lịch sử sửa chữa, trung tâm bảo hành, hỗ trợ, chat với kỹ thuật viên, thông báo có phân trang, hồ sơ và địa chỉ có bản đồ, màn bảo mật (đổi mật khẩu bằng OTP).
+
+- Polish Customer: chọn xem cả danh mục hoặc cả nhóm xóa shortcut đang lọc; tìm kiếm nhập tay được giữ khi đổi nhóm. Home ghi rõ TV cần giá treo sẵn. Shortcut vệ sinh máy lạnh nhận cả mã catalog gốc `VE_SINH_DIEU_HOA` nếu server trả về, giữ nhãn riêng vệ sinh/nạp gas và không thay giá hoặc phạm vi dịch vụ. Catalog dùng hai cột dưới 420dp hoặc chữ lớn, tên biến thể không cắt; thumbnail kết quả tìm kiếm không thêm nền riêng. CTA giữa nổi 8dp và toàn bộ nút 56dp nằm trong bounds của container nhận chạm; sheet uy tín Customer có nút đóng, tách accessibility cho nội dung và ghi quy định mặc định. Home dùng cutout catalog hiện có riêng cho vòi nước/rò rỉ, bỏ motif lavabo có nền trắng chung. Asset hero/catalog có alpha thật; mảng tường trắng thuộc minh họa hero vẫn giữ, không tạo/sửa asset hoặc dữ liệu dịch vụ.
+
+### Ví khách hàng C50
+
+`customerWalletApi.getSummary` giữ strict global HTTP envelope, integer-VND, phân trang và uniqueness của transaction ID; `amount` ledger phải dương, còn `balanceAfter` là số nguyên không âm và có thể bằng zero. Parser chấp nhận thêm `withdrawal` (tiền ra) và `withdrawal_refund` (tiền vào). Lịch sử hiển thị đủ bảy loại bằng nhãn riêng và dấu tiền theo loại ledger. `CustomerWalletScreen` dùng hero số dư xanh, cặp nút `Nạp tiền`/`Rút tiền`, form nạp thu gọn ban đầu và dòng giao dịch gọn; mã tham chiếu chỉ mở trong `Chi tiết`. Yêu cầu nạp, idempotency, VNPay và đối soát ACK chưa rõ không đổi.
+
+### Xác minh khách hàng C50
+
+`CustomerKycScreen` dùng `GET /customer/verification`, `POST /customer/verification/upload-url` (chỉ gửi MIME) và `POST /customer/verification`. Chỉ status Backend `none`, `pending`, `rejected`, `verified` được hiển thị; hồ sơ pending/verified không cho gửi lại. Form kiểm tra ngày thật theo ngày Việt Nam, năm sinh từ 1900, đủ 18 tuổi, CCCD 12 số, giới tính và địa chỉ. Hai mặt CCCD phải là hai tệp riêng, MIME/đuôi khớp JPEG/PNG/WEBP, 1–10 MB, đường dẫn dưới `kyc/<customerId>/`; PUT ảnh dùng native XHR trực tiếp tới signed URL, không gửi Backend JWT. URL mới chỉ được xin lại sau 401/403; lỗi mạng/timeout không tự replay. URI ảnh và dữ liệu hồ sơ chỉ ở bộ nhớ màn hình, được xóa khi rời màn hình hoặc ứng dụng chạy nền. UI trình bày rõ trạng thái none/pending/rejected/verified và hai thẻ ảnh mặt trước/mặt sau; chỉ hồ sơ verified có CTA sang rút tiền, không lộ thông tin hồ sơ trong trạng thái xác minh.
+
+### Ngân hàng và rút tiền C50
+
+`CustomerWithdrawScreen` đọc thông tin đủ điều kiện, ngân hàng, tài khoản nhận và lịch sử từ các route `/customer/wallet/*`; quy tắc KYC, số tiền tối thiểu/tối đa và khả năng rút do Backend cung cấp. UI có tiến trình xác minh danh tính → ngân hàng → rút tiền, hạn mức và thẻ nhập/xác nhận gọn; trạng thái sẵn sàng không đồng nghĩa lệnh rút thành công. Lưu tài khoản dùng `PUT /customer/wallet/bank-account` rồi GET đọc lại trước khi coi dữ liệu là hiện hành. Tạo lệnh gửi đúng một `POST /customer/wallet/withdrawals` với amount; ACK chưa rõ chỉ được đối soát qua GET và không gửi lại POST. Lịch sử `GET /customer/wallet/withdrawals` dùng `page`/`limit`; HTTP success envelope có mảng withdrawal ở top-level `data` và phân trang ở sibling top-level `meta`. Adapter yêu cầu cả hai trường, không nhận shape lồng cũ. Status giữ nguyên `PROCESSING`, `SUCCESS`, `FAILED`.
+
+### Tra cứu đơn công khai C45
+
+Guest và Customer Home đã đăng nhập đều có shortcut tới `PublicOrderTrackingScreen` dưới ô tìm dịch vụ; màn này gửi mã đơn và điện thoại đã đăng ký tới `POST /service-orders/public/track`, dùng cùng thông báo lỗi khi cặp thông tin không khớp. Adapter lấy `PublicTrackResult` trực tiếp từ `data` của global HTTP success envelope, không chờ thêm `data` lồng. Poll 15 giây chỉ chạy khi màn đang focus, ứng dụng foreground và status là `EN_ROUTE`/`UNDER_REPAIR`; manual và poll cùng dùng giới hạn client 5 request/60 giây, tôn trọng `Retry-After`, và dừng poll sau lỗi hoặc 429. Số điện thoại/mã chỉ nằm trong state màn hình; blur/background/query đổi sẽ xóa truy vấn, kết quả và tọa độ. Backend public DTO có thể trả cặp tọa độ đích; parser chỉ giữ cặp hợp lệ. Native map dùng marker thợ và điểm đến, chỉ hiện khi GPS thợ hợp lệ, mới không quá 2 phút, status đang hoạt động, màn focus và ứng dụng foreground; timer xóa map và mốc cập nhật khi GPS hết hạn. Tọa độ chỉ nằm trong state bộ nhớ tạm của map, không ghi lưu/analytics/log. Expo Web dùng module fallback riêng không import `react-native-maps`.
+
+Production `OrderInformationScreen` chỉ cho Customer sao chép `order.code`; màn `CompletedOrderScreen` trong nhánh Customer C12 có nút sao chép đầy đủ mã đơn ngay cạnh `Mã đơn`, nhánh Technician không có nút này. `CustomerRepairHistoryScreen` chỉ sao chép `item.code` đầy đủ, nút copy không mở card. Mã thiếu hiển thị `Chưa có mã đơn`, không thay bằng UUID.
 
 ### Kỹ thuật viên
 
@@ -144,7 +164,7 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 
 - Lời mời: công tắc "Tự nhận việc" (`autoAcceptInvitations` qua `PATCH /technicians/me/profile`), "Ưu tiên số N", lịch hẹn theo buổi hoặc "Tới ngay" bằng `sessionLabel`.
 - "Đặt lại thợ" (`RebookSheet`, `GET /bookings/:id/available-slots?previous=1`, `POST /bookings/:id/rebook`) ở Thông tin đơn (COMPLETED/CANCELLED) và booking đã hủy; thông báo "đã mời thợ cũ" hoặc "chọn thợ khác" qua param `rebooked`.
-- Điểm uy tín (`GET /reputation/me`, `ReputationCard`) ở hồ sơ hai vai trò; bảo hành mặc định (`PUT /technicians/me/warranty-default`, tối đa 365 ngày) ở hồ sơ thợ.
+- Điểm uy tín (`GET /reputation/me`, `ReputationCard`) ở hồ sơ hai vai trò; Customer dùng card gọn, cảnh báo khóa/tạm ngưng lấy từ server luôn hiển thị và sheet thông tin có quy định mặc định cùng sự kiện thực từ API; Tech giữ card/lịch sử cũ. API không trả policy động; ngày làm mới chỉ lấy từ `resetsAt`. Bảo hành mặc định (`PUT /technicians/me/warranty-default`, tối đa 365 ngày) ở hồ sơ thợ.
 - Thu nhập theo kỳ ngày/tuần/tháng từ `GET /technicians/me/earnings` có phân trang (`EarningsPeriodPanel`); biểu đồ cũ vẫn là ước tính từ danh sách đơn. Lịch có lưới giờ một ngày (6–22h, khối đơn 2 giờ) với vạch giờ hiện tại.
 - Báo giá của khách hiện số ngày bảo hành từng dòng; chi tiết booking hiện ghi chú và tự tải lại mỗi 5 giây khi đang chờ thợ; nhãn trạng thái, giá, thanh toán và vai trò tiếng Việt thay mã thô; `extractApiErrorMessage` dịch câu tiếng Anh đã biết của backend (`utils/api-error-messages.ts`), câu tiếng Anh lạ rơi về câu dự phòng của màn.
 - `useScrollHideTabBar` bật lại thanh tab khi màn rời focus. Thiết bị và E2E CHƯA KIỂM CHỨNG.
@@ -156,7 +176,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 ### Đối chiếu source SEP-132 trên nhánh integration
 
 - `ordersApi.getMyOrdersPage` từ chối body không có mảng danh sách; mảng rỗng hợp lệ vẫn trả trang rỗng. Giữ `bookingMode`, `slot`, `customerNote`, `departAvailableAt` và parser tiền/status hiện hành.
-- `GlassTabBar` giữ liquid glass tap/pan và indicator; `TechnicianNavigator` bật `technicianResponsive`, giữ năm tab với Ví ở vị trí thứ tư và `useTechnicianLocationPing`. Thông báo/badge mở từ chuông Home. Customer dùng `CustomerAnimatedBottomBar` với bốn tab và lựa chọn đặt lịch thường/AI; lựa chọn chỉ điều hướng, không tạo booking.
+- `GlassTabBar` giữ liquid glass tap/pan và indicator; `TechnicianNavigator` bật `technicianResponsive`, giữ năm tab với Ví ở vị trí thứ tư và `useTechnicianLocationPing`. Thông báo/badge mở từ chuông Home. Customer dùng `CustomerAnimatedBottomBar` với bốn tab và CTA đặt lịch nổi 56dp ở vùng giữa; năm vùng chạm tách khỏi nền tab clipping, lựa chọn đặt lịch thường/AI chỉ điều hướng, không tạo booking. Guest vẫn qua Auth handoff và Reduce Motion bỏ spring.
 - Root giữ `TechnicianNotifications` sau guard kỹ thuật viên và `TechnicianServiceAreas`; không còn tab Notifications.
 - SEP-135/136: splash logo chạy theo bootstrap thật. Không có phiên: first-run mở chọn vai trò; tiếp tục khách hàng hoặc bỏ qua mở Guest Home, lần sau mở Guest Home. Phiên hợp lệ mở Home đúng vai trò. Guest tái sử dụng `CustomerHomeScreen`, chỉ duyệt danh mục công khai; AI, đặt lịch và tab riêng mở Auth. Logout remount về Guest; Login Back giữ đường duyệt, Khám phá mở Guest. Handoff Login/Google/OTP chờ root đăng ký route đúng phiên và vai trò.
 - Tích hợp Customer Booking Create/Detail/Matching/Order/Profile, địa chỉ chính xác, ảnh booking và recovery controller; giữ gia hạn matching và các mutation controller hiện hành. Tích hợp Technician Jobs, work-order, chat, Profile/KYC/onboarding, ví/thu nhập và test production. Các GET `getTechnicianJobs`, `getTechnicianJobsPage`, `getTechnicianOrder` dùng cùng endpoint hiện hành; history chỉ chiếu trường tóm tắt được phép, full order vẫn dùng parser tiền dev. Notifications chỉ cập nhật trạng thái đọc sau API xác nhận và chặn GET cũ ghi đè trạng thái mới. Không nhập developer preview hoặc thay dependency/Expo.
@@ -188,6 +208,10 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - Ảnh đại diện phải tải lên `POST /media/upload` trước rồi mới gửi URL http(s) vào `PATCH /users/me`; `backend` từ chối đường dẫn ảnh trên máy.
 - Biến môi trường (chỉ tên): `EXPO_PUBLIC_API_BASE_URL`, `EXPO_PUBLIC_APP_NAME`. Mọi biến `EXPO_PUBLIC_*` đều công khai trong app.
 
+- Wallet summary của Customer vẫn đọc pagination trong `data.meta`; transaction `amount` do Backend trả luôn dương và `balanceAfter` có thể bằng zero, nên giao diện xác định dấu tiền theo `type`. Withdrawal history là endpoint riêng: global HTTP envelope đặt array trong `data` và pagination trong top-level `meta`; không dùng chung adapter summary. Public tracking đặt kết quả trực tiếp trong global envelope `data`.
+- C50 PR-C dùng quy tắc ngân hàng/rút tiền từ Backend; luồng thiết bị, xác nhận ngân hàng thật, API runtime và giao dịch tài chính CHƯA KIỂM CHỨNG. Không gửi lệnh rút thật.
+- C45 Guest tracking đối chiếu Backend `963fc9f` và Web `aef0258`; 20 Jest mục tiêu, full Jest 285 suites/3412 tests, lint/typecheck/Expo check và Expo Web export đạt. Bundle web dùng fallback map, không có marker native. Native map thực trên thiết bị, 429 runtime và thao tác native clipboard CHƯA KIỂM CHỨNG.
+
 - SEP-139 redesign lấy Backend dev `2c92d6d1a62302c3a2aaa697b05ef4a54f3fa255` làm target. Đã bổ sung contract `checkin_face`, uploaderId, order location, revise phát sinh và status-history; giữ completionNote/paidWarrantyItemIds. GET/readback quyết định trạng thái; POST timeout/401 hoặc GET xác minh lỗi giữ kết quả chưa rõ, không replay tự động.
 - Phát sinh không có version: nhiều đề xuất độc lập có thể chờ duyệt, revision tạo ID mới. Đọc lại qua `GET /service-orders/:id/additional-costs` và đối soát ID đã nhận; mất ID không được đoán từ đề xuất mới nhất. Linh kiện dùng `GET /part-requests/:id`; nhận phải đúng pickup/ready hoặc delivery/delivering, sử dụng đúng yêu cầu received và item. Resource lỗi/thiếu không được coi là mảng rỗng cho phép ghi.
 
@@ -203,6 +227,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 - Khách chọn 1 đến 2 kỹ thuật viên (app hiện bắt chọn đúng 2); ví kỹ thuật viên tối thiểu 200.000 ₫ (PO xác nhận 07/10/2026).
 - Hai luồng đặt lịch: thường và có AI; AI chỉ điền sẵn, khách tự bấm đặt.
+- Khung lịch Customer giữ hai buổi 08:00–12:00 và 13:00–18:00 theo UTC+7; ngày hợp lệ tính 14 ngày từ giờ Việt Nam, chọn ngày chưa chọn buổi.
 - Không có dữ liệu hay luồng giả (PO 07/10/2026): nạp ví chỉ qua VNPay, phản hồi không có `paymentUrl` là lỗi; nạp hay rút bị `backend` từ chối thì hiện đúng thông báo của server.
 - Chẩn đoán AI bắt buộc có mô tả, ảnh không bắt buộc (BRX-064).
 - Giao diện theo `FIXHOME-DESIGN-SYSTEM.md`: thuật ngữ tiếng Việt thống nhất, tiền dạng `1.250.000 ₫`, giờ theo UTC+7 qua `utils/vn-time`, không hiện mã lỗi cho người dùng.
@@ -212,6 +237,11 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - Ảnh check-in khuôn mặt không được hiển thị cho Customer. Chặn upload ảnh hỗ trợ/bảo hành mới đến khi Backend có phương án riêng tư được duyệt; không dùng media public làm đường thay thế.
 
 ## 8. Việc đang dở và rủi ro đã biết
+
+- UX1–UX5 visual: đã xem 13 ảnh AGY trước/sau Luna, nhưng AGY xác nhận cửa sổ resize chỉ đạt 502 CSS px với DPR 1.25, không chứng minh viewport 320/360/390/430dp. Cần chụp lại bằng device emulation và ghi kích thước thực. Customer đăng nhập, bàn phím, fontScale 1.3, Reduce Motion tương tác, native và Web runtime parity CHƯA KIỂM CHỨNG. Không đăng nhập live để chụp Booking/Matching vì GET có thể thay đổi trạng thái; chỉ dùng fixture chặn mạng trước bootstrap.
+
+- C50 PR-A đã nhận diện ledger `withdrawal`/`withdrawal_refund`, chấp nhận `balanceAfter: 0`, và hiển thị chiều tiền theo Backend. C45 KYC API/UI/validation, C50 PR-C bank/rút tiền và Guest map có unit tests. Expo Web Guest Home/PublicOrderTracking đã kiểm tra ở 320/360/390/430dp: không tràn ngang, shortcut và route hiển thị, focus bàn phím và lỗi form rỗng hoạt động. Authenticated wallet/KYC/withdrawal trên browser, native safe-area/IME, native map thực, signed PUT, tài khoản Backend thật, payout/finance E2E và Web parity CHƯA KIỂM CHỨNG. Không có KYC hoặc giao dịch tài chính thật được gửi.
+- Expo Web còn một React DOM console warning từ `MessageCircle` trong `CustomerHomeScreen` do thuộc tính `accessible={false}`; không thuộc thay đổi visual này.
 
 - SEP-135/136 Auth được phép triển khai: first-run, session bootstrap và logout dùng root stack theo phiên/vai trò. Backend source xác nhận login `identifier` nhận email hoặc số điện thoại; UI phản ánh đúng contract. Không đổi token storage, interceptor refresh hoặc quyền Backend. Kiểm tra đăng nhập trên iPhone thật còn CHƯA KIỂM CHỨNG.
 - FH-MAIN-01 HOLD Finance: `src/api/orders.api.ts` giữ `toMoney` dev; các test WIP yêu cầu từ chối null/invalid monetary fields trong `src/api/orders.api.test.ts` chưa nhập, cần Finance owner quyết định trước khi đổi parser. Test GET history/privacy và malformed page đã nhập. Glass giữ liquid glass, responsive opt-in và năm tab Technician; bổ sung prop nhãn tùy chọn, chưa bật trên Technician.
@@ -230,6 +260,21 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload support/warranty mới bị khóa theo quyết định owner. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-10-17 17:48 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | Booking Customer giữ hai buổi sáng/chiều; lịch 14 ngày có lịch tháng, không chọn buổi ngầm và làm mới theo focus/app/time.
+- 2026-10-17 16:50 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | Polish Customer: reset shortcut, đủ mã vệ sinh catalog, nhãn TV đúng phạm vi, cutout plumbing riêng, catalog dễ đọc, CTA trong vùng chạm và sheet uy tín truy cập được; chờ AGY recapture viewport thật.
+- 2026-10-17 16:23 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | UX1–UX5: định tuyến catalog theo service code, booking hai bước/review riêng, receipt gọn, radar matching có điều kiện, reputation customer sheet và CTA giữa nổi; thiết bị/visual QA CHƯA KIỂM CHỨNG.
+- 2026-10-17 14:00 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | Thay acronym KYC hiển thị trong tiến trình rút tiền và thông báo lỗi bằng thuật ngữ “xác minh danh tính”; status/API giữ nguyên.
+- 2026-10-17 13:51 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | C50/C45 owner visual polish: shortcut Guest/Customer, copy mã ở CompletedOrder Customer, wallet và Withdrawal/KYC; 12 suites/125 focused tests PASS, Expo Web guest viewport 320–430dp PASS; không gửi API KYC, ngân hàng hoặc rút tiền thật.
+- 2026-10-17 02:11 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | Ổn định test AppState unresolved bằng GPS fixture tạo theo test, `Date.now` cố định và flush lifecycle qua `act`; serial lẫn regular Jest đều 285/3412 PASS, lint/typecheck/check:expo PASS.
+- 2026-10-17 02:08 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | C45 map parity: 20 Jest mục tiêu, full Jest 285/3412, typecheck/lint/Expo check và web export đạt; native map runtime CHƯA KIỂM CHỨNG.
+- 2026-10-17 02:04 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | Sửa C45 tracker đọc trực tiếp `data`, withdrawal history đọc top-level `data`/`meta`, và guard `stopPropagation`; full Jest 285/3411, focused 24/24, lint/typecheck/Expo check PASS.
+- 2026-10-17 01:56 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | C45 xóa mốc GPS sau khi map hết hạn; Jest bao phủ GPS mới/thiếu/cũ, đơn kết thúc, blur và background; native runtime CHƯA KIỂM CHỨNG.
+- 2026-10-17 01:53 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | C45 thêm map native marker GPS/địa chỉ đích có điều kiện freshness/lifecycle; Expo Web dùng fallback không tải `react-native-maps`.
+- 2026-10-17 01:42 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | PR-D thêm tra cứu đơn Guest theo mã + điện thoại, giới hạn chung manual/poll 5/60 giây, 429 backoff, kiểm soát focus/background/stale GPS và copy đúng `order.code` ở hai màn Customer; focused 15 suites/124 tests, full Jest 285 suites/3402 tests, lint/typecheck/check:expo/diff check đạt; native/runtime CHƯA KIỂM CHỨNG.
+- 2026-10-17 01:29 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | PR-C thêm quản lý ngân hàng, rút tiền một lần không replay khi ACK chưa rõ, đối soát GET và lịch sử phân trang với ba status thật; focused 3 suites/18 tests, API runtime/thiết bị/giao dịch tài chính CHƯA KIỂM CHỨNG.
+- 2026-10-17 01:20 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | PR-B thêm KYC Customer với kiểm tra tuổi/ngày Việt Nam, hai ảnh CCCD riêng theo MIME/đuôi/owner path, signed XHR có timeout/abort và status; focused 4 suites/22 tests, lint/typecheck đạt; runtime Backend và thiết bị CHƯA KIỂM CHỨNG.
+- 2026-10-17 01:09 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | PR-A chốt kiểm thử đủ bảy loại ledger, `amount` dương và `balanceAfter` không âm (kể cả zero), từ chối loại không biết hoặc giá trị malformed; focused Jest xanh, chưa có thao tác tài chính thật.
+- 2026-10-17 00:56 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | PR-A mở rộng parser ví cho hai loại ledger rút tiền và trình bày đúng nhãn/chiều tiền; chưa có thao tác tài chính thật.
 - 2026-10-16 11:21 (UTC+7) | Hgnv11 | feat/sep139-group-b | Tạo booking chọn buổi sáng/chiều hoặc Tới ngay và ghi chú cho thợ như web, bỏ chọn giờ bắt đầu tự do; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-16 11:06 (UTC+7) | Hgnv11 | feat/sep139-group-b | Nhóm B SEP-139 (tự nhận việc, đặt lại thợ, uy tín, bảo hành mặc định, thu nhập theo kỳ, lưới lịch) và nhãn/thông báo tiếng Việt theo web; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-15 14:41 (UTC+7) | Hgnv11 | feat/sep139-m8-cutover | Màn nhiệm vụ không bị gỡ khi đơn hoặc tài nguyên tải lại hay có lệnh chờ (ảnh khuôn mặt, ảnh trước/sau, link VNPay); VNPay mở tự động sau xác nhận và gửi header x-client-platform mobile để backend trả về fixhome://app/order-payment; dấu lệnh VNPay quá 15 phút mà hoá đơn chưa trả thì mở khoá; thư viện ảnh gọi ảnh khuôn mặt đúng tên; thiết bị và E2E CHƯA KIỂM CHỨNG
@@ -275,9 +320,3 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-12 20:45 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | Đối chiếu source SEP-132: page fail-closed, glass responsive opt-in, route thông báo thợ và các gate Auth/Finance còn chờ.
 
 - 2026-10-09 00:17 (UTC+7) | ToanAltF4 | feat/technician-certificates | Đăng ký thợ: chứng chỉ không bắt buộc (bản công chứng), câu nhắc đến trụ sở sau khi nộp hồ sơ.
-- 2026-10-09 00:08 (UTC+7) | ToanAltF4 | feat/technician-order-steps | Thợ: check-in mở camera chụp sản phẩm, bỏ nút bắt đầu sửa, hoàn thành kèm ảnh, chỉ dùng camera, nút cần thay đổi thợ.
-- 2026-10-08 23:43 (UTC+7) | ToanAltF4 | feat/technician-sessions | Thợ: lịch hẹn theo buổi, ghi chú khách, nút xuất phát theo giờ cho phép, gửi GPS mỗi 5 phút, bán kính 40 km.
-- 2026-10-08 21:49 (UTC+7) | ToanAltF4 | feat/customer-extend-matching-and-tech-areas | Khách gia hạn thời gian chờ thợ; thợ sửa khu vực phục vụ sau onboarding.
-- 2026-10-07 22:05 (UTC+7) | ToanAltF4 | fix/technician-quote-status-label | Trạng thái báo giá hiện bằng chữ ở màn của kỹ thuật viên, dùng chung utils/quote-status.ts.
-- 2026-10-07 19:31 (UTC+7) | ToanAltF4 | fix/no-fake-data-and-po-decisions | Ghi việc gỡ dữ liệu giả, ảnh đại diện kỹ thuật viên, BRX-064 và thông báo mới; bỏ rủi ro ảnh file:// đã sửa
-- 2026-10-07 14:43 (UTC+7) | ToanAltF4 | docs/repo-context | Tạo file context theo bộ quy tắc chung của bốn repo, ghi hiện trạng sau đợt sửa lỗi ngày 07/10/2026

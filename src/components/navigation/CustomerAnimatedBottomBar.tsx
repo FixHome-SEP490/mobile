@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import type { NavigationProp } from '@react-navigation/native';
+import * as Haptics from 'expo-haptics';
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
@@ -91,6 +92,7 @@ export default function CustomerAnimatedBottomBar(props: CustomerAnimatedBottomB
   const [positionsWidth, setPositionsWidth] = useState(0);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const indicatorX = useSharedValue(0);
+  const bookingActionScale = useSharedValue(1);
   const snapPoints = useMemo(() => ['42%', '62%'], []);
   const renderBackdrop = useCallback((backdropProps: React.ComponentProps<typeof BottomSheetBackdrop>) => (
     <BottomSheetBackdrop {...backdropProps} appearsOnIndex={0} disappearsOnIndex={-1} pressBehavior="close" opacity={0.48} />
@@ -106,6 +108,9 @@ export default function CustomerAnimatedBottomBar(props: CustomerAnimatedBottomB
   const indicatorTargetX = activeColumn * slotWidth;
   const indicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: indicatorX.value }],
+  }));
+  const bookingActionStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: bookingActionScale.value }],
   }));
 
   useEffect(() => {
@@ -207,6 +212,19 @@ export default function CustomerAnimatedBottomBar(props: CustomerAnimatedBottomB
     sheetRef.current?.present();
   };
 
+  const pressBookingActionIn = () => {
+    void Haptics.selectionAsync();
+    if (!reduceMotion) {
+      bookingActionScale.value = withSpring(0.94, { damping: 18, stiffness: 260, mass: 0.5 });
+    }
+  };
+
+  const pressBookingActionOut = () => {
+    bookingActionScale.value = reduceMotion
+      ? 1
+      : withSpring(1, { damping: 18, stiffness: 260, mass: 0.5 });
+  };
+
   const dismissSheet = () => {
     setSheetOpen(false);
     sheetRef.current?.dismiss();
@@ -277,24 +295,7 @@ export default function CustomerAnimatedBottomBar(props: CustomerAnimatedBottomB
           </Pressable>
         ))}
 
-        <View style={styles.centerSlot}>
-          <Pressable
-            accessible
-            accessibilityRole="button"
-            accessibilityLabel="Đặt lịch"
-            accessibilityHint="Mở hai cách đặt lịch"
-            accessibilityState={{ expanded: sheetOpen }}
-            onPress={openSheet}
-            style={({ pressed }) => [
-              styles.actionButton,
-              { backgroundColor: 'transparent', opacity: pressed ? 0.65 : 1 },
-            ]}
-          >
-            <View style={[styles.actionGlyph, { width: 42, height: 42, borderRadius: 21, backgroundColor: sheetOpen ? 'transparent' : colors.primarySoft }]}>
-              <CalendarCheck size={28} color={sheetOpen ? colors.surface : colors.primaryStrong} strokeWidth={2.2} />
-            </View>
-          </Pressable>
-        </View>
+        <View style={styles.centerSlot} />
 
         {tabs.slice(2).map((tab) => (
           <Pressable
@@ -320,6 +321,26 @@ export default function CustomerAnimatedBottomBar(props: CustomerAnimatedBottomB
           </Pressable>
         ))}
       </BlurView>
+
+      <View testID="customer-booking-action-layer" pointerEvents="box-none" style={styles.centerActionLayer}>
+        <Animated.View pointerEvents="box-none" style={[styles.actionScale, bookingActionStyle]}>
+          <Pressable
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel="Đặt lịch"
+            accessibilityHint="Mở hai cách đặt lịch"
+            accessibilityState={{ expanded: sheetOpen }}
+            onPress={openSheet}
+            onPressIn={pressBookingActionIn}
+            onPressOut={pressBookingActionOut}
+            style={({ pressed }) => [styles.actionButton, pressed && styles.actionPressed]}
+          >
+            <LinearGradient colors={['#60A5FA', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.actionSurface}>
+              <CalendarCheck size={27} color={colors.surface} strokeWidth={2.2} />
+            </LinearGradient>
+          </Pressable>
+        </Animated.View>
+      </View>
 
       <BottomSheetModal
         accessible={false}
@@ -410,6 +431,7 @@ function createStyles(
       left: 0,
       right: 0,
       backgroundColor: 'transparent',
+      paddingTop: 8,
       paddingBottom: Math.max(bottomInset, 16),
       paddingHorizontal: 16,
     },
@@ -494,17 +516,38 @@ function createStyles(
       justifyContent: 'center',
       zIndex: 2,
     },
+    centerActionLayer: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      alignItems: 'center',
+      zIndex: 10,
+    },
+    actionScale: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+    },
     actionButton: {
-      width: '100%',
-      height: 64,
-      borderRadius: 23,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: 'transparent',
+      shadowColor: colors.primaryStrong,
+      shadowOffset: { width: 0, height: 5 },
+      shadowOpacity: 0.28,
+      shadowRadius: 8,
+      elevation: 7,
     },
-    actionGlyph: {
-      width: 28,
-      height: 28,
+    actionPressed: {
+      opacity: 0.9,
+    },
+    actionSurface: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
       alignItems: 'center',
       justifyContent: 'center',
     },

@@ -31,7 +31,6 @@ import {
 } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../../constants/theme';
-import { CUSTOMER_UI_ARTWORK } from '../../constants/customer-artwork';
 import { getServicePresentation } from '../../constants/service-presentation';
 import { bookingsApi } from '../../api/bookings.api';
 import { mediaApi, type MediaUploadImage } from '../../api/media.api';
@@ -39,6 +38,8 @@ import { servicesApi, type ServiceItem, type CategoryItem } from '../../api/serv
 import CategoryPills from '../../components/CategoryPills';
 import {
   addressReadyForBooking,
+  appendBookingDescriptionSuggestion,
+  getBookingDescriptionSuggestions,
   type BookingCreationAttempt,
 } from './customer-booking-create';
 import { createProductionBookingAttempt, entryAttemptJournal } from '../../features/order-flow/runtime/entry-attempt-production';
@@ -150,7 +151,7 @@ function isCurrentAuthenticatedCustomer(ownerUserId: string): boolean {
   );
 }
 
-const BOOKING_INTAKE_STEPS = ['Tình trạng', 'Địa chỉ', 'Khung giờ'] as const;
+const BOOKING_INTAKE_STEPS = ['Tình trạng', 'Địa chỉ & thời gian'] as const;
 
 function BookingIntakeProgress({
   active,
@@ -169,7 +170,7 @@ function BookingIntakeProgress({
     <View
       testID="booking-intake-progress"
       accessible
-      accessibilityLabel={`Tiến trình đặt lịch, bước ${active + 1} trên 3: ${BOOKING_INTAKE_STEPS[active] ?? ''}`}
+      accessibilityLabel={`Tiến trình đặt lịch, bước ${active + 1} trên ${BOOKING_INTAKE_STEPS.length}: ${BOOKING_INTAKE_STEPS[active] ?? ''}`}
       style={progressStyles.track}
     >
       {BOOKING_INTAKE_STEPS.map((label, index) => {
@@ -268,11 +269,11 @@ export default function CustomerBookingCreateScreen() {
   const [schedule, setSchedule] = useState<BookingSchedule | null>(null);
   const [customerNote, setCustomerNote] = useState('');
   // Keep one owner-bound draft while moving between dedicated booking scenes.
-  const [bookingStage, setBookingStage] = useState<0 | 1 | 2>(() =>
+  const [bookingStage, setBookingStage] = useState<0 | 1>(() =>
     customerOwnerId && (runtimeCreateStates[customerOwnerId]?.flowId === flowId
       || runtimeCompletedCreates.get(customerOwnerId)?.has(flowId)
       || runtimeCreateStates[customerOwnerId]?.kind === 'uncertain'
-      || runtimeReviewSnapshots.get(customerOwnerId)?.flowId === flowId) ? 2 : 0);
+      || runtimeReviewSnapshots.get(customerOwnerId)?.flowId === flowId) ? 1 : 0);
   const [addressEditorOpen, setAddressEditorOpen] = useState(false);
   // Preserve unknown address POST identity when the panel is closed/reopened.
   const [addressAttemptsByOwner, setAddressAttemptsByOwner] = useState<Record<string, BookingAddressCreateAttempt>>(() => {
@@ -387,7 +388,7 @@ export default function CustomerBookingCreateScreen() {
     setDescriptionTouched(false);
     const state = customerOwnerId ? runtimeCreateStates[customerOwnerId] : null;
     setBookingStage((customerOwnerId && runtimeCompletedCreates.get(customerOwnerId)?.has(flowId))
-      || (state && (state.kind === 'uncertain' || state.flowId === flowId)) ? 2 : 0);
+      || (state && (state.kind === 'uncertain' || state.flowId === flowId)) ? 1 : 0);
     setAddressEditorOpen(false);
     setSchedule(null);
     setCustomerNote('');
@@ -545,6 +546,7 @@ export default function CustomerBookingCreateScreen() {
   const selectedPrice = resolveServicePrice(selectedService);
   const selectedPresentation = getServicePresentation(selectedService?.code);
   const selectedIsOtherService = isOtherService(selectedService);
+  const descriptionSuggestions = getBookingDescriptionSuggestions(selectedService?.code);
   const descriptionLabel = selectedIsOtherService
     ? 'Mô tả yêu cầu (bắt buộc)'
     : 'Mô tả sự cố (bắt buộc)';
@@ -978,7 +980,7 @@ export default function CustomerBookingCreateScreen() {
     }
   };
 
-  const showBookingStage = (next: 0 | 1 | 2) => {
+  const showBookingStage = (next: 0 | 1) => {
     setBookingStage(next);
     scrollRef.current?.scrollTo({ y: 0, animated: false });
   };
@@ -998,14 +1000,21 @@ export default function CustomerBookingCreateScreen() {
     showBookingStage(1);
   };
 
-  const continueToSchedule = () => {
+  const continueToReview = () => {
     if (reviewDisabled) return;
-    if (!selectedAddressReady) {
-      Alert.alert('Chưa xác nhận địa chỉ', 'Hãy chọn địa chỉ có vị trí ghim hợp lệ trước khi chọn ngày giờ.');
+    if (!selectedAddress) {
+      setReviewError('Vui lòng chọn địa chỉ sửa chữa.');
       return;
     }
-    void Haptics.selectionAsync();
-    showBookingStage(2);
+    if (!selectedAddressReady) {
+      setReviewError('Địa chỉ này chưa có tọa độ hợp lệ. Hãy cập nhật vị trí GPS trước khi tiếp tục.');
+      return;
+    }
+    if (!schedule) {
+      setReviewError('Vui lòng chọn ngày và buổi (sáng hoặc chiều), hoặc chọn Tới ngay.');
+      return;
+    }
+    requestReview();
   };
 
   const action = (label: string, onPress: () => void, disabled = false, accessibilityLabel = label) => (
@@ -1148,8 +1157,7 @@ export default function CustomerBookingCreateScreen() {
           <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>
             {visibleReviewSnapshot ? 'Kiểm tra lần cuối'
               : bookingStage === 0 ? 'Tình trạng cần sửa'
-              : bookingStage === 1 ? 'Chọn địa chỉ'
-                : 'Chọn ngày và giờ'}
+              : 'Địa chỉ & thời gian'}
           </Text>
         )}
         {loading && (
@@ -1274,6 +1282,23 @@ export default function CustomerBookingCreateScreen() {
                   },
                 ]}
               />
+              <View style={styles.descriptionSuggestions}>
+                <Text style={[styles.suggestionHint, { color: colors.textSecondary }]}>Gợi ý có thể chỉnh sửa</Text>
+                <View style={styles.suggestionChips}>
+                  {descriptionSuggestions.map((suggestion) => (
+                    <TouchableOpacity
+                      key={suggestion}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Gợi ý: ${suggestion}`}
+                      onPress={() => setDescription((current) =>
+                        appendBookingDescriptionSuggestion(current, suggestion))}
+                      style={[styles.suggestionChip, { backgroundColor: colors.primarySoft, borderColor: colors.border }]}
+                    >
+                      <Text style={[styles.suggestionChipText, { color: colors.text }]}>{suggestion}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
               {!!descriptionError && (
                 <View style={styles.fieldError}>
                   <CircleAlert color={colors.error} size={16} />
@@ -1366,6 +1391,7 @@ export default function CustomerBookingCreateScreen() {
 
             {bookingStage === 1 && (
               <>
+            <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}>Địa chỉ sửa chữa</Text>
             {addressEditorOpen && customerOwnerId ? (
               addressEditor
             ) : (
@@ -1430,8 +1456,9 @@ export default function CustomerBookingCreateScreen() {
               </>
             )}
 
-            {bookingStage === 2 && (
+            {bookingStage === 1 && (
               <>
+            <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 12 }]}>Khung giờ</Text>
             <BookingSessionPicker
               value={schedule}
               onChange={(next) => { setSchedule(next); setReviewError(''); }}
@@ -1520,23 +1547,30 @@ export default function CustomerBookingCreateScreen() {
           </View>
         )}
         {!!visibleCreatedBookingId && (
-          <View style={[styles.section, { backgroundColor: colors.surface }]}>
-            <Image source={CUSTOMER_UI_ARTWORK.bookingConfirmed} style={{ width: 144, height: 112, alignSelf: 'center' }} resizeMode="contain" accessible={false} testID="booking-confirmed-art" />
-            <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>
-              Đã gửi yêu cầu
-            </Text>
-            <Text selectable style={{ color: colors.text }}>
-              Tham chiếu hỗ trợ: {visibleCreatedBookingId.slice(0, 8)}
-            </Text>
-            <Text style={[styles.note, { color: colors.textSecondary }]}>
-              Chọn kỹ thuật viên để gửi lời mời.
-            </Text>
+          <View testID="booking-submitted-receipt" style={[styles.section, { backgroundColor: colors.surface }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Ionicons name="checkmark-circle" size={28} color={colors.success} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}>Đã gửi yêu cầu</Text>
+                <Text selectable style={[styles.note, { color: colors.textSecondary }]}>Mã tham chiếu: {visibleCreatedBookingId.slice(0, 8)}</Text>
+              </View>
+            </View>
+            <Text style={[styles.note, { color: colors.textSecondary }]}>Chọn kỹ thuật viên để gửi lời mời.</Text>
             {visibleCreatedBooking && (
               <View style={{ gap: 8 }}>
-                <Text style={{ color: colors.text, fontWeight: '600' }}>{visibleCreatedBooking.snapshot.serviceName}</Text>
-                <Text numberOfLines={1} style={[styles.note, { color: colors.textSecondary }]}>{visibleCreatedBooking.snapshot.request.description}</Text>
+                <Text style={{ color: colors.text, fontWeight: '700' }}>{visibleCreatedBooking.snapshot.serviceName}</Text>
+                <Text style={[styles.note, { color: colors.text }]}>{visibleCreatedBooking.snapshot.request.description}</Text>
                 <Text style={[styles.note, { color: colors.textSecondary }]}>{visibleCreatedBooking.snapshot.scheduleLabel}</Text>
-                <Text numberOfLines={2} style={[styles.note, { color: colors.textSecondary }]}>{visibleCreatedBooking.snapshot.addressLabel} · {visibleCreatedBooking.snapshot.addressDescription}</Text>
+                <Text style={[styles.note, { color: colors.textSecondary }]}>{visibleCreatedBooking.snapshot.addressLabel} · {visibleCreatedBooking.snapshot.addressDescription}</Text>
+                <Text style={[styles.note, { color: colors.textSecondary }]}>
+                  {visibleCreatedBooking.snapshot.pricingLabel} · Số lượng: {visibleCreatedBooking.snapshot.request.quantity ?? 1}
+                </Text>
+                <Text style={[styles.note, { color: colors.textSecondary }]}>
+                  Ảnh đính kèm: {visibleCreatedBooking.snapshot.photos.length}/{MAX_BOOKING_PHOTOS}
+                </Text>
+                {visibleCreatedBooking.snapshot.hasAiSummary && (
+                  <Text style={[styles.note, { color: colors.textSecondary }]}>Đã kèm tóm tắt từ trợ lý AI.</Text>
+                )}
               </View>
             )}
 
@@ -1548,11 +1582,9 @@ export default function CustomerBookingCreateScreen() {
           {!visibleReviewSnapshot && !visibleCreatedBookingId && (
             bookingStage === 0
               ? <BookingPrimaryAction label="Tiếp tục: Chọn địa chỉ" onPress={continueToAddress} disabled={reviewDisabled} colors={colors} />
-              : bookingStage === 1
-                ? !addressEditorOpen && <BookingPrimaryAction label="Tiếp tục: Chọn ngày và giờ" onPress={continueToSchedule} disabled={reviewDisabled} colors={colors} />
-                : <BookingPrimaryAction label={isSubmitting ? 'Đang gửi yêu cầu...'
-                  : visibleUncertainAttempt ? 'Chờ xác minh yêu cầu' : 'Xem lại yêu cầu'}
-                  onPress={requestReview} disabled={reviewDisabled} colors={colors} />
+              : !addressEditorOpen && <BookingPrimaryAction label={isSubmitting ? 'Đang gửi yêu cầu...'
+                : visibleUncertainAttempt ? 'Chờ xác minh yêu cầu' : 'Xem lại yêu cầu'}
+                onPress={continueToReview} disabled={reviewDisabled} colors={colors} />
           )}
           {visibleReviewSnapshot && !visibleCreatedBookingId && (
             <>
@@ -1721,6 +1753,11 @@ const styles = StyleSheet.create({
   serviceCopy: { flex: 1, gap: 2 },
   serviceEyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
   input: { minHeight: 94, padding: 12, borderWidth: 1, borderRadius: 14, textAlignVertical: 'top', fontSize: 16, lineHeight: 24 },
+  descriptionSuggestions: { gap: 8, marginTop: 10 },
+  suggestionHint: { fontSize: 12, lineHeight: 16 },
+  suggestionChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  suggestionChip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, borderWidth: 1, borderRadius: 22 },
+  suggestionChipText: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
   fieldError: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
   fieldErrorText: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '500' },
   photoSection: { padding: 16, borderRadius: 14, gap: 10 },

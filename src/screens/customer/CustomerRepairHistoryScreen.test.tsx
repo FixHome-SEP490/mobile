@@ -1,10 +1,12 @@
 import React from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import * as Clipboard from 'expo-clipboard';
 
 const mockNavigate = jest.fn();
 const mockBack = jest.fn();
 const mockHistory = jest.fn();
+const mockSetClipboard = Clipboard.setStringAsync as jest.Mock;
 
 jest.mock('@react-navigation/native', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -42,6 +44,7 @@ jest.mock('../../constants/theme', () => ({
 jest.mock('../../api/orders.api', () => ({
   ordersApi: { getRepairHistory: (...args: unknown[]) => mockHistory(...args) },
 }));
+jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => {}) }));
 
 const validRow = {
   orderId: 'service-order-1',
@@ -151,5 +154,38 @@ describe('CustomerRepairHistoryScreen real UI', () => {
     } finally {
       act(() => tree.unmount());
     }
+  });
+
+  it('copies only the real full order code without opening the card', async () => {
+    mockHistory.mockResolvedValue({ data: [validRow], total: 1 });
+    const tree = await mount();
+    const copy = action(tree, 'Sao chép mã đơn FH-001');
+    expect(copy).toBeDefined();
+    const stopPropagation = jest.fn();
+    await act(async () => { await copy?.props.onPress({ stopPropagation }); });
+    expect(mockSetClipboard).toHaveBeenCalledWith('FH-001');
+    expect(stopPropagation).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(texts(tree)).toContain('Đã sao chép mã đơn.');
+    act(() => tree.unmount());
+  });
+
+  it('copies the order code when the press event has no callable propagation handler', async () => {
+    mockHistory.mockResolvedValue({ data: [validRow], total: 1 });
+    const tree = await mount();
+    const copy = action(tree, 'Sao chép mã đơn FH-001');
+    await act(async () => { await copy?.props.onPress({ stopPropagation: 'unavailable' }); });
+    expect(mockSetClipboard).toHaveBeenCalledWith('FH-001');
+    expect(texts(tree)).toContain('Đã sao chép mã đơn.');
+    act(() => tree.unmount());
+  });
+
+  it('never displays or copies a shortened order ID when the real code is absent', async () => {
+    mockHistory.mockResolvedValue({ data: [{ ...validRow, code: '' }], total: 1 });
+    const tree = await mount();
+    expect(texts(tree)).toContain('Chưa có mã đơn');
+    expect(texts(tree)).not.toContain('service-');
+    expect(tree.root.findAllByProps({ testID: 'repair-history-copy-code-service-order-1' })).toHaveLength(0);
+    act(() => tree.unmount());
   });
 });

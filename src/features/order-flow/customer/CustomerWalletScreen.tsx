@@ -1,15 +1,50 @@
 import React, { useEffect, useState } from 'react';
 import { Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../../types';
 import { useAuthStore } from '../../../store/auth.store';
 import { useCustomerWallet } from './useCustomerWallet';
 import { takePendingWalletReturn } from '../../../navigation/customer-wallet-return';
 import { parseWholeVndInput } from '../shared/m6-amount-input';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
-import { quoteMoneyText } from '../shared/DecisionSummary';
 import { formatVnd } from '../../../utils/format';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+import { wholeVnd, type CustomerWalletTransaction } from '../../../api/customer-wallet.api';
+
+const transactionLabels: Record<CustomerWalletTransaction['type'], string> = {
+  top_up: 'Nạp tiền',
+  invoice_payment: 'Thanh toán hóa đơn',
+  refund: 'Hoàn tiền',
+  adjustment_credit: 'Điều chỉnh cộng',
+  adjustment_debit: 'Điều chỉnh trừ',
+  withdrawal: 'Rút tiền',
+  withdrawal_refund: 'Hoàn tiền rút tiền',
+};
+
+const transactionIcons: Record<CustomerWalletTransaction['type'], React.ComponentProps<typeof Ionicons>['name']> = {
+  top_up: 'arrow-down-circle-outline',
+  invoice_payment: 'receipt-outline',
+  refund: 'refresh-circle-outline',
+  adjustment_credit: 'add-circle-outline',
+  adjustment_debit: 'remove-circle-outline',
+  withdrawal: 'arrow-up-circle-outline',
+  withdrawal_refund: 'refresh-circle-outline',
+};
+
+function isIncomingTransaction(type: CustomerWalletTransaction['type']): boolean {
+  return !['invoice_payment', 'adjustment_debit', 'withdrawal'].includes(type);
+}
+
+function transactionAmountText(transaction: CustomerWalletTransaction): string {
+  const amount = wholeVnd(transaction.amount);
+  if (amount === null) return '—';
+  const incoming = isIncomingTransaction(transaction.type);
+  const formatted = formatVnd(incoming ? amount : -amount);
+  return incoming ? `+${formatted}` : formatted;
+}
 
 function parseTopUpAmount(text: string): number | null {
   return parseWholeVndInput(text, { min: 10000, max: 50000000 });
@@ -26,7 +61,7 @@ interface FrozenTopUpSheet {
  * paymentId + authoritative PAYMENT ledger row; balance changes never count.
  */
 export default function CustomerWalletScreen() {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const authenticated = useAuthStore(s => s.isAuthenticated);
   const role = useAuthStore(s => s.user?.role ?? null);
   const { controller, state } = useCustomerWallet();
@@ -34,6 +69,8 @@ export default function CustomerWalletScreen() {
   const [amountText, setAmountText] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [sheet, setSheet] = useState<FrozenTopUpSheet | null>(null);
+  const [topUpExpanded, setTopUpExpanded] = useState(false);
+  const [expandedReferenceIds, setExpandedReferenceIds] = useState<Set<string>>(() => new Set());
   const focused = useIsFocused();
 
   // Root gate holds a canonical GET-refresh signal (cold getInitialURL or
@@ -94,6 +131,23 @@ export default function CustomerWalletScreen() {
     void controller.verify(next);
   };
 
+  const toggleReference = (id: string) => {
+    setExpandedReferenceIds(current => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const topUpAction = sheetValid && sheet
+    ? { label: `Xác nhận nạp ${formatVnd(sheet.amount)}`, testID: 'wallet-topup-submit', onPress: submitSheet }
+    : state.confirmation && !sheet
+      ? { label: 'Xem lại và xác nhận', testID: 'wallet-topup-open-sheet', onPress: openSheet }
+      : state.urlReady
+        ? { label: 'Mở cổng nạp tiền', testID: 'wallet-topup-open-browser', onPress: () => { if (!busy) void controller.openPaymentUrl(); } }
+        : { label: busy ? 'Đang xử lý…' : 'Kiểm tra số tiền nạp', testID: 'wallet-topup-request', onPress: request };
+
   return (
     <TaskScreenShell
       title="Ví FixHome"
@@ -104,81 +158,151 @@ export default function CustomerWalletScreen() {
         disabled: busy,
         onPress: () => { if (!busy) void controller.verify(page); },
       }}
-      primary={
-        sheetValid && sheet
-          ? { label: `Xác nhận nạp ${formatVnd(sheet.amount)}`, testID: 'wallet-topup-submit', disabled: busy,
-              accessibilityHint: 'Tạo một liên kết nạp tiền đúng số tiền đã chốt', onPress: submitSheet }
-          : state.confirmation && !sheet
-            ? { label: 'Xem lại và xác nhận', testID: 'wallet-topup-open-sheet', disabled: busy, onPress: openSheet }
-            : state.urlReady
-              ? { label: 'Mở cổng nạp tiền', testID: 'wallet-topup-open-browser', disabled: busy,
-                  onPress: () => { if (!busy) void controller.openPaymentUrl(); } }
-              : { label: busy ? 'Đang xử lý…' : 'Kiểm tra số tiền nạp', testID: 'wallet-topup-request', disabled: busy, onPress: request }
-      }
     >
-      <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }}>
-        <DetailRow
-          label="Số dư khả dụng"
-          value={summary ? formatVnd(Number(summary.balance)) : summaryError ? 'Chưa tải được số dư' : 'Đang tải…'}
-        />
+      <View testID="wallet-balance-hero" style={{ backgroundColor: colors.primaryStrong, borderRadius: 20, padding: spacing.lg, gap: spacing.sm }}>
+        <Text style={{ color: colors.surface, fontSize: 14, fontWeight: '600' }}>Số dư khả dụng</Text>
+        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ color: colors.surface, fontSize: 28, lineHeight: 36, fontWeight: '700' }}>
+          {summary ? formatVnd(Number(summary.balance)) : summaryError ? 'Chưa tải được số dư' : 'Đang tải…'}
+        </Text>
         {summaryError ? (
-          <Text style={{ color: colors.textSecondary, fontSize: 13, paddingBottom: spacing.sm }}>
+          <Text style={{ color: colors.surface, opacity: 0.88, fontSize: 13, lineHeight: 19 }}>
             Số dư lỗi không được xem như số dư 0; hãy làm mới.
           </Text>
         ) : null}
       </View>
+      <View testID="wallet-primary-actions" style={{ flexDirection: 'row', gap: spacing.sm }}>
+        <TouchableOpacity
+          testID="wallet-topup-expand"
+          accessibilityRole="button"
+          accessibilityLabel="Nạp tiền"
+          accessibilityState={{ expanded: topUpExpanded, disabled: busy }}
+          disabled={busy}
+          onPress={() => setTopUpExpanded(expanded => !expanded)}
+          activeOpacity={0.8}
+          style={{ flex: 1, minHeight: 50, paddingHorizontal: spacing.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: 12, backgroundColor: colors.primaryStrong, opacity: busy ? 0.55 : 1 }}
+        >
+          <Ionicons name="add-circle-outline" size={19} color={colors.surface} />
+          <Text style={{ color: colors.surface, fontSize: 14, fontWeight: '700' }}>Nạp tiền</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          testID="wallet-withdraw-open"
+          accessibilityRole="button"
+          accessibilityLabel="Rút tiền"
+          onPress={() => navigation.navigate('CustomerWithdraw')}
+          activeOpacity={0.8}
+          style={{ flex: 1, minHeight: 50, paddingHorizontal: spacing.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: 12, borderWidth: 1, borderColor: colors.primaryStrong, backgroundColor: colors.surface }}
+        >
+          <Ionicons name="arrow-up-circle-outline" size={19} color={colors.primaryStrong} />
+          <Text style={{ color: colors.primaryStrong, fontSize: 14, fontWeight: '700' }}>Rút tiền</Text>
+        </TouchableOpacity>
+      </View>
       {markerUnknown ? (
         <ReadOnlyNotice>Lần nạp trước chưa rõ kết quả. Hãy kiểm tra sổ giao dịch bên dưới; không tạo yêu cầu nạp mới khi còn thao tác chưa rõ.</ReadOnlyNotice>
       ) : null}
-      <View style={{ backgroundColor: colors.surface, borderRadius: 14, padding: spacing.md, gap: 12 }}>
-        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Nạp tiền vào ví</Text>
-        <Text accessibilityRole="none" style={{ color: colors.textSecondary, fontSize: 13 }}>
-          Số tiền từ 10.000 ₫ đến 50.000.000 ₫. Nạp tiền không tự thanh toán hóa đơn nào.
-        </Text>
-        <TextInput
-          testID="wallet-topup-amount"
-          accessibilityLabel="Số tiền nạp"
-          keyboardType="numeric"
-          editable={!busy && !markerUnknown}
-          value={amountText}
-          onChangeText={setAmountText}
-          placeholder="Ví dụ 100000"
-          placeholderTextColor={colors.muted}
-          style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, minHeight: 52, paddingHorizontal: spacing.md, fontSize: 16, color: colors.text, backgroundColor: colors.surface }}
-        />
-        {sheetValid && sheet ? (
-          <View style={{ backgroundColor: colors.tone.warning.bg, borderColor: colors.tone.warning.fg, borderWidth: 1, borderRadius: 12, padding: spacing.md }} testID="wallet-topup-sheet">
-            <Text style={{ fontSize: 15, fontWeight: '700', color: colors.tone.warning.text }}>Xác nhận nạp tiền</Text>
-            <DetailRow label="Số tiền đã chốt" value={formatVnd(sheet.amount)} />
-            <TouchableOpacity
-              testID="wallet-topup-cancel"
-              accessibilityRole="button"
-              accessibilityLabel="Hủy xác nhận nạp tiền"
-              disabled={busy}
-              onPress={cancelSheet}
-              style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
-            >
-              <Text style={{ color: colors.primaryStrong, fontWeight: '600', fontSize: 14, lineHeight: 20 }}>Hủy xác nhận</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-        {formError ? <Text style={{ color: colors.error, fontSize: 14 }}>{formError}</Text> : null}
-        {state.message ? <ReadOnlyNotice>{state.message}</ReadOnlyNotice> : null}
-      </View>
-      <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }}>
-        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text, paddingVertical: spacing.md }}>Lịch sử giao dịch</Text>
-        {!summary ? (
-          <Text style={{ color: colors.textSecondary, paddingBottom: spacing.md }}>Đang tải sổ giao dịch từ máy chủ…</Text>
-        ) : summary.transactions.length === 0 ? (
-          <Text style={{ color: colors.textSecondary, paddingBottom: spacing.md }}>Chưa có giao dịch nào.</Text>
-        ) : (
-          summary.transactions.map(tx => (
-            <View key={tx.id} testID={`wallet-tx-${tx.id}`} style={{ paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors.divider }}>
-              <DetailRow label={tx.type === 'top_up' ? 'Nạp tiền' : tx.type === 'invoice_payment' ? 'Thanh toán hóa đơn' : tx.type === 'refund' ? 'Hoàn tiền' : 'Điều chỉnh'} value={quoteMoneyText(tx.amount)} />
-              <DetailRow label="Tham chiếu" value={tx.referenceId ?? 'Không có'} />
-              <DetailRow label="Thời điểm" value={vnDateTimeString(tx.createdAt)} />
+      {topUpExpanded ? (
+        <View testID="wallet-topup-panel" style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 16, padding: spacing.md, gap: spacing.md }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+            <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="wallet-outline" size={20} color={colors.primaryStrong} />
             </View>
-          ))
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Nạp tiền vào ví</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+                Từ 10.000 ₫ đến 50.000.000 ₫. Nạp tiền không tự thanh toán hóa đơn.
+              </Text>
+            </View>
+          </View>
+          <TextInput
+            testID="wallet-topup-amount"
+            accessibilityLabel="Số tiền nạp"
+            keyboardType="numeric"
+            editable={!busy && !markerUnknown}
+            value={amountText}
+            onChangeText={setAmountText}
+            placeholder="Ví dụ 100000"
+            placeholderTextColor={colors.muted}
+            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, minHeight: 50, paddingHorizontal: spacing.md, fontSize: 16, color: colors.text, backgroundColor: colors.surface }}
+          />
+          {sheetValid && sheet ? (
+            <View style={{ backgroundColor: colors.tone.warning.bg, borderColor: colors.tone.warning.fg, borderWidth: 1, borderRadius: 12, padding: spacing.md, gap: spacing.xs }} testID="wallet-topup-sheet">
+              <Text style={{ fontSize: 15, fontWeight: '700', color: colors.tone.warning.text }}>Xác nhận nạp tiền</Text>
+              <DetailRow label="Số tiền đã chốt" value={formatVnd(sheet.amount)} />
+              <TouchableOpacity
+                testID="wallet-topup-cancel"
+                accessibilityRole="button"
+                accessibilityLabel="Hủy xác nhận nạp tiền"
+                disabled={busy}
+                onPress={cancelSheet}
+                style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Text style={{ color: colors.primaryStrong, fontWeight: '600', fontSize: 14, lineHeight: 20 }}>Hủy xác nhận</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+          {formError ? <Text style={{ color: colors.error, fontSize: 14 }} accessibilityRole="alert">{formError}</Text> : null}
+          {state.message ? <ReadOnlyNotice>{state.message}</ReadOnlyNotice> : null}
+          <TouchableOpacity
+            testID={topUpAction.testID}
+            accessibilityRole="button"
+            accessibilityHint={topUpAction.testID === 'wallet-topup-submit' ? 'Tạo một liên kết nạp tiền đúng số tiền đã chốt' : undefined}
+            disabled={busy || markerUnknown}
+            onPress={topUpAction.onPress}
+            activeOpacity={0.8}
+            style={{ minHeight: 48, paddingHorizontal: spacing.md, borderRadius: 12, backgroundColor: colors.primaryStrong, alignItems: 'center', justifyContent: 'center', opacity: busy || markerUnknown ? 0.55 : 1 }}
+          >
+            <Text style={{ color: colors.surface, fontSize: 14, fontWeight: '700', textAlign: 'center' }}>{topUpAction.label}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+      <View style={{ gap: spacing.xs }}>
+        <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text, paddingVertical: spacing.xs }}>Lịch sử giao dịch</Text>
+        {!summary ? (
+          <Text style={{ color: colors.textSecondary }}>Đang tải sổ giao dịch…</Text>
+        ) : summary.transactions.length === 0 ? (
+          <Text style={{ color: colors.textSecondary }}>Chưa có giao dịch nào.</Text>
+        ) : (
+          summary.transactions.map(tx => {
+            const incoming = isIncomingTransaction(tx.type);
+            const referenceExpanded = expandedReferenceIds.has(tx.id);
+            return (
+              <View key={tx.id} testID={`wallet-tx-${tx.id}`} style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.divider }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                  <View testID={`wallet-tx-icon-${tx.id}`} style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: incoming ? colors.tone.success.bg : colors.tone.info.bg, alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name={transactionIcons[tx.type]} size={20} color={incoming ? colors.tone.success.fg : colors.tone.info.fg} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+                    <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>{transactionLabels[tx.type]}</Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 16 }}>{vnDateTimeString(tx.createdAt)}</Text>
+                  </View>
+                  <Text style={{ color: incoming ? colors.tone.success.text : colors.text, fontSize: 14, fontWeight: '700', textAlign: 'right' }}>
+                    {transactionAmountText(tx)}
+                  </Text>
+                </View>
+                {tx.referenceId ? (
+                  <>
+                    <TouchableOpacity
+                      testID={`wallet-tx-details-${tx.id}`}
+                      accessibilityRole="button"
+                      accessibilityLabel="Chi tiết giao dịch"
+                      accessibilityState={{ expanded: referenceExpanded }}
+                      onPress={() => toggleReference(tx.id)}
+                      activeOpacity={0.75}
+                      style={{ minHeight: 44, alignSelf: 'flex-start', paddingHorizontal: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    >
+                      <Text style={{ color: colors.primaryStrong, fontSize: 13, fontWeight: '600' }}>{referenceExpanded ? 'Ẩn chi tiết' : 'Chi tiết'}</Text>
+                      <Ionicons name={referenceExpanded ? 'chevron-up' : 'chevron-down'} size={15} color={colors.primaryStrong} />
+                    </TouchableOpacity>
+                    {referenceExpanded ? (
+                      <View style={{ padding: spacing.sm, backgroundColor: colors.background, borderRadius: 8, gap: 4 }}>
+                        <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Mã tham chiếu</Text>
+                        <Text selectable style={{ color: colors.text, fontSize: 13, lineHeight: 18 }}>{tx.referenceId}</Text>
+                      </View>
+                    ) : null}
+                  </>
+                ) : null}
+              </View>
+            );
+          })
         )}
       </View>
       {summary && totalPages > 1 ? (

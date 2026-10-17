@@ -1,8 +1,10 @@
 import type { BookingItem } from '../../api/bookings.api';
 import {
   addressReadyForBooking,
+  appendBookingDescriptionSuggestion,
   classifyBookingCreatePostError,
   findCreatedBookingEvidence,
+  getBookingDescriptionSuggestions,
   type BookingCreationAttempt,
 } from './customer-booking-create';
 
@@ -34,6 +36,21 @@ function booking(overrides: Partial<BookingItem> = {}): BookingItem {
 }
 
 describe('customer booking create safety helpers', () => {
+  it.each([
+    ['VE_SINH_DIEU_HOA_1HP', ['Máy lạnh', 'Dấu hiệu', 'Thời điểm phát hiện']],
+    ['SUA_RO_RI_NUOC', ['Vị trí rò rỉ', 'Dấu hiệu', 'Thời điểm phát hiện']],
+    ['LAP_TV_GIA_TREO', ['Kích thước TV', 'Loại tường', 'Vị trí lắp đặt']],
+  ])('offers editable service-specific description prompts for %s', (code, expected) => {
+    expect(getBookingDescriptionSuggestions(code)).toEqual(expected);
+  });
+
+  it('appends a prompt to free text without changing or locking the existing description', () => {
+    expect(appendBookingDescriptionSuggestion('Máy lạnh chảy nước', 'Vị trí')).toBe(
+      'Máy lạnh chảy nước\nVị trí: ',
+    );
+    expect(appendBookingDescriptionSuggestion('', 'Vị trí')).toBe('Vị trí: ');
+  });
+
   it.each([
     [400, 'definitive'],
     [401, 'definitive'],

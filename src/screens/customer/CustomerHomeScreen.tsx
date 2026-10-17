@@ -44,59 +44,58 @@ import { LinearGradient } from 'expo-linear-gradient';
 interface PopularServiceItem {
   code: string;
   name: string;
-  // Deep-link target on CustomerServices: categoryCode filters by the
-  // Backend's seeded category; query pre-fills the existing server search.
+  // Local matching hint for the live catalog response; never a server query.
+  serviceAlias: string;
   categoryCode?: string;
-  query?: string;
 }
 
 const getPopularServices = (): PopularServiceItem[] => [
   {
     code: 'VE_SINH_DIEU_HOA_1HP',
     name: 'Vệ sinh máy lạnh',
+    serviceAlias: 'Vệ sinh máy lạnh',
     categoryCode: HOME_POPULAR_SERVICE_TARGETS[0].categoryCode,
-    query: 'Vệ sinh máy lạnh',
   },
   {
     code: 'THAY_VOI_NUOC',
     name: 'Thay vòi nước',
+    serviceAlias: 'Thay vòi nước',
     categoryCode: HOME_POPULAR_SERVICE_TARGETS[1].categoryCode,
-    query: 'Thay vòi nước',
   },
   {
     code: 'THAY_CONG_TAC_DIEN',
     name: 'Thay công tắc điện',
+    serviceAlias: 'Thay công tắc điện',
     categoryCode: HOME_POPULAR_SERVICE_TARGETS[2].categoryCode,
-    query: 'Thay công tắc điện',
   },
   {
     code: 'SUA_RO_RI_NUOC',
     name: 'Sửa rò rỉ nước',
+    serviceAlias: 'Sửa rò rỉ nước',
     categoryCode: HOME_POPULAR_SERVICE_TARGETS[3].categoryCode,
-    query: 'Sửa rò rỉ nước',
   },
   {
     code: 'LAP_TV_GIA_TREO',
-    name: 'Lắp TV treo tường',
-    query: 'Lắp TV treo tường',
+    name: 'Lắp TV lên giá treo sẵn',
+    serviceAlias: 'Lắp TV lên giá treo sẵn',
   },
   {
     code: 'SUA_BEP_TU',
     name: 'Sửa bếp từ',
+    serviceAlias: 'Sửa bếp từ',
     categoryCode: HOME_POPULAR_SERVICE_TARGETS[5].categoryCode,
-    query: 'Sửa bếp từ',
   },
   {
     code: 'SUA_MAY_GIAT',
     name: 'Sửa máy giặt',
+    serviceAlias: 'Sửa máy giặt',
     categoryCode: HOME_POPULAR_SERVICE_TARGETS[6].categoryCode,
-    query: 'Sửa máy giặt',
   },
   {
     code: 'SUA_TU_LANH',
     name: 'Sửa tủ lạnh',
+    serviceAlias: 'Sửa tủ lạnh',
     categoryCode: HOME_POPULAR_SERVICE_TARGETS[7].categoryCode,
-    query: 'Sửa tủ lạnh',
   },
 ];
 
@@ -210,8 +209,9 @@ export default function CustomerHomeScreen() {
   const handleServicePress = (service: PopularServiceItem) => {
     Haptics.selectionAsync();
     navigation.navigate('CustomerServices', {
+      serviceCode: service.code,
+      serviceAlias: service.serviceAlias,
       categoryCode: service.categoryCode,
-      query: service.query,
     });
   };
 
@@ -327,6 +327,19 @@ export default function CustomerHomeScreen() {
               <Ionicons name="arrow-forward" size={19} color={colors.surface} />
             </View>
           </Pressable>
+          <TouchableOpacity
+            testID="home-order-tracking"
+            style={styles.orderTrackingButton}
+            onPress={() => navigation.navigate('PublicOrderTracking')}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Tra cứu đơn sửa chữa"
+            accessibilityHint="Nhập mã đơn và số điện thoại đã đăng ký để xem trạng thái sửa chữa"
+          >
+            <Ionicons name="receipt-outline" size={20} color={colors.primaryStrong} />
+            <Text style={styles.orderTrackingText}>Tra cứu đơn sửa chữa</Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+          </TouchableOpacity>
         </View>
 
         {/* 4. Active-order resume: one concise card only with real active data */}
@@ -559,7 +572,7 @@ const getStyles = (
   },
   brandName: {
     fontSize: 21,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: -0.5,
   },
@@ -651,14 +664,11 @@ const getStyles = (
   },
   heroHeadline: {
     fontSize: windowWidth < 390 ? 25 : 29,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#FFFFFF',
     lineHeight: windowWidth < 390 ? 31 : 35,
     letterSpacing: -0.7,
     includeFontPadding: false,
-    textShadowColor: 'rgba(15,23,42,0.45)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
   },
   heroHeadlineAccent: {
     color: HERO_ACCENT,
@@ -712,6 +722,19 @@ const getStyles = (
     shadowRadius: 12,
     elevation: 4,
   },
+  orderTrackingButton: {
+    minHeight: 48,
+    marginTop: 8,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  orderTrackingText: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.text },
   searchPlaceholder: {
     flex: 1,
     fontSize: 14,

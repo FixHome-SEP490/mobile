@@ -138,6 +138,21 @@ beforeEach(() => {
 });
 
 describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
+  it.each([
+    ['guest', { user: null, isAuthenticated: false }],
+    ['signed-in customer', { user: { id: 'customer-a', role: 'customer' }, isAuthenticated: true }],
+  ] as const)('shows the order tracking shortcut below search for %s', (_actor, session) => {
+    storeMock.useAuthStore.mockImplementation(() => session);
+    const tree = mountScreen();
+    try {
+      const tracking = tree.root.findByProps({ testID: 'home-order-tracking' });
+      expect(tracking.props.accessibilityRole).toBe('button');
+      expect(tracking.props.accessibilityLabel).toBe('Tra cứu đơn sửa chữa');
+      act(() => tracking.props.onPress());
+      expect(mockNavigate).toHaveBeenCalledWith('PublicOrderTracking');
+    } finally { act(() => tree.unmount()); }
+  });
+
   it('shares guest Home browsing while private actions open Auth without address requests', () => {
     storeMock.useAuthStore.mockImplementation(() => ({ user: null, isAuthenticated: false }));
     const tree = mountScreen();
@@ -269,7 +284,7 @@ describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
     }
   });
 
-  it('keeps existing service selection: popular press deep-links CustomerServices with category/query', () => {
+  it('deep-links a popular Home service by its catalog code and local alias, not server search text', () => {
     const tree = mountScreen();
     try {
       const target = tree.root.findAllByType(TouchableOpacity).find(
@@ -278,8 +293,9 @@ describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
       expect(target).toBeDefined();
       act(() => target!.props.onPress());
       expect(mockNavigate).toHaveBeenCalledWith('CustomerServices', {
+        serviceCode: 'VE_SINH_DIEU_HOA_1HP',
+        serviceAlias: 'Vệ sinh máy lạnh',
         categoryCode: 'DIEN_LANH',
-        query: 'Vệ sinh máy lạnh',
       });
     } finally {
       act(() => tree.unmount());
@@ -308,7 +324,7 @@ describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
         'Thay vòi nước',
         'Thay công tắc điện',
         'Sửa rò rỉ nước',
-        'Lắp TV treo tường',
+        'Lắp TV lên giá treo sẵn',
         'Sửa bếp từ',
         'Sửa máy giặt',
         'Sửa tủ lạnh',
