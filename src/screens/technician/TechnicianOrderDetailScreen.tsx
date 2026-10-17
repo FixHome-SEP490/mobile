@@ -2057,7 +2057,7 @@ export default function TechnicianOrderDetailScreen() {
                 <>
                   <Text style={styles.jobMeta}>Dùng khi đã tới nơi và thấy việc nằm ngoài kỹ năng của bạn. Trường hợp này được quản lý xem xét, không tự trừ điểm uy tín.</Text>
                   {replacementOpen && (
-                    <TextInput
+                    <TextInput accessibilityLabel="Ghi chú thêm"
                       style={[styles.fieldInput, { minHeight: 80, textAlignVertical: 'top' }]}
                       value={replacementReason}
                       onChangeText={setReplacementReason}
@@ -2303,7 +2303,7 @@ export default function TechnicianOrderDetailScreen() {
                             </TouchableOpacity>
                           ) : (
                             <View style={styles.acItemCard}>
-                              <TextInput
+                              <TextInput accessibilityLabel="Tìm linh kiện"
                                 style={styles.fieldInput}
                                 value={quotePartQuery}
                                 onChangeText={(text) => {
@@ -2665,7 +2665,7 @@ export default function TechnicianOrderDetailScreen() {
 
                 {acShowPartSearch && (
                   <View style={styles.acItemCard}>
-                    <TextInput
+                    <TextInput accessibilityLabel="Tìm linh kiện FixHome"
                       style={styles.fieldInput}
                       value={acPartQuery}
                       onChangeText={(text) => {
@@ -2740,7 +2740,7 @@ export default function TechnicianOrderDetailScreen() {
                       <Text style={styles.jobMeta}>Giao đến tận nơi</Text>
                     </TouchableOpacity>
                     {acFulfillment === 'delivery' && (
-                      <TextInput
+                      <TextInput accessibilityLabel="Phí giao hàng"
                         style={styles.fieldInput}
                         value={acShippingFee}
                         onChangeText={setAcShippingFee}
@@ -3242,7 +3242,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
     borderBottomWidth: 1,
     borderBottomColor: colors.divider,
   },
-  headerTitle: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text },
+  headerTitle: { fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.text },
   headerBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   scrollContent: { padding: 16, paddingBottom: 48, gap: 12, backgroundColor: colors.background, flexGrow: 1 },
   centerLoading: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },

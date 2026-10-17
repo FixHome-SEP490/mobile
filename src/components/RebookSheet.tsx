@@ -86,7 +86,7 @@ export default function RebookSheet({ bookingId, visible, onClose }: { bookingId
               })}
             </ScrollView>
           )}
-          <TextInput
+          <TextInput accessibilityLabel="Ghi chú cho thợ"
             testID="rebook-note"
             value={note}
             onChangeText={setNote}

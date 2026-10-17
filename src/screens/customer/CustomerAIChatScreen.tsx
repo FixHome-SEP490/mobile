@@ -800,7 +800,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   headerBtnMuted: { opacity: 0.5 },
   headerTitleBox: { flex: 1, paddingHorizontal: 4 },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   headerSubtitle: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, marginTop: 4 },
 
   listContent: { paddingVertical: 16, paddingBottom: 28 },
@@ -979,7 +979,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   trayContent: { alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
   trayItem: { width: 88, height: 88 },
-  trayThumb: { width: 80, height: 80, borderRadius: 13, backgroundColor: colors.border },
+  trayThumb: { width: 80, height: 80, borderRadius: 14, backgroundColor: colors.border },
   trayRemove: {
     position: 'absolute',
     top: -4,

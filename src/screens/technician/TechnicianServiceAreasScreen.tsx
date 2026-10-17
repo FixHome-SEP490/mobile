@@ -98,7 +98,7 @@ export default function TechnicianServiceAreasScreen() {
           </TouchableOpacity>
           {picking && (
             <View style={styles.picker}>
-              <TextInput style={styles.input} value={query} onChangeText={setQuery} placeholder="Tìm tỉnh/thành phố" placeholderTextColor={colors.muted} />
+              <TextInput accessibilityLabel="Tìm tỉnh hoặc thành phố" style={styles.input} value={query} onChangeText={setQuery} placeholder="Tìm tỉnh/thành phố" placeholderTextColor={colors.muted} />
               {matches.map((p) => (
                 <TouchableOpacity key={p.code} style={styles.option} onPress={() => { setProvince(p.code); setPicking(false); setQuery(''); }} accessibilityRole="button">
                   <Text style={styles.selectText}>{p.name}</Text>
@@ -145,7 +145,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   container: { flex: 1, backgroundColor: colors.background },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, paddingVertical: 4, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider },
   iconBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text },
+  headerTitle: { fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.text },
   loader: { marginTop: 32 },
   content: { padding: 16, gap: 8 },
   error: { color: colors.textSecondary, fontSize: 14 },

@@ -775,7 +775,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   disabled: { opacity: 0.5 },
   scrollContent: { flexGrow: 1, padding: 16, gap: 12 },
   pageHeading: { gap: 4, paddingBottom: 4 },
-  pageTitle: { fontSize: 26, lineHeight: 34, fontWeight: '700', color: colors.text },
+  pageTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
   identity: { flexDirection: 'column', alignItems: 'center', gap: 12, paddingVertical: 24, paddingHorizontal: 16, backgroundColor: colors.primarySoft, borderRadius: 22, borderWidth: 1, borderColor: colors.primaryTint },
   identityText: { width: '100%', alignItems: 'center', gap: 4 },
   name: { fontSize: 20, lineHeight: 28, fontWeight: '700', color: colors.text, textAlign: 'center' },

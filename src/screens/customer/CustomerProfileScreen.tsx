@@ -1556,7 +1556,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   scrollContent: { flexGrow: 1, padding: 16 },
   pageIntro: { marginBottom: 12, paddingHorizontal: 2, gap: 4 },
   pageOverline: { fontSize: 12, lineHeight: 16, fontWeight: '700', letterSpacing: 1, color: colors.textSecondary },
-  pageTitle: { fontSize: 26, lineHeight: 34, fontWeight: '700', color: colors.text },
+  pageTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
   pageDescription: { fontSize: 13, lineHeight: 19, color: colors.textSecondary },
   mainWrapperCard: {
     backgroundColor: colors.background,

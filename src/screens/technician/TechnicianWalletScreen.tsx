@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import {
   View,
   Text,
@@ -280,8 +281,8 @@ export default function TechnicianWalletScreen({ route }: { route?: { name: stri
       >
         {state.loading ? (
           <View style={styles.centerBlock}>
-            <ActivityIndicator color={colors.primaryStrong} />
             <Text style={styles.mutedText}>Đang tải…</Text>
+            <CustomerSkeleton variant="orderDetail" />
           </View>
         ) : state.error ? (
           <View style={styles.centerBlock}>
@@ -876,7 +877,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   headerTitleGroup: { flex: 1, justifyContent: 'center', gap: 1 },
   headerEyebrow: { fontSize: 12, lineHeight: 16, color: colors.textSecondary, fontWeight: '600' },
-  headerTitle: { fontSize: 20, lineHeight: 28, fontWeight: '700', color: colors.text },
+  headerTitle: { fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.text },
   scrollContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40, gap: 12 },
   centerBlock: { alignItems: 'center', gap: 12, marginTop: 40 },
   mutedText: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },

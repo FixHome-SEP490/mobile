@@ -207,7 +207,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 13,
+    borderRadius: 14,
     backgroundColor: colors.divider,
 
     flexShrink: 0,

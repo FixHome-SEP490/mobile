@@ -432,7 +432,7 @@ export default function CustomerBookingsScreen() {
               Chỉ áp dụng khi chưa có đơn sửa chữa. Nếu kỹ thuật viên vừa nhận đơn,
               hệ thống sẽ chuyển sang đơn sửa chữa.
             </Text>
-            <TextInput
+            <TextInput accessibilityLabel="Lý do hủy"
               value={cancelReason}
               onChangeText={setCancelReason}
               editable={!manageBusy}
@@ -923,7 +923,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     borderBottomColor: colors.border,
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
     color: colors.text,
   },

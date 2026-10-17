@@ -345,7 +345,7 @@ function getStyles(colors: ThemeColors) {
     headerTitle: {
       flex: 1,
       textAlign: 'center',
-      fontSize: 17,
+      fontSize: 18,
       lineHeight: 24,
       fontWeight: '700',
       color: colors.text,

@@ -509,7 +509,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 13,
+    borderRadius: 14,
     backgroundColor: colors.divider,
     marginTop: 4,
     marginLeft: -5,
@@ -528,10 +528,10 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   headerTitle: {
     flex: 1,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: colors.text,
-    lineHeight: 26,
+    lineHeight: 24,
     letterSpacing: -0.4,
   },
 

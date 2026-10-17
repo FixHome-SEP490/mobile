@@ -874,7 +874,7 @@ const getStyles = (
   aiIconBox: {
     width: 42,
     height: 42,
-    borderRadius: 13,
+    borderRadius: 14,
     backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
@@ -909,7 +909,7 @@ const getStyles = (
   otherServiceIcon: {
     width: 42,
     height: 42,
-    borderRadius: 13,
+    borderRadius: 14,
     backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',

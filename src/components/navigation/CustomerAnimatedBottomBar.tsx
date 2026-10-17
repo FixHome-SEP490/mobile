@@ -571,7 +571,7 @@ function createStyles(
     choiceIcon: {
       width: 44,
       height: 44,
-      borderRadius: 13,
+      borderRadius: 14,
       alignItems: 'center',
       justifyContent: 'center',
       marginRight: 12,

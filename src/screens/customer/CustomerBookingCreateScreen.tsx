@@ -1598,7 +1598,7 @@ export default function CustomerBookingCreateScreen() {
               onSelect={setPickerCategoryId}
             />
           )}
-          <BottomSheetTextInput
+          <BottomSheetTextInput accessibilityLabel="Tìm dịch vụ"
             value={pickerQuery}
             onChangeText={setPickerQuery}
             placeholder="Tìm dịch vụ..."
@@ -1766,7 +1766,7 @@ const progressStyles = StyleSheet.create({
   dot: {
     width: 26,
     height: 26,
-    borderRadius: 13,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',

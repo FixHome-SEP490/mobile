@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
+import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -143,8 +144,8 @@ export default function CustomerRepairHistoryScreen() {
 
       {loading ? (
         <View style={styles.centerState}>
-          <ActivityIndicator size="small" color={colors.primary} />
           <Text style={styles.stateText}>Đang tải lịch sử sửa chữa...</Text>
+          <CustomerSkeleton variant="booking" rows={3} />
         </View>
       ) : (
         <ScrollView
@@ -286,7 +287,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   headerCopy: { flex: 1 },
   headerOverline: { fontSize: 12, lineHeight: 16, fontWeight: '700', letterSpacing: 1, color: colors.textSecondary },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: colors.text },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   headerSubtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   searchWrap: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
   searchBar: {

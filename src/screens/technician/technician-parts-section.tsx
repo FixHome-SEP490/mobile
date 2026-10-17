@@ -355,7 +355,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
               </View>
 
               <Text style={styles.fieldLabel}>Lý do yêu cầu linh kiện</Text>
-              <TextInput
+              <TextInput accessibilityLabel="Lý do cần linh kiện"
                 style={styles.fieldInput}
                 value={requestReason}
                 onChangeText={setRequestReason}
@@ -375,7 +375,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                   </TouchableOpacity>
                 ))}
               </View>
-              <TextInput
+              <TextInput accessibilityLabel="Tìm linh kiện"
                 style={styles.fieldInput}
                 value={searchQuery}
                 onChangeText={onSearchChange}
@@ -423,7 +423,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                       <Plus size={16} color={colors.text} strokeWidth={2} />
                     </TouchableOpacity>
                   </View>
-                  <TextInput
+                  <TextInput accessibilityLabel="Ghi chú"
                     style={styles.fieldInput}
                     value={itemNote}
                     onChangeText={setItemNote}
@@ -536,7 +536,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                 {showReceive && (
                   receivingId === pr.id ? (
                     <View style={styles.receiveBox}>
-                      <TextInput
+                      <TextInput accessibilityLabel="Mã QR nhận hàng"
                         style={styles.fieldInput}
                         value={qrTokenInput}
                         onChangeText={setQrTokenInput}

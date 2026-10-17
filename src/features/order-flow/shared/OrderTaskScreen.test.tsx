@@ -1,4 +1,5 @@
 import React from 'react';
+import { Text, TouchableOpacity } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { OrderSessionSnapshot } from '../domain/order-session.types';
 import { createOrderSessionSnapshot, readyResource } from '../domain/order-session.types';
@@ -15,12 +16,13 @@ let mockRouteName = 'OrderTask';
 let mockParams: Record<string, unknown> = {};
 let mockJournal: { list: (userId: string) => unknown[] } | null = null;
 const mockSetParams = jest.fn();
+const mockRefresh = jest.fn(async () => {});
 
 jest.mock('../runtime/OrderSessionProvider', () => ({
   useOrderSession: () => ({
     key: mockSnapshot?.key ?? null,
     snapshot: mockSnapshot,
-    refresh: jest.fn(async () => {}),
+    refresh: mockRefresh,
     loadResource: jest.fn(async () => {}),
     journal: mockJournal ?? { list: () => [] },
   }),
@@ -159,6 +161,21 @@ beforeEach(() => {
   mockRouteName = 'OrderTask';
   mockParams = {};
   mockJournal = null;
+});
+
+it('says a failed order read failed and offers a read-only retry instead of loading forever', async () => {
+  mockRole = 'customer';
+  mockSnapshot = snapshotFor('customer', baseOrder('ACCEPTED'));
+  mockSnapshot.order = { status: 'error', requestSeq: 1, error: 'unavailable' } as any;
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<OrderTaskScreen role={mockRole} />); });
+  const texts = renderer.root.findAllByType(Text).map((n: any) => n.props.children).flat().join(' ');
+  expect(texts).toContain('Chưa tải được thông tin đơn');
+  expect(texts).not.toContain('Đang xác minh quyền truy cập');
+  const retry = renderer.root.findAllByType(TouchableOpacity).find((b: any) => b.findAllByType(Text).some((t: any) => t.props.children === 'Thử lại'))!;
+  await act(async () => { retry.props.onPress(); });
+  expect(mockRefresh).toHaveBeenCalledWith('manual');
+  await act(async () => renderer.unmount());
 });
 
 it('dispatches one focused body per U1 task and never sets an automatic T04', async () => {

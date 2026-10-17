@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
+import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import {
   ActivityIndicator,
   Alert,
@@ -452,8 +453,8 @@ export default function CustomerWarrantiesScreen() {
 
       {loading ? (
         <View style={styles.centerState}>
-          <ActivityIndicator size="small" color={colors.primary} />
           <Text style={styles.helperText}>Đang tải bảo hành...</Text>
+          <CustomerSkeleton variant="booking" rows={3} />
         </View>
       ) : (
         <ScrollView
@@ -583,7 +584,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   backButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
   headerCopy: { flex: 1 },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: colors.text },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   headerSubtitle: { fontSize: 12, lineHeight: 17, color: colors.textSecondary, marginTop: 2 },
   searchWrap: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
   searchBar: {

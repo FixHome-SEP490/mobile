@@ -6,6 +6,7 @@ const mockNavigate = jest.fn();
 const mockBack = jest.fn();
 const mockHistory = jest.fn();
 
+jest.mock('../../components/customer/CustomerSkeleton', () => ({ __esModule: true, default: () => null }));
 jest.mock('@react-navigation/native', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const ReactModule = require('react');

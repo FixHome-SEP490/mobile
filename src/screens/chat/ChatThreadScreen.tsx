@@ -571,7 +571,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   headerAvatarText: { color: colors.primaryStrong, fontSize: 16, fontWeight: 'bold' },
   headerTextWrap: { flex: 1, justifyContent: 'center' },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   headerSubtitle: { fontSize: 13, color: colors.textSecondary, marginTop: 1 },
 
   chatContent: { paddingVertical: 12, flexGrow: 1 },

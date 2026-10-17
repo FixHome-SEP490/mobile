@@ -5,6 +5,7 @@ import { walletApi } from '../../api/wallet.api';
 import type { WalletSummary, WithdrawalRequest } from '../../types/wallet.types';
 import TechnicianWalletScreen from './TechnicianWalletScreen';
 
+jest.mock('../../components/customer/CustomerSkeleton', () => ({ __esModule: true, default: () => null }));
 jest.mock('@react-navigation/native', () => {
   const ReactModule = jest.requireActual<typeof import('react')>('react');
   return {

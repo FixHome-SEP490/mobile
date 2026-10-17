@@ -419,7 +419,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   loadingWrap: { flex: 1, paddingTop: 16 },
   loadingText: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, paddingHorizontal: 16, paddingBottom: 8 },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
     color: colors.text,
   },

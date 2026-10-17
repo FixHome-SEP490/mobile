@@ -214,7 +214,7 @@ export default function PartsLifecycleScreen() {
           <Text style={styles.modalSubtext}>
             Bạn chỉ có thể hủy yêu cầu đã gửi, trước khi kho bắt đầu xử lý lấy hoặc giao.
           </Text>
-          <TextInput
+          <TextInput accessibilityLabel="Lý do hủy"
             testID="parts-cancel-reason-input"
             style={styles.modalInput}
             placeholder="Lý do hủy (tùy chọn)..."
