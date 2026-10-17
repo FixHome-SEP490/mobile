@@ -259,7 +259,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   inputIcon: { marginRight: 12 },
   input: { flex: 1, minWidth: 0, fontSize: fontSize.md, color: colors.text, paddingVertical: 16 },
   eyeButton: { minWidth: 44, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  submitBtn: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, backgroundColor: colors.primaryStrong, minHeight: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginTop: 16, padding: 12 },
+  submitBtn: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, backgroundColor: colors.primaryStrong, minHeight: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginTop: 16, padding: 12 },
   submitBtnText: { color: colors.surface, fontSize: fontSize.md, fontWeight: '600' },
   linkButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
   helperText: { fontSize: fontSize.sm, lineHeight: 24, color: colors.textSecondary, marginBottom: 24 },

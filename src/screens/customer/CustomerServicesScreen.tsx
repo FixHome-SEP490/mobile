@@ -498,11 +498,11 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 14,
+    paddingBottom: 16,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    gap: 10,
+    gap: 8,
   },
   backBtn: {
     width: 44,
@@ -524,7 +524,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontWeight: '700',
     letterSpacing: 1.0,
     color: colors.textSecondary,
-    marginBottom: 3,
+    marginBottom: 4,
   },
   headerTitle: {
     flex: 1,
@@ -541,9 +541,9 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     alignItems: 'center',
     backgroundColor: colors.surface,
     marginHorizontal: 16,
-    marginTop: 14,
+    marginTop: 12,
     marginBottom: 4,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     minHeight: 52,
     borderRadius: 14,
     borderWidth: 1,
@@ -551,7 +551,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   searchInput: {
     flex: 1,
-    marginLeft: 10,
+    marginLeft: 8,
     fontSize: 14,
     color: colors.text,
     minHeight: 48,
@@ -572,8 +572,8 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     minHeight: 72,
     marginTop: 12,
     marginBottom: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: 18,
     backgroundColor: colors.primarySoft,
   },
@@ -595,7 +595,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   discoveryGroupTitle: { fontSize: 16, lineHeight: 22, fontWeight: '700', color: colors.text },
   discoveryGroupCount: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, marginTop: 1 },
   groupAction: { minHeight: 44, justifyContent: 'center', paddingLeft: 12 },
-  allGroupsAction: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', marginTop: -14, marginBottom: 10, paddingHorizontal: 4 },
+  allGroupsAction: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', marginTop: -14, marginBottom: 8, paddingHorizontal: 4 },
   groupActionText: { fontSize: 13, fontWeight: '600', color: colors.primaryStrong },
   discoveryGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 },
   discoveryService: {
@@ -616,13 +616,13 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     color: colors.text,
     textAlign: 'center',
     paddingHorizontal: 2,
-    paddingTop: 3,
+    paddingTop: 4,
   },
 
   // Category pills
   pillsContainer: {
     paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingTop: 12,
     backgroundColor: colors.background,
   },
 
@@ -713,7 +713,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     minHeight: 100,
-    gap: 14,
+    gap: 12,
   },
   itemImageContainer: {
     width: 100,
@@ -750,6 +750,6 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   itemPrice: {
     fontSize: 12,
     color: colors.textSecondary,
-    marginTop: 3,
+    marginTop: 4,
   },
 });

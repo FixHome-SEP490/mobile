@@ -398,7 +398,6 @@ export default function CustomerHomeScreen() {
           </View>
           <View style={styles.aiCopy}>
             <Text style={styles.aiTitle}>Chưa biết bắt đầu từ đâu?</Text>
-            <Text style={styles.aiSubtitle}>FixHome AI gợi ý, bạn quyết định.</Text>
           </View>
           <Ionicons name="open-outline" size={19} color={colors.muted} />
         </TouchableOpacity>
@@ -421,9 +420,6 @@ export default function CustomerHomeScreen() {
           </View>
           <View style={styles.otherServiceCopy}>
             <Text style={styles.otherServiceTitle}>Không thấy dịch vụ bạn cần?</Text>
-            <Text style={styles.otherServiceDesc}>
-              Chọn &quot;Khác&quot; và mô tả công việc để gửi yêu cầu.
-            </Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={colors.muted} />
         </TouchableOpacity>
@@ -544,7 +540,7 @@ const getStyles = (
     backgroundColor: colors.background,
   },
   scrollContent: {
-    paddingBottom: 20,
+    paddingBottom: 16,
   },
 
   // 1. Top bar (lives inside hero blue bg)
@@ -556,7 +552,7 @@ const getStyles = (
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingVertical: 8,
     backgroundColor: 'transparent',
   },
@@ -622,7 +618,7 @@ const getStyles = (
   // 2. Blue hero — Codex canonical
   hero: {
     backgroundColor: 'transparent',
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingTop: 2,
     paddingBottom: 0,
   },
@@ -636,7 +632,7 @@ const getStyles = (
   addressStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
     minHeight: 30,
     marginBottom: 8,
   },
@@ -714,7 +710,7 @@ const getStyles = (
 
   // 3. Overlapping search card
   searchCard: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     marginTop: -18,
     marginBottom: 4,
   },
@@ -726,8 +722,8 @@ const getStyles = (
     borderWidth: 1,
     borderColor: colors.border,
     minHeight: 56,
-    paddingHorizontal: 14,
-    gap: 10,
+    paddingHorizontal: 16,
+    gap: 8,
     // Card-like elevation
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -739,7 +735,7 @@ const getStyles = (
     flex: 1,
     fontSize: 14,
     color: colors.textSecondary,
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
   searchBtn: {
     width: 44,
@@ -754,17 +750,17 @@ const getStyles = (
   resumeCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 14,
+    marginHorizontal: 12,
     marginTop: 12,
     borderRadius: 14,
     paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     borderLeftWidth: 3,
     borderLeftColor: colors.primaryStrong,
-    gap: 10,
+    gap: 8,
   },
   resumePulseDot: {
     width: 8,
@@ -805,7 +801,7 @@ const getStyles = (
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    marginTop: 14,
+    marginTop: 12,
     marginBottom: 4,
   },
   sectionTitle: {
@@ -839,7 +835,7 @@ const getStyles = (
     alignItems: 'center',
     justifyContent: 'flex-start',
     paddingVertical: 4,
-    paddingHorizontal: 3,
+    paddingHorizontal: 4,
     minHeight: 96,
   },
   serviceName: {
@@ -890,22 +886,18 @@ const getStyles = (
     fontSize: 13,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: 3,
-  },
-  aiSubtitle: {
-    fontSize: 11,
-    color: colors.textSecondary,
+    marginBottom: 4,
   },
 
   // 8. Other service card
   quickRow: { flexDirection: 'row', gap: 12, marginHorizontal: 16, marginBottom: 8 },
-  quickItem: { flex: 1, minHeight: 56, paddingHorizontal: 14, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  quickItem: { flex: 1, minHeight: 56, paddingHorizontal: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 8 },
   quickLabel: { fontSize: 15, fontWeight: '600', color: colors.text },
   otherServiceCard: {
     marginHorizontal: 16,
     marginTop: 4,
     marginBottom: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 16,
     borderWidth: 1,
@@ -925,7 +917,6 @@ const getStyles = (
   },
   otherServiceCopy: { flex: 1, gap: 2 },
   otherServiceTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
-  otherServiceDesc: { fontSize: 12, lineHeight: 17, color: colors.textSecondary },
 
   // 9. Quiet copy — Codex bottom note
   quietCopy: {
@@ -1006,8 +997,8 @@ const getStyles = (
   },
   addAddressBtn: {
     backgroundColor: colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: 8,
     minHeight: 44,
     alignItems: 'center',

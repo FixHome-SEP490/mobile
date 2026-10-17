@@ -1637,7 +1637,7 @@ export default function CustomerBookingCreateScreen() {
             </TouchableOpacity>
           )}
           ListEmptyComponent={
-            <Text style={{ color: colors.textSecondary, padding: 14 }}>Không tìm thấy dịch vụ phù hợp.</Text>
+            <Text style={{ color: colors.textSecondary, padding: 16 }}>Không tìm thấy dịch vụ phù hợp.</Text>
           }
         />
       </BottomSheetModal>
@@ -1691,7 +1691,7 @@ export default function CustomerBookingCreateScreen() {
             );
           }}
           ListEmptyComponent={
-            <Text style={{ color: colors.textSecondary, padding: 14 }}>Chưa có địa chỉ đã lưu.</Text>
+            <Text style={{ color: colors.textSecondary, padding: 16 }}>Chưa có địa chỉ đã lưu.</Text>
           }
         />
       </BottomSheetModal>
@@ -1723,8 +1723,8 @@ const styles = StyleSheet.create({
   input: { minHeight: 94, padding: 12, borderWidth: 1, borderRadius: 14, textAlignVertical: 'top', fontSize: 16, lineHeight: 24 },
   fieldError: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
   fieldErrorText: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '500' },
-  photoSection: { padding: 16, borderRadius: 14, gap: 10 },
-  photoList: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 10 },
+  photoSection: { padding: 16, borderRadius: 14, gap: 8 },
+  photoList: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 8 },
   photoItem: { width: 78, gap: 4 },
   photoPreview: { width: 72, height: 72, borderRadius: 12 },
   removePhotoButton: {
@@ -1752,8 +1752,8 @@ const styles = StyleSheet.create({
   photoError: { fontSize: 13, lineHeight: 19 },
   action: { padding: 15, marginTop: 0, borderRadius: 14, alignItems: 'center', justifyContent: 'center', minHeight: 52 },
   actionText: { fontWeight: '700', fontSize: 15, lineHeight: 22 },
-  pickerHeader: { paddingHorizontal: 18, paddingBottom: 10, borderBottomWidth: 1, gap: 8 },
-  pickerListContent: { padding: 18, paddingTop: 10, gap: 10 },
+  pickerHeader: { paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, gap: 8 },
+  pickerListContent: { padding: 16, paddingTop: 12, gap: 8 },
 });
 
 const progressStyles = StyleSheet.create({

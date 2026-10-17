@@ -516,7 +516,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
           </View>
         )
       ) : (
-        <View style={{ marginTop: 8, gap: 10 }}>
+        <View style={{ marginTop: 8, gap: 8 }}>
           <Text style={styles.fieldLabel}>Lịch sử yêu cầu linh kiện ({partRequests.length} đợt)</Text>
           {partRequests.map((pr) => {
             const showReceive = (pr.fulfillmentMethod === 'pickup' && pr.status === 'ready') ||
@@ -647,21 +647,21 @@ const getStyles = (colors: any) => StyleSheet.create({
   jobMeta: { fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
   successBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.tone.success.bg, borderRadius: 14, padding: 12, marginBottom: 8 },
   errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.tone.danger.bg, borderRadius: 14, padding: 12, marginBottom: 8 },
-  ruleBanner: { backgroundColor: colors.primarySoft, borderRadius: 14, padding: 12, marginBottom: 10, gap: 2 },
+  ruleBanner: { backgroundColor: colors.primarySoft, borderRadius: 14, padding: 12, marginBottom: 8, gap: 2 },
   ruleBannerTitle: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong, marginBottom: 2 },
-  createBox: { marginBottom: 10, gap: 8 },
+  createBox: { marginBottom: 8, gap: 8 },
   fieldLabel: { fontSize: 14, lineHeight: 20, fontWeight: '500', color: colors.text, marginTop: 6, marginBottom: 4 },
-  fieldInput: { minHeight: 48, borderWidth: 1, borderColor: colors.textSecondary, borderRadius: 14, paddingHorizontal: 14, color: colors.text, fontSize: 16, backgroundColor: colors.surface },
+  fieldInput: { minHeight: 48, borderWidth: 1, borderColor: colors.textSecondary, borderRadius: 14, paddingHorizontal: 16, color: colors.text, fontSize: 16, backgroundColor: colors.surface },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 22, borderWidth: 1, borderColor: colors.border },
+  chip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: 22, borderWidth: 1, borderColor: colors.border },
   chipActive: { backgroundColor: colors.primaryStrong, borderColor: colors.primaryStrong },
   chipText: { fontSize: 14, lineHeight: 20, color: colors.text },
   chipTextActive: { color: colors.surface, fontWeight: '700' },
   resultsBox: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, maxHeight: 220, overflow: 'hidden' },
-  resultItem: { flexDirection: 'row', alignItems: 'center', minHeight: 48, padding: 10, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 8 },
+  resultItem: { flexDirection: 'row', alignItems: 'center', minHeight: 48, padding: 12, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 8 },
   resultName: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.text },
   resultPrice: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong },
-  spotlightCard: { borderWidth: 2, borderColor: colors.primaryStrong, backgroundColor: colors.primarySoft, borderRadius: 14, padding: 10, gap: 6 },
+  spotlightCard: { borderWidth: 2, borderColor: colors.primaryStrong, backgroundColor: colors.primarySoft, borderRadius: 14, padding: 12, gap: 6 },
   qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   qtyBtn: { width: 44, height: 44, borderRadius: 10, backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' },
   qtyText: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: colors.text, minWidth: 24, textAlign: 'center' },
@@ -671,17 +671,17 @@ const getStyles = (colors: any) => StyleSheet.create({
   primaryBtnText: { color: colors.surface, fontWeight: '700', fontSize: 14, lineHeight: 20 },
   ghostBtn: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 16, borderRadius: 14, backgroundColor: colors.border },
   ghostBtnText: { color: colors.text, fontWeight: '700', fontSize: 14, lineHeight: 20 },
-  emptyBox: { alignItems: 'center', paddingVertical: 20, gap: 4, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', borderRadius: 12 },
+  emptyBox: { alignItems: 'center', paddingVertical: 16, gap: 4, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', borderRadius: 12 },
   emptyTitle: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.text, textAlign: 'center' },
   requestCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 12, gap: 6 },
   requestHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   statusBadge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
   statusBadgeText: { fontSize: 12, lineHeight: 16, fontWeight: '700' },
   typeTag: { fontSize: 12, lineHeight: 16, color: colors.textSecondary, fontWeight: '600' },
-  receiveBox: { backgroundColor: colors.background, borderRadius: 14, padding: 10, gap: 8 },
+  receiveBox: { backgroundColor: colors.background, borderRadius: 14, padding: 12, gap: 8 },
   itemRow: { flexDirection: 'row', alignItems: 'center', paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border, gap: 8 },
   usageBtnRow: { flexDirection: 'row', gap: 6 },
-  usageBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
+  usageBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
   usageBtnActiveGreen: { backgroundColor: colors.tone.success.text, borderColor: colors.tone.success.text },
   usageBtnActiveAmber: { backgroundColor: colors.tone.warning.text, borderColor: colors.tone.warning.text },
   usageBtnText: { fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.text },

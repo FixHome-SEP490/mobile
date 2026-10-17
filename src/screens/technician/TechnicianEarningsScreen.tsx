@@ -252,7 +252,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   big: { fontSize: 32, lineHeight: 40, fontWeight: '700', color: colors.text },
   body: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
   sectionTitle: { fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.text, marginBottom: 8 },
-  walletShortcut: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 14, minHeight: 44 },
+  walletShortcut: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 16, minHeight: 44 },
   walletShortcutIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
   walletShortcutTitle: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: colors.text },
   chart: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },

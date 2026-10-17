@@ -594,7 +594,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   shiftTitle: { fontSize: 28, lineHeight: 36, fontWeight: '700', color: colors.text },
   availabilityCard: { minHeight: 70, justifyContent: 'center' },
   // Codex navy hero is a local surface (#1c416f per demo DESIGN_SYSTEM); shared theme.ts is untouched.
-  heroCard: { backgroundColor: '#1c416f', borderRadius: 22, padding: 20, gap: 12 },
+  heroCard: { backgroundColor: '#1c416f', borderRadius: 22, padding: 16, gap: 12 },
   heroPressable: { minHeight: 44 },
   heroInfo: { gap: 8, minHeight: 44, justifyContent: 'center' },
   heroEyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.primaryTint, letterSpacing: 1 },

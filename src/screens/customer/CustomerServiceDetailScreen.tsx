@@ -200,7 +200,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    gap: 10,
+    gap: 8,
   },
   backBtn: {
     width: 44,
@@ -221,7 +221,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontWeight: '700',
     letterSpacing: 1.0,
     color: colors.textSecondary,
-    marginBottom: 3,
+    marginBottom: 4,
   },
   headerTitle: {
     fontSize: 18,
@@ -285,8 +285,8 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     left: 14,
     backgroundColor: '#DBEAFE',
     borderRadius: 9,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
   },
   artPillText: {
     fontSize: 12,
@@ -312,7 +312,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   priceLabel: {
     fontSize: 13,
@@ -328,7 +328,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   categoryBadge: {
     fontSize: 12,
     color: colors.textSecondary,
-    marginBottom: 14,
+    marginBottom: 12,
   },
 
   // Description
@@ -336,13 +336,13 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontSize: 14,
     color: colors.textSecondary,
     lineHeight: 22,
-    marginBottom: 14,
+    marginBottom: 12,
   },
 
   // Scope section
   descSection: {
     backgroundColor: colors.surface,
-    padding: 14,
+    padding: 16,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.border,
@@ -352,7 +352,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontSize: 15,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: 10,
+    marginBottom: 8,
   },
 
   // Numbered steps — Codex "01 / 02" process
@@ -367,8 +367,8 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   lineItem: {
     flexDirection: 'row',
-    gap: 14,
-    paddingVertical: 14,
+    gap: 12,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.divider,
   },
@@ -393,7 +393,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontSize: 13,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: 3,
+    marginBottom: 4,
   },
   lineItemDesc: {
     fontSize: 12,
@@ -421,7 +421,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   bookBtn: {
     minHeight: 52,
     borderRadius: 14,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.primaryStrong,

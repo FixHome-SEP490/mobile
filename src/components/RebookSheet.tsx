@@ -118,7 +118,7 @@ export default function RebookSheet({ bookingId, visible, onClose }: { bookingId
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
-  sheet: { padding: 20, gap: 12, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '85%' },
+  sheet: { padding: 16, gap: 12, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '85%' },
   title: { fontSize: 20, fontWeight: '700' },
   hint: { fontSize: 13, lineHeight: 19 },
   loader: { paddingVertical: 32 },

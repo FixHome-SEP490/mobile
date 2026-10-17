@@ -400,7 +400,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
     minHeight: 80,
     marginHorizontal: 16,
     marginBottom: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 16,
     borderWidth: 1,

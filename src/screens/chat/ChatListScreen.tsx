@@ -274,7 +274,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     marginLeft: 8,
     fontSize: 16,
     color: colors.text,
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
   errorBanner: {
     flexDirection: 'row',

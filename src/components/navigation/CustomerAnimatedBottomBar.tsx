@@ -477,7 +477,7 @@ function createStyles(
       justifyContent: 'center',
       borderWidth: 1.5,
       borderColor: colors.surface,
-      paddingHorizontal: 3,
+      paddingHorizontal: 4,
       backgroundColor: colors.error,
     },
     badgeText: {
@@ -518,7 +518,7 @@ function createStyles(
       width: 40,
     },
     sheetContent: {
-      paddingHorizontal: 20,
+      paddingHorizontal: 16,
       paddingTop: 8,
       paddingBottom: Math.max(bottomInset, 20),
       gap: 12,
@@ -563,7 +563,7 @@ function createStyles(
       borderColor: colors.border,
       borderRadius: 16,
       paddingHorizontal: 12,
-      paddingVertical: 10,
+      paddingVertical: 12,
       backgroundColor: colors.surface,
     },
     choicePressed: {

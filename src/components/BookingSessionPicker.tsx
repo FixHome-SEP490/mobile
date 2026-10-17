@@ -120,12 +120,12 @@ export default function BookingSessionPicker({
 
 const styles = StyleSheet.create({
   wrap: { gap: 12 },
-  modes: { flexDirection: 'row', gap: 10 },
+  modes: { flexDirection: 'row', gap: 8 },
   card: { flex: 1, borderWidth: 1, borderRadius: 14, padding: 12, gap: 4, minHeight: 96 },
   cardTitle: { fontSize: 14, lineHeight: 20, fontWeight: '700' },
   cardHint: { fontSize: 12, lineHeight: 18 },
   days: { gap: 8, paddingVertical: 2 },
   day: { minHeight: 44, justifyContent: 'center', borderWidth: 1, borderRadius: 12, paddingHorizontal: 12 },
-  slots: { flexDirection: 'row', gap: 10 },
+  slots: { flexDirection: 'row', gap: 8 },
   slot: { flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: 12, paddingHorizontal: 8 },
 });
