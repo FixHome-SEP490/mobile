@@ -49,6 +49,8 @@ jest.mock('@gorhom/bottom-sheet', () => {
       ReactModule.createElement(ReactModule.Fragment, null, props.children),
     ),
     BottomSheetBackdrop: () => null,
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    BottomSheetFlatList: require('react-native').FlatList,
   };
 });
 

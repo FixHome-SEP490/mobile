@@ -10,6 +10,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {
@@ -301,10 +302,10 @@ export default function CustomerBookingCreateScreen() {
   const [pickerQuery, setPickerQuery] = useState('');
   const [pickerCategoryId, setPickerCategoryId] = useState<string | null>(null);
   const [pickerCategories, setPickerCategories] = useState<CategoryItem[]>([]);
+  const { height: windowHeight } = useWindowDimensions();
   const pickerSheetRef = useRef<BottomSheetModal>(null);
   const pickerSnapPoints = useMemo(() => ['80%'], []);
   const addressSheetRef = useRef<BottomSheetModal>(null);
-  const addressSnapPoints = useMemo(() => ['60%'], []);
   const descriptionInputRef = useRef<TextInput>(null);
   const descriptionTopRef = useRef(0);
   const scrollRef = useRef<ScrollView>(null);
@@ -1644,16 +1645,19 @@ export default function CustomerBookingCreateScreen() {
 
       <BottomSheetModal
         ref={addressSheetRef}
-        snapPoints={addressSnapPoints}
+        enableDynamicSizing
+        maxDynamicContentSize={Math.round(windowHeight * 0.8)}
         backdropComponent={(props) => (
           <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} />
         )}
       >
-        <View style={[styles.pickerHeader, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}>Chọn địa chỉ sửa chữa</Text>
-        </View>
         <BottomSheetFlatList
           data={addresses}
+          ListHeaderComponent={
+            <View style={[styles.pickerHeader, { borderBottomColor: colors.border, marginHorizontal: -16, marginTop: -12, marginBottom: 12 }]}>
+              <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}>Chọn địa chỉ sửa chữa</Text>
+            </View>
+          }
           keyExtractor={(address) => address.id}
           contentContainerStyle={styles.pickerListContent}
           renderItem={({ item: address }) => {

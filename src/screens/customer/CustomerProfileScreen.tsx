@@ -94,7 +94,6 @@ export default function CustomerProfileScreen() {
   const [isAvatarModalVisible, setAvatarModalVisible] = useState(false);
   const profileSheetRef = useRef<BottomSheetModal>(null);
   const addressSheetRef = useRef<BottomSheetModal>(null);
-  const profileSnapPoints = useMemo(() => ['62%'], []);
   const addressSnapPoints = useMemo(() => ['90%'], []);
 
   const handlePickImage = async () => {
@@ -1069,7 +1068,7 @@ export default function CustomerProfileScreen() {
       {/* Profile Edit Sheet */}
       <BottomSheetModal
         ref={profileSheetRef}
-        snapPoints={profileSnapPoints}
+        enableDynamicSizing
         keyboardBehavior="interactive"
         keyboardBlurBehavior="restore"
         onDismiss={() => setFocusedProfileField(null)}

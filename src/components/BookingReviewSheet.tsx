@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
@@ -112,10 +112,12 @@ export default function BookingReviewSheet({
   onEdit: () => void;
   onDismiss: () => void;
 }) {
+  const { height: windowHeight } = useWindowDimensions();
   return (
     <BottomSheetModal
       ref={sheetRef}
-      snapPoints={['78%']}
+      enableDynamicSizing
+      maxDynamicContentSize={Math.round(windowHeight * 0.78)}
       enablePanDownToClose
       onDismiss={onDismiss}
       backdropComponent={(props) => (

@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-17 14:41 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/mobile-layout-polish
+> Cập nhật lần cuối: 2026-10-17 14:53 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/mobile-layout-polish
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -156,7 +156,7 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 - Tổng quan thợ đọc `GET /technicians/me/availability` (`utils/availability.ts`, cùng năm câu với web: Đang nhận việc theo lịch tới giờ, Ngoài giờ làm, Tạm nghỉ, Đang nghỉ, Chưa đặt lịch). Bật nhận việc khi ví dưới mức ký quỹ (`eligibleForJobs` false) thì báo cần nạp thêm và không gọi `PATCH`; đọc ví lỗi thì để backend quyết.
 - Màn Hủy đơn (`OrderExceptionScreen`) ghi "Hủy đơn có thể bị trừ điểm uy tín của bạn"; sửa nhãn nút hỏng font.
 - Home khách (đã đăng nhập) có hai lối tắt "Ví của tôi" và "Bảo hành" như menu tài khoản web; Hồ sơ vẫn giữ cả hai. Hồ sơ thợ ở màn chọn thợ hiện "Giá công tham khảo: Theo báo giá" khi thợ chưa niêm yết giá; `reliabilityScore` vẫn không hiện cho khách (khác web, có test chặn).
-- Khoảng cách theo lưới 4/8/12/16 của `FIXHOME-DESIGN-SYSTEM.md` mục 9: giá trị lẻ (3, 5, 7, 9, 10, 11, 13, 14, 18, 20) của padding, margin và gap ở 48 file màn hình đã đổi về lưới (padding làm tròn lên để giữ vùng chạm 44pt, margin và gap làm tròn xuống); chữ dưới 12 ở `TaskScreenShell` và màn Bảo mật nâng lên 12; Home khách bỏ hai dòng chú thích (AI, "Khác"). Bố cục từng màn trên thiết bị CHƯA KIỂM CHỨNG.
+- Khoảng cách theo lưới 4/8/12/16 của `FIXHOME-DESIGN-SYSTEM.md` mục 9: giá trị lẻ (3, 5, 7, 9, 10, 11, 13, 14, 18, 20) của padding, margin và gap ở 48 file màn hình đã đổi về lưới (padding làm tròn lên để giữ vùng chạm 44pt, margin và gap làm tròn xuống); chữ dưới 12 ở `TaskScreenShell` và màn Bảo mật nâng lên 12; Home khách bỏ hai dòng chú thích (AI, "Khác"). Sheet chọn địa chỉ (Home, form đặt lịch), sheet chọn cách đặt lịch, sheet xem lại yêu cầu và sheet chỉnh thông tin hồ sơ khách co theo nội dung (`enableDynamicSizing`, tối đa 78-80% màn) thay cho chiều cao cố định 42-62% để ít địa chỉ không để trống lớn; danh sách trong sheet dùng `BottomSheetFlatList` với tiêu đề nằm trong `ListHeaderComponent` để sheet đo đủ. Bố cục từng màn trên thiết bị CHƯA KIỂM CHỨNG.
 - Khoảng cách theo lưới 4/8/12/16 của `FIXHOME-DESIGN-SYSTEM.md` mục 9: giá trị lẻ (3, 5, 7, 9, 10, 11, 13, 14, 18, 20) của padding, margin và gap ở 48 file màn hình đã đổi về lưới (padding làm tròn lên để giữ vùng chạm 44pt, margin và gap làm tròn xuống); chữ dưới 12 ở `TaskScreenShell` và màn Bảo mật nâng lên 12; Home khách bỏ hai dòng chú thích (AI, "Khác"). Bố cục từng màn trên thiết bị CHƯA KIỂM CHỨNG.
 - Chưa làm theo quyết định 17/10/2026: gọi thoại (cần `react-native-webrtc`, không chạy Expo Go), khách rút ví và xác minh CCCD, tóm tắt AI cho thợ, trợ lý AI (trả lời nhanh, Đúng ý/Chưa đúng, tóm tắt gửi thợ). Thiết bị CHƯA KIỂM CHỨNG.
 
@@ -241,6 +241,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload support/warranty mới bị khóa theo quyết định owner. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-10-17 14:53 (UTC+7) | Hgnv11 | feat/mobile-layout-polish | Năm bottom sheet (địa chỉ x2, cách đặt lịch, xem lại yêu cầu, sửa hồ sơ) co theo nội dung thay cho chiều cao cố định; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-17 14:41 (UTC+7) | Hgnv11 | feat/mobile-layout-polish | Chuẩn hóa khoảng cách về lưới 4/8/12/16 ở 48 màn, chữ tối thiểu 12, bỏ hai dòng chú thích ở Home khách; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-17 14:40 (UTC+7) | Hgnv11 | feat/mobile-layout-polish | Chuẩn hóa khoảng cách về lưới 4/8/12/16 ở 48 màn, chữ tối thiểu 12, bỏ hai dòng chú thích ở Home khách; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-17 14:24 (UTC+7) | Hgnv11 | feat/web-parity-home-candidates | Home khách có lối tắt Ví và Bảo hành, màn chọn thợ ghi Theo báo giá khi chưa có giá công; thiết bị CHƯA KIỂM CHỨNG.

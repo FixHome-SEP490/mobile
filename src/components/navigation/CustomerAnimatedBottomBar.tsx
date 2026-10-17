@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   BackHandler,
   Keyboard,
@@ -91,7 +91,6 @@ export default function CustomerAnimatedBottomBar(props: CustomerAnimatedBottomB
   const [positionsWidth, setPositionsWidth] = useState(0);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const indicatorX = useSharedValue(0);
-  const snapPoints = useMemo(() => ['42%', '62%'], []);
   const renderBackdrop = useCallback((backdropProps: React.ComponentProps<typeof BottomSheetBackdrop>) => (
     <BottomSheetBackdrop {...backdropProps} appearsOnIndex={0} disappearsOnIndex={-1} pressBehavior="close" opacity={0.48} />
   ), []);
@@ -325,7 +324,7 @@ export default function CustomerAnimatedBottomBar(props: CustomerAnimatedBottomB
         accessible={false}
         ref={sheetRef}
         index={0}
-        snapPoints={snapPoints}
+        enableDynamicSizing
         enablePanDownToClose
         keyboardBehavior="interactive"
         keyboardBlurBehavior="restore"

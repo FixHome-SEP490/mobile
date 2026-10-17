@@ -12,7 +12,6 @@ import {
   TouchableOpacity,
   Image,
   StatusBar,
-  FlatList,
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,7 +36,7 @@ import { useChatUnreadCount } from '../../hooks/useChatUnreadCount';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomerAnimatedBottomBar from '../../components/navigation/CustomerAnimatedBottomBar';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
-import { BottomSheetModal, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
+import { BottomSheetModal, BottomSheetBackdrop, BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -102,7 +101,7 @@ const getPopularServices = (): PopularServiceItem[] => [
 
 export default function CustomerHomeScreen() {
   const { colors, spacing, fontSize } = useAppTheme();
-  const { width: windowWidth, fontScale } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight, fontScale } = useWindowDimensions();
   const popularColumns = getHomePopularGridColumns(windowWidth, fontScale);
   const heroArtWidth = Math.min(210, Math.max(154, Math.round(windowWidth * 0.46)));
   const popularArtSize = popularColumns === 4
@@ -125,7 +124,6 @@ export default function CustomerHomeScreen() {
   const [addresses, setAddresses] = useState<AddressData[]>([]);
   const [resume, setResume] = useState<HomeResumeItem | null>(null);
   const addressSheetRef = useRef<BottomSheetModal>(null);
-  const snapPoints = useMemo(() => ['50%', '80%'], []);
 
   const closeAddressSheet = useCallback(() => {
     addressSheetRef.current?.dismiss();
@@ -458,26 +456,32 @@ export default function CustomerHomeScreen() {
       {/* Address Selection Bottom Sheet */}
       <BottomSheetModal
         ref={addressSheetRef}
-        snapPoints={snapPoints}
+        enableDynamicSizing
+        maxDynamicContentSize={Math.round(windowHeight * 0.8)}
         backdropComponent={(props) => (
           <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} />
         )}
       >
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Chọn địa chỉ</Text>
-            <TouchableOpacity
-              onPress={closeAddressSheet}
-              style={styles.closeBtn}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              accessibilityRole="button"
-              accessibilityLabel="Đóng"
-            >
-              <Ionicons name="close" size={24} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-          
-          {addresses.length === 0 ? (
+        {/* Sized to its rows (header and empty state live inside the list so the sheet measures them). */}
+        <BottomSheetFlatList
+          data={addresses}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.addressListContent}
+          ListHeaderComponent={
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Chọn địa chỉ</Text>
+              <TouchableOpacity
+                onPress={closeAddressSheet}
+                style={styles.closeBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Đóng"
+              >
+                <Ionicons name="close" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          }
+          ListEmptyComponent={
             <View style={styles.emptyAddress}>
               <Text style={styles.emptyAddressText}>Bạn chưa có địa chỉ nào.</Text>
               <TouchableOpacity style={styles.addAddressBtn} onPress={() => {
@@ -487,37 +491,32 @@ export default function CustomerHomeScreen() {
                 <Text style={styles.addAddressBtnText}>Thêm địa chỉ mới</Text>
               </TouchableOpacity>
             </View>
-          ) : (
-            <FlatList
-              data={addresses}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[styles.addressItem, selectedAddress === item.line1 && styles.addressItemActive]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setSelectedAddress(item.line1);
-                    closeAddressSheet();
-                  }}
-                >
-                  <Ionicons 
-                    name={selectedAddress === item.line1 ? "radio-button-on" : "radio-button-off"} 
-                    size={22} 
-                    color={selectedAddress === item.line1 ? colors.primary : colors.muted}
-                  />
-                  <View style={styles.addressItemTextContainer}>
-                    <Text style={[styles.addressItemLabel, selectedAddress === item.line1 && styles.addressItemLabelActive]}>
-                      {item.label || (item.isDefault ? 'Mặc định' : 'Địa chỉ')}
-                    </Text>
-                    <Text style={styles.addressItemLine} numberOfLines={2}>
-                      {item.line1}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-            />
+          }
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[styles.addressItem, selectedAddress === item.line1 && styles.addressItemActive]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setSelectedAddress(item.line1);
+                closeAddressSheet();
+              }}
+            >
+              <Ionicons
+                name={selectedAddress === item.line1 ? "radio-button-on" : "radio-button-off"}
+                size={22}
+                color={selectedAddress === item.line1 ? colors.primary : colors.muted}
+              />
+              <View style={styles.addressItemTextContainer}>
+                <Text style={[styles.addressItemLabel, selectedAddress === item.line1 && styles.addressItemLabelActive]}>
+                  {item.label || (item.isDefault ? 'Mặc định' : 'Địa chỉ')}
+                </Text>
+                <Text style={styles.addressItemLine} numberOfLines={2}>
+                  {item.line1}
+                </Text>
+              </View>
+            </TouchableOpacity>
           )}
-        </View>
+        />
       </BottomSheetModal>
     </SafeAreaView>
   );
@@ -931,13 +930,7 @@ const getStyles = (
   },
 
   // Address modal
-  modalContent: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '80%',
-    paddingBottom: 30,
-  },
+  addressListContent: { paddingBottom: 32 },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
