@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-16 11:21 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/sep139-group-b
+> Cập nhật lần cuối: 2026-10-17 14:15 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/web-parity-labels
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -149,6 +149,14 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 - Báo giá của khách hiện số ngày bảo hành từng dòng; chi tiết booking hiện ghi chú và tự tải lại mỗi 5 giây khi đang chờ thợ; nhãn trạng thái, giá, thanh toán và vai trò tiếng Việt thay mã thô; `extractApiErrorMessage` dịch câu tiếng Anh đã biết của backend (`utils/api-error-messages.ts`), câu tiếng Anh lạ rơi về câu dự phòng của màn.
 - `useScrollHideTabBar` bật lại thanh tab khi màn rời focus. Thiết bị và E2E CHƯA KIỂM CHỨNG.
 
+### Đối chiếu web 17/10/2026 (nhánh `feat/web-parity-labels`)
+
+- Bảo hành của khách: `GET /service-orders/:id/warranties` nay trả `itemType` và `itemDescription` (backend #130); nhãn "Công sửa · tên" hoặc "Linh kiện · tên", dòng "Bảo hành N ngày · đến dd/mm/yyyy · còn N ngày" (`warrantyCoverageLabel`, `warrantyCoverageTerm`).
+- Thông báo của khách có chip Tất cả / Chưa đọc, chỉ lọc các trang đã tải như web (`GET /notifications` không có tham số lọc).
+- Tổng quan thợ đọc `GET /technicians/me/availability` (`utils/availability.ts`, cùng năm câu với web: Đang nhận việc theo lịch tới giờ, Ngoài giờ làm, Tạm nghỉ, Đang nghỉ, Chưa đặt lịch). Bật nhận việc khi ví dưới mức ký quỹ (`eligibleForJobs` false) thì báo cần nạp thêm và không gọi `PATCH`; đọc ví lỗi thì để backend quyết.
+- Màn Hủy đơn (`OrderExceptionScreen`) ghi "Hủy đơn có thể bị trừ điểm uy tín của bạn"; sửa nhãn nút hỏng font.
+- Chưa làm theo quyết định 17/10/2026: gọi thoại (cần `react-native-webrtc`, không chạy Expo Go), khách rút ví và xác minh CCCD, tóm tắt AI cho thợ, trợ lý AI (trả lời nhanh, Đúng ý/Chưa đúng, tóm tắt gửi thợ). Thiết bị CHƯA KIỂM CHỨNG.
+
 ### Đăng nhập Google
 
 Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng `WebBrowser.openAuthSessionAsync`, nhận mã sống 60 giây rồi đổi ở `/auth/google/exchange`. App không cần Google client id.
@@ -230,6 +238,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload support/warranty mới bị khóa theo quyết định owner. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-10-17 14:15 (UTC+7) | Hgnv11 | feat/web-parity-labels | Bảo hành nêu hạng mục và số ngày còn lại, lọc thông báo chưa đọc, trạng thái nhận việc theo lịch và chặn bật khi ví thiếu ký quỹ, cảnh báo trừ điểm khi hủy đơn; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-16 11:21 (UTC+7) | Hgnv11 | feat/sep139-group-b | Tạo booking chọn buổi sáng/chiều hoặc Tới ngay và ghi chú cho thợ như web, bỏ chọn giờ bắt đầu tự do; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-16 11:06 (UTC+7) | Hgnv11 | feat/sep139-group-b | Nhóm B SEP-139 (tự nhận việc, đặt lại thợ, uy tín, bảo hành mặc định, thu nhập theo kỳ, lưới lịch) và nhãn/thông báo tiếng Việt theo web; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-15 14:41 (UTC+7) | Hgnv11 | feat/sep139-m8-cutover | Màn nhiệm vụ không bị gỡ khi đơn hoặc tài nguyên tải lại hay có lệnh chờ (ảnh khuôn mặt, ảnh trước/sau, link VNPay); VNPay mở tự động sau xác nhận và gửi header x-client-platform mobile để backend trả về fixhome://app/order-payment; dấu lệnh VNPay quá 15 phút mà hoá đơn chưa trả thì mở khoá; thư viện ảnh gọi ảnh khuôn mặt đúng tên; thiết bị và E2E CHƯA KIỂM CHỨNG

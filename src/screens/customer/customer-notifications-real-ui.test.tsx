@@ -108,6 +108,15 @@ describe('C-RUI6A real Customer Notifications UI', () => {
     await act(async () => renderer.unmount());
   });
 
+  it('narrows the loaded rows to unread with the filter chip', async () => {
+    mockGetPage.mockResolvedValue(page([item('n1', true, 'Đã xem rồi'), item('n2', false, 'Chưa xem')]));
+    const renderer = await render();
+    expect(textOf(renderer)).toContain('Đã xem rồi');
+    await act(async () => { renderer.root.findByProps({ testID: 'notifications-filter-unread' }).props.onPress(); });
+    expect(textOf(renderer)).not.toContain('Đã xem rồi');
+    expect(textOf(renderer)).toContain('Chưa xem');
+  });
+
   it('shows an empty state only after confirmed empty server page', async () => {
     const renderer = await render();
     expect(textOf(renderer)).toContain('Chưa có thông báo nào');

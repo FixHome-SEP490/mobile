@@ -282,12 +282,15 @@ export default function TechnicianHomeScreen() {
                 <View
                   style={[
                     styles.dot,
-                    { backgroundColor: availability.isAvailable ? colors.tone.success.fg : colors.muted },
+                    { backgroundColor: (availability.status?.receiving ?? availability.isAvailable) ? colors.tone.success.fg : colors.muted },
                   ]}
                 />
-                <Text style={styles.rowTitle}>
-                  {availability.isAvailable ? 'Sẵn sàng nhận việc' : 'Đang tạm nghỉ'}
-                </Text>
+                <View style={{ flexShrink: 1 }}>
+                  <Text style={styles.rowTitle}>
+                    {availability.status?.title ?? (availability.isAvailable ? 'Sẵn sàng nhận việc' : 'Đang tạm nghỉ')}
+                  </Text>
+                  {!!availability.status?.detail && <Text style={styles.caption}>{availability.status.detail}</Text>}
+                </View>
               </View>
               <Switch
                 value={availability.isAvailable}

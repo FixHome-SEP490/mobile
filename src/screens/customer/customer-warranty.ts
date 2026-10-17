@@ -57,8 +57,25 @@ export function isWarrantyCoverageClaimable(
   return !busyWarrantyCoverageIds(claims).includes(coverage.id);
 }
 
+/** "Công sửa · Thay tụ", "Linh kiện · Block máy lạnh"; falls back to the note, then "Bảo hành dịch vụ". */
 export function warrantyCoverageLabel(coverage: WarrantyCoverageItem): string {
+  const name = coverage.itemDescription?.trim();
+  if (name) {
+    const kind = coverage.itemType === 'labor' ? 'Công sửa' : coverage.itemType === 'parts_equipment' ? 'Linh kiện' : '';
+    return kind ? `${kind} · ${name}` : name;
+  }
   return coverage.note?.trim() || 'Bảo hành dịch vụ';
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** "Bảo hành 30 ngày · đến 15/11/2026 · còn 29 ngày", or "Hết hạn 15/11/2026" once it ended. */
+export function warrantyCoverageTerm(coverage: WarrantyCoverageItem, nowMs = Date.now()): string {
+  const until = formatWarrantyDate(coverage.expiresAt);
+  if (warrantyCoverageUiStatus(coverage, nowMs) !== 'ACTIVE') return `Hết hạn ${until}`;
+  const days = coverage.warrantyDaysSnapshot ? `Bảo hành ${coverage.warrantyDaysSnapshot} ngày · ` : '';
+  const left = Math.max(0, Math.ceil((new Date(coverage.expiresAt).getTime() - nowMs) / DAY_MS));
+  return `${days}đến ${until} · còn ${left} ngày`;
 }
 
 export function warrantyClaimDisplayMeta(claim: WarrantyClaimView): {

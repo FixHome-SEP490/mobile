@@ -1,5 +1,6 @@
 // src/api/technician-profile.api.ts
 import apiClient from './client';
+import type { TechnicianAvailability } from '../utils/availability';
 
 export interface TechnicianScheduleSlot {
   dayOfWeek: number;
@@ -94,6 +95,11 @@ export function normalizeProfile(
 }
 
 export const technicianProfileApi = {
+  async getMyAvailability(): Promise<TechnicianAvailability> {
+    const res = await apiClient.get<{ data: TechnicianAvailability } | TechnicianAvailability>('/technicians/me/availability');
+    return unwrap(res.data);
+  },
+
   async getMyProfile(): Promise<TechnicianProfile> {
     const res = await apiClient.get<{ data: TechnicianProfile } | TechnicianProfile>(
       '/technicians/me/profile',

@@ -31,6 +31,7 @@ import {
   validateWarrantyText,
   warrantyClaimDisplayMeta,
   warrantyCoverageLabel,
+  warrantyCoverageTerm,
   warrantyCoverageUiStatus,
   warrantyCustomerPromptCopy,
   type CustomerWarrantyGroup,
@@ -368,7 +369,7 @@ export default function CustomerWarrantiesScreen() {
                 <View style={styles.coverageCopy}>
                   <Text style={styles.coverageTitle}>{warrantyCoverageLabel(coverage)}</Text>
                   <Text style={styles.helperText}>
-                    Hạn {formatWarrantyDate(coverage.expiresAt)}
+                    {warrantyCoverageTerm(coverage)}
                     {busy ? ' · Đang có yêu cầu chưa xử lý' : ''}
                   </Text>
                 </View>
