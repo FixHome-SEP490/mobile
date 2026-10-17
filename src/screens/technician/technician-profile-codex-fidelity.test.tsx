@@ -155,7 +155,7 @@ describe('T12A authenticated Technician profile Codex identity shell', () => {
     expect(text).toContain('Tài khoản');
     expect(text).toContain('Hồ sơ nghề nghiệp');
     const header = r.root.findAllByType(Text).filter(x => x.props.accessibilityRole === 'header' && x.props.children === 'Tài khoản');
-    expect(header.some(x => styleList(x.props.style).some(s => s.fontSize === 26))).toBe(true);
+    expect(header.some(x => styleList(x.props.style).some(s => s.fontSize === 24))).toBe(true);
     await act(async () => r.unmount());
   });
   it('places dynamic identity into a centered theme-tinted card', async () => {

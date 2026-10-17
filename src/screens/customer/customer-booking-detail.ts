@@ -45,7 +45,7 @@ export function bookingStatusLabel(status: unknown): string {
     case 'CONFIRMED':
       return 'Đã xác nhận';
     case 'CLOSED':
-      return 'Vòng tìm kỹ thuật viên đã kết thúc';
+      return 'Chưa có thợ nhận';
     case 'CANCELLED':
       return 'Đã hủy';
     default:

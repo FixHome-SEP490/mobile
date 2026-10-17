@@ -99,7 +99,7 @@ function bookingStatusLabel(status: string): string {
     case 'MATCHING': return 'Đang tìm kỹ thuật viên';
     case 'MATCHED': return 'Đã ghép kỹ thuật viên';
     case 'CONFIRMED': return 'Đã xác nhận';
-    case 'CLOSED': return 'Vòng tìm kỹ thuật viên đã kết thúc';
+    case 'CLOSED': return 'Chưa có thợ nhận';
     case 'CANCELLED': return 'Đã hủy';
     default: return 'Đang xử lý yêu cầu';
   }

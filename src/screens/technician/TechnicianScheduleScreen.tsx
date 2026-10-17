@@ -268,7 +268,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   iconBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   headerTitleGroup: { flex: 1, gap: 1, justifyContent: 'center' },
   headerEyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.textSecondary },
-  headerTitle: { fontSize: 22, lineHeight: 30, fontWeight: '700', color: colors.text },
+  headerTitle: { fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.text },
   content: { padding: 16, gap: 12 },
   sourceNotice: { padding: 12, borderRadius: 14, backgroundColor: colors.primarySoft },
   sourceNoticeText: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },

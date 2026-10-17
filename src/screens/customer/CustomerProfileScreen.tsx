@@ -94,7 +94,6 @@ export default function CustomerProfileScreen() {
   const [isAvatarModalVisible, setAvatarModalVisible] = useState(false);
   const profileSheetRef = useRef<BottomSheetModal>(null);
   const addressSheetRef = useRef<BottomSheetModal>(null);
-  const profileSnapPoints = useMemo(() => ['62%'], []);
   const addressSnapPoints = useMemo(() => ['90%'], []);
 
   const handlePickImage = async () => {
@@ -1069,7 +1068,7 @@ export default function CustomerProfileScreen() {
       {/* Profile Edit Sheet */}
       <BottomSheetModal
         ref={profileSheetRef}
-        snapPoints={profileSnapPoints}
+        enableDynamicSizing
         keyboardBehavior="interactive"
         keyboardBlurBehavior="restore"
         onDismiss={() => setFocusedProfileField(null)}
@@ -1332,7 +1331,7 @@ export default function CustomerProfileScreen() {
               />
             )}
             {addressSearchMessage && (
-              <View style={{ marginTop: -4, marginBottom: 10, alignSelf: 'stretch' }}>
+              <View style={{ marginTop: -4, marginBottom: 8, alignSelf: 'stretch' }}>
                 <Text accessibilityLiveRegion="polite" style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17 }}>
                   {addressSearchMessage}
                 </Text>
@@ -1555,9 +1554,9 @@ const getStyles = (colors: any) => StyleSheet.create({
 
   // Giao diện Main Wrapper & Avatar của v2
   scrollContent: { flexGrow: 1, padding: 16 },
-  pageIntro: { marginBottom: 14, paddingHorizontal: 2, gap: 4 },
+  pageIntro: { marginBottom: 12, paddingHorizontal: 2, gap: 4 },
   pageOverline: { fontSize: 12, lineHeight: 16, fontWeight: '700', letterSpacing: 1, color: colors.textSecondary },
-  pageTitle: { fontSize: 26, lineHeight: 34, fontWeight: '700', color: colors.text },
+  pageTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
   pageDescription: { fontSize: 13, lineHeight: 19, color: colors.textSecondary },
   mainWrapperCard: {
     backgroundColor: colors.background,
@@ -1588,7 +1587,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   avatarBorder: {
     width: 88, height: 88, borderRadius: 44,
     justifyContent: 'center', alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   avatarBorderLight: { borderColor: colors.surface, backgroundColor: colors.surface },
   avatarBorderDark: { borderColor: '#1E293B', backgroundColor: '#1E293B' },
@@ -1599,12 +1598,12 @@ const getStyles = (colors: any) => StyleSheet.create({
   avatarImage: { width: '100%', height: '100%' },
   avatarText: { fontSize: 32, fontWeight: '700', color: colors.primaryStrong },
   phone: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, fontWeight: '500', textAlign: 'center' },
-  heroEditBtn: { minHeight: 48, justifyContent: 'center', alignItems: 'center', marginTop: 14, paddingHorizontal: 20, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  heroEditBtn: { minHeight: 48, justifyContent: 'center', alignItems: 'center', marginTop: 12, paddingHorizontal: 16, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   heroEditText: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.text },
   
   sectionTitle: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text, marginBottom: 12, marginTop: 12 },
   menuContainer: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 14, overflow: 'hidden', marginBottom: 12 },
-  menuItem: { flexDirection: 'row', minHeight: 56, paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center', gap: 12 },
+  menuItem: { flexDirection: 'row', minHeight: 56, paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center', gap: 12 },
   menuIconTile: { width: 36, height: 36, borderRadius: 8, backgroundColor: colors.primarySoft, justifyContent: 'center', alignItems: 'center' },
   menuContent: { flex: 1, minWidth: 0 },
   menuTitle: { fontSize: 16, lineHeight: 24, fontWeight: '500', color: colors.text },
@@ -1615,7 +1614,7 @@ const getStyles = (colors: any) => StyleSheet.create({
 
   profileSheetContent: {
     width: '100%',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 24,
   },
@@ -1638,29 +1637,29 @@ const getStyles = (colors: any) => StyleSheet.create({
     justifyContent: 'center',
   },
   profileFieldGroup: { width: '100%', marginBottom: 16 },
-  profileFieldLabel: { fontSize: 13, lineHeight: 18, fontWeight: '600', marginBottom: 7 },
+  profileFieldLabel: { fontSize: 13, lineHeight: 18, fontWeight: '600', marginBottom: 8 },
   profileInputShell: {
     minHeight: 50,
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     borderWidth: 1,
     borderRadius: 14,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
   },
   profileReadonlyShell: { opacity: 0.92 },
   profileInput: { flex: 1, minHeight: 48, paddingVertical: 0, fontSize: 15, lineHeight: 21 },
   profileReadonlyValue: { flex: 1, fontSize: 14, lineHeight: 20 },
-  profileHelperRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginTop: 7, paddingHorizontal: 2 },
+  profileHelperRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginTop: 8, paddingHorizontal: 2 },
   profileHelperText: { flex: 1, fontSize: 12, lineHeight: 17 },
-  profileActions: { width: '100%', flexDirection: 'row', gap: 10, marginTop: 4 },
+  profileActions: { width: '100%', flexDirection: 'row', gap: 8, marginTop: 4 },
   profileCancelButton: {
     minHeight: 48,
     minWidth: 92,
     borderWidth: 1,
     borderRadius: 14,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1669,19 +1668,19 @@ const getStyles = (colors: any) => StyleSheet.create({
     flex: 1,
     minHeight: 48,
     borderRadius: 14,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   profileSaveText: { color: '#FFFFFF', fontSize: 14, lineHeight: 20, fontWeight: '700' },
-  modalContent: { width: '100%', backgroundColor: colors.surface, borderRadius: 20, padding: 20, alignItems: 'center' },
+  modalContent: { width: '100%', backgroundColor: colors.surface, borderRadius: 20, padding: 16, alignItems: 'center' },
   modalTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 16 },
   input: { width: '100%', backgroundColor: colors.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, color: colors.text, marginBottom: 12 },
   inputDark: { backgroundColor: '#334155', color: colors.background },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', width: '100%', marginTop: 8, gap: 12 },
-  cancelBtn: { minHeight: 48, justifyContent: 'center', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, backgroundColor: colors.border },
+  cancelBtn: { minHeight: 48, justifyContent: 'center', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 12, backgroundColor: colors.border },
   cancelBtnText: { color: colors.textSecondary, fontWeight: '600', fontSize: 14 },
   saveBtn: { minHeight: 48, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
   saveBtnText: { color: colors.surface, fontWeight: '600', fontSize: 14 },
@@ -1691,17 +1690,17 @@ const getStyles = (colors: any) => StyleSheet.create({
   addressPinStatus: { fontSize: 12, lineHeight: 17, color: colors.textSecondary, marginTop: 4 },
   addressStateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16 },
   addressStateText: { fontSize: 13, lineHeight: 19, color: colors.textSecondary },
-  addressErrorBox: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, marginBottom: 8, backgroundColor: colors.background },
+  addressErrorBox: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 16, marginBottom: 8, backgroundColor: colors.background },
   addressErrorText: { fontSize: 13, lineHeight: 19, color: colors.text, marginBottom: 4 },
   addressRetryBtn: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   addressRetryText: { fontSize: 13, lineHeight: 19, fontWeight: '700', color: colors.primary },
   iconBtn: { minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center', marginLeft: 4 },
-  locationBtn: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: colors.primaryTint, borderRadius: 12, alignSelf: 'flex-start', marginBottom: 16 },
+  locationBtn: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 16, backgroundColor: colors.primaryTint, borderRadius: 12, alignSelf: 'flex-start', marginBottom: 16 },
   locationBtnText: { color: colors.primary, fontSize: 13, fontWeight: '600' },
-  defaultBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: colors.primaryTint, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  defaultBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primaryTint, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   defaultBadgeText: { fontSize: 12, lineHeight: 17, fontWeight: '700', color: colors.primaryStrong },
   suggestionBox: { width: '100%', backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border, marginTop: -8, marginBottom: 12, overflow: 'hidden' },
-  suggestionItem: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
+  suggestionItem: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
   suggestionText: { fontSize: 13, color: colors.text },
   defaultRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: 8 },
   cameraIconBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: colors.primaryStrong, width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: colors.surface },

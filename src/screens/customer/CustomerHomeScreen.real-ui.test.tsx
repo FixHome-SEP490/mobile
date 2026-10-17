@@ -13,7 +13,7 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('react-native-safe-area-context', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const Native = require('react-native');
-  return { SafeAreaView: Native.View };
+  return { SafeAreaView: Native.View, useSafeAreaInsets: () => ({ top: 0, bottom: 34, left: 0, right: 0 }) };
 });
 
 jest.mock('@expo/vector-icons', () => {
@@ -49,6 +49,8 @@ jest.mock('@gorhom/bottom-sheet', () => {
       ReactModule.createElement(ReactModule.Fragment, null, props.children),
     ),
     BottomSheetBackdrop: () => null,
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    BottomSheetFlatList: require('react-native').FlatList,
   };
 });
 
@@ -233,6 +235,27 @@ describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
     }
   });
 
+  it('ends with room for the whole tab bar so the last row is not hidden under it', () => {
+    const tree = mountScreen();
+    try {
+      // 64 pill + 34 home indicator + 16 gap
+      expect(tree.root.findByProps({ testID: 'home-tab-bar-clearance' }).props.style.height).toBe(114);
+    } finally { act(() => tree.unmount()); }
+  });
+  it('puts wallet and warranty one tap from Home for a signed-in customer only', () => {
+    const tree = mountScreen();
+    try {
+      act(() => tree.root.findByProps({ testID: 'home-quick-CustomerWallet' }).props.onPress());
+      expect(mockNavigate).toHaveBeenCalledWith('CustomerWallet');
+      act(() => tree.root.findByProps({ testID: 'home-quick-CustomerWarranties' }).props.onPress());
+      expect(mockNavigate).toHaveBeenCalledWith('CustomerWarranties');
+    } finally { act(() => tree.unmount()); }
+    storeMock.useAuthStore.mockImplementation(() => ({ user: null, isAuthenticated: false }));
+    const guest = mountScreen();
+    try {
+      expect(guest.root.findAllByProps({ testID: 'home-quick-CustomerWallet' })).toHaveLength(0);
+    } finally { act(() => guest.unmount()); }
+  });
   it('opens discovery from the Home search without mounting a focusable input', () => {
     const tree = mountScreen();
     try {

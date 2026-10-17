@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-17 17:48 (UTC+7) · Người cập nhật (git): foxonworld · Nhánh: feat/mobile-c50-c45-20261017
+> Cập nhật lần cuối: 2026-10-17 18:20 (UTC+7) · Người cập nhật (git): foxonworld · Nhánh: integration/mobile-c50-c45-20261017
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -169,6 +169,17 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 - Báo giá của khách hiện số ngày bảo hành từng dòng; chi tiết booking hiện ghi chú và tự tải lại mỗi 5 giây khi đang chờ thợ; nhãn trạng thái, giá, thanh toán và vai trò tiếng Việt thay mã thô; `extractApiErrorMessage` dịch câu tiếng Anh đã biết của backend (`utils/api-error-messages.ts`), câu tiếng Anh lạ rơi về câu dự phòng của màn.
 - `useScrollHideTabBar` bật lại thanh tab khi màn rời focus. Thiết bị và E2E CHƯA KIỂM CHỨNG.
 
+### Đối chiếu web 17/10/2026 (nhánh `feat/web-parity-labels`)
+
+- Bảo hành của khách: `GET /service-orders/:id/warranties` nay trả `itemType` và `itemDescription` (backend #130); nhãn "Công sửa · tên" hoặc "Linh kiện · tên", dòng "Bảo hành N ngày · đến dd/mm/yyyy · còn N ngày" (`warrantyCoverageLabel`, `warrantyCoverageTerm`).
+- Thông báo của khách có chip Tất cả / Chưa đọc, chỉ lọc các trang đã tải như web (`GET /notifications` không có tham số lọc).
+- Tổng quan thợ đọc `GET /technicians/me/availability` (`utils/availability.ts`, cùng năm câu với web: Đang nhận việc theo lịch tới giờ, Ngoài giờ làm, Tạm nghỉ, Đang nghỉ, Chưa đặt lịch). Bật nhận việc khi ví dưới mức ký quỹ (`eligibleForJobs` false) thì báo cần nạp thêm và không gọi `PATCH`; đọc ví lỗi thì để backend quyết.
+- Màn Hủy đơn (`OrderExceptionScreen`) ghi "Hủy đơn có thể bị trừ điểm uy tín của bạn"; sửa nhãn nút hỏng font.
+- Home khách (đã đăng nhập) có hai lối tắt "Ví của tôi" và "Bảo hành" như menu tài khoản web; Hồ sơ vẫn giữ cả hai. Hồ sơ thợ ở màn chọn thợ hiện "Giá công tham khảo: Theo báo giá" khi thợ chưa niêm yết giá; `reliabilityScore` vẫn không hiện cho khách (khác web, có test chặn).
+- Khoảng cách theo lưới 4/8/12/16 của `FIXHOME-DESIGN-SYSTEM.md` mục 9: giá trị lẻ (3, 5, 7, 9, 10, 11, 13, 14, 18, 20) của padding, margin và gap ở 48 file màn hình đã đổi về lưới (padding làm tròn lên để giữ vùng chạm 44pt, margin và gap làm tròn xuống); chữ dưới 12 ở `TaskScreenShell` và màn Bảo mật nâng lên 12; Home khách bỏ hai dòng chú thích (AI, "Khác"). Sheet chọn địa chỉ (Home, form đặt lịch), sheet chọn cách đặt lịch, sheet xem lại yêu cầu và sheet chỉnh thông tin hồ sơ khách co theo nội dung (`enableDynamicSizing`, tối đa 78-80% màn) thay cho chiều cao cố định 42-62% để ít địa chỉ không để trống lớn; danh sách trong sheet dùng `BottomSheetFlatList` với tiêu đề nằm trong `ListHeaderComponent` để sheet đo đủ. Bố cục từng màn trên thiết bị CHƯA KIỂM CHỨNG.
+- Khoảng cách theo lưới 4/8/12/16 của `FIXHOME-DESIGN-SYSTEM.md` mục 9: giá trị lẻ (3, 5, 7, 9, 10, 11, 13, 14, 18, 20) của padding, margin và gap ở 48 file màn hình đã đổi về lưới (padding làm tròn lên để giữ vùng chạm 44pt, margin và gap làm tròn xuống); chữ dưới 12 ở `TaskScreenShell` và màn Bảo mật nâng lên 12; Home khách bỏ hai dòng chú thích (AI, "Khác"). Tiêu đề màn thống nhất: màn có nút Quay lại dùng 18/24 đậm 700, màn gốc của tab (Đơn của tôi, Thông báo, Hồ sơ) dùng `pageTitle` 24/32 đậm 700 theo mục 6 của `FIXHOME-DESIGN-SYSTEM.md` (trước đây 16 đến 26, đậm 600 đến 800); `borderRadius` 13 đổi thành 14. 14 ô nhập còn thiếu `accessibilityLabel` đã có nhãn. Danh sách chat, lịch sử sửa chữa, bảo hành và ví thợ dùng khung xám (`CustomerSkeleton`) thay cho vòng xoay khi tải lần đầu. `OrderTaskScreen` khi đọc đơn lỗi (`order.status` là `error`) hiện "Chưa tải được thông tin đơn" kèm nút "Thử lại" (`refresh('manual')`, chỉ đọc) thay vì "Đang xác minh…" mãi; màn gửi lệnh (duyệt, thanh toán, huỷ) cố ý không có nút gửi lại tự động. Thanh tab nổi (`GlassTabBar`, `CustomerAnimatedBottomBar`) cao 64 cộng vùng an toàn dưới (tối thiểu 16); `hooks/useTabBarClearance` trả đúng phần đệm đó cộng 16 để dòng cuối cuộn ra khỏi thanh tab, dùng ở Trang chủ và Đơn của tôi của khách (trước đây chỉ chừa 56 và 16 nên bị che). Tab Hoạt động: booking `closed` hiện "Chưa có thợ nhận" ở danh sách, chi tiết và màn chọn thợ; giờ hẹn không còn giây; hàng "Tùy chọn yêu cầu" có đường kẻ trên để thẻ không kết thúc bằng một dải trống; mọi nút trên màn cùng cao tối thiểu 44, bo 14, chữ 14 đậm 600, hai nút Đổi lịch và Hủy yêu cầu chia đều chiều ngang, nút phụ rộng bằng nút chính; thẻ đã có hàng "Tùy chọn" không hiện thêm mũi tên phải ở đầu thẻ (mỗi thẻ một mũi tên). Chưa làm: màu hex viết cứng (nhiều nhất `CustomerOrderDetailScreen`) và gom bo góc 12/14 về một cỡ. Bố cục từng màn trên thiết bị CHƯA KIỂM CHỨNG.
+- Chưa làm theo quyết định 17/10/2026: gọi thoại (cần `react-native-webrtc`, không chạy Expo Go), tóm tắt AI cho thợ, trợ lý AI (trả lời nhanh, Đúng ý/Chưa đúng, tóm tắt gửi thợ). Thiết bị CHƯA KIỂM CHỨNG.
+
 ### Đăng nhập Google
 
 Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng `WebBrowser.openAuthSessionAsync`, nhận mã sống 60 giây rồi đổi ở `/auth/google/exchange`. App không cần Google client id.
@@ -225,7 +236,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 7. Quyết định đã chốt
 
-- Khách chọn 1 đến 2 kỹ thuật viên (app hiện bắt chọn đúng 2); ví kỹ thuật viên tối thiểu 200.000 ₫ (PO xác nhận 07/10/2026).
+- Khách chọn 1 đến 2 kỹ thuật viên; ví kỹ thuật viên tối thiểu 200.000 ₫ (PO xác nhận 07/10/2026).
 - Hai luồng đặt lịch: thường và có AI; AI chỉ điền sẵn, khách tự bấm đặt.
 - Khung lịch Customer giữ hai buổi 08:00–12:00 và 13:00–18:00 theo UTC+7; ngày hợp lệ tính 14 ngày từ giờ Việt Nam, chọn ngày chưa chọn buổi.
 - Không có dữ liệu hay luồng giả (PO 07/10/2026): nạp ví chỉ qua VNPay, phản hồi không có `paymentUrl` là lỗi; nạp hay rút bị `backend` từ chối thì hiện đúng thông báo của server.
@@ -260,9 +271,20 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload support/warranty mới bị khóa theo quyết định owner. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+
+- 2026-10-17 18:20 (UTC+7) | foxonworld | integration/mobile-c50-c45-20261017 | Tích hợp lịch tháng và CTA với UI/clearance, lịch nhận việc và ký quỹ từ dev; giữ C50/C45, lịch sử hai nhánh và dọn cleanup test bộ lọc thông báo; runtime CHƯA KIỂM CHỨNG.
 - 2026-10-17 17:48 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | Booking Customer giữ hai buổi sáng/chiều; lịch 14 ngày có lịch tháng, không chọn buổi ngầm và làm mới theo focus/app/time.
 - 2026-10-17 16:50 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | Polish Customer: reset shortcut, đủ mã vệ sinh catalog, nhãn TV đúng phạm vi, cutout plumbing riêng, catalog dễ đọc, CTA trong vùng chạm và sheet uy tín truy cập được; chờ AGY recapture viewport thật.
+- 2026-10-17 16:39 (UTC+7) | Hgnv11 | feat/mobile-layout-polish | Nhãn booking đóng thành Chưa có thợ nhận, giờ hẹn bỏ giây, hàng tùy chọn của thẻ Hoạt động gọn lại, nút trên màn cùng kích cỡ; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-17 16:23 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | UX1–UX5: định tuyến catalog theo service code, booking hai bước/review riêng, receipt gọn, radar matching có điều kiện, reputation customer sheet và CTA giữa nổi; thiết bị/visual QA CHƯA KIỂM CHỨNG.
+- 2026-10-17 16:18 (UTC+7) | Hgnv11 | feat/mobile-layout-polish | Trang chủ và Đơn của tôi của khách chừa đủ chỗ dưới đáy để thanh tab không che dòng cuối; thiết bị CHƯA KIỂM CHỨNG.
+- 2026-10-17 15:19 (UTC+7) | Hgnv11 | feat/mobile-layout-polish | Nhãn truy cập cho 14 ô nhập, khung xám cho bốn danh sách, nút Thử lại khi đọc đơn lỗi ở OrderTaskScreen; thiết bị CHƯA KIỂM CHỨNG.
+- 2026-10-17 15:10 (UTC+7) | Hgnv11 | feat/mobile-layout-polish | Thống nhất cỡ và độ đậm tiêu đề màn (18 có nút Quay lại, 24 màn gốc tab), bo góc 13 thành 14; thiết bị CHƯA KIỂM CHỨNG.
+- 2026-10-17 14:53 (UTC+7) | Hgnv11 | feat/mobile-layout-polish | Năm bottom sheet (địa chỉ x2, cách đặt lịch, xem lại yêu cầu, sửa hồ sơ) co theo nội dung thay cho chiều cao cố định; thiết bị CHƯA KIỂM CHỨNG.
+- 2026-10-17 14:41 (UTC+7) | Hgnv11 | feat/mobile-layout-polish | Chuẩn hóa khoảng cách về lưới 4/8/12/16 ở 48 màn, chữ tối thiểu 12, bỏ hai dòng chú thích ở Home khách; thiết bị CHƯA KIỂM CHỨNG.
+- 2026-10-17 14:40 (UTC+7) | Hgnv11 | feat/mobile-layout-polish | Chuẩn hóa khoảng cách về lưới 4/8/12/16 ở 48 màn, chữ tối thiểu 12, bỏ hai dòng chú thích ở Home khách; thiết bị CHƯA KIỂM CHỨNG.
+- 2026-10-17 14:24 (UTC+7) | Hgnv11 | feat/web-parity-home-candidates | Home khách có lối tắt Ví và Bảo hành, màn chọn thợ ghi Theo báo giá khi chưa có giá công; thiết bị CHƯA KIỂM CHỨNG.
+- 2026-10-17 14:15 (UTC+7) | Hgnv11 | feat/web-parity-labels | Bảo hành nêu hạng mục và số ngày còn lại, lọc thông báo chưa đọc, trạng thái nhận việc theo lịch và chặn bật khi ví thiếu ký quỹ, cảnh báo trừ điểm khi hủy đơn; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-17 14:00 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | Thay acronym KYC hiển thị trong tiến trình rút tiền và thông báo lỗi bằng thuật ngữ “xác minh danh tính”; status/API giữ nguyên.
 - 2026-10-17 13:51 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | C50/C45 owner visual polish: shortcut Guest/Customer, copy mã ở CompletedOrder Customer, wallet và Withdrawal/KYC; 12 suites/125 focused tests PASS, Expo Web guest viewport 320–430dp PASS; không gửi API KYC, ngân hàng hoặc rút tiền thật.
 - 2026-10-17 02:11 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | Ổn định test AppState unresolved bằng GPS fixture tạo theo test, `Date.now` cố định và flush lifecycle qua `act`; serial lẫn regular Jest đều 285/3412 PASS, lint/typecheck/check:expo PASS.
@@ -279,44 +301,35 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-16 11:06 (UTC+7) | Hgnv11 | feat/sep139-group-b | Nhóm B SEP-139 (tự nhận việc, đặt lại thợ, uy tín, bảo hành mặc định, thu nhập theo kỳ, lưới lịch) và nhãn/thông báo tiếng Việt theo web; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-15 14:41 (UTC+7) | Hgnv11 | feat/sep139-m8-cutover | Màn nhiệm vụ không bị gỡ khi đơn hoặc tài nguyên tải lại hay có lệnh chờ (ảnh khuôn mặt, ảnh trước/sau, link VNPay); VNPay mở tự động sau xác nhận và gửi header x-client-platform mobile để backend trả về fixhome://app/order-payment; dấu lệnh VNPay quá 15 phút mà hoá đơn chưa trả thì mở khoá; thư viện ảnh gọi ảnh khuôn mặt đúng tên; thiết bị và E2E CHƯA KIỂM CHỨNG
 - 2026-10-15 10:04 (UTC+7) | Hgnv11 | feat/sep139-m8-cutover | Mọi header dùng một nút Quay lại chung `components/BackButton` (44pt, mũi tên Ionicons, về Home đúng vai trò khi không có màn trước); nút số lượng linh kiện 44pt; thiết bị CHƯA KIỂM CHỨNG.
-
 - 2026-10-14 23:34 (UTC+7) | Hgnv11 | feat/sep139-m8-cutover | M8 chuyển route chi tiết đơn hai vai trò sang OrderFlow, bỏ POST claim trực tiếp, thêm lối vào Nhắn tin; thiết bị và E2E CHƯA KIỂM CHỨNG.
-
 - 2026-10-14 21:14 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Khóa bản nháp sau prepare, thêm thao tác sửa confirmation, dọn state khi đổi mục tiêu Booking/claim và chuyển CTA Technician vào footer; kiểm thử source đạt, thiết bị/runtime CHƯA KIỂM CHỨNG.
-
 - 2026-10-14 20:54 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Bổ sung UI hậu mãi M7 nối hook đã khóa và ghi rõ đường tạo claim trực tiếp cũ cần parity M8; runtime warranty chưa xác minh.
-
 - 2026-10-14 14:23 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Đóng source M6 với các sửa tiền/return/capture/recovery, ghi render ví thật và giới hạn runtime; M7–M8 chưa triển khai, không publish.
-
 - 2026-10-14 13:03 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Đóng M6 logic source gate sau review tài chính và sửa rollback ví HTTP422, lead xác minh 33 tests; M6 UI/root linking/capture return còn chờ.
-
 - 2026-10-14 12:49 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Bàn giao M6 logic và gate 118 tests, ghi review tài chính đang chờ, sửa wallet HTTP envelope và cập nhật QA/render danh sách rỗng hai vai trò; UI/cutover/native/payment còn chưa kiểm chứng.
-
 - 2026-10-14 05:55 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Đóng source gate UI M5, giữ capture mới chuyển tiếp M6 AFTER; QA sandbox đã khôi phục và Expo Web dev export thực đạt, native/render chưa kiểm chứng.
-
 - 2026-10-14 04:23 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Cập nhật source M3–M4, controller/recovery M5 và gate UI/runtime còn chờ; sửa guard phát sinh độc lập, dữ liệu thiếu và nhận linh kiện sau storage; ghi QA sandbox ngừng chạy.
-
 - 2026-10-13 22:30 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 đóng ba bản sửa logic M3 về booking/lời mời chưa gửi và departure bị từ chối trước ghi; UI M3, thiết bị và cutover còn chưa hoàn tất.
-
 - 2026-10-13 17:50 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 sửa số tiền dạng chuỗi, tuần tự hóa ghi chú và thêm làm mới chi tiết; runtime và cutover chưa kiểm chứng.
-
 - 2026-10-13 17:30 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 bổ sung preview native chỉ đọc theo role, chi tiết tải một lần và ghi chú bảo vệ phiên; UI production và runtime còn chưa cutover/kiểm chứng.
 
-- 2026-10-13 13:32 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 thêm nền session/resolver/readback và journal, cập nhật contract Backend dev/privacy owner; UI cutover và runtime còn chưa kiểm chứng.
+### Lịch sử giữ lại khi tích hợp
 
-- 2026-10-13 02:11 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | SEP-139 Technician mở toàn bộ chi tiết thành scene riêng, Back khôi phục chính xác bước trước; thêm regression test, device QA còn chờ.
+40 mục mới nhất ở trên; các mục cũ dưới đây được giữ nguyên từ hai nhánh để không mất lịch sử.
 
-- 2026-10-13 02:04 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | SEP-139 nối explicit start-repair và readback, chuyển order detail sang stage/action hiện hành với progress sheet; full-details, thiết bị và review cuối còn CHƯA KIỂM CHỨNG.
-
-- 2026-10-13 00:48 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | SEP-137 bổ sung hoàn thiện khu vực địa chỉ Booking, rút gọn Booking/Matching và timeline Customer Order theo dữ kiện GET, giữ toàn bộ chi tiết và safety controllers.
-
-- 2026-10-12 23:42 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | SEP-136 đổi lịch tuần dọc, editor theo yêu cầu và sao chép bản nháp T2–T6; đồng bộ account shell và nút đăng xuất cuối scroll của hai role, giữ API và auth guards.
-
-- 2026-10-12 23:03 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | SEP-135 sửa API native dev theo host Metro; SEP-136 triển khai first-run/Guest Home dùng chung, handoff auth, lịch/khu vực hợp nhất và tab Ví; giữ guard dev, thiết bị chờ QA.
-
-- 2026-10-12 21:52 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | Tích hợp source production Customer và Technician, GET history an toàn, giữ guard dev và ghi hunk Auth/Finance/workflow HOLD cùng giới hạn QA.
-
-- 2026-10-12 21:10 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | Port UI demo hai vai trò, giới thiệu/Guest qua Login và hai thanh tab, giữ API dev, role handoff, các gate Auth/Finance và thiết bị chưa kiểm chứng.
-- 2026-10-12 20:45 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | Đối chiếu source SEP-132: page fail-closed, glass responsive opt-in, route thông báo thợ và các gate Auth/Finance còn chờ.
-
-- 2026-10-09 00:17 (UTC+7) | ToanAltF4 | feat/technician-certificates | Đăng ký thợ: chứng chỉ không bắt buộc (bản công chứng), câu nhắc đến trụ sở sau khi nộp hồ sơ.
+> - 2026-10-13 13:32 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 thêm nền session/resolver/readback và journal, cập nhật contract Backend dev/privacy owner; UI cutover và runtime còn chưa kiểm chứng.
+> - 2026-10-13 02:11 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | SEP-139 Technician mở toàn bộ chi tiết thành scene riêng, Back khôi phục chính xác bước trước; thêm regression test, device QA còn chờ.
+> - 2026-10-13 02:04 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | SEP-139 nối explicit start-repair và readback, chuyển order detail sang stage/action hiện hành với progress sheet; full-details, thiết bị và review cuối còn CHƯA KIỂM CHỨNG.
+> - 2026-10-13 00:48 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | SEP-137 bổ sung hoàn thiện khu vực địa chỉ Booking, rút gọn Booking/Matching và timeline Customer Order theo dữ kiện GET, giữ toàn bộ chi tiết và safety controllers.
+> - 2026-10-12 23:42 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | SEP-136 đổi lịch tuần dọc, editor theo yêu cầu và sao chép bản nháp T2–T6; đồng bộ account shell và nút đăng xuất cuối scroll của hai role, giữ API và auth guards.
+> - 2026-10-12 23:03 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | SEP-135 sửa API native dev theo host Metro; SEP-136 triển khai first-run/Guest Home dùng chung, handoff auth, lịch/khu vực hợp nhất và tab Ví; giữ guard dev, thiết bị chờ QA.
+> - 2026-10-12 21:52 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | Tích hợp source production Customer và Technician, GET history an toàn, giữ guard dev và ghi hunk Auth/Finance/workflow HOLD cùng giới hạn QA.
+> - 2026-10-12 21:10 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | Port UI demo hai vai trò, giới thiệu/Guest qua Login và hai thanh tab, giữ API dev, role handoff, các gate Auth/Finance và thiết bị chưa kiểm chứng.
+> - 2026-10-12 20:45 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | Đối chiếu source SEP-132: page fail-closed, glass responsive opt-in, route thông báo thợ và các gate Auth/Finance còn chờ.
+> - 2026-10-09 00:17 (UTC+7) | ToanAltF4 | feat/technician-certificates | Đăng ký thợ: chứng chỉ không bắt buộc (bản công chứng), câu nhắc đến trụ sở sau khi nộp hồ sơ.
+> - 2026-10-09 00:08 (UTC+7) | ToanAltF4 | feat/technician-order-steps | Thợ: check-in mở camera chụp sản phẩm, bỏ nút bắt đầu sửa, hoàn thành kèm ảnh, chỉ dùng camera, nút cần thay đổi thợ.
+> - 2026-10-08 23:43 (UTC+7) | ToanAltF4 | feat/technician-sessions | Thợ: lịch hẹn theo buổi, ghi chú khách, nút xuất phát theo giờ cho phép, gửi GPS mỗi 5 phút, bán kính 40 km.
+> - 2026-10-08 21:49 (UTC+7) | ToanAltF4 | feat/customer-extend-matching-and-tech-areas | Khách gia hạn thời gian chờ thợ; thợ sửa khu vực phục vụ sau onboarding.
+> - 2026-10-07 22:05 (UTC+7) | ToanAltF4 | fix/technician-quote-status-label | Trạng thái báo giá hiện bằng chữ ở màn của kỹ thuật viên, dùng chung utils/quote-status.ts.
+> - 2026-10-07 19:31 (UTC+7) | ToanAltF4 | fix/no-fake-data-and-po-decisions | Ghi việc gỡ dữ liệu giả, ảnh đại diện kỹ thuật viên, BRX-064 và thông báo mới; bỏ rủi ro ảnh file:// đã sửa
+> - 2026-10-07 14:43 (UTC+7) | ToanAltF4 | docs/repo-context | Tạo file context theo bộ quy tắc chung của bốn repo, ghi hiện trạng sau đợt sửa lỗi ngày 07/10/2026

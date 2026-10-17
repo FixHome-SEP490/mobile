@@ -482,7 +482,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   headerTitleGroup: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 1 },
   headerEyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.textSecondary, textAlign: 'center' },
-  headerTitle: { fontSize: 20, lineHeight: 28, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  headerTitle: { fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.text, textAlign: 'center' },
   content: { padding: spacing.md, paddingBottom: spacing.xxl, gap: spacing.md },
   centerBlock: { alignItems: 'center', gap: 12, marginTop: spacing.xl },
   bodySmall: { fontSize: fontSize.sm, lineHeight: 20, color: colors.textSecondary },

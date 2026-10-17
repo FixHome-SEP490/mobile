@@ -308,7 +308,7 @@ export default function AcceptedPartsScreen() {
 
       <View style={styles.card}>
         <Text style={styles.inputLabel}>Lý do chuẩn bị trước (tùy chọn)</Text>
-        <TextInput
+        <TextInput accessibilityLabel="Ghi chú linh kiện"
           testID="pre-parts-reason-input"
           style={styles.reasonInput}
           multiline

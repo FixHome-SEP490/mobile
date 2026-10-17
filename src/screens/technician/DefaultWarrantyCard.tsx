@@ -73,10 +73,10 @@ export default function DefaultWarrantyCard({ saved, onSaved }: { saved: number 
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: 14, padding: 16, gap: 10 },
+  card: { borderWidth: 1, borderRadius: 14, padding: 16, gap: 8 },
   title: { fontSize: 16, fontWeight: '700' },
   hint: { fontSize: 12, lineHeight: 18 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   input: { minWidth: 80, minHeight: 44, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 16 },
   btn: { minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12, paddingHorizontal: 16, alignSelf: 'flex-start' },
   btnText: { fontWeight: '700' },

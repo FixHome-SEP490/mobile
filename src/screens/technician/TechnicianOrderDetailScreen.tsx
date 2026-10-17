@@ -2057,7 +2057,7 @@ export default function TechnicianOrderDetailScreen() {
                 <>
                   <Text style={styles.jobMeta}>Dùng khi đã tới nơi và thấy việc nằm ngoài kỹ năng của bạn. Trường hợp này được quản lý xem xét, không tự trừ điểm uy tín.</Text>
                   {replacementOpen && (
-                    <TextInput
+                    <TextInput accessibilityLabel="Ghi chú thêm"
                       style={[styles.fieldInput, { minHeight: 80, textAlignVertical: 'top' }]}
                       value={replacementReason}
                       onChangeText={setReplacementReason}
@@ -2303,7 +2303,7 @@ export default function TechnicianOrderDetailScreen() {
                             </TouchableOpacity>
                           ) : (
                             <View style={styles.acItemCard}>
-                              <TextInput
+                              <TextInput accessibilityLabel="Tìm linh kiện"
                                 style={styles.fieldInput}
                                 value={quotePartQuery}
                                 onChangeText={(text) => {
@@ -2665,7 +2665,7 @@ export default function TechnicianOrderDetailScreen() {
 
                 {acShowPartSearch && (
                   <View style={styles.acItemCard}>
-                    <TextInput
+                    <TextInput accessibilityLabel="Tìm linh kiện FixHome"
                       style={styles.fieldInput}
                       value={acPartQuery}
                       onChangeText={(text) => {
@@ -2740,7 +2740,7 @@ export default function TechnicianOrderDetailScreen() {
                       <Text style={styles.jobMeta}>Giao đến tận nơi</Text>
                     </TouchableOpacity>
                     {acFulfillment === 'delivery' && (
-                      <TextInput
+                      <TextInput accessibilityLabel="Phí giao hàng"
                         style={styles.fieldInput}
                         value={acShippingFee}
                         onChangeText={setAcShippingFee}
@@ -3242,7 +3242,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
     borderBottomWidth: 1,
     borderBottomColor: colors.divider,
   },
-  headerTitle: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text },
+  headerTitle: { fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.text },
   headerBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   scrollContent: { padding: 16, paddingBottom: 48, gap: 12, backgroundColor: colors.background, flexGrow: 1 },
   centerLoading: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
@@ -3252,11 +3252,11 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   emptyDesc: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
   retryBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, marginTop: 8 },
   bannerRetryBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16 },
-  retryText: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong, paddingVertical: 10 },
+  retryText: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong, paddingVertical: 12 },
 
   acPartResultItem: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.divider },
   acFulfillmentBox: { marginTop: 4, marginBottom: 4, gap: 4, backgroundColor: colors.primarySoft, borderRadius: 14, padding: 12 },
-  acItemsHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
+  acItemsHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
   acAddPartLink: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong, paddingVertical: 12 },
   acItemCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 12, marginTop: 8, gap: 8, backgroundColor: colors.background },
   acItemBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -3310,7 +3310,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   checkInTravelCheck: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.75, borderColor: colors.primaryStrong, alignItems: 'center', justifyContent: 'center' },
   checkInReadinessText: { flex: 1, fontSize: 14, lineHeight: 24, color: colors.text },
   repairOverview: { gap: 12, paddingBottom: 12 },
-  repairHero: { backgroundColor: colors.tone.repair.bg, borderRadius: 20, padding: 20, alignItems: 'center', gap: 8 },
+  repairHero: { backgroundColor: colors.tone.repair.bg, borderRadius: 20, padding: 16, alignItems: 'center', gap: 8 },
   repairHeroArt: { minHeight: 72, alignItems: 'center', justifyContent: 'center' },
   repairHeroTitle: { fontSize: 20, lineHeight: 28, fontWeight: '700', color: colors.text, textAlign: 'center' },
   repairHeroSubtitle: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
@@ -3319,7 +3319,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   repairChecked: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.75, borderColor: colors.primaryStrong, alignItems: 'center', justifyContent: 'center' },
   repairReadinessText: { flex: 1, fontSize: 14, lineHeight: 24, color: colors.text },
   afterOverview: { gap: 12, paddingBottom: 12 },
-  afterHero: { backgroundColor: colors.tone.repair.bg, borderRadius: 20, padding: 20, alignItems: 'center', gap: 8 },
+  afterHero: { backgroundColor: colors.tone.repair.bg, borderRadius: 20, padding: 16, alignItems: 'center', gap: 8 },
   afterHeroArt: { minHeight: 72, alignItems: 'center', justifyContent: 'center' },
   afterHeroTitle: { fontSize: 20, lineHeight: 28, fontWeight: '700', color: colors.text, textAlign: 'center' },
   afterHeroDescription: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
@@ -3332,7 +3332,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   afterCostRow: { borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, padding: 16 },
   afterCostText: { fontSize: 14, lineHeight: 20, fontWeight: '500', color: colors.text },
   completionPendingOverview: { gap: 12, paddingBottom: 12 },
-  completionPendingHero: { backgroundColor: colors.tone.warning.bg, borderRadius: 20, padding: 20, alignItems: 'center', gap: 8 },
+  completionPendingHero: { backgroundColor: colors.tone.warning.bg, borderRadius: 20, padding: 16, alignItems: 'center', gap: 8 },
   completionPendingArt: { minHeight: 72, alignItems: 'center', justifyContent: 'center' },
   completionPendingTitle: { fontSize: 20, lineHeight: 28, fontWeight: '700', color: colors.text, textAlign: 'center' },
   completionPendingSubtitle: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
@@ -3343,7 +3343,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   acceptedHero: { alignItems: 'center', gap: 12, paddingTop: 8 },
   acceptedArt: { minHeight: 160, width: '100%', alignItems: 'center', justifyContent: 'center' },
   acceptedTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text, textAlign: 'center', alignSelf: 'stretch' },
-  acceptedPaper: { backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 20, paddingBottom: 8 },
+  acceptedPaper: { backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, paddingBottom: 8 },
   acceptedInfoRow: { paddingVertical: 16, gap: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   acceptedInfoLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   acceptedInfoLabel: { fontSize: 12, lineHeight: 16, fontWeight: '500', color: colors.textSecondary, flexShrink: 1 },
@@ -3374,8 +3374,8 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   footerReason: { fontSize: 12, lineHeight: 16, color: colors.textSecondary },
   footerError: { fontSize: 12, lineHeight: 16, color: colors.tone.danger.text },
   progressBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15, 23, 42, 0.35)' },
-  progressSheet: { maxHeight: '80%', padding: 20, gap: 8, backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
-  stageChip: { minHeight: 44, maxWidth: '100%', paddingHorizontal: 10, justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: colors.border },
+  progressSheet: { maxHeight: '80%', padding: 16, gap: 8, backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+  stageChip: { minHeight: 44, maxWidth: '100%', paddingHorizontal: 12, justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: colors.border },
   stageChipCurrent: { backgroundColor: colors.primarySoft, borderColor: colors.primaryStrong },
   stageChipText: { fontSize: 12, lineHeight: 18, color: colors.text, flexShrink: 1 },
   stageFocus: {
@@ -3394,7 +3394,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   hierarchyAction: { gap: 6 },
   readinessCard: { marginTop: 6, padding: 12, gap: 4, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   readinessTitle: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.text },
-  quickActionsCard: { backgroundColor: colors.surface, borderRadius: 14, padding: 14, gap: 8, borderWidth: 1, borderColor: colors.border },
+  quickActionsCard: { backgroundColor: colors.surface, borderRadius: 14, padding: 16, gap: 8, borderWidth: 1, borderColor: colors.border },
   quickActionsTitle: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.textSecondary },
   quickChatAction: { minHeight: 48, borderRadius: 14, backgroundColor: colors.primarySoft, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   quickChatText: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong },
@@ -3427,8 +3427,8 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
     backgroundColor: colors.surface,
     borderRadius: 14,
     minHeight: 48,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderWidth: 1,
     borderColor: colors.textSecondary,
   },

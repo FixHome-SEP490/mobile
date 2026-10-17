@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     minHeight: 44,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   icon: {
     width: 28,

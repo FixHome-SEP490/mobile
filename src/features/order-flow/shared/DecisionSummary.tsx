@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md, gap: 8 },
   title: { color: colors.text, fontSize: 17, fontWeight: '700' },
   meta: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
-  item: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 10, gap: 4 },
+  item: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 12, gap: 4 },
   itemDescription: { color: colors.text, fontSize: 15, fontWeight: '600' },
   itemMoney: { color: colors.text, fontSize: 14, lineHeight: 20 },
   checkbox: {
@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
   checkboxChecked: { borderColor: colors.primaryStrong, backgroundColor: colors.primarySoft },
   checkboxText: { color: colors.text, fontSize: 15, fontWeight: '600' },
   checkboxTextChecked: { color: colors.primaryStrong, fontSize: 15, fontWeight: '700' },
-  totals: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 10, gap: 4 },
+  totals: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 12, gap: 4 },
   totalRow: { color: colors.text, fontSize: 15, lineHeight: 22 },
   hint: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
   preview: { backgroundColor: colors.primarySoft, borderRadius: 10, padding: 12, gap: 4 },

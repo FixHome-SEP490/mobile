@@ -10,6 +10,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {
@@ -302,10 +303,10 @@ export default function CustomerBookingCreateScreen() {
   const [pickerQuery, setPickerQuery] = useState('');
   const [pickerCategoryId, setPickerCategoryId] = useState<string | null>(null);
   const [pickerCategories, setPickerCategories] = useState<CategoryItem[]>([]);
+  const { height: windowHeight } = useWindowDimensions();
   const pickerSheetRef = useRef<BottomSheetModal>(null);
   const pickerSnapPoints = useMemo(() => ['80%'], []);
   const addressSheetRef = useRef<BottomSheetModal>(null);
-  const addressSnapPoints = useMemo(() => ['60%'], []);
   const descriptionInputRef = useRef<TextInput>(null);
   const descriptionTopRef = useRef(0);
   const scrollRef = useRef<ScrollView>(null);
@@ -1629,7 +1630,7 @@ export default function CustomerBookingCreateScreen() {
               onSelect={setPickerCategoryId}
             />
           )}
-          <BottomSheetTextInput
+          <BottomSheetTextInput accessibilityLabel="Tìm dịch vụ"
             value={pickerQuery}
             onChangeText={setPickerQuery}
             placeholder="Tìm dịch vụ..."
@@ -1669,23 +1670,26 @@ export default function CustomerBookingCreateScreen() {
             </TouchableOpacity>
           )}
           ListEmptyComponent={
-            <Text style={{ color: colors.textSecondary, padding: 14 }}>Không tìm thấy dịch vụ phù hợp.</Text>
+            <Text style={{ color: colors.textSecondary, padding: 16 }}>Không tìm thấy dịch vụ phù hợp.</Text>
           }
         />
       </BottomSheetModal>
 
       <BottomSheetModal
         ref={addressSheetRef}
-        snapPoints={addressSnapPoints}
+        enableDynamicSizing
+        maxDynamicContentSize={Math.round(windowHeight * 0.8)}
         backdropComponent={(props) => (
           <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} />
         )}
       >
-        <View style={[styles.pickerHeader, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}>Chọn địa chỉ sửa chữa</Text>
-        </View>
         <BottomSheetFlatList
           data={addresses}
+          ListHeaderComponent={
+            <View style={[styles.pickerHeader, { borderBottomColor: colors.border, marginHorizontal: -16, marginTop: -12, marginBottom: 12 }]}>
+              <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}>Chọn địa chỉ sửa chữa</Text>
+            </View>
+          }
           keyExtractor={(address) => address.id}
           contentContainerStyle={styles.pickerListContent}
           renderItem={({ item: address }) => {
@@ -1723,7 +1727,7 @@ export default function CustomerBookingCreateScreen() {
             );
           }}
           ListEmptyComponent={
-            <Text style={{ color: colors.textSecondary, padding: 14 }}>Chưa có địa chỉ đã lưu.</Text>
+            <Text style={{ color: colors.textSecondary, padding: 16 }}>Chưa có địa chỉ đã lưu.</Text>
           }
         />
       </BottomSheetModal>
@@ -1760,8 +1764,8 @@ const styles = StyleSheet.create({
   suggestionChipText: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
   fieldError: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
   fieldErrorText: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '500' },
-  photoSection: { padding: 16, borderRadius: 14, gap: 10 },
-  photoList: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 10 },
+  photoSection: { padding: 16, borderRadius: 14, gap: 8 },
+  photoList: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 8 },
   photoItem: { width: 78, gap: 4 },
   photoPreview: { width: 72, height: 72, borderRadius: 12 },
   removePhotoButton: {
@@ -1789,8 +1793,8 @@ const styles = StyleSheet.create({
   photoError: { fontSize: 13, lineHeight: 19 },
   action: { padding: 15, marginTop: 0, borderRadius: 14, alignItems: 'center', justifyContent: 'center', minHeight: 52 },
   actionText: { fontWeight: '700', fontSize: 15, lineHeight: 22 },
-  pickerHeader: { paddingHorizontal: 18, paddingBottom: 10, borderBottomWidth: 1, gap: 8 },
-  pickerListContent: { padding: 18, paddingTop: 10, gap: 10 },
+  pickerHeader: { paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, gap: 8 },
+  pickerListContent: { padding: 16, paddingTop: 12, gap: 8 },
 });
 
 const progressStyles = StyleSheet.create({
@@ -1799,7 +1803,7 @@ const progressStyles = StyleSheet.create({
   dot: {
     width: 26,
     height: 26,
-    borderRadius: 13,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',

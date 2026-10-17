@@ -1103,7 +1103,7 @@ export default function CustomerOrderDetailScreen() {
               )}
               <TouchableOpacity
                 testID="order-chat-technician"
-                style={[styles.decisionBtn, { backgroundColor: colors.primaryStrong, alignSelf: 'flex-start', flex: 0, paddingHorizontal: 16, marginTop: 10, opacity: openingChat ? 0.6 : 1 }]}
+                style={[styles.decisionBtn, { backgroundColor: colors.primaryStrong, alignSelf: 'flex-start', flex: 0, paddingHorizontal: 16, marginTop: 8, opacity: openingChat ? 0.6 : 1 }]}
                 onPress={() => { void openTechnicianChat(); }}
                 disabled={openingChat}
                 accessibilityRole="button"
@@ -1510,7 +1510,7 @@ export default function CustomerOrderDetailScreen() {
                       borderWidth: 1,
                       borderColor: colors.border,
                       borderRadius: 10,
-                      padding: 10,
+                      padding: 12,
                       color: colors.text,
                       backgroundColor: colors.surface,
                       textAlignVertical: 'top',
@@ -1778,7 +1778,7 @@ export default function CustomerOrderDetailScreen() {
                       borderWidth: 1,
                       borderColor: colors.border,
                       borderRadius: 10,
-                      padding: 10,
+                      padding: 12,
                       color: colors.text,
                       backgroundColor: colors.surface,
                       textAlignVertical: 'top',
@@ -2011,16 +2011,16 @@ const getStyles = (colors: any) => StyleSheet.create({
   footerButtonText: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.surface },
   progressLink: { minHeight: 44, justifyContent: 'center', alignItems: 'flex-start', paddingHorizontal: 12 },
   progressBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15, 23, 42, 0.35)' },
-  progressSheet: { maxHeight: '85%', padding: 20, gap: 8, backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+  progressSheet: { maxHeight: '85%', padding: 16, gap: 8, backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   progressClose: { minHeight: 44, justifyContent: 'center', alignItems: 'center' },
   progressSections: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  progressSectionButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 10, backgroundColor: colors.primarySoft },
+  progressSectionButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 10, backgroundColor: colors.primarySoft },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 16,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -2029,8 +2029,8 @@ const getStyles = (colors: any) => StyleSheet.create({
     flex: 1,
     textAlign: 'center',
     fontSize: 18,
-    lineHeight: 25,
-    fontWeight: '800',
+    lineHeight: 24,
+    fontWeight: '700',
     color: colors.text,
   },
   headerBackBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
@@ -2039,9 +2039,9 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 18,
+    paddingTop: 16,
     paddingBottom: 72,
-    gap: 14,
+    gap: 12,
     flexGrow: 1,
   },
   loadingState: {
@@ -2077,7 +2077,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   retryBtn: {
     minHeight: 48,
     minWidth: 116,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
     backgroundColor: colors.primarySoft,
@@ -2114,7 +2114,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   badge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 6,
     marginBottom: 6,
   },
@@ -2144,12 +2144,12 @@ const getStyles = (colors: any) => StyleSheet.create({
     alignSelf: 'flex-start',
     minHeight: 48,
     marginTop: 4,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     borderRadius: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
+    gap: 8,
   },
   actionPrimaryButtonText: {
     color: colors.surface,
@@ -2175,7 +2175,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     flexWrap: 'wrap',
     gap: 12,
   },
-  timelineRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  timelineRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.divider },
   timelineTitle: { flexGrow: 1, flexShrink: 1, minWidth: 130, fontSize: 13, lineHeight: 20, color: colors.text, fontWeight: '600' },
   timelineTime: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, flexShrink: 0 },
   decisionBtnRow: {
@@ -2188,7 +2188,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 8,
   },
   decisionBtnText: {
@@ -2199,7 +2199,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   evidenceItem: {
     gap: 8,
     marginTop: 8,
-    padding: 10,
+    padding: 12,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 12,
@@ -2261,13 +2261,13 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#FDE68A',
-    padding: 14,
+    padding: 16,
   },
   invoiceCard: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 18,
-    padding: 18,
+    padding: 16,
     gap: 12,
   },
   invoiceHeader: {
@@ -2275,14 +2275,14 @@ const getStyles = (colors: any) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   paymentHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   invoiceHeading: {
     flexShrink: 1,
@@ -2298,8 +2298,8 @@ const getStyles = (colors: any) => StyleSheet.create({
   invoiceLines: {
     borderTopWidth: 1,
     borderTopColor: colors.divider,
-    paddingTop: 10,
-    gap: 10,
+    paddingTop: 12,
+    gap: 8,
   },
   invoiceRow: {
     flexDirection: 'row',
@@ -2328,7 +2328,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     marginTop: 2,
@@ -2344,8 +2344,8 @@ const getStyles = (colors: any) => StyleSheet.create({
     alignSelf: 'flex-start',
     minHeight: 28,
     justifyContent: 'center',
-    paddingHorizontal: 11,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
     borderRadius: 99,
   },
   statusChipText: {
@@ -2369,8 +2369,8 @@ const getStyles = (colors: any) => StyleSheet.create({
     gap: 12,
   },
   cashPendingPanel: {
-    gap: 10,
-    padding: 14,
+    gap: 8,
+    padding: 16,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.tone.warning.bg,
@@ -2378,7 +2378,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   cashDisputedPanel: {
     gap: 8,
-    padding: 14,
+    padding: 16,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.tone.danger.bg,
@@ -2386,14 +2386,14 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   cashConfirmedPanel: {
     gap: 8,
-    padding: 14,
+    padding: 16,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.tone.success.bg,
     backgroundColor: colors.tone.success.bg,
   },
   paymentActions: {
-    gap: 10,
+    gap: 8,
     marginTop: 2,
   },
   paymentPrimaryButton: {

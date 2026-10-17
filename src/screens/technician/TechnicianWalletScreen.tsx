@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import {
   View,
   Text,
@@ -280,8 +281,8 @@ export default function TechnicianWalletScreen({ route }: { route?: { name: stri
       >
         {state.loading ? (
           <View style={styles.centerBlock}>
-            <ActivityIndicator color={colors.primaryStrong} />
             <Text style={styles.mutedText}>Đang tải…</Text>
+            <CustomerSkeleton variant="orderDetail" />
           </View>
         ) : state.error ? (
           <View style={styles.centerBlock}>
@@ -876,7 +877,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   headerTitleGroup: { flex: 1, justifyContent: 'center', gap: 1 },
   headerEyebrow: { fontSize: 12, lineHeight: 16, color: colors.textSecondary, fontWeight: '600' },
-  headerTitle: { fontSize: 20, lineHeight: 28, fontWeight: '700', color: colors.text },
+  headerTitle: { fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.text },
   scrollContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40, gap: 12 },
   centerBlock: { alignItems: 'center', gap: 12, marginTop: 40 },
   mutedText: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
@@ -887,8 +888,8 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   rowTitle: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.text },
   hintText: { fontSize: 12, lineHeight: 16, color: colors.textSecondary, marginBottom: 12 },
 
-  heroCard: { backgroundColor: '#193E70', borderRadius: 20, borderWidth: 1, borderColor: '#193E70', padding: 20, gap: 10 },
-  heroCaptionRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  heroCard: { backgroundColor: '#193E70', borderRadius: 20, borderWidth: 1, borderColor: '#193E70', padding: 16, gap: 8 },
+  heroCaptionRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   heroCaption: { fontSize: 12, lineHeight: 18, fontWeight: '600', color: '#FFFFFF' },
   heroMinBalance: { fontSize: 12, lineHeight: 18, color: '#EAF2FF' },
   heroBalance: { fontSize: 32, lineHeight: 40, fontWeight: '700', color: '#FFFFFF' },
@@ -911,7 +912,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   bankCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: colors.border },
   iconTile: { width: 40, height: 40, borderRadius: 8, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   bankList: { maxHeight: 200, borderWidth: 1, borderColor: colors.border, borderRadius: 14, marginBottom: 12 },
-  selectedBank: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 56, borderWidth: 1, borderColor: colors.primaryStrong, backgroundColor: colors.primarySoft, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8, marginBottom: 12 },
+  selectedBank: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 56, borderWidth: 1, borderColor: colors.primaryStrong, backgroundColor: colors.primarySoft, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 8, marginBottom: 12 },
   bankOption: { minHeight: 56, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.divider },
   bankOptionActive: { backgroundColor: colors.primarySoft },
   destinationBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 12, marginBottom: 12 },
@@ -939,8 +940,8 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   pagerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16 },
   pagerTextDisabled: { color: colors.muted },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
-  modalCard: { backgroundColor: colors.surface, borderRadius: 20, padding: 20, maxHeight: '90%' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 16 },
+  modalCard: { backgroundColor: colors.surface, borderRadius: 20, padding: 16, maxHeight: '90%' },
   modalTitle: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text, marginBottom: 16 },
   fieldLabel: { fontSize: 14, lineHeight: 20, color: colors.text, marginBottom: 8, fontWeight: '500' },
   presetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
@@ -948,7 +949,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   presetChipActive: { backgroundColor: colors.primaryStrong, borderColor: colors.primaryStrong },
   presetChipText: { fontSize: 14, lineHeight: 20, color: colors.text, fontWeight: '600' },
   presetChipTextActive: { color: colors.surface },
-  input: { width: '100%', minHeight: 48, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.textSecondary, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 16, color: colors.text, marginBottom: 12 },
+  input: { width: '100%', minHeight: 48, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.textSecondary, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 16, color: colors.text, marginBottom: 12 },
   modalError: { color: colors.error, fontSize: 14, lineHeight: 20, marginBottom: 8 },
   modalActions: { flexDirection: 'row', gap: 12, marginTop: 4 },
 });

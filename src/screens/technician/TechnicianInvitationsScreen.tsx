@@ -558,7 +558,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   bannerAction: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center' },
   bannerActionText: { fontSize: 14, lineHeight: 20, fontWeight: '700' },
   acceptedCard: {
-    padding: 14,
+    padding: 16,
     borderRadius: 14,
     gap: 8,
   },

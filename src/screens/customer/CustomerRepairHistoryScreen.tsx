@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
+import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -155,8 +156,8 @@ export default function CustomerRepairHistoryScreen() {
 
       {loading ? (
         <View style={styles.centerState}>
-          <ActivityIndicator size="small" color={colors.primary} />
           <Text style={styles.stateText}>Đang tải lịch sử sửa chữa...</Text>
+          <CustomerSkeleton variant="booking" rows={3} />
         </View>
       ) : (
         <ScrollView
@@ -297,7 +298,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 16,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -312,15 +313,15 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   headerCopy: { flex: 1 },
   headerOverline: { fontSize: 12, lineHeight: 16, fontWeight: '700', letterSpacing: 1, color: colors.textSecondary },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: colors.text },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   headerSubtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  searchWrap: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8 },
+  searchWrap: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
   searchBar: {
     minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.border,
@@ -328,9 +329,9 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 14, color: colors.text, paddingVertical: 0 },
   searchResetButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  searchScopeNote: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, paddingHorizontal: 18, paddingTop: 4, paddingBottom: 7 },
+  searchScopeNote: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
   scrollContent: { padding: 16, paddingBottom: 56, flexGrow: 1 },
-  centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 32 },
+  centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 32 },
   stateText: { fontSize: 13, lineHeight: 19, color: colors.textSecondary, textAlign: 'center' },
   emptyState: { alignItems: 'center', paddingHorizontal: 28, paddingVertical: 56 },
   emptyIcon: {
@@ -340,24 +341,24 @@ const getStyles = (colors: any) => StyleSheet.create({
     backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   emptyTitle: { fontSize: 17, fontWeight: '800', color: colors.text, marginBottom: 6 },
   errorBanner: {
     flexDirection: 'row',
-    gap: 10,
-    padding: 14,
+    gap: 8,
+    padding: 16,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   errorCopy: { flex: 1 },
   errorText: { fontSize: 13, lineHeight: 18, color: colors.text, marginBottom: 6 },
   retryText: { fontSize: 13, fontWeight: '700', color: colors.primary },
   retryButton: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start', paddingHorizontal: 2 },
-  listHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  listHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   sectionTitle: { fontSize: 14, fontWeight: '800', color: colors.text },
   sectionCount: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
   card: {
@@ -369,11 +370,11 @@ const getStyles = (colors: any) => StyleSheet.create({
     marginBottom: 12,
     minHeight: 84,
   },
-  cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
@@ -381,8 +382,8 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   statusText: { fontSize: 12, fontWeight: '700', color: colors.tone?.success?.text ?? colors.success },
   dateText: { fontSize: 12, color: colors.textSecondary },
-  serviceTitle: { fontSize: 16, lineHeight: 22, fontWeight: '800', color: colors.text, marginBottom: 10 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 },
+  serviceTitle: { fontSize: 16, lineHeight: 22, fontWeight: '800', color: colors.text, marginBottom: 8 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
   metaText: { flex: 1, fontSize: 13, color: colors.textSecondary },
   cardBottom: {
     flexDirection: 'row',

@@ -81,7 +81,7 @@ function getRestoredM6Recovery(
  * shell; their UI belongs to later milestones.
  */
 export default function OrderTaskScreen({ role }: { role: 'customer' | 'technician' }) {
-  const { key, snapshot, loadResource, journal } = useOrderSession();
+  const { key, snapshot, loadResource, journal, refresh } = useOrderSession();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const liveResolution: OrderTaskResolution | null = snapshot
@@ -129,6 +129,19 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
   }, [navigation, resolution, resolutionTaskId, snapshot, route.name, route.params?.taskId]);
 
   if (!snapshot || snapshot.access !== 'current' || (snapshot.order.status !== 'ready' && !(hold && lastTask)) || !resolution) {
+    // A failed read must not look like endless loading: say so and offer a read-only retry.
+    if (snapshot?.order.status === 'error') {
+      return (
+        <TaskScreenShell
+          title="Đơn dịch vụ"
+          stage={null}
+          onBack={() => navigation.goBack()}
+          primary={{ label: 'Thử lại', onPress: () => void refresh('manual') }}
+        >
+          <ReadOnlyNotice>Chưa tải được thông tin đơn. Vui lòng kiểm tra kết nối rồi thử lại.</ReadOnlyNotice>
+        </TaskScreenShell>
+      );
+    }
     return (
       <TaskScreenShell title="Đơn dịch vụ" stage={null} onBack={() => navigation.goBack()}>
         <ReadOnlyNotice>

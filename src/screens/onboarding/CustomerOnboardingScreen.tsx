@@ -179,7 +179,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) =>
     dotActive: { backgroundColor: colors.primaryStrong, width: 30 },
     footer: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md, alignItems: 'center' },
     primaryBtn: {
-      flexDirection: 'row', gap: 16, paddingHorizontal: 20,
+      flexDirection: 'row', gap: 16, paddingHorizontal: 16,
       minWidth: 160, minHeight: 56,
       borderRadius: 16,
       backgroundColor: colors.primaryStrong,

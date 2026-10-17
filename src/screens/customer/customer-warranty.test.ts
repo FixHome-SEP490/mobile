@@ -6,6 +6,8 @@ import {
   isWarrantyCoverageClaimable,
   validateWarrantyText,
   warrantyClaimDisplayMeta,
+  warrantyCoverageLabel,
+  warrantyCoverageTerm,
   warrantyCoverageUiStatus,
   warrantyCustomerPromptCopy,
 } from './customer-warranty';
@@ -81,5 +83,17 @@ describe('customer warranty helpers', () => {
 
   it('formats dates in Vietnam timezone', () => {
     expect(formatWarrantyDate('2026-09-29T18:00:00.000Z')).toBe('30/09/2026');
+  });
+
+  it('names what a coverage covers, falling back to the note', () => {
+    expect(warrantyCoverageLabel(coverage({ itemType: 'labor', itemDescription: 'Thay tụ' }))).toBe('Công sửa · Thay tụ');
+    expect(warrantyCoverageLabel(coverage({ itemType: 'parts_equipment', itemDescription: 'Block' }))).toBe('Linh kiện · Block');
+    expect(warrantyCoverageLabel(coverage({ itemType: null, itemDescription: null }))).toBe('Công sửa chữa');
+  });
+
+  it('shows days left while active and the end date once over', () => {
+    const now = Date.parse('2026-10-01T00:00:00.000Z');
+    expect(warrantyCoverageTerm(coverage(), now)).toBe('Bảo hành 30 ngày · đến 30/10/2026 · còn 29 ngày');
+    expect(warrantyCoverageTerm(coverage({ status: 'EXPIRED' }), now)).toBe('Hết hạn 30/10/2026');
   });
 });

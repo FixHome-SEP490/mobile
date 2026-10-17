@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import { useTabBarClearance } from '../../hooks/useTabBarClearance';
 import {
   View,
   Image,
@@ -70,6 +71,7 @@ export default function CustomerBookingsScreen() {
   const [manageBusy, setManageBusy] = useState(false);
   const [manageError, setManageError] = useState<string | null>(null);
   const [activityTab, setActivityTab] = useState<BookingsTab>('in_progress');
+  const tabBarClearance = useTabBarClearance();
   const [activitySearch, setActivitySearch] = useState('');
   const [expandedRequests, setExpandedRequests] = useState<Record<string, boolean>>({});
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -265,7 +267,7 @@ export default function CustomerBookingsScreen() {
       case 'CONFIRMED':
         return { label: 'Đã xác nhận', bg: colors.tone.info.bg, color: colors.tone.info.text };
       case 'CLOSED':
-        return { label: 'Vòng tìm kỹ thuật viên đã kết thúc', bg: colors.divider, color: colors.textSecondary };
+        return { label: 'Chưa có thợ nhận', bg: colors.divider, color: colors.textSecondary };
       case 'CANCELLED':
         return { label: 'Đã hủy', bg: colors.tone.neutral.bg, color: colors.tone.neutral.text };
       default:
@@ -333,7 +335,7 @@ export default function CustomerBookingsScreen() {
     const resumeId = resumeTargetFor(booking, !view.ordersCoverageComplete);
     const schedule = booking.preferredStartAt && Number.isFinite(Date.parse(booking.preferredStartAt))
       ? booking.preferredStartAt : null;
-    const dateStr = schedule ? `${vnDateString(schedule)} · ${vnTimeString(schedule)}`
+    const dateStr = schedule ? `${vnDateString(schedule)} · ${vnTimeString(schedule, { hour: '2-digit', minute: '2-digit', hour12: false })}`
       : booking.createdAt ? vnDateString(booking.createdAt) : 'Chưa có thời gian';
     const waiting = String(booking.status).toUpperCase() === 'MATCHING';
     return (
@@ -374,7 +376,9 @@ export default function CustomerBookingsScreen() {
               </View>
             )}
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          {!(canCancelBookingConservative(booking) || canRescheduleBookingConservative(booking) || waiting || booking.addressSummary) && (
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          )}
         </TouchableOpacity>
         {(canCancelBookingConservative(booking) || canRescheduleBookingConservative(booking) || waiting || booking.addressSummary) && (
           <TouchableOpacity
@@ -394,7 +398,7 @@ export default function CustomerBookingsScreen() {
           <View style={[styles.cardActionsRow, { marginTop: 12 }]}>
             {canRescheduleBookingConservative(booking) && (
               <TouchableOpacity
-                style={[styles.pillBtn, { borderColor: colors.border }]}
+                style={[styles.pillBtn, { borderColor: colors.border, flex: 1 }]}
                 onPress={() => openBookingManage(booking, 'reschedule')}
                 disabled={manageBusy}
                 accessibilityRole="button"
@@ -406,7 +410,7 @@ export default function CustomerBookingsScreen() {
             )}
             {canCancelBookingConservative(booking) && (
               <TouchableOpacity
-                style={[styles.pillBtn, { borderColor: '#FCA5A5' }]}
+                style={[styles.pillBtn, { borderColor: '#FCA5A5', flex: 1 }]}
                 onPress={() => openBookingManage(booking, 'cancel')}
                 disabled={manageBusy}
                 accessibilityRole="button"
@@ -432,7 +436,7 @@ export default function CustomerBookingsScreen() {
               Chỉ áp dụng khi chưa có đơn sửa chữa. Nếu kỹ thuật viên vừa nhận đơn,
               hệ thống sẽ chuyển sang đơn sửa chữa.
             </Text>
-            <TextInput
+            <TextInput accessibilityLabel="Lý do hủy"
               value={cancelReason}
               onChangeText={setCancelReason}
               editable={!manageBusy}
@@ -623,7 +627,7 @@ export default function CustomerBookingsScreen() {
     const detailId = orderDetailTarget(order.id);
     const schedule = booking.preferredStartAt && Number.isFinite(Date.parse(booking.preferredStartAt))
       ? booking.preferredStartAt : null;
-    const dateStr = schedule ? `${vnDateString(schedule)} · ${vnTimeString(schedule)}`
+    const dateStr = schedule ? `${vnDateString(schedule)} · ${vnTimeString(schedule, { hour: '2-digit', minute: '2-digit', hour12: false })}`
       : booking.createdAt ? vnDateString(booking.createdAt) : 'Chưa có thời gian';
     const message = replacement === 'waiting'
       ? 'Đang tìm kỹ thuật viên thay thế; đang chờ kỹ thuật viên phản hồi; làm mới để cập nhật'
@@ -664,7 +668,6 @@ export default function CustomerBookingsScreen() {
               </View>
             )}
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
         </TouchableOpacity>
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Thông tin lời mời"
           accessibilityState={{ expanded: !!expandedRequests[booking.id] }} style={styles.requestOptions}
@@ -682,7 +685,7 @@ export default function CustomerBookingsScreen() {
         </TouchableOpacity>
         {!!detailId && (
           <TouchableOpacity
-            style={[styles.pillBtn, { borderColor: colors.border, alignSelf: 'flex-start', marginTop: 8 }]}
+            style={[styles.pillBtn, { borderColor: colors.border, marginTop: 8 }]}
             onPress={() => navigation.navigate('CustomerOrderDetail', { serviceOrderId: detailId })}
             accessibilityRole="button"
             accessibilityLabel="Xem chi tiết đơn lịch sử"
@@ -786,7 +789,7 @@ export default function CustomerBookingsScreen() {
         </View>
       ) : showList ? (
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarClearance }]}
           onScroll={handleScroll}
           scrollEventThrottle={16}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -917,13 +920,13 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 16,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
     color: colors.text,
   },
@@ -945,16 +948,16 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   sectionHeaderSpaced: { marginTop: 8 },
   sectionTitle: { fontSize: 14, fontWeight: '800', color: colors.text },
   sectionCount: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
   activityControls: {
     paddingHorizontal: 16,
-    paddingTop: 14,
+    paddingTop: 16,
     paddingBottom: 4,
-    gap: 10,
+    gap: 8,
   },
   searchFilterContainer: {
     flexDirection: 'column',
@@ -1043,7 +1046,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     color: colors.primary,
     textAlign: 'center',
     lineHeight: 18,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   bookNowBtn: {
     flexDirection: 'row',
@@ -1051,14 +1054,14 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     justifyContent: 'center',
     minHeight: 44,
     gap: 8,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 14,
   },
   bookNowText: {
     color: colors.surface,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   retryBtn: {
     padding: 12,
@@ -1081,7 +1084,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     borderRadius: 8,
   },
   loadMoreBtn: {
-    padding: 14,
+    padding: 16,
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1094,36 +1097,36 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   resumeBtn: {
     marginTop: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     minHeight: 44,
-    borderRadius: 8,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   resumeText: {
     color: '#FFFFFF', // chữ trên nút nền primary/error, luôn trắng bất kể theme
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
   },
   secondaryBtn: {
     marginTop: 8,
-    paddingVertical: 10,
+    paddingVertical: 12,
     minHeight: 44,
-    borderRadius: 8,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
   },
   secondaryText: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
   },
   manageActions: {
     flexDirection: 'row',
     gap: 8,
     marginTop: 8,
   },
-  requestOptions: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
+  requestOptions: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 4, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   cardActionsRow: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
@@ -1131,16 +1134,17 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     marginTop: 8,
   },
   pillBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     minHeight: 44,
+    alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 20,
+    borderRadius: 14,
     borderWidth: 1,
   },
   pillBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
   },
   managePanel: {
     marginTop: 12,
@@ -1176,7 +1180,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     minHeight: 72,
     borderWidth: 1,
     borderRadius: 8,
-    padding: 10,
+    padding: 12,
     textAlignVertical: 'top',
   },
   manageError: {
@@ -1190,7 +1194,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     gap: 6,
   },
   manageChip: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     minHeight: 44,
     justifyContent: 'center',
@@ -1227,7 +1231,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   badge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 6,
     marginBottom: 6,
   },
