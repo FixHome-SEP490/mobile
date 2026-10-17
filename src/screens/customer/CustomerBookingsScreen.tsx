@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import { useTabBarClearance } from '../../hooks/useTabBarClearance';
 import {
   View,
   Image,
@@ -70,6 +71,7 @@ export default function CustomerBookingsScreen() {
   const [manageBusy, setManageBusy] = useState(false);
   const [manageError, setManageError] = useState<string | null>(null);
   const [activityTab, setActivityTab] = useState<BookingsTab>('in_progress');
+  const tabBarClearance = useTabBarClearance();
   const [activitySearch, setActivitySearch] = useState('');
   const [expandedRequests, setExpandedRequests] = useState<Record<string, boolean>>({});
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -786,7 +788,7 @@ export default function CustomerBookingsScreen() {
         </View>
       ) : showList ? (
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarClearance }]}
           onScroll={handleScroll}
           scrollEventThrottle={16}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}

@@ -1,4 +1,5 @@
 import { useAppTheme } from '../../constants/theme';
+import { useTabBarClearance } from '../../hooks/useTabBarClearance';
 import { CUSTOMER_UI_ARTWORK } from '../../constants/customer-artwork';
 // src/screens/customer/CustomerHomeScreen.tsx
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -124,6 +125,7 @@ export default function CustomerHomeScreen() {
   const [addresses, setAddresses] = useState<AddressData[]>([]);
   const [resume, setResume] = useState<HomeResumeItem | null>(null);
   const addressSheetRef = useRef<BottomSheetModal>(null);
+  const tabBarClearance = useTabBarClearance();
 
   const closeAddressSheet = useCallback(() => {
     addressSheetRef.current?.dismiss();
@@ -448,7 +450,7 @@ export default function CustomerHomeScreen() {
         {/* 9. Restrained, source-honest info */}
 
         {isGuest && <TouchableOpacity style={[styles.searchBar, { margin: 16, justifyContent: 'center' }]} accessibilityRole="button" accessibilityLabel="Đăng nhập hoặc tạo tài khoản" onPress={() => navigation.navigate('Auth')}><Text style={{ color: colors.primaryStrong, fontWeight: '600' }}>Đăng nhập / Tạo tài khoản</Text></TouchableOpacity>}
-        <View style={{ height: isGuest ? 112 : 40 }} />
+        <View testID="home-tab-bar-clearance" style={{ height: tabBarClearance }} />
       </ScrollView>
 
       {isGuest && <CustomerAnimatedBottomBar mode="guest" activeRouteName="Home" onGuestTabPress={name => name === 'Home' ? scrollRef.current?.scrollTo({ y: 0, animated: !reduceMotion }) : navigation.navigate('Auth')} onGuestBookingChoice={() => navigation.navigate('Auth')} />}

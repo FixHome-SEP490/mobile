@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, TextInput, TouchableOpacity } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { ServiceOrderItem } from '../../api/orders.api';
 
@@ -64,7 +64,7 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('react-native-safe-area-context', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const Native = require('react-native');
-  return { SafeAreaView: Native.View };
+  return { SafeAreaView: Native.View, useSafeAreaInsets: () => ({ top: 0, bottom: 34, left: 0, right: 0 }) };
 });
 
 jest.mock('@expo/vector-icons', () => {
@@ -203,6 +203,16 @@ beforeEach(() => {
 });
 
 describe('CustomerBookingsScreen order-detail affordance', () => {
+  it('lets the list scroll clear of the whole tab bar', () => {
+    const tree = mountScreen();
+    try {
+      // 64 pill + 34 home indicator + 16 gap
+      const list = tree.root.findAllByType(ScrollView).find((node) => node.props.refreshControl);
+      expect(StyleSheet.flatten(list!.props.contentContainerStyle).paddingBottom).toBe(114);
+    } finally {
+      act(() => tree.unmount());
+    }
+  });
   it('shows a chevron on a ServiceOrder summary when the row opens detail', () => {
     const tree = mountScreen();
     try {

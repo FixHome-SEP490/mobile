@@ -13,7 +13,7 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('react-native-safe-area-context', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const Native = require('react-native');
-  return { SafeAreaView: Native.View };
+  return { SafeAreaView: Native.View, useSafeAreaInsets: () => ({ top: 0, bottom: 34, left: 0, right: 0 }) };
 });
 
 jest.mock('@expo/vector-icons', () => {
@@ -220,6 +220,13 @@ describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
     }
   });
 
+  it('ends with room for the whole tab bar so the last row is not hidden under it', () => {
+    const tree = mountScreen();
+    try {
+      // 64 pill + 34 home indicator + 16 gap
+      expect(tree.root.findByProps({ testID: 'home-tab-bar-clearance' }).props.style.height).toBe(114);
+    } finally { act(() => tree.unmount()); }
+  });
   it('puts wallet and warranty one tap from Home for a signed-in customer only', () => {
     const tree = mountScreen();
     try {
