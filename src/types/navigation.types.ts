@@ -22,6 +22,8 @@ export type RootStackParamList = {
           description?: string;
           /** Assistant session; the technician who accepts gets a summary of it. */
           aiSessionId?: string;
+          /** Photos and videos sent in the assistant chat, already uploaded, for the technician (PO 18/10/2026). */
+          attachmentUploadIds?: { uploadId: string; kind: 'image' | 'video' }[];
         };
       }
     | undefined;
@@ -45,6 +47,8 @@ export type RootStackParamList = {
           description?: string;
           /** Assistant session; the technician who accepts gets a summary of it. */
           aiSessionId?: string;
+          /** Photos and videos sent in the assistant chat, already uploaded, for the technician (PO 18/10/2026). */
+          attachmentUploadIds?: { uploadId: string; kind: 'image' | 'video' }[];
         };
       }
     | undefined;

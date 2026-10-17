@@ -101,6 +101,16 @@ export interface AiReply {
   clarification?: Clarification | null;
   citations?: Citation[];
   disclaimerVi?: string;
+  /** What the conversation established (tried, ruled out, suspected), for the technician. */
+  notesVi?: string[];
+}
+
+/** The customer sent faster than the backend allows (429), as on the web. */
+export const AI_TOO_FAST_MESSAGE =
+  'Anh/chị nhắn hơi nhanh, em chưa kịp xử lý hết ạ. Anh/chị đợi khoảng một phút rồi gửi lại giúp em nhé.';
+
+function isTooFast(error: unknown): boolean {
+  return (error as { response?: { status?: number } })?.response?.status === 429;
 }
 
 export type AcknowledgementSituations = Record<string, string[]>;
@@ -131,6 +141,11 @@ function unwrap<T>(payload: { data: T } | T): T {
     return (payload as { data: T }).data;
   }
   return payload as T;
+}
+
+/** The backend refused the turn because it came too fast. */
+function tooFast(sessionId?: string | null): AiReply {
+  return { ...offline(sessionId), messageVi: AI_TOO_FAST_MESSAGE, answerVi: AI_TOO_FAST_MESSAGE };
 }
 
 /** The sentence to show when even our own backend is unreachable. */
@@ -171,8 +186,8 @@ export const aiApi = {
         { timeout: AI_REQUEST_TIMEOUT },
       );
       return unwrap(res.data);
-    } catch {
-      return offline(payload.sessionId);
+    } catch (error) {
+      return isTooFast(error) ? tooFast(payload.sessionId) : offline(payload.sessionId);
     }
   },
 
@@ -189,8 +204,25 @@ export const aiApi = {
         { timeout: AI_REQUEST_TIMEOUT },
       );
       return unwrap(res.data);
+    } catch (error) {
+      return isTooFast(error) ? tooFast(payload.sessionId) : offline(payload.sessionId);
+    }
+  },
+
+  /**
+   * Whether an answer was right, for the team to learn from (PO 16/10/2026, as on the web).
+   * Best effort: a failure is swallowed, the customer is thanked either way.
+   */
+  async feedback(payload: { sessionId: string; verdict: 'right' | 'wrong'; note?: string; reply?: string }): Promise<void> {
+    try {
+      await apiClient.post('/ai/feedback', {
+        sessionId: payload.sessionId,
+        verdict: payload.verdict,
+        ...(payload.note?.trim() ? { note: payload.note.trim().slice(0, 300) } : {}),
+        ...(payload.reply?.trim() ? { reply: payload.reply.trim().slice(0, 1000) } : {}),
+      });
     } catch {
-      return offline(payload.sessionId);
+      // Nothing to tell the customer.
     }
   },
 

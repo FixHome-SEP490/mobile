@@ -11,6 +11,7 @@ import { useAppTheme } from '../../constants/theme';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Alert,
   FlatList,
@@ -33,10 +34,14 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useKeyboardInset } from '../../hooks/useKeyboardInset';
 import {
+  jpegForUpload,
   pickImagesForAi,
+  pickVideoForAi,
+  recordVideoForAi,
   takePhotoForAi,
   shrinkForRetry,
   type PickedImage,
+  type PickedVideo,
 } from '../../services/image-for-ai';
 import TypingDots from '../chat/TypingDots';
 import {
@@ -47,6 +52,19 @@ import {
   type RecommendedService,
 } from '../../api/ai.api';
 import { appendCustomerWords } from './ai-chat-words';
+import {
+  AI_MAX_VIDEOS,
+  REVEAL_MS,
+  VIDEO_NOT_ANALYSED,
+  nextPinnedService,
+  quickReplies,
+  revealSteps,
+  videoDuration,
+  videoMimeType,
+  videoProblem,
+  type AttachedVideo,
+} from './ai-chat-logic';
+import { mediaApi } from '../../api/media.api';
 import {
   AI_DESCRIPTION_REQUIRED_HINT,
   canSendToAssistant,
@@ -78,6 +96,8 @@ interface ChatMessage {
   text: string;
   /** Data URIs the customer attached to this message. */
   images?: string[];
+  /** Videos sent with this message: shown here, kept for the technician, never sent to the AI. */
+  videos?: AttachedVideo[];
   /** Set on a bot message that carries a diagnosis. */
   reply?: AiReply;
   /** A holding line, replaced in place by the real answer. */
@@ -149,6 +169,22 @@ export default function CustomerAIChatScreen() {
       : (route.params?.initialImages ?? []).map((dataUri) => ({ uri: '', dataUri })),
   );
   const [isThinking, setIsThinking] = useState(hasDescription(route.params?.initialDescription));
+  /** Videos waiting in the tray; they go with the next message (PO 18/10/2026). */
+  const [pendingVideos, setPendingVideos] = useState<AttachedVideo[]>([]);
+  /** What the conversation keeps for the technician: chat photos (not the handed-over ones) and videos. */
+  const sentImages = useRef<PickedImage[]>([]);
+  const sentVideos = useRef<AttachedVideo[]>([]);
+  /** Upload ids already obtained, so a retried handover does not upload twice. */
+  const uploadedIds = useRef(new Map<string, string>());
+  const [handingOver, setHandingOver] = useState(false);
+  /** "Đúng ý / Chưa đúng" under the newest answer, per message. */
+  const [verdicts, setVerdicts] = useState<Record<string, 'note' | 'done'>>({});
+  const [feedbackNote, setFeedbackNote] = useState('');
+  /** Replies are written out piece by piece, except where motion is reduced or under tests. */
+  const revealPace = useRef(process.env.JEST_WORKER_ID ? 0 : REVEAL_MS);
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled?.().then((reduced) => { if (reduced) revealPace.current = 0; }).catch(() => undefined);
+  }, []);
 
   /**
    * Server-issued. Null until the first reply, then echoed back on every
@@ -259,12 +295,24 @@ export default function CustomerAIChatScreen() {
       const prose =
         reply.messageVi?.trim() || reply.answerVi?.trim() || composeFromFields(reply);
 
-      const offered = reply.recommendedServices?.[0];
-      if (offered) {
-        setPinnedService(offered);
-      }
+      // A catch-all service never replaces a specific one the conversation already found (as on the web).
+      setPinnedService((current) => nextPinnedService(current, reply.recommendedServices?.[0]));
 
-      setMessages((prev) => [...prev, { id: nextId(), sender: 'bot', text: prose, reply }]);
+      const pace = revealPace.current;
+      const steps = pace > 0 ? revealSteps(prose) : [prose];
+      if (steps.length === 1) {
+        setMessages((prev) => [...prev, { id: nextId(), sender: 'bot', text: prose, reply }]);
+      } else {
+        // Written out piece by piece; the card under it and every button come once the whole text is there.
+        const id = nextId();
+        setMessages((prev) => [...prev, { id, sender: 'bot', text: '' }]);
+        for (const step of steps) {
+          setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: step } : m)));
+          scrollToEnd();
+          if (step !== prose) await new Promise((resolve) => setTimeout(resolve, pace));
+        }
+        setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: prose, reply } : m)));
+      }
       setIsThinking(false);
       scrollToEnd();
     },
@@ -272,10 +320,13 @@ export default function CustomerAIChatScreen() {
   );
 
   const send = useCallback(
-    async (text: string, images: PickedImage[]) => {
+    async (text: string, images: PickedImage[], videos: AttachedVideo[] = []) => {
       const trimmed = text.trim();
-      // BRX-064: a diagnosis needs words; photos only go along with them.
+      // BRX-064: a diagnosis needs words; photos and videos only go along with them.
       if (!hasDescription(trimmed)) return;
+      // Kept for the technician: the chat's own photos (they have a file on the phone) and every video.
+      sentImages.current = [...sentImages.current, ...images.filter((image) => !!image.uri)].slice(0, 5);
+      sentVideos.current = [...sentVideos.current, ...videos];
 
       const isQuestion = images.length === 0 && looksLikeAQuestion(trimmed);
       const situation: Situation =
@@ -289,7 +340,13 @@ export default function CustomerAIChatScreen() {
 
       setMessages((prev) => [
         ...prev,
-        { id: nextId(), sender: 'user', text: trimmed, images: images.map((i) => i.dataUri) },
+        {
+          id: nextId(),
+          sender: 'user',
+          text: trimmed,
+          images: images.map((i) => i.dataUri),
+          ...(videos.length ? { videos } : {}),
+        },
         {
           id: nextId(),
           sender: 'bot',
@@ -299,6 +356,7 @@ export default function CustomerAIChatScreen() {
       ]);
       setInput('');
       setPendingImages([]);
+      setPendingVideos([]);
       setIsThinking(true);
       scrollToEnd();
 
@@ -343,6 +401,41 @@ export default function CustomerAIChatScreen() {
     }
   }, [pendingImages.length]);
 
+  // -------------------------------------------------------------- videos
+
+  /** A video for the technician (PO 18/10/2026): never sent to the AI, kept with the booking. */
+  const addVideo = useCallback((picked: PickedVideo | null, problemVi?: string) => {
+    if (problemVi) Alert.alert('Video', problemVi);
+    if (!picked) return;
+    const video: AttachedVideo = {
+      id: nextId(),
+      uri: picked.uri,
+      name: picked.name,
+      type: videoMimeType(picked.uri, picked.type),
+      sizeBytes: picked.sizeBytes,
+      durationMs: picked.durationMs,
+    };
+    const problem = videoProblem(video, sentVideos.current.length + pendingVideos.length);
+    if (problem) {
+      Alert.alert('Video', problem);
+      return;
+    }
+    setPendingVideos((prev) => [...prev, video]);
+  }, [pendingVideos.length]);
+
+  const chooseVideo = useCallback(() => {
+    Haptics.selectionAsync();
+    if (sentVideos.current.length + pendingVideos.length >= AI_MAX_VIDEOS) {
+      Alert.alert('Video', `Gửi được tối đa ${AI_MAX_VIDEOS} video.`);
+      return;
+    }
+    Alert.alert('Gửi video cho kỹ thuật viên', VIDEO_NOT_ANALYSED, [
+      { text: 'Quay video', onPress: () => { void recordVideoForAi().then((r) => addVideo(r.video, r.problemVi)); } },
+      { text: 'Chọn video có sẵn', onPress: () => { void pickVideoForAi().then((r) => addVideo(r.video, r.problemVi)); } },
+      { text: 'Để sau', style: 'cancel' },
+    ]);
+  }, [addVideo, pendingVideos.length]);
+
   // ------------------------------------------------------- a fresh start
 
   /**
@@ -368,6 +461,10 @@ export default function CustomerAIChatScreen() {
             setPinnedService(null);
             setTurnCount(0);
             setPendingImages([]);
+            setPendingVideos([]);
+            sentImages.current = [];
+            sentVideos.current = [];
+            setVerdicts({});
             setInput('');
             setMessages([{ id: `greeting-${Date.now()}`, sender: 'bot', text: GREETING }]);
           },
@@ -378,9 +475,51 @@ export default function CustomerAIChatScreen() {
 
   // --------------------------------------------------------------- book
 
-  /** Chat does not book. It carries the service into the booking flow. */
+  /**
+   * Chat does not book. It carries the service into the booking flow, and with
+   * it the photos and videos the customer sent here (PO 18/10/2026: the
+   * technician sees them; the videos were never shown to the AI). They go up
+   * now, while the customer is signed in, and travel as upload ids.
+   */
+  const uploadAttachments = useCallback(async (): Promise<{ uploadId: string; kind: 'image' | 'video' }[]> => {
+    const ids: { uploadId: string; kind: 'image' | 'video' }[] = [];
+    for (const image of sentImages.current) {
+      let id = uploadedIds.current.get(image.uri);
+      if (!id) {
+        const jpeg = await jpegForUpload(image.uri);
+        if (!jpeg) continue;
+        id = (await mediaApi.uploadBookingPhoto({ uri: jpeg, name: 'tro-ly.jpg', type: 'image/jpeg' })).uploadId;
+        uploadedIds.current.set(image.uri, id);
+      }
+      ids.push({ uploadId: id, kind: 'image' });
+    }
+    for (const video of sentVideos.current) {
+      let id = uploadedIds.current.get(video.uri);
+      if (!id) {
+        id = (await mediaApi.uploadBookingVideo({ uri: video.uri, name: video.name, type: video.type })).uploadId;
+        uploadedIds.current.set(video.uri, id);
+      }
+      ids.push({ uploadId: id, kind: 'video' });
+    }
+    return ids;
+  }, []);
+
   const goToBooking = useCallback(
-    (service: RecommendedService) => {
+    async (service: RecommendedService) => {
+      if (handingOver) return;
+      setHandingOver(true);
+      let attachmentUploadIds: { uploadId: string; kind: 'image' | 'video' }[] = [];
+      try {
+        attachmentUploadIds = await uploadAttachments();
+      } catch {
+        setHandingOver(false);
+        Alert.alert(
+          'Chưa tải được ảnh hoặc video',
+          'Vui lòng thử lại. Nếu vẫn chưa được, anh/chị bắt đầu phiên mới rồi gửi lại.',
+        );
+        return;
+      }
+      setHandingOver(false);
       navigation.navigate('CustomerAIDiagnosis', {
         prefill: {
           serviceId: service.serviceId ?? null,
@@ -388,30 +527,63 @@ export default function CustomerAIChatScreen() {
           serviceName: service.nameVi,
           description: lastCustomerWords.current,
           aiSessionId: sessionId.current ?? undefined,
+          ...(attachmentUploadIds.length ? { attachmentUploadIds } : {}),
         },
       });
     },
-    [navigation],
+    [handingOver, navigation, uploadAttachments],
   );
 
+  /** "Đúng ý" / "Chưa đúng" under the newest answer (as on the web); a failure still thanks. */
+  const rate = useCallback((message: ChatMessage, verdict: 'right' | 'wrong', note?: string) => {
+    const id = sessionId.current;
+    setVerdicts((prev) => ({ ...prev, [message.id]: 'done' }));
+    setFeedbackNote('');
+    if (id) void aiApi.feedback({ sessionId: id, verdict, note, reply: message.text });
+  }, []);
+
   // -------------------------------------------------------------- render
+
+  /** The newest real answer: the only one whose question can be answered or rated. */
+  const latestReplyId = useMemo(() => {
+    const last = [...messages].reverse().find((m) => m.sender === 'bot' && !m.isAcknowledgement);
+    return last?.reply && last.reply.status !== 'unavailable' ? last.id : null;
+  }, [messages]);
 
   const renderMessage = useCallback(
     ({ item }: { item: ChatMessage }) => {
       if (item.sender === 'user') {
         return (
-          <View style={[styles.bubble, styles.userBubble]}>
-            {item.images && item.images.length > 0 && (
-              <View style={styles.bubbleImages}>
-                {item.images.map((uri, index) => (
-                  <Image key={index} source={{ uri }} style={styles.bubbleThumb} />
-                ))}
-              </View>
-            )}
-            {!!item.text && <Text style={styles.userText}>{item.text}</Text>}
+          <View>
+            <View style={[styles.bubble, styles.userBubble]}>
+              {item.images && item.images.length > 0 && (
+                <View style={styles.bubbleImages}>
+                  {item.images.map((uri, index) => (
+                    <Image key={index} source={{ uri }} style={styles.bubbleThumb} />
+                  ))}
+                </View>
+              )}
+              {item.videos && item.videos.length > 0 && (
+                <View style={styles.bubbleImages} testID="ai-message-videos">
+                  {item.videos.map((video) => (
+                    <View key={video.id} style={styles.videoTile}>
+                      <Ionicons name="play-circle" size={26} color={colors.surface} />
+                      {!!videoDuration(video.durationMs) && <Text style={styles.videoTileText}>{videoDuration(video.durationMs)}</Text>}
+                    </View>
+                  ))}
+                </View>
+              )}
+              {!!item.text && <Text style={styles.userText}>{item.text}</Text>}
+            </View>
+            {!!item.videos?.length && <Text style={styles.videoNote} testID="ai-video-note">{VIDEO_NOT_ANALYSED}</Text>}
           </View>
         );
       }
+
+      const isLatest = item.id === latestReplyId && !isThinking;
+      const lastQuestion = item.reply?.clarification?.questionsVi?.slice(-1)[0];
+      const choices = isLatest ? quickReplies(lastQuestion) : [];
+      const verdict = verdicts[item.id];
 
       return (
         <View style={styles.botRow}>
@@ -435,14 +607,65 @@ export default function CustomerAIChatScreen() {
                 {item.text}
               </Text>
             </View>
-            {item.reply && (
-              <DiagnosisCard reply={item.reply} onBook={goToBooking} />
+            {item.reply && item.reply.status !== 'unavailable' && (
+              <DiagnosisCard reply={item.reply} />
+            )}
+            {choices.length > 0 && (
+              <View style={styles.quickRow} testID="ai-quick-replies">
+                {choices.map((choice) => (
+                  <TouchableOpacity
+                    key={choice}
+                    style={styles.quickChip}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      void send(choice, []);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Trả lời ${choice}`}
+                  >
+                    <Text style={styles.quickChipText}>{choice}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+            {isLatest && !!sessionId.current && (
+              <View style={styles.feedbackBox} testID="ai-feedback">
+                {verdict === 'done' ? (
+                  <Text style={styles.feedbackText}>Em cảm ơn anh/chị, em ghi nhận để học thêm ạ.</Text>
+                ) : verdict === 'note' ? (
+                  <View style={styles.feedbackNoteRow}>
+                    <TextInput
+                      style={styles.feedbackInput}
+                      value={feedbackNote}
+                      onChangeText={setFeedbackNote}
+                      maxLength={300}
+                      placeholder="Anh/chị góp ý thêm cho em (không bắt buộc)"
+                      placeholderTextColor={colors.muted}
+                      accessibilityLabel="Góp ý cho trợ lý"
+                      multiline
+                    />
+                    <TouchableOpacity style={styles.feedbackSend} onPress={() => rate(item, 'wrong', feedbackNote)} accessibilityRole="button" accessibilityLabel="Gửi góp ý">
+                      <Text style={styles.feedbackSendText}>Gửi góp ý</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.feedbackRow}>
+                    <Text style={styles.feedbackText}>Câu trả lời này có đúng ý anh/chị không?</Text>
+                    <TouchableOpacity onPress={() => rate(item, 'right')} accessibilityRole="button" accessibilityLabel="Đúng ý" hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
+                      <Text style={styles.feedbackAction}>Đúng ý</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setVerdicts((prev) => ({ ...prev, [item.id]: 'note' }))} accessibilityRole="button" accessibilityLabel="Chưa đúng" hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
+                      <Text style={styles.feedbackAction}>Chưa đúng</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
             )}
           </View>
         </View>
       );
     },
-    [goToBooking, colors, styles],
+    [colors, styles, latestReplyId, isThinking, verdicts, feedbackNote, rate, send],
   );
 
   const canSend = canSendToAssistant({
@@ -450,7 +673,7 @@ export default function CustomerAIChatScreen() {
     imageCount: pendingImages.length,
     busy: isThinking,
   });
-  const needsDescription = showDescriptionHint({ text: input, imageCount: pendingImages.length });
+  const needsDescription = showDescriptionHint({ text: input, imageCount: pendingImages.length + pendingVideos.length });
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
@@ -501,7 +724,8 @@ export default function CustomerAIChatScreen() {
           keyboardShouldPersistTaps="handled"
         />
 
-        {pinnedService && (
+        {/* "Đặt thợ" only once the assistant has finished answering (as on the web). */}
+        {pinnedService && !isThinking && (
           <View style={styles.pinnedBar}>
             <View style={styles.pinnedText}>
               <Text style={styles.pinnedLabel}>Dịch vụ đang chọn</Text>
@@ -511,19 +735,51 @@ export default function CustomerAIChatScreen() {
               <Text style={styles.pinnedHint}>Muốn loại khác, cứ nhắn em đổi ạ</Text>
             </View>
             <TouchableOpacity
-              style={styles.pinnedBtn}
+              style={[styles.pinnedBtn, handingOver && { opacity: 0.6 }]}
               activeOpacity={0.85}
+              disabled={handingOver}
               accessibilityRole="button"
               accessibilityLabel={`Xem dịch vụ ${pinnedService.nameVi} để tiếp tục đặt lịch`}
               accessibilityHint="Mở bước lựa chọn dịch vụ; chưa tạo yêu cầu đặt lịch"
+              accessibilityState={{ disabled: handingOver, busy: handingOver }}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                goToBooking(pinnedService);
+                void goToBooking(pinnedService);
               }}
             >
-              <Ionicons name="calendar-outline" size={15} color={colors.surface} />
-              <Text style={styles.pinnedBtnText}>Đặt thợ</Text>
+              {handingOver ? (
+                <ActivityIndicator size="small" color={colors.surface} />
+              ) : (
+                <Ionicons name="calendar-outline" size={15} color={colors.surface} />
+              )}
+              <Text style={styles.pinnedBtnText}>{handingOver ? 'Đang gửi kèm…' : 'Đặt thợ'}</Text>
             </TouchableOpacity>
+          </View>
+        )}
+
+        {pendingVideos.length > 0 && (
+          <View style={styles.videoTray} testID="ai-pending-videos">
+            {pendingVideos.map((video, index) => (
+              <View key={video.id} style={styles.trayItem}>
+                <View style={[styles.trayThumb, styles.videoTile]}>
+                  <Ionicons name="videocam" size={20} color={colors.surface} />
+                  {!!videoDuration(video.durationMs) && <Text style={styles.videoTileText}>{videoDuration(video.durationMs)}</Text>}
+                </View>
+                <TouchableOpacity
+                  style={styles.trayRemove}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setPendingVideos((prev) => prev.filter((_, i) => i !== index));
+                  }}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Bỏ video thứ ${index + 1}`}
+                >
+                  <Ionicons name="close" size={12} color={colors.surface} />
+                </TouchableOpacity>
+              </View>
+            ))}
+            <Text style={styles.videoTrayNote}>{VIDEO_NOT_ANALYSED}</Text>
           </View>
         )}
 
@@ -582,6 +838,16 @@ export default function CustomerAIChatScreen() {
           >
             <Ionicons name="camera-outline" size={22} color={colors.primary} />
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.composerBtn}
+            onPress={chooseVideo}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel="Gửi video cho kỹ thuật viên"
+            accessibilityHint={VIDEO_NOT_ANALYSED}
+          >
+            <Ionicons name="videocam-outline" size={22} color={colors.primary} />
+          </TouchableOpacity>
           <TextInput
             style={styles.input}
             placeholder="Nhà mình đang gặp vấn đề gì ạ?"
@@ -596,7 +862,7 @@ export default function CustomerAIChatScreen() {
             style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              send(input, pendingImages);
+              send(input, pendingImages, pendingVideos);
             }}
             disabled={!canSend}
             accessibilityRole="button"
@@ -625,13 +891,7 @@ export default function CustomerAIChatScreen() {
  * steps - turn off the gas, kill the breaker - because those are useless if the
  * customer reads them after a list of suspected faults.
  */
-function DiagnosisCard({
-  reply,
-  onBook,
-}: {
-  reply: AiReply;
-  onBook: (service: RecommendedService) => void;
-}) {
+function DiagnosisCard({ reply }: { reply: AiReply }) {
   const { colors, spacing, fontSize } = useAppTheme();
   const styles = getStyles(colors, spacing, fontSize);
   const urgent = reply.urgency === 'HIGH';
@@ -729,23 +989,15 @@ function DiagnosisCard({
         <Text style={styles.priceNote}>Thợ xem tận nơi rồi mới báo giá chính xác ạ.</Text>
       )}
 
-      {services.map((service) => (
-        <TouchableOpacity
-          key={service.serviceCode}
-          style={styles.bookBtn}
-          activeOpacity={0.85}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            onBook(service);
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={`Tiếp tục chọn lịch với dịch vụ ${service.nameVi}`}
-          accessibilityHint="Mở bước chọn dịch vụ; chưa đặt lịch tự động"
-        >
-          <Ionicons name="calendar-outline" size={16} color={colors.surface} />
-          <Text style={styles.bookBtnText}>Đặt thợ · {service.nameVi}</Text>
-        </TouchableOpacity>
-      ))}
+      {/* The booking action is the pinned "Đặt thợ" bar only, as on the web; here the suggestion is information. */}
+      {services.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Dịch vụ gợi ý</Text>
+          {services.map((service) => (
+            <Text key={service.serviceCode} style={styles.faultText}>{service.nameVi}</Text>
+          ))}
+        </View>
+      )}
 
       {!!reply.disclaimerVi && (
         <Text style={styles.disclaimer}>{reply.disclaimerVi}</Text>
@@ -924,19 +1176,6 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   priceValue: { fontSize: 15, fontWeight: '800', color: colors.text },
   priceNote: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, marginTop: 4 },
 
-  bookBtn: {
-    minHeight: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 12,
-    marginTop: 12,
-  },
-  bookBtnText: { color: colors.surface, fontWeight: '700', fontSize: 14 },
-
   disclaimer: { fontSize: 12, color: colors.textSecondary, marginTop: 12, lineHeight: 19 },
 
   pinnedBar: {
@@ -1039,6 +1278,77 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     marginLeft: 8,
   },
   sendBtnDisabled: { backgroundColor: '#CBD5E1' },
+
+  videoTile: {
+    width: 92,
+    height: 92,
+    borderRadius: 10,
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  videoTileText: { color: colors.surface, fontSize: 12, fontWeight: '600' },
+  videoNote: {
+    alignSelf: 'flex-end',
+    maxWidth: '82%',
+    marginHorizontal: 16,
+    marginBottom: 4,
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.tone.warning.text,
+  },
+  videoTray: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  videoTrayNote: { flex: 1, minWidth: 140, fontSize: 12, lineHeight: 18, color: colors.tone.warning.text },
+
+  quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  quickChip: {
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+  },
+  quickChipText: { fontSize: 14, fontWeight: '600', color: colors.primary },
+
+  feedbackBox: { marginTop: 8 },
+  feedbackRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
+  feedbackText: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
+  feedbackAction: { fontSize: 13, fontWeight: '700', color: colors.primary },
+  feedbackNoteRow: { gap: 8 },
+  feedbackInput: {
+    minHeight: 44,
+    maxHeight: 96,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: colors.text,
+    backgroundColor: colors.surface,
+  },
+  feedbackSend: {
+    alignSelf: 'flex-start',
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+  },
+  feedbackSendText: { color: colors.surface, fontWeight: '700', fontSize: 13 },
 });
 
 

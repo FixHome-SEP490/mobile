@@ -152,3 +152,68 @@ export async function takePhotoForAi(alreadyHave: number): Promise<PickResult> {
     ? { images: [{ uri: asset.uri, dataUri: encoded }] }
     : { images: [], problemVi: 'Ảnh vừa chụp em không đọc được, anh/chị chụp lại giúp em nhé.' };
 }
+
+/** A short video picked or recorded for the technician (PO 18/10/2026); it is never sent to the AI. */
+export interface PickedVideo {
+  uri: string;
+  name: string;
+  type: string;
+  sizeBytes: number | null;
+  durationMs: number | null;
+}
+
+export interface VideoPickResult {
+  video: PickedVideo | null;
+  problemVi?: string;
+}
+
+/** About a minute is enough for a technician to see the problem, and stays under 50 MB. */
+const VIDEO_MAX_SECONDS = 60;
+
+function toPickedVideo(asset: ImagePicker.ImagePickerAsset): PickedVideo {
+  const name = asset.fileName || asset.uri.split('/').pop() || 'video.mp4';
+  return {
+    uri: asset.uri,
+    name,
+    type: asset.mimeType || '',
+    sizeBytes: typeof asset.fileSize === 'number' ? asset.fileSize : null,
+    durationMs: typeof asset.duration === 'number' ? asset.duration : null,
+  };
+}
+
+/** One video from the library. */
+export async function pickVideoForAi(): Promise<VideoPickResult> {
+  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permission.granted) {
+    return { video: null, problemVi: 'Anh/chị cho phép FixHome truy cập thư viện để gửi video thiết bị giúp em ạ.' };
+  }
+  const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], allowsMultipleSelection: false, quality: 1 });
+  if (picked.canceled || !picked.assets[0]) return { video: null };
+  return { video: toPickedVideo(picked.assets[0]) };
+}
+
+/** One video recorded now, at most a minute. */
+export async function recordVideoForAi(): Promise<VideoPickResult> {
+  const permission = await ImagePicker.requestCameraPermissionsAsync();
+  if (!permission.granted) {
+    return { video: null, problemVi: 'Anh/chị cho phép FixHome dùng camera để quay thiết bị giúp em ạ.' };
+  }
+  const shot = await ImagePicker.launchCameraAsync({ mediaTypes: ['videos'], videoMaxDuration: VIDEO_MAX_SECONDS, quality: 1 });
+  if (shot.canceled || !shot.assets[0]) return { video: null };
+  return { video: toPickedVideo(shot.assets[0]) };
+}
+
+/**
+ * A chat photo as a JPEG file for the booking (PO 18/10/2026). The original may
+ * be HEIC or PNG and the server checks that the bytes match the declared type,
+ * so it goes up re-encoded as JPEG (same size, never upscaled). Null when it cannot be read.
+ */
+export async function jpegForUpload(uri: string): Promise<string | null> {
+  if (!uri) return null;
+  try {
+    const result = await manipulateAsync(uri, [], { compress: 0.8, format: SaveFormat.JPEG });
+    return result.uri;
+  } catch {
+    return null;
+  }
+}
