@@ -50,6 +50,7 @@ describe('BookingSessionPicker', () => {
     const value: BookingSchedule = { mode: 'scheduled', date: '2026-10-28', slot: 'afternoon' };
     act(() => { r = create(<BookingSessionPicker value={value} onChange={jest.fn()} />); });
     expect(new Set(r.root.findAll((n) => /^session-day-/.test(String(n.props.testID))).map((n) => n.props.testID)).size).toBe(6);
+    expect(r.root.findByProps({ testID: 'session-days-swipe-hint' }).props.children).toContain('Vuốt ngang để xem thêm ngày');
     expect(byId(r, 'session-selected-day').props.accessibilityState.selected).toBe(true);
     expect(r.root.findAll((n) => n.props.testID === 'session-day-2026-10-28')).toHaveLength(0);
     act(() => r.unmount());

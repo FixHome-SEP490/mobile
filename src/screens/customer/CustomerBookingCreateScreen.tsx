@@ -41,6 +41,8 @@ import {
   addressReadyForBooking,
   appendBookingDescriptionSuggestion,
   getBookingDescriptionSuggestions,
+  hasBookingDescriptionSuggestion,
+  toggleBookingDescriptionSuggestion,
   type BookingCreationAttempt,
 } from './customer-booking-create';
 import { createProductionBookingAttempt, entryAttemptJournal } from '../../features/order-flow/runtime/entry-attempt-production';
@@ -547,7 +549,11 @@ export default function CustomerBookingCreateScreen() {
   const selectedPrice = resolveServicePrice(selectedService);
   const selectedPresentation = getServicePresentation(selectedService?.code);
   const selectedIsOtherService = isOtherService(selectedService);
-  const descriptionSuggestions = getBookingDescriptionSuggestions(selectedService?.code);
+  const descriptionSuggestions = getBookingDescriptionSuggestions(
+    selectedService?.code,
+    selectedService?.categoryName?.trim()
+      || pickerCategories.find((category) => category.id === selectedService?.categoryId)?.name,
+  );
   const descriptionLabel = selectedIsOtherService
     ? 'Mô tả yêu cầu (bắt buộc)'
     : 'Mô tả sự cố (bắt buộc)';
@@ -1284,20 +1290,31 @@ export default function CustomerBookingCreateScreen() {
                 ]}
               />
               <View style={styles.descriptionSuggestions}>
-                <Text style={[styles.suggestionHint, { color: colors.textSecondary }]}>Gợi ý có thể chỉnh sửa</Text>
+                <Text style={[styles.suggestionHint, { color: colors.textSecondary }]}>Chạm để thêm hoặc bỏ gợi ý. Bạn vẫn có thể chỉnh sửa mô tả.</Text>
                 <View style={styles.suggestionChips}>
-                  {descriptionSuggestions.map((suggestion) => (
-                    <TouchableOpacity
-                      key={suggestion}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Gợi ý: ${suggestion}`}
-                      onPress={() => setDescription((current) =>
-                        appendBookingDescriptionSuggestion(current, suggestion))}
-                      style={[styles.suggestionChip, { backgroundColor: colors.primarySoft, borderColor: colors.border }]}
-                    >
-                      <Text style={[styles.suggestionChipText, { color: colors.text }]}>{suggestion}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  {descriptionSuggestions.map((suggestion) => {
+                    const selected = hasBookingDescriptionSuggestion(description, suggestion);
+                    const disabled = !selected && appendBookingDescriptionSuggestion(description, suggestion) === description;
+                    return (
+                      <TouchableOpacity
+                        key={suggestion}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Gợi ý: ${suggestion}`}
+                        accessibilityState={{ selected, disabled }}
+                        disabled={disabled}
+                        onPress={() => setDescription((current) =>
+                          toggleBookingDescriptionSuggestion(current, suggestion))}
+                        style={[styles.suggestionChip, {
+                          backgroundColor: selected ? colors.primarySoft : colors.surface,
+                          borderColor: selected ? colors.primary : colors.border,
+                          opacity: disabled ? 0.5 : 1,
+                        }]}
+                      >
+                        {selected && <Ionicons name="checkmark" size={16} color={colors.primary} accessible={false} />}
+                        <Text style={[styles.suggestionChipText, { color: colors.text }]}>{suggestion}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               </View>
               {!!descriptionError && (
@@ -1760,8 +1777,8 @@ const styles = StyleSheet.create({
   descriptionSuggestions: { gap: 8, marginTop: 10 },
   suggestionHint: { fontSize: 12, lineHeight: 16 },
   suggestionChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  suggestionChip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, borderWidth: 1, borderRadius: 22 },
-  suggestionChipText: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
+  suggestionChip: { minHeight: 44, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderRadius: 22 },
+  suggestionChipText: { flexShrink: 1, fontSize: 12, lineHeight: 16, fontWeight: '600' },
   fieldError: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
   fieldErrorText: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '500' },
   photoSection: { padding: 16, borderRadius: 14, gap: 8 },

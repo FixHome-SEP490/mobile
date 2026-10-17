@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-17 20:46 (UTC+7) · Người cập nhật (git): foxonworld · Nhánh: feat/technician-reputation-parity-20261017
+> Cập nhật lần cuối: 2026-10-17 23:40 (UTC+7) · Người cập nhật (git): foxonworld · Nhánh: feat/customer-symptom-chips-20261017
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -98,6 +98,7 @@ SEP-137/139: editor địa chỉ Booking phân biệt ghim đã xác nhận vớ
 
 - Home chọn dịch vụ phổ biến theo service code/alias cục bộ và category fallback có thật; danh mục tra cứu catalog động, không gửi text hint thành query Backend. Đặt lịch thường: Dịch vụ → Chi tiết dịch vụ → Tạo booking hai bước (địa chỉ đã lưu có GPS, chọn buổi sáng 8-12 hoặc chiều 13-18 trong 14 ngày tới, hoặc `Tới ngay`, ghi chú cho thợ tùy chọn) → review snapshot → xác nhận cuối mới tải tối đa 5 ảnh và `POST /bookings` gửi `mode`, `date`, `slot`, `customerNote` kèm cửa sổ giờ đã tính (`BookingSessionPicker`, `utils/booking-session.ts`); mô tả tối đa 5.000 ký tự, gợi ý là văn bản sửa được; không còn chọn giờ bắt đầu tự do.
 - Đặt lịch có AI: màn chẩn đoán nhận mô tả và tối đa 3 ảnh, chuyển sang trò chuyện với AI; AI không tự đặt lịch mà điền sẵn dịch vụ, mô tả và `aiSessionId` vào màn tạo booking.
+- Booking Create có chip gợi ý theo mã dịch vụ: vệ sinh máy lạnh, sửa máy lạnh, rò rỉ nước và lắp TV; mã khác dùng nhóm từ `service.categoryName` hoặc danh mục đã tải, rồi fallback nhóm mặc định như Web. Chạm thêm nguyên văn, chạm lại bỏ mục triệu chứng khớp toàn bộ không phân biệt hoa/thường; giữ nội dung tự nhập/AI, không cắt mô tả khi vượt 5.000 ký tự. Chip chọn có dấu kiểm và accessibility state; đổi dịch vụ chỉ tính lại gợi ý. Giữ mô tả bắt buộc, review snapshot, urgency `NORMAL`, lịch và payload hiện hành; không thêm điều chỉnh mức độ khẩn cấp theo quyết định owner. Visual/runtime và thiết bị CHƯA KIỂM CHỨNG.
 - Có thể chọn 1 hoặc 2 TECH user ID khác nhau theo thứ tự ở màn tìm thợ; mọi candidate còn khả dụng do Backend trả đều hiển thị. Không gửi lời mời thứ hai song song.
 - Đơn: duyệt báo giá và chi phí phát sinh, huỷ, xác nhận hoàn tất, hoá đơn, tiền mặt, mở VNPay, đánh giá, xem bằng chứng.
 - Lịch sử sửa chữa, trung tâm bảo hành, hỗ trợ, chat với kỹ thuật viên, thông báo có phân trang, hồ sơ và địa chỉ có bản đồ, màn bảo mật (đổi mật khẩu bằng OTP).
@@ -273,6 +274,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-17 23:40 (UTC+7) | foxonworld | feat/customer-symptom-chips-20261017 | Thêm chip triệu chứng theo dịch vụ/nhóm Web, thêm/bỏ giữ mô tả tự nhập/AI và 5.000 ký tự; hiển thị chỉ dẫn vuốt ngang dải ngày Booking. Giữ nguyên lịch 14 ngày, urgency và API.
 - 2026-10-17 20:46 (UTC+7) | foxonworld | feat/technician-reputation-parity-20261017 | Thống nhất card uy tín compact hai vai trò, sheet quy định/lịch sử và cảnh báo server luôn hiện; giữ riêng chip Độ tin cậy, native visual/runtime CHƯA KIỂM CHỨNG.
 - 2026-10-17 20:08 (UTC+7) | foxonworld | integration/mobile-c50-c45-reviewed-20261017 | Thu hẹp async act, bảo đảm cleanup và đặt timeout riêng 15 giây cho test radar Matching; CI Ubuntu sau sửa CHƯA KIỂM CHỨNG.
 - 2026-10-17 18:20 (UTC+7) | foxonworld | integration/mobile-c50-c45-20261017 | Tích hợp lịch tháng và CTA với UI/clearance, lịch nhận việc và ký quỹ từ dev; giữ C50/C45, lịch sử hai nhánh và dọn cleanup test bộ lọc thông báo; runtime CHƯA KIỂM CHỨNG.
@@ -312,7 +314,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-14 12:49 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Bàn giao M6 logic và gate 118 tests, ghi review tài chính đang chờ, sửa wallet HTTP envelope và cập nhật QA/render danh sách rỗng hai vai trò; UI/cutover/native/payment còn chưa kiểm chứng.
 - 2026-10-14 05:55 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Đóng source gate UI M5, giữ capture mới chuyển tiếp M6 AFTER; QA sandbox đã khôi phục và Expo Web dev export thực đạt, native/render chưa kiểm chứng.
 - 2026-10-14 04:23 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Cập nhật source M3–M4, controller/recovery M5 và gate UI/runtime còn chờ; sửa guard phát sinh độc lập, dữ liệu thiếu và nhận linh kiện sau storage; ghi QA sandbox ngừng chạy.
-- 2026-10-13 22:30 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 đóng ba bản sửa logic M3 về booking/lời mời chưa gửi và departure bị từ chối trước ghi; UI M3, thiết bị và cutover còn chưa hoàn tất.
 
 ### Lịch sử giữ lại khi tích hợp
 

@@ -281,6 +281,11 @@ export default function BookingSessionPicker({
               </Pressable>
             )}
           </ScrollView>
+          {quickDays.length > 1 && (
+            <Text testID="session-days-swipe-hint" style={[styles.daysHint, { color: colors.textSecondary }]}>
+              Vuốt ngang để xem thêm ngày
+            </Text>
+          )}
           <View style={styles.slots}>
             {(['morning', 'afternoon'] as BookingSlot[]).map((slot) => {
               const enabled = daySlots.includes(slot);
@@ -428,6 +433,7 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: 14, lineHeight: 20, fontWeight: '700' },
   calendarOpen: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12 },
   days: { gap: 8, paddingVertical: 2 },
+  daysHint: { fontSize: 11, lineHeight: 16, textAlign: 'right', marginTop: -8, marginBottom: -8 },
   day: { minHeight: 44, justifyContent: 'center', borderWidth: 1, borderRadius: 12, paddingHorizontal: 12 },
   selectedDay: { marginLeft: 2 },
   slots: { flexDirection: 'row', gap: 8 },

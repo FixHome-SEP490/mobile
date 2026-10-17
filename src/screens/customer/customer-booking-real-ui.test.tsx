@@ -326,10 +326,10 @@ it('adds service-aware description prompts as editable text', async () => {
   });
   const input = renderer.root.findAll((node) => node.props.accessibilityLabel === 'Mô tả sự cố')[0];
   expect(input.props.maxLength).toBe(5000);
-  const suggestion = renderer.root.findByProps({ accessibilityLabel: 'Gợi ý: Dấu hiệu' });
+  const suggestion = renderer.root.findByProps({ accessibilityLabel: 'Gợi ý: Máy không mát / kém lạnh' });
   await act(async () => { (suggestion.props.onPress as () => void)(); });
   expect(renderer.root.findAll((node) => node.props.accessibilityLabel === 'Mô tả sự cố')[0].props.value)
-    .toBe('Dấu hiệu: ');
+    .toBe('Máy không mát / kém lạnh');
   const edited = renderer.root.findAll((node) => node.props.accessibilityLabel === 'Mô tả sự cố')[0];
   await act(async () => { (edited.props.onChangeText as (value: string) => void)('Máy lạnh kêu to'); });
   expect(renderer.root.findAll((node) => node.props.accessibilityLabel === 'Mô tả sự cố')[0].props.value)
