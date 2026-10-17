@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-17 20:08 (UTC+7) · Người cập nhật (git): foxonworld · Nhánh: integration/mobile-c50-c45-reviewed-20261017
+> Cập nhật lần cuối: 2026-10-17 20:46 (UTC+7) · Người cập nhật (git): foxonworld · Nhánh: feat/technician-reputation-parity-20261017
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -164,7 +164,7 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 
 - Lời mời: công tắc "Tự nhận việc" (`autoAcceptInvitations` qua `PATCH /technicians/me/profile`), "Ưu tiên số N", lịch hẹn theo buổi hoặc "Tới ngay" bằng `sessionLabel`.
 - "Đặt lại thợ" (`RebookSheet`, `GET /bookings/:id/available-slots?previous=1`, `POST /bookings/:id/rebook`) ở Thông tin đơn (COMPLETED/CANCELLED) và booking đã hủy; thông báo "đã mời thợ cũ" hoặc "chọn thợ khác" qua param `rebooked`.
-- Điểm uy tín (`GET /reputation/me`, `ReputationCard`) ở hồ sơ hai vai trò; Customer dùng card gọn, cảnh báo khóa/tạm ngưng lấy từ server luôn hiển thị và sheet thông tin có quy định mặc định cùng sự kiện thực từ API; Tech giữ card/lịch sử cũ. API không trả policy động; ngày làm mới chỉ lấy từ `resetsAt`. Bảo hành mặc định (`PUT /technicians/me/warranty-default`, tối đa 365 ngày) ở hồ sơ thợ.
+- Điểm uy tín (`GET /reputation/me`, `ReputationCard`) ở hồ sơ hai vai trò; Customer và Technician dùng một card compact chung (điểm 24px, thanh 4dp, nút thông tin 44dp); cảnh báo khóa/tạm ngưng lấy từ server luôn nằm ngoài sheet, phân biệt đặt lịch/nhận việc theo vai trò. Sheet có nút đóng, quy định mặc định đúng vai trò, ngoại lệ Technician báo “Cần thay đổi thợ” do quản lý dịch vụ xem xét và lịch sử thực từ API. Điểm uy tín dùng dữ liệu users.reputation_points, tách biệt chip xanh “Độ tin cậy” từ technician_profiles.reliability_score; không đổi chip hoặc điều hướng Technician. Native visual/runtime và Web runtime parity CHƯA KIỂM CHỨNG. API không trả policy động; ngày làm mới chỉ lấy từ `resetsAt`. Bảo hành mặc định (`PUT /technicians/me/warranty-default`, tối đa 365 ngày) ở hồ sơ thợ.
 - Thu nhập theo kỳ ngày/tuần/tháng từ `GET /technicians/me/earnings` có phân trang (`EarningsPeriodPanel`); biểu đồ cũ vẫn là ước tính từ danh sách đơn. Lịch có lưới giờ một ngày (6–22h, khối đơn 2 giờ) với vạch giờ hiện tại.
 - Báo giá của khách hiện số ngày bảo hành từng dòng; chi tiết booking hiện ghi chú và tự tải lại mỗi 5 giây khi đang chờ thợ; nhãn trạng thái, giá, thanh toán và vai trò tiếng Việt thay mã thô; `extractApiErrorMessage` dịch câu tiếng Anh đã biết của backend (`utils/api-error-messages.ts`), câu tiếng Anh lạ rơi về câu dự phòng của màn.
 - `useScrollHideTabBar` bật lại thanh tab khi màn rời focus. Thiết bị và E2E CHƯA KIỂM CHỨNG.
@@ -273,6 +273,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-17 20:46 (UTC+7) | foxonworld | feat/technician-reputation-parity-20261017 | Thống nhất card uy tín compact hai vai trò, sheet quy định/lịch sử và cảnh báo server luôn hiện; giữ riêng chip Độ tin cậy, native visual/runtime CHƯA KIỂM CHỨNG.
 - 2026-10-17 20:08 (UTC+7) | foxonworld | integration/mobile-c50-c45-reviewed-20261017 | Thu hẹp async act, bảo đảm cleanup và đặt timeout riêng 15 giây cho test radar Matching; CI Ubuntu sau sửa CHƯA KIỂM CHỨNG.
 - 2026-10-17 18:20 (UTC+7) | foxonworld | integration/mobile-c50-c45-20261017 | Tích hợp lịch tháng và CTA với UI/clearance, lịch nhận việc và ký quỹ từ dev; giữ C50/C45, lịch sử hai nhánh và dọn cleanup test bộ lọc thông báo; runtime CHƯA KIỂM CHỨNG.
 - 2026-10-17 17:48 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | Booking Customer giữ hai buổi sáng/chiều; lịch 14 ngày có lịch tháng, không chọn buổi ngầm và làm mới theo focus/app/time.
@@ -312,12 +313,12 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-14 05:55 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Đóng source gate UI M5, giữ capture mới chuyển tiếp M6 AFTER; QA sandbox đã khôi phục và Expo Web dev export thực đạt, native/render chưa kiểm chứng.
 - 2026-10-14 04:23 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Cập nhật source M3–M4, controller/recovery M5 và gate UI/runtime còn chờ; sửa guard phát sinh độc lập, dữ liệu thiếu và nhận linh kiện sau storage; ghi QA sandbox ngừng chạy.
 - 2026-10-13 22:30 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 đóng ba bản sửa logic M3 về booking/lời mời chưa gửi và departure bị từ chối trước ghi; UI M3, thiết bị và cutover còn chưa hoàn tất.
-- 2026-10-13 17:50 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 sửa số tiền dạng chuỗi, tuần tự hóa ghi chú và thêm làm mới chi tiết; runtime và cutover chưa kiểm chứng.
 
 ### Lịch sử giữ lại khi tích hợp
 
 40 mục mới nhất ở trên; các mục cũ dưới đây được giữ nguyên từ hai nhánh để không mất lịch sử.
 
+> - 2026-10-13 17:50 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 sửa số tiền dạng chuỗi, tuần tự hóa ghi chú và thêm làm mới chi tiết; runtime và cutover chưa kiểm chứng.
 > - 2026-10-13 17:30 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 bổ sung preview native chỉ đọc theo role, chi tiết tải một lần và ghi chú bảo vệ phiên; UI production và runtime còn chưa cutover/kiểm chứng.
 > - 2026-10-13 13:32 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 thêm nền session/resolver/readback và journal, cập nhật contract Backend dev/privacy owner; UI cutover và runtime còn chưa kiểm chứng.
 > - 2026-10-13 02:11 (UTC+7) | foxonworld | integration/mobile-v2-gate-review | SEP-139 Technician mở toàn bộ chi tiết thành scene riêng, Back khôi phục chính xác bước trước; thêm regression test, device QA còn chờ.
