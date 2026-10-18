@@ -50,6 +50,10 @@ export function nextPinnedService(
 /** Videos in the chat: never sent to the AI, kept for the technician (PO 18/10/2026). */
 export const AI_MAX_VIDEOS = 2;
 export const AI_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
+/** What may be picked when the phone makes it light before sending (a long 4K clip). */
+export const VIDEO_SOURCE_MAX_BYTES = 600 * 1024 * 1024;
+/** A clip of the problem is at most a minute; the phone cannot cut a longer one. */
+export const VIDEO_MAX_MS = 60_000;
 export const AI_VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/webm'];
 export const VIDEO_NOT_ANALYSED = 'Video được gửi kèm cho kỹ thuật viên xem, trợ lý AI không xem video.';
 
@@ -62,11 +66,19 @@ export interface AttachedVideo {
   durationMs: number | null;
 }
 
-/** Null when the video can go, otherwise what to tell the customer. */
-export function videoProblem(video: Pick<AttachedVideo, 'type' | 'sizeBytes'>, alreadyAttached: number): string | null {
+/**
+ * Null when the video can go, otherwise what to tell the customer. `maxBytes`
+ * is larger where the phone makes the clip light before sending.
+ */
+export function videoProblem(
+  video: Pick<AttachedVideo, 'type' | 'sizeBytes'> & { durationMs?: number | null },
+  alreadyAttached: number,
+  maxBytes = AI_VIDEO_MAX_BYTES,
+): string | null {
   if (alreadyAttached >= AI_MAX_VIDEOS) return `Gửi được tối đa ${AI_MAX_VIDEOS} video.`;
   if (!AI_VIDEO_TYPES.includes((video.type || '').toLowerCase())) return 'Chỉ gửi được video MP4, MOV hoặc WebM.';
-  if (video.sizeBytes != null && video.sizeBytes > AI_VIDEO_MAX_BYTES) return 'Video lớn hơn 50 MB, vui lòng quay ngắn hơn.';
+  if (video.durationMs != null && video.durationMs > VIDEO_MAX_MS + 1000) return 'Video dài hơn 60 giây. Anh/chị quay đoạn ngắn hơn giúp em nhé.';
+  if (video.sizeBytes != null && video.sizeBytes > maxBytes) return 'Video lớn hơn 50 MB, vui lòng quay ngắn hơn.';
   return null;
 }
 

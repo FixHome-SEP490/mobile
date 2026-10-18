@@ -113,6 +113,21 @@ function normalizeUploadedBookingVideo(value: unknown): UploadedBookingVideo {
   return { uploadId, mimeType, sizeBytes };
 }
 
+/** Upload progress and cancellation, for uploads that must survive a weak connection (PO 18/10/2026). */
+export interface UploadProgressOptions {
+  onProgress?: (fraction: number) => void;
+  signal?: AbortSignal;
+}
+
+/** With progress the caller watches for a stall instead of a fixed timeout. */
+const progressConfig = (opts: UploadProgressOptions, fallbackTimeout: number) => ({
+  timeout: opts.onProgress ? 0 : fallbackTimeout,
+  ...(opts.signal ? { signal: opts.signal } : {}),
+  ...(opts.onProgress
+    ? { onUploadProgress: (event: { loaded: number; total?: number }) => { if (event.total) opts.onProgress?.(event.loaded / event.total); } }
+    : {}),
+});
+
 export const mediaApi = {
   async uploadPublicImage(image: MediaUploadImage): Promise<UploadedPublicMedia> {
     const form = new FormData();
@@ -130,7 +145,7 @@ export const mediaApi = {
     return normalizeUploadedMedia(response.data);
   },
 
-  async uploadBookingPhoto(image: MediaUploadImage): Promise<UploadedBookingPhoto> {
+  async uploadBookingPhoto(image: MediaUploadImage, opts: UploadProgressOptions = {}): Promise<UploadedBookingPhoto> {
     const form = new FormData();
     form.append('file', {
       uri: image.uri,
@@ -140,7 +155,7 @@ export const mediaApi = {
 
     const response = await apiClient.post('/media/booking-photo-upload', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: MEDIA_UPLOAD_TIMEOUT,
+      ...progressConfig(opts, MEDIA_UPLOAD_TIMEOUT),
     });
 
     if (response.status !== 201) {
@@ -151,12 +166,12 @@ export const mediaApi = {
   },
 
   /** A short private video of the problem (PO 18/10/2026): mp4/mov/webm up to 50 MB, never sent to the AI. */
-  async uploadBookingVideo(video: MediaUploadVideo): Promise<UploadedBookingVideo> {
+  async uploadBookingVideo(video: MediaUploadVideo, opts: UploadProgressOptions = {}): Promise<UploadedBookingVideo> {
     const form = new FormData();
     form.append('file', { uri: video.uri, name: video.name, type: video.type } as unknown as Blob);
     const response = await apiClient.post('/media/booking-video-upload', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 180_000,
+      ...progressConfig(opts, 180_000),
     });
     if (response.status !== 201) throw new Error('Không xác nhận được video yêu cầu đã tải lên.');
     return normalizeUploadedBookingVideo(response.data);

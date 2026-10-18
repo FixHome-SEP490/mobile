@@ -9,7 +9,7 @@ import { useAppTheme } from '../../constants/theme';
 // the behaviour a diagnosis assistant should have: yesterday's washing machine
 // has nothing to do with today's question.
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   AccessibilityInfo,
   ActivityIndicator,
@@ -34,7 +34,6 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useKeyboardInset } from '../../hooks/useKeyboardInset';
 import {
-  jpegForUpload,
   pickImagesForAi,
   pickVideoForAi,
   recordVideoForAi,
@@ -54,7 +53,9 @@ import {
 import { appendCustomerWords } from './ai-chat-words';
 import {
   AI_MAX_VIDEOS,
+  AI_VIDEO_MAX_BYTES,
   REVEAL_MS,
+  VIDEO_SOURCE_MAX_BYTES,
   VIDEO_NOT_ANALYSED,
   nextPinnedService,
   quickReplies,
@@ -64,7 +65,8 @@ import {
   videoProblem,
   type AttachedVideo,
 } from './ai-chat-logic';
-import { mediaApi } from '../../api/media.api';
+import { AI_CHAT_MAX_IMAGES, ATTACHMENT_LIMIT_TEXT, ChatUploadQueue, type ChatUpload } from './chat-upload-queue';
+import { canShrinkVideos } from '../../services/video-shrink';
 import {
   AI_DESCRIPTION_REQUIRED_HINT,
   canSendToAssistant,
@@ -96,8 +98,8 @@ interface ChatMessage {
   text: string;
   /** Data URIs the customer attached to this message. */
   images?: string[];
-  /** Videos sent with this message: shown here, kept for the technician, never sent to the AI. */
-  videos?: AttachedVideo[];
+  /** The photos and videos of this message on their way to the technician; the AI never gets the videos. */
+  uploadIds?: string[];
   /** Set on a bot message that carries a diagnosis. */
   reply?: AiReply;
   /** A holding line, replaced in place by the real answer. */
@@ -169,14 +171,30 @@ export default function CustomerAIChatScreen() {
       : (route.params?.initialImages ?? []).map((dataUri) => ({ uri: '', dataUri })),
   );
   const [isThinking, setIsThinking] = useState(hasDescription(route.params?.initialDescription));
-  /** Videos waiting in the tray; they go with the next message (PO 18/10/2026). */
-  const [pendingVideos, setPendingVideos] = useState<AttachedVideo[]>([]);
-  /** What the conversation keeps for the technician: chat photos (not the handed-over ones) and videos. */
-  const sentImages = useRef<PickedImage[]>([]);
-  const sentVideos = useRef<AttachedVideo[]>([]);
-  /** Upload ids already obtained, so a retried handover does not upload twice. */
-  const uploadedIds = useRef(new Map<string, string>());
-  const [handingOver, setHandingOver] = useState(false);
+  /**
+   * The chat's photos and videos for the technician (PO 18/10/2026): videos are
+   * made light as soon as they are picked, and everything sent goes up at once,
+   * in the background. At most three photos and two videos per conversation.
+   */
+  const [queue] = useState(() => new ChatUploadQueue());
+  const uploads = useSyncExternalStore(queue.subscribe, queue.snapshot);
+  const waitingVideos = useMemo(() => uploads.filter((item) => item.kind === 'video' && !item.sent), [uploads]);
+  const uploadsById = useMemo(() => new Map(uploads.map((item) => [item.id, item])), [uploads]);
+  const imagesUsed = pendingImages.length + uploads.filter((item) => item.kind === 'image').length;
+  const videosUsed = uploads.filter((item) => item.kind === 'video').length;
+  useEffect(() => () => queue.reset(), [queue]);
+  const attachmentsOf = useCallback(
+    (message: ChatMessage) =>
+      (message.uploadIds ?? []).flatMap((id) => {
+        const upload = uploadsById.get(id);
+        return upload ? [upload] : [];
+      }),
+    [uploadsById],
+  );
+  const sentVideosOf = useCallback(
+    (message: ChatMessage) => attachmentsOf(message).filter((upload) => upload.kind === 'video'),
+    [attachmentsOf],
+  );
   /** "Đúng ý / Chưa đúng" under the newest answer, per message. */
   const [verdicts, setVerdicts] = useState<Record<string, 'note' | 'done'>>({});
   const [feedbackNote, setFeedbackNote] = useState('');
@@ -320,13 +338,17 @@ export default function CustomerAIChatScreen() {
   );
 
   const send = useCallback(
-    async (text: string, images: PickedImage[], videos: AttachedVideo[] = []) => {
+    async (text: string, images: PickedImage[]) => {
       const trimmed = text.trim();
       // BRX-064: a diagnosis needs words; photos and videos only go along with them.
       if (!hasDescription(trimmed)) return;
-      // Kept for the technician: the chat's own photos (they have a file on the phone) and every video.
-      sentImages.current = [...sentImages.current, ...images.filter((image) => !!image.uri)].slice(0, 5);
-      sentVideos.current = [...sentVideos.current, ...videos];
+      // For the technician, sent at once in the background: the chat's own photos (they have
+      // a file on the phone; handed-over ones do not) and the videos waiting in the tray.
+      const q = queue;
+      const sentNow: ChatUpload[] = [
+        ...images.filter((image) => !!image.uri).map((image) => q.addSentImage(image)),
+        ...q.sendWaitingVideos(),
+      ];
 
       const isQuestion = images.length === 0 && looksLikeAQuestion(trimmed);
       const situation: Situation =
@@ -345,7 +367,7 @@ export default function CustomerAIChatScreen() {
           sender: 'user',
           text: trimmed,
           images: images.map((i) => i.dataUri),
-          ...(videos.length ? { videos } : {}),
+          ...(sentNow.length ? { uploadIds: sentNow.map((item) => item.id) } : {}),
         },
         {
           id: nextId(),
@@ -356,13 +378,12 @@ export default function CustomerAIChatScreen() {
       ]);
       setInput('');
       setPendingImages([]);
-      setPendingVideos([]);
       setIsThinking(true);
       scrollToEnd();
 
       await awaitReply(trimmed, images, isQuestion);
     },
-    [awaitReply, holdingLineFor, scrollToEnd, turnCount],
+    [awaitReply, holdingLineFor, scrollToEnd, turnCount, queue],
   );
 
   /** Starts the handed-over message. The message itself is already on screen. */
@@ -385,21 +406,29 @@ export default function CustomerAIChatScreen() {
 
   const pickImages = useCallback(async () => {
     Haptics.selectionAsync();
-    const result = await pickImagesForAi(pendingImages.length);
+    if (imagesUsed >= AI_CHAT_MAX_IMAGES) {
+      Alert.alert('Ảnh', ATTACHMENT_LIMIT_TEXT);
+      return;
+    }
+    const result = await pickImagesForAi(imagesUsed);
     if (result.problemVi) Alert.alert('Ảnh', result.problemVi);
     if (result.images.length > 0) {
       setPendingImages((prev) => [...prev, ...result.images].slice(0, AI_MAX_IMAGES));
     }
-  }, [pendingImages.length]);
+  }, [imagesUsed]);
 
   const takePhoto = useCallback(async () => {
     Haptics.selectionAsync();
-    const result = await takePhotoForAi(pendingImages.length);
+    if (imagesUsed >= AI_CHAT_MAX_IMAGES) {
+      Alert.alert('Ảnh', ATTACHMENT_LIMIT_TEXT);
+      return;
+    }
+    const result = await takePhotoForAi(imagesUsed);
     if (result.problemVi) Alert.alert('Ảnh', result.problemVi);
     if (result.images.length > 0) {
       setPendingImages((prev) => [...prev, ...result.images].slice(0, AI_MAX_IMAGES));
     }
-  }, [pendingImages.length]);
+  }, [imagesUsed]);
 
   // -------------------------------------------------------------- videos
 
@@ -415,18 +444,19 @@ export default function CustomerAIChatScreen() {
       sizeBytes: picked.sizeBytes,
       durationMs: picked.durationMs,
     };
-    const problem = videoProblem(video, sentVideos.current.length + pendingVideos.length);
+    const problem = videoProblem(video, videosUsed, canShrinkVideos() ? VIDEO_SOURCE_MAX_BYTES : AI_VIDEO_MAX_BYTES);
     if (problem) {
       Alert.alert('Video', problem);
       return;
     }
-    setPendingVideos((prev) => [...prev, video]);
-  }, [pendingVideos.length]);
+    // Made light at once, while the customer writes (PO 18/10/2026: weak connections).
+    queue.addVideo(video);
+  }, [videosUsed, queue]);
 
   const chooseVideo = useCallback(() => {
     Haptics.selectionAsync();
-    if (sentVideos.current.length + pendingVideos.length >= AI_MAX_VIDEOS) {
-      Alert.alert('Video', `Gửi được tối đa ${AI_MAX_VIDEOS} video.`);
+    if (videosUsed >= AI_MAX_VIDEOS) {
+      Alert.alert('Video', ATTACHMENT_LIMIT_TEXT);
       return;
     }
     Alert.alert('Gửi video cho kỹ thuật viên', VIDEO_NOT_ANALYSED, [
@@ -434,7 +464,7 @@ export default function CustomerAIChatScreen() {
       { text: 'Chọn video có sẵn', onPress: () => { void pickVideoForAi().then((r) => addVideo(r.video, r.problemVi)); } },
       { text: 'Để sau', style: 'cancel' },
     ]);
-  }, [addVideo, pendingVideos.length]);
+  }, [addVideo, videosUsed]);
 
   // ------------------------------------------------------- a fresh start
 
@@ -461,9 +491,7 @@ export default function CustomerAIChatScreen() {
             setPinnedService(null);
             setTurnCount(0);
             setPendingImages([]);
-            setPendingVideos([]);
-            sentImages.current = [];
-            sentVideos.current = [];
+            queue.reset();
             setVerdicts({});
             setInput('');
             setMessages([{ id: `greeting-${Date.now()}`, sender: 'bot', text: GREETING }]);
@@ -471,55 +499,21 @@ export default function CustomerAIChatScreen() {
         },
       ],
     );
-  }, [turnCount]);
+  }, [turnCount, queue]);
 
   // --------------------------------------------------------------- book
 
   /**
    * Chat does not book. It carries the service into the booking flow, and with
    * it the photos and videos the customer sent here (PO 18/10/2026: the
-   * technician sees them; the videos were never shown to the AI). They go up
-   * now, while the customer is signed in, and travel as upload ids.
+   * technician sees them; the videos were never shown to the AI). They went up
+   * in the background as they were sent; the booking takes those that arrived,
+   * and the customer chooses to wait for, retry or leave out the rest: a weak
+   * connection never blocks booking without saying why.
    */
-  const uploadAttachments = useCallback(async (): Promise<{ uploadId: string; kind: 'image' | 'video' }[]> => {
-    const ids: { uploadId: string; kind: 'image' | 'video' }[] = [];
-    for (const image of sentImages.current) {
-      let id = uploadedIds.current.get(image.uri);
-      if (!id) {
-        const jpeg = await jpegForUpload(image.uri);
-        if (!jpeg) continue;
-        id = (await mediaApi.uploadBookingPhoto({ uri: jpeg, name: 'tro-ly.jpg', type: 'image/jpeg' })).uploadId;
-        uploadedIds.current.set(image.uri, id);
-      }
-      ids.push({ uploadId: id, kind: 'image' });
-    }
-    for (const video of sentVideos.current) {
-      let id = uploadedIds.current.get(video.uri);
-      if (!id) {
-        id = (await mediaApi.uploadBookingVideo({ uri: video.uri, name: video.name, type: video.type })).uploadId;
-        uploadedIds.current.set(video.uri, id);
-      }
-      ids.push({ uploadId: id, kind: 'video' });
-    }
-    return ids;
-  }, []);
-
-  const goToBooking = useCallback(
-    async (service: RecommendedService) => {
-      if (handingOver) return;
-      setHandingOver(true);
-      let attachmentUploadIds: { uploadId: string; kind: 'image' | 'video' }[] = [];
-      try {
-        attachmentUploadIds = await uploadAttachments();
-      } catch {
-        setHandingOver(false);
-        Alert.alert(
-          'Chưa tải được ảnh hoặc video',
-          'Vui lòng thử lại. Nếu vẫn chưa được, anh/chị bắt đầu phiên mới rồi gửi lại.',
-        );
-        return;
-      }
-      setHandingOver(false);
+  const openBooking = useCallback(
+    (service: RecommendedService) => {
+      const attachmentUploadIds = queue.uploadIds() ?? [];
       navigation.navigate('CustomerAIDiagnosis', {
         prefill: {
           serviceId: service.serviceId ?? null,
@@ -531,7 +525,37 @@ export default function CustomerAIChatScreen() {
         },
       });
     },
-    [handingOver, navigation, uploadAttachments],
+    [navigation, queue],
+  );
+
+  const goToBooking = useCallback(
+    (service: RecommendedService) => {
+      const summary = queue.summary();
+      if (summary && summary.busy > 0) {
+        Alert.alert(
+          'Ảnh, video đang gửi cho thợ',
+          `Đã gửi khoảng ${Math.round(summary.progress * 100)}%. Mạng yếu thì có thể mất vài phút. Anh/chị chờ thêm, hoặc đặt thợ không kèm những tệp chưa gửi xong.`,
+          [
+            { text: 'Chờ thêm', style: 'cancel' },
+            { text: 'Đặt thợ không kèm', onPress: () => openBooking(service) },
+          ],
+        );
+        return;
+      }
+      if (summary && summary.failed > 0) {
+        Alert.alert(
+          'Có ảnh hoặc video chưa gửi được',
+          'Anh/chị bấm Thử lại khi mạng ổn hơn, hoặc đặt thợ không kèm những tệp đó.',
+          [
+            { text: 'Thử lại', onPress: () => queue.retryFailed() },
+            { text: 'Đặt thợ không kèm', onPress: () => openBooking(service) },
+          ],
+        );
+        return;
+      }
+      openBooking(service);
+    },
+    [openBooking, queue],
   );
 
   /** "Đúng ý" / "Chưa đúng" under the newest answer (as on the web); a failure still thanks. */
@@ -563,9 +587,9 @@ export default function CustomerAIChatScreen() {
                   ))}
                 </View>
               )}
-              {item.videos && item.videos.length > 0 && (
+              {sentVideosOf(item).length > 0 && (
                 <View style={styles.bubbleImages} testID="ai-message-videos">
-                  {item.videos.map((video) => (
+                  {sentVideosOf(item).map((video) => (
                     <View key={video.id} style={styles.videoTile}>
                       <Ionicons name="play-circle" size={26} color={colors.surface} />
                       {!!videoDuration(video.durationMs) && <Text style={styles.videoTileText}>{videoDuration(video.durationMs)}</Text>}
@@ -575,7 +599,34 @@ export default function CustomerAIChatScreen() {
               )}
               {!!item.text && <Text style={styles.userText}>{item.text}</Text>}
             </View>
-            {!!item.videos?.length && <Text style={styles.videoNote} testID="ai-video-note">{VIDEO_NOT_ANALYSED}</Text>}
+            {sentVideosOf(item).length > 0 && <Text style={styles.videoNote} testID="ai-video-note">{VIDEO_NOT_ANALYSED}</Text>}
+            {/* PO 18/10/2026: what goes with the booking is sent now, in the background; each says how far it is. */}
+            {attachmentsOf(item).length > 0 && (
+              <View style={styles.uploadList} testID="ai-attachment-status">
+                {attachmentsOf(item).map((upload) => (
+                  <View key={upload.id} style={styles.uploadRow} testID={`ai-attachment-${upload.state}`}>
+                    <Ionicons
+                      name={upload.state === 'done' ? 'checkmark-circle' : upload.state === 'failed' ? 'alert-circle' : upload.kind === 'video' ? 'videocam-outline' : 'image-outline'}
+                      size={14}
+                      color={upload.state === 'done' ? colors.success : upload.state === 'failed' ? colors.error : colors.textSecondary}
+                    />
+                    <Text style={[styles.uploadText, upload.state === 'failed' && { color: colors.error }, upload.state === 'done' && { color: colors.success }]}>
+                      {uploadStatusText(upload)}
+                    </Text>
+                    {upload.state === 'failed' && (
+                      <TouchableOpacity
+                        onPress={() => queue.retry(upload.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel="Gửi lại tệp này"
+                        hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+                      >
+                        <Text style={styles.uploadRetry}>Thử lại</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
         );
       }
@@ -665,7 +716,7 @@ export default function CustomerAIChatScreen() {
         </View>
       );
     },
-    [colors, styles, latestReplyId, isThinking, verdicts, feedbackNote, rate, send],
+    [colors, styles, latestReplyId, isThinking, verdicts, feedbackNote, rate, send, attachmentsOf, sentVideosOf, queue],
   );
 
   const canSend = canSendToAssistant({
@@ -673,7 +724,7 @@ export default function CustomerAIChatScreen() {
     imageCount: pendingImages.length,
     busy: isThinking,
   });
-  const needsDescription = showDescriptionHint({ text: input, imageCount: pendingImages.length + pendingVideos.length });
+  const needsDescription = showDescriptionHint({ text: input, imageCount: pendingImages.length + waitingVideos.length });
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
@@ -735,41 +786,37 @@ export default function CustomerAIChatScreen() {
               <Text style={styles.pinnedHint}>Muốn loại khác, cứ nhắn em đổi ạ</Text>
             </View>
             <TouchableOpacity
-              style={[styles.pinnedBtn, handingOver && { opacity: 0.6 }]}
+              style={styles.pinnedBtn}
               activeOpacity={0.85}
-              disabled={handingOver}
               accessibilityRole="button"
               accessibilityLabel={`Xem dịch vụ ${pinnedService.nameVi} để tiếp tục đặt lịch`}
               accessibilityHint="Mở bước lựa chọn dịch vụ; chưa tạo yêu cầu đặt lịch"
-              accessibilityState={{ disabled: handingOver, busy: handingOver }}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                void goToBooking(pinnedService);
+                goToBooking(pinnedService);
               }}
             >
-              {handingOver ? (
-                <ActivityIndicator size="small" color={colors.surface} />
-              ) : (
-                <Ionicons name="calendar-outline" size={15} color={colors.surface} />
-              )}
-              <Text style={styles.pinnedBtnText}>{handingOver ? 'Đang gửi kèm…' : 'Đặt thợ'}</Text>
+              <Ionicons name="calendar-outline" size={15} color={colors.surface} />
+              <Text style={styles.pinnedBtnText}>Đặt thợ</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {pendingVideos.length > 0 && (
+        {waitingVideos.length > 0 && (
           <View style={styles.videoTray} testID="ai-pending-videos">
-            {pendingVideos.map((video, index) => (
-              <View key={video.id} style={styles.trayItem}>
+            {waitingVideos.map((video, index) => (
+              <View key={video.id} style={styles.trayItem} testID={`ai-pending-video-${video.state}`}>
                 <View style={[styles.trayThumb, styles.videoTile]}>
                   <Ionicons name="videocam" size={20} color={colors.surface} />
-                  {!!videoDuration(video.durationMs) && <Text style={styles.videoTileText}>{videoDuration(video.durationMs)}</Text>}
+                  <Text style={styles.videoTileText}>
+                    {video.state === 'preparing' ? `${Math.round(video.progress * 100)}%` : videoDuration(video.durationMs)}
+                  </Text>
                 </View>
                 <TouchableOpacity
                   style={styles.trayRemove}
                   onPress={() => {
                     Haptics.selectionAsync();
-                    setPendingVideos((prev) => prev.filter((_, i) => i !== index));
+                    queue.remove(video.id);
                   }}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   accessibilityRole="button"
@@ -779,7 +826,14 @@ export default function CustomerAIChatScreen() {
                 </TouchableOpacity>
               </View>
             ))}
-            <Text style={styles.videoTrayNote}>{VIDEO_NOT_ANALYSED}</Text>
+            <Text style={styles.trayHint} testID="ai-video-count">
+              {`Ảnh ${imagesUsed}/${AI_CHAT_MAX_IMAGES} · Video ${videosUsed}/${AI_MAX_VIDEOS}`}
+            </Text>
+            <Text style={styles.videoTrayNote}>
+              {waitingVideos.some((video) => video.state === 'preparing')
+                ? 'Đang nén video cho nhẹ trước khi gửi, anh/chị cứ nhắn tiếp ạ.'
+                : VIDEO_NOT_ANALYSED}
+            </Text>
           </View>
         )}
 
@@ -807,8 +861,8 @@ export default function CustomerAIChatScreen() {
                 </TouchableOpacity>
               </View>
             ))}
-            <Text style={styles.trayHint}>
-              {`${pendingImages.length}/${AI_MAX_IMAGES} ảnh`}
+            <Text style={styles.trayHint} testID="ai-attachment-count">
+              {`Ảnh ${imagesUsed}/${AI_CHAT_MAX_IMAGES} · Video ${videosUsed}/${AI_MAX_VIDEOS}`}
             </Text>
           </ScrollView>
         )}
@@ -862,7 +916,7 @@ export default function CustomerAIChatScreen() {
             style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              send(input, pendingImages, pendingVideos);
+              send(input, pendingImages);
             }}
             disabled={!canSend}
             accessibilityRole="button"
@@ -880,6 +934,17 @@ export default function CustomerAIChatScreen() {
       </View>
     </SafeAreaView>
   );
+}
+
+/** Where a sent photo or video is on its way to the technician, in plain words. */
+export function uploadStatusText(upload: ChatUpload): string {
+  const what = upload.kind === 'video' ? 'video' : 'ảnh';
+  const percent = `${Math.round(Math.max(0, Math.min(1, upload.progress)) * 100)}%`;
+  if (upload.state === 'preparing') return `Đang nén video ${percent}`;
+  if (upload.state === 'ready') return `Chờ gửi ${what} cho thợ`;
+  if (upload.state === 'uploading') return upload.retrying ? 'Mạng chập chờn, đang gửi lại' : `Đang gửi ${what} cho thợ ${percent}`;
+  if (upload.state === 'done') return upload.kind === 'video' ? 'Video đã gửi kèm cho thợ' : 'Ảnh đã gửi kèm cho thợ';
+  return upload.error || 'Chưa gửi được';
 }
 
 // ---------------------------------------------------------------- the card
@@ -1309,6 +1374,10 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
+  uploadList: { alignSelf: 'flex-end', alignItems: 'flex-end', gap: 4, marginHorizontal: 16, marginBottom: 4, maxWidth: '82%' },
+  uploadRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  uploadText: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
+  uploadRetry: { fontSize: 12, fontWeight: '700', color: colors.primary },
   videoTrayNote: { flex: 1, minWidth: 140, fontSize: 12, lineHeight: 18, color: colors.tone.warning.text },
 
   quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },

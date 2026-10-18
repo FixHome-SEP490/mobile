@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-18 04:09 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: feat/mobile-call-ai-chat
+> Cập nhật lần cuối: 2026-10-18 12:59 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: feat/mobile-call-ai-chat
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -187,9 +187,9 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 - Gọi thoại: nút gọi ở đầu `ChatThreadScreen` khi server cho nhắn (`canSend`); một `CallOverlay` gắn ở gốc `AppNavigator` khi đã đăng nhập, nên cuộc gọi không mất khi đổi màn. Trạng thái và câu hiển thị theo web (`store/call.store.ts`): đang gọi, đang đổ chuông, cuộc gọi đến, đang kết nối, đang nói chuyện kèm đồng hồ, kết thúc kèm lý do và nút Gọi lại khi được. Nút Micro, nút "Loa nhỏ"/"Loa to" (bắt đầu ở loa trong, chạm để chuyển loa ngoài, qua `react-native-incall-manager`), nút Kết thúc. Mỗi yêu cầu gửi server chờ tối đa 8 giây, không trả lời coi như bị từ chối.
 - Âm thanh và WebRTC nạp lười (`services/call-native.ts`, `services/webrtc-call.service.ts`): Expo Go không có mã native nên nút gọi chỉ báo "Gọi thoại cần bản cài đặt FixHome đầy đủ (không chạy trong Expo Go).", mọi màn khác chạy như cũ. Android xin quyền micro trước khi gọi.
 - Trợ lý AI (`CustomerAIChatScreen`, luật thuần ở `ai-chat-logic.ts`): câu trả lời hiện dần theo từ (tắt khi bật giảm chuyển động), nút trả lời nhanh Rồi/Chưa/Không rõ hoặc Có/Không/Không rõ cho câu hỏi có/không, "Đúng ý"/"Chưa đúng" kèm góp ý dưới câu trả lời mới nhất (`POST /ai/feedback`), dịch vụ chung chung không thay dịch vụ cụ thể đã tìm ra, nút "Đặt thợ" chỉ hiện khi trợ lý trả lời xong và chỉ nằm ở thanh ghim (thẻ chẩn đoán chỉ liệt kê dịch vụ gợi ý), gửi quá nhanh (429) có câu riêng.
-- Video trong trò chuyện với trợ lý: quay hoặc chọn tối đa 2 video MP4/MOV/WebM, mỗi video tối đa 50 MB và 60 giây khi quay; video không gửi cho AI, chỉ hiện trong khung chat kèm câu "Video được gửi kèm cho kỹ thuật viên xem, trợ lý AI không xem video.".
-- Bấm "Đặt thợ": ảnh khách chọn trong chat (đổi sang JPEG) và video được tải lên `POST /media/booking-photo-upload` và `POST /media/booking-video-upload`, mỗi file một lần, rồi đi theo `prefill.attachmentUploadIds` qua màn mô tả tới form đặt lịch. Form ghi "Gửi kèm từ trò chuyện với trợ lý: N ảnh, M video" kèm nút Bỏ; khi gửi, ảnh của form đứng trước, ảnh từ chat chỉ thêm khi còn chỗ trong 5 ảnh, video tối đa 2 (`bookingMediaIds`). Tải lỗi thì ở lại chat và báo, không mở form.
-- Unit test: `ai-chat-logic.test.ts`, `CustomerAIChatScreen.parity.test.tsx`, `CallOverlay.test.tsx`, `call.store.test.ts`, `chat-socket.calls.test.ts`, thêm hai ca ở `CustomerBookingCreateScreen.test.tsx`. Cuộc gọi trên thiết bị thật, video thật và API thật CHƯA KIỂM CHỨNG.
+- Ảnh và video trong trò chuyện với trợ lý (PO 18/10/2026): mỗi cuộc trò chuyện tối đa 3 ảnh và 2 video (bộ đếm "Ảnh x/3 · Video y/2", câu "Mỗi cuộc trò chuyện gửi được tối đa 3 ảnh và 2 video."); quay hoặc chọn video MP4/MOV/WebM tối đa 60 giây (dài hơn thì báo, máy không cắt được), video không gửi cho AI. Video được nén ngay khi chọn (`services/video-shrink.ts`, `react-native-compressor` 2.0.3 nạp lười: H.264 ≤ 1280 px ~1,2 Mbit/s; file dưới 5 MB, không nhỏ đi, lỗi hoặc treo quá 2 lần thời lượng + 15 giây thì gửi bản gốc), khi đó chọn được file gốc tới 600 MB; Expo Go không có module nén nên bản gốc phải ≤ 50 MB. Toạ độ GPS trong video do server xoá.
+- Tải lên ở nền ngay khi gửi (`screens/customer/chat-upload-queue.ts`): ảnh trong chat (đổi sang JPEG) và video đã nén lên `POST /media/booking-photo-upload` và `POST /media/booking-video-upload` từng tệp một, có tiến độ (`onUploadProgress`), không timeout cố định (`services/upload-retry.ts`: đứng 45 giây không nhích mới bỏ, byte cuối đã đi thì chờ server trả lời tới 3 phút, thử lại 4 lần cách 2/5/10 giây); dưới tin có dòng "Đang nén video x%", "Đang gửi video cho thợ x%", "Video đã gửi kèm cho thợ", lỗi kèm "Thử lại". Bấm "Đặt thợ": còn tệp đang gửi thì hỏi "Chờ thêm" hay "Đặt thợ không kèm"; có tệp lỗi thì hỏi "Thử lại" hay "Đặt thợ không kèm"; mã đã tải xong đi theo `prefill.attachmentUploadIds` (ảnh trước, rồi video) qua màn mô tả tới form đặt lịch. Form ghi "Gửi kèm từ trò chuyện với trợ lý: N ảnh, M video" kèm nút Bỏ; khi gửi, ảnh của form đứng trước, ảnh từ chat chỉ thêm khi còn chỗ trong 5 ảnh, video tối đa 2 (`bookingMediaIds`).
+- Unit test: `ai-chat-logic.test.ts`, `CustomerAIChatScreen.parity.test.tsx`, `chat-upload-queue.test.ts`, `video-shrink.test.ts`, `upload-retry.test.ts`, `CallOverlay.test.tsx`, `call.store.test.ts`, `chat-socket.calls.test.ts`, hai ca ở `CustomerBookingCreateScreen.test.tsx`. Cuộc gọi trên thiết bị thật, nén video trên máy thật, video thật và API thật CHƯA KIỂM CHỨNG.
 
 ### Đăng nhập Google
 
@@ -242,7 +242,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 ## 6. Chạy, kiểm thử và cổng chất lượng
 
 - Node 22.13 trở lên (`.nvmrc` 22.15.0). `npm ci`, `npm start`, quét mã QR LAN bằng Expo Go. Backend cùng máy với Metro: để trống `EXPO_PUBLIC_API_BASE_URL` như `.env.example`. Backend máy khác, cổng khác hoặc Expo tunnel: cấu hình URL rõ ràng trong env cục bộ không theo dõi; coordinator khởi động lại Metro hiện có khi đổi env. Đăng nhập Google trên Android emulator cần `adb reverse tcp:3000 tcp:3000`.
-- Cài thư viện native bằng `npx expo install`, không eject, không commit `android/` hay `ios/` (đã gitignore). Gọi thoại cần `react-native-webrtc` và `react-native-incall-manager` (plugin `@config-plugins/react-native-webrtc` trong `app.json` khai quyền micro), nên chỉ chạy trên bản build có mã native: `npx expo run:android` sinh `android/` cục bộ rồi cài lên máy hoặc emulator. Expo Go vẫn chạy mọi màn khác.
+- Cài thư viện native bằng `npx expo install`, không eject, không commit `android/` hay `ios/` (đã gitignore). Gọi thoại cần `react-native-webrtc` và `react-native-incall-manager` (plugin `@config-plugins/react-native-webrtc` trong `app.json` khai quyền micro), nén video cần `react-native-compressor` và `react-native-nitro-modules`, nên hai việc này chỉ chạy trên bản build có mã native: `npx expo run:android` sinh `android/` cục bộ rồi cài lên máy hoặc emulator. Expo Go vẫn chạy mọi màn khác (không gọi được, video gửi bản gốc).
 - Gate trước mỗi commit: `npm run check:expo`, `npm run lint`, `npm run typecheck`, `npm test`. CI chạy đúng các bước này.
 - Test radar lifecycle trong `CustomerMatchingScreen.test.tsx` dùng `act` đồng bộ cho focus/AppState, cleanup cả khi mount lỗi và timeout riêng 15 giây cho cold module loading; timeout Jest chung và các assertion giữ nguyên. GitHub Ubuntu sau sửa CHƯA KIỂM CHỨNG.
 - Quy trình nhánh: tách nhánh từ `dev`, PR vào `dev`, CI xanh mới merge; không merge vào `main`.
@@ -289,6 +289,8 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-18 12:59 (UTC+7) | ToanAltF4 | feat/mobile-call-ai-chat | Tải lên không gửi lại cả file khi byte cuối đã đi và đang chờ server trả lời
+- 2026-10-18 12:20 (UTC+7) | ToanAltF4 | feat/mobile-call-ai-chat | Trợ lý AI: tối đa 3 ảnh + 2 video mỗi cuộc trò chuyện, nén video trên máy (react-native-compressor, bản gốc khi không nén được), tải lên ở nền có tiến độ, thử lại khi mạng yếu; Đặt thợ chờ, thử lại hoặc bỏ tệp chưa gửi xong
 - 2026-10-18 04:09 (UTC+7) | ToanAltF4 | feat/mobile-call-ai-chat | Gọi thoại như web (nút gọi trong chat, màn cuộc gọi chung, nút Loa to/Loa nhỏ, cần bản build native) và trợ lý AI như web (trả lời nhanh, Đúng ý/Chưa đúng, video gửi kèm cho thợ không qua AI, ảnh và video theo sang form đặt lịch).
 - 2026-10-17 23:40 (UTC+7) | foxonworld | feat/customer-symptom-chips-20261017 | Thêm chip triệu chứng theo dịch vụ/nhóm Web, thêm/bỏ giữ mô tả tự nhập/AI và 5.000 ký tự; hiển thị chỉ dẫn vuốt ngang dải ngày Booking. Giữ nguyên lịch 14 ngày, urgency và API.
 - 2026-10-17 20:46 (UTC+7) | foxonworld | feat/technician-reputation-parity-20261017 | Thống nhất card uy tín compact hai vai trò, sheet quy định/lịch sử và cảnh báo server luôn hiện; giữ riêng chip Độ tin cậy, native visual/runtime CHƯA KIỂM CHỨNG.
@@ -327,8 +329,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-14 20:54 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Bổ sung UI hậu mãi M7 nối hook đã khóa và ghi rõ đường tạo claim trực tiếp cũ cần parity M8; runtime warranty chưa xác minh.
 - 2026-10-14 14:23 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Đóng source M6 với các sửa tiền/return/capture/recovery, ghi render ví thật và giới hạn runtime; M7–M8 chưa triển khai, không publish.
 - 2026-10-14 13:03 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Đóng M6 logic source gate sau review tài chính và sửa rollback ví HTTP422, lead xác minh 33 tests; M6 UI/root linking/capture return còn chờ.
-- 2026-10-14 12:49 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Bàn giao M6 logic và gate 118 tests, ghi review tài chính đang chờ, sửa wallet HTTP envelope và cập nhật QA/render danh sách rỗng hai vai trò; UI/cutover/native/payment còn chưa kiểm chứng.
-- 2026-10-14 05:55 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Đóng source gate UI M5, giữ capture mới chuyển tiếp M6 AFTER; QA sandbox đã khôi phục và Expo Web dev export thực đạt, native/render chưa kiểm chứng.
 
 ### Lịch sử giữ lại khi tích hợp
 
