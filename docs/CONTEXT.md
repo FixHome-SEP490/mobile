@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-17 23:40 (UTC+7) · Người cập nhật (git): foxonworld · Nhánh: feat/customer-symptom-chips-20261017
+> Cập nhật lần cuối: 2026-10-18 12:59 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: feat/mobile-call-ai-chat
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -179,7 +179,17 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 - Home khách (đã đăng nhập) có hai lối tắt "Ví của tôi" và "Bảo hành" như menu tài khoản web; Hồ sơ vẫn giữ cả hai. Hồ sơ thợ ở màn chọn thợ hiện "Giá công tham khảo: Theo báo giá" khi thợ chưa niêm yết giá; `reliabilityScore` vẫn không hiện cho khách (khác web, có test chặn).
 - Khoảng cách theo lưới 4/8/12/16 của `FIXHOME-DESIGN-SYSTEM.md` mục 9: giá trị lẻ (3, 5, 7, 9, 10, 11, 13, 14, 18, 20) của padding, margin và gap ở 48 file màn hình đã đổi về lưới (padding làm tròn lên để giữ vùng chạm 44pt, margin và gap làm tròn xuống); chữ dưới 12 ở `TaskScreenShell` và màn Bảo mật nâng lên 12; Home khách bỏ hai dòng chú thích (AI, "Khác"). Sheet chọn địa chỉ (Home, form đặt lịch), sheet chọn cách đặt lịch, sheet xem lại yêu cầu và sheet chỉnh thông tin hồ sơ khách co theo nội dung (`enableDynamicSizing`, tối đa 78-80% màn) thay cho chiều cao cố định 42-62% để ít địa chỉ không để trống lớn; danh sách trong sheet dùng `BottomSheetFlatList` với tiêu đề nằm trong `ListHeaderComponent` để sheet đo đủ. Bố cục từng màn trên thiết bị CHƯA KIỂM CHỨNG.
 - Khoảng cách theo lưới 4/8/12/16 của `FIXHOME-DESIGN-SYSTEM.md` mục 9: giá trị lẻ (3, 5, 7, 9, 10, 11, 13, 14, 18, 20) của padding, margin và gap ở 48 file màn hình đã đổi về lưới (padding làm tròn lên để giữ vùng chạm 44pt, margin và gap làm tròn xuống); chữ dưới 12 ở `TaskScreenShell` và màn Bảo mật nâng lên 12; Home khách bỏ hai dòng chú thích (AI, "Khác"). Tiêu đề màn thống nhất: màn có nút Quay lại dùng 18/24 đậm 700, màn gốc của tab (Đơn của tôi, Thông báo, Hồ sơ) dùng `pageTitle` 24/32 đậm 700 theo mục 6 của `FIXHOME-DESIGN-SYSTEM.md` (trước đây 16 đến 26, đậm 600 đến 800); `borderRadius` 13 đổi thành 14. 14 ô nhập còn thiếu `accessibilityLabel` đã có nhãn. Danh sách chat, lịch sử sửa chữa, bảo hành và ví thợ dùng khung xám (`CustomerSkeleton`) thay cho vòng xoay khi tải lần đầu. `OrderTaskScreen` khi đọc đơn lỗi (`order.status` là `error`) hiện "Chưa tải được thông tin đơn" kèm nút "Thử lại" (`refresh('manual')`, chỉ đọc) thay vì "Đang xác minh…" mãi; màn gửi lệnh (duyệt, thanh toán, huỷ) cố ý không có nút gửi lại tự động. Thanh tab nổi (`GlassTabBar`, `CustomerAnimatedBottomBar`) cao 64 cộng vùng an toàn dưới (tối thiểu 16); `hooks/useTabBarClearance` trả đúng phần đệm đó cộng 16 để dòng cuối cuộn ra khỏi thanh tab, dùng ở Trang chủ và Đơn của tôi của khách (trước đây chỉ chừa 56 và 16 nên bị che). Tab Hoạt động: booking `closed` hiện "Chưa có thợ nhận" ở danh sách, chi tiết và màn chọn thợ; giờ hẹn không còn giây; hàng "Tùy chọn yêu cầu" có đường kẻ trên để thẻ không kết thúc bằng một dải trống; mọi nút trên màn cùng cao tối thiểu 44, bo 14, chữ 14 đậm 600, hai nút Đổi lịch và Hủy yêu cầu chia đều chiều ngang, nút phụ rộng bằng nút chính; thẻ đã có hàng "Tùy chọn" không hiện thêm mũi tên phải ở đầu thẻ (mỗi thẻ một mũi tên). Chưa làm: màu hex viết cứng (nhiều nhất `CustomerOrderDetailScreen`) và gom bo góc 12/14 về một cỡ. Bố cục từng màn trên thiết bị CHƯA KIỂM CHỨNG.
-- Chưa làm theo quyết định 17/10/2026: gọi thoại (cần `react-native-webrtc`, không chạy Expo Go), tóm tắt AI cho thợ, trợ lý AI (trả lời nhanh, Đúng ý/Chưa đúng, tóm tắt gửi thợ). Thiết bị CHƯA KIỂM CHỨNG.
+- Chưa làm theo quyết định 17/10/2026: tóm tắt AI cho thợ. Gọi thoại và trợ lý AI đã làm ở mục dưới.
+
+### Gọi thoại và trợ lý AI như web (18/10/2026, nhánh `feat/mobile-call-ai-chat`)
+
+- PO 18/10/2026: đợt này mobile chỉ làm gọi thoại và trợ lý AI cho giống web, không đụng phần khác.
+- Gọi thoại: nút gọi ở đầu `ChatThreadScreen` khi server cho nhắn (`canSend`); một `CallOverlay` gắn ở gốc `AppNavigator` khi đã đăng nhập, nên cuộc gọi không mất khi đổi màn. Trạng thái và câu hiển thị theo web (`store/call.store.ts`): đang gọi, đang đổ chuông, cuộc gọi đến, đang kết nối, đang nói chuyện kèm đồng hồ, kết thúc kèm lý do và nút Gọi lại khi được. Nút Micro, nút "Loa nhỏ"/"Loa to" (bắt đầu ở loa trong, chạm để chuyển loa ngoài, qua `react-native-incall-manager`), nút Kết thúc. Mỗi yêu cầu gửi server chờ tối đa 8 giây, không trả lời coi như bị từ chối.
+- Âm thanh và WebRTC nạp lười (`services/call-native.ts`, `services/webrtc-call.service.ts`): Expo Go không có mã native nên nút gọi chỉ báo "Gọi thoại cần bản cài đặt FixHome đầy đủ (không chạy trong Expo Go).", mọi màn khác chạy như cũ. Android xin quyền micro trước khi gọi.
+- Trợ lý AI (`CustomerAIChatScreen`, luật thuần ở `ai-chat-logic.ts`): câu trả lời hiện dần theo từ (tắt khi bật giảm chuyển động), nút trả lời nhanh Rồi/Chưa/Không rõ hoặc Có/Không/Không rõ cho câu hỏi có/không, "Đúng ý"/"Chưa đúng" kèm góp ý dưới câu trả lời mới nhất (`POST /ai/feedback`), dịch vụ chung chung không thay dịch vụ cụ thể đã tìm ra, nút "Đặt thợ" chỉ hiện khi trợ lý trả lời xong và chỉ nằm ở thanh ghim (thẻ chẩn đoán chỉ liệt kê dịch vụ gợi ý), gửi quá nhanh (429) có câu riêng.
+- Ảnh và video trong trò chuyện với trợ lý (PO 18/10/2026): mỗi cuộc trò chuyện tối đa 3 ảnh và 2 video (bộ đếm "Ảnh x/3 · Video y/2", câu "Mỗi cuộc trò chuyện gửi được tối đa 3 ảnh và 2 video."); quay hoặc chọn video MP4/MOV/WebM tối đa 60 giây (dài hơn thì báo, máy không cắt được), video không gửi cho AI. Video được nén ngay khi chọn (`services/video-shrink.ts`, `react-native-compressor` 2.0.3 nạp lười: H.264 ≤ 1280 px ~1,2 Mbit/s; file dưới 5 MB, không nhỏ đi, lỗi hoặc treo quá 2 lần thời lượng + 15 giây thì gửi bản gốc), khi đó chọn được file gốc tới 600 MB; Expo Go không có module nén nên bản gốc phải ≤ 50 MB. Toạ độ GPS trong video do server xoá.
+- Tải lên ở nền ngay khi gửi (`screens/customer/chat-upload-queue.ts`): ảnh trong chat (đổi sang JPEG) và video đã nén lên `POST /media/booking-photo-upload` và `POST /media/booking-video-upload` từng tệp một, có tiến độ (`onUploadProgress`), không timeout cố định (`services/upload-retry.ts`: đứng 45 giây không nhích mới bỏ, byte cuối đã đi thì chờ server trả lời tới 3 phút, thử lại 4 lần cách 2/5/10 giây); dưới tin có dòng "Đang nén video x%", "Đang gửi video cho thợ x%", "Video đã gửi kèm cho thợ", lỗi kèm "Thử lại". Bấm "Đặt thợ": còn tệp đang gửi thì hỏi "Chờ thêm" hay "Đặt thợ không kèm"; có tệp lỗi thì hỏi "Thử lại" hay "Đặt thợ không kèm"; mã đã tải xong đi theo `prefill.attachmentUploadIds` (ảnh trước, rồi video) qua màn mô tả tới form đặt lịch. Form ghi "Gửi kèm từ trò chuyện với trợ lý: N ảnh, M video" kèm nút Bỏ; khi gửi, ảnh của form đứng trước, ảnh từ chat chỉ thêm khi còn chỗ trong 5 ảnh, video tối đa 2 (`bookingMediaIds`).
+- Unit test: `ai-chat-logic.test.ts`, `CustomerAIChatScreen.parity.test.tsx`, `chat-upload-queue.test.ts`, `video-shrink.test.ts`, `upload-retry.test.ts`, `CallOverlay.test.tsx`, `call.store.test.ts`, `chat-socket.calls.test.ts`, hai ca ở `CustomerBookingCreateScreen.test.tsx`. Cuộc gọi trên thiết bị thật, nén video trên máy thật, video thật và API thật CHƯA KIỂM CHỨNG.
 
 ### Đăng nhập Google
 
@@ -205,8 +215,9 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - `src/api/`: axios dùng chung (`client.ts`) và khoảng 20 module gọi API, có test.
 - `src/navigation/`: App, Auth, Customer, Technician navigator. Tab khách: Trang chủ, Đơn của tôi, Thông báo, Hồ sơ (thêm nút trợ lý AI). Tab kỹ thuật viên: Trang chủ, Lời mời, Công việc, Ví, Hồ sơ. Chuông Home mở Thông báo.
 - `src/screens/`: `auth`, `chat`, `customer`, `technician`. Logic thuần đặt trong file `kebab-case.ts` cạnh màn hình, có `.test.ts` đi kèm.
-- `src/services/`: `storage.service.ts` (SecureStore), `chat-socket.service.ts`, `google-auth.service.ts`, `image-for-ai.ts` (thu ảnh về 1280 px, base64).
-- `src/store/`: Zustand `auth.store`, `badge.store`, `ui.store`.
+- `src/services/`: `storage.service.ts` (SecureStore), `chat-socket.service.ts` (chat và tín hiệu gọi), `google-auth.service.ts`, `image-for-ai.ts` (thu ảnh về 1280 px, base64; chọn hoặc quay video; đổi ảnh sang JPEG để tải lên), `call-native.ts` (nạp lười WebRTC và loa), `webrtc-call.service.ts` (micro, kết nối WebRTC).
+- `src/store/`: Zustand `auth.store`, `badge.store`, `ui.store`, `call.store` (vòng đời cuộc gọi).
+- `src/components/call/CallOverlay.tsx`: màn cuộc gọi dùng chung cho cả hai vai trò.
 - `src/constants/`: `config.ts` (đọc biến môi trường), `theme.ts` (`useAppTheme`).
 - `src/utils/`: giờ Việt Nam (`vn-time`), định dạng, kiểm dữ liệu nhập, khung giờ booking.
 
@@ -215,8 +226,9 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - REST tới `backend` qua `EXPO_PUBLIC_API_BASE_URL`; override rõ ràng luôn ưu tiên. Native development suy ra host LAN từ Expo/Metro và dùng cổng backend mặc định; Web giữ localhost, Android emulator với Metro loopback giữ bridge emulator. Không suy ra host từ tunnel hoặc ở production. Token vẫn lưu bằng `expo-secure-store`; session refresh không đổi.
 - Gặp 401 thì gọi một lần `POST /auth/refresh` dùng chung; chỉ chạy lại yêu cầu GET, HEAD, OPTIONS, không tự chạy lại thao tác ghi.
 - Danh sách gửi `page` và `pageSize` hoặc `limit` không quá 100; `status` viết thường đúng enum.
-- Socket.IO tới `{origin}/chat` (origin là base URL bỏ `/api/v1`), chỉ dùng cho chat: gửi `conversation:join`, `typing`; nhận `message:*`, `conversation:updated`, `typing`; tự vào lại phòng khi kết nối lại.
-- AI chỉ qua `/ai/diagnoses`, `/ai/chat/ask`, `/ai/chat/acknowledgements` của `backend`; mô tả tối đa 2000 ký tự, câu hỏi 1000, tối đa 3 ảnh. `aiApi` không bao giờ ném lỗi, trả câu dự phòng khi AI không có.
+- Socket.IO tới `{origin}/chat` (origin là base URL bỏ `/api/v1`), dùng cho chat và gọi thoại: gửi `conversation:join`, `typing`; nhận `message:*`, `conversation:updated`, `typing`; tự vào lại phòng khi kết nối lại. Gọi thoại cùng hợp đồng với web: nhận `connect:ready` (danh sách `iceServers`), `call:incoming`, `call:ringing`, `call:accepted`, `call:missed`, `call:ended` (có `reason`), `call:offer`, `call:answer`, `call:ice`; gửi có chờ xác nhận `call:invite`, `call:accept`, `call:reject`, `call:cancel`, `call:end`; gửi không chờ `call:ringing`, `call:offer`, `call:answer`, `call:ice`.
+- AI chỉ qua `/ai/diagnoses`, `/ai/chat/ask`, `/ai/chat/acknowledgements`, `/ai/feedback` của `backend`; mô tả tối đa 2000 ký tự, câu hỏi 1000, tối đa 3 ảnh. `aiApi` không bao giờ ném lỗi, trả câu dự phòng khi AI không có; 429 trả câu "nhắn hơi nhanh" riêng.
+- Video cho thợ: `POST /media/booking-video-upload` (khách hàng, MP4/MOV/WebM tối đa 50 MB) trả `uploadId` như ảnh; `photoUploadIds` của `POST /bookings` nhận tối đa 7 mã, trong đó tối đa 5 ảnh và 2 video. Hợp đồng này nằm ở nhánh backend `feat/po-batch-2026-10-18`, chưa vào `dev`.
 - Ảnh đại diện phải tải lên `POST /media/upload` trước rồi mới gửi URL http(s) vào `PATCH /users/me`; `backend` từ chối đường dẫn ảnh trên máy.
 - Biến môi trường (chỉ tên): `EXPO_PUBLIC_API_BASE_URL`, `EXPO_PUBLIC_APP_NAME`. Mọi biến `EXPO_PUBLIC_*` đều công khai trong app.
 
@@ -230,7 +242,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 ## 6. Chạy, kiểm thử và cổng chất lượng
 
 - Node 22.13 trở lên (`.nvmrc` 22.15.0). `npm ci`, `npm start`, quét mã QR LAN bằng Expo Go. Backend cùng máy với Metro: để trống `EXPO_PUBLIC_API_BASE_URL` như `.env.example`. Backend máy khác, cổng khác hoặc Expo tunnel: cấu hình URL rõ ràng trong env cục bộ không theo dõi; coordinator khởi động lại Metro hiện có khi đổi env. Đăng nhập Google trên Android emulator cần `adb reverse tcp:3000 tcp:3000`.
-- Cài thư viện native bằng `npx expo install`, không eject hay prebuild.
+- Cài thư viện native bằng `npx expo install`, không eject, không commit `android/` hay `ios/` (đã gitignore). Gọi thoại cần `react-native-webrtc` và `react-native-incall-manager` (plugin `@config-plugins/react-native-webrtc` trong `app.json` khai quyền micro), nén video cần `react-native-compressor` và `react-native-nitro-modules`, nên hai việc này chỉ chạy trên bản build có mã native: `npx expo run:android` sinh `android/` cục bộ rồi cài lên máy hoặc emulator. Expo Go vẫn chạy mọi màn khác (không gọi được, video gửi bản gốc).
 - Gate trước mỗi commit: `npm run check:expo`, `npm run lint`, `npm run typecheck`, `npm test`. CI chạy đúng các bước này.
 - Test radar lifecycle trong `CustomerMatchingScreen.test.tsx` dùng `act` đồng bộ cho focus/AppState, cleanup cả khi mount lỗi và timeout riêng 15 giây cho cold module loading; timeout Jest chung và các assertion giữ nguyên. GitHub Ubuntu sau sửa CHƯA KIỂM CHỨNG.
 - Quy trình nhánh: tách nhánh từ `dev`, PR vào `dev`, CI xanh mới merge; không merge vào `main`.
@@ -245,6 +257,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - Chẩn đoán AI bắt buộc có mô tả, ảnh không bắt buộc (BRX-064).
 - Giao diện theo `FIXHOME-DESIGN-SYSTEM.md`: thuật ngữ tiếng Việt thống nhất, tiền dạng `1.250.000 ₫`, giờ theo UTC+7 qua `utils/vn-time`, không hiện mã lỗi cho người dùng.
 - Quản lý dịch vụ và admin không có giao diện trên mobile.
+- PO 18/10/2026: cuộc gọi bắt đầu ở loa trong, có nút chuyển "Loa to"/"Loa nhỏ"; video khách gửi trong trò chuyện với trợ lý không đưa cho AI phân tích, chỉ lưu kèm booking cho thợ xem.
 
 - SEP-139 owner đã duyệt redesign toàn bộ hai role trên Backend dev mới: auto-start theo server, không bắt buộc khách nghiệm thu trước thanh toán, hỗ trợ Ví FixHome/VNPay/tiền mặt; invoice PAID khác order COMPLETED.
 - Ảnh check-in khuôn mặt không được hiển thị cho Customer. Chặn upload ảnh hỗ trợ/bảo hành mới đến khi Backend có phương án riêng tư được duyệt; không dùng media public làm đường thay thế.
@@ -263,6 +276,8 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - FH-MAIN-01: Web parity, visual/runtime và thiết bị/E2E CHƯA KIỂM CHỨNG; coordinator làm QA cuối và Git. Không khởi động hoặc dừng Expo/backend. Giữ mapping asset tối ưu hiện có; không nhập hai ảnh onboarding legacy vì runtime đã dùng asset tương đương được theo dõi.
 
 - Thay đổi ngày 07/10/2026 mới chạy gate, CHƯA KIỂM CHỨNG trên thiết bị (ảnh đại diện kỹ thuật viên, nút gửi AI, ví).
+- Gọi thoại 18/10/2026: chưa build `npx expo run:android` lần nào, cuộc gọi thật giữa hai máy, loa trong/loa ngoài và quyền micro CHƯA KIỂM CHỨNG. `react-native-webrtc` ghim `~124.0.8` để khớp plugin `@config-plugins/react-native-webrtc` 15; chạy được với React Native 0.86 kiến trúc mới hay không CHƯA KIỂM CHỨNG. iOS chưa thử.
+- Backend nhánh `feat/po-batch-2026-10-18` khoá chat khách và thợ khi đơn hoàn tất (gửi tin trả 409 `CONVERSATION_CLOSED`, hội thoại có `closedReason`), mở lại khi có yêu cầu bảo hành, gửi được ảnh hoặc video trong chat và phát `order:updated` khi đơn đổi. Mobile vẫn theo `canSend` nên hội thoại đã khoá hiện "Cuộc trò chuyện này chỉ còn xem lại được." và ẩn nút gọi, nhưng chưa đọc `closedReason` để nói lý do và dẫn tới bảo hành, chưa có nút gửi ảnh hoặc video trong chat, chưa nghe `order:updated` (đợt 18/10 chỉ làm gọi thoại và trợ lý AI); hội thoại bị khoá trong lúc đang mở màn thì lần gửi sau hiện câu lỗi chung. Màn booking hoặc đơn của mobile chưa có trình xem video, video thợ nhận được chỉ xem trên web.
 - SEP-136: một màn Lịch làm việc chứa editor khung giờ tuần theo ngày, preset/giờ chính xác, ngày nghỉ với chọn ngày và lịch đơn hiện có. Một màn Khu vực hoạt động chứa vị trí/bán kính và quận/huyện. Giữ payload lưu hiện hành, ngày tuần Sunday=0, khoảng giờ đã lưu, giới hạn 40 km, GPS/camera và tài chính. Bàn phím/safe area đã xử lý trong source; thiết bị còn CHƯA KIỂM CHỨNG.
 - Chưa có push notification (`expo-notifications` đã cài nhưng chưa dùng); ảnh booking đã có upload adapter/controller nhưng runtime CHƯA KIỂM CHỨNG; khu vực phục vụ có màn chỉnh sau onboarding.
 - Chưa có cấu hình EAS và bundle id. Root đã xử lý cold/warm return `fixhome://app/wallet` bằng đích an toàn cho Customer và GET-only refresh, bỏ mọi query payload; luồng Google/Technician giữ nguyên. OS delivery/native chưa kiểm chứng.
@@ -274,6 +289,9 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-18 12:59 (UTC+7) | ToanAltF4 | feat/mobile-call-ai-chat | Tải lên không gửi lại cả file khi byte cuối đã đi và đang chờ server trả lời
+- 2026-10-18 12:20 (UTC+7) | ToanAltF4 | feat/mobile-call-ai-chat | Trợ lý AI: tối đa 3 ảnh + 2 video mỗi cuộc trò chuyện, nén video trên máy (react-native-compressor, bản gốc khi không nén được), tải lên ở nền có tiến độ, thử lại khi mạng yếu; Đặt thợ chờ, thử lại hoặc bỏ tệp chưa gửi xong
+- 2026-10-18 04:09 (UTC+7) | ToanAltF4 | feat/mobile-call-ai-chat | Gọi thoại như web (nút gọi trong chat, màn cuộc gọi chung, nút Loa to/Loa nhỏ, cần bản build native) và trợ lý AI như web (trả lời nhanh, Đúng ý/Chưa đúng, video gửi kèm cho thợ không qua AI, ảnh và video theo sang form đặt lịch).
 - 2026-10-17 23:40 (UTC+7) | foxonworld | feat/customer-symptom-chips-20261017 | Thêm chip triệu chứng theo dịch vụ/nhóm Web, thêm/bỏ giữ mô tả tự nhập/AI và 5.000 ký tự; hiển thị chỉ dẫn vuốt ngang dải ngày Booking. Giữ nguyên lịch 14 ngày, urgency và API.
 - 2026-10-17 20:46 (UTC+7) | foxonworld | feat/technician-reputation-parity-20261017 | Thống nhất card uy tín compact hai vai trò, sheet quy định/lịch sử và cảnh báo server luôn hiện; giữ riêng chip Độ tin cậy, native visual/runtime CHƯA KIỂM CHỨNG.
 - 2026-10-17 20:08 (UTC+7) | foxonworld | integration/mobile-c50-c45-reviewed-20261017 | Thu hẹp async act, bảo đảm cleanup và đặt timeout riêng 15 giây cho test radar Matching; CI Ubuntu sau sửa CHƯA KIỂM CHỨNG.
@@ -311,9 +329,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-14 20:54 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Bổ sung UI hậu mãi M7 nối hook đã khóa và ghi rõ đường tạo claim trực tiếp cũ cần parity M8; runtime warranty chưa xác minh.
 - 2026-10-14 14:23 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Đóng source M6 với các sửa tiền/return/capture/recovery, ghi render ví thật và giới hạn runtime; M7–M8 chưa triển khai, không publish.
 - 2026-10-14 13:03 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Đóng M6 logic source gate sau review tài chính và sửa rollback ví HTTP422, lead xác minh 33 tests; M6 UI/root linking/capture return còn chờ.
-- 2026-10-14 12:49 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Bàn giao M6 logic và gate 118 tests, ghi review tài chính đang chờ, sửa wallet HTTP envelope và cập nhật QA/render danh sách rỗng hai vai trò; UI/cutover/native/payment còn chưa kiểm chứng.
-- 2026-10-14 05:55 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Đóng source gate UI M5, giữ capture mới chuyển tiếp M6 AFTER; QA sandbox đã khôi phục và Expo Web dev export thực đạt, native/render chưa kiểm chứng.
-- 2026-10-14 04:23 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Cập nhật source M3–M4, controller/recovery M5 và gate UI/runtime còn chờ; sửa guard phát sinh độc lập, dữ liệu thiếu và nhận linh kiện sau storage; ghi QA sandbox ngừng chạy.
 
 ### Lịch sử giữ lại khi tích hợp
 

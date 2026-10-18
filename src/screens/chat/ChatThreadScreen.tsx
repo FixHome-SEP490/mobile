@@ -20,6 +20,7 @@ import * as Haptics from 'expo-haptics';
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store/auth.store';
+import { isCallBusy, useCallStore } from '../../store/call.store';
 import {
   messagingApi,
   type ChatMessage,
@@ -84,6 +85,16 @@ export default function ChatThreadScreen() {
 
   // Fail closed until the backend confirms permission for this job-scoped chat.
   const canSend = conversation?.canSend === true;
+
+  const callStatus = useCallStore((state) => state.status);
+  const callBusy = isCallBusy(callStatus);
+  const startVoiceCall = useCallback(() => {
+    Haptics.selectionAsync();
+    void useCallStore.getState().startCall(conversationId, {
+      name: conversation?.counterpart.fullName ?? counterpartName,
+      role: String(conversation?.counterpart.role ?? '').toUpperCase() === 'TECHNICIAN' ? 'Kỹ thuật viên' : 'Khách hàng',
+    });
+  }, [conversation, conversationId, counterpartName]);
 
   const upsert = useCallback((incoming: ChatMessage) => {
     setMessages((prev) => {
@@ -382,6 +393,21 @@ export default function ChatThreadScreen() {
             )}
           </View>
         </View>
+
+        {/* Voice call (PO 18/10/2026): only where the server lets this person write. */}
+        {canSend && (
+          <TouchableOpacity
+            testID="chat-call"
+            style={[styles.headerCallBtn, callBusy && { opacity: 0.4 }]}
+            disabled={callBusy}
+            onPress={startVoiceCall}
+            accessibilityRole="button"
+            accessibilityLabel={callBusy ? 'Đang có cuộc gọi khác' : 'Gọi thoại'}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+          >
+            <Ionicons name="call-outline" size={22} color={colors.primary} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Same reason as the assistant screen: KeyboardAvoidingView needs the
@@ -571,6 +597,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   headerAvatarText: { color: colors.primaryStrong, fontSize: 16, fontWeight: 'bold' },
   headerTextWrap: { flex: 1, justifyContent: 'center' },
+  headerCallBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
   headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   headerSubtitle: { fontSize: 13, color: colors.textSecondary, marginTop: 1 },
 

@@ -79,6 +79,7 @@ jest.mock('../../constants/theme', () => ({
       success: '#059669',
       warning: '#D97706',
       info: '#175CD3',
+      tone: { warning: { bg: '#FEF6E0', fg: '#B07D00', text: '#805B00' } },
     },
   }),
 }));
@@ -840,6 +841,55 @@ it('uploads selected Booking photos privately only after confirmation and sends 
   expect(request.photoUploadIds).not.toContain('file:///issue-a.jpg');
   expect(request.photoUploadIds).not.toContain('data:image/jpeg;base64,preview');
   await act(async () => renderer.unmount());
+});
+
+it('sends the photos and videos from the assistant chat after the booking photos (PO 18/10/2026)', async () => {
+  const prefill = mockRoute.params.prefill as Record<string, unknown>;
+  prefill.attachmentUploadIds = [
+    { uploadId: 'chat-photo-1', kind: 'image' },
+    { uploadId: 'chat-video-1', kind: 'video' },
+  ];
+  try {
+    const renderer = await renderScreen();
+    await act(async () => {
+      (findDescriptionInput(renderer)!.props.onChangeText as (value: string) => void)('Máy lạnh chảy nước');
+    });
+    expect(textContent(renderer.root)).toContain(
+      'Gửi kèm từ trò chuyện với trợ lý: 1 ảnh, 1 video. Kỹ thuật viên xem được trước khi nhận đơn.',
+    );
+    mockLaunchImageLibrary.mockResolvedValueOnce({ canceled: false, assets: [bookingPhoto] });
+    await selectBookingPhoto(renderer);
+    await openAndConfirmReview(renderer);
+
+    expect(mockUploadBookingPhoto).toHaveBeenCalledTimes(1);
+    expect(mockCreateBooking).toHaveBeenCalledWith(expect.objectContaining({
+      photoUploadIds: ['8f9c9a41-bc0e-4a25-99a6-16e8d11c2c9a', 'chat-photo-1', 'chat-video-1'],
+    }));
+    await act(async () => renderer.unmount());
+  } finally {
+    delete prefill.attachmentUploadIds;
+  }
+});
+
+it('lets the customer leave out what the assistant chat carried over', async () => {
+  const prefill = mockRoute.params.prefill as Record<string, unknown>;
+  prefill.attachmentUploadIds = [{ uploadId: 'chat-video-1', kind: 'video' }];
+  try {
+    const renderer = await renderScreen();
+    await act(async () => {
+      (findDescriptionInput(renderer)!.props.onChangeText as (value: string) => void)('Máy lạnh chảy nước');
+    });
+    const drop = findAccessibleActions(renderer, 'Bỏ ảnh và video từ trò chuyện với trợ lý')[0];
+    expect(drop).toBeDefined();
+    await act(async () => { (drop.props.onPress as () => void)(); });
+    expect(textContent(renderer.root)).not.toContain('Gửi kèm từ trò chuyện với trợ lý');
+    await openAndConfirmReview(renderer);
+    expect(mockCreateBooking).toHaveBeenCalledTimes(1);
+    expect(mockCreateBooking.mock.calls[0][0]).not.toHaveProperty('photoUploadIds');
+    await act(async () => renderer.unmount());
+  } finally {
+    delete prefill.attachmentUploadIds;
+  }
 });
 
 it('does not create a Booking after an uncertain photo upload and allows recovery by removing that photo', async () => {
