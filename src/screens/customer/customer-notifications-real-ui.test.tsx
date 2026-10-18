@@ -7,6 +7,7 @@ const mockGetPage = jest.fn();
 const mockReadAll = jest.fn();
 const mockReadOne = jest.fn();
 const mockNavigate = jest.fn();
+const mountedRenderers: ReactTestRenderer[] = [];
 
 jest.mock('../../constants/theme', () => ({
   useAppTheme: () => ({
@@ -58,7 +59,10 @@ const page = (data: ReturnType<typeof item>[]) => ({
 
 async function render(): Promise<ReactTestRenderer> {
   let renderer!: ReactTestRenderer;
-  await act(async () => { renderer = create(<CustomerNotificationsScreen />); });
+  await act(async () => {
+    renderer = create(<CustomerNotificationsScreen />);
+    mountedRenderers.push(renderer);
+  });
   return renderer;
 }
 function textOf(renderer: ReactTestRenderer): string {
@@ -74,10 +78,23 @@ function buttonByLabel(renderer: ReactTestRenderer, label: string) {
 }
 
 beforeEach(() => {
+  jest.useFakeTimers();
   jest.clearAllMocks();
   mockReadAll.mockResolvedValue(undefined);
   mockReadOne.mockResolvedValue(undefined);
   mockGetPage.mockResolvedValue(page([]));
+});
+
+afterEach(async () => {
+  try {
+    await act(async () => { jest.runOnlyPendingTimers(); });
+  } finally {
+    await act(async () => {
+      while (mountedRenderers.length) mountedRenderers.pop()?.unmount();
+    });
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  }
 });
 
 describe('C-RUI6A real Customer Notifications UI', () => {
@@ -88,7 +105,6 @@ describe('C-RUI6A real Customer Notifications UI', () => {
     expect(textOf(renderer)).not.toContain('Chưa có thông báo nào');
     expect(mockReadAll).not.toHaveBeenCalled();
     expect(mockReadOne).not.toHaveBeenCalled();
-    await act(async () => renderer.unmount());
   });
 
   it('renders source-backed unread count and full accessible row text without read mutation on mount', async () => {
@@ -105,14 +121,21 @@ describe('C-RUI6A real Customer Notifications UI', () => {
     const mark = buttonByLabel(renderer, 'Đánh dấu tất cả thông báo đã đọc');
     expect(mark).toBeDefined();
     expect(mark!.props.style[0].minHeight).toBeGreaterThanOrEqual(44);
-    await act(async () => renderer.unmount());
+  });
+
+  it('narrows the loaded rows to unread with the filter chip', async () => {
+    mockGetPage.mockResolvedValue(page([item('n1', true, 'Đã xem rồi'), item('n2', false, 'Chưa xem')]));
+    const renderer = await render();
+    expect(textOf(renderer)).toContain('Đã xem rồi');
+    await act(async () => { renderer.root.findByProps({ testID: 'notifications-filter-unread' }).props.onPress(); });
+    expect(textOf(renderer)).not.toContain('Đã xem rồi');
+    expect(textOf(renderer)).toContain('Chưa xem');
   });
 
   it('shows an empty state only after confirmed empty server page', async () => {
     const renderer = await render();
     expect(textOf(renderer)).toContain('Chưa có thông báo nào');
     expect(textOf(renderer)).toContain('lịch hẹn, đơn sửa chữa hoặc yêu cầu hỗ trợ');
-    await act(async () => renderer.unmount());
   });
 
   it('renders retry on failure, not a fake empty list', async () => {
@@ -123,7 +146,6 @@ describe('C-RUI6A real Customer Notifications UI', () => {
       expect(textOf(renderer)).toContain('Không tải được thông báo');
       expect(buttonByLabel(renderer, 'Đánh dấu tất cả thông báo đã đọc')).toBeDefined();
       expect(textOf(renderer)).not.toContain('Chưa có thông báo nào');
-      await act(async () => renderer.unmount());
     } finally { consoleSpy.mockRestore(); }
   });
 
@@ -139,7 +161,6 @@ describe('C-RUI6A real Customer Notifications UI', () => {
       expect(mockReadAll).toHaveBeenCalledTimes(1);
       expect(textOf(renderer)).toContain('Không thể đánh dấu tất cả đã đọc');
       expect(textOf(renderer)).toContain('1 chưa đọc ·');
-      await act(async () => renderer.unmount());
     } finally { consoleSpy.mockRestore(); }
   });
 
@@ -153,6 +174,5 @@ describe('C-RUI6A real Customer Notifications UI', () => {
     expect(StyleSheet.flatten(row!.props.style).minHeight).toBeGreaterThanOrEqual(44);
     expect(mockReadAll).not.toHaveBeenCalled();
     expect(mockReadOne).not.toHaveBeenCalled();
-    await act(async () => renderer.unmount());
   });
 });

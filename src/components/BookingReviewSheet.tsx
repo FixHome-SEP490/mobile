@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
@@ -112,10 +112,12 @@ export default function BookingReviewSheet({
   onEdit: () => void;
   onDismiss: () => void;
 }) {
+  const { height: windowHeight } = useWindowDimensions();
   return (
     <BottomSheetModal
       ref={sheetRef}
-      snapPoints={['78%']}
+      enableDynamicSizing
+      maxDynamicContentSize={Math.round(windowHeight * 0.78)}
       enablePanDownToClose
       onDismiss={onDismiss}
       backdropComponent={(props) => (
@@ -196,20 +198,20 @@ function SummaryRow({
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 24, gap: 14 },
+  content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24, gap: 12 },
   title: { fontSize: 20, lineHeight: 27, fontWeight: '700' },
   subtitle: { fontSize: 13, lineHeight: 19 },
   prestate: { fontSize: 12, lineHeight: 18 },
-  summary: { gap: 13 },
-  summaryRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  summary: { gap: 12 },
+  summaryRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   icon: { width: 22, alignItems: 'center', paddingTop: 2 },
-  summaryText: { flex: 1, gap: 3 },
+  summaryText: { flex: 1, gap: 4 },
   label: { fontSize: 12 },
   value: { fontSize: 14, lineHeight: 20, fontWeight: '500' },
   quantity: { paddingLeft: 32, fontSize: 14, fontWeight: '600' },
-  note: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  note: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 12 },
   noteText: { fontSize: 13, lineHeight: 19 },
-  photoSummary: { gap: 7, paddingLeft: 32 },
+  photoSummary: { gap: 8, paddingLeft: 32 },
   photoList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   photoPreview: { width: 64, height: 64, borderRadius: 10 },
   uploadError: { fontSize: 13, lineHeight: 19 },

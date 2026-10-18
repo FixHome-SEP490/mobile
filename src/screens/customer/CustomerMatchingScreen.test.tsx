@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, AppState, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 import type { BookingItem, TechnicianCandidate } from '../../api/bookings.api';
 import type { ServiceOrderItem } from '../../api/orders.api';
@@ -15,6 +15,8 @@ const PRIVATE_PHONE_SENTINEL = 'PRIVATE_PHONE_SENTINEL';
 const PRIVATE_EMAIL_SENTINEL = 'PRIVATE_SENTINEL@example.invalid';
 
 let mockRunFocusEffect = false;
+let mockIsScreenFocused = true;
+let mockAppStateListener: ((state: 'active' | 'background' | 'inactive') => void) | null = null;
 let mockAuthState: any = {
   isAuthenticated: true,
   user: { id: CUSTOMER_A, role: 'customer' },
@@ -46,6 +48,7 @@ jest.mock('@react-navigation/native', () => {
       if (!mockRunFocusEffect) return undefined;
       return callback();
     }, [callback]),
+    useIsFocused: () => mockIsScreenFocused,
     useNavigation: () => mockNavigation,
     useRoute: () => ({ params: { bookingId: BOOKING_ID } }),
   };
@@ -289,6 +292,8 @@ async function startShortlistSend(
 beforeEach(() => {
   jest.clearAllMocks();
   mockRunFocusEffect = false;
+  mockIsScreenFocused = true;
+  mockAppStateListener = null;
   mockReduceMotionPreference = undefined;
   mockAuthState = {
     isAuthenticated: true,
@@ -302,6 +307,54 @@ beforeEach(() => {
 });
 
 describe('Customer Matching presentation and privacy', () => {
+  // This first mount includes cold module loading on CI; keep the budget local to this test.
+  it('shows the radar only for an eligible live invite while focused and foregrounded', async () => {
+    mockReduceMotionPreference = true;
+    const appStateSpy = jest.spyOn(AppState, 'addEventListener').mockImplementation(((_event, listener) => {
+      mockAppStateListener = listener as (state: 'active' | 'background' | 'inactive') => void;
+      return { remove: jest.fn() };
+    }) as typeof AppState.addEventListener);
+    const matching = makeBooking({
+      status: 'MATCHING',
+      invitations: [{
+        id: 'invite-pending', bookingId: BOOKING_ID, priorityOrder: 1, status: 'PENDING',
+        invitedAt: '2026-09-25T04:00:00.000Z', expiresAt: '2030-10-21T11:00:00.000Z',
+      }],
+    });
+    let tree!: ReactTestRenderer;
+    try {
+      mockRunFocusEffect = true;
+      mockGetBooking.mockResolvedValue(matching);
+      mockGetCandidates.mockResolvedValue([]);
+      await act(async () => {
+        tree = create(screenElement());
+        await flushPromises();
+      });
+      expect(mockAppStateListener).toBeDefined();
+      act(() => mockAppStateListener?.('active'));
+      expect(tree.root.findAllByProps({ testID: 'matching-state-radar' }).length).toBeGreaterThan(0);
+      mockIsScreenFocused = false;
+      act(() => tree.update(screenElement()));
+      expect(tree.root.findAllByProps({ testID: 'matching-state-radar' })).toHaveLength(0);
+
+      mockIsScreenFocused = true;
+      act(() => tree.update(screenElement()));
+      expect(tree.root.findAllByProps({ testID: 'matching-state-radar' }).length).toBeGreaterThan(0);
+
+      expect(mockAppStateListener).toBeDefined();
+      act(() => mockAppStateListener?.('background'));
+      expect(tree.root.findAllByProps({ testID: 'matching-state-radar' })).toHaveLength(0);
+      act(() => mockAppStateListener?.('active'));
+      expect(tree.root.findAllByProps({ testID: 'matching-state-radar' }).length).toBeGreaterThan(0);
+    } finally {
+      try {
+        act(() => tree?.unmount());
+      } finally {
+        appStateSpy.mockRestore();
+      }
+    }
+  }, 15_000);
+
   it('shows an initial Matching skeleton instead of a lone spinner', () => {
     let tree!: ReactTestRenderer;
     act(() => { tree = create(screenElement()); });

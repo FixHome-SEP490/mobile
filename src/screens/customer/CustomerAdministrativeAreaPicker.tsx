@@ -55,9 +55,9 @@ export default function CustomerAdministrativeAreaPicker({ value, disabled, onCh
 }
 
 const styles = StyleSheet.create({
-  fields: { alignSelf: 'stretch', gap: 10 },
+  fields: { alignSelf: 'stretch', gap: 8 },
   field: { minHeight: 50, borderWidth: 1, borderRadius: 12, padding: 12, justifyContent: 'center' },
-  modal: { flex: 1, padding: 16, gap: 10 },
+  modal: { flex: 1, padding: 16, gap: 8 },
   heading: { fontSize: 20, lineHeight: 28, fontWeight: '700' },
   option: { minHeight: 48, paddingVertical: 12, paddingHorizontal: 8, justifyContent: 'center' },
 });

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useNavigation } from '@react-navigation/native';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { isHistoricalOrder } from '../../../api/orders.api';
@@ -27,6 +28,7 @@ export default function OrderInformationScreen() {
   const order = orderValue && !isHistoricalOrder(orderValue) ? orderValue : null;
   const [openingChat, setOpeningChat] = useState(false);
   const [rebookOpen, setRebookOpen] = useState(false);
+  const [copyMessage, setCopyMessage] = useState('');
   const canRebook = snapshot?.key.role === 'customer' && !!order?.bookingId && ['COMPLETED', 'CANCELLED'].includes(String(order.status).toUpperCase());
   const openChat = async (bookingId: string) => {
     if (openingChat) return;
@@ -39,6 +41,15 @@ export default function OrderInformationScreen() {
       Alert.alert('Không mở được', 'Không thể mở cuộc trò chuyện. Vui lòng thử lại.');
     } finally {
       setOpeningChat(false);
+    }
+  };
+  const copyOrderCode = async (code: string) => {
+    if (snapshot?.key.role !== 'customer' || !code.trim()) return;
+    try {
+      await Clipboard.setStringAsync(code);
+      setCopyMessage('Đã sao chép mã đơn.');
+    } catch {
+      setCopyMessage('Không thể sao chép mã đơn.');
     }
   };
   const historicalOrder = history && orderValue && isHistoricalOrder(orderValue) ? orderValue : null;
@@ -57,6 +68,14 @@ export default function OrderInformationScreen() {
     </View>}
     {order && !history && <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }}>
       <DetailRow label="Mã đơn" value={order.code} />
+      {snapshot?.key.role === 'customer' && order.code ? (
+        <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.sm }}>
+          <Pressable testID="order-code-copy" accessibilityRole="button" accessibilityLabel="Sao chép mã đơn" style={[entry, { minHeight: 48 }]} onPress={() => void copyOrderCode(order.code)}>
+            <Text style={entryText}>Sao chép mã đơn</Text>
+          </Pressable>
+          {copyMessage ? <Text accessibilityLiveRegion="polite" style={{ color: colors.textSecondary, fontSize: 13, marginTop: 6 }}>{copyMessage}</Text> : null}
+        </View>
+      ) : null}
       <DetailRow label="Dịch vụ" value={order.serviceName} />
       <DetailRow label="Trạng thái" value={serviceOrderStatusView(order.status).label} />
       <DetailRow label="Lịch hẹn" value={order.bookingMode || order.slot ? sessionLabel({ bookingMode: order.bookingMode, slot: order.slot, start: order.scheduledAt }) : vnDateTimeString(order.scheduledAt)} />

@@ -82,14 +82,6 @@ jest.mock('../technician/CashDeclarationScreen', () => {
   function MockedT15a() { return ReactRuntime.createElement(Native.Text, { testID: 'dispatched-T15a' }, 't15a'); }
   return MockedT15a;
 });
-jest.mock('./CompletedOrderScreen', () => {
-  const ReactRuntime = jest.requireActual('react');
-  const Native = jest.requireActual('react-native');
-  function Mocked(props: { role: string }) {
-    return ReactRuntime.createElement(Native.Text, { testID: `dispatched-completed-${props.role}` }, 'completed');
-  }
-  return Mocked;
-});
 jest.mock('../technician/RepairRecoveryScreen', () => {
   const ReactRuntime = jest.requireActual('react');
   const Native = jest.requireActual('react-native');
@@ -133,9 +125,9 @@ it.each([
   ['C09', 'customer', baseOrder('customer', 'UNDER_REPAIR', requested), unpaidInvoice, null, 'dispatched-C09'],
   ['C10', 'customer', baseOrder('customer', 'UNDER_REPAIR', requested), unpaidInvoice, pendingCash, 'dispatched-C10'],
   ['C11', 'customer', baseOrder('customer', 'UNDER_REPAIR', requested), paidInvoice, null, 'dispatched-C11'],
-  ['C12', 'customer', baseOrder('customer', 'COMPLETED'), null, null, 'dispatched-completed-customer'],
+  ['C12', 'customer', baseOrder('customer', 'COMPLETED'), null, null, 'completed-copy-order-code'],
   ['T15', 'technician', baseOrder('technician', 'UNDER_REPAIR', requested), unpaidInvoice, null, 'dispatched-T15'],
-  ['T16', 'technician', baseOrder('technician', 'COMPLETED'), null, null, 'dispatched-completed-technician'],
+  ['T16', 'technician', baseOrder('technician', 'COMPLETED'), null, null, 'completed-back-home'],
 ] as const)('dispatches M6 task %s to its focused screen', async (_task, role, order, invoice, cash, testID) => {
   mockRole = role;
   mockSnapshot = snapshotFor(role, order);
@@ -153,7 +145,7 @@ it('paid invoice with under-repair never dispatches the completed screen', async
   mockSnapshot.resources.invoice = readyResource(paidInvoice as any, 1, 1);
   let renderer!: ReturnType<typeof create>;
   await act(async () => { renderer = create(<OrderTaskScreen role={mockRole} />); });
-  expect(renderer.root.findAllByProps({ testID: 'dispatched-completed-customer' }).length).toBe(0);
+  expect(renderer.root.findAllByProps({ testID: 'completed-copy-order-code' }).length).toBe(0);
   expect(renderer.root.findByProps({ testID: 'dispatched-C11' })).toBeTruthy();
   await act(async () => renderer.unmount());
 });

@@ -10,6 +10,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {
@@ -31,7 +32,6 @@ import {
 } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../../constants/theme';
-import { CUSTOMER_UI_ARTWORK } from '../../constants/customer-artwork';
 import { getServicePresentation } from '../../constants/service-presentation';
 import { bookingsApi } from '../../api/bookings.api';
 import { mediaApi, type MediaUploadImage } from '../../api/media.api';
@@ -39,6 +39,10 @@ import { servicesApi, type ServiceItem, type CategoryItem } from '../../api/serv
 import CategoryPills from '../../components/CategoryPills';
 import {
   addressReadyForBooking,
+  appendBookingDescriptionSuggestion,
+  getBookingDescriptionSuggestions,
+  hasBookingDescriptionSuggestion,
+  toggleBookingDescriptionSuggestion,
   type BookingCreationAttempt,
 } from './customer-booking-create';
 import { createProductionBookingAttempt, entryAttemptJournal } from '../../features/order-flow/runtime/entry-attempt-production';
@@ -150,7 +154,7 @@ function isCurrentAuthenticatedCustomer(ownerUserId: string): boolean {
   );
 }
 
-const BOOKING_INTAKE_STEPS = ['Tình trạng', 'Địa chỉ', 'Khung giờ'] as const;
+const BOOKING_INTAKE_STEPS = ['Tình trạng', 'Địa chỉ & thời gian'] as const;
 
 function BookingIntakeProgress({
   active,
@@ -169,7 +173,7 @@ function BookingIntakeProgress({
     <View
       testID="booking-intake-progress"
       accessible
-      accessibilityLabel={`Tiến trình đặt lịch, bước ${active + 1} trên 3: ${BOOKING_INTAKE_STEPS[active] ?? ''}`}
+      accessibilityLabel={`Tiến trình đặt lịch, bước ${active + 1} trên ${BOOKING_INTAKE_STEPS.length}: ${BOOKING_INTAKE_STEPS[active] ?? ''}`}
       style={progressStyles.track}
     >
       {BOOKING_INTAKE_STEPS.map((label, index) => {
@@ -268,11 +272,11 @@ export default function CustomerBookingCreateScreen() {
   const [schedule, setSchedule] = useState<BookingSchedule | null>(null);
   const [customerNote, setCustomerNote] = useState('');
   // Keep one owner-bound draft while moving between dedicated booking scenes.
-  const [bookingStage, setBookingStage] = useState<0 | 1 | 2>(() =>
+  const [bookingStage, setBookingStage] = useState<0 | 1>(() =>
     customerOwnerId && (runtimeCreateStates[customerOwnerId]?.flowId === flowId
       || runtimeCompletedCreates.get(customerOwnerId)?.has(flowId)
       || runtimeCreateStates[customerOwnerId]?.kind === 'uncertain'
-      || runtimeReviewSnapshots.get(customerOwnerId)?.flowId === flowId) ? 2 : 0);
+      || runtimeReviewSnapshots.get(customerOwnerId)?.flowId === flowId) ? 1 : 0);
   const [addressEditorOpen, setAddressEditorOpen] = useState(false);
   // Preserve unknown address POST identity when the panel is closed/reopened.
   const [addressAttemptsByOwner, setAddressAttemptsByOwner] = useState<Record<string, BookingAddressCreateAttempt>>(() => {
@@ -301,10 +305,10 @@ export default function CustomerBookingCreateScreen() {
   const [pickerQuery, setPickerQuery] = useState('');
   const [pickerCategoryId, setPickerCategoryId] = useState<string | null>(null);
   const [pickerCategories, setPickerCategories] = useState<CategoryItem[]>([]);
+  const { height: windowHeight } = useWindowDimensions();
   const pickerSheetRef = useRef<BottomSheetModal>(null);
   const pickerSnapPoints = useMemo(() => ['80%'], []);
   const addressSheetRef = useRef<BottomSheetModal>(null);
-  const addressSnapPoints = useMemo(() => ['60%'], []);
   const descriptionInputRef = useRef<TextInput>(null);
   const descriptionTopRef = useRef(0);
   const scrollRef = useRef<ScrollView>(null);
@@ -387,7 +391,7 @@ export default function CustomerBookingCreateScreen() {
     setDescriptionTouched(false);
     const state = customerOwnerId ? runtimeCreateStates[customerOwnerId] : null;
     setBookingStage((customerOwnerId && runtimeCompletedCreates.get(customerOwnerId)?.has(flowId))
-      || (state && (state.kind === 'uncertain' || state.flowId === flowId)) ? 2 : 0);
+      || (state && (state.kind === 'uncertain' || state.flowId === flowId)) ? 1 : 0);
     setAddressEditorOpen(false);
     setSchedule(null);
     setCustomerNote('');
@@ -545,6 +549,11 @@ export default function CustomerBookingCreateScreen() {
   const selectedPrice = resolveServicePrice(selectedService);
   const selectedPresentation = getServicePresentation(selectedService?.code);
   const selectedIsOtherService = isOtherService(selectedService);
+  const descriptionSuggestions = getBookingDescriptionSuggestions(
+    selectedService?.code,
+    selectedService?.categoryName?.trim()
+      || pickerCategories.find((category) => category.id === selectedService?.categoryId)?.name,
+  );
   const descriptionLabel = selectedIsOtherService
     ? 'Mô tả yêu cầu (bắt buộc)'
     : 'Mô tả sự cố (bắt buộc)';
@@ -978,7 +987,7 @@ export default function CustomerBookingCreateScreen() {
     }
   };
 
-  const showBookingStage = (next: 0 | 1 | 2) => {
+  const showBookingStage = (next: 0 | 1) => {
     setBookingStage(next);
     scrollRef.current?.scrollTo({ y: 0, animated: false });
   };
@@ -998,14 +1007,21 @@ export default function CustomerBookingCreateScreen() {
     showBookingStage(1);
   };
 
-  const continueToSchedule = () => {
+  const continueToReview = () => {
     if (reviewDisabled) return;
-    if (!selectedAddressReady) {
-      Alert.alert('Chưa xác nhận địa chỉ', 'Hãy chọn địa chỉ có vị trí ghim hợp lệ trước khi chọn ngày giờ.');
+    if (!selectedAddress) {
+      setReviewError('Vui lòng chọn địa chỉ sửa chữa.');
       return;
     }
-    void Haptics.selectionAsync();
-    showBookingStage(2);
+    if (!selectedAddressReady) {
+      setReviewError('Địa chỉ này chưa có tọa độ hợp lệ. Hãy cập nhật vị trí GPS trước khi tiếp tục.');
+      return;
+    }
+    if (!schedule) {
+      setReviewError('Vui lòng chọn ngày và buổi (sáng hoặc chiều), hoặc chọn Tới ngay.');
+      return;
+    }
+    requestReview();
   };
 
   const action = (label: string, onPress: () => void, disabled = false, accessibilityLabel = label) => (
@@ -1148,8 +1164,7 @@ export default function CustomerBookingCreateScreen() {
           <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>
             {visibleReviewSnapshot ? 'Kiểm tra lần cuối'
               : bookingStage === 0 ? 'Tình trạng cần sửa'
-              : bookingStage === 1 ? 'Chọn địa chỉ'
-                : 'Chọn ngày và giờ'}
+              : 'Địa chỉ & thời gian'}
           </Text>
         )}
         {loading && (
@@ -1274,6 +1289,34 @@ export default function CustomerBookingCreateScreen() {
                   },
                 ]}
               />
+              <View style={styles.descriptionSuggestions}>
+                <Text style={[styles.suggestionHint, { color: colors.textSecondary }]}>Chạm để thêm hoặc bỏ gợi ý. Bạn vẫn có thể chỉnh sửa mô tả.</Text>
+                <View style={styles.suggestionChips}>
+                  {descriptionSuggestions.map((suggestion) => {
+                    const selected = hasBookingDescriptionSuggestion(description, suggestion);
+                    const disabled = !selected && appendBookingDescriptionSuggestion(description, suggestion) === description;
+                    return (
+                      <TouchableOpacity
+                        key={suggestion}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Gợi ý: ${suggestion}`}
+                        accessibilityState={{ selected, disabled }}
+                        disabled={disabled}
+                        onPress={() => setDescription((current) =>
+                          toggleBookingDescriptionSuggestion(current, suggestion))}
+                        style={[styles.suggestionChip, {
+                          backgroundColor: selected ? colors.primarySoft : colors.surface,
+                          borderColor: selected ? colors.primary : colors.border,
+                          opacity: disabled ? 0.5 : 1,
+                        }]}
+                      >
+                        {selected && <Ionicons name="checkmark" size={16} color={colors.primary} accessible={false} />}
+                        <Text style={[styles.suggestionChipText, { color: colors.text }]}>{suggestion}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
               {!!descriptionError && (
                 <View style={styles.fieldError}>
                   <CircleAlert color={colors.error} size={16} />
@@ -1366,6 +1409,7 @@ export default function CustomerBookingCreateScreen() {
 
             {bookingStage === 1 && (
               <>
+            <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}>Địa chỉ sửa chữa</Text>
             {addressEditorOpen && customerOwnerId ? (
               addressEditor
             ) : (
@@ -1430,8 +1474,9 @@ export default function CustomerBookingCreateScreen() {
               </>
             )}
 
-            {bookingStage === 2 && (
+            {bookingStage === 1 && (
               <>
+            <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 12 }]}>Khung giờ</Text>
             <BookingSessionPicker
               value={schedule}
               onChange={(next) => { setSchedule(next); setReviewError(''); }}
@@ -1520,23 +1565,30 @@ export default function CustomerBookingCreateScreen() {
           </View>
         )}
         {!!visibleCreatedBookingId && (
-          <View style={[styles.section, { backgroundColor: colors.surface }]}>
-            <Image source={CUSTOMER_UI_ARTWORK.bookingConfirmed} style={{ width: 144, height: 112, alignSelf: 'center' }} resizeMode="contain" accessible={false} testID="booking-confirmed-art" />
-            <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>
-              Đã gửi yêu cầu
-            </Text>
-            <Text selectable style={{ color: colors.text }}>
-              Tham chiếu hỗ trợ: {visibleCreatedBookingId.slice(0, 8)}
-            </Text>
-            <Text style={[styles.note, { color: colors.textSecondary }]}>
-              Chọn kỹ thuật viên để gửi lời mời.
-            </Text>
+          <View testID="booking-submitted-receipt" style={[styles.section, { backgroundColor: colors.surface }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Ionicons name="checkmark-circle" size={28} color={colors.success} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}>Đã gửi yêu cầu</Text>
+                <Text selectable style={[styles.note, { color: colors.textSecondary }]}>Mã tham chiếu: {visibleCreatedBookingId.slice(0, 8)}</Text>
+              </View>
+            </View>
+            <Text style={[styles.note, { color: colors.textSecondary }]}>Chọn kỹ thuật viên để gửi lời mời.</Text>
             {visibleCreatedBooking && (
               <View style={{ gap: 8 }}>
-                <Text style={{ color: colors.text, fontWeight: '600' }}>{visibleCreatedBooking.snapshot.serviceName}</Text>
-                <Text numberOfLines={1} style={[styles.note, { color: colors.textSecondary }]}>{visibleCreatedBooking.snapshot.request.description}</Text>
+                <Text style={{ color: colors.text, fontWeight: '700' }}>{visibleCreatedBooking.snapshot.serviceName}</Text>
+                <Text style={[styles.note, { color: colors.text }]}>{visibleCreatedBooking.snapshot.request.description}</Text>
                 <Text style={[styles.note, { color: colors.textSecondary }]}>{visibleCreatedBooking.snapshot.scheduleLabel}</Text>
-                <Text numberOfLines={2} style={[styles.note, { color: colors.textSecondary }]}>{visibleCreatedBooking.snapshot.addressLabel} · {visibleCreatedBooking.snapshot.addressDescription}</Text>
+                <Text style={[styles.note, { color: colors.textSecondary }]}>{visibleCreatedBooking.snapshot.addressLabel} · {visibleCreatedBooking.snapshot.addressDescription}</Text>
+                <Text style={[styles.note, { color: colors.textSecondary }]}>
+                  {visibleCreatedBooking.snapshot.pricingLabel} · Số lượng: {visibleCreatedBooking.snapshot.request.quantity ?? 1}
+                </Text>
+                <Text style={[styles.note, { color: colors.textSecondary }]}>
+                  Ảnh đính kèm: {visibleCreatedBooking.snapshot.photos.length}/{MAX_BOOKING_PHOTOS}
+                </Text>
+                {visibleCreatedBooking.snapshot.hasAiSummary && (
+                  <Text style={[styles.note, { color: colors.textSecondary }]}>Đã kèm tóm tắt từ trợ lý AI.</Text>
+                )}
               </View>
             )}
 
@@ -1548,11 +1600,9 @@ export default function CustomerBookingCreateScreen() {
           {!visibleReviewSnapshot && !visibleCreatedBookingId && (
             bookingStage === 0
               ? <BookingPrimaryAction label="Tiếp tục: Chọn địa chỉ" onPress={continueToAddress} disabled={reviewDisabled} colors={colors} />
-              : bookingStage === 1
-                ? !addressEditorOpen && <BookingPrimaryAction label="Tiếp tục: Chọn ngày và giờ" onPress={continueToSchedule} disabled={reviewDisabled} colors={colors} />
-                : <BookingPrimaryAction label={isSubmitting ? 'Đang gửi yêu cầu...'
-                  : visibleUncertainAttempt ? 'Chờ xác minh yêu cầu' : 'Xem lại yêu cầu'}
-                  onPress={requestReview} disabled={reviewDisabled} colors={colors} />
+              : !addressEditorOpen && <BookingPrimaryAction label={isSubmitting ? 'Đang gửi yêu cầu...'
+                : visibleUncertainAttempt ? 'Chờ xác minh yêu cầu' : 'Xem lại yêu cầu'}
+                onPress={continueToReview} disabled={reviewDisabled} colors={colors} />
           )}
           {visibleReviewSnapshot && !visibleCreatedBookingId && (
             <>
@@ -1597,7 +1647,7 @@ export default function CustomerBookingCreateScreen() {
               onSelect={setPickerCategoryId}
             />
           )}
-          <BottomSheetTextInput
+          <BottomSheetTextInput accessibilityLabel="Tìm dịch vụ"
             value={pickerQuery}
             onChangeText={setPickerQuery}
             placeholder="Tìm dịch vụ..."
@@ -1637,23 +1687,26 @@ export default function CustomerBookingCreateScreen() {
             </TouchableOpacity>
           )}
           ListEmptyComponent={
-            <Text style={{ color: colors.textSecondary, padding: 14 }}>Không tìm thấy dịch vụ phù hợp.</Text>
+            <Text style={{ color: colors.textSecondary, padding: 16 }}>Không tìm thấy dịch vụ phù hợp.</Text>
           }
         />
       </BottomSheetModal>
 
       <BottomSheetModal
         ref={addressSheetRef}
-        snapPoints={addressSnapPoints}
+        enableDynamicSizing
+        maxDynamicContentSize={Math.round(windowHeight * 0.8)}
         backdropComponent={(props) => (
           <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} />
         )}
       >
-        <View style={[styles.pickerHeader, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}>Chọn địa chỉ sửa chữa</Text>
-        </View>
         <BottomSheetFlatList
           data={addresses}
+          ListHeaderComponent={
+            <View style={[styles.pickerHeader, { borderBottomColor: colors.border, marginHorizontal: -16, marginTop: -12, marginBottom: 12 }]}>
+              <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}>Chọn địa chỉ sửa chữa</Text>
+            </View>
+          }
           keyExtractor={(address) => address.id}
           contentContainerStyle={styles.pickerListContent}
           renderItem={({ item: address }) => {
@@ -1691,7 +1744,7 @@ export default function CustomerBookingCreateScreen() {
             );
           }}
           ListEmptyComponent={
-            <Text style={{ color: colors.textSecondary, padding: 14 }}>Chưa có địa chỉ đã lưu.</Text>
+            <Text style={{ color: colors.textSecondary, padding: 16 }}>Chưa có địa chỉ đã lưu.</Text>
           }
         />
       </BottomSheetModal>
@@ -1721,10 +1774,15 @@ const styles = StyleSheet.create({
   serviceCopy: { flex: 1, gap: 2 },
   serviceEyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
   input: { minHeight: 94, padding: 12, borderWidth: 1, borderRadius: 14, textAlignVertical: 'top', fontSize: 16, lineHeight: 24 },
+  descriptionSuggestions: { gap: 8, marginTop: 10 },
+  suggestionHint: { fontSize: 12, lineHeight: 16 },
+  suggestionChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  suggestionChip: { minHeight: 44, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderRadius: 22 },
+  suggestionChipText: { flexShrink: 1, fontSize: 12, lineHeight: 16, fontWeight: '600' },
   fieldError: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
   fieldErrorText: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '500' },
-  photoSection: { padding: 16, borderRadius: 14, gap: 10 },
-  photoList: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 10 },
+  photoSection: { padding: 16, borderRadius: 14, gap: 8 },
+  photoList: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 8 },
   photoItem: { width: 78, gap: 4 },
   photoPreview: { width: 72, height: 72, borderRadius: 12 },
   removePhotoButton: {
@@ -1752,8 +1810,8 @@ const styles = StyleSheet.create({
   photoError: { fontSize: 13, lineHeight: 19 },
   action: { padding: 15, marginTop: 0, borderRadius: 14, alignItems: 'center', justifyContent: 'center', minHeight: 52 },
   actionText: { fontWeight: '700', fontSize: 15, lineHeight: 22 },
-  pickerHeader: { paddingHorizontal: 18, paddingBottom: 10, borderBottomWidth: 1, gap: 8 },
-  pickerListContent: { padding: 18, paddingTop: 10, gap: 10 },
+  pickerHeader: { paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, gap: 8 },
+  pickerListContent: { padding: 16, paddingTop: 12, gap: 8 },
 });
 
 const progressStyles = StyleSheet.create({
@@ -1762,7 +1820,7 @@ const progressStyles = StyleSheet.create({
   dot: {
     width: 26,
     height: 26,
-    borderRadius: 13,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',

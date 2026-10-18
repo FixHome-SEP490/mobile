@@ -42,4 +42,10 @@ describe('Mobile Booking routes never expose the legacy mock completion/review c
     expect(navigatorSource).toContain('<Stack.Screen name="CustomerSecurity"');
     expect(navigatorSource).toContain('<Stack.Screen name="TechnicianOrderDetail"');
   });
+
+  it('registers public order tracking in the guest stack with a typed route', () => {
+    const guestStack = navigatorSource.split('{/* Public guest routes never mount account/order/AI screens. */')[1]?.split('{isAuthenticated && user?.role === UserRole.CUSTOMER')[0];
+    expect(guestStack).toContain('<Stack.Screen name="PublicOrderTracking" component={PublicOrderTrackingScreen} />');
+    expect(navigationTypesSource).toContain('PublicOrderTracking: undefined;');
+  });
 });

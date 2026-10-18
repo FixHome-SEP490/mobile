@@ -161,6 +161,7 @@ type TestNode = {
   props: Record<string, unknown>;
   children: (TestNode | string | number)[];
   findAll: (predicate: (node: TestNode) => boolean) => TestNode[];
+  findByProps: (props: Record<string, unknown>) => TestNode;
 };
 type TestRenderer = { root: TestNode; unmount: () => void };
 const { act, create } = jest.requireActual('react-test-renderer') as {
@@ -201,8 +202,11 @@ async function goToAddress(renderer: TestRenderer) {
   await act(async () => {
     (description.props.onChangeText as (value: string) => void)('Máy lạnh không mát');
   });
+  expect(renderer.root.findAll((node) => node.props.accessibilityLabel === 'Mô tả sự cố')[0].props.value)
+    .toBe('Máy lạnh không mát');
   const next = bookingAction(renderer, 'Tiếp tục: Chọn địa chỉ');
   expect(next).toBeDefined();
+  expect(next?.props.disabled).toBe(false);
   await act(async () => {
     (next?.props.onPress as () => void)();
     await flushPromises();
@@ -211,12 +215,6 @@ async function goToAddress(renderer: TestRenderer) {
 
 async function goToSchedule(renderer: TestRenderer) {
   await goToAddress(renderer);
-  const next = bookingAction(renderer, 'Tiếp tục: Chọn ngày và giờ');
-  expect(next).toBeDefined();
-  await act(async () => {
-    (next?.props.onPress as () => void)();
-    await flushPromises();
-  });
   await pickAfternoon(renderer);
 }
 
@@ -234,6 +232,7 @@ beforeEach(() => {
       {
         id: SERVICE_ID,
         name: 'Sửa máy lạnh',
+        code: 'SUA_DIEU_HOA',
         categoryId: '33333333-3333-4333-8333-333333333333',
         pricingMode: 'fixed_price',
         basePrice: 250000,
@@ -270,7 +269,7 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-it('never submits a real booking on render and presents the 3-stage flow with clear form sections', async () => {
+it('never submits on render and presents two intake stages plus a separate review', async () => {
   let renderer!: TestRenderer;
   await act(async () => {
     renderer = create(React.createElement(CustomerBookingCreateScreen));
@@ -284,7 +283,7 @@ it('never submits a real booking on render and presents the 3-stage flow with cl
   for (const label of [
     'Tình trạng',
     'Địa chỉ',
-    'Khung giờ',
+    'Địa chỉ & thời gian',
     'DỊCH VỤ',
     'Mô tả sự cố (bắt buộc)',
     'Ảnh sự cố (không bắt buộc)',
@@ -294,25 +293,101 @@ it('never submits a real booking on render and presents the 3-stage flow with cl
   expect(body).not.toContain('ĐỊA CHỈ SỬA CHỮA');
   expect(body).not.toContain('Chọn ngày và giờ');
   expect(body).toContain('Tình trạng cần sửa');
+  const descriptionInput = renderer.root.findAll((node) => node.props.accessibilityLabel === 'Mô tả sự cố')[0];
+  expect(descriptionInput.props.maxLength).toBe(5000);
+  expect(renderer.root.findByProps({ testID: 'booking-intake-progress' }).props.accessibilityLabel)
+    .toBe('Tiến trình đặt lịch, bước 1 trên 2: Tình trạng');
 
   await goToAddress(renderer);
-  expect(textContent(renderer.root)).toContain('Chọn địa chỉ');
+  expect(textContent(renderer.root)).toContain('Địa chỉ sửa chữa');
+  expect(textContent(renderer.root)).toContain('Khung giờ');
+  expect(renderer.root.findByProps({ testID: 'booking-intake-progress' }).props.accessibilityLabel)
+    .toBe('Tiến trình đặt lịch, bước 2 trên 2: Địa chỉ & thời gian');
+  expect(renderer.root.findAll((node) => node.props.testID === 'session-slot-morning').length).toBeGreaterThan(0);
+  expect(renderer.root.findAll((node) => node.props.testID === 'session-slot-afternoon').length).toBeGreaterThan(0);
+  expect(bookingAction(renderer, 'Xem lại yêu cầu')).toBeDefined();
+  expect(bookingAction(renderer, 'Tiếp tục: Chọn ngày và giờ')).toBeUndefined();
   expect(textContent(renderer.root)).not.toContain('LỊCH HẸN TẠI NHÀ');
   expect(textContent(renderer.root)).not.toContain('MÔ TẢ SỰ CỐ');
-  const toSchedule = bookingAction(renderer, 'Tiếp tục: Chọn ngày và giờ');
-  await act(async () => {
-    (toSchedule?.props.onPress as () => void)();
-    await flushPromises();
-  });
-  expect(textContent(renderer.root)).toContain('Chọn ngày và giờ');
   await pickAfternoon(renderer);
-  expect(textContent(renderer.root)).not.toContain('ĐỊA CHỈ SỬA CHỮA');
   expect(mockCreateBooking).not.toHaveBeenCalled();
   for (let number = 1; number <= 5; number++) {
     expect(body).not.toContain(`Bước ${number} trên 5`);
   }
   expect(body).not.toContain('ĐẶT DỊCH VỤ / 01');
   await act(async () => renderer.unmount());
+});
+
+it('adds service-aware description prompts as editable text', async () => {
+  let renderer!: TestRenderer;
+  await act(async () => {
+    renderer = create(React.createElement(CustomerBookingCreateScreen));
+    await flushPromises();
+  });
+  const input = renderer.root.findAll((node) => node.props.accessibilityLabel === 'Mô tả sự cố')[0];
+  expect(input.props.maxLength).toBe(5000);
+  const suggestion = renderer.root.findByProps({ accessibilityLabel: 'Gợi ý: Máy không mát / kém lạnh' });
+  await act(async () => { (suggestion.props.onPress as () => void)(); });
+  expect(renderer.root.findAll((node) => node.props.accessibilityLabel === 'Mô tả sự cố')[0].props.value)
+    .toBe('Máy không mát / kém lạnh');
+  const edited = renderer.root.findAll((node) => node.props.accessibilityLabel === 'Mô tả sự cố')[0];
+  await act(async () => { (edited.props.onChangeText as (value: string) => void)('Máy lạnh kêu to'); });
+  expect(renderer.root.findAll((node) => node.props.accessibilityLabel === 'Mô tả sự cố')[0].props.value)
+    .toBe('Máy lạnh kêu to');
+  expect(mockCreateBooking).not.toHaveBeenCalled();
+  expect(mockUploadBookingPhoto).not.toHaveBeenCalled();
+  await act(async () => renderer.unmount());
+});
+
+it('does not open review or send anything when the selected address has no valid coordinates', async () => {
+  mockGetAddresses.mockResolvedValue([{
+    id: ADDRESS_ID,
+    userId: 'customer-a',
+    label: 'Nhà riêng',
+    line1: '12 Đường Hoa',
+    lat: null,
+    lng: null,
+  }]);
+  let renderer!: TestRenderer;
+  await act(async () => {
+    renderer = create(React.createElement(CustomerBookingCreateScreen));
+    await flushPromises();
+  });
+  try {
+    await goToAddress(renderer);
+    await pickAfternoon(renderer);
+    await act(async () => {
+      (bookingAction(renderer, 'Xem lại yêu cầu')?.props.onPress as () => void)();
+      await flushPromises();
+    });
+    expect(textContent(renderer.root)).toContain('tọa độ');
+    expect(renderer.root.findAll((node) => node.props.testID === 'booking-review-full-screen')).toHaveLength(0);
+    expect(mockCreateBooking).not.toHaveBeenCalled();
+    expect(mockUploadBookingPhoto).not.toHaveBeenCalled();
+  } finally {
+    await act(async () => renderer.unmount());
+  }
+});
+
+it('requires a selected date and time before opening review', async () => {
+  let renderer!: TestRenderer;
+  await act(async () => {
+    renderer = create(React.createElement(CustomerBookingCreateScreen));
+    await flushPromises();
+  });
+  try {
+    await goToAddress(renderer);
+    await act(async () => {
+      (bookingAction(renderer, 'Xem lại yêu cầu')?.props.onPress as () => void)();
+      await flushPromises();
+    });
+    expect(textContent(renderer.root)).toContain('Chọn ngày và buổi');
+    expect(renderer.root.findAll((node) => node.props.testID === 'booking-review-full-screen')).toHaveLength(0);
+    expect(mockCreateBooking).not.toHaveBeenCalled();
+    expect(mockUploadBookingPhoto).not.toHaveBeenCalled();
+  } finally {
+    await act(async () => renderer.unmount());
+  }
 });
 it('navigates back across stages without losing the draft or sending a Booking', async () => {
   let renderer!: TestRenderer;
@@ -321,7 +396,7 @@ it('navigates back across stages without losing the draft or sending a Booking',
     await flushPromises();
   });
   await goToSchedule(renderer);
-  // Schedule omits the summary; draft remains when returning to intake.
+  // Address and schedule remain together; returning restores the first intake stage.
   expect(textContent(renderer.root)).not.toContain('Máy lạnh không mát');
   expect(renderer.root.findAll((node) => node.props.testID === 'booking-review-full-screen')).toHaveLength(0);
 
@@ -329,12 +404,13 @@ it('navigates back across stages without losing the draft or sending a Booking',
     (node) => node.type === TouchableOpacity && node.props.accessibilityLabel === 'Quay lại',
   )[0];
   await act(async () => { (back().props.onPress as () => void)(); });
-  expect(textContent(renderer.root)).toContain('Chọn địa chỉ');
-  expect(textContent(renderer.root)).toContain('Chọn địa chỉ');
-  await act(async () => { (back().props.onPress as () => void)(); });
   expect(textContent(renderer.root)).toContain('Tình trạng cần sửa');
   expect(renderer.root.findAll((node) => node.props.accessibilityLabel === 'Mô tả sự cố')[0].props.value)
     .toBe('Máy lạnh không mát');
+  await goToAddress(renderer);
+  expect(textContent(renderer.root)).toContain('Nhà riêng');
+  expect((renderer.root.findAll((node) => node.props.testID === 'session-slot-afternoon')[0]
+    .props.accessibilityState as { checked?: boolean }).checked).toBe(true);
   expect(mockNavigation.goBack).not.toHaveBeenCalled();
   expect(mockCreateBooking).not.toHaveBeenCalled();
   expect(mockUploadBookingPhoto).not.toHaveBeenCalled();
@@ -475,7 +551,7 @@ it('shows a dedicated full-screen confirmation scene, preserves the snapshot and
     (back.props.onPress as () => void)();
   });
   expect(renderer.root.findAll((node) => node.type === View && node.props.testID === 'booking-review-full-screen')).toHaveLength(0);
-  expect(textContent(renderer.root)).toContain('Chọn ngày và giờ');
+  expect(textContent(renderer.root)).toContain('Khung giờ');
   expect(textContent(renderer.root)).not.toContain('Máy lạnh không mát');
   await act(async () => { (bookingAction(renderer, 'Xem lại yêu cầu')!.props.onPress as () => void)(); });
   expect(textContent(renderer.root)).toContain('Máy lạnh không mát');
@@ -503,7 +579,7 @@ it('intercepts a native-stack back removal while the standalone review scene is 
   });
   expect(renderer.root.findAll((node) =>
     node.type === View && node.props.testID === 'booking-review-full-screen')).toHaveLength(0);
-  expect(textContent(renderer.root)).toContain('Chọn ngày và giờ');
+  expect(textContent(renderer.root)).toContain('Khung giờ');
   expect(mockNavigation.goBack).not.toHaveBeenCalled();
   expect(mockCreateBooking).not.toHaveBeenCalled();
   await act(async () => renderer.unmount());

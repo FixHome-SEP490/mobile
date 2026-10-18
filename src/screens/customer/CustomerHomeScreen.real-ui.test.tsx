@@ -13,7 +13,7 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('react-native-safe-area-context', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const Native = require('react-native');
-  return { SafeAreaView: Native.View };
+  return { SafeAreaView: Native.View, useSafeAreaInsets: () => ({ top: 0, bottom: 34, left: 0, right: 0 }) };
 });
 
 jest.mock('@expo/vector-icons', () => {
@@ -49,6 +49,8 @@ jest.mock('@gorhom/bottom-sheet', () => {
       ReactModule.createElement(ReactModule.Fragment, null, props.children),
     ),
     BottomSheetBackdrop: () => null,
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    BottomSheetFlatList: require('react-native').FlatList,
   };
 });
 
@@ -138,6 +140,21 @@ beforeEach(() => {
 });
 
 describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
+  it.each([
+    ['guest', { user: null, isAuthenticated: false }],
+    ['signed-in customer', { user: { id: 'customer-a', role: 'customer' }, isAuthenticated: true }],
+  ] as const)('shows the order tracking shortcut below search for %s', (_actor, session) => {
+    storeMock.useAuthStore.mockImplementation(() => session);
+    const tree = mountScreen();
+    try {
+      const tracking = tree.root.findByProps({ testID: 'home-order-tracking' });
+      expect(tracking.props.accessibilityRole).toBe('button');
+      expect(tracking.props.accessibilityLabel).toBe('Tra cứu đơn sửa chữa');
+      act(() => tracking.props.onPress());
+      expect(mockNavigate).toHaveBeenCalledWith('PublicOrderTracking');
+    } finally { act(() => tree.unmount()); }
+  });
+
   it('shares guest Home browsing while private actions open Auth without address requests', () => {
     storeMock.useAuthStore.mockImplementation(() => ({ user: null, isAuthenticated: false }));
     const tree = mountScreen();
@@ -218,6 +235,27 @@ describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
     }
   });
 
+  it('ends with room for the whole tab bar so the last row is not hidden under it', () => {
+    const tree = mountScreen();
+    try {
+      // 64 pill + 34 home indicator + 16 gap
+      expect(tree.root.findByProps({ testID: 'home-tab-bar-clearance' }).props.style.height).toBe(114);
+    } finally { act(() => tree.unmount()); }
+  });
+  it('puts wallet and warranty one tap from Home for a signed-in customer only', () => {
+    const tree = mountScreen();
+    try {
+      act(() => tree.root.findByProps({ testID: 'home-quick-CustomerWallet' }).props.onPress());
+      expect(mockNavigate).toHaveBeenCalledWith('CustomerWallet');
+      act(() => tree.root.findByProps({ testID: 'home-quick-CustomerWarranties' }).props.onPress());
+      expect(mockNavigate).toHaveBeenCalledWith('CustomerWarranties');
+    } finally { act(() => tree.unmount()); }
+    storeMock.useAuthStore.mockImplementation(() => ({ user: null, isAuthenticated: false }));
+    const guest = mountScreen();
+    try {
+      expect(guest.root.findAllByProps({ testID: 'home-quick-CustomerWallet' })).toHaveLength(0);
+    } finally { act(() => guest.unmount()); }
+  });
   it('opens discovery from the Home search without mounting a focusable input', () => {
     const tree = mountScreen();
     try {
@@ -269,7 +307,7 @@ describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
     }
   });
 
-  it('keeps existing service selection: popular press deep-links CustomerServices with category/query', () => {
+  it('deep-links a popular Home service by its catalog code and local alias, not server search text', () => {
     const tree = mountScreen();
     try {
       const target = tree.root.findAllByType(TouchableOpacity).find(
@@ -278,8 +316,9 @@ describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
       expect(target).toBeDefined();
       act(() => target!.props.onPress());
       expect(mockNavigate).toHaveBeenCalledWith('CustomerServices', {
+        serviceCode: 'VE_SINH_DIEU_HOA_1HP',
+        serviceAlias: 'Vệ sinh máy lạnh',
         categoryCode: 'DIEN_LANH',
-        query: 'Vệ sinh máy lạnh',
       });
     } finally {
       act(() => tree.unmount());
@@ -308,7 +347,7 @@ describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
         'Thay vòi nước',
         'Thay công tắc điện',
         'Sửa rò rỉ nước',
-        'Lắp TV treo tường',
+        'Lắp TV lên giá treo sẵn',
         'Sửa bếp từ',
         'Sửa máy giặt',
         'Sửa tủ lạnh',

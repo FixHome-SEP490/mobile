@@ -23,13 +23,13 @@ describe('customer home popular-services pager (NEW-CUX-27)', () => {
   it('uses the exact production-linked 8 targets in the intended order', () => {
     expect(HOME_POPULAR_SERVICE_TARGETS).toStrictEqual([
       { id: 'ac_clean', categoryCode: 'DIEN_LANH' },
-      { id: 'plumbing', categoryCode: 'DIEN_NUOC', query: 'nước' },
-      { id: 'electricity', categoryCode: 'DIEN_NUOC', query: 'điện' },
-      { id: 'drainage', categoryCode: 'DIEN_NUOC' },
-      { id: 'ac_repair', query: 'tivi' },
-      { id: 'ac_install', categoryCode: 'BEP_GIA_DUNG' },
-      { id: 'washer_repair', categoryCode: 'DIEN_LANH', query: 'máy giặt' },
-      { id: 'fridge_repair', categoryCode: 'DIEN_LANH', query: 'tủ lạnh' },
+      { id: 'faucet_replacement', categoryCode: 'DIEN_NUOC' },
+      { id: 'switch_replacement', categoryCode: 'DIEN_NUOC' },
+      { id: 'water_leak_repair', categoryCode: 'DIEN_NUOC' },
+      { id: 'tv_wall_mount' },
+      { id: 'induction_cooker_repair', categoryCode: 'BEP_GIA_DUNG' },
+      { id: 'washer_repair', categoryCode: 'DIEN_LANH' },
+      { id: 'fridge_repair', categoryCode: 'DIEN_LANH' },
     ]);
   });
 

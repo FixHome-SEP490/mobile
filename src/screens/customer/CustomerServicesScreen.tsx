@@ -31,7 +31,7 @@ import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import { getServicePresentation } from '../../constants/service-presentation';
 import { CUSTOMER_UI_ARTWORK } from '../../constants/customer-artwork';
 import { customerDiscoveryColumns, displayCustomerServiceName } from '../../constants/customer-display';
-import { groupCustomerServices } from './customer-service-discovery';
+import { groupCustomerServices, resolvePopularServiceServices } from './customer-service-discovery';
 import { useAuthStore } from '../../store';
 import BackButton from '../../components/BackButton';
 
@@ -45,8 +45,16 @@ export default function CustomerServicesScreen() {
   const discoveryArtworkSize = discoveryColumns === 3 ? 76 : 82;
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<ServicesRoute>();
-  const [searchQuery, setSearchQuery] = useState(route.params?.query ?? '');
-  const browseMode = searchQuery.trim().length === 0;
+  const routeQuery = route.params?.query ?? '';
+  const routeServiceCode = route.params?.serviceCode;
+  const routeServiceAlias = route.params?.serviceAlias;
+  const routeCategoryCode = route.params?.categoryCode;
+  const routeKey = JSON.stringify([routeQuery, routeServiceCode, routeServiceAlias, routeCategoryCode]);
+  const [appliedRouteKey, setAppliedRouteKey] = useState(routeKey);
+  const routeChanged = appliedRouteKey !== routeKey;
+  const [searchQuery, setSearchQuery] = useState(routeQuery);
+  const activeSearchQuery = routeChanged ? routeQuery : searchQuery;
+  const browseMode = activeSearchQuery.trim().length === 0;
   const [catalogState, setCatalogState] = useState(initialCatalogState);
   const { services, total, loading, loadingMore, error } = catalogState;
   const loaderRef = useRef<ReturnType<typeof createServiceCatalogLoader> | null>(null);
@@ -61,16 +69,37 @@ export default function CustomerServicesScreen() {
   const [categoriesLoaded, setCategoriesLoaded] = useState(false);
   const [categoryLoadFailed, setCategoryLoadFailed] = useState(false);
   const [categoryReloadKey, setCategoryReloadKey] = useState(0);
-  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [selectedCategoryCode, setSelectedCategoryCode] = useState<string | undefined>(routeCategoryCode);
+  const activeCategoryCode = routeChanged ? routeCategoryCode : selectedCategoryCode;
+  const categoryId = categories.find((category) => category.code === activeCategoryCode)?.id ?? null;
+  const [serviceCode, setServiceCode] = useState(routeServiceCode);
+  const [serviceAlias, setServiceAlias] = useState(routeServiceAlias);
+  const activeServiceCode = routeChanged ? routeServiceCode : serviceCode;
+  const activeServiceAlias = routeChanged ? routeServiceAlias : serviceAlias;
   const [discoveryServices, setDiscoveryServices] = useState<ServiceItem[]>([]);
-  const [discoveryComplete, setDiscoveryComplete] = useState(true);
+  const [discoveryComplete, setDiscoveryComplete] = useState(false);
   const [discoveryLoading, setDiscoveryLoading] = useState(true);
   const [discoveryError, setDiscoveryError] = useState(false);
   const discoveryRequest = useRef(0);
 
-  // Resolve the requested categoryCode against the loaded categories exactly
-  // once, so a code that doesn't (yet) exist just falls back to unfiltered.
-  const requestedCategoryCode = useRef(route.params?.categoryCode);
+  useEffect(() => {
+    if (!routeChanged) return;
+    loaderRef.current?.cancel();
+    // Reset route-bound view state before the next catalog/search effect publishes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Prevents stale route results from flashing.
+    setCatalogState(initialCatalogState);
+    discoveryRequest.current += 1;
+    setDiscoveryServices([]);
+    setDiscoveryLoading(true);
+    setDiscoveryComplete(false);
+    setDiscoveryError(false);
+    setSearchQuery(routeQuery);
+    setServiceCode(routeServiceCode);
+    setServiceAlias(routeServiceAlias);
+    setSelectedCategoryCode(routeCategoryCode);
+    setAppliedRouteKey(routeKey);
+  }, [routeChanged, routeKey, routeQuery, routeServiceCode, routeServiceAlias, routeCategoryCode]);
+
   useEffect(() => {
     let cancelled = false;
     servicesApi
@@ -78,10 +107,6 @@ export default function CustomerServicesScreen() {
       .then((rows) => {
         if (cancelled) return;
         setCategories(rows);
-        const wanted = requestedCategoryCode.current;
-        if (wanted) {
-          setCategoryId(rows.find((category) => category.code === wanted)?.id ?? null);
-        }
       })
       .catch(() => {
         if (!cancelled) setCategoryLoadFailed(true);
@@ -98,6 +123,11 @@ export default function CustomerServicesScreen() {
     if (!browseMode || !categoriesLoaded || categoryLoadFailed) return;
     const requestId = ++discoveryRequest.current;
     let cancelled = false;
+    // Mark the new full-catalog request pending until its matching response settles.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Route/category mode changes start a new request.
+    setDiscoveryLoading(true);
+    setDiscoveryComplete(false);
+    setDiscoveryError(false);
     fetchAllCatalogServices(
       (params) => servicesApi.getServices(params),
       () => !cancelled && discoveryRequest.current === requestId,
@@ -122,7 +152,7 @@ export default function CustomerServicesScreen() {
       cancelled = true;
       if (discoveryRequest.current === requestId) discoveryRequest.current += 1;
     };
-  }, [browseMode, categoriesLoaded, categoryLoadFailed]);
+  }, [browseMode, categoriesLoaded, categoryLoadFailed, routeKey]);
 
   // Debounced server search: every keystroke re-queries page one, and the
   // loader drops stale responses so only the latest query renders. Held
@@ -131,10 +161,10 @@ export default function CustomerServicesScreen() {
   useEffect(() => {
     if (!categoriesLoaded || browseMode) return;
     const timer = setTimeout(() => {
-      void loaderRef.current?.search(searchQuery.trim(), categoryId ?? undefined);
+      void loaderRef.current?.search(activeSearchQuery.trim(), categoryId ?? undefined);
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery, categoryId, categoriesLoaded, browseMode]);
+  }, [activeSearchQuery, categoryId, categoriesLoaded, browseMode, routeKey]);
 
   const selectedCategoryName = categories.find((category) => category.id === categoryId)?.name;
 
@@ -143,6 +173,7 @@ export default function CustomerServicesScreen() {
   const retryDiscovery = () => {
     if (categoryLoadFailed) {
       setDiscoveryLoading(true);
+      setDiscoveryComplete(false);
       setDiscoveryError(false);
       setCategoriesLoaded(false);
       setCategoryLoadFailed(false);
@@ -151,6 +182,7 @@ export default function CustomerServicesScreen() {
     }
     const requestId = ++discoveryRequest.current;
     setDiscoveryLoading(true);
+    setDiscoveryComplete(false);
     setDiscoveryError(false);
     void fetchAllCatalogServices(
       (params) => servicesApi.getServices(params),
@@ -170,8 +202,30 @@ export default function CustomerServicesScreen() {
       });
   };
 
-  const selectedCategoryCode = categories.find((category) => category.id === categoryId)?.code;
-  const groups = groupCustomerServices(categories, discoveryServices, selectedCategoryCode);
+  const popularIntentServices = resolvePopularServiceServices(
+    discoveryServices,
+    activeServiceCode,
+    activeServiceAlias,
+  );
+  const hasPopularIntent = Boolean(activeServiceCode || activeServiceAlias);
+  const hasIntentFallback = hasPopularIntent
+    && discoveryComplete
+    && !discoveryLoading
+    && !discoveryError
+    && popularIntentServices.length === 0;
+  const hasCategoryFallback = Boolean(categories.find((category) => category.code === activeCategoryCode));
+  const noMatchingPopularService = hasIntentFallback && !hasCategoryFallback;
+  const displayedDiscoveryServices = !hasPopularIntent
+    ? discoveryServices
+    : popularIntentServices.length > 0
+      ? popularIntentServices
+      : hasCategoryFallback
+        ? discoveryServices
+        : [];
+  const displayedCategoryCode = hasPopularIntent && popularIntentServices.length > 0
+    ? undefined
+    : activeCategoryCode;
+  const groups = groupCustomerServices(categories, displayedDiscoveryServices, displayedCategoryCode);
   const openAiHelp = () => {
     const session = useAuthStore.getState();
     navigation.navigate(session.isAuthenticated ? 'CustomerAIDiagnosis' : 'Auth');
@@ -187,7 +241,15 @@ export default function CustomerServicesScreen() {
       setDiscoveryLoading(true);
       setDiscoveryError(false);
     }
+    setServiceCode(undefined);
+    setServiceAlias(undefined);
     setSearchQuery(value);
+  };
+
+  const onCategorySelect = (id: string | null) => {
+    setServiceCode(undefined);
+    setServiceAlias(undefined);
+    setSelectedCategoryCode(categories.find((category) => category.id === id)?.code);
   };
 
   return (
@@ -210,9 +272,9 @@ export default function CustomerServicesScreen() {
           style={styles.searchInput}
           placeholder="Tìm điều hòa, máy giặt…"
           placeholderTextColor={colors.muted}
-          value={searchQuery}
+          value={activeSearchQuery}
           onChangeText={onSearchChange}
-          autoFocus={Boolean(route.params?.query?.trim())}
+          autoFocus={Boolean(activeSearchQuery.trim())}
           autoCorrect={false}
           autoCapitalize="none"
           accessibilityLabel="Tìm kiếm dịch vụ"
@@ -234,7 +296,7 @@ export default function CustomerServicesScreen() {
       {/* Search results keep the existing server-backed filters and loader. */}
       {!browseMode && categories.length > 0 && (
         <View style={styles.pillsContainer}>
-          <CategoryPills categories={categories} selectedId={categoryId} onSelect={setCategoryId} />
+          <CategoryPills categories={categories} selectedId={categoryId} onSelect={onCategorySelect} />
         </View>
       )}
 
@@ -245,6 +307,13 @@ export default function CustomerServicesScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {hasIntentFallback && (
+            <Text style={styles.popularIntentNote} accessibilityLiveRegion="polite">
+              {selectedCategoryName
+                ? `Chưa tìm thấy dịch vụ phù hợp. Đang hiển thị danh mục ${selectedCategoryName}.`
+                : 'Chưa tìm thấy dịch vụ phù hợp. Đang hiển thị các danh mục hiện có.'}
+            </Text>
+          )}
           <TouchableOpacity
             style={styles.aiEntry}
             onPress={openAiHelp}
@@ -260,10 +329,10 @@ export default function CustomerServicesScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.primaryStrong} />
           </TouchableOpacity>
-          {selectedCategoryName && (
+          {(selectedCategoryName || hasPopularIntent) && (
             <TouchableOpacity
               style={styles.allGroupsAction}
-              onPress={() => setCategoryId(null)}
+              onPress={() => onCategorySelect(null)}
               accessibilityRole="button"
               accessibilityLabel="Xem tất cả danh mục dịch vụ"
             >
@@ -292,6 +361,23 @@ export default function CustomerServicesScreen() {
                 <Text style={styles.retryText}>Thử lại</Text>
               </TouchableOpacity>
             </View>
+          ) : noMatchingPopularService ? (
+            <View style={styles.discoveryState}>
+              <Text style={styles.stateTitle}>Chưa tìm thấy dịch vụ phù hợp</Text>
+              <Text style={styles.stateText}>Danh mục chưa có dịch vụ khớp với lựa chọn này.</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setServiceCode(undefined);
+                  setServiceAlias(undefined);
+                  setSelectedCategoryCode(undefined);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Xem tất cả dịch vụ"
+                style={styles.retryBtn}
+              >
+                <Text style={styles.retryText}>Xem tất cả dịch vụ</Text>
+              </TouchableOpacity>
+            </View>
           ) : groups.every((group) => group.services.length === 0) ? (
             <View style={styles.discoveryState}>
               <Text style={styles.stateTitle}>Chưa có dịch vụ trong danh mục này</Text>
@@ -309,7 +395,7 @@ export default function CustomerServicesScreen() {
                   </View>
                   <TouchableOpacity
                     style={styles.groupAction}
-                    onPress={() => setCategoryId(group.category.id)}
+                    onPress={() => onCategorySelect(group.category.id)}
                     accessibilityRole="button"
                     accessibilityLabel={`Xem trong nhóm ${group.category.name}`}
                   >
@@ -341,7 +427,7 @@ export default function CustomerServicesScreen() {
                             <Ionicons name="construct-outline" size={28} color={colors.textSecondary} />
                           )}
                         </View>
-                        <Text style={styles.discoveryServiceName} numberOfLines={2}>
+                        <Text style={styles.discoveryServiceName}>
                           {displayCustomerServiceName(service.code, service.name)}
                         </Text>
                       </TouchableOpacity>
@@ -498,18 +584,18 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 14,
+    paddingBottom: 16,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    gap: 10,
+    gap: 8,
   },
   backBtn: {
     width: 44,
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 13,
+    borderRadius: 14,
     backgroundColor: colors.divider,
     marginTop: 4,
     marginLeft: -5,
@@ -524,14 +610,14 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontWeight: '700',
     letterSpacing: 1.0,
     color: colors.textSecondary,
-    marginBottom: 3,
+    marginBottom: 4,
   },
   headerTitle: {
     flex: 1,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: colors.text,
-    lineHeight: 26,
+    lineHeight: 24,
     letterSpacing: -0.4,
   },
 
@@ -541,9 +627,9 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     alignItems: 'center',
     backgroundColor: colors.surface,
     marginHorizontal: 16,
-    marginTop: 14,
+    marginTop: 12,
     marginBottom: 4,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     minHeight: 52,
     borderRadius: 14,
     borderWidth: 1,
@@ -551,7 +637,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   searchInput: {
     flex: 1,
-    marginLeft: 10,
+    marginLeft: 8,
     fontSize: 14,
     color: colors.text,
     minHeight: 48,
@@ -572,8 +658,8 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     minHeight: 72,
     marginTop: 12,
     marginBottom: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: 18,
     backgroundColor: colors.primarySoft,
   },
@@ -581,6 +667,17 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   aiCopy: { flex: 1 },
   aiTitle: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.text },
   aiSubtitle: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, marginTop: 1 },
+  popularIntentNote: {
+    marginHorizontal: 4,
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: colors.primarySoft,
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+  },
   discoveryLoading: { paddingTop: 4 },
   discoveryState: { alignItems: 'center', justifyContent: 'center', padding: 24, gap: 8 },
   discoveryGroup: { marginBottom: 16 },
@@ -595,13 +692,13 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   discoveryGroupTitle: { fontSize: 16, lineHeight: 22, fontWeight: '700', color: colors.text },
   discoveryGroupCount: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, marginTop: 1 },
   groupAction: { minHeight: 44, justifyContent: 'center', paddingLeft: 12 },
-  allGroupsAction: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', marginTop: -14, marginBottom: 10, paddingHorizontal: 4 },
+  allGroupsAction: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', marginTop: -14, marginBottom: 8, paddingHorizontal: 4 },
   groupActionText: { fontSize: 13, fontWeight: '600', color: colors.primaryStrong },
   discoveryGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 },
   discoveryService: {
     minHeight: 112,
-    paddingHorizontal: 4,
-    paddingBottom: 6,
+    paddingHorizontal: 8,
+    paddingBottom: 16,
     justifyContent: 'flex-start',
   },
   discoveryArtworkFrame: {
@@ -616,13 +713,13 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     color: colors.text,
     textAlign: 'center',
     paddingHorizontal: 2,
-    paddingTop: 3,
+    paddingTop: 4,
   },
 
   // Category pills
   pillsContainer: {
     paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingTop: 12,
     backgroundColor: colors.background,
   },
 
@@ -713,21 +810,18 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     minHeight: 100,
-    gap: 14,
+    gap: 12,
   },
   itemImageContainer: {
-    width: 100,
-    height: 90,
-    borderRadius: 16,
+    width: 72,
+    height: 72,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.divider,
-    overflow: 'hidden',
     flexShrink: 0,
   },
   itemImage: {
-    width: 100,
-    height: 90,
+    width: 72,
+    height: 72,
   },
   itemInfo: {
     flex: 1,
@@ -750,6 +844,6 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   itemPrice: {
     fontSize: 12,
     color: colors.textSecondary,
-    marginTop: 3,
+    marginTop: 4,
   },
 });

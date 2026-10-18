@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import {
-  ActivityIndicator,
   FlatList,
   Image,
   RefreshControl,
@@ -196,8 +196,8 @@ export default function ChatListScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Đang tải…</Text>
+          <CustomerSkeleton variant="notification" rows={5} />
         </View>
       ) : (
         <FlatList
@@ -274,7 +274,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     marginLeft: 8,
     fontSize: 16,
     color: colors.text,
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
   errorBanner: {
     flexDirection: 'row',

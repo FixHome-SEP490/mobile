@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
+import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import {
   ActivityIndicator,
   Alert,
@@ -31,6 +32,7 @@ import {
   validateWarrantyText,
   warrantyClaimDisplayMeta,
   warrantyCoverageLabel,
+  warrantyCoverageTerm,
   warrantyCoverageUiStatus,
   warrantyCustomerPromptCopy,
   type CustomerWarrantyGroup,
@@ -368,7 +370,7 @@ export default function CustomerWarrantiesScreen() {
                 <View style={styles.coverageCopy}>
                   <Text style={styles.coverageTitle}>{warrantyCoverageLabel(coverage)}</Text>
                   <Text style={styles.helperText}>
-                    Hạn {formatWarrantyDate(coverage.expiresAt)}
+                    {warrantyCoverageTerm(coverage)}
                     {busy ? ' · Đang có yêu cầu chưa xử lý' : ''}
                   </Text>
                 </View>
@@ -451,8 +453,8 @@ export default function CustomerWarrantiesScreen() {
 
       {loading ? (
         <View style={styles.centerState}>
-          <ActivityIndicator size="small" color={colors.primary} />
           <Text style={styles.helperText}>Đang tải bảo hành...</Text>
+          <CustomerSkeleton variant="booking" rows={3} />
         </View>
       ) : (
         <ScrollView
@@ -577,40 +579,40 @@ export default function CustomerWarrantiesScreen() {
 const getStyles = (colors: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14,
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 16,
     backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border,
   },
   backButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
   headerCopy: { flex: 1 },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: colors.text },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   headerSubtitle: { fontSize: 12, lineHeight: 17, color: colors.textSecondary, marginTop: 2 },
-  searchWrap: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8 },
+  searchWrap: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
   searchBar: {
-    minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14,
+    minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16,
     borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
   },
   searchInput: { flex: 1, fontSize: 14, color: colors.text, paddingVertical: 0 },
   searchResetButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   searchScopeNote: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, paddingHorizontal: 4, paddingBottom: 8 },
   content: { padding: 16, paddingBottom: 72, flexGrow: 1 },
-  centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 32 },
+  centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 32 },
   emptyState: { alignItems: 'center', paddingHorizontal: 16, paddingVertical: 40, gap: 8 },
-  retryButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 18, borderRadius: 12, backgroundColor: colors.primarySoft, marginTop: 10 },
+  retryButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 16, borderRadius: 12, backgroundColor: colors.primarySoft, marginTop: 8 },
   emptyIcon: {
     width: 58, height: 58, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: colors.primarySoft, marginBottom: 14,
+    backgroundColor: colors.primarySoft, marginBottom: 12,
   },
   emptyTitle: { fontSize: 17, fontWeight: '800', color: colors.text, marginBottom: 6 },
   emptyText: { fontSize: 13, lineHeight: 19, color: colors.textSecondary, textAlign: 'center' },
   orderCard: {
     backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
-    borderRadius: 18, padding: 16, marginBottom: 14,
+    borderRadius: 18, padding: 16, marginBottom: 12,
   },
-  orderHeader: { flexDirection: 'row', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 14 },
+  orderHeader: { flexDirection: 'row', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 12 },
   orderHeaderCopy: { flex: 1 },
-  orderCode: { fontSize: 12, lineHeight: 18, fontWeight: '800', color: colors.primary, marginBottom: 3 },
+  orderCode: { fontSize: 12, lineHeight: 18, fontWeight: '800', color: colors.primary, marginBottom: 4 },
   orderTitle: { fontSize: 16, lineHeight: 22, fontWeight: '800', color: colors.text, marginBottom: 4 },
-  orderStatusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 9 },
+  orderStatusPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 9 },
   orderStatusText: { fontSize: 12, lineHeight: 17, fontWeight: '800' },
   coverageBox: { borderRadius: 14, backgroundColor: colors.background, padding: 12, gap: 8 },
   subheading: { fontSize: 13, fontWeight: '800', color: colors.text, marginBottom: 2 },
@@ -619,40 +621,40 @@ const getStyles = (colors: any) => StyleSheet.create({
   coverageTitle: { fontSize: 13, fontWeight: '700', color: colors.text },
   coverageState: { fontSize: 12, lineHeight: 18, fontWeight: '700' },
   helperText: { fontSize: 12, lineHeight: 17, color: colors.textSecondary },
-  claimsWrap: { marginTop: 14, gap: 8 },
+  claimsWrap: { marginTop: 12, gap: 8 },
   claimCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 12, gap: 8 },
-  claimHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  claimHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   claimTitleWrap: { flex: 1 },
   claimTitle: { fontSize: 13, fontWeight: '800', color: colors.text },
-  statusLine: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  statusLine: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
   statusText: { fontSize: 12, lineHeight: 18, fontWeight: '700' },
   dateText: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
   bodyText: { fontSize: 13, lineHeight: 19, color: colors.text },
   warningBox: {
-    flexDirection: 'row', gap: 8, padding: 11, borderRadius: 12,
+    flexDirection: 'row', gap: 8, padding: 12, borderRadius: 12,
     borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   warningText: { fontSize: 12, lineHeight: 17, color: colors.text },
-  responseBox: { backgroundColor: colors.background, borderRadius: 10, padding: 10 },
-  responseLabel: { fontSize: 12, lineHeight: 18, fontWeight: '800', color: colors.textSecondary, marginBottom: 3 },
-  customerPrompt: { borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: 10, gap: 8 },
+  responseBox: { backgroundColor: colors.background, borderRadius: 10, padding: 12 },
+  responseLabel: { fontSize: 12, lineHeight: 18, fontWeight: '800', color: colors.textSecondary, marginBottom: 4 },
+  customerPrompt: { borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: 12, gap: 8 },
   promptText: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: colors.text },
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   footerRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10,
-    marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.divider,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8,
+    marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.divider,
   },
   linkText: { fontSize: 13, fontWeight: '700', color: colors.primary },
   linkButton: { minHeight: 44, minWidth: 132, justifyContent: 'center', paddingHorizontal: 4 },
   primaryButton: {
     minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingHorizontal: 14, borderRadius: 12, backgroundColor: colors.primary,
+    paddingHorizontal: 16, borderRadius: 12, backgroundColor: colors.primary,
   },
   primaryButtonText: { fontSize: 13, fontWeight: '800', color: '#FFFFFF' },
   disabledButton: { opacity: 0.45 },
   secondaryButton: {
-    minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14,
+    minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16,
     borderRadius: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
   },
   secondaryButtonText: { fontSize: 13, fontWeight: '700', color: colors.text },
@@ -660,16 +662,16 @@ const getStyles = (colors: any) => StyleSheet.create({
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15,23,42,0.45)' },
   modalCard: {
     maxHeight: '88%', backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingHorizontal: 18, paddingTop: 18, paddingBottom: 44,
+    paddingHorizontal: 16, paddingTop: 16, paddingBottom: 44,
   },
   modalHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 16 },
   modalHeaderCopy: { flex: 1 },
   modalCloseButton: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center' },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: colors.text, marginBottom: 3 },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: colors.text, marginBottom: 4 },
   fieldLabel: { fontSize: 13, fontWeight: '800', color: colors.text, marginBottom: 8, marginTop: 4 },
   coverageChoice: {
-    minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 9, borderWidth: 1, borderColor: colors.border,
-    borderRadius: 12, padding: 11, marginBottom: 8,
+    minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.border,
+    borderRadius: 12, padding: 12, marginBottom: 8,
   },
   textArea: {
     minHeight: 108, borderWidth: 1, borderColor: colors.border, borderRadius: 12,

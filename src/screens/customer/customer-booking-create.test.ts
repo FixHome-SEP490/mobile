@@ -1,8 +1,12 @@
 import type { BookingItem } from '../../api/bookings.api';
 import {
   addressReadyForBooking,
+  appendBookingDescriptionSuggestion,
   classifyBookingCreatePostError,
   findCreatedBookingEvidence,
+  getBookingDescriptionSuggestions,
+  hasBookingDescriptionSuggestion,
+  toggleBookingDescriptionSuggestion,
   type BookingCreationAttempt,
 } from './customer-booking-create';
 
@@ -34,6 +38,70 @@ function booking(overrides: Partial<BookingItem> = {}): BookingItem {
 }
 
 describe('customer booking create safety helpers', () => {
+  it.each([
+    ['VE_SINH_DIEU_HOA_1HP', ['Bụi bám dàn lạnh', 'Mùi hôi ẩm mốc', 'Luồng gió yếu', 'Lâu chưa vệ sinh']],
+    ['VE_SINH_DIEU_HOA', ['Bụi bám dàn lạnh', 'Mùi hôi ẩm mốc', 'Luồng gió yếu', 'Lâu chưa vệ sinh']],
+    ['SUA_DIEU_HOA_2HP', ['Máy không mát / kém lạnh', 'Chảy nước dàn lạnh', 'Kêu to / rung lắc mạnh', 'Mùi hôi ẩm mốc', 'Không nhận điều khiển', 'Bám tuyết ống đồng']],
+    ['SUA_RO_RI_NUOC', ['Rò rỉ lavabo / bồn rửa', 'Rò rỉ đường ống nước', 'Rò nước tại van / vòi', 'Tường / sàn bị thấm nước']],
+    ['LAP_TV_GIA_TREO', ['Đã có giá treo TV', 'Lắp trên tường bê tông', 'Lắp trên tường gạch', 'Lắp trên tường thạch cao']],
+  ])('offers symptoms appropriate to service %s', (code, expected) => {
+    expect(getBookingDescriptionSuggestions(code)).toEqual(expected);
+  });
+
+  it.each([
+    ['Điện lạnh', 'Máy không mát / kém lạnh'],
+    ['Điều hòa', 'Máy không mát / kém lạnh'],
+    ['Điện nước', 'Rò rỉ lavabo / bồn rửa'],
+    ['Bếp', 'Bếp từ báo lỗi không nóng'],
+    ['Cửa / Khóa', 'Khóa vân tay không nhận'],
+    ['Khác', 'Thiết bị không lên nguồn'],
+  ])('falls back to Web symptoms for category %s', (category, firstSymptom) => {
+    expect(getBookingDescriptionSuggestions('UNKNOWN', category)[0]).toBe(firstSymptom);
+  });
+
+  it('prioritizes a known service over category and uses defaults without catalog metadata', () => {
+    expect(getBookingDescriptionSuggestions(' lap_tv_gia_treo ', 'Điện lạnh')[0]).toBe('Đã có giá treo TV');
+    expect(getBookingDescriptionSuggestions()).toEqual([
+      'Thiết bị không lên nguồn', 'Phát ra tiếng ồn lạ', 'Cần bảo dưỡng vệ sinh', 'Hỏng linh kiện / cần thay mới',
+    ]);
+  });
+
+  it('adds exact literal text and removes it on a second tap, preserving custom/AI text', () => {
+    const custom = 'AI gợi ý: kiểm tra máy, chưa rõ lỗi.\n  Ghi chú riêng  ';
+    const added = toggleBookingDescriptionSuggestion(custom, 'Mùi hôi ẩm mốc');
+    expect(added).toBe(`${custom}\nMùi hôi ẩm mốc`);
+    expect(hasBookingDescriptionSuggestion(added, 'Mùi hôi ẩm mốc')).toBe(true);
+    expect(toggleBookingDescriptionSuggestion(added, 'Mùi hôi ẩm mốc')).toBe(custom);
+    expect(toggleBookingDescriptionSuggestion('', 'Mùi hôi ẩm mốc')).toBe('Mùi hôi ẩm mốc');
+    expect(toggleBookingDescriptionSuggestion('Mùi hôi ẩm mốc', 'Mùi hôi ẩm mốc')).toBe('');
+  });
+
+  it('does not duplicate case-insensitive comma/newline symptoms and removes only exact parts', () => {
+    const description = 'Máy KHÔNG MÁT / KÉM LẠNH, Ghi chú riêng\nMùi hôi ẩm mốc';
+    expect(appendBookingDescriptionSuggestion(description, 'Máy không mát / kém lạnh')).toBe(description);
+    expect(toggleBookingDescriptionSuggestion(description, 'Máy không mát / kém lạnh')).toBe('Ghi chú riêng\nMùi hôi ẩm mốc');
+    const custom = 'Không có Mùi hôi ẩm mốc hôm nay';
+    expect(hasBookingDescriptionSuggestion(custom, 'Mùi hôi ẩm mốc')).toBe(false);
+    expect(toggleBookingDescriptionSuggestion(custom, 'Mùi hôi ẩm mốc')).toBe(`${custom}\nMùi hôi ẩm mốc`);
+    expect(toggleBookingDescriptionSuggestion('Riêng, mùi hôi ẩm mốc, Cuối', 'Mùi hôi ẩm mốc')).toBe('Riêng, Cuối');
+    expect(toggleBookingDescriptionSuggestion('Riêng\nMùi hôi ẩm mốc\nmùi hôi ẩm mốc', 'Mùi hôi ẩm mốc')).toBe('Riêng');
+  });
+
+  it('keeps additions idempotent and never truncates custom text or a chip at 5000 characters', () => {
+    expect(appendBookingDescriptionSuggestion('Mùi hôi ẩm mốc', 'MÙI HÔI ẨM MỐC')).toBe('Mùi hôi ẩm mốc');
+    expect(appendBookingDescriptionSuggestion('Riêng\n', 'Mùi hôi ẩm mốc')).toBe('Riêng\n\nMùi hôi ẩm mốc');
+    expect(toggleBookingDescriptionSuggestion(
+      appendBookingDescriptionSuggestion('Riêng\n', 'Mùi hôi ẩm mốc'), 'Mùi hôi ẩm mốc',
+    )).toBe('Riêng\n');
+    const full = 'x'.repeat(5000);
+    expect(toggleBookingDescriptionSuggestion(full, 'Mùi hôi ẩm mốc')).toBe(full);
+    const fits = 'x'.repeat(4996);
+    expect(appendBookingDescriptionSuggestion(fits, 'Bụi')).toBe(`${fits}\nBụi`);
+    expect(appendBookingDescriptionSuggestion(`${fits}x`, 'Bụi')).toBe(`${fits}x`);
+    expect(appendBookingDescriptionSuggestion('Riêng', '')).toBe('Riêng');
+    expect(toggleBookingDescriptionSuggestion(`${fits}\nBụi`, 'Bụi')).toBe(fits);
+  });
+
   it.each([
     [400, 'definitive'],
     [401, 'definitive'],

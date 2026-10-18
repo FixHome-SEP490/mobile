@@ -7,6 +7,9 @@ import CustomerAnimatedBottomBar from './CustomerAnimatedBottomBar';
 let mockReduceMotion = false;
 const mockWithTiming = jest.fn((value: number, _config?: object) => value);
 const mockWithSpring = jest.fn((value: number, _config?: object) => value);
+const mockSelectionHaptic = jest.fn();
+
+jest.mock('expo-haptics', () => ({ selectionAsync: (...args: unknown[]) => mockSelectionHaptic(...args) }));
 
 jest.mock('@gorhom/bottom-sheet', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -250,6 +253,50 @@ describe('CustomerAnimatedBottomBar', () => {
       expect(StyleSheet.flatten(indicator.props.style).width).toBeGreaterThan(50);
       expect(getAccessibleTabs(tree)).toHaveLength(4);
     }
+  });
+
+  it('keeps the raised 56dp booking control inside parent touch bounds and outside the clipped tab surface at 320dp', () => {
+    const tree = renderAuthenticatedBar();
+    const positions = tree.root.findByProps({ testID: 'customer-bottom-bar-positions' });
+    act(() => positions.props.onLayout({ nativeEvent: { layout: { width: 288 } } }));
+    const layer = tree.root.findByProps({ testID: 'customer-booking-action-layer' });
+    const action = tree.root.findByProps({ accessibilityLabel: 'Đặt lịch' });
+    const actionStyle = StyleSheet.flatten(action.props.style({ pressed: false }));
+    const containerStyle = StyleSheet.flatten(tree.root.findByProps({ testID: 'customer-animated-bottom-bar' }).props.style);
+    const layerStyle = StyleSheet.flatten(layer.props.style);
+    const columnWidth = 288 / 5;
+
+    expect(StyleSheet.flatten(positions.props.style).overflow).toBe('hidden');
+    expect(layer.parent).not.toBe(positions);
+    expect(layer.findAllByProps({ accessibilityLabel: 'Đặt lịch' }).length).toBeGreaterThan(0);
+    expect(actionStyle).toMatchObject({ width: 56, height: 56, borderRadius: 28 });
+    expect(columnWidth).toBeGreaterThanOrEqual(actionStyle.width);
+    expect(StyleSheet.flatten(layer.props.style)).toMatchObject({ position: 'absolute' });
+    // Native hit testing cannot reach children above the parent's bounds.
+    expect(layerStyle.top).toBeGreaterThanOrEqual(0);
+    expect(containerStyle.paddingTop - layerStyle.top).toBe(8);
+    expect(layerStyle.top + actionStyle.height).toBeLessThanOrEqual(containerStyle.paddingTop + 64);
+    expect(getAccessibleTabs(tree)).toHaveLength(4);
+  });
+
+  it('uses haptic spring feedback for the center action and suppresses its spring for Reduce Motion', () => {
+    const tree = renderAuthenticatedBar();
+    const action = tree.root.findByProps({ accessibilityLabel: 'Đặt lịch' });
+    mockWithSpring.mockClear();
+    act(() => action.props.onPressIn());
+    expect(mockSelectionHaptic).toHaveBeenCalledTimes(1);
+    expect(mockWithSpring).toHaveBeenCalledWith(0.94, expect.objectContaining({ damping: 18, stiffness: 260, mass: 0.5 }));
+    act(() => action.props.onPressOut());
+    expect(mockWithSpring).toHaveBeenLastCalledWith(1, expect.any(Object));
+
+    mockReduceMotion = true;
+    act(() => tree.update(<CustomerAnimatedBottomBar {...createTabBarProps()} mode="authenticated" />));
+    mockWithSpring.mockClear();
+    const reducedMotionAction = tree.root.findByProps({ accessibilityLabel: 'Đặt lịch' });
+    act(() => { reducedMotionAction.props.onPressIn(); reducedMotionAction.props.onPressOut(); });
+    expect(mockWithSpring).not.toHaveBeenCalled();
+    expect(mockSelectionHaptic).toHaveBeenCalledTimes(2);
+    act(() => tree.unmount());
   });
 
   it('slides the indicator through four tab columns and skips the center action column', () => {

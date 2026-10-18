@@ -36,7 +36,7 @@ it('accepts only a real UUID-shaped Booking target', () => {
 it.each([
   ['SUBMITTED', 'Đã gửi yêu cầu'],
   ['MATCHING', 'Đang tìm kỹ thuật viên'],
-  ['CLOSED', 'Vòng tìm kỹ thuật viên đã kết thúc'],
+  ['CLOSED', 'Chưa có thợ nhận'],
   ['CANCELLED', 'Đã hủy'],
 ])('maps Booking status %s to Vietnamese display copy', (status, label) => {
   expect(bookingStatusLabel(status)).toBe(label);

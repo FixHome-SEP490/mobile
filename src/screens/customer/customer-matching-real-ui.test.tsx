@@ -36,6 +36,7 @@ jest.mock('@react-navigation/native', () => {
       if (!mockRunFocusEffect) return undefined;
       return callback();
     }, [callback]),
+    useIsFocused: () => true,
     useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn() }),
     useRoute: () => ({ params: { bookingId: BOOKING_ID } }),
   };

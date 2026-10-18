@@ -291,6 +291,9 @@ export interface WarrantyCoverageItem {
   id: string;
   serviceOrderId?: string;
   invoiceItemId?: string | null;
+  /** Invoice line this coverage covers (backend #130); null on coverages without one. */
+  itemType?: 'labor' | 'parts_equipment' | null;
+  itemDescription?: string | null;
   warrantyDaysSnapshot: number;
   note?: string | null;
   startsAt: string;

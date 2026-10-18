@@ -101,6 +101,9 @@ export default function CustomerNotificationsScreen() {
   const [markingAll, setMarkingAll] = useState(false);
   const [markAllError, setMarkAllError] = useState<string | null>(null);
   const loadedUnreadCount = notifications.filter((item) => !item.isRead).length;
+  // Like the web filter: narrows the pages already loaded, GET /notifications has no filter parameter.
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const shown = unreadOnly ? notifications.filter((item) => !item.isRead) : notifications;
 
   const onMarkAllRead = async () => {
     if (markingAll) return;
@@ -272,6 +275,13 @@ export default function CustomerNotificationsScreen() {
         </View>
       );
     }
+    if (unreadOnly && notifications.length > 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyTitle}>Không có thông báo chưa đọc</Text>
+        </View>
+      );
+    }
     return (
       <View style={styles.emptyContainer}>
         <View style={styles.emptyIconCircle}>
@@ -332,6 +342,22 @@ export default function CustomerNotificationsScreen() {
       </View>
 
       {!!markAllError && <Text style={styles.markAllError} accessibilityRole="alert">{markAllError}</Text>}
+      {!loading && notifications.length > 0 && (
+        <View style={styles.filterRow}>
+          {([[false, 'Tất cả'], [true, `Chưa đọc (${loadedUnreadCount})`]] as const).map(([value, label]) => (
+            <TouchableOpacity
+              key={label}
+              testID={value ? 'notifications-filter-unread' : 'notifications-filter-all'}
+              style={[styles.filterChip, unreadOnly === value && styles.filterChipActive]}
+              onPress={() => setUnreadOnly(value)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: unreadOnly === value }}
+            >
+              <Text style={[styles.filterChipText, unreadOnly === value && styles.filterChipTextActive]}>{label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
       {loading && !refreshing ? (
         <View style={styles.loadingWrap}>
           <Text style={styles.loadingText}>Đang tải thông báo…</Text>
@@ -339,7 +365,7 @@ export default function CustomerNotificationsScreen() {
         </View>
       ) : (
         <FlatList
-          data={notifications}
+          data={shown}
           keyExtractor={(item, index) => item.id?.toString() || index.toString()}
           renderItem={renderItem}
           ListHeaderComponent={
@@ -379,21 +405,21 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 16,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  headerCopy: { flex: 1, minWidth: 0, gap: 3 },
+  headerCopy: { flex: 1, minWidth: 0, gap: 4 },
   headerOverline: { fontSize: 12, lineHeight: 16, fontWeight: '700', letterSpacing: 1, color: colors.textSecondary },
   headerSubtitle: { fontSize: 12, lineHeight: 17, color: colors.textSecondary },
   unreadPill: { alignSelf: 'flex-start', backgroundColor: colors.primarySoft, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginTop: 2 },
   unreadPillText: { fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.primaryStrong ?? colors.primary },
-  markAllError: { fontSize: 13, lineHeight: 19, color: colors.error, paddingHorizontal: 16, paddingVertical: 10 },
-  loadingWrap: { flex: 1, paddingTop: 14 },
+  markAllError: { fontSize: 13, lineHeight: 19, color: colors.error, paddingHorizontal: 16, paddingVertical: 12 },
+  loadingWrap: { flex: 1, paddingTop: 16 },
   loadingText: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, paddingHorizontal: 16, paddingBottom: 8 },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
     color: colors.text,
   },
@@ -404,11 +430,16 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.primarySoft,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
     gap: 4,
   },
+  filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 12 },
+  filterChip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  filterChipActive: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
+  filterChipText: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
+  filterChipTextActive: { color: colors.primaryStrong ?? colors.primary },
   markAllText: {
     fontSize: 12,
     fontWeight: '600',
@@ -450,7 +481,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    marginRight: 12,
     position: 'relative',
   },
   unreadDot: {
@@ -511,7 +542,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     backgroundColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   emptyTitle: {
     fontSize: 18,

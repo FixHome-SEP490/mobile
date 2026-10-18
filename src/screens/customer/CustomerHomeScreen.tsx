@@ -1,4 +1,5 @@
 import { useAppTheme } from '../../constants/theme';
+import { useTabBarClearance } from '../../hooks/useTabBarClearance';
 import { CUSTOMER_UI_ARTWORK } from '../../constants/customer-artwork';
 // src/screens/customer/CustomerHomeScreen.tsx
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -12,7 +13,6 @@ import {
   TouchableOpacity,
   Image,
   StatusBar,
-  FlatList,
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,72 +37,71 @@ import { useChatUnreadCount } from '../../hooks/useChatUnreadCount';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomerAnimatedBottomBar from '../../components/navigation/CustomerAnimatedBottomBar';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
-import { BottomSheetModal, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
+import { BottomSheetModal, BottomSheetBackdrop, BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 
 interface PopularServiceItem {
   code: string;
   name: string;
-  // Deep-link target on CustomerServices: categoryCode filters by the
-  // Backend's seeded category; query pre-fills the existing server search.
+  // Local matching hint for the live catalog response; never a server query.
+  serviceAlias: string;
   categoryCode?: string;
-  query?: string;
 }
 
 const getPopularServices = (): PopularServiceItem[] => [
   {
     code: 'VE_SINH_DIEU_HOA_1HP',
     name: 'Vệ sinh máy lạnh',
+    serviceAlias: 'Vệ sinh máy lạnh',
     categoryCode: HOME_POPULAR_SERVICE_TARGETS[0].categoryCode,
-    query: 'Vệ sinh máy lạnh',
   },
   {
     code: 'THAY_VOI_NUOC',
     name: 'Thay vòi nước',
+    serviceAlias: 'Thay vòi nước',
     categoryCode: HOME_POPULAR_SERVICE_TARGETS[1].categoryCode,
-    query: 'Thay vòi nước',
   },
   {
     code: 'THAY_CONG_TAC_DIEN',
     name: 'Thay công tắc điện',
+    serviceAlias: 'Thay công tắc điện',
     categoryCode: HOME_POPULAR_SERVICE_TARGETS[2].categoryCode,
-    query: 'Thay công tắc điện',
   },
   {
     code: 'SUA_RO_RI_NUOC',
     name: 'Sửa rò rỉ nước',
+    serviceAlias: 'Sửa rò rỉ nước',
     categoryCode: HOME_POPULAR_SERVICE_TARGETS[3].categoryCode,
-    query: 'Sửa rò rỉ nước',
   },
   {
     code: 'LAP_TV_GIA_TREO',
-    name: 'Lắp TV treo tường',
-    query: 'Lắp TV treo tường',
+    name: 'Lắp TV lên giá treo sẵn',
+    serviceAlias: 'Lắp TV lên giá treo sẵn',
   },
   {
     code: 'SUA_BEP_TU',
     name: 'Sửa bếp từ',
+    serviceAlias: 'Sửa bếp từ',
     categoryCode: HOME_POPULAR_SERVICE_TARGETS[5].categoryCode,
-    query: 'Sửa bếp từ',
   },
   {
     code: 'SUA_MAY_GIAT',
     name: 'Sửa máy giặt',
+    serviceAlias: 'Sửa máy giặt',
     categoryCode: HOME_POPULAR_SERVICE_TARGETS[6].categoryCode,
-    query: 'Sửa máy giặt',
   },
   {
     code: 'SUA_TU_LANH',
     name: 'Sửa tủ lạnh',
+    serviceAlias: 'Sửa tủ lạnh',
     categoryCode: HOME_POPULAR_SERVICE_TARGETS[7].categoryCode,
-    query: 'Sửa tủ lạnh',
   },
 ];
 
 export default function CustomerHomeScreen() {
   const { colors, spacing, fontSize } = useAppTheme();
-  const { width: windowWidth, fontScale } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight, fontScale } = useWindowDimensions();
   const popularColumns = getHomePopularGridColumns(windowWidth, fontScale);
   const heroArtWidth = Math.min(210, Math.max(154, Math.round(windowWidth * 0.46)));
   const popularArtSize = popularColumns === 4
@@ -125,7 +124,7 @@ export default function CustomerHomeScreen() {
   const [addresses, setAddresses] = useState<AddressData[]>([]);
   const [resume, setResume] = useState<HomeResumeItem | null>(null);
   const addressSheetRef = useRef<BottomSheetModal>(null);
-  const snapPoints = useMemo(() => ['50%', '80%'], []);
+  const tabBarClearance = useTabBarClearance();
 
   const closeAddressSheet = useCallback(() => {
     addressSheetRef.current?.dismiss();
@@ -210,8 +209,9 @@ export default function CustomerHomeScreen() {
   const handleServicePress = (service: PopularServiceItem) => {
     Haptics.selectionAsync();
     navigation.navigate('CustomerServices', {
+      serviceCode: service.code,
+      serviceAlias: service.serviceAlias,
       categoryCode: service.categoryCode,
-      query: service.query,
     });
   };
 
@@ -327,6 +327,19 @@ export default function CustomerHomeScreen() {
               <Ionicons name="arrow-forward" size={19} color={colors.surface} />
             </View>
           </Pressable>
+          <TouchableOpacity
+            testID="home-order-tracking"
+            style={styles.orderTrackingButton}
+            onPress={() => navigation.navigate('PublicOrderTracking')}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Tra cứu đơn sửa chữa"
+            accessibilityHint="Nhập mã đơn và số điện thoại đã đăng ký để xem trạng thái sửa chữa"
+          >
+            <Ionicons name="receipt-outline" size={20} color={colors.primaryStrong} />
+            <Text style={styles.orderTrackingText}>Tra cứu đơn sửa chữa</Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+          </TouchableOpacity>
         </View>
 
         {/* 4. Active-order resume: one concise card only with real active data */}
@@ -398,7 +411,6 @@ export default function CustomerHomeScreen() {
           </View>
           <View style={styles.aiCopy}>
             <Text style={styles.aiTitle}>Chưa biết bắt đầu từ đâu?</Text>
-            <Text style={styles.aiSubtitle}>FixHome AI gợi ý, bạn quyết định.</Text>
           </View>
           <Ionicons name="open-outline" size={19} color={colors.muted} />
         </TouchableOpacity>
@@ -421,17 +433,37 @@ export default function CustomerHomeScreen() {
           </View>
           <View style={styles.otherServiceCopy}>
             <Text style={styles.otherServiceTitle}>Không thấy dịch vụ bạn cần?</Text>
-            <Text style={styles.otherServiceDesc}>
-              Chọn &quot;Khác&quot; và mô tả công việc để gửi yêu cầu.
-            </Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={colors.muted} />
         </TouchableOpacity>
 
+        {/* Like the web account menu: wallet and warranty one tap from Home (Profile keeps them too). */}
+        {!isGuest && (
+          <View style={styles.quickRow}>
+            {([
+              ['CustomerWallet', 'wallet-outline', 'Ví của tôi'],
+              ['CustomerWarranties', 'shield-checkmark-outline', 'Bảo hành'],
+            ] as const).map(([route, icon, label]) => (
+              <TouchableOpacity
+                key={route}
+                testID={`home-quick-${route}`}
+                style={styles.quickItem}
+                activeOpacity={0.8}
+                onPress={() => navigation.navigate(route)}
+                accessibilityRole="button"
+                accessibilityLabel={label}
+              >
+                <Ionicons name={icon} size={22} color={colors.primaryStrong} />
+                <Text style={styles.quickLabel}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
         {/* 9. Restrained, source-honest info */}
 
         {isGuest && <TouchableOpacity style={[styles.searchBar, { margin: 16, justifyContent: 'center' }]} accessibilityRole="button" accessibilityLabel="Đăng nhập hoặc tạo tài khoản" onPress={() => navigation.navigate('Auth')}><Text style={{ color: colors.primaryStrong, fontWeight: '600' }}>Đăng nhập / Tạo tài khoản</Text></TouchableOpacity>}
-        <View style={{ height: isGuest ? 112 : 40 }} />
+        <View testID="home-tab-bar-clearance" style={{ height: tabBarClearance }} />
       </ScrollView>
 
       {isGuest && <CustomerAnimatedBottomBar mode="guest" activeRouteName="Home" onGuestTabPress={name => name === 'Home' ? scrollRef.current?.scrollTo({ y: 0, animated: !reduceMotion }) : navigation.navigate('Auth')} onGuestBookingChoice={() => navigation.navigate('Auth')} />}
@@ -439,26 +471,32 @@ export default function CustomerHomeScreen() {
       {/* Address Selection Bottom Sheet */}
       <BottomSheetModal
         ref={addressSheetRef}
-        snapPoints={snapPoints}
+        enableDynamicSizing
+        maxDynamicContentSize={Math.round(windowHeight * 0.8)}
         backdropComponent={(props) => (
           <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} />
         )}
       >
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Chọn địa chỉ</Text>
-            <TouchableOpacity
-              onPress={closeAddressSheet}
-              style={styles.closeBtn}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              accessibilityRole="button"
-              accessibilityLabel="Đóng"
-            >
-              <Ionicons name="close" size={24} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-          
-          {addresses.length === 0 ? (
+        {/* Sized to its rows (header and empty state live inside the list so the sheet measures them). */}
+        <BottomSheetFlatList
+          data={addresses}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.addressListContent}
+          ListHeaderComponent={
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Chọn địa chỉ</Text>
+              <TouchableOpacity
+                onPress={closeAddressSheet}
+                style={styles.closeBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Đóng"
+              >
+                <Ionicons name="close" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          }
+          ListEmptyComponent={
             <View style={styles.emptyAddress}>
               <Text style={styles.emptyAddressText}>Bạn chưa có địa chỉ nào.</Text>
               <TouchableOpacity style={styles.addAddressBtn} onPress={() => {
@@ -468,37 +506,32 @@ export default function CustomerHomeScreen() {
                 <Text style={styles.addAddressBtnText}>Thêm địa chỉ mới</Text>
               </TouchableOpacity>
             </View>
-          ) : (
-            <FlatList
-              data={addresses}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[styles.addressItem, selectedAddress === item.line1 && styles.addressItemActive]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setSelectedAddress(item.line1);
-                    closeAddressSheet();
-                  }}
-                >
-                  <Ionicons 
-                    name={selectedAddress === item.line1 ? "radio-button-on" : "radio-button-off"} 
-                    size={22} 
-                    color={selectedAddress === item.line1 ? colors.primary : colors.muted}
-                  />
-                  <View style={styles.addressItemTextContainer}>
-                    <Text style={[styles.addressItemLabel, selectedAddress === item.line1 && styles.addressItemLabelActive]}>
-                      {item.label || (item.isDefault ? 'Mặc định' : 'Địa chỉ')}
-                    </Text>
-                    <Text style={styles.addressItemLine} numberOfLines={2}>
-                      {item.line1}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-            />
+          }
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[styles.addressItem, selectedAddress === item.line1 && styles.addressItemActive]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setSelectedAddress(item.line1);
+                closeAddressSheet();
+              }}
+            >
+              <Ionicons
+                name={selectedAddress === item.line1 ? "radio-button-on" : "radio-button-off"}
+                size={22}
+                color={selectedAddress === item.line1 ? colors.primary : colors.muted}
+              />
+              <View style={styles.addressItemTextContainer}>
+                <Text style={[styles.addressItemLabel, selectedAddress === item.line1 && styles.addressItemLabelActive]}>
+                  {item.label || (item.isDefault ? 'Mặc định' : 'Địa chỉ')}
+                </Text>
+                <Text style={styles.addressItemLine} numberOfLines={2}>
+                  {item.line1}
+                </Text>
+              </View>
+            </TouchableOpacity>
           )}
-        </View>
+        />
       </BottomSheetModal>
     </SafeAreaView>
   );
@@ -521,7 +554,7 @@ const getStyles = (
     backgroundColor: colors.background,
   },
   scrollContent: {
-    paddingBottom: 20,
+    paddingBottom: 16,
   },
 
   // 1. Top bar (lives inside hero blue bg)
@@ -533,7 +566,7 @@ const getStyles = (
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingVertical: 8,
     backgroundColor: 'transparent',
   },
@@ -559,7 +592,7 @@ const getStyles = (
   },
   brandName: {
     fontSize: 21,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: -0.5,
   },
@@ -599,7 +632,7 @@ const getStyles = (
   // 2. Blue hero — Codex canonical
   hero: {
     backgroundColor: 'transparent',
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingTop: 2,
     paddingBottom: 0,
   },
@@ -613,7 +646,7 @@ const getStyles = (
   addressStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
     minHeight: 30,
     marginBottom: 8,
   },
@@ -651,14 +684,11 @@ const getStyles = (
   },
   heroHeadline: {
     fontSize: windowWidth < 390 ? 25 : 29,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#FFFFFF',
     lineHeight: windowWidth < 390 ? 31 : 35,
     letterSpacing: -0.7,
     includeFontPadding: false,
-    textShadowColor: 'rgba(15,23,42,0.45)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
   },
   heroHeadlineAccent: {
     color: HERO_ACCENT,
@@ -691,7 +721,7 @@ const getStyles = (
 
   // 3. Overlapping search card
   searchCard: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     marginTop: -18,
     marginBottom: 4,
   },
@@ -703,8 +733,8 @@ const getStyles = (
     borderWidth: 1,
     borderColor: colors.border,
     minHeight: 56,
-    paddingHorizontal: 14,
-    gap: 10,
+    paddingHorizontal: 16,
+    gap: 8,
     // Card-like elevation
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -712,11 +742,24 @@ const getStyles = (
     shadowRadius: 12,
     elevation: 4,
   },
+  orderTrackingButton: {
+    minHeight: 48,
+    marginTop: 8,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  orderTrackingText: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.text },
   searchPlaceholder: {
     flex: 1,
     fontSize: 14,
     color: colors.textSecondary,
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
   searchBtn: {
     width: 44,
@@ -731,17 +774,17 @@ const getStyles = (
   resumeCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 14,
+    marginHorizontal: 12,
     marginTop: 12,
     borderRadius: 14,
     paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     borderLeftWidth: 3,
     borderLeftColor: colors.primaryStrong,
-    gap: 10,
+    gap: 8,
   },
   resumePulseDot: {
     width: 8,
@@ -782,7 +825,7 @@ const getStyles = (
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    marginTop: 14,
+    marginTop: 12,
     marginBottom: 4,
   },
   sectionTitle: {
@@ -816,7 +859,7 @@ const getStyles = (
     alignItems: 'center',
     justifyContent: 'flex-start',
     paddingVertical: 4,
-    paddingHorizontal: 3,
+    paddingHorizontal: 4,
     minHeight: 96,
   },
   serviceName: {
@@ -856,7 +899,7 @@ const getStyles = (
   aiIconBox: {
     width: 42,
     height: 42,
-    borderRadius: 13,
+    borderRadius: 14,
     backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
@@ -867,19 +910,18 @@ const getStyles = (
     fontSize: 13,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: 3,
-  },
-  aiSubtitle: {
-    fontSize: 11,
-    color: colors.textSecondary,
+    marginBottom: 4,
   },
 
   // 8. Other service card
+  quickRow: { flexDirection: 'row', gap: 12, marginHorizontal: 16, marginBottom: 8 },
+  quickItem: { flex: 1, minHeight: 56, paddingHorizontal: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  quickLabel: { fontSize: 15, fontWeight: '600', color: colors.text },
   otherServiceCard: {
     marginHorizontal: 16,
     marginTop: 4,
     marginBottom: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 16,
     borderWidth: 1,
@@ -892,14 +934,13 @@ const getStyles = (
   otherServiceIcon: {
     width: 42,
     height: 42,
-    borderRadius: 13,
+    borderRadius: 14,
     backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
   otherServiceCopy: { flex: 1, gap: 2 },
   otherServiceTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
-  otherServiceDesc: { fontSize: 12, lineHeight: 17, color: colors.textSecondary },
 
   // 9. Quiet copy — Codex bottom note
   quietCopy: {
@@ -914,13 +955,7 @@ const getStyles = (
   },
 
   // Address modal
-  modalContent: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '80%',
-    paddingBottom: 30,
-  },
+  addressListContent: { paddingBottom: 32 },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -980,8 +1015,8 @@ const getStyles = (
   },
   addAddressBtn: {
     backgroundColor: colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: 8,
     minHeight: 44,
     alignItems: 'center',

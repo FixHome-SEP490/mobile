@@ -209,6 +209,7 @@ type TestNode = {
   props: Record<string, unknown>;
   children: (TestNode | string | number)[];
   findAll: (predicate: (node: TestNode) => boolean) => TestNode[];
+  findByProps: (props: Record<string, unknown>) => TestNode;
 };
 type TestRenderer = { root: TestNode; unmount: () => void; update: (element: React.ReactElement) => void };
 const { act, create } = jest.requireActual('react-test-renderer') as {
@@ -325,12 +326,6 @@ async function advanceToSchedule(renderer: TestRenderer) {
   if (findActions(renderer, 'Tiếp tục: Chọn địa chỉ').length) {
     await act(async () => {
       (findActions(renderer, 'Tiếp tục: Chọn địa chỉ')[0].props.onPress as () => void)();
-      await flushPromises();
-    });
-  }
-  if (findActions(renderer, 'Tiếp tục: Chọn ngày và giờ').length) {
-    await act(async () => {
-      (findActions(renderer, 'Tiếp tục: Chọn ngày và giờ')[0].props.onPress as () => void)();
       await flushPromises();
     });
   }
@@ -476,10 +471,12 @@ it('keeps review local, then creates exactly the immutable reviewed request on c
   if (confirmActions.length !== 1) return;
   await act(async () => {
     (confirmActions[0].props.onPress as () => void)();
+    (confirmActions[0].props.onPress as () => void)();
     await flushPromises();
   });
 
   expect(mockGetMyBookingsPage).toHaveBeenCalledTimes(1);
+  expect(mockCreateBooking).toHaveBeenCalledTimes(1);
   expect(mockUploadBookingPhoto).not.toHaveBeenCalled();
   expect(mockCreateBooking).toHaveBeenCalledWith({
     serviceId: SERVICE_ID,
@@ -494,6 +491,15 @@ it('keeps review local, then creates exactly the immutable reviewed request on c
     urgency: 'NORMAL',
   });
   expect(textContent(renderer.root)).toContain('Đã gửi yêu cầu');
+  const receipt = renderer.root.findByProps({ testID: 'booking-submitted-receipt' });
+  expect(textContent(receipt)).toContain('Sửa máy lạnh');
+  expect(textContent(receipt)).toContain('Máy lạnh chảy nước');
+  expect(textContent(receipt)).toContain('Chiều 13:00 - 18:00');
+  expect(textContent(receipt)).toContain('12 Đường Hoa');
+  expect(textContent(receipt)).toContain('Giá cố định:');
+  expect(textContent(receipt)).toContain('Số lượng: 1');
+  expect(textContent(receipt)).toContain('Ảnh đính kèm: 0/5');
+  expect(renderer.root.findAll((node) => node.props.testID === 'booking-confirmed-art')).toHaveLength(0);
   expect(textContent(renderer.root)).toContain('Về trang chủ');
   expect(mockUsePreventRemove).toHaveBeenLastCalledWith(false, expect.any(Function));
   await act(async () => (findAccessibleActions(renderer, 'Quay lại')[0].props.onPress as () => void)());
@@ -646,7 +652,7 @@ it('keeps new-address save outside the scroll body and Back returns to the saved
       expect(scroll.findAll((node) => node.props.accessibilityLabel === 'Lưu địa chỉ mới')).toHaveLength(0);
     }
     await act(async () => (findAccessibleActions(renderer, 'Quay lại')[0].props.onPress as () => void)());
-    expect(findActions(renderer, 'Tiếp tục: Chọn ngày và giờ')).toHaveLength(1);
+    expect(findActions(renderer, 'Xem lại yêu cầu')).toHaveLength(1);
     expect(mockCreateBooking).not.toHaveBeenCalled();
   } finally {
     await act(async () => renderer.unmount());
@@ -1399,7 +1405,7 @@ it('retains an ambiguous in-flight create lock under its original owner across a
   await act(async () => renderer.unmount());
 });
 
-it('shows the restrained three-stage intake progress with a neutral fallback for a codeless service', async () => {
+it('shows two intake stages with a neutral fallback for a codeless service', async () => {
   const renderer = await renderScreen();
   const progress = renderer.root.findAll(
     (node) => node.type === View && node.props.testID === 'booking-intake-progress',
@@ -1408,9 +1414,8 @@ it('shows the restrained three-stage intake progress with a neutral fallback for
   if (progress.length !== 1) return;
   const progressText = textContent(progress[0]);
   expect(progressText).toContain('Tình trạng');
-  expect(progressText).toContain('Địa chỉ');
-  expect(progressText).toContain('Khung giờ');
-  expect(String(progress[0].props.accessibilityLabel)).toContain('bước 1 trên 3');
+  expect(progressText).toContain('Địa chỉ & thời gian');
+  expect(String(progress[0].props.accessibilityLabel)).toContain('bước 1 trên 2');
   expect(
     renderer.root.findAll(
       (node) => node.type === View && node.props.testID === 'booking-service-artwork-fallback',

@@ -3,7 +3,7 @@ import apiClient from './client';
 export type WalletMoney = number | string;
 export interface CustomerWalletTransaction {
   id: string;
-  type: 'top_up' | 'invoice_payment' | 'refund' | 'adjustment_credit' | 'adjustment_debit';
+  type: 'top_up' | 'invoice_payment' | 'refund' | 'adjustment_credit' | 'adjustment_debit' | 'withdrawal' | 'withdrawal_refund';
   amount: WalletMoney;
   balanceAfter: WalletMoney;
   description: string | null;
@@ -52,8 +52,9 @@ export function normalizeCustomerWalletSummary(value: unknown): CustomerWalletSu
     || meta.totalPages !== Math.ceil(Number(meta.total) / Number(meta.limit)) || row.transactions.length > Number(meta.limit)) throw Error('Dữ liệu ví chưa xác định.');
   const transactions = row.transactions.map(value => {
     const tx = financialRecord(value);
-    if (!tx || typeof tx.id !== 'string' || !tx.id || typeof tx.type !== 'string' || !['top_up', 'invoice_payment', 'refund', 'adjustment_credit', 'adjustment_debit'].includes(tx.type)
-      || wholeVnd(tx.amount) === null || wholeVnd(tx.amount) === 0 || wholeVnd(tx.balanceAfter) === null
+    const balanceAfter = wholeVnd(tx?.balanceAfter);
+    if (!tx || typeof tx.id !== 'string' || !tx.id || typeof tx.type !== 'string' || !['top_up', 'invoice_payment', 'refund', 'adjustment_credit', 'adjustment_debit', 'withdrawal', 'withdrawal_refund'].includes(tx.type)
+      || wholeVnd(tx.amount) === null || wholeVnd(tx.amount) === 0 || balanceAfter === null || balanceAfter < 0
       || !['description', 'referenceType', 'referenceId'].every(k => tx[k] === null || typeof tx[k] === 'string')
       || typeof tx.createdAt !== 'string' || !Number.isFinite(Date.parse(tx.createdAt))) throw Error('Dữ liệu giao dịch chưa xác định.');
     return { id: tx.id, type: tx.type, amount: tx.amount, balanceAfter: tx.balanceAfter,

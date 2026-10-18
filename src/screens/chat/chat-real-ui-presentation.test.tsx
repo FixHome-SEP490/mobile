@@ -5,6 +5,7 @@ import ChatListScreen from './ChatListScreen';
 import ChatThreadScreen from './ChatThreadScreen';
 import { messagingApi } from '../../api/messaging.api';
 
+jest.mock('../../components/customer/CustomerSkeleton', () => ({ __esModule: true, default: () => null }));
 jest.mock('expo-haptics', () => ({
   selectionAsync: jest.fn(),
   impactAsync: jest.fn(),

@@ -1034,7 +1034,7 @@ const getStyles = (colors: ThemeColors) =>
     chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     chip: {
       minHeight: 44,
-      paddingHorizontal: 14,
+      paddingHorizontal: 16,
       justifyContent: 'center',
       borderRadius: 22,
       borderWidth: 1,

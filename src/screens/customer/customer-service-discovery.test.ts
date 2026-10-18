@@ -1,5 +1,5 @@
 import type { CategoryItem, ServiceItem } from '../../api/services.api';
-import { groupCustomerServices } from './customer-service-discovery';
+import { groupCustomerServices, resolvePopularServiceServices } from './customer-service-discovery';
 
 const categories: CategoryItem[] = [
   { id: 'c-13', name: 'Điện lạnh', code: 'DIEN_LANH', isActive: true, sortOrder: 1 },
@@ -58,5 +58,48 @@ describe('groupCustomerServices', () => {
 
     expect(groups).toHaveLength(5);
     expect(groups.every((group) => group.services.length === 0)).toBe(true);
+  });
+});
+
+describe('resolvePopularServiceServices', () => {
+  it('returns every live air-conditioner cleaning variant from the catalog', () => {
+    const services = [
+      { ...service(1, 'c-13', 1), code: 'VE_SINH_DIEU_HOA_1HP', name: 'Vệ sinh máy lạnh 1HP' },
+      { ...service(2, 'c-13', 2), code: 'VE_SINH_DIEU_HOA_2HP', name: 'Vệ sinh máy lạnh 2HP' },
+      { ...service(3, 'c-13', 3), code: 'VE_SINH_DIEU_HOA_AM_TRAN', name: 'Vệ sinh điều hòa âm trần' },
+      { ...service(4, 'c-13', 4), code: 'SUA_DIEU_HOA', name: 'Sửa máy lạnh' },
+      { ...service(5, 'c-13', 5), code: 'VE_SINH_DIEU_HOA', name: 'Vệ sinh, nạp gas điều hòa' },
+    ];
+
+    expect(resolvePopularServiceServices(services, 'VE_SINH_DIEU_HOA_1HP', 'Vệ sinh máy lạnh')
+      .map((row) => row.code)).toEqual([
+      'VE_SINH_DIEU_HOA_1HP',
+      'VE_SINH_DIEU_HOA_2HP',
+      'VE_SINH_DIEU_HOA_AM_TRAN',
+      'VE_SINH_DIEU_HOA',
+    ]);
+  });
+
+  it.each([
+    ['LAP_TV_GIA_TREO', 'Lắp đặt tivi treo tường', 'Lắp TV treo tường'],
+    ['SUA_RO_RI_NUOC', 'Khắc phục rò rỉ nước', 'Sửa rò rỉ nước'],
+  ])('matches the live %s service code and normalized Home alias', (code, liveName, alias) => {
+    const rows = [
+      { ...service(1, 'c-14', 1), code, name: liveName },
+      { ...service(2, 'c-14', 2), code: 'UNRELATED', name: 'Dịch vụ khác' },
+    ];
+
+    expect(resolvePopularServiceServices(rows, code, alias).map((row) => row.id)).toEqual(['service-1']);
+  });
+
+  it('uses a normalized local alias when a live row has no service code', () => {
+    const row = { ...service(1, 'c-14', 1), code: undefined, name: 'Lắp đặt tivi treo tường' };
+    expect(resolvePopularServiceServices([row], 'LAP_TV_GIA_TREO', 'Lắp TV treo tường'))
+      .toEqual([row]);
+  });
+
+  it('never creates a result when the requested code and alias are absent from live rows', () => {
+    expect(resolvePopularServiceServices([service(1, 'c-13', 1)], 'MISSING_SERVICE', 'Không có thật'))
+      .toEqual([]);
   });
 });

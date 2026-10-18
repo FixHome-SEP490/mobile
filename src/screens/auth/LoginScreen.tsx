@@ -244,7 +244,7 @@ export default function LoginScreen() {
               <Text style={styles.forgotPasswordText}>Khám phá</Text>
             </TouchableOpacity>
 
-            <View style={[styles.registerRow, { marginTop: 20 }]}>
+            <View style={[styles.registerRow, { marginTop: 16 }]}>
               <Text style={styles.registerText}>Chưa có tài khoản? </Text>
               <TouchableOpacity style={styles.linkButton} accessibilityRole="button" accessibilityLabel="Đăng ký tài khoản" disabled={loading || googleLoading} onPress={() => navigation.navigate('Register')}>
                 <Text style={styles.registerLink}>Đăng ký ngay</Text>
@@ -277,7 +277,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   inputIcon: { marginRight: 12 },
   input: { flex: 1, minWidth: 0, fontSize: fontSize.md, color: colors.text, paddingVertical: 16 },
   eyeButton: { minWidth: 44, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  loginBtn: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, backgroundColor: colors.primaryStrong, minHeight: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginTop: 16, padding: 12 },
+  loginBtn: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, backgroundColor: colors.primaryStrong, minHeight: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginTop: 16, padding: 12 },
   loginBtnText: { color: colors.surface, fontSize: fontSize.md, fontWeight: '600' },
   forgotPasswordRow: { alignSelf: 'flex-end', minHeight: 44, justifyContent: 'center' },
   forgotPasswordText: { fontSize: fontSize.sm, fontWeight: '500', color: colors.primaryStrong },

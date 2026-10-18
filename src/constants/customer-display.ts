@@ -41,5 +41,5 @@ export function displayCustomerServiceName(code: string | undefined, sourceName:
 
 /** Keep two columns where width or text scaling would make three cramped. */
 export function customerDiscoveryColumns(width: number, fontScale: number): 2 | 3 {
-  return width < 380 || fontScale >= 1.15 ? 2 : 3;
+  return width < 420 || fontScale >= 1.15 ? 2 : 3;
 }

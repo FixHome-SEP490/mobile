@@ -179,6 +179,18 @@ describe('createServiceCatalogLoader (paged search, stale-safe)', () => {
     expect(JSON.stringify(last)).not.toMatch(/STALE/);
   });
 
+  it('cancels an in-flight search and clears the previous route state', async () => {
+    const h = setup();
+    const pending = deferred<{ data: ServiceItem[]; total: number }>();
+    h.getServices.mockReturnValueOnce(pending.promise);
+    const oldRequest = h.loader.search('máy lạnh', UUID_B);
+    h.loader.cancel();
+    pending.resolve({ data: [h.row({ name: 'STALE ROUTE' })], total: 1 });
+    await oldRequest;
+
+    expect(h.state()).toEqual(initialCatalogState);
+  });
+
   it('appends further pages while items remain and stops at the total', async () => {
     const h = setup();
     h.getServices.mockResolvedValue({ data: [h.row()], total: 45 });

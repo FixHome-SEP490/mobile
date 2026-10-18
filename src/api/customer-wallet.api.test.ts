@@ -31,6 +31,21 @@ it('requires exact valid ledger fields and retains correlation', () => {
   const row = { id: 'tx', type: 'top_up', amount: '10000', balanceAfter: '10000', description: null, referenceType: 'PAYMENT', referenceId: 'payment', createdAt: '2026-10-14T00:00:00Z' };
   expect(normalizeCustomerWalletSummary({ balance: '10000', transactions: [row], meta: { page: 1, limit: 20, total: 1, totalPages: 1 } }).transactions).toEqual([row]);
   expect(() => normalizeCustomerWalletSummary({ balance: 10000, transactions: [{ ...row, amount: undefined }], meta: { page: 1, limit: 20, total: 1, totalPages: 1 } })).toThrow();
+  expect(() => normalizeCustomerWalletSummary({ balance: 10000, transactions: [{ ...row, type: 'chargeback' }], meta: { page: 1, limit: 20, total: 1, totalPages: 1 } })).toThrow();
+  for (const amount of [0, '0', -10000, '-10000']) {
+    expect(() => normalizeCustomerWalletSummary({ balance: 10000, transactions: [{ ...row, amount }], meta: { page: 1, limit: 20, total: 1, totalPages: 1 } })).toThrow();
+  }
+});
+it.each(['top_up', 'invoice_payment', 'refund', 'adjustment_credit', 'adjustment_debit', 'withdrawal', 'withdrawal_refund'] as const)('accepts zero balanceAfter for %s while rejecting negative or malformed balances', type => {
+  const row = { id: `tx-${type}`, type, amount: '10000', balanceAfter: '10000', description: null, referenceType: 'WITHDRAWAL', referenceId: 'withdrawal-1', createdAt: '2026-10-14T00:00:00Z' };
+  const summary = (transaction: typeof row) => ({ balance: 0, transactions: [transaction], meta: { page: 1, limit: 20, total: 1, totalPages: 1 } });
+  expect(normalizeCustomerWalletSummary(summary({ ...row, balanceAfter: 0 as unknown as string })).transactions[0].balanceAfter).toBe(0);
+  expect(normalizeCustomerWalletSummary(summary({ ...row, balanceAfter: '0' })).transactions[0].balanceAfter).toBe('0');
+  for (const balanceAfter of [-1, '-1', null, 1.5, '10000.5', 'not-money', NaN, Infinity]) {
+    expect(() => normalizeCustomerWalletSummary(summary({ ...row, balanceAfter: balanceAfter as string }))).toThrow();
+  }
+  expect(normalizeCustomerWalletSummary({ balance: 0, transactions: [row], meta: { page: 1, limit: 20, total: 1, totalPages: 1 } }).transactions).toEqual([row]);
+  expect(() => normalizeCustomerWalletSummary({ balance: 0, transactions: [{ ...row, amount: '10000.5' }], meta: { page: 1, limit: 20, total: 1, totalPages: 1 } })).toThrow();
 });
 it('sends only the top-up DTO and mobile header, wallet pay has no amount/key body', async () => {
   client.post.mockResolvedValue(http({ paymentId: 'payment', paymentUrl: 'https://payments.example.test/start' }));

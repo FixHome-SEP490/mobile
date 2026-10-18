@@ -54,7 +54,7 @@ export function CustomerWarrantyScreen() {
     {coverages.map((coverage: any) => {
       const claim = claims.find((item: any) => item.warrantyCoverageId === coverage.id && !['resolved', 'rejected', 'closed'].includes(String(item.status).toLowerCase()));
       const expired = String(coverage.status).toLowerCase() === 'expired';
-      return <View key={coverage.id} style={{ backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md, gap: 10 }}>
+      return <View key={coverage.id} style={{ backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md, gap: 8 }}>
         <Text style={{ ...label, fontWeight: '700' }}>{coverage.note || 'Phạm vi bảo hành'}</Text>
         <DetailRow label="Tình trạng" value={coverageLabel[String(coverage.status).toLowerCase()] || 'Chưa xác định'} />
         <DetailRow label="Hết hạn" value={coverage.expiresAt ? vnDateTimeString(coverage.expiresAt) : 'Chưa có thông tin'} />

@@ -441,7 +441,7 @@ export default function RegisterScreen() {
               </>
             )}
 
-            <View style={[styles.loginRow, { marginTop: 20 }]}>
+            <View style={[styles.loginRow, { marginTop: 16 }]}>
               <Text style={styles.loginText}>Đã có tài khoản? </Text>
               <TouchableOpacity style={styles.linkButton} accessibilityRole="button" accessibilityLabel="Đăng nhập" disabled={isLoading || googleLoading} onPress={() => navigation.navigate('Login')}>
                 <Text style={styles.loginLink}>Đăng nhập</Text>
@@ -476,7 +476,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   inputIcon: { marginRight: 12 },
   input: { flex: 1, minWidth: 0, fontSize: fontSize.md, color: colors.text, paddingVertical: 16 },
   eyeButton: { minWidth: 44, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  registerBtn: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, backgroundColor: colors.primaryStrong, minHeight: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginTop: 16, padding: 12 },
+  registerBtn: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, backgroundColor: colors.primaryStrong, minHeight: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginTop: 16, padding: 12 },
   registerBtnText: { color: colors.surface, fontSize: fontSize.md, fontWeight: '600' },
   loginRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', marginTop: 24 },
   loginText: { fontSize: fontSize.sm, color: colors.textSecondary },

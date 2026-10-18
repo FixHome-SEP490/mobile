@@ -20,6 +20,9 @@ import CustomerRepairHistoryScreen from '../screens/customer/CustomerRepairHisto
 import CustomerWarrantiesScreen from '../screens/customer/CustomerWarrantiesScreen';
 import CustomerSecurityScreen from '../screens/customer/CustomerSecurityScreen';
 import CustomerWalletScreen from '../features/order-flow/customer/CustomerWalletScreen';
+import CustomerKycScreen from '../features/customer-kyc/CustomerKycScreen';
+import CustomerWithdrawScreen from '../features/customer-withdrawal/CustomerWithdrawScreen';
+import PublicOrderTrackingScreen from '../screens/guest/PublicOrderTrackingScreen';
 import TechnicianKycScreen from '../screens/technician/TechnicianKycScreen';
 import TechnicianOnboardingScreen from '../screens/technician/TechnicianOnboardingScreen';
 import TechnicianWalletScreen from '../screens/technician/TechnicianWalletScreen';
@@ -130,6 +133,7 @@ export default function AppNavigator({ firstRunSeen = false }: { firstRunSeen?: 
             <Stack.Screen name="CustomerRoleChoice" component={CustomerRoleChoiceScreen} />
             <Stack.Screen name="CustomerOnboarding" component={CustomerOnboardingScreen} />
             <Stack.Screen name="CustomerGuestHome" component={CustomerGuestHomeScreen} />
+            <Stack.Screen name="PublicOrderTracking" component={PublicOrderTrackingScreen} />
             <Stack.Screen name="CustomerServices" component={CustomerServicesScreen} />
             <Stack.Screen name="CustomerServiceDetail" component={CustomerServiceDetailScreen} />
             {isAuthenticated && user?.role === UserRole.CUSTOMER && <>
@@ -147,6 +151,8 @@ export default function AppNavigator({ firstRunSeen = false }: { firstRunSeen?: 
             <Stack.Screen name="CustomerWarranties" component={CustomerWarrantiesScreen} />
             <Stack.Screen name="CustomerSecurity" component={CustomerSecurityScreen} />
             <Stack.Screen name="CustomerWallet" component={CustomerWalletScreen} />
+            <Stack.Screen name="CustomerKyc" component={CustomerKycScreen} />
+            <Stack.Screen name="CustomerWithdraw" component={CustomerWithdrawScreen} />
             <Stack.Screen name="TechnicianOrderDetail" component={TechnicianOrderDetailEntry} />
             {__DEV__ && <Stack.Screen name="OrderFlowDevPreview" component={OrderFlowEntry} />}
             {__DEV__ && <Stack.Screen name="M7AftercareDevPreview" component={M7AftercareDevPreviewScreen} />}
