@@ -26,12 +26,13 @@ function mount(over: Record<string, unknown> = {}) {
 
 beforeEach(() => getPreview.mockReset());
 
-it('hides itself when the backend says the feature is not available', async () => {
+it('shows a retry, never a hidden dead end, when the backend refuses the preview of a V2 service', async () => {
   getPreview.mockRejectedValue({ response: { status: 404 } });
-  const { r, onPreview } = mount();
+  const { r, onPreview, onChangeVariantCode } = mount();
   await flush();
-  expect(r.toJSON()).toBeNull();
+  expect(texts(r)).toContain('Chưa tải được thông tin giá của dịch vụ.');
   expect(onPreview).toHaveBeenLastCalledWith(null);
+  expect(onChangeVariantCode).not.toHaveBeenCalledWith(expect.stringMatching(/AC-/));
 });
 
 it('asks only the missing question, then reports the server-confirmed scope and price', async () => {

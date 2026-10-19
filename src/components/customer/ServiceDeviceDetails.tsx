@@ -9,13 +9,12 @@ import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import { useAppTheme } from '../../constants/theme';
 import {
   catalogPricingApi,
-  isCatalogV2PricingUnavailableError,
   type BookingDeviceAttributes,
   type CatalogPricingPreview,
 } from '../../api/catalog-pricing.api';
 import { formatVnd } from '../../utils/format';
 
-type LoadState = 'loading' | 'ready' | 'failed' | 'unavailable';
+type LoadState = 'loading' | 'ready' | 'failed';
 
 const MOUNTING = [{ value: 'wall', label: 'Treo tường' }, { value: 'ceiling', label: 'Âm trần cassette' }] as const;
 const HORSEPOWER = [{ value: 'up_to_1_5', label: '≤ 1.5 HP' }, { value: '2_to_2_5', label: '2 – 2.5 HP' }] as const;
@@ -100,9 +99,10 @@ export default function ServiceDeviceDetails({
       setState('ready');
       live.current.onPreview(result);
       announce(result.status === 'FIXED_PRICE' && result.selectedVariant ? result.selectedVariant.variantCode : null);
-    } catch (error) {
+    } catch {
       if (mine !== token.current) return;
-      setState(isCatalogV2PricingUnavailableError(error) ? 'unavailable' : 'failed');
+      // A V2 service always has a preview; hiding the section here would leave the customer blocked with no way forward.
+      setState('failed');
       live.current.onPreview(null);
       announce(null);
     }
@@ -126,7 +126,6 @@ export default function ServiceDeviceDetails({
     void load(deviceAttributes, code);
   };
 
-  if (state === 'unavailable') return null;
   const busy = state === 'loading' || disabled;
   const missing = new Set(preview?.missingAttributes ?? []);
   const a = deviceAttributes;
