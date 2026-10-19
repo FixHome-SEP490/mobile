@@ -172,3 +172,12 @@ describe('customer booking create safety helpers', () => {
     ).toBeNull();
   });
 });
+
+describe('description suggestions for Catalog V2 service codes', () => {
+  it('gives the same suggestions as the older codes they replace', () => {
+    expect(getBookingDescriptionSuggestions('AC-02')).toEqual(getBookingDescriptionSuggestions('VE_SINH_DIEU_HOA_1HP'));
+    expect(getBookingDescriptionSuggestions('AC-01')).toEqual(getBookingDescriptionSuggestions('SUA_DIEU_HOA'));
+    expect(getBookingDescriptionSuggestions('PI-01')).toEqual(getBookingDescriptionSuggestions('SUA_RO_RI_NUOC'));
+    expect(getBookingDescriptionSuggestions('TV-01')).toEqual(getBookingDescriptionSuggestions('LAP_TV_GIA_TREO'));
+  });
+});

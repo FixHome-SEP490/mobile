@@ -15,17 +15,6 @@ export interface HomePopularServiceTarget {
   readonly categoryCode?: string;
 }
 
-export const HOME_POPULAR_SERVICE_TARGETS = [
-  { id: 'ac_clean', categoryCode: 'DIEN_LANH' },
-  { id: 'faucet_replacement', categoryCode: 'DIEN_NUOC' },
-  { id: 'switch_replacement', categoryCode: 'DIEN_NUOC' },
-  { id: 'water_leak_repair', categoryCode: 'DIEN_NUOC' },
-  { id: 'tv_wall_mount' },
-  { id: 'induction_cooker_repair', categoryCode: 'BEP_GIA_DUNG' },
-  { id: 'washer_repair', categoryCode: 'DIEN_LANH' },
-  { id: 'fridge_repair', categoryCode: 'DIEN_LANH' },
-] as const satisfies readonly HomePopularServiceTarget[];
-
 /**
  * Split Home popular services into fixed-size pages, preserving order.
  * Returns [] for empty input; never drops or duplicates entries.

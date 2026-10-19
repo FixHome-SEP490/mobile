@@ -151,11 +151,72 @@ export const SERVICE_PRESENTATION_CODES = Object.freeze(
   Object.keys(presentations) as ServicePresentationCode[],
 );
 
+/**
+ * Artwork drawn for Catalog V2 services that had no close older picture (19/10/2026), in the same style:
+ * 3D-rendered technician in blue cap, overalls and gloves, white and steel appliances, transparent 512 px PNG.
+ */
+const v2Presentations: Readonly<Record<string, ServicePresentation>> = {
+  'AC-03': {
+    assetFileName: 'svc-lap-dat-dieu-hoa.png',
+    imageSource: require('../../assets/optimized/services/svc-lap-dat-dieu-hoa.png'),
+  },
+  'AC-04': {
+    assetFileName: 'svc-thao-di-doi-dieu-hoa.png',
+    imageSource: require('../../assets/optimized/services/svc-thao-di-doi-dieu-hoa.png'),
+  },
+  'PU-01': {
+    assetFileName: 'svc-sua-may-bom-nuoc.png',
+    imageSource: require('../../assets/optimized/services/svc-sua-may-bom-nuoc.png'),
+  },
+  'PU-02': {
+    assetFileName: 'svc-lap-dat-may-bom-nuoc.png',
+    imageSource: require('../../assets/optimized/services/svc-lap-dat-may-bom-nuoc.png'),
+  },
+};
+
+/**
+ * Catalog V2 codes (19/10/2026: `AC-02`, `WM-01`...) borrow the owner-approved artwork of the closest
+ * older service. The last block borrows a picture of the same appliance only until its own is drawn.
+ */
+const V2_ARTWORK: Readonly<Record<string, ServicePresentationCode>> = {
+  // Same appliance, still waiting for its own picture (washer install, dryer, purifier, fan, drain).
+  'WM-02': 'VE_SINH_MAY_GIAT_CUA_NGANG_LE9',
+  'WM-03': 'SUA_MAY_GIAT',
+  'WM-04': 'VE_SINH_MAY_SAY',
+  'WH-02': 'VE_SINH_BINH_NONG_LANH',
+  'KT-02': 'SUA_MAY_HUT_MUI',
+  'RO-01': 'LAP_MAY_LOC_NUOC',
+  'RO-02': 'LAP_MAY_LOC_NUOC',
+  'LF-03': 'LAP_QUAT_TREO_TUONG',
+  'SA-03': 'THAY_SIPHON_LAVABO',
+  'AC-01': 'SUA_DIEU_HOA',
+  'AC-02': 'VE_SINH_DIEU_HOA',
+  'WM-01': 'SUA_MAY_GIAT',
+  'WM-05': 'VE_SINH_MAY_SAY',
+  'FR-01': 'SUA_TU_LANH',
+  'KT-01': 'SUA_BEP_TU',
+  'KT-03': 'SUA_MAY_HUT_MUI',
+  'WH-01': 'VE_SINH_BINH_NONG_LANH',
+  'PI-01': 'SUA_RO_RI_NUOC',
+  'TV-01': 'LAP_TV_GIA_TREO',
+  'LF-01': 'LAP_DEN_TRAN_CO_BAN',
+  'LF-02': 'LAP_QUAT_TRAN_CO_BAN',
+  'SA-01': 'THAY_THIET_BI_VE_SINH',
+  'SA-02': 'THAY_THIET_BI_VE_SINH',
+  'EL-01': 'SUA_CHAP_DIEN',
+  'EL-02': 'THAY_CONG_TAC_DIEN',
+  'RO-03': 'LAP_MAY_LOC_NUOC',
+  'LK-02': 'SUA_KHOA_THONG_MINH',
+  'LK-03': 'SUA_KHOA_THONG_MINH',
+};
+
 /** Unknown, stale, UUID, and demo identifiers intentionally have no artwork. */
 export function getServicePresentation(
   serviceCode: unknown,
 ): ServicePresentation | null {
   if (typeof serviceCode !== 'string') return null;
-  if (!Object.prototype.hasOwnProperty.call(presentations, serviceCode)) return null;
-  return presentations[serviceCode as ServicePresentationCode];
+  if (Object.prototype.hasOwnProperty.call(v2Presentations, serviceCode)) return v2Presentations[serviceCode];
+  const code = Object.prototype.hasOwnProperty.call(V2_ARTWORK, serviceCode) ? V2_ARTWORK[serviceCode] : serviceCode;
+  if (!Object.prototype.hasOwnProperty.call(presentations, code)) return null;
+  return presentations[code as ServicePresentationCode];
 }

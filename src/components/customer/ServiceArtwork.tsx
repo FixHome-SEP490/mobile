@@ -21,6 +21,9 @@ const TRANSPARENT_CUTOUTS: Record<string, ImageSourcePropType> = {
   VE_SINH_DIEU_HOA_1HP: CUSTOMER_UI_ARTWORK.aircon,
   THAY_CONG_TAC_DIEN: CUSTOMER_UI_ARTWORK.electrical,
   SUA_MAY_GIAT: CUSTOMER_UI_ARTWORK.washingMachine,
+  'AC-02': CUSTOMER_UI_ARTWORK.aircon,
+  'WM-01': CUSTOMER_UI_ARTWORK.washingMachine,
+  'EL-02': CUSTOMER_UI_ARTWORK.electrical,
 };
 
 /**

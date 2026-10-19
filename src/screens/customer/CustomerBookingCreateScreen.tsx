@@ -54,7 +54,7 @@ import { createProductionBookingAttempt, entryAttemptJournal } from '../../featu
 
 import {
   isOtherService,
-  resolveServicePrice,
+  servicePricingLabel,
   serviceDetailTarget,
 } from './service-catalog';
 import { usersApi, type AddressData } from '../../api/users.api';
@@ -559,8 +559,6 @@ export default function CustomerBookingCreateScreen() {
   const selectedAddress =
     addresses.find((address) => address.id === addressId) ?? null;
   const selectedAddressReady = addressReadyForBooking(selectedAddress);
-  const selectedPrice = resolveServicePrice(selectedService);
-  const selectedSummary = servicePriceSummaryText(selectedService?.priceSummary);
   const selectedPresentation = getServicePresentation(selectedService?.code);
   const selectedIsOtherService = isOtherService(selectedService);
   const descriptionSuggestions = getBookingDescriptionSuggestions(
@@ -1274,13 +1272,7 @@ export default function CustomerBookingCreateScreen() {
                 <Text style={{ color: colors.text, fontWeight: '700' }}>
                   {selectedIsOtherService
                     ? 'Yêu cầu ngoài danh sách — kỹ thuật viên sẽ khảo sát và báo giá'
-                    : selectedSummary
-                    ? `${selectedSummary.label}${selectedSummary.caption ? ` · ${selectedSummary.caption}` : ''}`
-                    : selectedService.pricingMode === 'fixed_price'
-                    ? `Giá cố định: ${selectedPrice.text}`
-                    : selectedService.pricingMode === 'inspection_required'
-                      ? `Cần khảo sát/báo giá: ${selectedPrice.text}`
-                      : selectedPrice.text}
+                    : servicePricingLabel(selectedService)}
                 </Text>
                 <Text style={[styles.note, { color: colors.textSecondary }]}>
                   {selectedIsOtherService

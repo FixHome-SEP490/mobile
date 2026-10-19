@@ -3,7 +3,7 @@ import type { BookingDeviceAttributes } from '../../api/catalog-pricing.api';
 import type { MediaUploadImage } from '../../api/media.api';
 import type { ServiceItem } from '../../api/services.api';
 import type { AddressData } from '../../api/users.api';
-import { resolveServicePrice } from './service-catalog';
+import { servicePricingLabel } from './service-catalog';
 import { addressReadyForBooking } from './customer-booking-create';
 import { buildCustomerBookingWindow, validateBookingFields } from '../../utils/booking-window';
 import { buildScheduleWindow, scheduleSummary, type BookingSchedule } from '../../utils/booking-session';
@@ -101,13 +101,7 @@ export function buildBookingReviewSnapshot({
     ...(deviceAttributes && Object.keys(deviceAttributes).length > 0 ? { deviceAttributes: { ...deviceAttributes } } : {}),
     ...(selectedVariantCode ? { selectedVariantCode } : {}),
   });
-  const price = resolveServicePrice(service);
-  const pricingLabel =
-    service.pricingMode === 'fixed_price'
-      ? `Giá cố định: ${price.text}`
-      : service.pricingMode === 'inspection_required'
-        ? `Cần khảo sát/báo giá: ${price.text}`
-        : price.text;
+  const pricingLabel = servicePricingLabel(service);
   let scheduleLabel: string;
   if (schedule) {
     scheduleLabel = scheduleSummary(schedule);

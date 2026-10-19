@@ -1,5 +1,5 @@
 import React from 'react';
-import { Dimensions, Text, TextInput, TouchableOpacity } from 'react-native';
+import { Dimensions, Image, Text, TextInput, TouchableOpacity } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 const mockNavigate = jest.fn();
@@ -110,10 +110,10 @@ jest.mock('../../api/orders.api', () => ({
 }));
 
 const storeMock = jest.requireMock('../../store') as { useAuthStore: jest.Mock };
-storeMock.useAuthStore.mockImplementation(() => ({
-  user: { id: 'customer-a', role: 'customer' },
-  isAuthenticated: true,
-}));
+// One stable session object: a fresh object on every render would re-run the effects that depend on `user`.
+const GUEST_SESSION = { user: null, isAuthenticated: false };
+const CUSTOMER_SESSION = { user: { id: 'customer-a', role: 'customer' }, isAuthenticated: true };
+storeMock.useAuthStore.mockImplementation(() => CUSTOMER_SESSION);
 
 function screenElement() {
   const { default: CustomerHomeScreen } = jest.requireActual('./CustomerHomeScreen') as {
@@ -130,13 +130,22 @@ function mountScreen(): ReactTestRenderer {
   return tree;
 }
 
+// The live Catalog V2 categories (`GET /categories`, 19/10/2026), in the server order.
+const mockCategories = [{"id":"cat-CAT_AC","code":"CAT_AC","name":"Điều hòa","isActive":true,"sortOrder":1},{"id":"cat-CAT_LAUNDRY","code":"CAT_LAUNDRY","name":"Máy giặt & máy sấy","isActive":true,"sortOrder":2},{"id":"cat-CAT_FRIDGE","code":"CAT_FRIDGE","name":"Tủ lạnh","isActive":true,"sortOrder":3},{"id":"cat-CAT_RO","code":"CAT_RO","name":"Máy lọc nước","isActive":true,"sortOrder":4},{"id":"cat-CAT_HEATER","code":"CAT_HEATER","name":"Bình nóng lạnh","isActive":true,"sortOrder":5},{"id":"cat-CAT_KITCHEN","code":"CAT_KITCHEN","name":"Thiết bị nhà bếp","isActive":true,"sortOrder":6},{"id":"cat-CAT_ELECTRIC","code":"CAT_ELECTRIC","name":"Điện dân dụng","isActive":true,"sortOrder":7},{"id":"cat-CAT_LIGHT_FAN","code":"CAT_LIGHT_FAN","name":"Đèn & quạt","isActive":true,"sortOrder":8},{"id":"cat-CAT_PIPE","code":"CAT_PIPE","name":"Đường ống nước","isActive":true,"sortOrder":9},{"id":"cat-CAT_PUMP","code":"CAT_PUMP","name":"Máy bơm nước","isActive":true,"sortOrder":10},{"id":"cat-CAT_SANITARY","code":"CAT_SANITARY","name":"Thiết bị vệ sinh & thông tắc","isActive":true,"sortOrder":11},{"id":"cat-CAT_TV","code":"CAT_TV","name":"Tivi & màn hình","isActive":true,"sortOrder":12},{"id":"cat-CAT_LOCK","code":"CAT_LOCK","name":"Khóa cửa","isActive":true,"sortOrder":13}];
+jest.mock('../../api/services.api', () => ({
+  servicesApi: { getCategories: jest.fn(() => Promise.resolve(mockCategories)) },
+}));
+
+async function mountLoaded(): Promise<ReactTestRenderer> {
+  const tree = mountScreen();
+  await act(async () => { for (let i = 0; i < 4; i += 1) await Promise.resolve(); });
+  return tree;
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockChatUnreadCount.mockReturnValue(0);
-  storeMock.useAuthStore.mockImplementation(() => ({
-    user: { id: 'customer-a', role: 'customer' },
-    isAuthenticated: true,
-  }));
+  storeMock.useAuthStore.mockImplementation(() => CUSTOMER_SESSION);
 });
 
 describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
@@ -156,7 +165,7 @@ describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
   });
 
   it('shares guest Home browsing while private actions open Auth without address requests', () => {
-    storeMock.useAuthStore.mockImplementation(() => ({ user: null, isAuthenticated: false }));
+    storeMock.useAuthStore.mockImplementation(() => GUEST_SESSION);
     const tree = mountScreen();
     try {
       act(() => tree.root.findByProps({ accessibilityLabel: 'Hỏi FixHome AI' }).props.onPress());
@@ -250,7 +259,7 @@ describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
       act(() => tree.root.findByProps({ testID: 'home-quick-CustomerWarranties' }).props.onPress());
       expect(mockNavigate).toHaveBeenCalledWith('CustomerWarranties');
     } finally { act(() => tree.unmount()); }
-    storeMock.useAuthStore.mockImplementation(() => ({ user: null, isAuthenticated: false }));
+    storeMock.useAuthStore.mockImplementation(() => GUEST_SESSION);
     const guest = mountScreen();
     try {
       expect(guest.root.findAllByProps({ testID: 'home-quick-CustomerWallet' })).toHaveLength(0);
@@ -267,29 +276,25 @@ describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
       act(() => tree.unmount());
     }
   });
-  it('renders real search, Basic/AI entries, and 8 popular services with honest artwork', () => {
-    const tree = mountScreen();
+  it('renders real search, Basic/AI entries and the big categories with honest artwork', async () => {
+    const tree = await mountLoaded();
     try {
-      const texts = tree.root.findAllByType(Text).map((node) => String(node.props.children ?? ''));
-      const joined = texts.join('\n');
-      // Codex canonical hero text (C-NATIVE-02 visual update)
+      const joined = tree.root.findAllByType(Text).map((node) => String(node.props.children ?? '')).join('\n');
       expect(joined).toContain('Nhà cần sửa.');
       expect(joined).toContain('Dịch vụ cho nhà bạn');
-      // AI entry preserved
       expect(joined).toContain('Chưa biết bắt đầu từ đâu?');
-      // "Other service" entry
       expect(joined).toContain('Không thấy dịch vụ bạn cần?');
 
-      const serviceButtons = tree.root.findAllByType(TouchableOpacity).filter(
-        (node) => typeof node.props.accessibilityHint === 'string' && node.props.accessibilityHint.startsWith('Tìm '),
+      const categoryButtons = tree.root.findAllByType(TouchableOpacity).filter(
+        (node) => typeof node.props.accessibilityHint === 'string' && node.props.accessibilityHint.startsWith('Xem các dịch vụ '),
       );
-      expect(serviceButtons).toHaveLength(8);
+      expect(categoryButtons).toHaveLength(13);
 
-      // Honest opaque artwork per service: one image or one neutral fallback, never a nested white frame.
+      // Honest opaque artwork per category: one image or one neutral fallback, never a nested white frame.
       const artworks = tree.root.findAll(
         (node) => typeof node.props.testID === 'string' && String(node.props.testID).startsWith('service-artwork-'),
       );
-      expect(artworks.length).toBeGreaterThanOrEqual(8);
+      expect(artworks.length).toBeGreaterThanOrEqual(13);
     } finally {
       act(() => tree.unmount());
     }
@@ -307,19 +312,40 @@ describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
     }
   });
 
-  it('deep-links a popular Home service by its catalog code and local alias, not server search text', () => {
-    const tree = mountScreen();
+  it('opens the services of a category when its tile is tapped', async () => {
+    const tree = await mountLoaded();
     try {
-      const target = tree.root.findAllByType(TouchableOpacity).find(
-        (node) => node.props.accessibilityLabel === 'Vệ sinh máy lạnh',
-      );
-      expect(target).toBeDefined();
-      act(() => target!.props.onPress());
-      expect(mockNavigate).toHaveBeenCalledWith('CustomerServices', {
-        serviceCode: 'VE_SINH_DIEU_HOA_1HP',
-        serviceAlias: 'Vệ sinh máy lạnh',
-        categoryCode: 'DIEN_LANH',
-      });
+      act(() => tree.root.findByProps({ testID: 'home-category-CAT_AC' }).props.onPress());
+      expect(mockNavigate).toHaveBeenCalledWith('CustomerServices', { categoryCode: 'CAT_AC' });
+      act(() => tree.root.findByProps({ testID: 'home-category-CAT_PUMP' }).props.onPress());
+      expect(mockNavigate).toHaveBeenLastCalledWith('CustomerServices', { categoryCode: 'CAT_PUMP' });
+    } finally {
+      act(() => tree.unmount());
+    }
+  });
+
+  it('draws every category tile with a real picture, not the neutral fallback', async () => {
+    const tree = await mountLoaded();
+    try {
+      const grid = tree.root.findByProps({ testID: 'popular-services-grid' });
+      for (const category of mockCategories) {
+        const tile = grid.findByProps({ testID: `home-category-${category.code}` });
+        expect(tile.findAll((node) => node.type === Image).length).toBeGreaterThan(0);
+      }
+    } finally {
+      act(() => tree.unmount());
+    }
+  });
+
+  it('says so and offers a retry when the categories cannot be loaded', async () => {
+    const servicesApi = jest.requireMock('../../api/services.api').servicesApi as { getCategories: jest.Mock };
+    servicesApi.getCategories.mockRejectedValueOnce(new Error('offline'));
+    const tree = await mountLoaded();
+    try {
+      const retry = tree.root.findByProps({ testID: 'home-categories-retry' });
+      await act(async () => { retry.props.onPress(); await Promise.resolve(); await Promise.resolve(); });
+      expect(tree.root.findAllByProps({ testID: 'home-categories-retry' })).toHaveLength(0);
+      expect(tree.root.findAllByProps({ testID: 'home-category-CAT_AC' }).length).toBeGreaterThan(0);
     } finally {
       act(() => tree.unmount());
     }
@@ -337,33 +363,22 @@ describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
     }
   });
 
-  it('shows all 8 real popular services in one accessible grid without paging', () => {
-    const tree = mountScreen();
+  it('shows all 13 categories in one accessible grid without paging', async () => {
+    const tree = await mountLoaded();
     try {
       const grid = tree.root.findByProps({ testID: 'popular-services-grid' });
-      const visibleServices = grid.findAllByType(TouchableOpacity);
-      expect(visibleServices.map((node) => node.props.accessibilityLabel)).toStrictEqual([
-        'Vệ sinh máy lạnh',
-        'Thay vòi nước',
-        'Thay công tắc điện',
-        'Sửa rò rỉ nước',
-        'Lắp TV lên giá treo sẵn',
-        'Sửa bếp từ',
-        'Sửa máy giặt',
-        'Sửa tủ lạnh',
-      ]);
+      const tiles = grid.findAllByType(TouchableOpacity);
+      expect(tiles.map((node) => node.props.accessibilityLabel)).toStrictEqual(mockCategories.map((c) => c.name));
       expect(tree.root.findAllByProps({ testID: 'popular-services-pager' })).toHaveLength(0);
-      expect(tree.root.findAllByProps({ testID: 'popular-services-dot-0' })).toHaveLength(0);
-      expect(visibleServices.every((node) => node.props.accessibilityRole === 'button')).toBe(true);
-      expect(visibleServices.every((node) => {
-        const style = Array.isArray(node.props.style)
-          ? Object.assign({}, ...node.props.style)
-          : node.props.style;
+      expect(tiles.every((node) => node.props.accessibilityRole === 'button')).toBe(true);
+      expect(tiles.every((node) => {
+        const style = Array.isArray(node.props.style) ? Object.assign({}, ...node.props.style) : node.props.style;
         return Number(style?.minHeight) >= 44;
       })).toBe(true);
-      expect(grid.findAllByType(Text).filter((node) => node.props.numberOfLines === 2)).toHaveLength(8);
+      expect(grid.findAllByType(Text).filter((node) => node.props.numberOfLines === 2)).toHaveLength(13);
     } finally {
       act(() => tree.unmount());
     }
   });
+
 });

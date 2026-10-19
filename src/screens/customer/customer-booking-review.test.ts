@@ -5,6 +5,7 @@ import { vnWallClockToDate } from '../../utils/vn-time';
 
 jest.mock('./service-catalog', () => ({
   resolveServicePrice: () => ({ text: '250.000đ' }),
+  servicePricingLabel: (s: { pricingMode?: string }) => (s.pricingMode === 'fixed_price' ? 'Giá cố định: 250.000đ' : '250.000đ'),
 }));
 
 jest.mock('./customer-booking-create', () => ({

@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-19 21:10 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/realtime-full
+> Cập nhật lần cuối: 2026-10-19 22:52 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: fix/home-catalog-v2
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -230,6 +230,13 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 
 - Web 18/10 đổi `BookingSessionPicker` thành chọn ngày (lưới tuần) rồi chọn giờ. Mobile đã có cùng luồng (dải ngày nhanh, lịch tháng, rồi chọn Sáng/Chiều, ngày kín bị loại) và gửi `urgency: NORMAL` nên không đổi gì.
 
+### Home theo danh mục Catalog V2 (19/10/2026, nhánh `fix/home-catalog-v2`)
+
+- `GET /services` trên backend đang dùng (`api.fixhome.sbs`) đã là Catalog V2: 32 dịch vụ mã `AC-01`, `WM-01`... và 13 nhóm `CAT_*`. Các ô dịch vụ nổi bật ở Home từng trỏ tới mã cũ (`VE_SINH_DIEU_HOA_1HP`, `SUA_MAY_GIAT`...) và nhóm cũ (`DIEN_LANH`, `KHAC`...) nên chạm vào chỉ mở danh sách trống. Nay Home hiện các danh mục lớn lấy từ `GET /categories` (13 nhóm `CAT_*`, đúng thứ tự và tên của server, `screens/customer/home-categories.ts`); chạm một danh mục thì mở danh sách dịch vụ con của nó (`CustomerServices` với `categoryCode`). Không tải được thì hiện dòng "Chưa tải được danh mục" kèm chạm để thử lại. Ảnh mỗi danh mục là ảnh của một dịch vụ tiêu biểu trong nhóm (`AC-02`, `WM-01`, `FR-01`, `RO-03`, `WH-01`, `KT-01`, `EL-02`, `LF-02`, `PI-01`, `PU-01`, `SA-02`, `TV-01`, `LK-02`); danh mục mới chưa có trong bảng này hiện hình trung tính. Không còn danh sách 8 dịch vụ nổi bật cố định trên Home. Ô "Không thấy dịch vụ bạn cần?" mở trợ lý AI vì V2 không còn nhóm "Khác".
+- Màn bị ảnh hưởng và cách xử lý: Home (lưới danh mục lớn, ô "Không thấy dịch vụ bạn cần?"); danh sách dịch vụ, chi tiết dịch vụ, thẻ dịch vụ đã chọn khi đặt lịch và màn xem lại (giá: trước đó cả 32 dịch vụ đều hiện "Cần khảo sát để xác định chi phí" vì V2 đều là `inspection_required` và giá nằm ở `priceSummary`; nay `service-catalog.ts` `resolveServicePrice`/`servicePricingLabel` ưu tiên `priceSummary`, chi tiết dịch vụ hiện thêm dòng giải thích và nhãn "Giá công đã duyệt theo thiết bị"); ảnh dịch vụ ở mọi nơi dùng `ServiceArtwork`; gợi ý mô tả sự cố (`customer-booking-create.ts`, thêm `AC-01`, `AC-02`, `PI-01`, `TV-01`). Không đổi: tên hiển thị (lấy từ API), nhóm (lấy từ API), trợ lý AI (mã dự phòng `DICH_VU_KHAC` giữ nguyên như web).
+- Ảnh dịch vụ V2 (`constants/service-presentation.ts`): `v2Presentations` là 4 ảnh vẽ mới cho dịch vụ chưa có ảnh gần nghĩa (`AC-03` lắp đặt điều hòa, `AC-04` tháo/di dời điều hòa, `PU-01` sửa máy bơm, `PU-02` lắp đặt máy bơm; PNG RGBA 512 px nền trong suốt, cùng phong cách: thợ mũ, yếm và găng xanh, thiết bị trắng và thép); `V2_ARTWORK` mượn ảnh đã duyệt của dịch vụ cũ gần nhất. Mượn tạm, cần vẽ riêng: `WM-03` lắp đặt máy giặt, `WM-04` sửa máy sấy, `RO-01` và `RO-02` máy lọc nước, `LF-03` sửa quạt, `SA-03` thông tắc (cùng loại thiết bị nhưng khác công việc). `WM-02`, `WH-02`, `KT-02` mượn ảnh đúng thiết bị. Ảnh mới do công cụ tạo ảnh sinh ra rồi tách nền; nên để chủ sản phẩm duyệt như ảnh cũ trước khi phát hành.
+- Đã kiểm ở danh mục và code, CHƯA chạy trên máy. Test: `CustomerHomeScreen.real-ui.test.tsx` (13 danh mục, chạm mở dịch vụ con, thử lại khi lỗi), `home-categories.test.ts`, `service-presentation-v2.test.ts` (mọi mã V2 có ảnh), `service-catalog-v2.test.ts` (giá), `customer-booking-create.test.ts` (gợi ý).
+
 ### Đăng nhập Google
 
 Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng `WebBrowser.openAuthSessionAsync`, nhận mã sống 60 giây rồi đổi ở `/auth/google/exchange`. App không cần Google client id.
@@ -328,6 +335,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-19 22:52 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Home hiện danh mục lớn rồi mở dịch vụ con, danh sách và chi tiết dịch vụ, thẻ đặt lịch theo Catalog V2: giá theo priceSummary, 4 ảnh dịch vụ vẽ mới, ảnh mượn cho dịch vụ còn lại, gợi ý mô tả
 - 2026-10-19 21:10 (UTC+7) | Hgnv11 | feat/realtime-full | Realtime đầy đủ: đọc lại đúng phần bị đổi theo kinds, thông báo, ví, thu nhập, màn chính, poll dự phòng khi socket rớt
 - 2026-10-19 21:02 (UTC+7) | Hgnv11 | feat/chat-parity-n4-n3 | Chat gửi ảnh/video, khoá khi đơn hoàn tất, mã đơn; realtime nhẹ cho lời mời, đơn và danh sách việc như web
 - 2026-10-19 20:52 (UTC+7) | Hgnv11 | feat/technician-part-returns | Thợ khai trả linh kiện FixHome như web (P1), ẩn khi backend chưa bật custody
@@ -367,7 +375,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-17 00:56 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | PR-A mở rộng parser ví cho hai loại ledger rút tiền và trình bày đúng nhãn/chiều tiền; chưa có thao tác tài chính thật.
 - 2026-10-16 11:21 (UTC+7) | Hgnv11 | feat/sep139-group-b | Tạo booking chọn buổi sáng/chiều hoặc Tới ngay và ghi chú cho thợ như web, bỏ chọn giờ bắt đầu tự do; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-16 11:06 (UTC+7) | Hgnv11 | feat/sep139-group-b | Nhóm B SEP-139 (tự nhận việc, đặt lại thợ, uy tín, bảo hành mặc định, thu nhập theo kỳ, lưới lịch) và nhãn/thông báo tiếng Việt theo web; thiết bị CHƯA KIỂM CHỨNG.
-- 2026-10-15 14:41 (UTC+7) | Hgnv11 | feat/sep139-m8-cutover | Màn nhiệm vụ không bị gỡ khi đơn hoặc tài nguyên tải lại hay có lệnh chờ (ảnh khuôn mặt, ảnh trước/sau, link VNPay); VNPay mở tự động sau xác nhận và gửi header x-client-platform mobile để backend trả về fixhome://app/order-payment; dấu lệnh VNPay quá 15 phút mà hoá đơn chưa trả thì mở khoá; thư viện ảnh gọi ảnh khuôn mặt đúng tên; thiết bị và E2E CHƯA KIỂM CHỨNG
 
 ### Lịch sử giữ lại khi tích hợp
 
