@@ -139,7 +139,8 @@ function mergeOrdersPage(existing: ServiceOrderItem[], rows: ServiceOrderItem[],
   };
 }
 
-export type BookingsTab = 'all' | 'in_progress' | 'completed';
+export type BookingsTab = 'all' | 'in_progress' | 'completed' | 'cancelled';
+type Bucket = Exclude<BookingsTab, 'all'>;
 export type BookingsEmptyNote = 'no-match' | 'more-pages';
 
 export interface BookingsView {
@@ -158,21 +159,22 @@ export interface BookingsView {
   ordersCoverageText: string | null;
 }
 
-function orderBucket(status: CanonicalOrderStatus): 'in_progress' | 'completed' | null {
+function orderBucket(status: CanonicalOrderStatus): Bucket | null {
   const s = String(status).toUpperCase();
   if (['ACCEPTED', 'EN_ROUTE', 'UNDER_REPAIR', 'IN_PROGRESS'].includes(s)) return 'in_progress';
   if (s === 'COMPLETED') return 'completed';
+  if (s === 'CANCELLED') return 'cancelled';
   return null;
 }
 
-function bookingBucket(status: BookingItem['status']): 'in_progress' | 'completed' | null {
+function bookingBucket(status: BookingItem['status']): Bucket | null {
   const s = String(status).toUpperCase();
   if (['SUBMITTED', 'MATCHING', 'MATCHED', 'PENDING', 'CONFIRMED', 'CLOSED'].includes(s)) return 'in_progress';
-  if (s === 'CANCELLED') return 'completed';
+  if (s === 'CANCELLED') return 'cancelled';
   return null;
 }
 
-function cardBucket(card: HistoryCard): 'in_progress' | 'completed' | null {
+function cardBucket(card: HistoryCard): Bucket | null {
   if (card.kind === 'order') return orderBucket(card.order.status);
   if (card.order) return orderBucket(card.order.status);
   return bookingBucket(card.booking.status);
@@ -211,8 +213,7 @@ export function resolveBookingsView(
 ): BookingsView {
   const cards = mergeHistory(state.bookings, state.orders);
   const filtered = cards.filter((card) => {
-    if (activeTab === 'in_progress' && cardBucket(card) !== 'in_progress') return false;
-    if (activeTab === 'completed' && cardBucket(card) !== 'completed') return false;
+    if (activeTab !== 'all' && cardBucket(card) !== activeTab) return false;
     return matchesSearch(card, searchQuery);
   });
   const showLoadMore = state.bookings.length < state.total;

@@ -24,10 +24,10 @@ jest.mock('@expo/vector-icons', () => {
   };
 });
 
-function mount(props: { title: string; count: number; icon: 'alert' | 'ongoing'; testID?: string }): ReactTestRenderer {
+function mount(props: { title: string; count: number; icon: 'alert' | 'ongoing' | 'request'; testID?: string }): ReactTestRenderer {
   let tree!: ReactTestRenderer;
   const { default: Header } = jest.requireActual('./CustomerActivitySectionHeader') as {
-    default: React.ComponentType<{ title: string; count: number; icon: 'alert' | 'ongoing'; testID?: string }>;
+    default: React.ComponentType<{ title: string; count: number; icon: 'alert' | 'ongoing' | 'request'; testID?: string }>;
   };
   act(() => {
     tree = create(React.createElement(Header, props));
@@ -59,6 +59,14 @@ describe('CustomerActivitySectionHeader', () => {
       ).toHaveLength(1);
     } finally {
       act(() => alertTree.unmount());
+    }
+    for (const [icon, glyph] of [['request', 'calendar-outline']] as const) {
+      const tree = mount({ title: icon, count: 2, icon });
+      try {
+        expect(tree.root.findAllByType(Text).filter((node) => node.props.testID === `icon-${glyph}`)).toHaveLength(1);
+      } finally {
+        act(() => tree.unmount());
+      }
     }
     const ongoingTree = mount({ title: 'Đang diễn ra', count: 3, icon: 'ongoing' });
     try {

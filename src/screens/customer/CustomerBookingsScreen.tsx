@@ -73,6 +73,8 @@ export default function CustomerBookingsScreen() {
   const [manageBusy, setManageBusy] = useState(false);
   const [manageError, setManageError] = useState<string | null>(null);
   const [activityTab, setActivityTab] = useState<BookingsTab>('in_progress');
+  // Repairs and booking requests are two lists, one shown at a time (as on the web), so nobody scrolls past one to reach the other.
+  const [kindTab, setKindTab] = useState<'repair' | 'request' | null>(null);
   const tabBarClearance = useTabBarClearance();
   const [activitySearch, setActivitySearch] = useState('');
   const [expandedRequests, setExpandedRequests] = useState<Record<string, boolean>>({});
@@ -282,17 +284,18 @@ export default function CustomerBookingsScreen() {
   };
 
   const view = resolveBookingsView(historyState, activitySearch, activityTab);
+  // The server totals of both lists, as on the web; unknown until the first load settles.
+  const allTotal = loading || !!error || !!ordersError ? null : total + historyState.ordersTotal;
   const { filtered: filteredCards, showList, emptyNote, showLoadMore, showLoadMoreOrders } = view;
-  const secondarySectionTitle = activityTab === 'completed'
-    ? 'Lịch sử sửa chữa'
-    : activityTab === 'all' ? 'Yêu cầu và đơn khác' : 'Đang diễn ra';
   const emptyTitle = activitySearch.trim()
     ? 'Không có kết quả trong phần đã tải'
-    : activityTab === 'completed' ? 'Chưa có lịch sử sửa chữa'
+    : activityTab === 'completed' ? 'Chưa có đơn hoặc yêu cầu hoàn tất'
+      : activityTab === 'cancelled' ? 'Chưa có đơn hoặc yêu cầu đã hủy'
       : activityTab === 'all' ? 'Chưa có yêu cầu hoặc đơn nào' : 'Không có đơn đang diễn ra';
   const emptyDescription = activitySearch.trim()
     ? 'Hãy đổi từ khóa hoặc tải thêm trang để tìm tiếp.'
-    : activityTab === 'completed' ? 'Các yêu cầu đã kết thúc và đơn sửa chữa hoàn thành sẽ xuất hiện tại đây.'
+    : activityTab === 'completed' ? 'Các đơn sửa chữa đã hoàn tất sẽ xuất hiện tại đây.'
+      : activityTab === 'cancelled' ? 'Các đơn và yêu cầu đã hủy sẽ xuất hiện tại đây.'
       : activityTab === 'all' ? 'Yêu cầu đặt lịch và đơn sửa chữa của bạn sẽ xuất hiện tại đây.'
         : 'Khi có yêu cầu hoặc đơn sửa chữa đang xử lý, chúng sẽ xuất hiện tại đây.';
 
@@ -416,12 +419,12 @@ export default function CustomerBookingsScreen() {
             )}
             {canCancelBookingConservative(booking) && (
               <TouchableOpacity
-                style={[styles.pillBtn, { borderColor: '#FCA5A5', flex: 1 }]}
+                style={[styles.pillBtn, { borderColor: colors.tone.danger.fg, flex: 1 }]}
                 onPress={() => openBookingManage(booking, 'cancel')}
                 disabled={manageBusy}
                 accessibilityRole="button"
               >
-                <Text style={[styles.pillBtnText, { color: '#B91C1C' }]}>
+                <Text style={[styles.pillBtnText, { color: colors.tone.danger.text }]}>
                   Hủy yêu cầu
                 </Text>
               </TouchableOpacity>
@@ -738,6 +741,18 @@ export default function CustomerBookingsScreen() {
     && resumeTargetFor(card.booking, !view.ordersCoverageComplete) !== null,
   );
   const ongoingCards = filteredCards.filter((card) => !actionRequiredCards.includes(card));
+  const repairCards = ongoingCards.filter((card) => card.kind === 'order' || card.order !== null);
+  const requestCards = ongoingCards.filter((card) => !repairCards.includes(card));
+  const requestCount = requestCards.length + actionRequiredCards.length;
+  // What needs the customer's action opens first; otherwise the repairs, then the requests.
+  const activeKind = kindTab ?? (actionRequiredCards.length > 0 ? 'request' : repairCards.length > 0 || requestCount === 0 ? 'repair' : 'request');
+  const kindEmptyText = activeKind === 'repair'
+    ? (activityTab === 'completed' ? 'Chưa có đơn sửa chữa hoàn tất' : activityTab === 'cancelled' ? 'Chưa có đơn sửa chữa đã hủy' : 'Chưa có đơn sửa chữa nào')
+    : (activityTab === 'completed' ? 'Chưa có yêu cầu đặt lịch hoàn tất' : activityTab === 'cancelled' ? 'Chưa có yêu cầu đặt lịch đã hủy' : 'Chưa có yêu cầu đặt lịch nào');
+  const kindTabs = [
+    { id: 'repair', label: 'Đơn sửa chữa', count: repairCards.length, urgent: 0 },
+    { id: 'request', label: 'Yêu cầu đặt lịch', count: requestCount, urgent: actionRequiredCards.length },
+  ] as const;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -763,28 +778,50 @@ export default function CustomerBookingsScreen() {
             style={styles.searchInput}
           />
         </View>
-        <View style={styles.segmentContainer} accessibilityRole="tablist">
+        <View style={styles.kindTabs} accessibilityRole="tablist" testID="activity-kind-tabs">
+          {kindTabs.map((tab) => {
+            const selected = activeKind === tab.id;
+            return (
+              <TouchableOpacity
+                key={tab.id}
+                testID={`activity-kind-${tab.id}`}
+                style={[styles.kindTab, selected && styles.kindTabActive]}
+                onPress={() => setKindTab(tab.id)}
+                accessibilityRole="tab"
+                accessibilityLabel={`${tab.label}, ${tab.count}${tab.urgent > 0 ? `, ${tab.urgent} cần bạn xử lý` : ''}`}
+                accessibilityState={{ selected }}
+              >
+                <Text style={selected ? styles.kindTabTextActive : styles.kindTabText} numberOfLines={1}>{tab.label}</Text>
+                <View style={[styles.kindCount, { backgroundColor: tab.urgent > 0 ? colors.tone.warning.bg : selected ? colors.primarySoft : colors.divider }]}>
+                  <Text style={[styles.kindCountText, { color: tab.urgent > 0 ? colors.tone.warning.text : colors.textSecondary }]}>{tab.count}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow} accessibilityRole="tablist">
           {([
-            { id: 'in_progress', label: 'Đang mở', testID: 'activity-filter-open' },
-            { id: 'completed', label: 'Lịch sử', testID: 'activity-filter-history' },
-            { id: 'all', label: 'Tất cả', testID: 'activity-filter-all' },
+            { id: 'all', label: allTotal === null ? 'Tất cả' : `Tất cả (${allTotal})`, testID: 'activity-filter-all' },
+            { id: 'in_progress', label: 'Đang xử lý', testID: 'activity-filter-open' },
+            { id: 'completed', label: 'Hoàn tất', testID: 'activity-filter-history' },
+            { id: 'cancelled', label: 'Đã hủy', testID: 'activity-filter-cancelled' },
           ] as const).map((tab) => {
             const selected = activityTab === tab.id;
             return (
               <TouchableOpacity
                 key={tab.id}
                 testID={tab.testID}
-                style={[styles.segmentBtn, selected && styles.segmentActive]}
+                style={[styles.filterChip, selected && styles.filterChipActive]}
                 onPress={() => setActivityTab(tab.id)}
                 accessibilityRole="tab"
                 accessibilityLabel={tab.label}
                 accessibilityState={{ selected }}
               >
-                <Text style={selected ? styles.segmentTextActive : styles.segmentText}>{tab.label}</Text>
+                <Text style={selected ? styles.filterChipTextActive : styles.filterChipText} numberOfLines={1}>{tab.label}</Text>
               </TouchableOpacity>
             );
           })}
-        </View>
+        </ScrollView>
       </View>
 
       {/* Content List */}
@@ -840,29 +877,40 @@ export default function CustomerBookingsScreen() {
               )}
             </View>
           )}
-          {actionRequiredCards.length > 0 && (
+          {activeKind === 'repair' && repairCards.map(renderActiveCard)}
+          {activeKind === 'request' && (
             <>
-              <CustomerActivitySectionHeader
-                title="Cần bạn xử lý"
-                count={actionRequiredCards.length}
-                icon="alert"
-                testID="activity-action-required-section"
-              />
-              {actionRequiredCards.map(renderActiveCard)}
+              {actionRequiredCards.length > 0 && (
+                <>
+                  <CustomerActivitySectionHeader
+                    title="Cần bạn xử lý"
+                    count={actionRequiredCards.length}
+                    icon="alert"
+                    testID="activity-action-required-section"
+                  />
+                  {actionRequiredCards.map(renderActiveCard)}
+                </>
+              )}
+              {requestCards.length > 0 && (
+                <>
+                  {actionRequiredCards.length > 0 && (
+                    <View style={styles.sectionHeaderSpaced}>
+                      <CustomerActivitySectionHeader title="Yêu cầu khác" count={requestCards.length} icon="request" testID="activity-request-section" />
+                    </View>
+                  )}
+                  {requestCards.map(renderActiveCard)}
+                </>
+              )}
             </>
           )}
-          {ongoingCards.length > 0 && (
-            <>
-              <View style={actionRequiredCards.length > 0 && styles.sectionHeaderSpaced}>
-                <CustomerActivitySectionHeader
-                  title={secondarySectionTitle}
-                  count={ongoingCards.length}
-                  icon="ongoing"
-                  testID="activity-ongoing-section"
-                />
-              </View>
-              {ongoingCards.map(renderActiveCard)}
-            </>
+          {filteredCards.length > 0 && (activeKind === 'repair' ? repairCards.length === 0 : requestCount === 0) && (
+            <View style={styles.kindEmpty} testID="activity-kind-empty">
+              <Ionicons name={activeKind === 'repair' ? 'construct-outline' : 'calendar-outline'} size={40} color={colors.muted} />
+              <Text style={styles.emptyTitle}>{kindEmptyText}</Text>
+              <Text style={styles.emptyDesc}>
+                {activeKind === 'repair' ? 'Xem tab Yêu cầu đặt lịch để theo dõi các yêu cầu của bạn.' : 'Xem tab Đơn sửa chữa để theo dõi các đơn đang được thực hiện.'}
+              </Text>
+            </View>
           )}
           {showLoadMore && (
             <TouchableOpacity
@@ -957,11 +1005,14 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     marginBottom: 8,
   },
   sectionHeaderSpaced: { marginTop: 8 },
+  kindCount: { minWidth: 22, height: 22, paddingHorizontal: 6, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  kindCountText: { fontSize: 12, fontWeight: '700' },
+  kindEmpty: { alignItems: 'center', gap: 8, paddingVertical: 32, paddingHorizontal: 24 },
   sectionTitle: { fontSize: 14, fontWeight: '800', color: colors.text },
   sectionCount: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
   activityControls: {
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 8,
     paddingBottom: 4,
     gap: 8,
   },
@@ -987,42 +1038,20 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontSize: 14,
     color: colors.text,
   },
-  segmentContainer: {
-    flexDirection: 'row',
-    backgroundColor: colors.border,
-    margin: 0,
-    padding: 4,
-    borderRadius: 12,
-  },
-  segmentBtn: {
-    flex: 1,
-    minHeight: 44,
-    paddingVertical: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-  },
-  segmentActive: {
-    backgroundColor: colors.surface,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  segmentText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  segmentTextActive: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.text,
-  },
+  // Two lists as tabs with an underline (the page's main choice); the status filter is a row of chips like Thông báo.
+  kindTabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border },
+  kindTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48, borderBottomWidth: 2, borderBottomColor: 'transparent', marginBottom: -1 },
+  kindTabActive: { borderBottomColor: colors.primary },
+  kindTabText: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
+  kindTabTextActive: { fontSize: 14, fontWeight: '700', color: colors.primaryStrong ?? colors.primary },
+  filterRow: { flexDirection: 'row', gap: 8, paddingRight: 8 },
+  filterChip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  filterChipActive: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
+  filterChipText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+  filterChipTextActive: { fontSize: 13, fontWeight: '700', color: colors.primaryStrong ?? colors.primary },
   scrollContent: {
     padding: 16,
-    paddingTop: 16,
+    paddingTop: 12,
   },
   loadingState: {
     flex: 1,
@@ -1086,8 +1115,8 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     marginBottom: 12,
     gap: 8,
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    borderRadius: 8,
+    backgroundColor: colors.tone.warning.bg,
+    borderRadius: 12,
   },
   loadMoreBtn: {
     padding: 16,
@@ -1190,7 +1219,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     textAlignVertical: 'top',
   },
   manageError: {
-    color: '#B91C1C',
+    color: colors.tone.danger.text,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -1210,13 +1239,10 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   card: {
     backgroundColor: colors.surface,
     borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    marginBottom: 10,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -1225,8 +1251,8 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   iconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 12,
-    backgroundColor: '#E0F2FE',
+    borderRadius: 14,
+    backgroundColor: colors.primarySoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -1236,9 +1262,9 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   badge: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 999,
     marginBottom: 6,
   },
   badgeText: {
@@ -1246,7 +1272,8 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontWeight: '700',
   },
   title: {
-    fontSize: 15,
+    fontSize: 16,
+    lineHeight: 22,
     fontWeight: '700',
     color: colors.text,
     marginBottom: 4,

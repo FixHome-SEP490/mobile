@@ -656,3 +656,28 @@ describe('homeResumeTarget', () => {
     )).toBeNull();
   });
 });
+
+describe('status filters like the web: all, in progress, completed, cancelled', () => {
+  const state = (): BookingsHistoryState => ({
+    ...initialHistoryState, loading: false, page: 1, ordersPage: 1,
+    bookings: [
+      booking({ id: 'b-open', status: 'MATCHING' }),
+      booking({ id: 'b-cancelled', status: 'CANCELLED' }),
+    ],
+    orders: [
+      order({ id: 'o-active', bookingId: 'x1', status: 'UNDER_REPAIR' }),
+      order({ id: 'o-done', bookingId: 'x2', status: 'COMPLETED' }),
+      order({ id: 'o-cancelled', bookingId: 'x3', status: 'CANCELLED' }),
+    ],
+    total: 2, ordersTotal: 3,
+  });
+  const ids = (tab: 'all' | 'in_progress' | 'completed' | 'cancelled') =>
+    resolveBookingsView(state(), '', tab).filtered.map((card) => (card.kind === 'order' ? card.order.id : card.booking.id)).sort();
+
+  it('puts each card in exactly one status filter, cancelled ones apart from completed', () => {
+    expect(ids('in_progress')).toEqual(['b-open', 'o-active']);
+    expect(ids('completed')).toEqual(['o-done']);
+    expect(ids('cancelled')).toEqual(['b-cancelled', 'o-cancelled']);
+    expect(ids('all')).toHaveLength(5);
+  });
+});

@@ -268,41 +268,62 @@ describe('CustomerBookingsScreen activity ordering (C-RUI1)', () => {
     }
   });
 
-  it('renders action-required before ongoing with counts', () => {
+  it('shows repairs and booking requests as two tabs with counts, one list at a time', () => {
     const historyMock = jest.requireMock('./customer-bookings-history') as {
       resolveBookingsView: (...args: unknown[]) => unknown;
       resumeTargetFor: (...args: unknown[]) => string | null;
     };
     const originalResolve = historyMock.resolveBookingsView;
     const originalResume = historyMock.resumeTargetFor;
-    const bookingCard = { kind: 'booking', booking, order: null };
+    const requestCard = { kind: 'booking', booking, order: null };
     const orderCard = { kind: 'order', order };
     historyMock.resolveBookingsView = () => ({
-      cards: [bookingCard, orderCard],
-      filtered: [bookingCard, orderCard],
-      showList: true,
-      emptyNote: null,
-      showLoadMore: false,
-      showLoadMoreOrders: false,
-      ordersCoverageText: null,
-      ordersCoverageComplete: true,
+      cards: [requestCard, orderCard], filtered: [requestCard, orderCard], showList: true, emptyNote: null,
+      showLoadMore: false, showLoadMoreOrders: false, ordersCoverageText: null, ordersCoverageComplete: true,
     });
-    historyMock.resumeTargetFor = (target: unknown) =>
-      (target as { id?: string }).id === BOOKING_ID ? BOOKING_ID : null;
+    historyMock.resumeTargetFor = () => null // nothing needs the customer's action;
     const tree = mountScreen();
     try {
-      const actionNodes = tree.root.findAllByProps({ testID: 'activity-action-required-section' });
-      const ongoingNodes = tree.root.findAllByProps({ testID: 'activity-ongoing-section' });
-      const actionSection = actionNodes.find((node) => node.props.accessibilityRole === 'header') ?? actionNodes[0];
-      const ongoingSection = ongoingNodes.find((node) => node.props.accessibilityRole === 'header') ?? ongoingNodes[0];
-      expect(String(actionSection.props.accessibilityLabel)).toContain('Cần bạn xử lý');
-      expect(String(ongoingSection.props.accessibilityLabel)).toContain('Đang diễn ra');
-      const texts = tree.root.findAllByType(Text).map((node) => String(node.props.children ?? ''));
-      const actionIndex = texts.findIndex((text) => text.includes('Cần bạn xử lý'));
-      const ongoingIndex = texts.findIndex((text) => text.includes('Đang diễn ra'));
-      expect(actionIndex).toBeGreaterThanOrEqual(0);
-      expect(ongoingIndex).toBeGreaterThanOrEqual(0);
-      expect(actionIndex).toBeLessThan(ongoingIndex);
+      const tab = (id: string) => tree.root.findAllByProps({ testID: `activity-kind-${id}` }).find((node) => node.props.accessibilityRole === 'tab')!;
+      expect(tab('repair').props.accessibilityLabel).toBe('Đơn sửa chữa, 1');
+      expect(tab('request').props.accessibilityLabel).toBe('Yêu cầu đặt lịch, 1');
+      // Repairs open first when nothing needs action, and the request list is not drawn under them.
+      expect(tab('repair').props.accessibilityState.selected).toBe(true);
+      expect(tree.root.findAllByProps({ testID: 'activity-action-required-section' })).toHaveLength(0);
+      act(() => tab('request').props.onPress());
+      expect(tab('request').props.accessibilityState.selected).toBe(true);
+      expect(tab('repair').props.accessibilityState.selected).toBe(false);
+      expect(tree.root.findAllByProps({ testID: 'activity-kind-empty' })).toHaveLength(0);
+    } finally {
+      act(() => tree.unmount());
+      historyMock.resolveBookingsView = originalResolve;
+      historyMock.resumeTargetFor = originalResume;
+    }
+  });
+
+  it('opens on the requests, with "Cần bạn xử lý" first, when a request needs the customer', () => {
+    const historyMock = jest.requireMock('./customer-bookings-history') as {
+      resolveBookingsView: (...args: unknown[]) => unknown;
+      resumeTargetFor: (...args: unknown[]) => string | null;
+    };
+    const originalResolve = historyMock.resolveBookingsView;
+    const originalResume = historyMock.resumeTargetFor;
+    const requestCard = { kind: 'booking', booking, order: null };
+    const orderCard = { kind: 'order', order };
+    historyMock.resolveBookingsView = () => ({
+      cards: [requestCard, orderCard], filtered: [requestCard, orderCard], showList: true, emptyNote: null,
+      showLoadMore: false, showLoadMoreOrders: false, ordersCoverageText: null, ordersCoverageComplete: true,
+    });
+    historyMock.resumeTargetFor = (target: unknown) => ((target as { id?: string }).id === BOOKING_ID ? BOOKING_ID : null);
+    const tree = mountScreen();
+    try {
+      const tab = (id: string) => tree.root.findAllByProps({ testID: `activity-kind-${id}` }).find((node) => node.props.accessibilityRole === 'tab')!;
+      expect(tab('request').props.accessibilityState.selected).toBe(true);
+      expect(tab('request').props.accessibilityLabel).toBe('Yêu cầu đặt lịch, 1, 1 cần bạn xử lý');
+      const header = tree.root.findAllByProps({ testID: 'activity-action-required-section' }).find((node) => node.props.accessibilityRole === 'header')!;
+      expect(String(header.props.accessibilityLabel)).toContain('Cần bạn xử lý');
+      act(() => tab('repair').props.onPress());
+      expect(tree.root.findAllByProps({ testID: 'activity-action-required-section' })).toHaveLength(0);
     } finally {
       act(() => tree.unmount());
       historyMock.resolveBookingsView = originalResolve;
@@ -312,18 +333,23 @@ describe('CustomerBookingsScreen activity ordering (C-RUI1)', () => {
 });
 
 describe('CustomerBookingsScreen real Activity filters (C-NATIVE-05)', () => {
-  it('offers open, history, and all filters and passes the selected bucket to the existing real-data resolver', () => {
+  it('offers all, in progress, completed and cancelled filters like the web and passes the selected bucket to the existing real-data resolver', () => {
     const tree = mountScreen();
     try {
       const open = tree.root.findByProps({ testID: 'activity-filter-open' });
       const history = tree.root.findByProps({ testID: 'activity-filter-history' });
       const all = tree.root.findByProps({ testID: 'activity-filter-all' });
       expect(open.props.accessibilityState.selected).toBe(true);
-      expect(history.props.accessibilityLabel).toBe('Lịch sử');
-      expect(all.props.accessibilityLabel).toBe('Tất cả');
+      const cancelled = tree.root.findByProps({ testID: 'activity-filter-cancelled' });
+      expect(open.props.accessibilityLabel).toBe('Đang xử lý');
+      expect(history.props.accessibilityLabel).toBe('Hoàn tất');
+      expect(cancelled.props.accessibilityLabel).toBe('Đã hủy');
+      expect(all.props.accessibilityLabel).toMatch(/^Tất cả/);
 
       act(() => history.props.onPress());
       expect(mockResolveBookingsView).toHaveBeenLastCalledWith(expect.any(Object), '', 'completed');
+      act(() => cancelled.props.onPress());
+      expect(mockResolveBookingsView).toHaveBeenLastCalledWith(expect.any(Object), '', 'cancelled');
       act(() => all.props.onPress());
       expect(mockResolveBookingsView).toHaveBeenLastCalledWith(expect.any(Object), '', 'all');
     } finally {
