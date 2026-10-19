@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-19 20:39 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/booking-device-pricing
+> Cập nhật lần cuối: 2026-10-19 20:52 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/technician-part-returns
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -201,13 +201,18 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 ### Giá công trên thẻ dịch vụ (19/10/2026, nhánh `feat/catalog-price-summary`)
 
 - Backend `dev` (#catalog V2) thêm `priceSummary {kind: fixed_range|inspection_reference|inspection_only, minLaborVnd, maxLaborVnd, suggestedLaborVnd?}` vào dịch vụ trong `/services`, `/categories` và chi tiết. Mobile đọc ở `ServiceItem.priceSummary`; danh sách chọn dịch vụ và khung dịch vụ đã chọn ở `CustomerBookingCreateScreen` ưu tiên `utils/service-price-summary.ts` (cùng câu chữ với web: khoảng giá công, "Tham khảo ...", "Khảo sát & báo giá"), thiếu trường thì giữ cách hiện cũ. Chỉ để xem, không dùng cho tổng tiền hay điều kiện đặt. Test `service-price-summary.test.ts`; runtime với backend bật Catalog V2 CHƯA KIỂM CHỨNG (DEV chung đang tắt).
-- Chưa làm từ cùng đợt backend: thợ khai trả linh kiện (`declare-return`).
+- Đợt backend này không còn việc nào chưa làm trên mobile, trừ phần quản lý dịch vụ nhận linh kiện hoàn trả (chỉ có ở console web).
 
 ### Thông tin thiết bị và phạm vi tiền công khi đặt lịch (19/10/2026, nhánh `feat/booking-device-pricing`)
 
 - P012 như web: với dịch vụ có mã Catalog V2 và không đi từ trợ lý AI, bước 1 của `CustomerBookingCreateScreen` hiện `ServiceDeviceDetails`. Màn gọi `GET /services/:id/catalog-v2-pricing` (`api/catalog-pricing.api.ts`), chỉ hỏi thông tin server còn thiếu (treo tường/âm trần, HP, cửa máy giặt, kg), cho chọn phạm vi khi server yêu cầu, và chỉ hiện giá cố định kèm tên phạm vi khi server trả `FIXED_PRICE`; khoảng giá chỉ mang nhãn "Giá tham khảo — thợ khảo sát và báo giá, khách duyệt". Mobile không tự tính hay chỉnh tiền.
 - `POST /bookings` mang thêm `deviceAttributes` và `selectedVariantCode` (chỉ sau khi preview xác nhận `FIXED_PRICE`); server tự khoá phạm vi trong transaction. Đổi dịch vụ hoặc đổi thông tin thì xoá kết quả cũ ngay. Nút "Tiếp tục" bị chặn tới khi preview khớp dịch vụ (`isCatalogV2PreviewReady`); dịch vụ cũ và luồng AI không bị chặn.
 - Backend trả 403/404/501/503 thì mục này ẩn và đặt lịch chạy như cũ (DEV chung đang tắt Catalog V2). Test: `catalog-pricing.api.test.ts`, `ServiceDeviceDetails.test.tsx`, `customer-booking-review.test.ts`. Runtime với backend bật Catalog V2 và trên thiết bị CHƯA KIỂM CHỨNG.
+
+### Thợ khai trả linh kiện FixHome (19/10/2026, nhánh `feat/technician-part-returns`)
+
+- P1 như web (owner lock 19/10/2026): trong `technician-parts-section.tsx` (màn đơn của thợ), mỗi dòng linh kiện FixHome đã nhận qua QR có khối "Hoàn trả" đọc `GET /service-orders/:orderId/part-returns`: "Cấp / Dùng / Cần trả", dòng "Đang chờ quản lý xác nhận" hoặc "Đã nhận", và nút "Khai trả" chọn số lượng (nguyên, từ 1 tới phần còn phải trả chưa khai) rồi gửi `POST /part-requests/:requestId/items/:itemId/declare-return {quantity, expectedVersion, idempotencyKey}`. Khai trả chưa phải là đã trả xong; quản lý dịch vụ nhận thực tế ở console web.
+- Lỗi 409 thì đọc lại số liệu trước khi gửi lại. Backend chưa bật custody (403/404/501/503) thì khối này ẩn và QR/đã dùng/hoàn trả cũ không đổi. Test: `part-returns.test.ts`, `technician-parts-returns.test.tsx`. Runtime với backend bật custody và trên thiết bị CHƯA KIỂM CHỨNG.
 
 ### Đăng nhập Google
 
@@ -307,6 +312,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-19 20:52 (UTC+7) | Hgnv11 | feat/technician-part-returns | Thợ khai trả linh kiện FixHome như web (P1), ẩn khi backend chưa bật custody
 - 2026-10-19 20:39 (UTC+7) | Hgnv11 | feat/booking-device-pricing | Đặt lịch hỏi thông tin thiết bị và hiện phạm vi tiền công do server xác nhận như web (P012)
 - 2026-10-19 20:22 (UTC+7) | Hgnv11 | feat/catalog-price-summary | Thẻ dịch vụ đặt lịch hiện giá công theo priceSummary của backend như web
 - 2026-10-19 13:27 (UTC+7) | Hgnv11 | feat/technician-job-preview | Thợ xem mô tả, giá, tóm tắt AI, ảnh, video và khoảng cách trong lời mời trước khi nhận như web
@@ -346,7 +352,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-15 14:41 (UTC+7) | Hgnv11 | feat/sep139-m8-cutover | Màn nhiệm vụ không bị gỡ khi đơn hoặc tài nguyên tải lại hay có lệnh chờ (ảnh khuôn mặt, ảnh trước/sau, link VNPay); VNPay mở tự động sau xác nhận và gửi header x-client-platform mobile để backend trả về fixhome://app/order-payment; dấu lệnh VNPay quá 15 phút mà hoá đơn chưa trả thì mở khoá; thư viện ảnh gọi ảnh khuôn mặt đúng tên; thiết bị và E2E CHƯA KIỂM CHỨNG
 - 2026-10-15 10:04 (UTC+7) | Hgnv11 | feat/sep139-m8-cutover | Mọi header dùng một nút Quay lại chung `components/BackButton` (44pt, mũi tên Ionicons, về Home đúng vai trò khi không có màn trước); nút số lượng linh kiện 44pt; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-14 23:34 (UTC+7) | Hgnv11 | feat/sep139-m8-cutover | M8 chuyển route chi tiết đơn hai vai trò sang OrderFlow, bỏ POST claim trực tiếp, thêm lối vào Nhắn tin; thiết bị và E2E CHƯA KIỂM CHỨNG.
-- 2026-10-14 21:14 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Khóa bản nháp sau prepare, thêm thao tác sửa confirmation, dọn state khi đổi mục tiêu Booking/claim và chuyển CTA Technician vào footer; kiểm thử source đạt, thiết bị/runtime CHƯA KIỂM CHỨNG.
 
 ### Lịch sử giữ lại khi tích hợp
 

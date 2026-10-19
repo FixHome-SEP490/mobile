@@ -20,7 +20,10 @@ import { AlertCircle, CheckCircle2, Minus, Plus, QrCode, RefreshCw, Send, Trash2
 import * as Haptics from 'expo-haptics';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { useAppTheme } from '../../constants/theme';
-import { partRequestsApi, type PartRequest, type FulfillmentMethod } from '../../api/part-requests.api';
+import {
+  partRequestsApi, partReturnsApi, canDeclareMoreQty, createIdempotencyKey, isPartReturnsUnavailableError, pendingDeclaredQty,
+  type PartRequest, type FulfillmentMethod, type PartCustodyReturnRecord,
+} from '../../api/part-requests.api';
 import { partsCatalogApi, type FixHomePart } from '../../api/parts-catalog.api';
 import { extractApiErrorMessage } from '../../utils/input-validation';
 import { formatVnd } from '../../utils/format';
@@ -116,10 +119,47 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
+  // P1 custody (owner lock 19/10/2026): what this order still owes back to FixHome. With the feature off
+  // the GET fails with 403/404/501/503 and the return UI stays hidden.
+  const [returns, setReturns] = useState<Record<string, PartCustodyReturnRecord>>({});
+  const [declareItemId, setDeclareItemId] = useState<string | null>(null);
+  const [declareQty, setDeclareQty] = useState(1);
+  const [declaring, setDeclaring] = useState(false);
+  const loadReturns = async () => {
+    try {
+      const list = await partReturnsApi.getByOrderId(orderId);
+      setReturns(Object.fromEntries(list.map((r) => [r.partRequestItemId, r])));
+    } catch (err) {
+      setReturns({});
+      if (!isPartReturnsUnavailableError(err)) setActionError(errorMessage(err, 'Chưa tải được số liệu hoàn trả linh kiện.'));
+    }
+  };
+  const submitDeclare = async (requestId: string, record: PartCustodyReturnRecord) => {
+    const max = canDeclareMoreQty(record);
+    if (declaring || !Number.isInteger(declareQty) || declareQty < 1 || declareQty > max) return;
+    setDeclaring(true);
+    setActionError(null);
+    try {
+      await partReturnsApi.declare(requestId, record.partRequestItemId, {
+        quantity: declareQty, expectedVersion: record.version, idempotencyKey: createIdempotencyKey('declare'),
+      });
+      setDeclareItemId(null);
+      setActionSuccess('Đã gửi khai trả linh kiện. Quản lý dịch vụ sẽ nhận và xác nhận số lượng thực tế.');
+      await loadPartRequests();
+    } catch (err) {
+      setActionError(errorMessage(err, 'Không gửi được khai trả linh kiện. Vui lòng thử lại.'));
+      // Stale version (someone else just updated it): read the numbers again before retrying.
+      if ((err as { response?: { status?: number } } | null)?.response?.status === 409) await loadReturns();
+    } finally {
+      setDeclaring(false);
+    }
+  };
+
   const loadPartRequests = async () => {
     try {
       setLoading(true);
       setPartRequests(await partRequestsApi.getByOrderId(orderId));
+      void loadReturns();
     } catch (err) {
       setActionError(errorMessage(err, 'Không thể tải danh sách yêu cầu linh kiện.'));
     } finally {
@@ -150,7 +190,6 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
   };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount
     void loadPartRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
@@ -606,6 +645,56 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
                     )}
                   </View>
                 ))}
+                {pr.items.map((item) => {
+                  const record = returns[item.id];
+                  if (!record) return null;
+                  const pending = pendingDeclaredQty(record);
+                  const max = canDeclareMoreQty(record);
+                  const open = declareItemId === item.id;
+                  return (
+                    <View key={`ret-${item.id}`} style={styles.returnBox} testID={`part-return-${item.id}`}>
+                      <Text style={styles.resultName}>{`Hoàn trả: ${item.partNameSnapshot}`}</Text>
+                      <Text style={styles.jobMeta}>{`Cấp ${record.issuedQty} · Dùng ${record.usedQty} · Cần trả ${record.outstandingQty}`}</Text>
+                      {pending > 0 ? (
+                        <Text style={[styles.jobMeta, { color: colors.tone.warning.text }]}>Đang chờ quản lý xác nhận</Text>
+                      ) : record.outstandingQty === 0 ? (
+                        <Text style={[styles.jobMeta, { color: colors.tone.success.text }]}>Đã nhận</Text>
+                      ) : null}
+                      {max > 0 && !open ? (
+                        <TouchableOpacity
+                          accessibilityRole="button"
+                          style={styles.ghostBtn}
+                          disabled={declaring}
+                          onPress={() => { setDeclareQty(1); setDeclareItemId(item.id); setActionError(null); setActionSuccess(null); }}
+                        >
+                          <Text style={styles.ghostBtnText}>Khai trả</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                      {open ? (
+                        <View style={{ gap: 8 }}>
+                          <View style={styles.usageBtnRow}>
+                            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Giảm số lượng trả" style={styles.usageBtn} onPress={() => setDeclareQty((q) => Math.max(1, q - 1))}>
+                              <Minus size={16} color={colors.text} strokeWidth={1.75} />
+                            </TouchableOpacity>
+                            <Text style={styles.resultName} accessibilityLabel={`Số lượng trả ${declareQty}`}>{declareQty}</Text>
+                            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Tăng số lượng trả" style={styles.usageBtn} onPress={() => setDeclareQty((q) => Math.min(max, q + 1))}>
+                              <Plus size={16} color={colors.text} strokeWidth={1.75} />
+                            </TouchableOpacity>
+                          </View>
+                          <Text style={styles.jobMeta}>Quản lý dịch vụ sẽ nhận linh kiện và xác nhận số lượng thực tế. Khai trả chưa phải là đã trả xong.</Text>
+                          <View style={styles.usageBtnRow}>
+                            <TouchableOpacity accessibilityRole="button" style={styles.primaryBtn} disabled={declaring} onPress={() => void submitDeclare(pr.id, record)}>
+                              {declaring ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.primaryBtnText}>Gửi khai trả</Text>}
+                            </TouchableOpacity>
+                            <TouchableOpacity accessibilityRole="button" style={styles.ghostBtn} disabled={declaring} onPress={() => setDeclareItemId(null)}>
+                              <Text style={styles.ghostBtnText}>Huỷ</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })}
               </View>
             );
           })}
@@ -680,7 +769,8 @@ const getStyles = (colors: any) => StyleSheet.create({
   typeTag: { fontSize: 12, lineHeight: 16, color: colors.textSecondary, fontWeight: '600' },
   receiveBox: { backgroundColor: colors.background, borderRadius: 14, padding: 12, gap: 8 },
   itemRow: { flexDirection: 'row', alignItems: 'center', paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border, gap: 8 },
-  usageBtnRow: { flexDirection: 'row', gap: 6 },
+  usageBtnRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  returnBox: { paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border, gap: 6 },
   usageBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
   usageBtnActiveGreen: { backgroundColor: colors.tone.success.text, borderColor: colors.tone.success.text },
   usageBtnActiveAmber: { backgroundColor: colors.tone.warning.text, borderColor: colors.tone.warning.text },

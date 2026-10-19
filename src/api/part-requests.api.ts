@@ -103,3 +103,57 @@ export const partRequestsApi = {
     return unwrap(res.data);
   },
 };
+
+/**
+ * P1 parts custody (owner lock 19/10/2026): the return obligation of one FixHome part line the
+ * technician received through QR handover. A declaration only marks the intent to hand parts back;
+ * the obligation ends when the Service Manager physically accepts them at the counter.
+ */
+export interface PartCustodyReturnRecord {
+  partRequestId: string;
+  partRequestItemId: string;
+  partNameSnapshot: string;
+  issuedQty: number;
+  usedQty: number;
+  declaredQty: number;
+  managerAcceptedQty: number;
+  outstandingQty: number;
+  version: number;
+}
+
+export interface DeclareReturnPayload {
+  quantity: number;
+  expectedVersion: number;
+  idempotencyKey: string;
+}
+
+/** One key per user action, reused only when the same action is retried; the Backend rejects a key reused with a different request. */
+export function createIdempotencyKey(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+/** Feature flag off (404), no access (403), not enabled (501) or not available yet (503): hide the return UI, keep QR/usage working. */
+export function isPartReturnsUnavailableError(err: unknown): boolean {
+  const status = (err as { response?: { status?: number } } | null)?.response?.status;
+  return status === 403 || status === 404 || status === 501 || status === 503;
+}
+
+/** Declared but not physically accepted yet: the manager still has to confirm. */
+export const pendingDeclaredQty = (r: PartCustodyReturnRecord) => Math.max(0, r.declaredQty - r.managerAcceptedQty);
+
+/** What the technician may still declare: the return-due quantity not declared yet. */
+export const canDeclareMoreQty = (r: PartCustodyReturnRecord) => Math.max(0, r.outstandingQty - pendingDeclaredQty(r));
+
+export const partReturnsApi = {
+  async getByOrderId(orderId: string): Promise<PartCustodyReturnRecord[]> {
+    const res = await apiClient.get<{ data: PartCustodyReturnRecord[] } | PartCustodyReturnRecord[]>(
+      `/service-orders/${orderId}/part-returns`,
+    );
+    const result = unwrap(res.data);
+    return Array.isArray(result) ? result : [];
+  },
+
+  async declare(requestId: string, itemId: string, payload: DeclareReturnPayload): Promise<void> {
+    await apiClient.post(`/part-requests/${requestId}/items/${itemId}/declare-return`, payload);
+  },
+};
