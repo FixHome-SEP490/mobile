@@ -10,6 +10,31 @@ export interface TypingEvent {
   isTyping: boolean;
 }
 
+/** Why a call ended, as the server says it (same contract as the web). */
+export type CallEndReason =
+  | 'rejected'
+  | 'cancelled'
+  | 'ended'
+  | 'timeout'
+  | 'disconnected'
+  | 'busy'
+  | 'answered_elsewhere';
+
+export interface IncomingCallEvent { callId: string; conversationId: string; fromUserId: string }
+export interface CallStepEvent { callId: string; conversationId?: string }
+export interface CallMissedEvent { conversationId: string; fromUserId: string; reason: 'busy' }
+export interface CallEndedEvent { callId: string; conversationId: string; reason: CallEndReason }
+export interface CallSignalEvent<T> { callId: string; data: T }
+export interface CallInviteResult {
+  ok: boolean;
+  callId?: string;
+  reason?: 'invalid' | 'forbidden' | 'busy' | 'self_busy' | 'offline';
+}
+/** A STUN/TURN server handed over on connect:ready. */
+export interface IceServer { urls: string | string[]; username?: string; credential?: string }
+export interface SessionDescription { type: string; sdp: string }
+export interface IceCandidateInit { candidate: string; sdpMid?: string | null; sdpMLineIndex?: number | null }
+
 export interface ChatSocketHandlers {
   onMessageNew?: (message: ChatMessage) => void;
   onMessageUpdated?: (message: ChatMessage) => void;
@@ -22,7 +47,19 @@ export interface ChatSocketHandlers {
    * a screen showing a thread must refetch instead of trusting what it holds.
    */
   onReconnected?: () => void;
+  // Voice calls (PO 18/10/2026), the same events the web listens to.
+  onCallIncoming?: (event: IncomingCallEvent) => void;
+  onCallRinging?: (event: CallStepEvent) => void;
+  onCallAccepted?: (event: CallStepEvent) => void;
+  onCallMissed?: (event: CallMissedEvent) => void;
+  onCallEnded?: (event: CallEndedEvent) => void;
+  onCallOffer?: (event: CallSignalEvent<SessionDescription>) => void;
+  onCallAnswer?: (event: CallSignalEvent<SessionDescription>) => void;
+  onCallIce?: (event: CallSignalEvent<IceCandidateInit>) => void;
 }
+
+/** A call request the server never answers would leave a screen stuck ringing. */
+export const CALL_ACK_TIMEOUT_MS = 8000;
 
 /**
  * The gateway lives at the server root, not under the REST prefix, so the socket
@@ -44,9 +81,15 @@ class ChatSocketService {
   /** Threads opened after connect; re-joined whenever the socket comes back. */
   private joined = new Set<string>();
   private hasConnectedOnce = false;
+  /** Handed over on connect:ready; empty is valid on one Wi-Fi network. */
+  private ice: IceServer[] = [];
 
   get connected(): boolean {
     return this.socket?.connected ?? false;
+  }
+
+  get iceServers(): IceServer[] {
+    return this.ice;
   }
 
   subscribe(handlers: ChatSocketHandlers): () => void {
@@ -129,6 +172,19 @@ class ChatSocketService {
           this.emitToHandlers('onConversationUpdated', p),
         );
         socket.on('typing', (e: TypingEvent) => this.emitToHandlers('onTyping', e));
+        socket.on('connect:ready', (payload: { iceServers?: IceServer[] }) => {
+          this.ice = Array.isArray(payload?.iceServers) ? payload.iceServers : [];
+        });
+        // Call signalling. The server addresses each of these from the call it
+        // stored, so anything arriving here is for this account.
+        socket.on('call:incoming', (e: IncomingCallEvent) => this.emitToHandlers('onCallIncoming', e));
+        socket.on('call:ringing', (e: CallStepEvent) => this.emitToHandlers('onCallRinging', e));
+        socket.on('call:accepted', (e: CallStepEvent) => this.emitToHandlers('onCallAccepted', e));
+        socket.on('call:missed', (e: CallMissedEvent) => this.emitToHandlers('onCallMissed', e));
+        socket.on('call:ended', (e: CallEndedEvent) => this.emitToHandlers('onCallEnded', e));
+        socket.on('call:offer', (e: CallSignalEvent<SessionDescription>) => this.emitToHandlers('onCallOffer', e));
+        socket.on('call:answer', (e: CallSignalEvent<SessionDescription>) => this.emitToHandlers('onCallAnswer', e));
+        socket.on('call:ice', (e: CallSignalEvent<IceCandidateInit>) => this.emitToHandlers('onCallIce', e));
       })();
     });
 
@@ -163,12 +219,76 @@ class ChatSocketService {
     this.socket?.emit('typing', { conversationId, isTyping });
   }
 
+  // --------------------------------------------------------- voice signalling
+
+  /** Ring the other participant of a conversation; the server works out who. */
+  callInvite(conversationId: string): Promise<CallInviteResult> {
+    return this.emitWithAck<CallInviteResult>('call:invite', { conversationId });
+  }
+
+  /** Tell the caller this phone shows their call, so they hear it ring. */
+  callRinging(callId: string): void {
+    this.socket?.emit('call:ringing', { callId });
+  }
+
+  callAccept(callId: string): Promise<{ ok: boolean }> {
+    return this.emitWithAck('call:accept', { callId });
+  }
+
+  callReject(callId: string): Promise<{ ok: boolean }> {
+    return this.emitWithAck('call:reject', { callId });
+  }
+
+  callCancel(callId: string): Promise<{ ok: boolean }> {
+    return this.emitWithAck('call:cancel', { callId });
+  }
+
+  callEnd(callId: string): Promise<{ ok: boolean }> {
+    return this.emitWithAck('call:end', { callId });
+  }
+
+  sendOffer(callId: string, data: SessionDescription): void {
+    this.socket?.emit('call:offer', { callId, data });
+  }
+
+  sendAnswer(callId: string, data: SessionDescription): void {
+    this.socket?.emit('call:answer', { callId, data });
+  }
+
+  sendIceCandidate(callId: string, data: IceCandidateInit): void {
+    this.socket?.emit('call:ice', { callId, data });
+  }
+
+  /** Every acknowledgement is bounded: no answer counts as a refusal. */
+  private emitWithAck<T extends { ok: boolean }>(event: string, payload: Record<string, unknown>): Promise<T> {
+    return new Promise((resolve) => {
+      const socket = this.socket;
+      if (!socket?.connected) {
+        resolve({ ok: false, reason: 'invalid' } as unknown as T);
+        return;
+      }
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        resolve({ ok: false, reason: 'invalid' } as unknown as T);
+      }, CALL_ACK_TIMEOUT_MS);
+      socket.emit(event, payload, (answer: T) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(answer && typeof answer === 'object' ? answer : ({ ok: false } as T));
+      });
+    });
+  }
+
   disconnect(): void {
     this.socket?.removeAllListeners();
     this.socket?.disconnect();
     this.socket = null;
     this.joined.clear();
     this.hasConnectedOnce = false;
+    this.ice = [];
   }
 }
 

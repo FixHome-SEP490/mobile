@@ -43,7 +43,13 @@
           "cameraPermission": "FixHome cần quyền camera để bạn quét mã QR xác nhận đã nhận linh kiện từ kho."
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "microphonePermission": "FixHome cần micro để bạn gọi thoại với kỹ thuật viên hoặc khách hàng ngay trong ứng dụng."
+        }
+      ]
     ]
   }
 }
