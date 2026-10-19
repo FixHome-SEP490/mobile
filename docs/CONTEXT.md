@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-19 23:36 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: fix/home-catalog-v2
+> Cập nhật lần cuối: 2026-10-20 00:36 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: fix/home-catalog-v2
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -246,6 +246,10 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 
 - Như web: tab Hoạt động (`CustomerBookingsScreen`) có hai tab "Đơn sửa chữa" và "Yêu cầu đặt lịch", mỗi tab có số đếm, mỗi lần chỉ hiện một danh sách để khỏi phải cuộn qua danh sách này mới tới danh sách kia. Đơn sửa chữa là đơn đã có thợ (gồm thẻ đang tìm thợ thay thế); yêu cầu đặt lịch là yêu cầu chưa thành đơn. Tab mở sẵn: "Yêu cầu đặt lịch" khi có yêu cầu cần khách xử lý (tab có số "cần bạn xử lý" và nhóm "Cần bạn xử lý" đứng đầu), nếu không thì "Đơn sửa chữa" khi có đơn, còn lại "Yêu cầu đặt lịch". Tab rỗng nói rõ và chỉ sang tab kia. Về kiểu dáng theo đúng mẫu đã có trong app: hai tab là thanh tab gạch chân (lựa chọn chính của trang), bộ lọc trạng thái là hàng chip vuốt ngang như màn Thông báo (không còn hai thanh phân đoạn xám xếp chồng), đúng bốn mục và thứ tự của web: Tất cả (kèm tổng số đơn và yêu cầu theo server, ẩn khi chưa tải xong hoặc đang lỗi), Đang xử lý, Hoàn tất, Đã hủy. Đã hủy tách khỏi Hoàn tất (trước đây gộp vào Lịch sử, còn đơn đã hủy chỉ thấy ở Tất cả); nhãn dùng "Đã hủy" như thẻ trạng thái của mobile. Thẻ đơn và thẻ yêu cầu dùng cùng ngôn ngữ với thẻ dịch vụ (viền mảnh thay bóng, góc 16, nhãn trạng thái dạng viên) và màu lấy từ token theme thay màu cứng nên đúng ở chế độ tối. Bộ lọc, tìm kiếm và cách gộp dữ liệu (`mergeHistory`) giữ nguyên và áp dụng cho cả hai tab. Danh sách tự tải thêm khi cuộn gần cuối (còn khoảng 400 điểm) mỗi lần một trang (20 dòng), đặt lịch trước rồi tới đơn sửa chữa, không tải hết lịch sử một lúc; danh sách quá ngắn để cuộn (bộ lọc ít kết quả) chỉ được thêm một trang cho mỗi lần chọn bộ lọc hoặc tìm kiếm; không còn nút "Tải thêm", chỉ có dòng "Đang tải thêm…". Trang tải lỗi thì dừng tự tải tới khi khách bấm Thử lại; trang không thêm được dòng nào thì coi là hết danh sách để không lặp mãi. Test `CustomerBookingsScreen.test.tsx`. CHƯA xem trên máy thật.
 
+### Thanh tab của khách bớt lệch (20/10/2026, nhánh `fix/home-catalog-v2`)
+
+- `CustomerAnimatedBottomBar`: tab đang chọn từng là một vòng tròn xanh đặc cạnh nút "Đặt lịch" cũng xanh đặc và nhô lên, hai thứ giống nhau tranh nhau và nhìn lệch. Nay tab đang chọn là viên nền xanh nhạt (`primaryTint`) với biểu tượng xanh đậm (`primaryStrong`), chỉ nút "Đặt lịch" là xanh đặc; nút có viền ngoài màu nền (3 điểm, vẫn 56 điểm tổng) để trông gắn liền với thanh. Vị trí, vùng chạm và cách chuyển tab giữ nguyên. Thanh của kỹ thuật viên (`GlassTabBar`) chưa đổi. CHƯA xem trên máy thật.
+
 ### Đăng nhập Google
 
 Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng `WebBrowser.openAuthSessionAsync`, nhận mã sống 60 giây rồi đổi ở `/auth/google/exchange`. App không cần Google client id.
@@ -344,6 +348,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-20 00:36 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Thanh tab khách: tab đang chọn là viên xanh nhạt, chỉ nút Đặt lịch xanh đặc có viền
 - 2026-10-19 23:36 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Hoạt động có hai tab Đơn sửa chữa và Yêu cầu đặt lịch như web, mỗi tab một danh sách và số đếm
 - 2026-10-19 23:12 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Làm lại màn Khám phá dịch vụ: thẻ dịch vụ có giá công, dải chip danh mục, danh mục chọn từ Home chỉ hiện dịch vụ con
 - 2026-10-19 23:05 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Home gọn lại: danh mục lớn vuốt ngang hai hàng mỗi trang kèm chấm trang
@@ -383,7 +388,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-17 01:29 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | PR-C thêm quản lý ngân hàng, rút tiền một lần không replay khi ACK chưa rõ, đối soát GET và lịch sử phân trang với ba status thật; focused 3 suites/18 tests, API runtime/thiết bị/giao dịch tài chính CHƯA KIỂM CHỨNG.
 - 2026-10-17 01:20 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | PR-B thêm KYC Customer với kiểm tra tuổi/ngày Việt Nam, hai ảnh CCCD riêng theo MIME/đuôi/owner path, signed XHR có timeout/abort và status; focused 4 suites/22 tests, lint/typecheck đạt; runtime Backend và thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-17 01:09 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | PR-A chốt kiểm thử đủ bảy loại ledger, `amount` dương và `balanceAfter` không âm (kể cả zero), từ chối loại không biết hoặc giá trị malformed; focused Jest xanh, chưa có thao tác tài chính thật.
-- 2026-10-17 00:56 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | PR-A mở rộng parser ví cho hai loại ledger rút tiền và trình bày đúng nhãn/chiều tiền; chưa có thao tác tài chính thật.
 
 ### Lịch sử giữ lại khi tích hợp
 
