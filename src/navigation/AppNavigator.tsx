@@ -33,6 +33,7 @@ import TechnicianEarningsScreen from '../screens/technician/TechnicianEarningsSc
 import TechnicianNotificationsScreen from '../screens/technician/TechnicianNotificationsScreen';
 import ChatListScreen from '../screens/chat/ChatListScreen';
 import ChatThreadScreen from '../screens/chat/ChatThreadScreen';
+import CallOverlay from '../components/call/CallOverlay';
 
 import CustomerRoleChoiceScreen from '../screens/onboarding/CustomerRoleChoiceScreen';
 import CustomerOnboardingScreen from '../screens/onboarding/CustomerOnboardingScreen';
@@ -163,6 +164,8 @@ export default function AppNavigator({ firstRunSeen = false }: { firstRunSeen?: 
           </>
         )}
       </Stack.Navigator>
+      {/* Voice calls (PO 18/10/2026): one call screen for the whole signed-in app. */}
+      {isAuthenticated && <CallOverlay />}
     </NavigationContainer>
   );
 }

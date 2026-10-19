@@ -116,13 +116,13 @@ describe('CustomerAIChatScreen REAL presentation', () => {
     try {
       await act(async () => { await button(tree, 'Chọn ảnh từ thư viện')?.props.onPress(); });
       expect(mockPick).toHaveBeenCalledWith(0);
-      expect(textValues(tree)).toContain('1/3 ảnh');
+      expect(textValues(tree)).toContain('Ảnh 1/3 · Video 0/2');
       const remove = button(tree, 'Bỏ ảnh thứ 1');
       expect(remove).toBeDefined();
       expect(styleOf(remove).width).toBeGreaterThanOrEqual(44);
       expect(styleOf(remove).height).toBeGreaterThanOrEqual(44);
       act(() => remove?.props.onPress());
-      expect(textValues(tree)).not.toContain('1/3 ảnh');
+      expect(textValues(tree)).not.toContain('Ảnh 1/3 · Video 0/2');
       expect(mockAnalyze).not.toHaveBeenCalled();
       expect(mockAsk).not.toHaveBeenCalled();
     } finally { act(() => tree.unmount()); }

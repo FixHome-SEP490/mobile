@@ -56,6 +56,7 @@ import { usersApi, type AddressData } from '../../api/users.api';
 import { useAuthStore } from '../../store';
 import { UserRole, type RootStackParamList } from '../../types';
 import BookingSessionPicker from '../../components/BookingSessionPicker';
+import { bookingMediaIds, chatAttachmentSummary, type ChatAttachmentId } from './ai-chat-logic';
 import type { BookingSchedule } from '../../utils/booking-session';
 import { BookingReviewSummary } from '../../components/BookingReviewSheet';
 import {
@@ -271,6 +272,8 @@ export default function CustomerBookingCreateScreen() {
   // Session booking (web parity): a morning/afternoon of a day, or "tới ngay". Nothing is pre-selected.
   const [schedule, setSchedule] = useState<BookingSchedule | null>(null);
   const [customerNote, setCustomerNote] = useState('');
+  /** Photos and videos the customer sent the assistant, already uploaded, for the technician (PO 18/10/2026). */
+  const [chatAttachments, setChatAttachments] = useState<ChatAttachmentId[]>(() => prefill?.attachmentUploadIds ?? []);
   // Keep one owner-bound draft while moving between dedicated booking scenes.
   const [bookingStage, setBookingStage] = useState<0 | 1>(() =>
     customerOwnerId && (runtimeCreateStates[customerOwnerId]?.flowId === flowId
@@ -384,6 +387,8 @@ export default function CustomerBookingCreateScreen() {
     setServiceId('');
     setAddressId('');
     setDescription(sameOwner ? prefill?.description ?? '' : '');
+    // Uploaded by the customer who chatted; anyone else signing in starts without them.
+    setChatAttachments(sameOwner ? prefill?.attachmentUploadIds ?? [] : []);
     bookingPhotosRef.current = [];
     setBookingPhotos([]);
     setPhotoUploadError('');
@@ -397,7 +402,7 @@ export default function CustomerBookingCreateScreen() {
     setCustomerNote('');
     setLoadError('');
     setLoading(Boolean(customerOwnerId));
-  }, [customerOwnerId, flowId, prefill?.description]);
+  }, [customerOwnerId, flowId, prefill?.description, prefill?.attachmentUploadIds]);
 
   const loadOptions = useCallback(async () => {
     const generation = ++loadGenerationRef.current;
@@ -878,8 +883,10 @@ export default function CustomerBookingCreateScreen() {
 
       if (!sameSubmissionSession()) return;
       setPhotoUploadError('');
-      const request = photoUploadIds.length > 0
-        ? { ...snapshot.request, photoUploadIds }
+      // The chat's photos while there is room, and its videos, after the booking's own photos.
+      const mediaUploadIds = bookingMediaIds(photoUploadIds, chatAttachments, MAX_BOOKING_PHOTOS);
+      const request = mediaUploadIds.length > 0
+        ? { ...snapshot.request, photoUploadIds: mediaUploadIds }
         : snapshot.request;
 
       try {
@@ -1402,6 +1409,22 @@ export default function CustomerBookingCreateScreen() {
                   {photoUploadError}
                 </Text>
               )}
+              {chatAttachments.length > 0 && (
+                <View testID="booking-chat-attachments" style={[styles.chatAttachments, { backgroundColor: colors.tone.warning.bg }]}>
+                  <Text style={{ flex: 1, color: colors.tone.warning.text, fontSize: 13, lineHeight: 19 }}>
+                    {`Gửi kèm từ trò chuyện với trợ lý: ${chatAttachmentSummary(chatAttachments)}. Kỹ thuật viên xem được trước khi nhận đơn.`}
+                  </Text>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Bỏ ảnh và video từ trò chuyện với trợ lý"
+                    disabled={reviewDisabled}
+                    onPress={() => setChatAttachments([])}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={{ color: colors.primary, fontWeight: '600' }}>Bỏ</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
 
               </>
@@ -1808,6 +1831,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   photoError: { fontSize: 13, lineHeight: 19 },
+  chatAttachments: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12 },
   action: { padding: 15, marginTop: 0, borderRadius: 14, alignItems: 'center', justifyContent: 'center', minHeight: 52 },
   actionText: { fontWeight: '700', fontSize: 15, lineHeight: 22 },
   pickerHeader: { paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, gap: 8 },
