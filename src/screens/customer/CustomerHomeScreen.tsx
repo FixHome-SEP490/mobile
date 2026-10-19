@@ -17,6 +17,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useLiveRefresh } from '../../hooks/useLiveRefresh';
+import { listsNeedRead } from '../../services/live-kinds';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store';
@@ -167,9 +169,11 @@ export default function CustomerHomeScreen() {
 
   // Active-order resume (read-only): at most one concise card from real
   // Booking/Order data. Hidden on error/unknown data — never a false claim.
+  const [resumeTick, setResumeTick] = useState(0);
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
+      void resumeTick;
       const session = useAuthStore.getState();
       const ownerId = session.user?.id ?? null;
       if (!session.isAuthenticated || session.user?.role !== UserRole.CUSTOMER || !ownerId) {
@@ -191,7 +195,7 @@ export default function CustomerHomeScreen() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [resumeTick]),
   );
 
   const openResume = useCallback(() => {
@@ -222,6 +226,8 @@ export default function CustomerHomeScreen() {
     if (hour < 18) return name ? `Chào buổi chiều, ${name}` : 'Chào buổi chiều';
     return name ? `Chào buổi tối, ${name}` : 'Chào buổi tối';
   };
+
+  useLiveRefresh(['booking:updated', 'invitation:updated', 'order:updated'], (batch) => { if (listsNeedRead(batch)) setResumeTick((tick) => tick + 1); }, undefined, { pollMs: 60_000 });
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>

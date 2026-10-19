@@ -23,7 +23,7 @@ jest.mock('../../constants/theme', () => ({
     },
   }),
 }));
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: mockNavigate }) }));
+jest.mock('@react-navigation/native', () => ({ useFocusEffect: () => undefined, useNavigation: () => ({ navigate: mockNavigate }) }));
 jest.mock('../../hooks/useScrollHideTabBar', () => ({ useScrollHideTabBar: () => jest.fn() }));
 jest.mock('react-native-safe-area-context', () => {
   const Native = jest.requireActual('react-native');

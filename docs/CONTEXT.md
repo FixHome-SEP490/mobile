@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-19 21:02 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/chat-parity-n4-n3
+> Cập nhật lần cuối: 2026-10-19 21:10 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/realtime-full
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -222,7 +222,9 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 
 ### Realtime (19/10/2026, nhánh `feat/chat-parity-n4-n3`)
 
-- Socket `/chat` nhận thêm `order:updated {serviceOrderId, bookingId, status, kinds?}`, `order:location`, `booking:updated`, `invitation:updated`, `notification:new`, `wallet:updated`, `realtime:resync`. Phiên bản nhẹ so với web: `hooks/useLiveRefresh.ts` chỉ chạy khi màn đang focus, gom sự kiện trong 150 ms rồi gọi lại hàm đọc sẵn có của màn (chạy ngầm, không spinner toàn trang), và cũng đọc lại sau khi socket nối lại. Đã nối: danh sách lời mời và số đếm lời mời trên tab của thợ (`invitation:updated`), danh sách đơn của khách (`booking:updated`, `invitation:updated`, `order:updated`), danh sách việc của thợ, chi tiết đơn của khách và của thợ (`order:updated` đúng đơn đang mở). Không đọc lại theo `kinds` từng phần như web, và `order:location`, `wallet:updated`, `notification:new` chưa dùng. Khi socket rớt, mobile giữ cách cũ (đọc khi focus), chưa có polling dự phòng. Test `useLiveRefresh.test.tsx`.
+- Socket `/chat` nhận thêm `order:updated {serviceOrderId, bookingId, status, kinds?}`, `order:location`, `booking:updated`, `invitation:updated`, `notification:new`, `wallet:updated`, `realtime:resync` (`services/chat-socket.service.ts`, `onLiveUpdate`). Cơ chế như web nhưng gọn hơn: `hooks/useLiveRefresh.ts` chỉ chạy khi màn đang focus, gom sự kiện trong 150 ms thành một lần đọc và báo đủ `kinds` của cả đợt (`batch.kinds`; thiếu `kinds` hoặc `realtime:resync` hoặc vừa nối lại socket thì đọc lại tất cả). Màn cần theo kịp cả khi không có realtime truyền `pollMs`: chỉ poll lúc socket rớt (30-60 giây) và dừng khi socket nối lại.
+- Đọc lại đúng phần bị đổi (`services/live-kinds.ts`, `orderPartsFor`): chi tiết đơn của khách và của thợ chỉ đọc lại thông tin đơn khi `order/status/assignment/quotation/arrival/warranty/cash` đổi, ảnh bằng chứng khi `evidence`, hoá đơn khi `invoice/cash`, chi phí phát sinh khi `additional_cost`, danh sách linh kiện của thợ khi `part` (`TechnicianPartsSection` nhận `refreshKey`). Danh sách và bộ đếm (`listsNeedRead`) chỉ đọc lại khi trạng thái hoặc người giữ đơn đổi, không đọc vì một tấm ảnh hay một món linh kiện.
+- Đã nối: lời mời của thợ và số đếm trên tab (`invitation:updated`); danh sách đơn của khách, màn chính của khách (đơn đang theo dõi), danh sách việc và màn chính của thợ (`order:updated`, `booking:updated`, `invitation:updated`); số thông báo chưa đọc trên tab thợ và danh sách thông báo của khách và thợ (`notification:new`); ví và thu nhập của thợ (`wallet:updated`). `order:location` không có nơi dùng: mobile chưa có bản đồ vị trí thợ cho khách đã đăng nhập (chỉ có tra cứu đơn công khai). Số thông báo chưa đọc của khách chưa có huy hiệu để cập nhật. Test `useLiveRefresh.test.tsx`; chưa kiểm chứng với backend thật.
 
 ### Đối chiếu lịch chọn ngày rồi chọn giờ (19/10/2026)
 
@@ -326,6 +328,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-19 21:10 (UTC+7) | Hgnv11 | feat/realtime-full | Realtime đầy đủ: đọc lại đúng phần bị đổi theo kinds, thông báo, ví, thu nhập, màn chính, poll dự phòng khi socket rớt
 - 2026-10-19 21:02 (UTC+7) | Hgnv11 | feat/chat-parity-n4-n3 | Chat gửi ảnh/video, khoá khi đơn hoàn tất, mã đơn; realtime nhẹ cho lời mời, đơn và danh sách việc như web
 - 2026-10-19 20:52 (UTC+7) | Hgnv11 | feat/technician-part-returns | Thợ khai trả linh kiện FixHome như web (P1), ẩn khi backend chưa bật custody
 - 2026-10-19 20:39 (UTC+7) | Hgnv11 | feat/booking-device-pricing | Đặt lịch hỏi thông tin thiết bị và hiện phạm vi tiền công do server xác nhận như web (P012)
@@ -365,7 +368,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-16 11:21 (UTC+7) | Hgnv11 | feat/sep139-group-b | Tạo booking chọn buổi sáng/chiều hoặc Tới ngay và ghi chú cho thợ như web, bỏ chọn giờ bắt đầu tự do; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-16 11:06 (UTC+7) | Hgnv11 | feat/sep139-group-b | Nhóm B SEP-139 (tự nhận việc, đặt lại thợ, uy tín, bảo hành mặc định, thu nhập theo kỳ, lưới lịch) và nhãn/thông báo tiếng Việt theo web; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-15 14:41 (UTC+7) | Hgnv11 | feat/sep139-m8-cutover | Màn nhiệm vụ không bị gỡ khi đơn hoặc tài nguyên tải lại hay có lệnh chờ (ảnh khuôn mặt, ảnh trước/sau, link VNPay); VNPay mở tự động sau xác nhận và gửi header x-client-platform mobile để backend trả về fixhome://app/order-payment; dấu lệnh VNPay quá 15 phút mà hoá đơn chưa trả thì mở khoá; thư viện ảnh gọi ảnh khuôn mặt đúng tên; thiết bị và E2E CHƯA KIỂM CHỨNG
-- 2026-10-15 10:04 (UTC+7) | Hgnv11 | feat/sep139-m8-cutover | Mọi header dùng một nút Quay lại chung `components/BackButton` (44pt, mũi tên Ionicons, về Home đúng vai trò khi không có màn trước); nút số lượng linh kiện 44pt; thiết bị CHƯA KIỂM CHỨNG.
 
 ### Lịch sử giữ lại khi tích hợp
 

@@ -17,6 +17,7 @@ import { useInvitationCount } from '../hooks/useInvitationCount';
 import { useAppTheme } from '../constants/theme';
 import { notificationsApi } from '../api/notifications.api';
 import { useFocusEffect } from '@react-navigation/native';
+import { useLiveRefresh } from '../hooks/useLiveRefresh';
 
 const Tab = createBottomTabNavigator<TechnicianTabParamList>();
 
@@ -36,6 +37,11 @@ export default function TechnicianNavigator() {
       return () => { mounted = false; };
     }, [setUnreadCount])
   );
+
+  // PO 18/10/2026: the unread count on the tab follows `notification:new` instead of waiting for a refocus.
+  useLiveRefresh(['notification:new'], () => {
+    notificationsApi.getCountUnread().then(setUnreadCount).catch(() => {});
+  }, undefined, { pollMs: 60_000 });
 
   return (
     <Tab.Navigator

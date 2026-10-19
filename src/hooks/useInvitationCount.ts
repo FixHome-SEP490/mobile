@@ -36,7 +36,7 @@ export function useInvitationCount(): number {
       void refresh();
     }, [refresh]),
   );
-  useLiveRefresh(['invitation:updated'], () => void refresh());
+  useLiveRefresh(['invitation:updated'], () => void refresh(), undefined, { pollMs: 60_000 });
 
   return isAuthenticated ? count : 0;
 }

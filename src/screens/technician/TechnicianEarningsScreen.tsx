@@ -3,6 +3,8 @@ import { RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TouchableOpaci
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AlertTriangle, ChevronRight, Info, WalletCards } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useLiveRefresh } from '../../hooks/useLiveRefresh';
+import { listsNeedRead } from '../../services/live-kinds';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAppTheme } from '../../constants/theme';
@@ -77,6 +79,8 @@ export default function TechnicianEarningsScreen({ embedded = false }: { embedde
   const buckets: EarningsBucket[] = summary ? (period === 'week' ? summary.weeks : summary.months) : [];
   const max = Math.max(1, ...buckets.map((b) => b.amount));
   const current = buckets[buckets.length - 1];
+
+  useLiveRefresh(['wallet:updated', 'order:updated'], (batch) => { if (listsNeedRead(batch)) void load(); });
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

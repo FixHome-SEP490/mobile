@@ -12,6 +12,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AlertTriangle, Bell, BellOff, Briefcase, CheckCheck, Tag, Wallet } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useLiveRefresh } from '../../hooks/useLiveRefresh';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAppTheme, type ToneName } from '../../constants/theme';
@@ -274,6 +275,9 @@ export default function TechnicianNotificationsScreen() {
       </View>
     );
   };
+
+  // PO 18/10/2026: a new notification joins the list as it arrives.
+  useLiveRefresh(['notification:new'], () => { void fetchFirstPage(); }, undefined, { pollMs: 60_000 });
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>

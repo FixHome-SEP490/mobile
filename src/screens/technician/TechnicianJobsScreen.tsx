@@ -34,6 +34,7 @@ import { historicalSummaryDates, isHistoricalOrder, resolveJobsView, techOrderDe
 import { findChatForBooking } from './technician-chat-shortcut';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useLiveRefresh } from '../../hooks/useLiveRefresh';
+import { listsNeedRead } from '../../services/live-kinds';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store/auth.store';
@@ -138,7 +139,9 @@ export default function TechnicianJobsScreen() {
     void loader.focus();
     return () => loader.blur();
   }, [loader]));
-  useLiveRefresh(['order:updated', 'invitation:updated'], () => { void loader.refresh(true); });
+  useLiveRefresh(['order:updated', 'invitation:updated'], (batch) => {
+    if (listsNeedRead(batch)) void loader.refresh(true);
+  }, undefined, { pollMs: 30_000 });
   // Switching back into this tab reuses the cached list silently (background
   // refresh, no visible spinner). Tapping the tab icon while already on it is
   // the explicit "reload" gesture — same pattern as CustomerBookingsScreen.

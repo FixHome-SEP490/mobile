@@ -85,7 +85,7 @@ function errorMessage(err: unknown, fallback: string): string {
   return extractApiErrorMessage(err, fallback);
 }
 
-export default function TechnicianPartsSection({ orderId, orderStatus }: { orderId: string; orderStatus: string }) {
+export default function TechnicianPartsSection({ orderId, orderStatus, refreshKey = 0 }: { orderId: string; orderStatus: string; refreshKey?: number }) {
   const { colors } = useAppTheme();
   const styles = getStyles(colors);
   const [loading, setLoading] = useState(true);
@@ -191,8 +191,9 @@ export default function TechnicianPartsSection({ orderId, orderStatus }: { order
 
   useEffect(() => {
     void loadPartRequests();
+    // refreshKey: a part request of this order changed on the server (PO 18/10/2026).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId]);
+  }, [orderId, refreshKey]);
 
   const onSearchChange = (text: string) => {
     setSearchQuery(text);

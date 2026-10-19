@@ -106,7 +106,7 @@ export default function TechnicianInvitationsScreen() {
     return () => controller.blur();
   }, [controller]));
 
-  useLiveRefresh(['invitation:updated'], () => { void controller.load(); });
+  useLiveRefresh(['invitation:updated'], () => { void controller.load(); }, undefined, { pollMs: 30_000 });
 
   // Re-evaluate countdowns/expiry while focused. Deadlines come from the server (`expiresAt`).
   const [now, setNow] = useState(() => Date.now());

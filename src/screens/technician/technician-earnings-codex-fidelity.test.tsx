@@ -10,6 +10,7 @@ const mockNavigate = jest.fn();
 const mockGetParent = jest.fn();
 
 jest.mock('@react-navigation/native', () => ({
+  useFocusEffect: () => undefined, // live refresh needs the focus hook; the socket is not under test here
   useNavigation: () => ({
     getParent: mockGetParent,
     goBack: mockGoBack,

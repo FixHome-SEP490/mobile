@@ -21,6 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useLiveRefresh } from '../../hooks/useLiveRefresh';
+import { listsNeedRead } from '../../services/live-kinds';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAppTheme } from '../../constants/theme';
@@ -116,7 +117,9 @@ export default function CustomerBookingsScreen() {
     });
   }, [navigation, loader]);
   // PO 18/10/2026: a technician answering, an order moving on or a new one reaching the list shows up at once.
-  useLiveRefresh(['booking:updated', 'invitation:updated', 'order:updated'], () => { void loader.refresh(true); });
+  useLiveRefresh(['booking:updated', 'invitation:updated', 'order:updated'], (batch) => {
+    if (listsNeedRead(batch)) void loader.refresh(true);
+  }, undefined, { pollMs: 30_000 });
   const handleScroll = useScrollHideTabBar();
 
   const onRefresh = () => { void loader.refresh(); };
