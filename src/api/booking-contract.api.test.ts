@@ -82,7 +82,16 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
         serviceName: 'Repair', quantity: 1, urgency: 'medium',
         preferredStartAt: '2030-10-21T10:00:00Z', preferredEndAt: '2030-10-21T12:00:00Z',
         customerId: 'private-customer-id', customerPhone: 'private-phone',
-        addressSummary: 'private-street-address', media: [{ url: 'private-photo' }],
+        addressSummary: 'private-street-address', customerNote: 'gate code 1234',
+        description: 'Tap leaks',
+        aiSummary: { conclusion: 'Worn washer' },
+        media: [
+          { id: 'm1', url: null, isPrivate: true, mimeType: 'image/jpeg', privateUploadId: 'secret' },
+          { id: 'm2', url: 'leak', isPrivate: true, mimeType: 'video/mp4' },
+          { url: 'no-id' },
+        ],
+        pricingMode: 'fixed_price', fixedUnitPrice: '150000',
+        distanceBand: { minKm: 3, maxKm: 5 },
       },
     }] } });
     const [invitation] = await bookingsApi.getMyInvitations();
@@ -94,7 +103,16 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
     expect(invitation.booking).not.toHaveProperty('customerId');
     expect(invitation.booking).not.toHaveProperty('customerPhone');
     expect(invitation.booking).not.toHaveProperty('addressSummary');
-    expect(invitation.booking).not.toHaveProperty('media');
+    expect(invitation.booking).not.toHaveProperty('customerNote');
+    // PO 18/10/2026: the job itself is visible before accepting, as safe fields only.
+    expect(invitation.booking).toMatchObject({
+      description: 'Tap leaks', aiSummary: { conclusion: 'Worn washer' },
+      pricingMode: 'fixed_price', fixedUnitPrice: 150000, distanceBand: { minKm: 3, maxKm: 5 },
+    });
+    expect(invitation.booking?.media).toEqual([
+      { id: 'm1', url: null, isPrivate: true, mimeType: 'image/jpeg' },
+      { id: 'm2', url: null, isPrivate: true, mimeType: 'video/mp4' },
+    ]);
   });
 
   it('preserves private photo upload IDs on Booking create and normalizes urgency', async () => {

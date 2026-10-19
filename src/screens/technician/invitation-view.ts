@@ -43,3 +43,23 @@ export function invitationClosedLabel(status: InvitationItem['status']): string 
   if (status === 'DECLINED') return 'Đã từ chối';
   return 'Đã hết hạn';
 }
+
+/** "Cách bạn dưới 1 km" / "khoảng 3-5 km" / "hơn 40 km"; empty when the server could not measure (same wording as the web). */
+export function invitationDistanceText(band: { minKm: number; maxKm: number | null } | null | undefined): string {
+  if (!band) return '';
+  if (band.minKm === 0 && band.maxKm != null) return `Cách bạn dưới ${band.maxKm} km`;
+  if (band.maxKm == null) return `Cách bạn hơn ${band.minKm} km`;
+  return `Cách bạn khoảng ${band.minKm}-${band.maxKm} km`;
+}
+
+/** The price basis the technician accepts: the listed price, or a quote after the visit. */
+export function invitationPriceText(
+  booking: { pricingMode?: string | null; fixedUnitPrice?: number | null; quantity?: number } | undefined,
+  formatMoney: (n: number) => string,
+): string {
+  if (String(booking?.pricingMode ?? '').toLowerCase() === 'fixed_price' && booking?.fixedUnitPrice != null) {
+    const qty = booking.quantity && booking.quantity > 1 ? ` × ${booking.quantity}` : '';
+    return `Giá niêm yết ${formatMoney(booking.fixedUnitPrice)}${qty}`;
+  }
+  return 'Báo giá sau khi kiểm tra tại nhà khách';
+}

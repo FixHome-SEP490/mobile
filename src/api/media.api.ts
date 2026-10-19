@@ -1,4 +1,6 @@
 import apiClient from './client';
+import { APP_CONFIG } from '../constants';
+import { storageService } from '../services/storage.service';
 
 export interface MediaUploadImage {
   uri: string;
@@ -128,7 +130,41 @@ const progressConfig = (opts: UploadProgressOptions, fallbackTimeout: number) =>
     : {}),
 });
 
+/** A short-lived link a video player streams and seeks (PO 18/10/2026); paths are relative to the API base. */
+export interface VideoLink {
+  url: string;
+  posterUrl: string;
+  expiresAt: string;
+}
+
+/** Validates a viewing-link answer: the paths must point at our own streaming routes. */
+export function toVideoLink(data: unknown, prefix: string): VideoLink {
+  const link = data as Partial<VideoLink> | null;
+  if (!link || typeof link.url !== 'string' || !link.url.startsWith(prefix)
+    || typeof link.posterUrl !== 'string' || typeof link.expiresAt !== 'string') {
+    throw new Error('Unexpected API response: invalid video link');
+  }
+  return { url: link.url, posterUrl: link.posterUrl, expiresAt: link.expiresAt };
+}
+
+export const apiUrl = (path: string) => `${APP_CONFIG.API_BASE_URL}${path}`;
+
 export const mediaApi = {
+  /** A viewing link for a booking video: the player streams it instead of downloading it whole. */
+  async getBookingVideoLink(bookingId: string, mediaId: string): Promise<VideoLink> {
+    const res = await apiClient.get(`/bookings/${encodeURIComponent(bookingId)}/media/${encodeURIComponent(mediaId)}/stream`);
+    return toVideoLink(isRecord(res.data) && 'data' in res.data ? res.data.data : res.data, '/bookings/media/stream/');
+  },
+
+  /** Source for an `<Image>` of a private booking photo: the bytes need the bearer token. */
+  async getBookingPhotoSource(bookingId: string, mediaId: string): Promise<{ uri: string; headers: Record<string, string> }> {
+    const token = await storageService.getToken();
+    return {
+      uri: apiUrl(`/bookings/${encodeURIComponent(bookingId)}/media/${encodeURIComponent(mediaId)}/content`),
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    };
+  },
+
   async uploadPublicImage(image: MediaUploadImage): Promise<UploadedPublicMedia> {
     const form = new FormData();
     form.append('file', {

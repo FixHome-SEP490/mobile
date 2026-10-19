@@ -29,7 +29,7 @@ import { UserRole, type RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store/auth.store';
 import { useBadgeStore } from '../../store/badge.store';
 import { createInvitationInbox, initialInboxState, isActionable } from './invitation-inbox';
-import { invitationClosedLabel, invitationCountdown, sortInvitationsForDisplay } from './invitation-view';
+import { invitationClosedLabel, invitationCountdown, invitationDistanceText, sortInvitationsForDisplay } from './invitation-view';
 import { urgencyView, type StatusView } from './technician-status';
 import { bookingsApi, type InvitationItem } from '../../api/bookings.api';
 import { ordersApi } from '../../api/orders.api';
@@ -40,6 +40,7 @@ import { sessionLabel } from '../../utils/booking-session';
 import { isSameVnDay, vnDateTimeString, vnTimeString } from '../../utils/vn-time';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import StatusBadge from '../../components/StatusBadge';
+import InvitationJobDetails from '../../components/technician/InvitationJobDetails';
 import InvitationDecisionView from '../../features/order-flow/technician/InvitationDecisionView';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -177,6 +178,7 @@ export default function TechnicianInvitationsScreen() {
       ? { label: countdown.label, tone: countdown.urgent ? 'danger' : 'warning', icon: 'Clock' }
       : null;
     const location = [b?.district, b?.province].filter(Boolean).join(', ');
+    const distance = invitationDistanceText(b?.distanceBand);
     // Same wording as the web: "Buổi sáng (8:00 - 12:00), 21/10/2026" / "Tới ngay"; older bookings keep the plain window.
     const timeWindow = b && (b.bookingMode || b.slot)
       ? sessionLabel({ bookingMode: b.bookingMode, slot: b.slot, start: b.preferredStartAt })
@@ -227,6 +229,7 @@ export default function TechnicianInvitationsScreen() {
               <View style={styles.detailField}>
                 <Text style={styles.fieldLabel}>Khu vực được phép xem</Text>
                 <Text style={styles.fieldValue}>{location || 'Chưa xác định'}</Text>
+                {distance ? <Text style={styles.fieldValue} testID="invitation-detail-distance">{distance}</Text> : null}
               </View>
               <View style={styles.detailField}>
                 <Text style={styles.fieldLabel}>Khung giờ mong muốn</Text>
@@ -245,13 +248,15 @@ export default function TechnicianInvitationsScreen() {
                 <Text style={styles.fieldValue}>{knownDeadline ? vnDateTimeString(inv.expiresAt!, VN_DATETIME) : 'Chưa xác định'}</Text>
                 {countdownView ? <StatusBadge view={countdownView} /> : null}
               </View>
+              {b ? <InvitationJobDetails booking={b} /> : null}
             </View>
           ) : (
             <>
               <View style={styles.metaRow}>
                 <MapPin size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
-                <Text style={styles.metaText}>{location || 'Khu vực chưa xác định'}</Text>
+                <Text style={styles.metaText}>{[location || 'Khu vực chưa xác định', distance].filter(Boolean).join(' · ')}</Text>
               </View>
+              {b?.description ? <Text style={styles.metaText} numberOfLines={2} testID="invitation-description">{b.description}</Text> : null}
               <View style={styles.metaRow}>
                 <Clock size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
                 <Text style={styles.metaText}>{timeWindow || 'Khung giờ chưa xác định'}</Text>

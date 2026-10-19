@@ -198,7 +198,7 @@ describe('Technician T03 focused invitation scene (FH-TECH-02 UX01A)', () => {
       addressSummary: 'PRIVATE_ADDRESS_SENTINEL_123',
       customerPhone: '0901234567',
       customerName: 'PRIVATE_NAME_SENTINEL',
-      description: 'PRIVATE_ISSUE_SENTINEL',
+      description: 'Vòi nước bị rò',
     });
     await render([inv]);
     review('Sửa bơm riêng tư (fixture)');

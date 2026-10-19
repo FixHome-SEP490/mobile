@@ -124,6 +124,55 @@ export interface TechnicianBookingPreview {
   preferredEndAt: string | null;
   bookingMode?: 'scheduled' | 'urgent';
   slot?: BookingSlot | null;
+  /** PO 18/10/2026: what the technician needs to decide before accepting; never the address or phone. */
+  description?: string | null;
+  aiSummary?: AiBookingSummary | null;
+  media?: BookingMedia[];
+  /** `fixed_price` (listed price) or `inspection_required` (quote after checking). */
+  pricingMode?: string | null;
+  fixedUnitPrice?: number | null;
+  /** A coarse band, never an exact distance: {0,1}, {1,3} ... {40,null}. */
+  distanceBand?: { minKm: number; maxKm: number | null } | null;
+}
+
+export interface AiBookingSummary {
+  deviceName?: string | null;
+  customerText?: string | null;
+  suspectedFaults?: string[];
+  suggestedActions?: string[];
+  conclusion?: string | null;
+  priceMin?: number | null;
+  priceMax?: number | null;
+  recommendedServiceName?: string | null;
+  /** What the customer already tried, ruled out or suspects. */
+  notes?: string[];
+}
+
+export interface BookingMedia {
+  id: string;
+  url: string | null;
+  isPrivate: boolean;
+  mimeType: string;
+}
+
+const finiteOrNull = (v: unknown): number | null => (v != null && Number.isFinite(Number(v)) ? Number(v) : null);
+
+function previewBand(v: unknown): TechnicianBookingPreview['distanceBand'] {
+  if (!v || typeof v !== 'object') return null;
+  const { minKm, maxKm } = v as { minKm?: unknown; maxKm?: unknown };
+  const min = finiteOrNull(minKm);
+  const max = maxKm === null ? null : finiteOrNull(maxKm);
+  return min == null || min < 0 || (max != null && max <= min) || (maxKm !== null && max == null) ? null : { minKm: min, maxKm: max };
+}
+
+/** Keeps only media with the shape the viewer relies on; a private item never carries a url. */
+function previewMedia(v: unknown): BookingMedia[] {
+  if (!Array.isArray(v)) return [];
+  return v.flatMap((m) => {
+    if (!m || typeof m !== 'object' || typeof m.id !== 'string' || !m.id.trim() || typeof m.mimeType !== 'string'
+      || typeof m.isPrivate !== 'boolean' || (m.url !== null && typeof m.url !== 'string')) return [];
+    return [{ id: m.id, url: m.isPrivate ? null : m.url, isPrivate: m.isPrivate, mimeType: m.mimeType }];
+  });
 }
 
 export interface InvitationItem {
@@ -287,6 +336,14 @@ export const bookingsApi = {
         urgency: inv.booking.urgency,
         preferredStartAt: inv.booking.preferredStartAt,
         preferredEndAt: inv.booking.preferredEndAt,
+        bookingMode: inv.booking.bookingMode,
+        slot: inv.booking.slot,
+        description: typeof inv.booking.description === 'string' && inv.booking.description.trim() ? inv.booking.description : null,
+        aiSummary: inv.booking.aiSummary && typeof inv.booking.aiSummary === 'object' ? inv.booking.aiSummary : null,
+        media: previewMedia(inv.booking.media),
+        pricingMode: typeof inv.booking.pricingMode === 'string' ? inv.booking.pricingMode : null,
+        fixedUnitPrice: finiteOrNull(inv.booking.fixedUnitPrice),
+        distanceBand: previewBand(inv.booking.distanceBand),
       } : undefined,
     }));
   },
