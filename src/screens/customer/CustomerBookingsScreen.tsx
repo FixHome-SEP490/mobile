@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useTabBarClearance } from '../../hooks/useTabBarClearance';
 import {
   View,
@@ -95,7 +95,7 @@ export default function CustomerBookingsScreen() {
     };
   }, []);
   const [historyState, setHistoryState] = useState(getCachedHistoryState);
-  const { bookings, total, loading, refreshing, loadingMore, loadingMoreOrders, error, ordersError } = historyState;
+  const { total, loading, refreshing, loadingMore, loadingMoreOrders, error, ordersError } = historyState;
   const [loader] = useState(() => createBookingsHistoryLoader(
     (page, pageSize) => bookingsApi.getMyBookingsPage(page, pageSize),
     ordersApi.getMyOrders,
@@ -125,8 +125,6 @@ export default function CustomerBookingsScreen() {
   const handleScroll = useScrollHideTabBar();
 
   const onRefresh = () => { void loader.refresh(); };
-  const onLoadMore = () => { void loader.loadMore(); };
-  const onLoadMoreOrders = () => { void loader.loadMoreOrders(); };
 
   const closeBookingManage = () => {
     if (manageBusy) return;
@@ -287,6 +285,23 @@ export default function CustomerBookingsScreen() {
   // The server totals of both lists, as on the web; unknown until the first load settles.
   const allTotal = loading || !!error || !!ordersError ? null : total + historyState.ordersTotal;
   const { filtered: filteredCards, showList, emptyNote, showLoadMore, showLoadMoreOrders } = view;
+  // More pages load by themselves, one page (20 rows) each time the customer scrolls near the end, never the whole
+  // history at once. A list too short to scroll gets one extra page per filter/search choice (`fillBudget`), so a
+  // filter with few matches is not stuck, and a failed page stops it until the customer retries.
+  const scrollMetrics = useRef({ offset: 0, viewport: 0, content: 0 });
+  const fillBudget = useRef(1);
+  const filterKey = `${activityTab}|${kindTab}|${activitySearch}`;
+  useEffect(() => { fillBudget.current = 1; }, [filterKey]);
+  const loadMoreWhenNearEnd = (fillingShortList = false) => {
+    const { offset, viewport, content } = scrollMetrics.current;
+    if (error || ordersError || loading || refreshing || loadingMore || loadingMoreOrders || content <= 0) return;
+    if (offset + viewport < content - 400) return;
+    if (fillingShortList && fillBudget.current <= 0) return;
+    if (showLoadMore) void loader.loadMore();
+    else if (showLoadMoreOrders) void loader.loadMoreOrders();
+    else return;
+    if (fillingShortList) fillBudget.current -= 1;
+  };
   const emptyTitle = activitySearch.trim()
     ? 'Không có kết quả trong phần đã tải'
     : activityTab === 'completed' ? 'Chưa có đơn hoặc yêu cầu hoàn tất'
@@ -833,7 +848,14 @@ export default function CustomerBookingsScreen() {
       ) : showList ? (
         <ScrollView
           contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarClearance }]}
-          onScroll={handleScroll}
+          onScroll={(event) => {
+            handleScroll(event);
+            const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
+            scrollMetrics.current = { offset: contentOffset.y, viewport: layoutMeasurement.height, content: contentSize.height };
+            loadMoreWhenNearEnd();
+          }}
+          onLayout={(event) => { scrollMetrics.current.viewport = event.nativeEvent.layout.height; }}
+          onContentSizeChange={(_, height) => { scrollMetrics.current.content = height; loadMoreWhenNearEnd(true); }}
           scrollEventThrottle={16}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
@@ -857,7 +879,7 @@ export default function CustomerBookingsScreen() {
             <View style={styles.emptyContainer}>
               <Ionicons name="layers-outline" size={56} color={colors.muted} />
               <Text style={styles.emptyTitle}>{emptyTitle}</Text>
-              <Text style={styles.emptyDesc}>Còn dữ liệu ở các trang tiếp theo. Tải thêm để kiểm tra.</Text>
+              <Text style={styles.emptyDesc}>Còn dữ liệu ở các trang tiếp theo. Đang tải thêm để kiểm tra…</Text>
             </View>
           )}
           {filteredCards.length === 0 && emptyNote === 'no-match' && (
@@ -912,35 +934,11 @@ export default function CustomerBookingsScreen() {
               </Text>
             </View>
           )}
-          {showLoadMore && (
-            <TouchableOpacity
-              onPress={onLoadMore}
-              disabled={loadingMore}
-              accessibilityRole="button"
-              accessibilityLabel="Tải thêm lịch sử đặt lịch"
-              style={styles.loadMoreBtn}
-            >
-              {loadingMore ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : (
-                <Text style={styles.retryText}>Tải thêm ({bookings.length}/{total})</Text>
-              )}
-            </TouchableOpacity>
-          )}
-          {showLoadMoreOrders && (
-            <TouchableOpacity
-              onPress={onLoadMoreOrders}
-              disabled={loadingMoreOrders}
-              accessibilityRole="button"
-              accessibilityLabel="Tải thêm đơn đã nhận"
-              style={styles.loadMoreBtn}
-            >
-              {loadingMoreOrders ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : (
-                <Text style={styles.retryText}>Tải thêm đơn đã nhận</Text>
-              )}
-            </TouchableOpacity>
+          {(loadingMore || loadingMoreOrders) && (
+            <View style={styles.loadMoreBtn} testID="activity-loading-more" accessibilityLiveRegion="polite">
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.loadingText}>Đang tải thêm…</Text>
+            </View>
           )}
         </ScrollView>
       ) : (

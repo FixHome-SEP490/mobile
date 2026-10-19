@@ -134,7 +134,7 @@ function mergeOrdersPage(existing: ServiceOrderItem[], rows: ServiceOrderItem[],
   const orders = dedupeOrders(existing, rows);
   return {
     orders,
-    ordersTotal: rows.length === 0 ? orders.length : total,
+    ordersTotal: orders.length === existing.length ? orders.length : total,
     ordersPage: page,
   };
 }
@@ -423,9 +423,12 @@ export function createBookingsHistoryLoader(
       try {
         const result = await getBookingsPage(nextPage, pageSize);
         if (!valid()) return;
+        const merged = dedupeBookings(state.bookings, result.data);
+        // A page that adds nothing (empty, or only rows already held) ends the list: the screen loads
+        // further pages by itself while scrolling, so inconsistent totals must not promise pages forever.
         publish({
-          bookings: dedupeBookings(state.bookings, result.data),
-          total: result.total,
+          bookings: merged,
+          total: merged.length === state.bookings.length ? merged.length : result.total,
           page: nextPage,
         });
       } catch (error) {

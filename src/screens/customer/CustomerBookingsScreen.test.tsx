@@ -151,14 +151,16 @@ jest.mock('./customer-booking-manage', () => ({
   rescheduleBookingConservative: jest.fn(),
 }));
 
+const mockLoader = {
+  focus: jest.fn(),
+  blur: jest.fn(),
+  refresh: jest.fn(),
+  loadMore: jest.fn(),
+  loadMoreOrders: jest.fn(),
+};
+
 jest.mock('./customer-bookings-history', () => ({
-  createBookingsHistoryLoader: () => ({
-    focus: jest.fn(),
-    blur: jest.fn(),
-    refresh: jest.fn(),
-    loadMore: jest.fn(),
-    loadMoreOrders: jest.fn(),
-  }),
+  createBookingsHistoryLoader: () => mockLoader,
   customerBookingsUserId: () => 'customer-a',
   getCachedHistoryState: () => ({
     bookings: [],
@@ -328,6 +330,63 @@ describe('CustomerBookingsScreen activity ordering (C-RUI1)', () => {
       act(() => tree.unmount());
       historyMock.resolveBookingsView = originalResolve;
       historyMock.resumeTargetFor = originalResume;
+    }
+  });
+});
+
+describe('CustomerBookingsScreen loads more pages by itself while scrolling', () => {
+  const defaultView = mockResolveBookingsView.getMockImplementation();
+  afterEach(() => { if (defaultView) mockResolveBookingsView.mockImplementation(defaultView); });
+  const withMore = (over: Record<string, unknown> = {}) => {
+    mockResolveBookingsView.mockImplementation(() => ({
+      cards: [], filtered: [], showList: true, emptyNote: null, showLoadMore: true, showLoadMoreOrders: false,
+      ordersCoverageText: null, ordersCoverageComplete: true, ...over,
+    }));
+  };
+  const list = (tree: ReactTestRenderer) => tree.root.findAllByType(ScrollView).find((node) => node.props.refreshControl)!;
+  const scroll = (tree: ReactTestRenderer, offset: number, viewport: number, content: number) => act(() => {
+    list(tree).props.onScroll({ nativeEvent: { contentOffset: { y: offset }, layoutMeasurement: { height: viewport }, contentSize: { height: content } } });
+  });
+
+  it('loads the next page when the end comes near, never before, and has no "Tải thêm" button', () => {
+    withMore();
+    const tree = mountScreen();
+    try {
+      scroll(tree, 0, 600, 3000); // far from the end
+      expect(mockLoader.loadMore).not.toHaveBeenCalled();
+      scroll(tree, 2100, 600, 3000); // within 400 of the end
+      expect(mockLoader.loadMore).toHaveBeenCalledTimes(1);
+      expect(tree.root.findAllByProps({ accessibilityLabel: 'Tải thêm lịch sử đặt lịch' })).toHaveLength(0);
+    } finally {
+      act(() => tree.unmount());
+    }
+  });
+
+  it('loads one extra page when the list is too short to scroll, and the orders after the bookings', () => {
+    withMore({ showLoadMore: false, showLoadMoreOrders: true });
+    const tree = mountScreen();
+    try {
+      act(() => { list(tree).props.onLayout({ nativeEvent: { layout: { height: 800 } } }); });
+      act(() => { list(tree).props.onContentSizeChange(0, 300); });
+      expect(mockLoader.loadMore).not.toHaveBeenCalled();
+      expect(mockLoader.loadMoreOrders).toHaveBeenCalledTimes(1);
+      // One extra page for a short list, not the whole history: further growth does not chain more loads.
+      act(() => { list(tree).props.onContentSizeChange(0, 400); });
+      expect(mockLoader.loadMoreOrders).toHaveBeenCalledTimes(1);
+    } finally {
+      act(() => tree.unmount());
+    }
+  });
+
+  it('stays quiet when there is nothing more to load', () => {
+    withMore({ showLoadMore: false, showLoadMoreOrders: false });
+    const tree = mountScreen();
+    try {
+      scroll(tree, 2900, 600, 3000);
+      expect(mockLoader.loadMore).not.toHaveBeenCalled();
+      expect(mockLoader.loadMoreOrders).not.toHaveBeenCalled();
+    } finally {
+      act(() => tree.unmount());
     }
   });
 });
