@@ -27,7 +27,7 @@ import { usersApi, AddressData } from '../../api/users.api';
 import { bookingsApi } from '../../api/bookings.api';
 import { ordersApi } from '../../api/orders.api';
 import { homeResumeTarget, type HomeResumeItem } from './customer-bookings-history';
-import { getHomePopularGridColumns } from './customer-home-pager';
+import { chunkHomePopularServices, getHomePopularGridColumns, getHomePopularPagerPage } from './customer-home-pager';
 import { homeCategories, type HomeCategory } from './home-categories';
 import { servicesApi } from '../../api/services.api';
 import { orderDetailTarget } from './customer-order-detail';
@@ -56,6 +56,9 @@ export default function CustomerHomeScreen() {
   const [categories, setCategories] = useState<HomeCategory[]>([]);
   const [categoriesState, setCategoriesState] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [categoriesTick, setCategoriesTick] = useState(0);
+  // Two rows per page, swiped sideways, so thirteen categories do not push the rest of Home far down.
+  const categoryPages = chunkHomePopularServices(categories, popularColumns * 2);
+  const [categoryPage, setCategoryPage] = useState(0);
   useEffect(() => {
     let live = true;
     servicesApi.getCategories().then(
@@ -333,27 +336,48 @@ export default function CustomerHomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* The big categories; the services inside open on tap. */}
-        <View style={styles.servicesGrid} testID="popular-services-grid">
-          {categories.map((category) => (
-            <TouchableOpacity
-              key={category.id}
-              testID={`home-category-${category.code}`}
-              style={[styles.serviceItem, { width: `${100 / popularColumns}%` }]}
-              onPress={() => handleCategoryPress(category)}
-              activeOpacity={0.75}
-              accessibilityRole="button"
-              accessibilityLabel={category.name}
-              accessibilityHint={`Xem các dịch vụ ${category.name}`}
-            >
-              <ServiceArtwork code={category.artCode} name={category.name} size={popularArtSize} />
-              <Text style={styles.serviceName} numberOfLines={2}>{category.name}</Text>
-            </TouchableOpacity>
-          ))}
+        {/* The big categories, two rows per page; the services inside open on tap. */}
+        <View testID="popular-services-grid">
+          <ScrollView
+            horizontal
+            pagingEnabled
+            testID="popular-services-pager"
+            showsHorizontalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onMomentumScrollEnd={(event) =>
+              setCategoryPage(getHomePopularPagerPage(event.nativeEvent.contentOffset.x, windowWidth, categoryPages.length))}
+          >
+            {categoryPages.map((page, pageIndex) => (
+              <View key={pageIndex} style={[styles.servicesGrid, { width: windowWidth }]} testID={`popular-services-page-${pageIndex}`}>
+                {page.map((category) => (
+                  <TouchableOpacity
+                    key={category.id}
+                    testID={`home-category-${category.code}`}
+                    style={[styles.serviceItem, { width: `${100 / popularColumns}%` }]}
+                    onPress={() => handleCategoryPress(category)}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityLabel={category.name}
+                    accessibilityHint={`Xem các dịch vụ ${category.name}`}
+                  >
+                    <ServiceArtwork code={category.artCode} name={category.name} size={popularArtSize} />
+                    <Text style={styles.serviceName} numberOfLines={2}>{category.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ))}
+          </ScrollView>
+          {categoryPages.length > 1 && (
+            <View style={styles.pagerDots} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              {categoryPages.map((_, index) => (
+                <View key={index} testID={`popular-services-dot-${index}`} style={[styles.pagerDot, index === categoryPage && styles.pagerDotActive]} />
+              ))}
+            </View>
+          )}
           {categoriesState === 'failed' && (
             <TouchableOpacity
               testID="home-categories-retry"
-              style={{ width: '100%', minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+              style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
               onPress={() => { setCategoriesState('loading'); setCategoriesTick((tick) => tick + 1); }}
               accessibilityRole="button"
               accessibilityLabel="Tải lại danh mục dịch vụ"
@@ -821,7 +845,24 @@ const getStyles = (
     justifyContent: 'flex-start',
     paddingVertical: 4,
     paddingHorizontal: 4,
-    minHeight: 96,
+    minHeight: 92,
+  },
+  pagerDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+    paddingTop: 2,
+    paddingBottom: 4,
+  },
+  pagerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.border,
+  },
+  pagerDotActive: {
+    width: 16,
+    backgroundColor: colors.primaryStrong,
   },
   serviceName: {
     fontSize: fontScale >= 1.2 ? 12 : 11,

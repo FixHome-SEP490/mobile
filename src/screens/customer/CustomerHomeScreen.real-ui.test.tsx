@@ -363,13 +363,21 @@ describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
     }
   });
 
-  it('shows all 13 categories in one accessible grid without paging', async () => {
+  it('shows all 13 categories as two-row pages so Home stays short', async () => {
     const tree = await mountLoaded();
     try {
       const grid = tree.root.findByProps({ testID: 'popular-services-grid' });
       const tiles = grid.findAllByType(TouchableOpacity);
       expect(tiles.map((node) => node.props.accessibilityLabel)).toStrictEqual(mockCategories.map((c) => c.name));
-      expect(tree.root.findAllByProps({ testID: 'popular-services-pager' })).toHaveLength(0);
+      // Two rows per page (4 tiles on two columns, 8 on four), a dot per page, nothing lost or repeated.
+      const pages: number[] = [];
+      for (let i = 0; tree.root.findAllByProps({ testID: `popular-services-page-${i}` }).length > 0; i += 1) {
+        pages.push(tree.root.findByProps({ testID: `popular-services-page-${i}` }).findAllByType(TouchableOpacity).length);
+      }
+      expect([4, 8]).toContain(pages[0]);
+      expect(pages.reduce((sum, n) => sum + n, 0)).toBe(13);
+      expect(pages.slice(0, -1).every((n) => n === pages[0])).toBe(true);
+      expect(tree.root.findAllByProps({ testID: `popular-services-dot-${pages.length - 1}` }).length).toBeGreaterThan(0);
       expect(tiles.every((node) => node.props.accessibilityRole === 'button')).toBe(true);
       expect(tiles.every((node) => {
         const style = Array.isArray(node.props.style) ? Object.assign({}, ...node.props.style) : node.props.style;
@@ -380,5 +388,4 @@ describe('CustomerHomeScreen real UI (ServiceArtwork popular layout)', () => {
       act(() => tree.unmount());
     }
   });
-
 });

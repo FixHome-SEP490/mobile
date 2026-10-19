@@ -11,7 +11,6 @@ import {
   TextInput,
   ActivityIndicator,
   Image,
-  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,13 +23,11 @@ import {
   createServiceCatalogLoader,
   fetchAllCatalogServices,
   initialCatalogState,
-  resolveServicePrice,
 } from './service-catalog';
 import CategoryPills from '../../components/CategoryPills';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
-import { getServicePresentation } from '../../constants/service-presentation';
+import ServiceRowCard from '../../components/customer/ServiceRowCard';
 import { CUSTOMER_UI_ARTWORK } from '../../constants/customer-artwork';
-import { customerDiscoveryColumns, displayCustomerServiceName } from '../../constants/customer-display';
 import { groupCustomerServices, resolvePopularServiceServices } from './customer-service-discovery';
 import { useAuthStore } from '../../store';
 import BackButton from '../../components/BackButton';
@@ -40,9 +37,6 @@ type ServicesRoute = RouteProp<RootStackParamList, 'CustomerServices'>;
 export default function CustomerServicesScreen() {
   const { colors, spacing, fontSize, isDark } = useAppTheme();
   const styles = getStyles(colors, spacing, fontSize);
-  const { width: viewportWidth, fontScale } = useWindowDimensions();
-  const discoveryColumns = customerDiscoveryColumns(viewportWidth, fontScale);
-  const discoveryArtworkSize = discoveryColumns === 3 ? 76 : 82;
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<ServicesRoute>();
   const routeQuery = route.params?.query ?? '';
@@ -252,20 +246,47 @@ export default function CustomerServicesScreen() {
     setSelectedCategoryCode(categories.find((category) => category.id === id)?.code);
   };
 
+  const visibleGroups = groups.filter((group) => group.services.length > 0);
+  // One category (or a shortcut) is a flat list under its own title; "Tất cả" is grouped by category.
+  const flatBrowse = Boolean(selectedCategoryName) || hasPopularIntent;
+  const subtitle = browseMode
+    ? (discoveryComplete && !discoveryError && !categoryLoadFailed ? `${displayedDiscoveryServices.length} dịch vụ` : '')
+    : (!loading && !error && services.length > 0 ? `${total} dịch vụ` : '');
+
+  const aiEntry = (
+    <TouchableOpacity
+      style={styles.aiEntry}
+      onPress={openAiHelp}
+      activeOpacity={0.82}
+      accessibilityRole="button"
+      accessibilityLabel="Hỏi FixHome AI"
+      accessibilityHint="Mở chẩn đoán sơ bộ bằng AI"
+    >
+      <Image source={CUSTOMER_UI_ARTWORK.aiHelper} style={styles.aiArtwork} resizeMode="contain" accessible={false} />
+      <View style={styles.aiCopy}>
+        <Text style={styles.aiTitle}>Chưa biết bắt đầu từ đâu?</Text>
+        <Text style={styles.aiSubtitle}>Mô tả sự cố để nhận gợi ý sơ bộ.</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={colors.primaryStrong} />
+    </TouchableOpacity>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
-      {/* Page header */}
+      {/* Header: where you are and how many services it holds */}
       <View style={styles.header}>
         <BackButton />
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {browseMode ? selectedCategoryName ?? 'Khám phá dịch vụ' : selectedCategoryName ?? 'Kết quả tìm kiếm'}
-        </Text>
-        <View style={{ width: 44 }} />
+        <View style={styles.headerCopy}>
+          <Text style={styles.headerTitle} numberOfLines={1} accessibilityRole="header">
+            {browseMode ? selectedCategoryName ?? 'Khám phá dịch vụ' : selectedCategoryName ?? 'Kết quả tìm kiếm'}
+          </Text>
+          {!!subtitle && <Text style={styles.headerSubtitle} accessibilityLiveRegion="polite">{subtitle}</Text>}
+        </View>
       </View>
 
-      {/* Search bar */}
+      {/* Search */}
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color={colors.muted} />
         <TextInput
@@ -293,8 +314,8 @@ export default function CustomerServicesScreen() {
         )}
       </View>
 
-      {/* Search results keep the existing server-backed filters and loader. */}
-      {!browseMode && categories.length > 0 && (
+      {/* The big categories as one swipeable strip: pick one to see only its services */}
+      {categories.length > 0 && (
         <View style={styles.pillsContainer}>
           <CategoryPills categories={categories} selectedId={categoryId} onSelect={onCategorySelect} />
         </View>
@@ -307,37 +328,13 @@ export default function CustomerServicesScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {aiEntry}
           {hasIntentFallback && (
             <Text style={styles.popularIntentNote} accessibilityLiveRegion="polite">
               {selectedCategoryName
                 ? `Chưa tìm thấy dịch vụ phù hợp. Đang hiển thị danh mục ${selectedCategoryName}.`
                 : 'Chưa tìm thấy dịch vụ phù hợp. Đang hiển thị các danh mục hiện có.'}
             </Text>
-          )}
-          <TouchableOpacity
-            style={styles.aiEntry}
-            onPress={openAiHelp}
-            activeOpacity={0.82}
-            accessibilityRole="button"
-            accessibilityLabel="Hỏi FixHome AI"
-            accessibilityHint="Mở chẩn đoán sơ bộ bằng AI"
-          >
-            <Image source={CUSTOMER_UI_ARTWORK.aiHelper} style={styles.aiArtwork} resizeMode="contain" accessible={false} />
-            <View style={styles.aiCopy}>
-              <Text style={styles.aiTitle}>Chưa biết bắt đầu từ đâu?</Text>
-              <Text style={styles.aiSubtitle}>Mô tả sự cố để nhận gợi ý sơ bộ.</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.primaryStrong} />
-          </TouchableOpacity>
-          {(selectedCategoryName || hasPopularIntent) && (
-            <TouchableOpacity
-              style={styles.allGroupsAction}
-              onPress={() => onCategorySelect(null)}
-              accessibilityRole="button"
-              accessibilityLabel="Xem tất cả danh mục dịch vụ"
-            >
-              <Text style={styles.groupActionText}>Xem tất cả danh mục</Text>
-            </TouchableOpacity>
           )}
 
           {categoryLoadFailed ? (
@@ -378,61 +375,24 @@ export default function CustomerServicesScreen() {
                 <Text style={styles.retryText}>Xem tất cả dịch vụ</Text>
               </TouchableOpacity>
             </View>
-          ) : groups.every((group) => group.services.length === 0) ? (
+          ) : visibleGroups.length === 0 ? (
             <View style={styles.discoveryState}>
               <Text style={styles.stateTitle}>Chưa có dịch vụ trong danh mục này</Text>
               <Text style={styles.stateText}>Danh sách sẽ cập nhật theo dữ liệu dịch vụ hiện có.</Text>
             </View>
           ) : (
-            groups.filter((group) => group.services.length > 0).map((group) => (
+            visibleGroups.map((group) => (
               <View key={group.category.id} style={styles.discoveryGroup}>
-                <View style={styles.discoveryGroupHeader}>
-                  <View style={styles.discoveryGroupCopy}>
-                    <Text style={styles.discoveryGroupTitle}>{group.category.name}</Text>
-                    {discoveryComplete && (
-                      <Text style={styles.discoveryGroupCount}>{`${group.services.length} dịch vụ`}</Text>
-                    )}
+                {!flatBrowse && (
+                  <View style={styles.discoveryGroupHeader}>
+                    <Text style={styles.discoveryGroupTitle} accessibilityRole="header">{group.category.name}</Text>
+                    {discoveryComplete && <Text style={styles.discoveryGroupCount}>{`${group.services.length} dịch vụ`}</Text>}
                   </View>
-                  <TouchableOpacity
-                    style={styles.groupAction}
-                    onPress={() => onCategorySelect(group.category.id)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Xem trong nhóm ${group.category.name}`}
-                  >
-                    <Text style={styles.groupActionText}>Xem trong nhóm</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.discoveryGrid}>
-                  {group.services.map((service) => {
-                    const presentation = getServicePresentation(service.code);
-                    return (
-                      <TouchableOpacity
-                        key={service.id}
-                        style={[styles.discoveryService, { width: `${100 / discoveryColumns}%` }]}
-                        onPress={() => openService(service)}
-                        activeOpacity={0.82}
-                        accessibilityRole="button"
-                        accessibilityLabel={service.name}
-                        accessibilityHint="Mở chi tiết dịch vụ"
-                      >
-                        <View style={[styles.discoveryArtworkFrame, { height: discoveryArtworkSize }]}>
-                          {presentation ? (
-                            <Image
-                              source={presentation.imageSource}
-                              style={{ width: discoveryArtworkSize, height: discoveryArtworkSize }}
-                              resizeMode="contain"
-                              accessible={false}
-                            />
-                          ) : (
-                            <Ionicons name="construct-outline" size={28} color={colors.textSecondary} />
-                          )}
-                        </View>
-                        <Text style={styles.discoveryServiceName}>
-                          {displayCustomerServiceName(service.code, service.name)}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                )}
+                <View style={styles.cardList}>
+                  {group.services.map((service) => (
+                    <ServiceRowCard key={service.id} service={service} onPress={openService} />
+                  ))}
                 </View>
               </View>
             ))
@@ -440,13 +400,6 @@ export default function CustomerServicesScreen() {
         </ScrollView>
       ) : (
         <>
-      {/* Result count */}
-      {!loading && !error && services.length > 0 && (
-        <Text style={styles.resultCount} accessibilityLiveRegion="polite">
-          {`Đã tải ${services.length} trên ${total} dịch vụ`}
-        </Text>
-      )}
-
       {loading && services.length === 0 ? (
         <View style={styles.loadingState}>
           <CustomerSkeleton variant="service" rows={4} />
@@ -471,7 +424,7 @@ export default function CustomerServicesScreen() {
         <View style={styles.centerState}>
           <Image source={CUSTOMER_UI_ARTWORK.emptySearch} style={{ width: 144, height: 112 }} resizeMode="contain" accessible={false} testID="services-empty-art" />
           <Text style={styles.stateTitle}>Chưa tìm thấy dịch vụ</Text>
-          <Text style={styles.stateText}>Không tìm thấy dịch vụ nào phù hợp.</Text>
+          <Text style={styles.stateText}>Không tìm thấy dịch vụ nào phù hợp. Thử từ khóa khác hoặc chọn một danh mục.</Text>
           <TouchableOpacity
             onPress={onRetry}
             accessibilityRole="button"
@@ -486,6 +439,7 @@ export default function CustomerServicesScreen() {
           data={services}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
+          ItemSeparatorComponent={() => <View style={styles.cardGap} />}
           onEndReached={onLoadMore}
           onEndReachedThreshold={0.5}
           keyboardShouldPersistTaps="handled"
@@ -523,50 +477,7 @@ export default function CustomerServicesScreen() {
               </TouchableOpacity>
             ) : null
           }
-          renderItem={({ item }) => {
-            const presentation = getServicePresentation(item.code);
-            const price = resolveServicePrice(item).text;
-            // Category eyebrow from item metadata when available
-            const categoryName = (item as any).categoryName as string | undefined;
-            return (
-              <TouchableOpacity
-                style={styles.itemCard}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  navigation.navigate('CustomerServiceDetail', { serviceId: item.id });
-                }}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel={`${item.name}. ${price}`}
-                accessibilityHint="Mở chi tiết dịch vụ"
-              >
-                {/* Artwork: full Codex catalog-card art style */}
-                <View style={styles.itemImageContainer}>
-                  {presentation ? (
-                    <Image
-                      source={presentation.imageSource}
-                      style={styles.itemImage}
-                      resizeMode="contain"
-                      accessible={false}
-                    />
-                  ) : (
-                    <Ionicons name="construct-outline" size={28} color={colors.textSecondary} />
-                  )}
-                </View>
-                {/* Info block: category eyebrow + name + price */}
-                <View style={styles.itemInfo}>
-                  {!!categoryName?.trim() && (
-                    <Text style={styles.itemEyebrow}>{categoryName.toUpperCase()}</Text>
-                  )}
-                  <Text style={styles.itemName} numberOfLines={2} ellipsizeMode="tail">
-                    {displayCustomerServiceName(item.code, item.name)}
-                  </Text>
-                  <Text style={styles.itemPrice}>{price}</Text>
-                </View>
-                <Ionicons name="open-outline" size={20} color={colors.muted} />
-              </TouchableOpacity>
-            );
-          }}
+          renderItem={({ item }) => <ServiceRowCard service={item} onPress={openService} />}
         />
       )}
         </>
@@ -578,48 +489,24 @@ export default function CustomerServicesScreen() {
 const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
 
-  // Header — Codex "Một việc, đúng người." large title
+  // Header: back, title, and the count under it
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 16,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingTop: 8,
+    paddingBottom: 12,
     gap: 8,
   },
-  backBtn: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 14,
-    backgroundColor: colors.divider,
-    marginTop: 4,
-    marginLeft: -5,
-    flexShrink: 0,
-  },
-  headerTitleBlock: {
-    flex: 1,
-    paddingTop: 2,
-  },
-  headerEyebrow: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.0,
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
+  headerCopy: { flex: 1 },
   headerTitle: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
     color: colors.text,
-    lineHeight: 24,
+    lineHeight: 28,
     letterSpacing: -0.4,
   },
+  headerSubtitle: { fontSize: 13, lineHeight: 18, color: colors.textSecondary, marginTop: 1 },
 
   // Search
   searchContainer: {
@@ -627,18 +514,16 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     alignItems: 'center',
     backgroundColor: colors.surface,
     marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 4,
     paddingHorizontal: 16,
     minHeight: 52,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
   },
   searchInput: {
     flex: 1,
     marginLeft: 8,
-    fontSize: 14,
+    fontSize: 15,
     color: colors.text,
     minHeight: 48,
   },
@@ -649,26 +534,33 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     alignItems: 'center',
   },
 
-  discoveryBody: { flex: 1 },
-  discoveryContent: { paddingHorizontal: 16, paddingBottom: 28 },
-  aiEntry: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    minHeight: 72,
-    marginTop: 12,
-    marginBottom: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 18,
-    backgroundColor: colors.primarySoft,
+  // Category strip
+  pillsContainer: {
+    paddingLeft: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+    backgroundColor: colors.background,
   },
-  aiArtwork: { width: 44, height: 44 },
-  aiCopy: { flex: 1 },
-  aiTitle: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.text },
-  aiSubtitle: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, marginTop: 1 },
+
+  // Browse list
+  discoveryBody: { flex: 1 },
+  discoveryContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32 },
+  discoveryLoading: { paddingTop: 4 },
+  discoveryState: { alignItems: 'center', justifyContent: 'center', padding: 24, gap: 8 },
+  discoveryGroup: { marginBottom: 12 },
+  discoveryGroupHeader: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  discoveryGroupTitle: { flex: 1, fontSize: 16, lineHeight: 22, fontWeight: '700', color: colors.text },
+  discoveryGroupCount: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, paddingLeft: 8 },
+  cardList: { gap: 8 },
+  cardGap: { height: 8 },
   popularIntentNote: {
-    marginHorizontal: 4,
     marginBottom: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -678,59 +570,23 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontSize: 12,
     lineHeight: 18,
   },
-  discoveryLoading: { paddingTop: 4 },
-  discoveryState: { alignItems: 'center', justifyContent: 'center', padding: 24, gap: 8 },
-  discoveryGroup: { marginBottom: 16 },
-  discoveryGroupHeader: {
-    minHeight: 44,
+
+  // Help from the assistant, first in the list
+  aiEntry: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  discoveryGroupCopy: { flex: 1 },
-  discoveryGroupTitle: { fontSize: 16, lineHeight: 22, fontWeight: '700', color: colors.text },
-  discoveryGroupCount: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, marginTop: 1 },
-  groupAction: { minHeight: 44, justifyContent: 'center', paddingLeft: 12 },
-  allGroupsAction: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', marginTop: -14, marginBottom: 8, paddingHorizontal: 4 },
-  groupActionText: { fontSize: 13, fontWeight: '600', color: colors.primaryStrong },
-  discoveryGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 },
-  discoveryService: {
-    minHeight: 112,
-    paddingHorizontal: 8,
-    paddingBottom: 16,
-    justifyContent: 'flex-start',
-  },
-  discoveryArtworkFrame: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  discoveryServiceName: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '600',
-    color: colors.text,
-    textAlign: 'center',
-    paddingHorizontal: 2,
-    paddingTop: 4,
-  },
-
-  // Category pills
-  pillsContainer: {
+    gap: 12,
+    minHeight: 72,
+    marginBottom: 12,
     paddingHorizontal: 16,
-    paddingTop: 12,
-    backgroundColor: colors.background,
+    paddingVertical: 12,
+    borderRadius: 18,
+    backgroundColor: colors.primarySoft,
   },
-
-  // Result count
-  resultCount: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 2,
-  },
+  aiArtwork: { width: 44, height: 44 },
+  aiCopy: { flex: 1 },
+  aiTitle: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.text },
+  aiSubtitle: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, marginTop: 1 },
 
   // States
   centerState: {
@@ -792,58 +648,10 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     paddingHorizontal: 16,
   },
 
-  // List
+  // Search results
   listContainer: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 24,
-    gap: 0,
-  },
-
-  // Catalog card — Codex style: image on left, eyebrow+name+price on right
-  itemCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    paddingVertical: 16,
-    paddingHorizontal: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    minHeight: 100,
-    gap: 12,
-  },
-  itemImageContainer: {
-    width: 72,
-    height: 72,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-  itemImage: {
-    width: 72,
-    height: 72,
-  },
-  itemInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  itemEyebrow: {
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    color: colors.textSecondary,
-    marginBottom: 2,
-  },
-  itemName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    lineHeight: 22,
-    flexShrink: 1,
-  },
-  itemPrice: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 4,
+    paddingBottom: 32,
   },
 });
