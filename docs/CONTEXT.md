@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-19 20:52 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/technician-part-returns
+> Cập nhật lần cuối: 2026-10-19 21:02 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/chat-parity-n4-n3
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -214,6 +214,20 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 - P1 như web (owner lock 19/10/2026): trong `technician-parts-section.tsx` (màn đơn của thợ), mỗi dòng linh kiện FixHome đã nhận qua QR có khối "Hoàn trả" đọc `GET /service-orders/:orderId/part-returns`: "Cấp / Dùng / Cần trả", dòng "Đang chờ quản lý xác nhận" hoặc "Đã nhận", và nút "Khai trả" chọn số lượng (nguyên, từ 1 tới phần còn phải trả chưa khai) rồi gửi `POST /part-requests/:requestId/items/:itemId/declare-return {quantity, expectedVersion, idempotencyKey}`. Khai trả chưa phải là đã trả xong; quản lý dịch vụ nhận thực tế ở console web.
 - Lỗi 409 thì đọc lại số liệu trước khi gửi lại. Backend chưa bật custody (403/404/501/503) thì khối này ẩn và QR/đã dùng/hoàn trả cũ không đổi. Test: `part-returns.test.ts`, `technician-parts-returns.test.tsx`. Runtime với backend bật custody và trên thiết bị CHƯA KIỂM CHỨNG.
 
+### Chat: ảnh, video, khoá khi đơn hoàn tất, mã đơn (19/10/2026, nhánh `feat/chat-parity-n4-n3`)
+
+- PO 18/10/2026, như web. `ConversationItem` đọc thêm `orderCode` (hiện cạnh tên dịch vụ ở danh sách và đầu chat) và `closedReason`. Hội thoại khoá vì đơn hoàn tất (`canSend` false, `closedReason: order_completed`) hiện lý do: khách được dẫn tới "Gửi yêu cầu bảo hành" (`CustomerOrderDetail` tab bảo hành), thợ được báo chat mở lại khi khách gửi yêu cầu; gửi bị 409 `CONVERSATION_CLOSED` thì báo khoá và đọc lại hội thoại.
+- Nút kẹp giấy gửi một ảnh (tối đa 10 MB, đổi sang JPEG) hoặc video (thư viện, chụp, quay; tối đa 60 giây, nén trước bằng `services/video-shrink.ts`, gửi tối đa 50 MB) qua `POST /conversations/:id/attachments` (multipart `file`, `content`, `clientMessageId`), tải có tiến độ và thử lại khi mạng yếu (`services/upload-retry.ts`). Bong bóng hiện ngay kèm "Đang nén…", "Đang gửi x%"; lỗi thì giữ bong bóng với "Thử lại" và "Bỏ" (gửi lại cùng `clientMessageId` nên không lưu hai lần). Logic ở `screens/chat/chat-attachment.ts`.
+- Ảnh trong chat tải bằng `<Image>` kèm `Authorization` (`GET /messages/:id/attachment`); video phát bằng `expo-video` qua link ngắn hạn `GET /messages/:id/attachment/stream`, chỉ xin link khi chạm vào ô video (`ChatAttachmentView.tsx`). Test: `chat-attachments-and-lock.test.tsx`. Nén video và phát video trên máy thật CHƯA KIỂM CHỨNG (cần bản build có mã native, Expo Go gửi bản gốc).
+
+### Realtime (19/10/2026, nhánh `feat/chat-parity-n4-n3`)
+
+- Socket `/chat` nhận thêm `order:updated {serviceOrderId, bookingId, status, kinds?}`, `order:location`, `booking:updated`, `invitation:updated`, `notification:new`, `wallet:updated`, `realtime:resync`. Phiên bản nhẹ so với web: `hooks/useLiveRefresh.ts` chỉ chạy khi màn đang focus, gom sự kiện trong 150 ms rồi gọi lại hàm đọc sẵn có của màn (chạy ngầm, không spinner toàn trang), và cũng đọc lại sau khi socket nối lại. Đã nối: danh sách lời mời và số đếm lời mời trên tab của thợ (`invitation:updated`), danh sách đơn của khách (`booking:updated`, `invitation:updated`, `order:updated`), danh sách việc của thợ, chi tiết đơn của khách và của thợ (`order:updated` đúng đơn đang mở). Không đọc lại theo `kinds` từng phần như web, và `order:location`, `wallet:updated`, `notification:new` chưa dùng. Khi socket rớt, mobile giữ cách cũ (đọc khi focus), chưa có polling dự phòng. Test `useLiveRefresh.test.tsx`.
+
+### Đối chiếu lịch chọn ngày rồi chọn giờ (19/10/2026)
+
+- Web 18/10 đổi `BookingSessionPicker` thành chọn ngày (lưới tuần) rồi chọn giờ. Mobile đã có cùng luồng (dải ngày nhanh, lịch tháng, rồi chọn Sáng/Chiều, ngày kín bị loại) và gửi `urgency: NORMAL` nên không đổi gì.
+
 ### Đăng nhập Google
 
 Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng `WebBrowser.openAuthSessionAsync`, nhận mã sống 60 giây rồi đổi ở `/auth/google/exchange`. App không cần Google client id.
@@ -300,7 +314,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 - Thay đổi ngày 07/10/2026 mới chạy gate, CHƯA KIỂM CHỨNG trên thiết bị (ảnh đại diện kỹ thuật viên, nút gửi AI, ví).
 - Gọi thoại 18/10/2026: chưa build `npx expo run:android` lần nào, cuộc gọi thật giữa hai máy, loa trong/loa ngoài và quyền micro CHƯA KIỂM CHỨNG. `react-native-webrtc` ghim `~124.0.8` để khớp plugin `@config-plugins/react-native-webrtc` 15; chạy được với React Native 0.86 kiến trúc mới hay không CHƯA KIỂM CHỨNG. iOS chưa thử.
-- Backend nhánh `feat/po-batch-2026-10-18` khoá chat khách và thợ khi đơn hoàn tất (gửi tin trả 409 `CONVERSATION_CLOSED`, hội thoại có `closedReason`), mở lại khi có yêu cầu bảo hành, gửi được ảnh hoặc video trong chat và phát `order:updated` khi đơn đổi. Mobile vẫn theo `canSend` nên hội thoại đã khoá hiện "Cuộc trò chuyện này chỉ còn xem lại được." và ẩn nút gọi, nhưng chưa đọc `closedReason` để nói lý do và dẫn tới bảo hành, chưa có nút gửi ảnh hoặc video trong chat, chưa nghe `order:updated` (đợt 18/10 chỉ làm gọi thoại và trợ lý AI); hội thoại bị khoá trong lúc đang mở màn thì lần gửi sau hiện câu lỗi chung. Màn booking hoặc đơn của mobile chưa có trình xem video, video thợ nhận được chỉ xem trên web.
+- Chat có ảnh/video, khoá khi đơn hoàn tất và realtime đã làm ở các mục "Chat" và "Realtime" dưới (19/10/2026); chưa kiểm chứng trên thiết bị. Thông báo đẩy lên điện thoại và số chưa đọc của thông báo qua `notification:new` mobile chưa nối.
 - SEP-136: một màn Lịch làm việc chứa editor khung giờ tuần theo ngày, preset/giờ chính xác, ngày nghỉ với chọn ngày và lịch đơn hiện có. Một màn Khu vực hoạt động chứa vị trí/bán kính và quận/huyện. Giữ payload lưu hiện hành, ngày tuần Sunday=0, khoảng giờ đã lưu, giới hạn 40 km, GPS/camera và tài chính. Bàn phím/safe area đã xử lý trong source; thiết bị còn CHƯA KIỂM CHỨNG.
 - Chưa có push notification (`expo-notifications` đã cài nhưng chưa dùng); ảnh booking đã có upload adapter/controller nhưng runtime CHƯA KIỂM CHỨNG; khu vực phục vụ có màn chỉnh sau onboarding.
 - Chưa có cấu hình EAS và bundle id. Root đã xử lý cold/warm return `fixhome://app/wallet` bằng đích an toàn cho Customer và GET-only refresh, bỏ mọi query payload; luồng Google/Technician giữ nguyên. OS delivery/native chưa kiểm chứng.
@@ -312,6 +326,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-19 21:02 (UTC+7) | Hgnv11 | feat/chat-parity-n4-n3 | Chat gửi ảnh/video, khoá khi đơn hoàn tất, mã đơn; realtime nhẹ cho lời mời, đơn và danh sách việc như web
 - 2026-10-19 20:52 (UTC+7) | Hgnv11 | feat/technician-part-returns | Thợ khai trả linh kiện FixHome như web (P1), ẩn khi backend chưa bật custody
 - 2026-10-19 20:39 (UTC+7) | Hgnv11 | feat/booking-device-pricing | Đặt lịch hỏi thông tin thiết bị và hiện phạm vi tiền công do server xác nhận như web (P012)
 - 2026-10-19 20:22 (UTC+7) | Hgnv11 | feat/catalog-price-summary | Thẻ dịch vụ đặt lịch hiện giá công theo priceSummary của backend như web
@@ -351,7 +366,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-16 11:06 (UTC+7) | Hgnv11 | feat/sep139-group-b | Nhóm B SEP-139 (tự nhận việc, đặt lại thợ, uy tín, bảo hành mặc định, thu nhập theo kỳ, lưới lịch) và nhãn/thông báo tiếng Việt theo web; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-15 14:41 (UTC+7) | Hgnv11 | feat/sep139-m8-cutover | Màn nhiệm vụ không bị gỡ khi đơn hoặc tài nguyên tải lại hay có lệnh chờ (ảnh khuôn mặt, ảnh trước/sau, link VNPay); VNPay mở tự động sau xác nhận và gửi header x-client-platform mobile để backend trả về fixhome://app/order-payment; dấu lệnh VNPay quá 15 phút mà hoá đơn chưa trả thì mở khoá; thư viện ảnh gọi ảnh khuôn mặt đúng tên; thiết bị và E2E CHƯA KIỂM CHỨNG
 - 2026-10-15 10:04 (UTC+7) | Hgnv11 | feat/sep139-m8-cutover | Mọi header dùng một nút Quay lại chung `components/BackButton` (44pt, mũi tên Ionicons, về Home đúng vai trò khi không có màn trước); nút số lượng linh kiện 44pt; thiết bị CHƯA KIỂM CHỨNG.
-- 2026-10-14 23:34 (UTC+7) | Hgnv11 | feat/sep139-m8-cutover | M8 chuyển route chi tiết đơn hai vai trò sang OrderFlow, bỏ POST claim trực tiếp, thêm lối vào Nhắn tin; thiết bị và E2E CHƯA KIỂM CHỨNG.
 
 ### Lịch sử giữ lại khi tích hợp
 

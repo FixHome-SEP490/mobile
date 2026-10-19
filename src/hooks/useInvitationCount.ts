@@ -4,6 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { bookingsApi } from '../api/bookings.api';
 import { isActionable } from '../screens/technician/invitation-inbox';
 import { useAuthStore } from '../store/auth.store';
+import { useLiveRefresh } from './useLiveRefresh';
 import { useBadgeStore } from '../store/badge.store';
 
 /**
@@ -35,6 +36,7 @@ export function useInvitationCount(): number {
       void refresh();
     }, [refresh]),
   );
+  useLiveRefresh(['invitation:updated'], () => void refresh());
 
   return isAuthenticated ? count : 0;
 }

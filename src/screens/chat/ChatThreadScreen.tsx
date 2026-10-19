@@ -17,11 +17,16 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useKeyboardInset } from '../../hooks/useKeyboardInset';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useRoute, type RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
+import ChatAttachmentView from './ChatAttachmentView';
+import { AttachmentProblem, pickChatAttachment, sendChatAttachment, type PickedAttachment, type PickSource } from './chat-attachment';
+import { uploadErrorText } from '../../services/upload-retry';
 import { useAuthStore } from '../../store/auth.store';
 import { isCallBusy, useCallStore } from '../../store/call.store';
 import {
+  isConversationClosedError,
   messagingApi,
   type ChatMessage,
   type ConversationItem,
@@ -52,6 +57,7 @@ export default function ChatThreadScreen() {
   const { colors, isDark } = useAppTheme();
   const styles = getStyles(colors);
   const route = useRoute<ThreadRoute>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { conversationId, counterpartName, serviceName } = route.params;
   const myId = useAuthStore((state) => state.user?.id);
   const insets = useSafeAreaInsets();
@@ -85,6 +91,9 @@ export default function ChatThreadScreen() {
 
   // Fail closed until the backend confirms permission for this job-scoped chat.
   const canSend = conversation?.canSend === true;
+  // PO 18/10/2026: a finished order closes the chat until a warranty claim reopens it.
+  const closedByCompletion = !canSend && conversation?.closedReason === 'order_completed';
+  const viewerIsCustomer = String(conversation?.counterpart.role ?? '').toUpperCase() === 'TECHNICIAN';
 
   const callStatus = useCallStore((state) => state.status);
   const callBusy = isCallBusy(callStatus);
@@ -270,14 +279,107 @@ export default function ChatThreadScreen() {
         clientMessageId,
       );
       upsert(saved);
-    } catch {
+    } catch (error) {
       setMessages((prev) => prev.filter((m) => m.clientMessageId !== clientMessageId));
-      Alert.alert('Không gửi được tin nhắn', 'Vui lòng kiểm tra kết nối và thử lại.');
+      if (isConversationClosedError(error)) {
+        Alert.alert('Cuộc trò chuyện đã khoá', 'Đơn đã hoàn tất nên không nhắn thêm được.');
+        void messagingApi.getConversation(conversationId).then(setConversation).catch(() => undefined);
+      } else {
+        Alert.alert('Không gửi được tin nhắn', 'Vui lòng kiểm tra kết nối và thử lại.');
+      }
       setDraft(content);
     } finally {
       setSending(false);
     }
   }, [draft, sending, canSend, editing, conversationId, myId, upsert]);
+
+  // ------------------------------------------------- photo / video (PO 18/10/2026)
+
+  const attachments = useRef(new Map<string, { picked: PickedAttachment; caption: string; controller: AbortController }>());
+  useEffect(() => {
+    const pending = attachments.current;
+    return () => pending.forEach((entry) => entry.controller.abort());
+  }, []);
+
+  const patchUpload = useCallback((clientMessageId: string, upload: ChatMessage['upload'] | undefined) => {
+    setMessages((prev) => prev.map((m) => (m.clientMessageId === clientMessageId ? { ...m, upload } : m)));
+  }, []);
+
+  const runAttachment = useCallback(async (clientMessageId: string) => {
+    const entry = attachments.current.get(clientMessageId);
+    if (!entry) return;
+    const controller = new AbortController();
+    entry.controller = controller;
+    patchUpload(clientMessageId, { state: 'preparing', progress: 0 });
+    try {
+      const saved = await sendChatAttachment(conversationId, entry.picked, {
+        caption: entry.caption,
+        clientMessageId,
+        signal: controller.signal,
+        onPhase: (phase) => patchUpload(clientMessageId, { state: phase, progress: 0 }),
+        onProgress: (fraction) => setMessages((prev) => prev.map((m) => (m.clientMessageId === clientMessageId && m.upload
+          ? { ...m, upload: { ...m.upload, progress: fraction } } : m))),
+      });
+      attachments.current.delete(clientMessageId);
+      upsert(saved);
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      const closed = isConversationClosedError(error);
+      patchUpload(clientMessageId, {
+        state: 'failed',
+        progress: 0,
+        error: closed ? 'Đơn đã hoàn tất nên cuộc trò chuyện đã khoá.' : error instanceof AttachmentProblem ? error.message : uploadErrorText(error),
+      });
+      if (closed) void messagingApi.getConversation(conversationId).then(setConversation).catch(() => undefined);
+    }
+  }, [conversationId, patchUpload, upsert]);
+
+  const startAttachment = useCallback((picked: PickedAttachment) => {
+    const caption = draft.trim();
+    const clientMessageId = newClientMessageId();
+    attachments.current.set(clientMessageId, { picked, caption, controller: new AbortController() });
+    const optimistic: ChatMessage = {
+      id: `local-${clientMessageId}`,
+      conversationId,
+      senderId: myId ?? '',
+      content: caption,
+      createdAt: new Date().toISOString(),
+      editedAt: null,
+      isDeleted: false,
+      clientMessageId,
+      attachment: { kind: picked.kind, mimeType: picked.type, sizeBytes: picked.sizeBytes },
+      localUri: picked.uri,
+      upload: { state: 'preparing', progress: 0 },
+    };
+    setMessages((prev) => [optimistic, ...prev]);
+    setDraft('');
+    void runAttachment(clientMessageId);
+  }, [draft, conversationId, myId, runAttachment]);
+
+  const discardAttachment = useCallback((clientMessageId: string) => {
+    attachments.current.get(clientMessageId)?.controller.abort();
+    attachments.current.delete(clientMessageId);
+    setMessages((prev) => prev.filter((m) => m.clientMessageId !== clientMessageId));
+  }, []);
+
+  const choosePick = useCallback(async (source: PickSource) => {
+    try {
+      const { picked, problem } = await pickChatAttachment(source);
+      if (problem) Alert.alert('Chưa gửi được', problem);
+      else if (picked) startAttachment(picked);
+    } catch {
+      Alert.alert('Chưa gửi được', 'Không mở được thư viện hoặc camera. Vui lòng thử lại.');
+    }
+  }, [startAttachment]);
+
+  const openAttachMenu = useCallback(() => {
+    Haptics.selectionAsync();
+    Alert.alert('Gửi ảnh hoặc video', 'Chọn nguồn. Ảnh tối đa 10 MB, video tối đa 60 giây.', [
+      { text: 'Thư viện', onPress: () => void choosePick('library') },
+      { text: 'Chụp ảnh', onPress: () => void choosePick('camera-photo') },
+      { text: 'Quay video', onPress: () => void choosePick('camera-video') },
+    ]);
+  }, [choosePick]);
 
 
 
@@ -294,15 +396,44 @@ export default function ChatThreadScreen() {
             item.isDeleted && styles.bubbleDeleted,
           ]}
         >
-          <Text
-            style={[
-              styles.msgText,
-              mine ? styles.msgTextMine : styles.msgTextTheirs,
-              item.isDeleted && styles.msgTextDeleted,
-            ]}
-          >
-            {item.isDeleted ? 'Tin nhắn đã được gỡ' : item.content}
-          </Text>
+          {!!item.attachment && !item.isDeleted && (
+            <ChatAttachmentView
+              messageId={item.id}
+              attachment={item.attachment}
+              localUri={item.localUri}
+              textColor={mine ? '#FFFFFF' : colors.text}
+            />
+          )}
+          {!!item.upload && (
+            <View style={styles.uploadRow} testID={`chat-upload-${item.clientMessageId}`}>
+              <Text style={[styles.metaText, mine ? styles.metaTextMine : styles.metaTextTheirs]} accessibilityLiveRegion="polite">
+                {item.upload.state === 'preparing' ? 'Đang nén…'
+                  : item.upload.state === 'uploading' ? `Đang gửi ${Math.round(item.upload.progress * 100)}%`
+                  : (item.upload.error ?? 'Chưa gửi được.')}
+              </Text>
+              {item.upload.state === 'failed' && !!item.clientMessageId && (
+                <View style={styles.uploadActions}>
+                  <TouchableOpacity accessibilityRole="button" style={styles.uploadBtn} onPress={() => void runAttachment(item.clientMessageId!)}>
+                    <Text style={styles.uploadBtnText}>Thử lại</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity accessibilityRole="button" style={styles.uploadBtn} onPress={() => discardAttachment(item.clientMessageId!)}>
+                    <Text style={styles.uploadBtnText}>Bỏ</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
+          {(!!item.content || item.isDeleted || !item.attachment) && (
+            <Text
+              style={[
+                styles.msgText,
+                mine ? styles.msgTextMine : styles.msgTextTheirs,
+                item.isDeleted && styles.msgTextDeleted,
+              ]}
+            >
+              {item.isDeleted ? 'Tin nhắn đã được gỡ' : item.content}
+            </Text>
+          )}
           <View style={styles.metaRow}>
             {!!item.isAutomated && !item.isDeleted && (
               <Text
@@ -358,11 +489,11 @@ export default function ChatThreadScreen() {
         </View>
       );
     },
-    [myId, styles],
+    [myId, styles, colors.text, runAttachment, discardAttachment],
   );
 
   const headerSubtitle = useMemo(
-    () => conversation?.serviceName ?? serviceName ?? null,
+    () => [conversation?.serviceName ?? serviceName ?? null, conversation?.orderCode ?? null].filter(Boolean).join(' · ') || null,
     [conversation, serviceName],
   );
 
@@ -490,6 +621,18 @@ export default function ChatThreadScreen() {
 
         {canSend ? (
           <View style={[styles.inputContainer, { paddingBottom: isKeyboardVisible ? 0 : Math.max(insets.bottom, 5) }]}>
+            {!editing && (
+              <TouchableOpacity
+                testID="chat-attach"
+                style={styles.sendIconBtn}
+                onPress={openAttachMenu}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Gửi ảnh hoặc video"
+              >
+                <Ionicons name="attach" size={24} color={colors.primary} />
+              </TouchableOpacity>
+            )}
             <TextInput
               style={styles.input}
               placeholder="Tin nhắn..."
@@ -517,15 +660,28 @@ export default function ChatThreadScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={[styles.readOnlyBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <View style={[styles.readOnlyBar, { paddingBottom: Math.max(insets.bottom, 16) }]} testID={closedByCompletion ? 'chat-closed-completed' : undefined}>
             <Ionicons name="lock-closed-outline" size={16} color={colors.textSecondary} />
             <Text style={styles.readOnlyText}>
               {conversation === null
                 ? (loadFailed
                   ? 'Chưa xác minh được quyền nhắn tin. Vui lòng thử lại.'
                   : 'Đang xác minh quyền nhắn tin…')
-                : 'Cuộc trò chuyện này chỉ còn xem lại được.'}
+                : closedByCompletion
+                  ? (viewerIsCustomer
+                    ? 'Đơn đã hoàn tất nên cuộc trò chuyện đã khoá. Nếu thiết bị gặp lại vấn đề, hãy gửi yêu cầu bảo hành để nhắn tin lại với kỹ thuật viên.'
+                    : 'Đơn đã hoàn tất nên cuộc trò chuyện đã khoá. Khi khách gửi yêu cầu bảo hành, cuộc trò chuyện sẽ mở lại.')
+                  : 'Cuộc trò chuyện này chỉ còn xem lại được.'}
             </Text>
+            {closedByCompletion && viewerIsCustomer && !!conversation?.serviceOrderId && (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Gửi yêu cầu bảo hành"
+                onPress={() => navigation.navigate('CustomerOrderDetail', { serviceOrderId: conversation.serviceOrderId!, screen: 'CustomerWarranty' })}
+              >
+                <Text style={styles.uploadBtnText}>Gửi yêu cầu bảo hành</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>
@@ -691,5 +847,9 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  readOnlyText: { fontSize: 13, color: colors.textSecondary },
+  readOnlyText: { fontSize: 13, color: colors.textSecondary, flexShrink: 1 },
+  uploadRow: { gap: 4, marginBottom: 4 },
+  uploadActions: { flexDirection: 'row', gap: 12 },
+  uploadBtn: { minHeight: 44, justifyContent: 'center' },
+  uploadBtnText: { fontSize: 13, fontWeight: '700', color: colors.primary },
 });

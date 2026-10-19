@@ -120,9 +120,9 @@ export default function ChatListScreen() {
           <Text style={styles.time}>{relativeTime(item.lastMessageAt)}</Text>
         </View>
 
-        {!!item.serviceName && (
+        {!!(item.serviceName || item.orderCode) && (
           <Text style={styles.serviceNote} numberOfLines={1}>
-            {item.serviceName}
+            {[item.serviceName, item.orderCode].filter(Boolean).join(" · ")}
           </Text>
         )}
 

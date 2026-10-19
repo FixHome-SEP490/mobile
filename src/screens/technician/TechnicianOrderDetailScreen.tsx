@@ -38,6 +38,7 @@ import {
   Wrench,
 } from 'lucide-react-native';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { useLiveRefresh } from '../../hooks/useLiveRefresh';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAppTheme } from '../../constants/theme';
@@ -741,6 +742,9 @@ export default function TechnicianOrderDetailScreen() {
       completionRef.current = null;
     };
   }, []);
+  // PO 18/10/2026: this order changed on the server (customer decision, payment, warranty): read it again, quietly.
+  useLiveRefresh(['order:updated'], () => { void loaderRef.current?.refresh(true); },
+    (event) => !event.payload.serviceOrderId || event.payload.serviceOrderId === serviceOrderId);
   useFocusEffect(useCallback(() => {
     focusAliveRef.current = true;
     void loaderRef.current?.focus(serviceOrderId);

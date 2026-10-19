@@ -27,6 +27,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { UserRole, type RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store/auth.store';
+import { useLiveRefresh } from '../../hooks/useLiveRefresh';
 import { useBadgeStore } from '../../store/badge.store';
 import { createInvitationInbox, initialInboxState, isActionable } from './invitation-inbox';
 import { invitationClosedLabel, invitationCountdown, invitationDistanceText, sortInvitationsForDisplay } from './invitation-view';
@@ -104,6 +105,8 @@ export default function TechnicianInvitationsScreen() {
     void controller.focus();
     return () => controller.blur();
   }, [controller]));
+
+  useLiveRefresh(['invitation:updated'], () => { void controller.load(); });
 
   // Re-evaluate countdowns/expiry while focused. Deadlines come from the server (`expiresAt`).
   const [now, setNow] = useState(() => Date.now());

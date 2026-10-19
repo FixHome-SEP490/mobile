@@ -35,7 +35,19 @@ export interface IceServer { urls: string | string[]; username?: string; credent
 export interface SessionDescription { type: string; sdp: string }
 export interface IceCandidateInit { candidate: string; sdpMid?: string | null; sdpMLineIndex?: number | null }
 
+/** Server pushes that mean "something you may be looking at changed" (PO 18/10/2026), the same as the web's live updates. */
+export const LIVE_EVENT_NAMES = [
+  'order:updated', 'order:location', 'booking:updated', 'invitation:updated', 'notification:new', 'wallet:updated', 'realtime:resync',
+] as const;
+export type LiveEventName = (typeof LIVE_EVENT_NAMES)[number];
+export interface LiveEvent {
+  name: LiveEventName;
+  /** e.g. `{serviceOrderId, bookingId, status, kinds?}` for order:updated; may be empty. */
+  payload: Record<string, unknown>;
+}
+
 export interface ChatSocketHandlers {
+  onLiveUpdate?: (event: LiveEvent) => void;
   onMessageNew?: (message: ChatMessage) => void;
   onMessageUpdated?: (message: ChatMessage) => void;
   onMessageDeleted?: (message: ChatMessage) => void;
@@ -172,6 +184,12 @@ class ChatSocketService {
           this.emitToHandlers('onConversationUpdated', p),
         );
         socket.on('typing', (e: TypingEvent) => this.emitToHandlers('onTyping', e));
+        for (const name of LIVE_EVENT_NAMES) {
+          socket.on(name, (payload: unknown) => this.emitToHandlers('onLiveUpdate', {
+            name,
+            payload: payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {},
+          }));
+        }
         socket.on('connect:ready', (payload: { iceServers?: IceServer[] }) => {
           this.ice = Array.isArray(payload?.iceServers) ? payload.iceServers : [];
         });
