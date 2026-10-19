@@ -3,6 +3,7 @@ import { Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import CustomerWalletScreen from './CustomerWalletScreen';
 import { handleWalletUrl } from '../../../navigation/customer-wallet-return';
+const dump = (r: { toJSON: () => unknown }) => JSON.stringify(r.toJSON(), (k, v) => (k === 'refreshControl' ? undefined : v));
 
 let mockWalletState: any;
 const mockRequestTopUp: jest.Mock = jest.fn(async () => {});
@@ -63,7 +64,7 @@ it('presents the balance as a blue hero with adjacent top-up and withdrawal acti
   await act(async () => { renderer = create(<CustomerWalletScreen />); });
   const hero = renderer.root.findByProps({ testID: 'wallet-balance-hero' });
   const heroStyle = Array.isArray(hero.props.style) ? Object.assign({}, ...hero.props.style) : hero.props.style;
-  expect(heroStyle.backgroundColor).toBe('#2563EB');
+  expect(heroStyle.backgroundColor).toBe('#193E70');
   const actions = renderer.root.findByProps({ testID: 'wallet-primary-actions' });
   const labels = actions.findAllByType(Text).map(node => String(node.props.children));
   expect(labels).toEqual(expect.arrayContaining(['Nạp tiền', 'Rút tiền']));
@@ -88,14 +89,14 @@ it('failed summary GET is never zero; invalid top-up amounts never request', asy
   mockWalletState = { ...baseState, summary: { status: 'error', requestSeq: 1, error: 'unavailable' } };
   let renderer!: ReturnType<typeof create>;
   await act(async () => { renderer = create(<CustomerWalletScreen />); });
-  const text = JSON.stringify(renderer.toJSON());
+  const text = dump(renderer);
   expect(text).toContain('Chưa tải được số dư');
   expect(text).not.toContain('"0 ₫"');
   await expandTopUp(renderer);
   await act(async () => { renderer.root.findByProps({ testID: 'wallet-topup-amount' }).props.onChangeText('5000'); });
   await act(async () => { renderer.root.findByProps({ testID: 'wallet-topup-request' }).props.onPress(); });
   expect(mockRequestTopUp).not.toHaveBeenCalled();
-  expect(JSON.stringify(renderer.toJSON())).toContain('10.000');
+  expect(dump(renderer)).toContain('10.000');
   await act(async () => renderer.unmount());
 });
 
@@ -147,7 +148,7 @@ it('labels all seven ledger rows and shows their authoritative incoming or outgo
   await act(async () => renderer.unmount());
 });
 
-it('keeps raw transaction references collapsed until the customer opens details', async () => {
+it('never shows the raw transaction reference', async () => {
   const referenceId = 'b43eb49e-3921-4df0-a556-a110d8610123';
   mockWalletState = {
     ...baseState,
@@ -164,11 +165,8 @@ it('keeps raw transaction references collapsed until the customer opens details'
   await act(async () => { renderer = create(<CustomerWalletScreen />); });
   const row = renderer.root.findByProps({ testID: 'wallet-tx-top-up-ref' });
   expect(row.findAllByType(Text).map(node => String(node.props.children)).join(' ')).not.toContain(referenceId);
-  const details = row.findByProps({ testID: 'wallet-tx-details-top-up-ref' });
-  expect(details.props.accessibilityState.expanded).toBe(false);
-  await act(async () => details.props.onPress());
-  expect(JSON.stringify(renderer.toJSON())).toContain(referenceId);
-  expect(renderer.root.findByProps({ testID: 'wallet-tx-details-top-up-ref' }).props.accessibilityState.expanded).toBe(true);
+  expect(dump(renderer)).not.toContain(referenceId);
+  expect(renderer.root.findAllByProps({ testID: 'wallet-tx-details-top-up-ref' })).toHaveLength(0);
   await act(async () => renderer.unmount());
 });
 
@@ -187,7 +185,7 @@ it('keeps top-up locked after an unknown result until the ledger is reconciled',
   expect(action.props.disabled).toBe(true);
   await act(async () => action.props.onPress());
   expect(mockRequestTopUp).not.toHaveBeenCalled();
-  expect(JSON.stringify(renderer.toJSON())).toContain('chưa rõ kết quả');
+  expect(dump(renderer)).toContain('chưa rõ kết quả');
   await act(async () => renderer.unmount());
 });
 
@@ -240,7 +238,7 @@ it('non-customer roles see no wallet content and send nothing', async () => {
   mockRole = 'technician';
   let renderer!: ReturnType<typeof create>;
   await act(async () => { renderer = create(<CustomerWalletScreen />); });
-  expect(JSON.stringify(renderer.toJSON())).toContain('không có quyền');
+  expect(dump(renderer)).toContain('không có quyền');
   expect(mockVerify).not.toHaveBeenCalled();
   expect(mockRequestTopUp).not.toHaveBeenCalled();
   await act(async () => renderer.unmount());

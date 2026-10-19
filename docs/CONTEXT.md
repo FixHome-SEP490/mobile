@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-20 00:36 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: fix/home-catalog-v2
+> Cập nhật lần cuối: 2026-10-20 00:54 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: fix/home-catalog-v2
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -268,6 +268,10 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 - M6 source: màn bàn giao/thanh toán ba phương thức, ví Customer riêng từ Tài khoản, AFTER và khai báo tiền mặt đã nối hooks frozen. Parser VND không đổi thập phân thành số tiền khác; ảnh gửi xác nhận không gửi lại draft, quay lại đề xuất giữ route/draft cũ. Web export thực đã kiểm chứng GET ví, nhập lỗi, mở/hủy xác nhận và footer ở 320/360/390/430px với dữ liệu QA thật, không POST thanh toán. Đơn QA rỗng; nghiệp vụ đơn, ảnh/native và gateway chưa runtime kiểm chứng.
 
+### Ví khách theo kiểu ví thợ (20/10/2026, nhánh `fix/home-catalog-v2`)
+
+- Chỉ đổi giao diện `CustomerWalletScreen`, không đổi logic nạp, rút, kiểm tra hay phân trang: đầu trang có nút Quay lại, dòng nhỏ "Ví của tôi", tiêu đề "Ví FixHome" và nút làm mới; thẻ số dư nền `#193E70` cỡ 32 như ví thợ (lỗi tải vẫn hiện "Chưa tải được số dư", không bao giờ hiện 0); hai nút Nạp tiền (đặc) và Rút tiền (viền) cao 48 bo 14; mỗi giao dịch là một thẻ viền mảnh bo 14; phân trang là "Trước, Trang n/tổng, Sau"; bỏ nút "Chi tiết" và mã tham chiếu thô (chuỗi UUID khách không dùng được) khỏi từng giao dịch. Kéo xuống để làm mới. Test `CustomerWalletScreen.test.tsx`. CHƯA xem trên máy thật.
+
 ## 4. Kiến trúc và thư mục chính
 
 - `src/features/order-flow/`: domain/runtime và shared/navigation cho redesign, một provider/reader mỗi phiên đơn. M3 có controller và task screens di chuyển/check-in/face/BEFORE, bằng chứng đúng ID/chủ ảnh và tracker chỉ bật tại màn di chuyển. M4 có controller/hook báo giá, editor và quyết định hai vai trò. M5 dùng controller/hook phát sinh và linh kiện, journal lưu ID trả về thật và kết quả sử dụng cần đối soát; không lưu QR hoặc payload nhạy cảm. Recovery ưu tiên intent chưa rõ, chỉ GET đúng phạm vi. Booking/lời mời phân biệt chắc chắn chưa gửi với POST chưa rõ. Preview vẫn chưa thay route production.
@@ -348,6 +352,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-20 00:54 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Ví của khách làm lại theo kiểu ví của thợ: thẻ số dư xanh đậm, nút Nạp tiền và Rút tiền, giao dịch dạng thẻ, kéo để làm mới
 - 2026-10-20 00:36 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Thanh tab khách: tab đang chọn là viên xanh nhạt, chỉ nút Đặt lịch xanh đặc có viền
 - 2026-10-19 23:36 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Hoạt động có hai tab Đơn sửa chữa và Yêu cầu đặt lịch như web, mỗi tab một danh sách và số đếm
 - 2026-10-19 23:12 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Làm lại màn Khám phá dịch vụ: thẻ dịch vụ có giá công, dải chip danh mục, danh mục chọn từ Home chỉ hiện dịch vụ con
@@ -387,7 +392,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-17 01:42 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | PR-D thêm tra cứu đơn Guest theo mã + điện thoại, giới hạn chung manual/poll 5/60 giây, 429 backoff, kiểm soát focus/background/stale GPS và copy đúng `order.code` ở hai màn Customer; focused 15 suites/124 tests, full Jest 285 suites/3402 tests, lint/typecheck/check:expo/diff check đạt; native/runtime CHƯA KIỂM CHỨNG.
 - 2026-10-17 01:29 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | PR-C thêm quản lý ngân hàng, rút tiền một lần không replay khi ACK chưa rõ, đối soát GET và lịch sử phân trang với ba status thật; focused 3 suites/18 tests, API runtime/thiết bị/giao dịch tài chính CHƯA KIỂM CHỨNG.
 - 2026-10-17 01:20 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | PR-B thêm KYC Customer với kiểm tra tuổi/ngày Việt Nam, hai ảnh CCCD riêng theo MIME/đuôi/owner path, signed XHR có timeout/abort và status; focused 4 suites/22 tests, lint/typecheck đạt; runtime Backend và thiết bị CHƯA KIỂM CHỨNG.
-- 2026-10-17 01:09 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | PR-A chốt kiểm thử đủ bảy loại ledger, `amount` dương và `balanceAfter` không âm (kể cả zero), từ chối loại không biết hoặc giá trị malformed; focused Jest xanh, chưa có thao tác tài chính thật.
 
 ### Lịch sử giữ lại khi tích hợp
 
