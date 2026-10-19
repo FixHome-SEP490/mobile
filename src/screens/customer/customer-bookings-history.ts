@@ -90,6 +90,11 @@ export type HistoryCard =
   | { kind: 'booking'; booking: BookingItem; order: ServiceOrderItem | null }
   | { kind: 'order'; order: ServiceOrderItem };
 
+/** A repair order is one a technician currently holds (or finished); an order that lost its technician is a booking request again. */
+export function isRepairCard(card: HistoryCard): boolean {
+  return card.kind === 'order' || (card.order !== null && linkedReplacementState(card.booking, card.order) === null);
+}
+
 /**
  * Merge customer-owned bookings with authoritative service orders.
  * An order links to at most one booking via order.bookingId; orders whose
@@ -104,6 +109,16 @@ export function mergeHistory(bookings: BookingItem[], orders: ServiceOrderItem[]
   });
   for (const order of remaining.values()) cards.push({ kind: 'order', order });
   return cards;
+}
+
+export type RequestStage = 'no_tech' | 'sent' | 'cancelled';
+
+/** The stage of a booking request, for the filter chips of the requests tab. */
+export function requestStage(card: HistoryCard): RequestStage {
+  if (card.kind !== 'booking') return 'sent';
+  if (card.order !== null) return 'no_tech';
+  const status = String(card.booking.status).toUpperCase();
+  return status === 'CANCELLED' ? 'cancelled' : status === 'CLOSED' ? 'no_tech' : 'sent';
 }
 
 function dedupeBookings(existing: BookingItem[], incoming: BookingItem[]): BookingItem[] {

@@ -4,8 +4,10 @@ import {
   customerBookingsUserId,
   homeResumeTarget,
   initialHistoryState,
+  isRepairCard,
   linkedReplacementState,
   mergeHistory,
+  requestStage,
   orderTotalText,
   resolveBookingsView,
   resumeTargetFor,
@@ -679,5 +681,37 @@ describe('status filters like the web: all, in progress, completed, cancelled', 
     expect(ids('completed')).toEqual(['o-done']);
     expect(ids('cancelled')).toEqual(['b-cancelled', 'o-cancelled']);
     expect(ids('all')).toHaveLength(5);
+  });
+});
+
+describe('isRepairCard: a repair order is one a technician holds', () => {
+  const linked = (bookingStatus: BookingItem['status'], orderStatus: ServiceOrderItem['status']) => ({
+    kind: 'booking' as const,
+    booking: booking({ id: 'b-split', status: bookingStatus }),
+    order: order({ id: 'o-split', bookingId: 'b-split', status: orderStatus }),
+  });
+  it.each([
+    ['MATCHED', 'ACCEPTED', true], ['MATCHED', 'UNDER_REPAIR', true], ['MATCHED', 'COMPLETED', true],
+    ['MATCHING', 'ACCEPTED', false], ['CLOSED', 'EN_ROUTE', false],
+  ] as const)('booking %s + order %s -> repair %s', (b, o, expected) => {
+    expect(isRepairCard(linked(b, o))).toBe(expected);
+  });
+  it('keeps standalone orders as repairs and unlinked bookings as requests', () => {
+    expect(isRepairCard({ kind: 'order', order: order({ id: 'o-solo' }) })).toBe(true);
+    expect(isRepairCard({ kind: 'booking', booking: booking({ id: 'b-solo' }), order: null })).toBe(false);
+  });
+});
+
+describe('requestStage: stage chips of the requests tab', () => {
+  const req = (status: BookingItem['status'], linkedOrder: ServiceOrderItem | null = null) =>
+    ({ kind: 'booking' as const, booking: booking({ id: 'b-stage', status }), order: linkedOrder });
+  it.each([
+    ['SUBMITTED', 'sent'], ['MATCHING', 'sent'], ['MATCHED', 'sent'], ['PENDING', 'sent'], ['CONFIRMED', 'sent'],
+    ['CLOSED', 'no_tech'], ['CANCELLED', 'cancelled'],
+  ] as const)('booking %s -> %s', (status, stage) => {
+    expect(requestStage(req(status))).toBe(stage);
+  });
+  it('an order that lost its technician is still without a technician', () => {
+    expect(requestStage(req('MATCHING', order({ id: 'o-stage', bookingId: 'b-stage', status: 'ACCEPTED' })))).toBe('no_tech');
   });
 });

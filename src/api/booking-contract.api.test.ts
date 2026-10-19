@@ -15,6 +15,24 @@ const technicianProfileId = '33333333-3333-4333-8333-333333333333';
 beforeEach(() => jest.resetAllMocks());
 
 describe('Mobile Booking / ServiceOrder API contract', () => {
+  it('reads the Activity counts from the server and totals each list', async () => {
+    api.get.mockResolvedValue({ data: { data: {
+      repair: { in_progress: 2, completed: 3, cancelled: 1 },
+      request: { no_technician: 33, sent: 4, cancelled: 5 },
+    } } });
+    const counts = await bookingsApi.getActivityCounts();
+    expect(api.get).toHaveBeenCalledWith('/bookings/my/activity-counts');
+    expect(counts.repair).toEqual({ all: 6, in_progress: 2, completed: 3, cancelled: 1 });
+    expect(counts.request).toEqual({ all: 42, no_technician: 33, sent: 4, cancelled: 5 });
+  });
+
+  it('treats a missing or invalid count as zero, never a made-up number', async () => {
+    api.get.mockResolvedValue({ data: { data: { repair: { in_progress: '2' }, request: {} } } });
+    const counts = await bookingsApi.getActivityCounts();
+    expect(counts.repair.all).toBe(0);
+    expect(counts.request.all).toBe(0);
+  });
+
   it('keeps technician profile ID separate from shortlist USER ID', async () => {
     api.get.mockResolvedValue({ data: { data: [{
       technicianId: technicianProfileId, userId: firstUserId, fullName: 'Demo Technician',

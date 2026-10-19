@@ -29,13 +29,15 @@ import { CUSTOMER_UI_ARTWORK } from '../../constants/customer-artwork';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { useAuthStore } from '../../store/auth.store';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
-import CustomerActivitySectionHeader from '../../components/customer/CustomerActivitySectionHeader';
-import { bookingsApi, type BookingItem } from '../../api/bookings.api';
+import { bookingsApi, type ActivityCounts, type BookingItem } from '../../api/bookings.api';
 import { ordersApi, type ServiceOrderItem, type CanonicalOrderStatus } from '../../api/orders.api';
 import {
   createBookingsHistoryLoader,
   customerBookingsUserId,
   getCachedHistoryState,
+  isRepairCard,
+  requestStage,
+  type RequestStage,
   linkedReplacementState,
   resolveBookingsView,
   resumeTargetFor,
@@ -75,6 +77,8 @@ export default function CustomerBookingsScreen() {
   const [activityTab, setActivityTab] = useState<BookingsTab>('in_progress');
   // Repairs and booking requests are two lists, one shown at a time (as on the web), so nobody scrolls past one to reach the other.
   const [kindTab, setKindTab] = useState<'repair' | 'request' | null>(null);
+  // Requests have their own stages (no technician yet, sent, cancelled) instead of the repair statuses.
+  const [requestFilter, setRequestFilter] = useState<'all' | RequestStage>('all');
   const tabBarClearance = useTabBarClearance();
   const [activitySearch, setActivitySearch] = useState('');
   const [expandedRequests, setExpandedRequests] = useState<Record<string, boolean>>({});
@@ -95,7 +99,7 @@ export default function CustomerBookingsScreen() {
     };
   }, []);
   const [historyState, setHistoryState] = useState(getCachedHistoryState);
-  const { total, loading, refreshing, loadingMore, loadingMoreOrders, error, ordersError } = historyState;
+  const { loading, refreshing, loadingMore, loadingMoreOrders, error, ordersError } = historyState;
   const [loader] = useState(() => createBookingsHistoryLoader(
     (page, pageSize) => bookingsApi.getMyBookingsPage(page, pageSize),
     ordersApi.getMyOrders,
@@ -106,6 +110,14 @@ export default function CustomerBookingsScreen() {
     },
     { getOrdersPage: (page, pageSize) => ordersApi.getMyOrdersPage(page, pageSize) },
   ));
+  // Exact totals come from the server, so they do not move while the lists page in; read again after every list refresh.
+  const [counts, setCounts] = useState<ActivityCounts | null>(null);
+  useEffect(() => {
+    if (loading || refreshing) return;
+    let current = true;
+    bookingsApi.getActivityCounts().then((next) => { if (current) setCounts(next); }, () => undefined);
+    return () => { current = false; };
+  }, [loading, refreshing]);
   useFocusEffect(useCallback(() => {
     void loader.focus();
     return () => loader.blur();
@@ -281,23 +293,35 @@ export default function CustomerBookingsScreen() {
     }
   };
 
-  const view = resolveBookingsView(historyState, activitySearch, activityTab);
-  // The server totals of both lists, as on the web; unknown until the first load settles.
-  const allTotal = loading || !!error || !!ordersError ? null : total + historyState.ordersTotal;
+  const requestView = resolveBookingsView(historyState, activitySearch, 'all');
+  const repairView = resolveBookingsView(historyState, activitySearch, activityTab);
+  const repairCards = repairView.filtered.filter(isRepairCard);
+  const requestCards = requestView.filtered.filter((card) => !isRepairCard(card));
+  const urgentCount = requestCards.filter((card) =>
+    card.kind === 'booking' && !card.order && resumeTargetFor(card.booking, !requestView.ordersCoverageComplete) !== null,
+  ).length;
+  // What needs the customer's action opens first; otherwise the repairs, then the requests.
+  const activeKind = kindTab ?? (urgentCount > 0 ? 'request' : repairCards.length > 0 || requestCards.length === 0 ? 'repair' : 'request');
+  const view = activeKind === 'request' ? requestView : repairView;
+  const shownRequests = requestCards.filter((card) => requestFilter === 'all' || requestStage(card) === requestFilter);
   const { filtered: filteredCards, showList, emptyNote, showLoadMore, showLoadMoreOrders } = view;
   // More pages load by themselves, one page (20 rows) each time the customer scrolls near the end, never the whole
   // history at once. A list too short to scroll gets one extra page per filter/search choice (`fillBudget`), so a
   // filter with few matches is not stuck, and a failed page stops it until the customer retries.
   const scrollMetrics = useRef({ offset: 0, viewport: 0, content: 0 });
   const fillBudget = useRef(1);
-  const filterKey = `${activityTab}|${kindTab}|${activitySearch}`;
+  const filterKey = `${activityTab}|${requestFilter}|${kindTab}|${activitySearch}`;
   useEffect(() => { fillBudget.current = 1; }, [filterKey]);
   const loadMoreWhenNearEnd = (fillingShortList = false) => {
     const { offset, viewport, content } = scrollMetrics.current;
     if (error || ordersError || loading || refreshing || loadingMore || loadingMoreOrders || content <= 0) return;
     if (offset + viewport < content - 400) return;
     if (fillingShortList && fillBudget.current <= 0) return;
-    if (showLoadMore) void loader.loadMore();
+    // Each tab pulls only its own data: the repairs are orders, the requests are bookings (then the orders that tell them apart).
+    if (activeKind === 'repair') {
+      if (showLoadMoreOrders) void loader.loadMoreOrders();
+      else return;
+    } else if (showLoadMore) void loader.loadMore();
     else if (showLoadMoreOrders) void loader.loadMoreOrders();
     else return;
     if (fillingShortList) fillBudget.current -= 1;
@@ -750,23 +774,26 @@ export default function CustomerBookingsScreen() {
     );
   };
 
-  const actionRequiredCards = filteredCards.filter((card) =>
-    card.kind === 'booking'
-    && !card.order
-    && resumeTargetFor(card.booking, !view.ordersCoverageComplete) !== null,
-  );
-  const ongoingCards = filteredCards.filter((card) => !actionRequiredCards.includes(card));
-  const repairCards = ongoingCards.filter((card) => card.kind === 'order' || card.order !== null);
-  const requestCards = ongoingCards.filter((card) => !repairCards.includes(card));
-  const requestCount = requestCards.length + actionRequiredCards.length;
-  // What needs the customer's action opens first; otherwise the repairs, then the requests.
-  const activeKind = kindTab ?? (actionRequiredCards.length > 0 ? 'request' : repairCards.length > 0 || requestCount === 0 ? 'repair' : 'request');
   const kindEmptyText = activeKind === 'repair'
     ? (activityTab === 'completed' ? 'Chưa có đơn sửa chữa hoàn tất' : activityTab === 'cancelled' ? 'Chưa có đơn sửa chữa đã hủy' : 'Chưa có đơn sửa chữa nào')
-    : (activityTab === 'completed' ? 'Chưa có yêu cầu đặt lịch hoàn tất' : activityTab === 'cancelled' ? 'Chưa có yêu cầu đặt lịch đã hủy' : 'Chưa có yêu cầu đặt lịch nào');
+    : ({ all: 'Chưa có yêu cầu đặt lịch nào', no_tech: 'Không có yêu cầu nào chưa có thợ', sent: 'Không có yêu cầu đã gửi', cancelled: 'Chưa có yêu cầu đặt lịch đã hủy' })[requestFilter];
+  const withCount = (label: string, count: number | undefined) => (count === undefined ? label : `${label} (${count})`);
+  const filterChips = activeKind === 'request'
+    ? ([
+      { id: 'all', label: withCount('Tất cả', counts?.request.all), testID: 'activity-request-filter-all' },
+      { id: 'no_tech', label: withCount('Chưa có thợ', counts?.request.no_technician), testID: 'activity-request-filter-no-tech' },
+      { id: 'sent', label: withCount('Đã gửi', counts?.request.sent), testID: 'activity-request-filter-sent' },
+      { id: 'cancelled', label: withCount('Đã hủy', counts?.request.cancelled), testID: 'activity-request-filter-cancelled' },
+    ] as const).map((chip) => ({ ...chip, selected: requestFilter === chip.id, onPress: () => setRequestFilter(chip.id) }))
+    : ([
+      { id: 'all', label: withCount('Tất cả', counts?.repair.all), testID: 'activity-filter-all' },
+      { id: 'in_progress', label: withCount('Đang xử lý', counts?.repair.in_progress), testID: 'activity-filter-open' },
+      { id: 'completed', label: withCount('Hoàn tất', counts?.repair.completed), testID: 'activity-filter-history' },
+      { id: 'cancelled', label: withCount('Đã hủy', counts?.repair.cancelled), testID: 'activity-filter-cancelled' },
+    ] as const).map((chip) => ({ ...chip, selected: activityTab === chip.id, onPress: () => setActivityTab(chip.id) }));
   const kindTabs = [
-    { id: 'repair', label: 'Đơn sửa chữa', count: repairCards.length, urgent: 0 },
-    { id: 'request', label: 'Yêu cầu đặt lịch', count: requestCount, urgent: actionRequiredCards.length },
+    { id: 'repair', label: 'Đơn sửa chữa', count: counts?.repair.all ?? null, urgent: 0 },
+    { id: 'request', label: 'Yêu cầu đặt lịch', count: counts?.request.all ?? null, urgent: urgentCount },
   ] as const;
 
   return (
@@ -803,39 +830,33 @@ export default function CustomerBookingsScreen() {
                 style={[styles.kindTab, selected && styles.kindTabActive]}
                 onPress={() => setKindTab(tab.id)}
                 accessibilityRole="tab"
-                accessibilityLabel={`${tab.label}, ${tab.count}${tab.urgent > 0 ? `, ${tab.urgent} cần bạn xử lý` : ''}`}
+                accessibilityLabel={`${tab.label}${tab.count === null ? '' : `, ${tab.count}`}${tab.urgent > 0 ? `, ${tab.urgent} cần bạn xử lý` : ''}`}
                 accessibilityState={{ selected }}
               >
                 <Text style={selected ? styles.kindTabTextActive : styles.kindTabText} numberOfLines={1}>{tab.label}</Text>
-                <View style={[styles.kindCount, { backgroundColor: tab.urgent > 0 ? colors.tone.warning.bg : selected ? colors.primarySoft : colors.divider }]}>
-                  <Text style={[styles.kindCountText, { color: tab.urgent > 0 ? colors.tone.warning.text : colors.textSecondary }]}>{tab.count}</Text>
-                </View>
+                {(tab.count !== null || tab.urgent > 0) && (
+                  <View style={[styles.kindCount, { backgroundColor: tab.urgent > 0 ? colors.tone.warning.bg : selected ? colors.primarySoft : colors.divider }]}>
+                    <Text style={[styles.kindCountText, { color: tab.urgent > 0 ? colors.tone.warning.text : colors.textSecondary }]}>{tab.count ?? tab.urgent}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow} accessibilityRole="tablist">
-          {([
-            { id: 'all', label: allTotal === null ? 'Tất cả' : `Tất cả (${allTotal})`, testID: 'activity-filter-all' },
-            { id: 'in_progress', label: 'Đang xử lý', testID: 'activity-filter-open' },
-            { id: 'completed', label: 'Hoàn tất', testID: 'activity-filter-history' },
-            { id: 'cancelled', label: 'Đã hủy', testID: 'activity-filter-cancelled' },
-          ] as const).map((tab) => {
-            const selected = activityTab === tab.id;
-            return (
-              <TouchableOpacity
-                key={tab.id}
-                testID={tab.testID}
-                style={[styles.filterChip, selected && styles.filterChipActive]}
-                onPress={() => setActivityTab(tab.id)}
-                accessibilityRole="tab"
-                accessibilityLabel={tab.label}
-                accessibilityState={{ selected }}
-              >
-                <Text style={selected ? styles.filterChipTextActive : styles.filterChipText} numberOfLines={1}>{tab.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
+          {filterChips.map((tab) => (
+            <TouchableOpacity
+              key={tab.id}
+              testID={tab.testID}
+              style={[styles.filterChip, tab.selected && styles.filterChipActive]}
+              onPress={tab.onPress}
+              accessibilityRole="tab"
+              accessibilityLabel={tab.label}
+              accessibilityState={{ selected: tab.selected }}
+            >
+              <Text style={tab.selected ? styles.filterChipTextActive : styles.filterChipText} numberOfLines={1}>{tab.label}</Text>
+            </TouchableOpacity>
+          ))}
         </ScrollView>
       </View>
 
@@ -900,32 +921,8 @@ export default function CustomerBookingsScreen() {
             </View>
           )}
           {activeKind === 'repair' && repairCards.map(renderActiveCard)}
-          {activeKind === 'request' && (
-            <>
-              {actionRequiredCards.length > 0 && (
-                <>
-                  <CustomerActivitySectionHeader
-                    title="Cần bạn xử lý"
-                    count={actionRequiredCards.length}
-                    icon="alert"
-                    testID="activity-action-required-section"
-                  />
-                  {actionRequiredCards.map(renderActiveCard)}
-                </>
-              )}
-              {requestCards.length > 0 && (
-                <>
-                  {actionRequiredCards.length > 0 && (
-                    <View style={styles.sectionHeaderSpaced}>
-                      <CustomerActivitySectionHeader title="Yêu cầu khác" count={requestCards.length} icon="request" testID="activity-request-section" />
-                    </View>
-                  )}
-                  {requestCards.map(renderActiveCard)}
-                </>
-              )}
-            </>
-          )}
-          {filteredCards.length > 0 && (activeKind === 'repair' ? repairCards.length === 0 : requestCount === 0) && (
+          {activeKind === 'request' && shownRequests.map(renderActiveCard)}
+          {filteredCards.length > 0 && (activeKind === 'repair' ? repairCards.length === 0 : shownRequests.length === 0) && (
             <View style={styles.kindEmpty} testID="activity-kind-empty">
               <Ionicons name={activeKind === 'repair' ? 'construct-outline' : 'calendar-outline'} size={40} color={colors.muted} />
               <Text style={styles.emptyTitle}>{kindEmptyText}</Text>

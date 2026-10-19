@@ -41,6 +41,10 @@ const order: ServiceOrderItem = {
   technician: { id: 'tech-user', fullName: 'Kỹ thuật viên A' },
   createdAt: '2026-09-29T02:00:00.000Z',
 } as ServiceOrderItem;
+const mockCounts = {
+  repair: { all: 6, in_progress: 2, completed: 3, cancelled: 1 },
+  request: { all: 42, no_technician: 33, sent: 4, cancelled: 5 },
+};
 const mockResolveBookingsView = jest.fn((_state: unknown, _query: string, _tab: string) => ({
   cards: [{ kind: 'order', order }],
   filtered: [{ kind: 'order', order }],
@@ -131,6 +135,7 @@ jest.mock('../../store/auth.store', () => ({
 jest.mock('../../api/bookings.api', () => ({
   bookingsApi: {
     getMyBookingsPage: jest.fn(),
+    getActivityCounts: jest.fn(() => Promise.resolve(mockCounts)),
     getBooking: jest.fn(),
     cancelBooking: jest.fn(),
     reschedule: jest.fn(),
@@ -172,6 +177,8 @@ jest.mock('./customer-bookings-history', () => ({
     error: null,
     ordersError: null,
   }),
+  isRepairCard: (card: { kind: string; order: unknown }) => card.kind === 'order' || card.order !== null,
+  requestStage: (card: { order: unknown }) => (card.order ? 'no_tech' : 'sent'),
   linkedReplacementState: () => null,
   orderTotalText: () => '250.000 ₫',
   resolveBookingsView: (state: unknown, query: string, tab: string) =>
@@ -195,6 +202,13 @@ function mountScreen(): ReactTestRenderer {
   act(() => {
     tree = create(screenElement());
   });
+  return tree;
+}
+
+/** Mounts and lets the server counts arrive. */
+async function mountCounted(): Promise<ReactTestRenderer> {
+  const tree = mountScreen();
+  await act(async () => { await Promise.resolve(); await Promise.resolve(); });
   return tree;
 }
 
@@ -270,7 +284,7 @@ describe('CustomerBookingsScreen activity ordering (C-RUI1)', () => {
     }
   });
 
-  it('shows repairs and booking requests as two tabs with counts, one list at a time', () => {
+  it('shows repairs and booking requests as two tabs with counts, one list at a time', async () => {
     const historyMock = jest.requireMock('./customer-bookings-history') as {
       resolveBookingsView: (...args: unknown[]) => unknown;
       resumeTargetFor: (...args: unknown[]) => string | null;
@@ -284,11 +298,11 @@ describe('CustomerBookingsScreen activity ordering (C-RUI1)', () => {
       showLoadMore: false, showLoadMoreOrders: false, ordersCoverageText: null, ordersCoverageComplete: true,
     });
     historyMock.resumeTargetFor = () => null // nothing needs the customer's action;
-    const tree = mountScreen();
+    const tree = await mountCounted();
     try {
       const tab = (id: string) => tree.root.findAllByProps({ testID: `activity-kind-${id}` }).find((node) => node.props.accessibilityRole === 'tab')!;
-      expect(tab('repair').props.accessibilityLabel).toBe('Đơn sửa chữa, 1');
-      expect(tab('request').props.accessibilityLabel).toBe('Yêu cầu đặt lịch, 1');
+      expect(tab('repair').props.accessibilityLabel).toBe('Đơn sửa chữa, 6');
+      expect(tab('request').props.accessibilityLabel).toBe('Yêu cầu đặt lịch, 42');
       // Repairs open first when nothing needs action, and the request list is not drawn under them.
       expect(tab('repair').props.accessibilityState.selected).toBe(true);
       expect(tree.root.findAllByProps({ testID: 'activity-action-required-section' })).toHaveLength(0);
@@ -303,7 +317,7 @@ describe('CustomerBookingsScreen activity ordering (C-RUI1)', () => {
     }
   });
 
-  it('opens on the requests, with "Cần bạn xử lý" first, when a request needs the customer', () => {
+  it('opens on the requests, with an urgent count, when a request needs the customer', async () => {
     const historyMock = jest.requireMock('./customer-bookings-history') as {
       resolveBookingsView: (...args: unknown[]) => unknown;
       resumeTargetFor: (...args: unknown[]) => string | null;
@@ -317,19 +331,53 @@ describe('CustomerBookingsScreen activity ordering (C-RUI1)', () => {
       showLoadMore: false, showLoadMoreOrders: false, ordersCoverageText: null, ordersCoverageComplete: true,
     });
     historyMock.resumeTargetFor = (target: unknown) => ((target as { id?: string }).id === BOOKING_ID ? BOOKING_ID : null);
-    const tree = mountScreen();
+    const tree = await mountCounted();
     try {
       const tab = (id: string) => tree.root.findAllByProps({ testID: `activity-kind-${id}` }).find((node) => node.props.accessibilityRole === 'tab')!;
       expect(tab('request').props.accessibilityState.selected).toBe(true);
-      expect(tab('request').props.accessibilityLabel).toBe('Yêu cầu đặt lịch, 1, 1 cần bạn xử lý');
-      const header = tree.root.findAllByProps({ testID: 'activity-action-required-section' }).find((node) => node.props.accessibilityRole === 'header')!;
-      expect(String(header.props.accessibilityLabel)).toContain('Cần bạn xử lý');
+      expect(tab('request').props.accessibilityLabel).toBe('Yêu cầu đặt lịch, 42, 1 cần bạn xử lý');
       act(() => tab('repair').props.onPress());
-      expect(tree.root.findAllByProps({ testID: 'activity-action-required-section' })).toHaveLength(0);
+      expect(tab('repair').props.accessibilityState.selected).toBe(true);
     } finally {
       act(() => tree.unmount());
       historyMock.resolveBookingsView = originalResolve;
       historyMock.resumeTargetFor = originalResume;
+    }
+  });
+
+  it('filters requests by stage: no technician yet, sent, cancelled', async () => {
+    const historyMock = jest.requireMock('./customer-bookings-history') as {
+      resolveBookingsView: (...args: unknown[]) => unknown;
+      isRepairCard: (card: unknown) => boolean;
+      requestStage: (card: unknown) => string;
+    };
+    const saved = { ...historyMock };
+    const sent = { kind: 'booking', booking, order: null };
+    const lost = { kind: 'booking', booking: { ...booking, id: 'booking-lost' }, order };
+    const cancelled = { kind: 'booking', booking: { ...booking, id: 'booking-cancelled' }, order: null };
+    historyMock.resolveBookingsView = () => ({
+      cards: [sent, lost, cancelled], filtered: [sent, lost, cancelled], showList: true, emptyNote: null,
+      showLoadMore: false, showLoadMoreOrders: false, ordersCoverageText: null, ordersCoverageComplete: true,
+    });
+    historyMock.isRepairCard = () => false;
+    historyMock.requestStage = (card: unknown) => (card === lost ? 'no_tech' : card === cancelled ? 'cancelled' : 'sent');
+    const tree = await mountCounted();
+    try {
+      act(() => tree.root.findAllByProps({ testID: 'activity-kind-request' }).find((node) => node.props.accessibilityRole === 'tab')!.props.onPress());
+      const chip = (id: string) => tree.root.findAllByProps({ testID: id }).find((node) => node.props.accessibilityRole === 'tab')!;
+      expect(chip('activity-request-filter-all').props.accessibilityLabel).toBe('Tất cả (42)');
+      expect(chip('activity-request-filter-no-tech').props.accessibilityLabel).toBe('Chưa có thợ (33)');
+      expect(chip('activity-request-filter-sent').props.accessibilityLabel).toBe('Đã gửi (4)');
+      expect(chip('activity-request-filter-cancelled').props.accessibilityLabel).toBe('Đã hủy (5)');
+      expect(tree.root.findAllByProps({ testID: 'activity-filter-open' })).toHaveLength(0);
+      const shown = (id: string) => tree.root.findAllByProps({ testID: `booking-card-detail-${id}` }).length > 0;
+      act(() => chip('activity-request-filter-cancelled').props.onPress());
+      expect(chip('activity-request-filter-cancelled').props.accessibilityState.selected).toBe(true);
+      expect(shown('booking-cancelled')).toBe(true);
+      expect(shown(BOOKING_ID)).toBe(false);
+    } finally {
+      act(() => tree.unmount());
+      Object.assign(historyMock, saved);
     }
   });
 });
@@ -352,6 +400,7 @@ describe('CustomerBookingsScreen loads more pages by itself while scrolling', ()
     withMore();
     const tree = mountScreen();
     try {
+      act(() => tree.root.findAllByProps({ testID: 'activity-kind-request' }).find((node) => node.props.accessibilityRole === 'tab')!.props.onPress());
       scroll(tree, 0, 600, 3000); // far from the end
       expect(mockLoader.loadMore).not.toHaveBeenCalled();
       scroll(tree, 2100, 600, 3000); // within 400 of the end
@@ -373,6 +422,21 @@ describe('CustomerBookingsScreen loads more pages by itself while scrolling', ()
       // One extra page for a short list, not the whole history: further growth does not chain more loads.
       act(() => { list(tree).props.onContentSizeChange(0, 400); });
       expect(mockLoader.loadMoreOrders).toHaveBeenCalledTimes(1);
+    } finally {
+      act(() => tree.unmount());
+    }
+  });
+
+  it('loads only orders on the repairs tab, and the counts stay the server totals while pages load', async () => {
+    withMore({ showLoadMore: true, showLoadMoreOrders: true });
+    const tree = await mountCounted();
+    try {
+      scroll(tree, 2100, 600, 3000);
+      expect(mockLoader.loadMore).not.toHaveBeenCalled();
+      expect(mockLoader.loadMoreOrders).toHaveBeenCalledTimes(1);
+      const tab = (id: string) => tree.root.findAllByProps({ testID: `activity-kind-${id}` }).find((node) => node.props.accessibilityRole === 'tab')!;
+      expect(tab('repair').props.accessibilityLabel).toBe('Đơn sửa chữa, 6');
+      expect(tab('request').props.accessibilityLabel).toBe('Yêu cầu đặt lịch, 42');
     } finally {
       act(() => tree.unmount());
     }
