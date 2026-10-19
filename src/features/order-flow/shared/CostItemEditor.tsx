@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 
@@ -161,7 +161,7 @@ export interface CostItemEditorProps {
   onToggle: () => void;
   onChange: (next: CostItemRow) => void;
   onRemove: () => void;
-  onLoadCatalog?: () => void;
+  onLoadCatalog?: (search?: string) => void;
   onSelectCatalogPart?: (part: CostItemCatalogOption) => void;
 }
 
@@ -194,6 +194,7 @@ export function CostItemEditor({
   const id = (suffix: string) => `cost-item-${row.key}-${suffix}`;
   const title = row.description.trim() || 'Hạng mục mới';
   const kindLabel = row.kind === 'labor' ? 'Tiền công' : 'Linh kiện';
+  const [search, setSearch] = useState('');
 
   return (
     <View style={styles.card}>
@@ -321,6 +322,17 @@ export function CostItemEditor({
                 <View>
                   <Text style={styles.hint}>Chọn đúng mã sản phẩm FixHome. Giá và bảo hành do máy chủ đối chiếu lại.</Text>
                   {catalogHint ? <Text style={styles.hint}>{catalogHint}</Text> : null}
+                  <TextInput
+                    testID={id('catalog-search')}
+                    accessibilityLabel="Tìm linh kiện FixHome"
+                    value={search}
+                    onChangeText={setSearch}
+                    onSubmitEditing={() => onLoadCatalog?.(search)}
+                    returnKeyType="search"
+                    placeholder="Tìm theo tên hoặc mã linh kiện"
+                    placeholderTextColor={colors.muted}
+                    style={styles.input}
+                  />
                   {(!catalog || catalog.status === 'idle' || catalog.status === 'error') && (
                     <View>
                       {catalog?.status === 'error' && catalog.error ? (
@@ -332,7 +344,7 @@ export function CostItemEditor({
                         testID={id('catalog-retry')}
                         accessibilityRole="button"
                         accessibilityHint="Tải lại danh mục linh kiện FixHome"
-                        onPress={onLoadCatalog}
+                        onPress={() => onLoadCatalog?.(search)}
                         style={styles.secondaryAction}
                       >
                         <Text style={styles.secondaryActionText}>
@@ -348,7 +360,7 @@ export function CostItemEditor({
                       <TouchableOpacity
                         testID={id('catalog-retry')}
                         accessibilityRole="button"
-                        onPress={onLoadCatalog}
+                        onPress={() => onLoadCatalog?.(search)}
                         style={styles.secondaryAction}
                       >
                         <Text style={styles.secondaryActionText}>Tải lại</Text>

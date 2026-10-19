@@ -81,14 +81,14 @@ export default function AcceptedPartsScreen() {
   const loadGeneration = useRef(0);
   const picks = useRef<Record<string, number>>({});
   useLayoutEffect(() => { loadGeneration.current += 1; picks.current = {}; }, [key?.userId, key?.role, key?.sessionGeneration, key?.serviceOrderId, current]);
-  const loadCatalog = async () => {
+  const loadCatalog = async (search?: string) => {
     if (!canCreate) return;
     const generation = ++loadGeneration.current;
     const owner = key;
     setCatalog({ status: 'loading', parts: [], error: null });
     const valid = () => mountedRef.current && generation === loadGeneration.current && !!latest.current.key && sameOrderSession(owner, latest.current.key) && latest.current.canCreate;
     try {
-      const result = await fetchStrictCatalog({ limit: 50 });
+      const result = await fetchStrictCatalog({ limit: 50, ...(search?.trim() ? { search: search.trim() } : {}) });
       if (!valid()) return;
       setCatalog({ status: result.data.length ? 'ready' : 'empty', parts: result.data, error: null });
     } catch { if (valid()) setCatalog({ status: 'error', parts: [], error: 'Không tải được danh mục. Hãy thử tải lại.' }); }
@@ -333,8 +333,8 @@ export default function AcceptedPartsScreen() {
             onToggle={() => setExpandedKey((prev) => (prev === row.key ? null : row.key))}
             onChange={(next) => onRowChange(next)}
             onRemove={() => onRemoveRow(row.key)}
-            onLoadCatalog={() => {
-              void loadCatalog();
+            onLoadCatalog={search => {
+              void loadCatalog(search);
             }}
             onSelectCatalogPart={(part) => onSelectPart(row.key, part)}
           />
