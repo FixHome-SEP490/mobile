@@ -36,6 +36,7 @@ import { getServicePresentation } from '../../constants/service-presentation';
 import { bookingsApi } from '../../api/bookings.api';
 import { mediaApi, type MediaUploadImage } from '../../api/media.api';
 import { servicesApi, type ServiceItem, type CategoryItem } from '../../api/services.api';
+import { servicePriceSummaryText } from '../../utils/service-price-summary';
 import CategoryPills from '../../components/CategoryPills';
 import {
   addressReadyForBooking,
@@ -546,6 +547,7 @@ export default function CustomerBookingCreateScreen() {
     addresses.find((address) => address.id === addressId) ?? null;
   const selectedAddressReady = addressReadyForBooking(selectedAddress);
   const selectedPrice = resolveServicePrice(selectedService);
+  const selectedSummary = servicePriceSummaryText(selectedService?.priceSummary);
   const selectedPresentation = getServicePresentation(selectedService?.code);
   const selectedIsOtherService = isOtherService(selectedService);
   const descriptionSuggestions = getBookingDescriptionSuggestions(
@@ -1249,6 +1251,8 @@ export default function CustomerBookingCreateScreen() {
                 <Text style={{ color: colors.text, fontWeight: '700' }}>
                   {selectedIsOtherService
                     ? 'Yêu cầu ngoài danh sách — kỹ thuật viên sẽ khảo sát và báo giá'
+                    : selectedSummary
+                    ? `${selectedSummary.label}${selectedSummary.caption ? ` · ${selectedSummary.caption}` : ''}`
                     : selectedService.pricingMode === 'fixed_price'
                     ? `Giá cố định: ${selectedPrice.text}`
                     : selectedService.pricingMode === 'inspection_required'
@@ -1703,6 +1707,11 @@ export default function CustomerBookingCreateScreen() {
                 {service.name}
                 {serviceId === service.id ? ' ✓' : ''}
               </Text>
+              {servicePriceSummaryText(service.priceSummary) ? (
+                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                  {servicePriceSummaryText(service.priceSummary)?.label}
+                </Text>
+              ) : null}
             </TouchableOpacity>
           )}
           ListEmptyComponent={

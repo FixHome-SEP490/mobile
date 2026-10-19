@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-19 13:27 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/technician-job-preview
+> Cập nhật lần cuối: 2026-10-19 20:22 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/catalog-price-summary
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -198,6 +198,11 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 - Ảnh riêng tư tải bằng `<Image>` kèm `Authorization` (`GET /bookings/:id/media/:mediaId/content`). Video phát bằng `expo-video` qua link ngắn hạn `GET /bookings/:id/media/:mediaId/stream` (`mediaApi.getBookingVideoLink`), chỉ xin link khi thợ chạm vào ô video, lỗi thì chạm để thử lại. `expo-video` chạy được trong Expo Go.
 - Test: `booking-contract.api.test.ts`, `invitation-view.test.ts`, `InvitationJobDetails.test.tsx`. Phát video và tải ảnh riêng tư trên thiết bị thật, và với backend thật, CHƯA KIỂM CHỨNG.
 
+### Giá công trên thẻ dịch vụ (19/10/2026, nhánh `feat/catalog-price-summary`)
+
+- Backend `dev` (#catalog V2) thêm `priceSummary {kind: fixed_range|inspection_reference|inspection_only, minLaborVnd, maxLaborVnd, suggestedLaborVnd?}` vào dịch vụ trong `/services`, `/categories` và chi tiết. Mobile đọc ở `ServiceItem.priceSummary`; danh sách chọn dịch vụ và khung dịch vụ đã chọn ở `CustomerBookingCreateScreen` ưu tiên `utils/service-price-summary.ts` (cùng câu chữ với web: khoảng giá công, "Tham khảo ...", "Khảo sát & báo giá"), thiếu trường thì giữ cách hiện cũ. Chỉ để xem, không dùng cho tổng tiền hay điều kiện đặt. Test `service-price-summary.test.ts`; runtime với backend bật Catalog V2 CHƯA KIỂM CHỨNG (DEV chung đang tắt).
+- Chưa làm từ cùng đợt backend: hỏi thông tin thiết bị và phạm vi tiền công khi đặt lịch (`GET /services/:id/catalog-v2-pricing`, `deviceAttributes`, `selectedVariantCode`), thợ khai trả linh kiện (`declare-return`).
+
 ### Đăng nhập Google
 
 Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng `WebBrowser.openAuthSessionAsync`, nhận mã sống 60 giây rồi đổi ở `/auth/google/exchange`. App không cần Google client id.
@@ -296,6 +301,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-19 20:22 (UTC+7) | Hgnv11 | feat/catalog-price-summary | Thẻ dịch vụ đặt lịch hiện giá công theo priceSummary của backend như web
 - 2026-10-19 13:27 (UTC+7) | Hgnv11 | feat/technician-job-preview | Thợ xem mô tả, giá, tóm tắt AI, ảnh, video và khoảng cách trong lời mời trước khi nhận như web
 - 2026-10-18 12:59 (UTC+7) | ToanAltF4 | feat/mobile-call-ai-chat | Tải lên không gửi lại cả file khi byte cuối đã đi và đang chờ server trả lời
 - 2026-10-18 12:20 (UTC+7) | ToanAltF4 | feat/mobile-call-ai-chat | Trợ lý AI: tối đa 3 ảnh + 2 video mỗi cuộc trò chuyện, nén video trên máy (react-native-compressor, bản gốc khi không nén được), tải lên ở nền có tiến độ, thử lại khi mạng yếu; Đặt thợ chờ, thử lại hoặc bỏ tệp chưa gửi xong
@@ -335,7 +341,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-14 23:34 (UTC+7) | Hgnv11 | feat/sep139-m8-cutover | M8 chuyển route chi tiết đơn hai vai trò sang OrderFlow, bỏ POST claim trực tiếp, thêm lối vào Nhắn tin; thiết bị và E2E CHƯA KIỂM CHỨNG.
 - 2026-10-14 21:14 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Khóa bản nháp sau prepare, thêm thao tác sửa confirmation, dọn state khi đổi mục tiêu Booking/claim và chuyển CTA Technician vào footer; kiểm thử source đạt, thiết bị/runtime CHƯA KIỂM CHỨNG.
 - 2026-10-14 20:54 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Bổ sung UI hậu mãi M7 nối hook đã khóa và ghi rõ đường tạo claim trực tiếp cũ cần parity M8; runtime warranty chưa xác minh.
-- 2026-10-14 14:23 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Đóng source M6 với các sửa tiền/return/capture/recovery, ghi render ví thật và giới hạn runtime; M7–M8 chưa triển khai, không publish.
 
 ### Lịch sử giữ lại khi tích hợp
 
