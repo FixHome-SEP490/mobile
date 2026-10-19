@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-19 20:22 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/catalog-price-summary
+> Cập nhật lần cuối: 2026-10-19 20:39 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/booking-device-pricing
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -201,7 +201,13 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 ### Giá công trên thẻ dịch vụ (19/10/2026, nhánh `feat/catalog-price-summary`)
 
 - Backend `dev` (#catalog V2) thêm `priceSummary {kind: fixed_range|inspection_reference|inspection_only, minLaborVnd, maxLaborVnd, suggestedLaborVnd?}` vào dịch vụ trong `/services`, `/categories` và chi tiết. Mobile đọc ở `ServiceItem.priceSummary`; danh sách chọn dịch vụ và khung dịch vụ đã chọn ở `CustomerBookingCreateScreen` ưu tiên `utils/service-price-summary.ts` (cùng câu chữ với web: khoảng giá công, "Tham khảo ...", "Khảo sát & báo giá"), thiếu trường thì giữ cách hiện cũ. Chỉ để xem, không dùng cho tổng tiền hay điều kiện đặt. Test `service-price-summary.test.ts`; runtime với backend bật Catalog V2 CHƯA KIỂM CHỨNG (DEV chung đang tắt).
-- Chưa làm từ cùng đợt backend: hỏi thông tin thiết bị và phạm vi tiền công khi đặt lịch (`GET /services/:id/catalog-v2-pricing`, `deviceAttributes`, `selectedVariantCode`), thợ khai trả linh kiện (`declare-return`).
+- Chưa làm từ cùng đợt backend: thợ khai trả linh kiện (`declare-return`).
+
+### Thông tin thiết bị và phạm vi tiền công khi đặt lịch (19/10/2026, nhánh `feat/booking-device-pricing`)
+
+- P012 như web: với dịch vụ có mã Catalog V2 và không đi từ trợ lý AI, bước 1 của `CustomerBookingCreateScreen` hiện `ServiceDeviceDetails`. Màn gọi `GET /services/:id/catalog-v2-pricing` (`api/catalog-pricing.api.ts`), chỉ hỏi thông tin server còn thiếu (treo tường/âm trần, HP, cửa máy giặt, kg), cho chọn phạm vi khi server yêu cầu, và chỉ hiện giá cố định kèm tên phạm vi khi server trả `FIXED_PRICE`; khoảng giá chỉ mang nhãn "Giá tham khảo — thợ khảo sát và báo giá, khách duyệt". Mobile không tự tính hay chỉnh tiền.
+- `POST /bookings` mang thêm `deviceAttributes` và `selectedVariantCode` (chỉ sau khi preview xác nhận `FIXED_PRICE`); server tự khoá phạm vi trong transaction. Đổi dịch vụ hoặc đổi thông tin thì xoá kết quả cũ ngay. Nút "Tiếp tục" bị chặn tới khi preview khớp dịch vụ (`isCatalogV2PreviewReady`); dịch vụ cũ và luồng AI không bị chặn.
+- Backend trả 403/404/501/503 thì mục này ẩn và đặt lịch chạy như cũ (DEV chung đang tắt Catalog V2). Test: `catalog-pricing.api.test.ts`, `ServiceDeviceDetails.test.tsx`, `customer-booking-review.test.ts`. Runtime với backend bật Catalog V2 và trên thiết bị CHƯA KIỂM CHỨNG.
 
 ### Đăng nhập Google
 
@@ -301,6 +307,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-19 20:39 (UTC+7) | Hgnv11 | feat/booking-device-pricing | Đặt lịch hỏi thông tin thiết bị và hiện phạm vi tiền công do server xác nhận như web (P012)
 - 2026-10-19 20:22 (UTC+7) | Hgnv11 | feat/catalog-price-summary | Thẻ dịch vụ đặt lịch hiện giá công theo priceSummary của backend như web
 - 2026-10-19 13:27 (UTC+7) | Hgnv11 | feat/technician-job-preview | Thợ xem mô tả, giá, tóm tắt AI, ảnh, video và khoảng cách trong lời mời trước khi nhận như web
 - 2026-10-18 12:59 (UTC+7) | ToanAltF4 | feat/mobile-call-ai-chat | Tải lên không gửi lại cả file khi byte cuối đã đi và đang chờ server trả lời
@@ -340,7 +347,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-15 10:04 (UTC+7) | Hgnv11 | feat/sep139-m8-cutover | Mọi header dùng một nút Quay lại chung `components/BackButton` (44pt, mũi tên Ionicons, về Home đúng vai trò khi không có màn trước); nút số lượng linh kiện 44pt; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-14 23:34 (UTC+7) | Hgnv11 | feat/sep139-m8-cutover | M8 chuyển route chi tiết đơn hai vai trò sang OrderFlow, bỏ POST claim trực tiếp, thêm lối vào Nhắn tin; thiết bị và E2E CHƯA KIỂM CHỨNG.
 - 2026-10-14 21:14 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Khóa bản nháp sau prepare, thêm thao tác sửa confirmation, dọn state khi đổi mục tiêu Booking/claim và chuyển CTA Technician vào footer; kiểm thử source đạt, thiết bị/runtime CHƯA KIỂM CHỨNG.
-- 2026-10-14 20:54 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | Bổ sung UI hậu mãi M7 nối hook đã khóa và ghi rõ đường tạo claim trực tiếp cũ cần parity M8; runtime warranty chưa xác minh.
 
 ### Lịch sử giữ lại khi tích hợp
 

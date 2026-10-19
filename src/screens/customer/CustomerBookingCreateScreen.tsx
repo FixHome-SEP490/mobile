@@ -37,6 +37,10 @@ import { bookingsApi } from '../../api/bookings.api';
 import { mediaApi, type MediaUploadImage } from '../../api/media.api';
 import { servicesApi, type ServiceItem, type CategoryItem } from '../../api/services.api';
 import { servicePriceSummaryText } from '../../utils/service-price-summary';
+import ServiceDeviceDetails from '../../components/customer/ServiceDeviceDetails';
+import {
+  isCatalogV2PreviewReady, isCatalogV2ServiceCode, type BookingDeviceAttributes, type CatalogPricingPreview,
+} from '../../api/catalog-pricing.api';
 import CategoryPills from '../../components/CategoryPills';
 import {
   addressReadyForBooking,
@@ -257,6 +261,15 @@ export default function CustomerBookingCreateScreen() {
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [addresses, setAddresses] = useState<AddressData[]>([]);
   const [serviceId, setServiceId] = useState('');
+  // P012 device facts, bound to the service they were answered for (a service change starts blank).
+  const [deviceState, setDeviceState] = useState<{
+    serviceId: string; attrs: BookingDeviceAttributes; code: string | null; preview: CatalogPricingPreview | null;
+  }>({ serviceId: '', attrs: {}, code: null, preview: null });
+  const device = deviceState.serviceId === serviceId
+    ? deviceState
+    : { serviceId, attrs: {} as BookingDeviceAttributes, code: null, preview: null };
+  const patchDevice = (patch: Partial<Omit<typeof deviceState, 'serviceId'>>) =>
+    setDeviceState((d) => ({ ...(d.serviceId === serviceId ? d : { serviceId, attrs: {}, code: null, preview: null }), ...patch }));
   const [addressId, setAddressId] = useState('');
   const [description, setDescription] = useState(prefill?.description ?? '');
   const [bookingPhotos, setBookingPhotos] = useState<BookingPhotoDraft[]>([]);
@@ -561,6 +574,11 @@ export default function CustomerBookingCreateScreen() {
   const descriptionPlaceholder = selectedIsOtherService
     ? 'Ví dụ: Cửa tủ bếp bung bản lề, cần người đến kiểm tra và sửa'
     : 'Mô tả thiết bị và vấn đề cần sửa';
+  const isAiFlow = Boolean(prefill?.aiSessionId);
+  const showDeviceDetails = !isAiFlow && !!selectedService && isCatalogV2ServiceCode(selectedService.code);
+  const pricingReady = isCatalogV2PreviewReady({
+    service: selectedService, preview: device.preview, selectedVariantCode: device.code, isAiFlow,
+  });
   const reviewDisabled =
     isSubmitting ||
     durableBlocked ||
@@ -743,6 +761,7 @@ export default function CustomerBookingCreateScreen() {
         schedule: schedule ?? undefined,
         customerNote,
         aiSessionId: prefill?.aiSessionId ?? null,
+        ...(showDeviceDetails ? { deviceAttributes: device.attrs, selectedVariantCode: device.code } : {}),
         photos: bookingPhotos.map(({ uri, name, type, sizeBytes }) => ({
           uri,
           name,
@@ -999,6 +1018,10 @@ export default function CustomerBookingCreateScreen() {
     if (reviewDisabled) return;
     if (!selectedService) {
       Alert.alert('Chưa chọn dịch vụ', 'Hãy chọn dịch vụ cần sửa trước khi tiếp tục.');
+      return;
+    }
+    if (!pricingReady) {
+      Alert.alert('Đang xác nhận giá', 'Vui lòng chờ hệ thống xác nhận giá hoặc chọn Thử lại trước khi tiếp tục.');
       return;
     }
     setDescriptionTouched(true);
@@ -1266,6 +1289,19 @@ export default function CustomerBookingCreateScreen() {
                 </Text>
               </View>
             )}
+
+            {showDeviceDetails && selectedService ? (
+              <ServiceDeviceDetails
+                key={selectedService.id}
+                serviceId={selectedService.id}
+                deviceAttributes={device.attrs}
+                selectedVariantCode={device.code}
+                disabled={reviewDisabled}
+                onChangeAttributes={(attrs) => patchDevice({ attrs })}
+                onChangeVariantCode={(code) => patchDevice({ code })}
+                onPreview={(preview) => patchDevice({ preview })}
+              />
+            ) : null}
 
             <View
               onLayout={(event) => {
@@ -1622,7 +1658,7 @@ export default function CustomerBookingCreateScreen() {
         <BookingActionBar>
           {!visibleReviewSnapshot && !visibleCreatedBookingId && (
             bookingStage === 0
-              ? <BookingPrimaryAction label="Tiếp tục: Chọn địa chỉ" onPress={continueToAddress} disabled={reviewDisabled} colors={colors} />
+              ? <BookingPrimaryAction label="Tiếp tục: Chọn địa chỉ" onPress={continueToAddress} disabled={reviewDisabled || !pricingReady} colors={colors} />
               : !addressEditorOpen && <BookingPrimaryAction label={isSubmitting ? 'Đang gửi yêu cầu...'
                 : visibleUncertainAttempt ? 'Chờ xác minh yêu cầu' : 'Xem lại yêu cầu'}
                 onPress={continueToReview} disabled={reviewDisabled} colors={colors} />

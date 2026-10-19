@@ -1,5 +1,6 @@
 // src/api/bookings.api.ts
 import apiClient from './client';
+import type { BookingDeviceAttributes } from './catalog-pricing.api';
 
 const USER_UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -76,6 +77,10 @@ export interface CreateBookingDto {
   aiDiagnosisId?: string;
   /** Session id from the assistant; the technician receives a summary of it. */
   aiSessionId?: string;
+  /** P012: customer-reported device facts; the server validates them and derives the pricing snapshot itself. */
+  deviceAttributes?: BookingDeviceAttributes;
+  /** P012: approved variant code, sent only after the preview confirmed it with FIXED_PRICE. */
+  selectedVariantCode?: string;
 }
 
 export interface TechnicianCandidate {

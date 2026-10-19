@@ -1,4 +1,5 @@
 import type { CreateBookingDto } from '../../api/bookings.api';
+import type { BookingDeviceAttributes } from '../../api/catalog-pricing.api';
 import type { MediaUploadImage } from '../../api/media.api';
 import type { ServiceItem } from '../../api/services.api';
 import type { AddressData } from '../../api/users.api';
@@ -47,6 +48,8 @@ export function buildBookingReviewSnapshot({
   now,
   aiSessionId,
   photos = [],
+  deviceAttributes,
+  selectedVariantCode,
 }: {
   ownerUserId: string;
   service: ServiceItem;
@@ -60,6 +63,8 @@ export function buildBookingReviewSnapshot({
   now?: Date;
   aiSessionId?: string | null;
   photos?: readonly BookingPhotoPreview[];
+  deviceAttributes?: BookingDeviceAttributes;
+  selectedVariantCode?: string | null;
 }): BookingReviewSnapshot {
   if (!ownerUserId || address.userId !== ownerUserId) {
     throw new Error('Vui lòng chọn địa chỉ đã lưu của tài khoản này.');
@@ -93,6 +98,8 @@ export function buildBookingReviewSnapshot({
     urgency: 'NORMAL',
     ...(note ? { customerNote: note } : {}),
     ...(session ? { aiSessionId: session } : {}),
+    ...(deviceAttributes && Object.keys(deviceAttributes).length > 0 ? { deviceAttributes: { ...deviceAttributes } } : {}),
+    ...(selectedVariantCode ? { selectedVariantCode } : {}),
   });
   const price = resolveServicePrice(service);
   const pricingLabel =
