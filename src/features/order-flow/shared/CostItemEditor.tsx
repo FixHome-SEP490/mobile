@@ -1,6 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { CatalogPicker } from './CatalogPicker';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+import { formatVnd } from '../../../utils/format';
 
 /**
  * M4 shared quotation row draft. Presentation-only: the frozen controller
@@ -74,6 +76,31 @@ export function createCostItemRow(kind: CostItemKind = 'labor'): CostItemRow {
     warrantyFee: '',
     laborWarrantyDays: '',
   };
+}
+
+const DIGITS = /^\d+$/;
+/** Line total for display only; null while quantity/price are not valid integers (never 0). */
+export function costItemRowSubtotal(row: Pick<CostItemRow, 'quantity' | 'unitPrice'>): number | null {
+  const q = row.quantity.trim();
+  const p = row.unitPrice.trim();
+  if (!DIGITS.test(q) || !DIGITS.test(p)) return null;
+  const total = Number(q) * Number(p);
+  return Number.isSafeInteger(total) ? total : null;
+}
+
+/** Required-field hints shown after a failed submit; the controller validator stays authoritative. */
+export function validateCostItemRows(rows: CostItemRow[]): Record<string, CostItemFieldErrors> {
+  const out: Record<string, CostItemFieldErrors> = {};
+  for (const row of rows) {
+    const e: CostItemFieldErrors = {};
+    if (!row.description.trim()) e.description = 'Nhập mô tả hạng mục.';
+    if (!DIGITS.test(row.quantity.trim()) || Number(row.quantity) < 1) e.quantity = 'Nhập số lượng từ 1 trở lên.';
+    if (!DIGITS.test(row.unitPrice.trim())) e.unitPrice = 'Nhập đơn giá bằng số nguyên (đ).';
+    if (row.kind === 'parts_equipment' && row.partSource === 'fixhome' && !row.partCatalogId) e.partCatalogId = 'Chọn một linh kiện trong danh mục FixHome.';
+    if (row.kind === 'parts_equipment' && row.partSource === 'technician' && row.partWarrantyOption === 'paid_warranty' && !DIGITS.test(row.warrantyTermDays.trim())) e.warrantyTermDays = 'Nhập thời hạn bảo hành (ngày).';
+    if (Object.keys(e).length) out[row.key] = e;
+  }
+  return out;
 }
 
 /** Kind/source switches clear forbidden fields; never carried into the payload. */
@@ -161,7 +188,7 @@ export interface CostItemEditorProps {
   onToggle: () => void;
   onChange: (next: CostItemRow) => void;
   onRemove: () => void;
-  onLoadCatalog?: () => void;
+  onLoadCatalog?: (search?: string) => void;
   onSelectCatalogPart?: (part: CostItemCatalogOption) => void;
 }
 
@@ -194,6 +221,9 @@ export function CostItemEditor({
   const id = (suffix: string) => `cost-item-${row.key}-${suffix}`;
   const title = row.description.trim() || 'Hạng mục mới';
   const kindLabel = row.kind === 'labor' ? 'Tiền công' : 'Linh kiện';
+  const subtotal = costItemRowSubtotal(row);
+  const summary = subtotal === null ? kindLabel : `${kindLabel} · ${row.quantity.trim()} × ${formatVnd(Number(row.unitPrice))} = ${formatVnd(subtotal)}`;
+  const hasErrors = !!errors && Object.keys(errors).length > 0;
 
   return (
     <View style={styles.card}>
@@ -201,14 +231,16 @@ export function CostItemEditor({
         testID={id('header')}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
+        accessibilityLabel={`${title}. ${summary}${hasErrors ? '. Cần bổ sung thông tin' : ''}`}
         accessibilityHint="Mở hoặc thu gọn hạng mục này"
         onPress={onToggle}
         style={styles.header}
       >
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {title}
-        </Text>
-        <Text style={styles.headerMeta}>{kindLabel}</Text>
+        <View style={styles.headerText}>
+          <Text style={styles.headerTitle} numberOfLines={1}>{title}</Text>
+          <Text style={[styles.headerMeta, hasErrors && styles.headerMetaError]} numberOfLines={1}>{hasErrors ? 'Cần bổ sung thông tin' : summary}</Text>
+        </View>
+        <View style={[styles.chevron, expanded && styles.chevronUp]} />
       </TouchableOpacity>
 
       {expanded && (
@@ -241,7 +273,7 @@ export function CostItemEditor({
             value={row.description}
             onChangeText={description => onChange({ ...row, description })}
             placeholder="Ví dụ: Vệ sinh dàn lạnh"
-            placeholderTextColor={colors.muted}
+            placeholderTextColor={colors.textSecondary}
             style={styles.input}
             maxLength={2000}
           />
@@ -257,7 +289,7 @@ export function CostItemEditor({
                 onChangeText={quantity => onChange({ ...row, quantity })}
                 keyboardType="number-pad"
                 placeholder="1"
-                placeholderTextColor={colors.muted}
+                placeholderTextColor={colors.textSecondary}
                 style={styles.input}
               />
               <FieldError testID={id('error-quantity')} message={errors?.quantity} />
@@ -271,7 +303,7 @@ export function CostItemEditor({
                 onChangeText={unitPrice => onChange({ ...row, unitPrice })}
                 keyboardType="number-pad"
                 placeholder="150000"
-                placeholderTextColor={colors.muted}
+                placeholderTextColor={colors.textSecondary}
                 style={styles.input}
               />
               <FieldError testID={id('error-unitprice')} message={errors?.unitPrice} />
@@ -288,7 +320,7 @@ export function CostItemEditor({
                 onChangeText={laborWarrantyDays => onChange({ ...row, laborWarrantyDays })}
                 keyboardType="number-pad"
                 placeholder="365"
-                placeholderTextColor={colors.muted}
+                placeholderTextColor={colors.textSecondary}
                 style={styles.input}
               />
               <FieldError testID={id('error-labor-warranty')} message={errors?.laborWarrantyDays} />
@@ -300,8 +332,8 @@ export function CostItemEditor({
                 {(
                   [
                     ['fixhome', 'FixHome'],
-                    ['external', 'Ngoài'],
-                    ['technician', 'Thợ'],
+                    ['external', 'Mua ngoài'],
+                    ['technician', 'Thợ tự mang'],
                   ] as [CostItemPartSource, string][]
                 ).map(([source, label]) => (
                   <TouchableOpacity
@@ -318,61 +350,15 @@ export function CostItemEditor({
               </View>
 
               {row.partSource === 'fixhome' && (
-                <View>
-                  <Text style={styles.hint}>Chọn đúng mã sản phẩm FixHome. Giá và bảo hành do máy chủ đối chiếu lại.</Text>
-                  {catalogHint ? <Text style={styles.hint}>{catalogHint}</Text> : null}
-                  {(!catalog || catalog.status === 'idle' || catalog.status === 'error') && (
-                    <View>
-                      {catalog?.status === 'error' && catalog.error ? (
-                        <Text testID={id('catalog-error')} accessibilityRole="alert" style={styles.errorText}>
-                          {catalog.error}
-                        </Text>
-                      ) : null}
-                      <TouchableOpacity
-                        testID={id('catalog-retry')}
-                        accessibilityRole="button"
-                        accessibilityHint="Tải lại danh mục linh kiện FixHome"
-                        onPress={onLoadCatalog}
-                        style={styles.secondaryAction}
-                      >
-                        <Text style={styles.secondaryActionText}>
-                          {catalog?.status === 'error' ? 'Thử tải lại danh mục' : 'Tải danh mục FixHome'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                  {catalog?.status === 'loading' && <Text style={styles.hint}>Đang tải danh mục.</Text>}
-                  {catalog?.status === 'empty' && (
-                    <View>
-                      <Text style={styles.hint}>Danh mục đang trống.</Text>
-                      <TouchableOpacity
-                        testID={id('catalog-retry')}
-                        accessibilityRole="button"
-                        onPress={onLoadCatalog}
-                        style={styles.secondaryAction}
-                      >
-                        <Text style={styles.secondaryActionText}>Tải lại</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                  {catalog?.status === 'ready' &&
-                    catalog.parts.map(part => (
-                      <TouchableOpacity
-                        key={part.id}
-                        testID={id(`catalog-option-${part.id}`)}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: row.partCatalogId === part.id }}
-                        onPress={() => onSelectCatalogPart?.(part)}
-                        style={[styles.catalogOption, row.partCatalogId === part.id && styles.optionSelected]}
-                      >
-                        <Text style={styles.catalogName} numberOfLines={1}>
-                          {part.name}
-                        </Text>
-                        <Text style={styles.catalogMeta}>{part.id}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  <FieldError testID={id('error-catalog')} message={errors?.partCatalogId} />
-                </View>
+                <CatalogPicker
+                  idPrefix={`cost-item-${row.key}-`}
+                  selectedId={row.partCatalogId}
+                  catalog={catalog}
+                  hint={[ 'Chọn đúng mã sản phẩm FixHome. Giá và bảo hành do máy chủ đối chiếu lại.', catalogHint ].filter(Boolean).join(' ')}
+                  error={errors?.partCatalogId}
+                  onLoad={onLoadCatalog}
+                  onSelect={onSelectCatalogPart}
+                />
               )}
 
               {row.partSource === 'external' && (
@@ -416,7 +402,7 @@ export function CostItemEditor({
                           onChangeText={warrantyTermDays => onChange({ ...row, warrantyTermDays })}
                           keyboardType="number-pad"
                           placeholder="90"
-                          placeholderTextColor={colors.muted}
+                          placeholderTextColor={colors.textSecondary}
                           style={styles.input}
                         />
                         <FieldError testID={id('error-term')} message={errors?.warrantyTermDays} />
@@ -430,7 +416,7 @@ export function CostItemEditor({
                           onChangeText={warrantyFee => onChange({ ...row, warrantyFee })}
                           keyboardType="number-pad"
                           placeholder="30000"
-                          placeholderTextColor={colors.muted}
+                          placeholderTextColor={colors.textSecondary}
                           style={styles.input}
                         />
                         <FieldError testID={id('error-fee')} message={errors?.warrantyFee} />
@@ -446,7 +432,7 @@ export function CostItemEditor({
             <TouchableOpacity
               testID={id('remove')}
               accessibilityRole="button"
-              accessibilityHint="Xóa hạng mục này khỏi báo giá"
+              accessibilityHint="Xóa hạng mục này khỏi danh sách"
               onPress={onRemove}
               style={styles.removeAction}
             >
@@ -461,9 +447,13 @@ export function CostItemEditor({
 
 const styles = StyleSheet.create({
   card: { backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
-  header: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, gap: 8 },
-  headerTitle: { flex: 1, color: colors.text, fontSize: 16, fontWeight: '600' },
+  header: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: 8, gap: 8 },
+  headerText: { flex: 1, minWidth: 0, gap: 2 },
+  headerTitle: { color: colors.text, fontSize: 16, fontWeight: '600' },
   headerMeta: { color: colors.textSecondary, fontSize: 13 },
+  headerMetaError: { color: colors.error, fontWeight: '600' },
+  chevron: { width: 9, height: 9, borderRightWidth: 2, borderBottomWidth: 2, borderColor: colors.textSecondary, transform: [{ rotate: '45deg' }], marginBottom: 4 },
+  chevronUp: { transform: [{ rotate: '225deg' }], marginBottom: 0, marginTop: 4 },
   body: { paddingHorizontal: spacing.md, paddingBottom: spacing.md, gap: 8 },
   section: { gap: 8 },
   label: { color: colors.textSecondary, fontSize: 13, marginTop: 4 },
@@ -495,19 +485,6 @@ const styles = StyleSheet.create({
   optionText: { color: colors.text, fontSize: 14, fontWeight: '600' },
   optionTextSelected: { color: colors.primaryStrong, fontSize: 14, fontWeight: '700' },
   errorText: { color: colors.error, fontSize: 13, lineHeight: 19 },
-  secondaryAction: {
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: spacing.md,
-  },
-  secondaryActionText: { color: colors.primaryStrong, fontSize: 15, fontWeight: '600' },
-  catalogOption: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, gap: 2 },
-  catalogName: { color: colors.text, fontSize: 15, fontWeight: '600' },
-  catalogMeta: { color: colors.textSecondary, fontSize: 12 },
   removeAction: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   removeText: { color: colors.error, fontSize: 15, fontWeight: '600' },
 });

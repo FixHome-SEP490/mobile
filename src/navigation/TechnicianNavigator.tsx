@@ -2,12 +2,12 @@
 import React from 'react';
 import { useTechnicianLocationPing } from '../hooks/useTechnicianLocationPing';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Home, MailOpen, Briefcase, Wallet, User } from 'lucide-react-native';
+import { Home, MailOpen, Briefcase, Bell, User } from 'lucide-react-native';
 import type { TechnicianTabParamList } from '../types';
 import TechnicianHomeScreen from '../screens/technician/TechnicianHomeScreen';
 import TechnicianInvitationsScreen from '../screens/technician/TechnicianInvitationsScreen';
 import TechnicianJobsScreen from '../screens/technician/TechnicianJobsScreen';
-import TechnicianWalletScreen from '../screens/technician/TechnicianWalletScreen';
+import TechnicianNotificationsScreen from '../screens/technician/TechnicianNotificationsScreen';
 import TechnicianProfileScreen from '../screens/technician/TechnicianProfileScreen';
 import { GlassTabBar } from '../components/navigation/GlassTabBar';
 import { AvatarTabIcon } from '../components/navigation/AvatarTabIcon';
@@ -17,6 +17,7 @@ import { useInvitationCount } from '../hooks/useInvitationCount';
 import { useAppTheme } from '../constants/theme';
 import { notificationsApi } from '../api/notifications.api';
 import { useFocusEffect } from '@react-navigation/native';
+import { useLiveRefresh } from '../hooks/useLiveRefresh';
 
 const Tab = createBottomTabNavigator<TechnicianTabParamList>();
 
@@ -26,6 +27,7 @@ export default function TechnicianNavigator() {
   const { colors } = useAppTheme();
   const setUnreadCount = useBadgeStore((state) => state.setUnreadNotifications);
   const invitationCount = useInvitationCount();
+  const unreadCount = useBadgeStore((state) => state.unreadNotifications);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -36,6 +38,11 @@ export default function TechnicianNavigator() {
       return () => { mounted = false; };
     }, [setUnreadCount])
   );
+
+  // PO 18/10/2026: the unread count on the tab follows `notification:new` instead of waiting for a refocus.
+  useLiveRefresh(['notification:new'], () => {
+    notificationsApi.getCountUnread().then(setUnreadCount).catch(() => {});
+  }, undefined, { pollMs: 60_000 });
 
   return (
     <Tab.Navigator
@@ -49,8 +56,8 @@ export default function TechnicianNavigator() {
             return <MailOpen size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
           } else if (route.name === 'Jobs') {
             return <Briefcase size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
-          } else if (route.name === 'Wallet') {
-            return <Wallet size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
+          } else if (route.name === 'Notifications') {
+            return <Bell size={size} color={color} strokeWidth={focused ? 2.5 : 2} />;
           } else if (route.name === 'Profile') {
             if (user?.avatarUrl) {
               return <AvatarTabIcon uri={user.avatarUrl} size={size} color={color} focused={focused} />;
@@ -90,12 +97,13 @@ export default function TechnicianNavigator() {
          }}
       />
       <Tab.Screen
-        name="Wallet"
-        component={TechnicianWalletScreen}
+        name="Notifications"
+        component={TechnicianNotificationsScreen}
         options={{ 
-          title: 'Ví',
+          title: 'Thông báo',
+          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
           headerShown: false,
-          tabBarAccessibilityLabel: 'Ví',
+          tabBarAccessibilityLabel: unreadCount > 0 ? `Thông báo, ${unreadCount} chưa đọc` : 'Thông báo',
          }}
       />
       <Tab.Screen

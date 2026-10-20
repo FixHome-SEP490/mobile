@@ -1,6 +1,5 @@
 import {
   HOME_POPULAR_SERVICES_PAGE_SIZE,
-  HOME_POPULAR_SERVICE_TARGETS,
   chunkHomePopularServices,
   getHomePopularGridColumns,
   getHomePopularPagerLayout,
@@ -20,25 +19,13 @@ describe('customer home popular-services pager (NEW-CUX-27)', () => {
     expect(HOME_POPULAR_SERVICES_PAGE_SIZE).toBe(4);
   });
 
-  it('uses the exact production-linked 8 targets in the intended order', () => {
-    expect(HOME_POPULAR_SERVICE_TARGETS).toStrictEqual([
-      { id: 'ac_clean', categoryCode: 'DIEN_LANH' },
-      { id: 'faucet_replacement', categoryCode: 'DIEN_NUOC' },
-      { id: 'switch_replacement', categoryCode: 'DIEN_NUOC' },
-      { id: 'water_leak_repair', categoryCode: 'DIEN_NUOC' },
-      { id: 'tv_wall_mount' },
-      { id: 'induction_cooker_repair', categoryCode: 'BEP_GIA_DUNG' },
-      { id: 'washer_repair', categoryCode: 'DIEN_LANH' },
-      { id: 'fridge_repair', categoryCode: 'DIEN_LANH' },
-    ]);
-  });
-
-  it('groups the production-linked targets into 2 pages of 4 without loss or duplication', () => {
-    const pages = chunkHomePopularServices(HOME_POPULAR_SERVICE_TARGETS);
+  it('groups tiles into pages of 4 without loss or duplication', () => {
+    const tiles = Array.from({ length: 8 }, (_, index) => ({ id: `tile-${index}` }));
+    const pages = chunkHomePopularServices(tiles);
     expect(pages).toHaveLength(2);
     expect(pages[0]).toHaveLength(4);
     expect(pages[1]).toHaveLength(4);
-    expect(pages.flat()).toStrictEqual(HOME_POPULAR_SERVICE_TARGETS);
+    expect(pages.flat()).toStrictEqual(tiles);
   });
 
   it('moves the active page from 0 to 1 based on the horizontal scroll offset', () => {

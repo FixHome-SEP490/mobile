@@ -18,6 +18,7 @@ interface QrReceiveModalState {
   fulfillmentMethod?: string;
   tokenInput: string;
   scanning: boolean;
+  reveal: boolean;
 }
 
 interface CancelModalState {
@@ -37,6 +38,7 @@ export default function PartsLifecycleScreen() {
   const order = orderValue && !isHistoricalOrder(orderValue) ? orderValue : null;
   const current = focused && !!key && !!order && snapshot?.access === 'current' && sameOrderSession(snapshot.key, key) && key.role === 'technician' && order.id === key.serviceOrderId && order.technician?.id === key.userId;
   const isUnderRepair = order?.status === 'UNDER_REPAIR' && !order.completionRequestedAt;
+  const isAccepted = order?.status === 'ACCEPTED';
 
   const partsResource = snapshot?.resources.parts;
   const partsList: OrderPartReadModel[] = partsResource?.status === 'ready' && Array.isArray(partsResource.data)
@@ -72,7 +74,7 @@ export default function PartsLifecycleScreen() {
   const onOpenReceive = (pr: OrderPartReadModel) => {
     if (!key || !current || frozen || !latest.current.current || latest.current.frozen || !sameOrderSession(latest.current.key, key) || !receiveEligible(pr)) return;
     setCancelModal(null); setUsageModal(null);
-    setQrModal({ requestId: pr.id, fulfillmentMethod: pr.fulfillmentMethod, tokenInput: '', scanning: false });
+    setQrModal({ requestId: pr.id, fulfillmentMethod: pr.fulfillmentMethod, tokenInput: '', scanning: false, reveal: false });
   };
   const onSubmitReceive = () => {
     const live = latest.current;
@@ -112,6 +114,7 @@ export default function PartsLifecycleScreen() {
   };
   const closeDraft = () => { setQrModal(null); setCancelModal(null); setUsageModal(null); latest.current = { ...latest.current, qrModal: null, cancelModal: null, usageModal: null }; };
   const focusedRequestId = qrModal?.requestId ?? cancelModal?.requestId ?? usageModal?.requestId;
+  const usageItemName = usageModal ? partsList.find(pr => pr.id === usageModal.requestId)?.items.find(it => it.id === usageModal.itemId)?.partNameSnapshot : undefined;
 
   const onPrimary = () => {
     if (busy) return;
@@ -163,7 +166,7 @@ export default function PartsLifecycleScreen() {
       stage={3}
       onBack={() => navigation.goBack()}
       secondary={{
-        label: focusedRequestId && !frozen ? 'Hủy xác nhận' : 'Làm mới dữ liệu',
+        label: focusedRequestId && !frozen ? 'Quay lại' : 'Làm mới dữ liệu',
         testID: focusedRequestId && !frozen ? 'parts-draft-cancel' : 'task-refresh', disabled: busy || refreshing,
         onPress: () => { if (busy) return; if (focusedRequestId && !frozen) closeDraft(); else if (!refreshing) void refresh('manual'); },
       }}
@@ -175,13 +178,13 @@ export default function PartsLifecycleScreen() {
       }}
     >
       {showRecovery && (
-        <ReadOnlyNotice>
+        <ReadOnlyNotice tone="warning">
           Có thao tác linh kiện chưa rõ kết quả từ phiên trước. Vui lòng kiểm tra lại từ máy chủ.
         </ReadOnlyNotice>
       )}
 
-      {state.error && <ReadOnlyNotice>{state.error}</ReadOnlyNotice>}
-      {state.actionSuccess && <ReadOnlyNotice>{state.actionSuccess}</ReadOnlyNotice>}
+      {state.error && <ReadOnlyNotice tone="error">{state.error}</ReadOnlyNotice>}
+      {state.actionSuccess && <ReadOnlyNotice tone="success">{state.actionSuccess}</ReadOnlyNotice>}
 
       {qrModal && !frozen && (
         <View style={styles.modalCard} testID="parts-qr-modal">
@@ -201,9 +204,18 @@ export default function PartsLifecycleScreen() {
             onChangeText={(txt) => setQrModal((prev) => prev ? { ...prev, tokenInput: txt } : null)}
             autoCapitalize="none"
             autoCorrect={false}
-            secureTextEntry
+            secureTextEntry={!qrModal.reveal}
             accessibilityLabel="Mã nhận linh kiện"
           />
+          <TouchableOpacity
+            testID="parts-qr-reveal"
+            accessibilityRole="button"
+            accessibilityLabel={qrModal.reveal ? 'Ẩn mã nhận hàng' : 'Hiện mã nhận hàng để kiểm tra'}
+            onPress={() => setQrModal(prev => prev ? { ...prev, reveal: !prev.reveal } : null)}
+            style={styles.revealBtn}
+          >
+            <Text style={styles.revealText}>{qrModal.reveal ? 'Ẩn mã' : 'Hiện mã để kiểm tra'}</Text>
+          </TouchableOpacity>
 
         </View>
       )}
@@ -226,8 +238,12 @@ export default function PartsLifecycleScreen() {
         </View>
       )}
 
-      {usageModal && !frozen && <ReadOnlyNotice>{usageModal.status === 'used' ? 'Xác nhận đã dùng linh kiện cho sửa chữa.' : 'Xác nhận hoàn trả linh kiện.'} Thao tác chỉ được gửi khi bạn xác nhận ở cuối màn hình.</ReadOnlyNotice>}
-      {partsResource?.status === 'error' && <ReadOnlyNotice>Không tải được yêu cầu linh kiện. Hãy làm mới dữ liệu.</ReadOnlyNotice>}
+      {usageModal && !frozen && (
+        <ReadOnlyNotice tone="warning">
+          {usageModal.status === 'used' ? 'Xác nhận đã dùng' : 'Xác nhận hoàn trả'}: {usageItemName ?? 'linh kiện đã chọn'}. Thao tác chỉ được gửi khi bạn bấm xác nhận ở cuối màn hình.
+        </ReadOnlyNotice>
+      )}
+      {partsResource?.status === 'error' && <ReadOnlyNotice tone="error">Không tải được yêu cầu linh kiện. Hãy làm mới dữ liệu.</ReadOnlyNotice>}
       {partsResource?.status === 'loading' && <ReadOnlyNotice>Đang tải yêu cầu linh kiện…</ReadOnlyNotice>}
       {partsList.length > 0 ? (
         partsList.filter(req => !focusedRequestId || req.id === focusedRequestId).map((req, rIdx) => {
@@ -239,14 +255,14 @@ export default function PartsLifecycleScreen() {
             <View key={req.id} style={styles.requestCard} testID={`parts-request-${req.id}`}>
               <View style={styles.requestHeader}>
                 <Text style={styles.requestTitle}>
-                  Yêu cầu #{rIdx + 1} ({req.requestType === 'pre_repair' ? 'Linh kiện dự kiến' : 'Linh kiện sửa chữa'})
+                  Yêu cầu #{rIdx + 1} ({req.requestType === 'pre_repair' ? 'Linh kiện dự kiến' : req.requestType === 'quotation' ? 'Linh kiện theo báo giá' : 'Linh kiện sửa chữa'})
                 </Text>
-                <View style={[styles.statusBadge, getStatusBadgeStyle(req.status)]}>
+                <View accessible accessibilityLabel={`Trạng thái: ${statusLabel(req.status)}`} style={[styles.statusBadge, getStatusBadgeStyle(req.status)]}>
                   <Text style={styles.statusText}>{statusLabel(req.status)}</Text>
                 </View>
               </View>
 
-              <DetailRow label="Mã yêu cầu" value={req.id} />
+              <DetailRow label="Mã yêu cầu" value={`#${String(req.id).slice(-6).toUpperCase()}`} />
               <DetailRow
                 label="Hình thức nhận"
                 value={req.fulfillmentMethod === 'delivery' ? 'Giao hàng tận nơi' : req.fulfillmentMethod === 'pickup' ? 'Tự lấy tại kho' : 'Chưa có thông tin'}
@@ -326,7 +342,19 @@ export default function PartsLifecycleScreen() {
           );
         })
       ) : (
-        <ReadOnlyNotice>Chưa có yêu cầu linh kiện nào cho đơn hàng này.</ReadOnlyNotice>
+        <>
+          <ReadOnlyNotice>Chưa có yêu cầu linh kiện nào cho đơn hàng này.</ReadOnlyNotice>
+          {(isAccepted || isUnderRepair) && partsResource?.status === 'ready' && (
+            <TouchableOpacity
+              testID="parts-empty-cta"
+              accessibilityRole="button"
+              style={styles.emptyCta}
+              onPress={() => navigation.navigate(isAccepted ? 'AcceptedParts' : 'ExtraProposal')}
+            >
+              <Text style={styles.emptyCtaText}>{isAccepted ? 'Chuẩn bị linh kiện cho đơn này' : 'Đề xuất chi phí phát sinh (linh kiện bổ sung)'}</Text>
+            </TouchableOpacity>
+          )}
+        </>
       )}
     </TaskScreenShell>
   );
@@ -342,15 +370,19 @@ const styles = StyleSheet.create({
   requestHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: 8,
     marginBottom: spacing.xs,
   },
   requestTitle: {
+    flex: 1,
     fontSize: 15,
     fontWeight: '700',
     color: colors.text,
   },
   statusBadge: {
+    flexShrink: 0,
+    maxWidth: '45%',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
@@ -488,43 +520,31 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.sm,
   },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-  },
-  modalBtn: {
-    minHeight: 48,
-    paddingHorizontal: spacing.md,
-    borderRadius: 8,
+  revealBtn: {
+    minHeight: 44,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginBottom: spacing.sm,
   },
-  modalBtnSecondary: {
-    backgroundColor: colors.background,
-  },
-  modalBtnSecondaryText: {
-    color: colors.text,
+  revealText: {
+    color: colors.primaryStrong,
     fontSize: 14,
     fontWeight: '600',
+    textDecorationLine: 'underline',
   },
-  modalBtnPrimary: {
-    backgroundColor: colors.primaryStrong,
+  emptyCta: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.primaryStrong,
+    borderRadius: 12,
+    paddingHorizontal: spacing.md,
   },
-  modalBtnPrimaryText: {
-    color: colors.surface,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  modalBtnDanger: {
-    backgroundColor: colors.tone.danger.text,
-  },
-  modalBtnDangerText: {
-    color: colors.surface,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  modalBtnDisabled: {
-    opacity: 0.5,
+  emptyCtaText: {
+    color: colors.primaryStrong,
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });

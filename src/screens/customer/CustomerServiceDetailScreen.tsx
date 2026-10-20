@@ -65,7 +65,9 @@ export default function CustomerServiceDetailScreen() {
   const priceView = service ? resolveServicePrice(service) : null;
   const needsInspection = service?.pricingMode === 'inspection_required';
   const hasPublishedFixedPrice = service?.pricingMode === 'fixed_price' && priceView?.kind === 'fixed';
-  const pricingBadge = needsInspection
+  const pricingBadge = priceView?.kind === 'range' && priceView.caption
+    ? 'Giá công đã duyệt theo thiết bị'
+    : needsInspection
     ? 'Kiểm tra trước, báo giá sau'
     : hasPublishedFixedPrice
       ? 'Giá theo bảng giá dịch vụ'
@@ -140,6 +142,9 @@ export default function CustomerServiceDetailScreen() {
               <Text style={styles.priceLabel}>Chi phí:</Text>
               <Text style={styles.priceValue}>{priceView.text}</Text>
             </View>
+          )}
+          {!!priceView?.caption && (
+            <Text style={styles.priceLabel} testID="service-price-caption">{priceView.caption}</Text>
           )}
 
           {/* Category name */}

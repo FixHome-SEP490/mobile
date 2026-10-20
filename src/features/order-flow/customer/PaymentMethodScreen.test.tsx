@@ -118,3 +118,26 @@ it('handover review stays reachable from payment for inspection before paying', 
   expect(mockRequestPayment).not.toHaveBeenCalled();
   await act(async () => renderer.unmount());
 });
+
+it('a zero invoice offers only the free confirmation, not wallet, VNPay or cash', async () => {
+  mockSnapshot = snapshotWith(null);
+  (mockSnapshot.resources.invoice as any).data.grandTotal = '0';
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<PaymentMethodScreen />); });
+  expect(renderer.root.findAllByProps({ testID: 'payment-method-wallet' })).toHaveLength(0);
+  expect(renderer.root.findAllByProps({ testID: 'payment-method-vnpay' })).toHaveLength(0);
+  await act(async () => { renderer.root.findByProps({ testID: 'payment-method-no_charge' }).props.onPress(); });
+  expect(mockRequestPayment).toHaveBeenCalledWith('no_charge');
+  await act(async () => renderer.unmount());
+});
+
+it('VNPay stays off below 5.000 and says so, while the wallet stays on', async () => {
+  mockSnapshot = snapshotWith(null);
+  (mockSnapshot.resources.invoice as any).data.grandTotal = '4999';
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<PaymentMethodScreen />); });
+  expect(renderer.root.findByProps({ testID: 'payment-method-vnpay' }).props.disabled).toBe(true);
+  expect(JSON.stringify(renderer.toJSON())).toContain('VNPay chỉ nhận từ 5.000');
+  expect(renderer.root.findByProps({ testID: 'payment-method-wallet' }).props.disabled).toBe(false);
+  await act(async () => renderer.unmount());
+});

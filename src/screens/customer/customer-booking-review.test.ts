@@ -5,6 +5,7 @@ import { vnWallClockToDate } from '../../utils/vn-time';
 
 jest.mock('./service-catalog', () => ({
   resolveServicePrice: () => ({ text: '250.000đ' }),
+  servicePricingLabel: (s: { pricingMode?: string }) => (s.pricingMode === 'fixed_price' ? 'Giá cố định: 250.000đ' : '250.000đ'),
 }));
 
 jest.mock('./customer-booking-create', () => ({
@@ -163,5 +164,20 @@ describe('session schedule', () => {
 
   it('asks for a session when none was chosen', () => {
     expect(() => buildBookingReviewSnapshot(base())).toThrow('chọn ngày và buổi');
+  });
+});
+
+describe('Catalog V2 device facts in the booking request', () => {
+  const base = {
+    ownerUserId: 'customer-a', service, address, description: 'Máy không mát',
+    schedule: { mode: 'scheduled', date: '2026-10-16', slot: 'morning' } as const, now: new Date('2026-10-15T03:00:00Z'),
+  };
+
+  it('sends the facts and the server-confirmed variant, and nothing when there are none', () => {
+    const withFacts = buildBookingReviewSnapshot({ ...base, deviceAttributes: { acMounting: 'wall' }, selectedVariantCode: 'AC-01-02' });
+    expect(withFacts.request).toMatchObject({ deviceAttributes: { acMounting: 'wall' }, selectedVariantCode: 'AC-01-02' });
+    const plain = buildBookingReviewSnapshot({ ...base, deviceAttributes: {}, selectedVariantCode: null });
+    expect(plain.request).not.toHaveProperty('deviceAttributes');
+    expect(plain.request).not.toHaveProperty('selectedVariantCode');
   });
 });

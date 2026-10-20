@@ -106,10 +106,7 @@ it('shows the exact SENT scope with the awaited party and refreshes without writ
   });
   expect(mockNavigate).toHaveBeenCalledWith('ProposalDetail', { proposalId: 'quote-1' });
 
-  await act(async () => {
-    renderer.root.findByProps({ testID: 'task-refresh' }).props.onPress();
-  });
-  expect(mockRefresh).toHaveBeenCalledWith('manual');
+  expect(renderer.root.findAllByProps({ testID: 'task-refresh' }).length).toBe(0);
   expect(mockVerify).not.toHaveBeenCalled();
   await act(async () => renderer.unmount());
 });

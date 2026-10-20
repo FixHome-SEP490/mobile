@@ -6,3 +6,6 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 
 // Icon fonts cannot load under Jest; tests that assert on icons mock this module themselves.
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
+
+// Native video cannot load under Jest; screens that show videos get inert stand-ins.
+jest.mock('expo-video', () => ({ useVideoPlayer: () => ({ addListener: () => ({ remove: () => undefined }), play: () => undefined }), VideoView: () => null }));

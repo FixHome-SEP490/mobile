@@ -62,7 +62,7 @@ function getRestoredM6Recovery(
   if (!order || order.id !== key.serviceOrderId || isHistoricalOrder(order)) return null;
   if (key.role === 'technician' && order.technician?.id !== key.userId) return null;
   const allowed = key.role === 'customer'
-    ? ['wallet-pay', 'vnpay-url', 'cash-confirm']
+    ? ['wallet-pay', 'vnpay-url', 'no-charge', 'cash-confirm']
     : ['after-upload', 'evidence-delete', 'request-completion', 'cash-declare'];
   const match = journal.list(key.userId).find(m =>
     allowed.includes(m.operation) && m.serviceOrderId === key.serviceOrderId && m.role === key.role
@@ -96,11 +96,13 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
   const refreshing = snapshot?.access === 'current'
     && (snapshot.order.status === 'loading' || Object.values(snapshot.resources).some(r => r.status === 'loading'));
   const [lastTask, setLastTask] = useState<OrderTaskResolution | null>(null);
+  // The same holds for T02: its depart command writes the marker before the POST, and unmounting
+  // the screen there kills the controller so the POST is never sent (confirm bounced back to start).
   // A camera upload writes its pending marker, which resolves to TR; the capture screen owns that
   // command and already renders the pending/verify state, so it must not be unmounted underneath it.
   // Likewise C09 owns the VNPay link its own submit just created; the marker must not swap the screen away.
   const hold = refreshing || (snapshot?.pendingIntent === true && (
-    (liveResolution?.taskId === 'TR' && (lastTask?.taskId === 'T05' || lastTask?.taskId === 'T06'))
+    (liveResolution?.taskId === 'TR' && (lastTask?.taskId === 'T02' || lastTask?.taskId === 'T05' || lastTask?.taskId === 'T06'))
     || ((liveResolution?.taskId === 'C11' || liveResolution?.taskId === 'CX') && lastTask?.taskId === 'C09')));
   if (liveResolution && !hold && lastTask?.taskId !== liveResolution.taskId) setLastTask(liveResolution);
   const resolution = hold && lastTask ? lastTask : liveResolution;

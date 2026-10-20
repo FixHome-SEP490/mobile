@@ -1,8 +1,9 @@
 import type { CreateBookingDto } from '../../api/bookings.api';
+import type { BookingDeviceAttributes } from '../../api/catalog-pricing.api';
 import type { MediaUploadImage } from '../../api/media.api';
 import type { ServiceItem } from '../../api/services.api';
 import type { AddressData } from '../../api/users.api';
-import { resolveServicePrice } from './service-catalog';
+import { servicePricingLabel } from './service-catalog';
 import { addressReadyForBooking } from './customer-booking-create';
 import { buildCustomerBookingWindow, validateBookingFields } from '../../utils/booking-window';
 import { buildScheduleWindow, scheduleSummary, type BookingSchedule } from '../../utils/booking-session';
@@ -47,6 +48,8 @@ export function buildBookingReviewSnapshot({
   now,
   aiSessionId,
   photos = [],
+  deviceAttributes,
+  selectedVariantCode,
 }: {
   ownerUserId: string;
   service: ServiceItem;
@@ -60,6 +63,8 @@ export function buildBookingReviewSnapshot({
   now?: Date;
   aiSessionId?: string | null;
   photos?: readonly BookingPhotoPreview[];
+  deviceAttributes?: BookingDeviceAttributes;
+  selectedVariantCode?: string | null;
 }): BookingReviewSnapshot {
   if (!ownerUserId || address.userId !== ownerUserId) {
     throw new Error('Vui lòng chọn địa chỉ đã lưu của tài khoản này.');
@@ -80,7 +85,7 @@ export function buildBookingReviewSnapshot({
     );
   }
 
-  if (!schedule && (!date || !time)) throw new Error('Vui lòng chọn ngày và buổi (sáng hoặc chiều).');
+  if (!schedule && (!date || !time)) throw new Error('Vui lòng chọn ngày và buổi (sáng, chiều hoặc tối).');
   const window = schedule ? buildScheduleWindow(schedule, now) : buildCustomerBookingWindow({ date: date!, time: time!, now });
   const note = customerNote?.trim() ?? '';
   if (note.length > 1000) throw new Error('Ghi chú cho thợ tối đa 1000 ký tự.');
@@ -93,14 +98,10 @@ export function buildBookingReviewSnapshot({
     urgency: 'NORMAL',
     ...(note ? { customerNote: note } : {}),
     ...(session ? { aiSessionId: session } : {}),
+    ...(deviceAttributes && Object.keys(deviceAttributes).length > 0 ? { deviceAttributes: { ...deviceAttributes } } : {}),
+    ...(selectedVariantCode ? { selectedVariantCode } : {}),
   });
-  const price = resolveServicePrice(service);
-  const pricingLabel =
-    service.pricingMode === 'fixed_price'
-      ? `Giá cố định: ${price.text}`
-      : service.pricingMode === 'inspection_required'
-        ? `Cần khảo sát/báo giá: ${price.text}`
-        : price.text;
+  const pricingLabel = servicePricingLabel(service);
   let scheduleLabel: string;
   if (schedule) {
     scheduleLabel = scheduleSummary(schedule);

@@ -489,3 +489,51 @@ describe('ExtraProposalScreen (T10)', () => {
     expect(tree.root.findAllByProps({ testID: 'proposal-evidence-face' })).toHaveLength(0);
   });
 });
+
+describe('ExtraProposalScreen UX', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockJournalList = [];
+    mockRouteParams = {};
+    mockState = { phase: 'idle', operation: null, targetId: null, revisingId: null, error: null, actionSuccess: null, resolvedEntityId: null };
+  });
+
+  it('shows the missing reason and bad rows inline and keeps the total unknown until rows are valid', () => {
+    ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot());
+    let tree: any;
+    act(() => { tree = create(<ExtraProposalScreen />); });
+    expect(tree.root.findByProps({ testID: 'proposal-estimate-total' }).props.accessibilityLabel).toContain('chưa xác định');
+    act(() => { tree.root.findByProps({ testID: 'proposal-submit' }).props.onPress(); });
+    expect(tree.root.findByProps({ testID: 'proposal-reason-error' })).toBeTruthy();
+    expect(JSON.stringify(tree.toJSON())).toContain('Nhập mô tả hạng mục.');
+    expect(tree.root.findAllByProps({ testID: 'proposal-confirm-sheet' })).toHaveLength(0);
+  });
+
+  it('total follows the rows and the confirmation reads back every line', () => {
+    ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot());
+    let tree: any;
+    act(() => { tree = create(<ExtraProposalScreen />); });
+    act(() => { tree.root.findByProps({ testID: 'proposal-reason-input' }).props.onChangeText('Thay tụ'); });
+    act(() => { tree.root.findByProps({ accessibilityLabel: 'Mô tả hạng mục' }).props.onChangeText('Công thay tụ'); });
+    act(() => { tree.root.findByProps({ accessibilityLabel: 'Số lượng' }).props.onChangeText('2'); });
+    act(() => { tree.root.findByProps({ accessibilityLabel: 'Đơn giá' }).props.onChangeText('150000'); });
+    expect(tree.root.findByProps({ testID: 'proposal-estimate-total' }).props.accessibilityLabel).toContain('300.000');
+    act(() => { tree.root.findByProps({ testID: 'proposal-submit' }).props.onPress(); });
+    const out = JSON.stringify(tree.toJSON());
+    expect(out).toContain('Công thay tụ');
+    expect(out).toContain('Thay tụ');
+    expect(tree.root.findAllByProps({ testID: 'proposal-reason-input' })).toHaveLength(0);
+  });
+
+  it('adds parts and labor rows explicitly', () => {
+    ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot());
+    let tree: any;
+    act(() => { tree = create(<ExtraProposalScreen />); });
+    act(() => { tree.root.findByProps({ testID: 'proposal-add-parts' }).props.onPress(); });
+    act(() => { tree.root.findByProps({ testID: 'proposal-add-labor' }).props.onPress(); });
+    const editors = tree.root.findAllByType(CostItemEditor);
+    expect(editors).toHaveLength(3);
+    expect(editors[1].props.row.kind).toBe('parts_equipment');
+    expect(editors[2].props.row.kind).toBe('labor');
+  });
+});

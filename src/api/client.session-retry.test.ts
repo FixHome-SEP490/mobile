@@ -5,7 +5,7 @@ import axios, {
   type AxiosResponse,
   type InternalAxiosRequestConfig,
 } from 'axios';
-import apiClient from './client';
+import apiClient, { clearApiCache } from './client';
 import { storageService } from '../services/storage.service';
 import { useAuthStore } from '../store/auth.store';
 import { UserRole, type UserInfo } from '../types';
@@ -93,6 +93,7 @@ describe('api client auth-session retry safety', () => {
   let storedRefreshToken: string | null;
 
   beforeEach(() => {
+    clearApiCache();
     jest.clearAllMocks();
 
     storedAccessToken = 'access-a';

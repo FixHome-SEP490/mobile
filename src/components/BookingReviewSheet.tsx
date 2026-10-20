@@ -5,7 +5,7 @@ import {
   BottomSheetModal,
   BottomSheetScrollView,
 } from '@gorhom/bottom-sheet';
-import { CalendarDays, MapPin, PackageCheck, Wrench } from 'lucide-react-native';
+import { CalendarDays, FileText, MapPin, PackageCheck, Wrench } from 'lucide-react-native';
 import type { BookingReviewSnapshot } from '../screens/customer/customer-booking-review';
 
 type BookingColors = {
@@ -35,6 +35,7 @@ export function BookingReviewSummary({
         colors={colors}
       />
       <SummaryRow
+        icon={<FileText color={colors.primary} size={18} />}
         label="Mô tả sự cố"
         value={snapshot.request.description}
         colors={colors}
@@ -208,10 +209,10 @@ const styles = StyleSheet.create({
   summaryText: { flex: 1, gap: 4 },
   label: { fontSize: 12 },
   value: { fontSize: 14, lineHeight: 20, fontWeight: '500' },
-  quantity: { paddingLeft: 32, fontSize: 14, fontWeight: '600' },
+  quantity: { paddingLeft: 30, fontSize: 14, fontWeight: '600' },
   note: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 12 },
   noteText: { fontSize: 13, lineHeight: 19 },
-  photoSummary: { gap: 8, paddingLeft: 32 },
+  photoSummary: { gap: 8, paddingLeft: 30 },
   photoList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   photoPreview: { width: 64, height: 64, borderRadius: 10 },
   uploadError: { fontSize: 13, lineHeight: 19 },

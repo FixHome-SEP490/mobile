@@ -137,7 +137,7 @@ it('presents every API preview in deadline order with a separate decision footer
 
 it('opens spacious T03 inside the same screen with only preview metadata and no automatic response', async () => {
   const inv = invitation('one', 'Kiểm tra bơm (fixture)', 20);
-  Object.assign(inv.booking!, { addressSummary: 'PRIVATE_ADDRESS', customerPhone: 'PRIVATE_PHONE', description: 'PRIVATE_ISSUE', customerName: 'PRIVATE_NAME', mediaUrls: ['PRIVATE_IMAGE'] });
+  Object.assign(inv.booking!, { addressSummary: 'PRIVATE_ADDRESS', customerPhone: 'PRIVATE_PHONE', description: 'Vòi nước bị rò', customerName: 'PRIVATE_NAME', mediaUrls: ['PRIVATE_IMAGE'] });
   await render([inv]);
   expectNoPrivateOrPrototypeData();
   review();

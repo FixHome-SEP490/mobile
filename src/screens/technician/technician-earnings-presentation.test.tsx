@@ -7,6 +7,7 @@ import { fetchAllOrders, summarizeEarnings } from './technician-earnings';
 import TechnicianEarningsScreen from './TechnicianEarningsScreen';
 
 jest.mock('@react-navigation/native', () => ({
+  useFocusEffect: () => undefined, // live refresh needs the focus hook; the socket is not under test here
   useNavigation: () => ({ getParent: () => null, goBack: jest.fn(), navigate: jest.fn() }),
 }));
 

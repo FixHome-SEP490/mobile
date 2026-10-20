@@ -1,5 +1,6 @@
 // src/api/bookings.api.ts
 import apiClient from './client';
+import type { BookingDeviceAttributes } from './catalog-pricing.api';
 
 const USER_UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -49,6 +50,12 @@ export interface BookingItem {
   };
 }
 
+/** Exact server counts for the Activity tabs and their filters (`GET /bookings/my/activity-counts`). */
+export interface ActivityCounts {
+  repair: { all: number; in_progress: number; completed: number; cancelled: number };
+  request: { all: number; no_technician: number; sent: number; cancelled: number };
+}
+
 export interface BookingsPage {
   data: BookingItem[];
   total: number;
@@ -76,6 +83,10 @@ export interface CreateBookingDto {
   aiDiagnosisId?: string;
   /** Session id from the assistant; the technician receives a summary of it. */
   aiSessionId?: string;
+  /** P012: customer-reported device facts; the server validates them and derives the pricing snapshot itself. */
+  deviceAttributes?: BookingDeviceAttributes;
+  /** P012: approved variant code, sent only after the preview confirmed it with FIXED_PRICE. */
+  selectedVariantCode?: string;
 }
 
 export interface TechnicianCandidate {
@@ -124,6 +135,55 @@ export interface TechnicianBookingPreview {
   preferredEndAt: string | null;
   bookingMode?: 'scheduled' | 'urgent';
   slot?: BookingSlot | null;
+  /** PO 18/10/2026: what the technician needs to decide before accepting; never the address or phone. */
+  description?: string | null;
+  aiSummary?: AiBookingSummary | null;
+  media?: BookingMedia[];
+  /** `fixed_price` (listed price) or `inspection_required` (quote after checking). */
+  pricingMode?: string | null;
+  fixedUnitPrice?: number | null;
+  /** A coarse band, never an exact distance: {0,1}, {1,3} ... {40,null}. */
+  distanceBand?: { minKm: number; maxKm: number | null } | null;
+}
+
+export interface AiBookingSummary {
+  deviceName?: string | null;
+  customerText?: string | null;
+  suspectedFaults?: string[];
+  suggestedActions?: string[];
+  conclusion?: string | null;
+  priceMin?: number | null;
+  priceMax?: number | null;
+  recommendedServiceName?: string | null;
+  /** What the customer already tried, ruled out or suspects. */
+  notes?: string[];
+}
+
+export interface BookingMedia {
+  id: string;
+  url: string | null;
+  isPrivate: boolean;
+  mimeType: string;
+}
+
+const finiteOrNull = (v: unknown): number | null => (v != null && Number.isFinite(Number(v)) ? Number(v) : null);
+
+function previewBand(v: unknown): TechnicianBookingPreview['distanceBand'] {
+  if (!v || typeof v !== 'object') return null;
+  const { minKm, maxKm } = v as { minKm?: unknown; maxKm?: unknown };
+  const min = finiteOrNull(minKm);
+  const max = maxKm === null ? null : finiteOrNull(maxKm);
+  return min == null || min < 0 || (max != null && max <= min) || (maxKm !== null && max == null) ? null : { minKm: min, maxKm: max };
+}
+
+/** Keeps only media with the shape the viewer relies on; a private item never carries a url. */
+function previewMedia(v: unknown): BookingMedia[] {
+  if (!Array.isArray(v)) return [];
+  return v.flatMap((m) => {
+    if (!m || typeof m !== 'object' || typeof m.id !== 'string' || !m.id.trim() || typeof m.mimeType !== 'string'
+      || typeof m.isPrivate !== 'boolean' || (m.url !== null && typeof m.url !== 'string')) return [];
+    return [{ id: m.id, url: m.isPrivate ? null : m.url, isPrivate: m.isPrivate, mimeType: m.mimeType }];
+  });
 }
 
 export interface InvitationItem {
@@ -159,7 +219,7 @@ const normalizeBooking = (booking: RawBooking): BookingItem => ({
     : booking.media?.map((m) => m.url) || [],
 });
 
-export type BookingSlot = 'morning' | 'afternoon';
+export type BookingSlot = 'morning' | 'afternoon' | 'evening';
 
 export interface SessionOption {
   date: string;
@@ -204,6 +264,18 @@ export const bookingsApi = {
   async getMyBookings(): Promise<BookingItem[]> {
     const res = await apiClient.get('/bookings/my');
     return unwrap<RawBooking[]>(res.data).map(normalizeBooking);
+  },
+
+  async getActivityCounts(): Promise<ActivityCounts> {
+    const res = await apiClient.get('/bookings/my/activity-counts');
+    const data = unwrap<{ repair?: Record<string, unknown>; request?: Record<string, unknown> }>(res.data);
+    const n = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0);
+    const repair = { in_progress: n(data?.repair?.in_progress), completed: n(data?.repair?.completed), cancelled: n(data?.repair?.cancelled) };
+    const request = { no_technician: n(data?.request?.no_technician), sent: n(data?.request?.sent), cancelled: n(data?.request?.cancelled) };
+    return {
+      repair: { all: repair.in_progress + repair.completed + repair.cancelled, ...repair },
+      request: { all: request.no_technician + request.sent + request.cancelled, ...request },
+    };
   },
 
   async getMyBookingsPage(page = 1, pageSize = 20): Promise<BookingsPage> {
@@ -287,6 +359,14 @@ export const bookingsApi = {
         urgency: inv.booking.urgency,
         preferredStartAt: inv.booking.preferredStartAt,
         preferredEndAt: inv.booking.preferredEndAt,
+        bookingMode: inv.booking.bookingMode,
+        slot: inv.booking.slot,
+        description: typeof inv.booking.description === 'string' && inv.booking.description.trim() ? inv.booking.description : null,
+        aiSummary: inv.booking.aiSummary && typeof inv.booking.aiSummary === 'object' ? inv.booking.aiSummary : null,
+        media: previewMedia(inv.booking.media),
+        pricingMode: typeof inv.booking.pricingMode === 'string' ? inv.booking.pricingMode : null,
+        fixedUnitPrice: finiteOrNull(inv.booking.fixedUnitPrice),
+        distanceBand: previewBand(inv.booking.distanceBand),
       } : undefined,
     }));
   },

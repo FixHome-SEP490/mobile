@@ -1,5 +1,6 @@
 // src/api/services.api.ts
 import apiClient from './client';
+import type { ServicePriceSummary } from '../utils/service-price-summary';
 
 function unwrap<T>(payload: { data: T } | T): T {
   if (payload && typeof payload === 'object' && 'data' in payload) {
@@ -36,6 +37,8 @@ export interface ServiceItem {
   fixedPrice?: number | null;
   unit?: string | null;
   scopeDescription?: string | null;
+  /** Catalog V2 discovery price (labor only); absent on older backends. Display only. */
+  priceSummary?: ServicePriceSummary;
   isActive: boolean;
   sortOrder?: number;
 }

@@ -61,14 +61,14 @@ const COOLING_DESCRIPTION_SUGGESTIONS = [
 /** Local editable symptoms; service-specific context takes precedence over Web category fallbacks. */
 export function getBookingDescriptionSuggestions(serviceCode?: string, categoryName?: string): readonly string[] {
   const code = serviceCode?.trim().toLocaleUpperCase('en-US') ?? '';
-  if (code.startsWith('VE_SINH_DIEU_HOA')) {
+  if (code.startsWith('VE_SINH_DIEU_HOA') || code === 'AC-02') {
     return ['Bụi bám dàn lạnh', 'Mùi hôi ẩm mốc', 'Luồng gió yếu', 'Lâu chưa vệ sinh'];
   }
-  if (code.startsWith('SUA_DIEU_HOA')) return COOLING_DESCRIPTION_SUGGESTIONS;
-  if (code === 'SUA_RO_RI_NUOC') {
+  if (code.startsWith('SUA_DIEU_HOA') || code === 'AC-01') return COOLING_DESCRIPTION_SUGGESTIONS;
+  if (code === 'SUA_RO_RI_NUOC' || code === 'PI-01') {
     return ['Rò rỉ lavabo / bồn rửa', 'Rò rỉ đường ống nước', 'Rò nước tại van / vòi', 'Tường / sàn bị thấm nước'];
   }
-  if (code === 'LAP_TV_GIA_TREO') {
+  if (code === 'LAP_TV_GIA_TREO' || code === 'TV-01') {
     return ['Đã có giá treo TV', 'Lắp trên tường bê tông', 'Lắp trên tường gạch', 'Lắp trên tường thạch cao'];
   }
   const category = categoryName?.toLocaleLowerCase('vi') ?? '';

@@ -21,6 +21,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { useLiveRefresh } from '../../hooks/useLiveRefresh';
+import { orderPartsFor } from '../../services/live-kinds';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAppTheme } from '../../constants/theme';
@@ -437,6 +439,19 @@ export default function CustomerOrderDetailScreen() {
       decisionRef.current = null;
     };
   }, []);
+  // PO 18/10/2026: this order changed on the server (status, photos, costs, warranty): read it again, quietly.
+  // Only the part the push says it touched is read again (photos, invoice, costs, the order itself).
+  useLiveRefresh(['order:updated'], (batch) => {
+    const parts = orderPartsFor(batch.kinds);
+    if (parts.detail) void loaderRef.current?.refresh(true);
+    const latest = latestRef.current;
+    if (!latest.order || latest.order.id !== latest.serviceOrderId) return;
+    const target = latest.order.id;
+    const readable = () => isEvidenceReadable(target);
+    if (parts.evidence) void evidenceRef.current?.refreshEvidence(readable);
+    if (parts.invoice) void invoiceRef.current?.refreshInvoice(readable);
+    if (parts.costs) void costsRef.current?.refreshCosts(readable);
+  }, (event) => !event.payload.serviceOrderId || event.payload.serviceOrderId === serviceOrderId, { pollMs: 30_000 });
   useFocusEffect(useCallback(() => {
     focusAliveRef.current = true;
     void loaderRef.current?.focus(serviceOrderId);

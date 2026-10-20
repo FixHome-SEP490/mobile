@@ -27,6 +27,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useLiveRefresh } from '../../hooks/useLiveRefresh';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuthStore } from '../../store';
 import { walletApi } from '../../api/wallet.api';
@@ -260,6 +261,9 @@ export default function TechnicianWalletScreen({ route }: { route?: { name: stri
   };
 
   const balanceNegative = !!summary && summary.balance < 0;
+
+  // PO 18/10/2026: a top-up, a payout or a settlement shows on the balance without pulling to refresh.
+  useLiveRefresh(['wallet:updated'], () => { void controllerRef.current?.refreshAll(); }, undefined, { pollMs: 60_000 });
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>

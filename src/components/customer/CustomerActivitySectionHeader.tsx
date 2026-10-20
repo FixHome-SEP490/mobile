@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../constants/theme';
 
-export type CustomerActivitySectionIcon = 'alert' | 'ongoing';
+export type CustomerActivitySectionIcon = 'alert' | 'ongoing' | 'request';
 
 interface CustomerActivitySectionHeaderProps {
   title: string;
@@ -12,9 +12,10 @@ interface CustomerActivitySectionHeaderProps {
   testID?: string;
 }
 
-const ICON_NAME: Record<CustomerActivitySectionIcon, 'alert-circle-outline' | 'layers-outline'> = {
+const ICON_NAME: Record<CustomerActivitySectionIcon, 'alert-circle-outline' | 'layers-outline' | 'calendar-outline'> = {
   alert: 'alert-circle-outline',
   ongoing: 'layers-outline',
+  request: 'calendar-outline',
 };
 
 /**

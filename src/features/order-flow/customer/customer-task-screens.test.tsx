@@ -87,10 +87,7 @@ for (const { name, Screen, status } of cases) {
     });
     expect(mockNavigate).toHaveBeenCalledWith('OrderInformation');
     expect(mockRefresh).not.toHaveBeenCalled();
-    await act(async () => {
-      renderer.root.findByProps({ testID: 'task-refresh' }).props.onPress();
-    });
-    expect(mockRefresh).toHaveBeenCalledWith('manual');
+    expect(renderer.root.findAllByProps({ testID: 'task-refresh' }).length).toBe(0);
     await act(async () => renderer.unmount());
   });
 

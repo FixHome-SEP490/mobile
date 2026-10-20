@@ -131,7 +131,7 @@ export default function QuotationFormScreen() {
     setFormError(null);
   };
 
-  const loadCatalog = () => {
+  const loadCatalog = (search?: string) => {
     if (frozen || reviewing) return;
     const gen = catalogLoadGen.current + 1;
     catalogLoadGen.current = gen;
@@ -139,7 +139,7 @@ export default function QuotationFormScreen() {
     setCatalog({ status: 'loading', parts: [], error: null });
     void (async () => {
       try {
-        const result = await fetchStrictCatalog({ limit: 50 });
+        const result = await fetchStrictCatalog({ limit: 50, ...(search?.trim() ? { search: search.trim() } : {}) });
         // Stale load (superseded request, owner/session switch, unmount) is ignored.
         if (!mountedRef.current || gen !== catalogLoadGen.current || ownerRef.current !== owner || !canEditRef.current) return;
         if (!result.data.length) {
@@ -195,7 +195,7 @@ export default function QuotationFormScreen() {
             partSku: part.sku ?? '',
             warrantyPolicy: part.warrantyPolicy ?? '',
             unitPrice: String(part.sellingPrice),
-            description: r.description.trim() ? r.description : part.name,
+            description: part.name,
           }
           : r)));
         setFormError(null);
@@ -384,8 +384,8 @@ export default function QuotationFormScreen() {
               onToggle={() => setExpandedKey(prev => (prev === row.key ? null : row.key))}
               onChange={next => updateRow(row.key, next)}
               onRemove={() => removeRow(row.key)}
-              onLoadCatalog={() => {
-                void loadCatalog();
+              onLoadCatalog={search => {
+                void loadCatalog(search);
               }}
               onSelectCatalogPart={part => selectCatalogPart(row.key, part)}
             />

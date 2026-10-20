@@ -7,6 +7,7 @@ function setup() {
   const f = m6Fixture();
   const transport = { payWallet: jest.fn(async () => { f.server.invoice!.paymentStatus = 'paid'; return { paid: true }; }),
     createVnpayUrl: jest.fn(async () => 'https://payments.example.test/start'), confirmCash: jest.fn(async (_id: string, _body: unknown) => undefined),
+    confirmNoCharge: jest.fn(async (_id: string) => { f.server.invoice!.paymentStatus = 'paid'; return { paymentStatus: 'paid', settlementMethod: 'NO_CHARGE' }; }),
     readWallet: jest.fn(async () => f.server.wallet), openUrl: jest.fn(async (_url: string) => undefined) };
   const deps = { ...f.runtime, transport };
   return { ...f, transport, deps, controller: createOrderPaymentController(deps) };
@@ -162,4 +163,26 @@ it('cash redeclaration with same ID/amount but changed actor or timestamp invali
 it('missing declaration identity/time does not authorize customer cash confirmation', async () => {
   const f = setup(); f.server.cash = { id: 'cash', serviceOrderId: 'order', status: 'pending_confirmation', declaredAmount: 120000 };
   await f.controller.requestCashConfirmation({ agreed: true, confirmedAmount: 120000 }); await f.controller.submitConfirmation(); expect(f.transport.confirmCash).not.toHaveBeenCalled();
+});
+
+describe('zero invoice (no charge)', () => {
+  it('confirms a 0 invoice without touching wallet, VNPay or cash, and refuses every other amount', async () => {
+    const f = setup(); f.server.invoice!.grandTotal = '0';
+    await f.controller.requestPayment('wallet'); await f.controller.requestPayment('vnpay');
+    expect(f.controller.getState().confirmation).toBeNull();
+    await f.controller.requestPayment('no_charge'); await f.controller.submitConfirmation();
+    expect(f.transport.confirmNoCharge).toHaveBeenCalledWith('invoice');
+    expect(f.transport.payWallet).not.toHaveBeenCalled(); expect(f.transport.createVnpayUrl).not.toHaveBeenCalled(); expect(f.transport.confirmCash).not.toHaveBeenCalled();
+    expect(f.controller.getState()).toMatchObject({ phase: 'resolved', result: 'paid-awaiting-order' });
+    const other = setup();
+    await other.controller.requestPayment('no_charge');
+    expect(other.controller.getState().confirmation).toBeNull();
+    expect(other.transport.confirmNoCharge).not.toHaveBeenCalled();
+  });
+  it.each(['ORDER_INVALID_TRANSITION', 'EVIDENCE_REQUIRED_AFTER', 'VALIDATION_FAILED', 'CONFLICT'])('%s means nothing was confirmed, so it can be retried', async code => {
+    const f = setup(); f.server.invoice!.grandTotal = '0';
+    f.transport.confirmNoCharge.mockRejectedValue({ response: { status: 409, data: { success: false, error: { code } } } });
+    await f.controller.requestPayment('no_charge'); await f.controller.submitConfirmation();
+    expect(f.journal.list('customer')[0].status).toBe('failed-known'); expect(f.controller.getState().phase).toBe('failed-known');
+  });
 });

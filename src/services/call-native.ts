@@ -20,6 +20,7 @@ let inCall: InCallManager | null | undefined;
 
 export function loadWebRtc(): WebRtcModule | null {
   if (webRtc !== undefined) return webRtc;
+  if (Platform.OS === 'web') return (webRtc = null);
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const mod = require('react-native-webrtc') as WebRtcModule;
@@ -32,6 +33,7 @@ export function loadWebRtc(): WebRtcModule | null {
 
 export function loadInCallManager(): InCallManager | null {
   if (inCall !== undefined) return inCall;
+  if (Platform.OS === 'web') return (inCall = null);
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const mod = require('react-native-incall-manager');

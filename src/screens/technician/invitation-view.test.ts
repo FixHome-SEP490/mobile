@@ -1,5 +1,7 @@
 import type { InvitationItem } from '../../api/bookings.api';
-import { invitationClosedLabel, invitationCountdown, sortInvitationsForDisplay } from './invitation-view';
+import {
+  invitationClosedLabel, invitationCountdown, invitationDistanceText, invitationPriceText, sortInvitationsForDisplay,
+} from './invitation-view';
 
 const NOW = Date.parse('2026-09-30T07:00:00Z');
 const at = (minutes: number) => new Date(NOW + minutes * 60000).toISOString();
@@ -51,4 +53,19 @@ it('labels closed invitations by how they closed', () => {
   expect(invitationClosedLabel('DECLINED')).toBe('Đã từ chối');
   expect(invitationClosedLabel('EXPIRED')).toBe('Đã hết hạn');
   expect(invitationClosedLabel('PENDING')).toBe('Đã hết hạn');
+});
+
+describe('invitation job preview text', () => {
+  it('words the distance band like the web', () => {
+    expect(invitationDistanceText({ minKm: 0, maxKm: 1 })).toBe('Cách bạn dưới 1 km');
+    expect(invitationDistanceText({ minKm: 3, maxKm: 5 })).toBe('Cách bạn khoảng 3-5 km');
+    expect(invitationDistanceText({ minKm: 40, maxKm: null })).toBe('Cách bạn hơn 40 km');
+    expect(invitationDistanceText(null)).toBe('');
+  });
+  it('shows a listed price only for fixed_price, otherwise the quote-after-visit line', () => {
+    const money = (n: number) => `${n}đ`;
+    expect(invitationPriceText({ pricingMode: 'fixed_price', fixedUnitPrice: 150000, quantity: 2 }, money)).toBe('Giá niêm yết 150000đ × 2');
+    expect(invitationPriceText({ pricingMode: 'inspection_required', fixedUnitPrice: null }, money)).toBe('Báo giá sau khi kiểm tra tại nhà khách');
+    expect(invitationPriceText(undefined, money)).toBe('Báo giá sau khi kiểm tra tại nhà khách');
+  });
 });

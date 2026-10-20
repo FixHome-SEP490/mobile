@@ -13,6 +13,7 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { useLiveRefresh } from '../../hooks/useLiveRefresh';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
@@ -315,6 +316,9 @@ export default function CustomerNotificationsScreen() {
     }
     return null;
   };
+
+  // PO 18/10/2026: a new notification joins the list as it arrives.
+  useLiveRefresh(['notification:new'], () => { if (!loadingMoreRef.current) void fetchNotifications(); }, undefined, { pollMs: 60_000 });
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>

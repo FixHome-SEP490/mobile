@@ -1,6 +1,7 @@
 import type { ServiceItem } from '../../api/services.api';
 import { SERVICES_PAGE_SIZE } from '../../api/services.api';
 import { formatVnd } from '../../utils/format';
+import { servicePriceSummaryText } from '../../utils/service-price-summary';
 
 /**
  * P0-3 trusted service-catalog flow. Lists and details come only from the
@@ -43,6 +44,20 @@ export type ServicePriceKind = 'fixed' | 'range' | 'survey';
 export interface ServicePriceView {
   kind: ServicePriceKind;
   text: string;
+  /** What the amount is ("Giá công theo thiết bị/phạm vi"), when the catalog says. */
+  caption?: string;
+}
+
+/** The one line that names a service's price, for the booking card and the review: the catalog's own words win. */
+export function servicePricingLabel(
+  service: Pick<ServiceItem, 'pricingMode' | 'fixedPrice' | 'minPrice' | 'maxPrice' | 'priceSummary'> | null,
+): string {
+  const price = resolveServicePrice(service);
+  if (price.caption) return `${price.text} · ${price.caption}`;
+  if (service?.priceSummary) return price.text;
+  if (service?.pricingMode === 'fixed_price') return `Giá cố định: ${price.text}`;
+  if (service?.pricingMode === 'inspection_required') return `Cần khảo sát/báo giá: ${price.text}`;
+  return price.text;
 }
 
 function validMoney(value: unknown): number | null {
@@ -55,10 +70,16 @@ function validMoney(value: unknown): number | null {
  * Never invents ETA or warranty copy.
  */
 export function resolveServicePrice(
-  service: Pick<ServiceItem, 'pricingMode' | 'fixedPrice' | 'minPrice' | 'maxPrice'> | null,
+  service: Pick<ServiceItem, 'pricingMode' | 'fixedPrice' | 'minPrice' | 'maxPrice' | 'priceSummary'> | null,
 ): ServicePriceView {
   const fallback: ServicePriceView = { kind: 'survey', text: 'Cần khảo sát để xác định chi phí' };
   if (!service) return fallback;
+  // Catalog V2 (19/10/2026): every service is `inspection_required`, and the labor price the customer can
+  // expect comes as `priceSummary`; without it the list would say "cần khảo sát" for all 32 services.
+  const summary = servicePriceSummaryText(service.priceSummary);
+  if (summary) {
+    return { kind: service.priceSummary?.kind === 'fixed_range' ? 'range' : 'survey', text: summary.label, caption: summary.caption || undefined };
+  }
   if (service.pricingMode === 'fixed_price') {
     const fixed = validMoney(service.fixedPrice);
     return fixed === null ? fallback : { kind: 'fixed', text: formatVnd(fixed) };

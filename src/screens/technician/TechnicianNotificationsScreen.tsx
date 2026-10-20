@@ -12,6 +12,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AlertTriangle, Bell, BellOff, Briefcase, CheckCheck, Tag, Wallet } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useLiveRefresh } from '../../hooks/useLiveRefresh';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAppTheme, type ToneName } from '../../constants/theme';
@@ -47,7 +48,8 @@ function pageItems(res: Awaited<ReturnType<typeof notificationsApi.getNotificati
   return null;
 }
 
-export default function TechnicianNotificationsScreen() {
+export default function TechnicianNotificationsScreen({ route }: { route?: { name: string } }) {
+  const isTab = route?.name === 'Notifications';
   const { colors, isDark } = useAppTheme();
   const styles = getStyles(colors);
   const insets = useSafeAreaInsets();
@@ -275,14 +277,17 @@ export default function TechnicianNotificationsScreen() {
     );
   };
 
+  // PO 18/10/2026: a new notification joins the list as it arrives.
+  useLiveRefresh(['notification:new'], () => { void fetchFirstPage(); }, undefined, { pollMs: 60_000 });
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
 
       <View style={styles.header}>
-        <BackButton onPress={onBackPress} />
+        {!isTab && <BackButton onPress={onBackPress} />}
         <View style={styles.headerText}>
-          <Text style={styles.headerTitle} accessibilityRole="header">Thông báo</Text>
+          <Text style={isTab ? styles.pageTitle : styles.headerTitle} accessibilityRole="header">Thông báo</Text>
           {!loading && totalUnread > 0 && <Text style={styles.headerSubtitle}>{totalUnread} chưa đọc</Text>}
         </View>
         {totalUnread > 0 && (
@@ -343,33 +348,33 @@ export default function TechnicianNotificationsScreen() {
 }
 
 const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.surface },
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingVertical: 16,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
+    borderBottomColor: colors.border,
   },
   backButton: { width: 44, height: 44, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   headerText: { flex: 1, gap: 2 },
   headerTitle: { fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.text },
-  headerSubtitle: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, marginTop: 2 },
+  pageTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
+  headerSubtitle: { fontSize: 12, lineHeight: 16, color: colors.textSecondary },
   markAllBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     minHeight: 44,
     paddingHorizontal: 12,
-    borderRadius: 22,
+    borderRadius: 16,
     backgroundColor: colors.primarySoft,
   },
-  markAllText: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.primaryStrong },
+  markAllText: { fontSize: 12, lineHeight: 20, fontWeight: '600', color: colors.primaryStrong },
   disabled: { opacity: 0.6 },
   errorBanner: {
     flexDirection: 'row',
@@ -391,7 +396,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 8,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
   },
   row: {
     flexDirection: 'row',
@@ -411,7 +416,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   iconTile: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   rowContent: { flex: 1, gap: 2, minWidth: 0 },
   rowTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
-  title: { flex: 1, flexShrink: 1, fontSize: 14, lineHeight: 20, fontWeight: '500', color: colors.text },
+  title: { flex: 1, flexShrink: 1, fontSize: 15, lineHeight: 22, fontWeight: '600', color: colors.text },
   titleUnread: { fontWeight: '700' },
   desc: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
   timeText: { flexShrink: 0, fontSize: 12, lineHeight: 16, fontWeight: '500', color: colors.textSecondary },

@@ -12,7 +12,9 @@ const fs = jest.requireActual<{
  * canonical Backend catalog with honest pricing and no invented promises.
  * Static source assertions plus mocked-API loader behavior (no network).
  */
-const LIST_SRC = fs.readFileSync('src/screens/customer/CustomerServicesScreen.tsx', 'utf8');
+// The list screen and the card it draws each service with.
+const LIST_SRC = fs.readFileSync('src/screens/customer/CustomerServicesScreen.tsx', 'utf8')
+  + fs.readFileSync('src/components/customer/ServiceRowCard.tsx', 'utf8');
 const DETAIL_SRC = fs.readFileSync('src/screens/customer/CustomerServiceDetailScreen.tsx', 'utf8');
 
 const mockNavigate = jest.fn();
@@ -161,7 +163,7 @@ describe('customer service real UI (C-RUI3)', () => {
   });
 
   it('opens real detail by server UUID and books with a service prefill', () => {
-    expect(LIST_SRC).toContain("navigation.navigate('CustomerServiceDetail', { serviceId: item.id })");
+    expect(LIST_SRC).toContain("navigation.navigate('CustomerServiceDetail', { serviceId: service.id })");
     expect(DETAIL_SRC).toContain('servicesApi.getServiceById');
     expect(DETAIL_SRC).toContain('createServiceDetailLoader');
     expect(DETAIL_SRC).toContain('serviceIdFromRoute');
@@ -220,8 +222,8 @@ describe('customer service loader behavior (mocked servicesApi, C-RUI3 M1)', () 
         .filter((node) => node.props.children === 'Vệ sinh điều hòa âm trần');
       expect(nameNodes.length).toBeGreaterThanOrEqual(1);
       // Long service variants remain readable; the touch target retains the canonical name.
-      expect(nameNodes[0].props.numberOfLines).toBeUndefined();
-      expect(flatStyle(nameNodes[0]).lineHeight).toBe(16);
+      expect(nameNodes[0].props.numberOfLines).toBe(2);
+      expect(flatStyle(nameNodes[0]).lineHeight).toBe(21);
 
       const row = tree.root.findAllByType(TouchableOpacity).find(
         (node) =>
@@ -464,7 +466,7 @@ describe('customer service loader behavior (mocked servicesApi, C-RUI3 M1)', () 
     try {
       await settle(50);
       expect(tree.root.findAllByProps({ accessibilityLabel: 'Sửa máy lạnh' })).toHaveLength(0);
-      act(() => tree.root.findByProps({ accessibilityLabel: 'Xem tất cả danh mục dịch vụ' }).props.onPress());
+      act(() => tree.root.findByProps({ accessibilityLabel: 'Danh mục Tất cả' }).props.onPress());
       expect(tree.root.findByProps({ accessibilityLabel: 'Sửa máy lạnh' })).toBeDefined();
       expect(tree.root.findByProps({ accessibilityLabel: 'Sửa rò rỉ nước' })).toBeDefined();
       expect(tree.root.findByType(TextInput).props.value).toBe('');
@@ -483,7 +485,7 @@ describe('customer service loader behavior (mocked servicesApi, C-RUI3 M1)', () 
     act(() => { tree = create(listElement()); });
     try {
       await settle(50);
-      act(() => tree.root.findByProps({ accessibilityLabel: 'Xem trong nhóm Điện lạnh' }).props.onPress());
+      act(() => tree.root.findByProps({ accessibilityLabel: 'Danh mục Tất cả' }).props.onPress());
       expect(tree.root.findByProps({ accessibilityLabel: 'Sửa máy lạnh' })).toBeDefined();
     } finally {
       act(() => tree.unmount());

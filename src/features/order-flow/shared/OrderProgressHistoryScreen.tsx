@@ -31,7 +31,7 @@ export default function OrderProgressHistoryScreen() {
     {historicalTech && <ReadOnlyNotice>Đơn lịch sử chỉ có bản tóm tắt bảy trường do máy chủ cấp. Không tải lịch sử, hồ sơ đặt chỗ hoặc tài nguyên chi tiết.</ReadOnlyNotice>}
     {!current && !historicalTech && <ReadOnlyNotice>{snapshot?.access === 'revoked' ? 'Quyền truy cập đã thay đổi; dữ liệu đơn đã được xóa.' : 'Lịch sử chỉ tải sau khi xác minh quyền xem đơn hiện tại.'}</ReadOnlyNotice>}
     {current && resource?.status === 'loading' && <ReadOnlyNotice>Đang tải lịch sử từ máy chủ…</ReadOnlyNotice>}
-    {current && resource?.status === 'error' && <ReadOnlyNotice>Chưa tải được lịch sử. Hãy nhấn “Làm mới dữ liệu” để thử lại.</ReadOnlyNotice>}
+    {current && resource?.status === 'error' && <ReadOnlyNotice>Chưa tải được lịch sử. Ứng dụng sẽ tự thử lại.</ReadOnlyNotice>}
     {current && resource?.status === 'ready' && resource.data.length === 0 && <ReadOnlyNotice>Máy chủ chưa có mục lịch sử tiến độ cho đơn này.</ReadOnlyNotice>}
     {current && resource?.status === 'ready' && resource.data.map(entry => <View key={entry.id} style={{ backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md }}>
       <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>{serviceOrderStatusView(entry.toStatus).label}</Text>

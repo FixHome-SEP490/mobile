@@ -15,12 +15,12 @@ import * as Haptics from 'expo-haptics';
 import { CalendarDays, ChevronLeft, ChevronRight, Clock, X } from 'lucide-react-native';
 import { useAppTheme } from '../constants/theme';
 import {
+  BOOKING_SLOTS,
   SLOT_SHORT,
   sessionDayLabel,
-  sessionWindow,
+  sessionCloseAt,
   upcomingSessions,
   type BookingSchedule,
-  type BookingSlot,
 } from '../utils/booking-session';
 import { vnTodayCalendarDate, vnWallClockToDate } from '../utils/vn-time';
 
@@ -67,7 +67,7 @@ function sameSessions(left: ReturnType<typeof upcomingSessions>, right: ReturnTy
 }
 
 /**
- * "Đặt trước theo buổi" (one morning or afternoon of a day in the next 14 days)
+ * "Đặt trước theo buổi" (one morning, afternoon or evening of a day in the next 14 days)
  * or "Tới ngay" — same choices as the web booking page.
  */
 export default function BookingSessionPicker({
@@ -119,11 +119,11 @@ export default function BookingSessionPicker({
     const midnight = vnWallClockToDate(
       tomorrow.getFullYear(), tomorrow.getMonth() + 1, tomorrow.getDate(), 0, 0,
     ).getTime();
-    const nextSessionStart = sessions
-      .map((session) => sessionWindow(session)?.start.getTime())
+    const nextSessionClose = sessions
+      .map((session) => sessionCloseAt(session))
       .filter((time): time is number => time !== undefined && time > now)
       .reduce((next, time) => Math.min(next, time), Number.POSITIVE_INFINITY);
-    const nextBoundary = Math.min(midnight, nextSessionStart);
+    const nextBoundary = Math.min(midnight, nextSessionClose);
     const timeout = setTimeout(refreshSessions, Math.max(1, nextBoundary - now + 50));
     return () => clearTimeout(timeout);
   }, [refreshSessions, sessions]);
@@ -220,7 +220,7 @@ export default function BookingSessionPicker({
         >
           <CalendarDays size={16} color={colors.primaryStrong} strokeWidth={1.75} />
           <Text style={[styles.cardTitle, { color: colors.text }]}>Đặt trước theo buổi</Text>
-          <Text style={[styles.cardHint, { color: colors.textSecondary }]}>Chọn ngày và buổi sáng hoặc chiều</Text>
+          <Text style={[styles.cardHint, { color: colors.textSecondary }]}>Chọn ngày và buổi sáng, chiều hoặc tối</Text>
         </Pressable>
         <Pressable
           testID="mode-urgent"
@@ -287,7 +287,7 @@ export default function BookingSessionPicker({
             </Text>
           )}
           <View style={styles.slots}>
-            {(['morning', 'afternoon'] as BookingSlot[]).map((slot) => {
+            {BOOKING_SLOTS.map((slot) => {
               const enabled = daySlots.includes(slot);
               const on = !!scheduled && scheduled.date === activeDay && scheduled.slot === slot;
               return (
@@ -306,14 +306,14 @@ export default function BookingSessionPicker({
                   }}
                   style={[styles.slot, { borderColor: on ? colors.primary : colors.border, backgroundColor: on ? colors.primarySoft : colors.surface, opacity: enabled ? 1 : 0.4 }]}
                 >
-                  <Text style={{ color: on ? colors.primaryStrong : colors.text, fontWeight: '700' }}>{SLOT_SHORT[slot]}</Text>
+                  <Text style={{ color: on ? colors.primaryStrong : colors.text, fontWeight: '700', fontSize: 13, textAlign: 'center' }}>{SLOT_SHORT[slot]}</Text>
                   {!enabled && <Text style={[styles.cardHint, { color: colors.textSecondary }]}>Đã qua</Text>}
                 </Pressable>
               );
             })}
           </View>
           {!scheduled && (
-            <Text style={[styles.cardHint, { color: colors.textSecondary }]}>Chưa chọn buổi; lịch chỉ được xác nhận sau khi chọn buổi sáng hoặc chiều.</Text>
+            <Text style={[styles.cardHint, { color: colors.textSecondary }]}>Chưa chọn buổi; lịch chỉ được xác nhận sau khi chọn buổi sáng, chiều hoặc tối.</Text>
           )}
         </>
       )}

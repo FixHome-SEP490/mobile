@@ -36,6 +36,11 @@ import { getServicePresentation } from '../../constants/service-presentation';
 import { bookingsApi } from '../../api/bookings.api';
 import { mediaApi, type MediaUploadImage } from '../../api/media.api';
 import { servicesApi, type ServiceItem, type CategoryItem } from '../../api/services.api';
+import { servicePriceSummaryText } from '../../utils/service-price-summary';
+import ServiceDeviceDetails from '../../components/customer/ServiceDeviceDetails';
+import {
+  isCatalogV2PreviewReady, isCatalogV2ServiceCode, type BookingDeviceAttributes, type CatalogPricingPreview,
+} from '../../api/catalog-pricing.api';
 import CategoryPills from '../../components/CategoryPills';
 import {
   addressReadyForBooking,
@@ -49,7 +54,7 @@ import { createProductionBookingAttempt, entryAttemptJournal } from '../../featu
 
 import {
   isOtherService,
-  resolveServicePrice,
+  servicePricingLabel,
   serviceDetailTarget,
 } from './service-catalog';
 import { usersApi, type AddressData } from '../../api/users.api';
@@ -175,53 +180,47 @@ function BookingIntakeProgress({
       testID="booking-intake-progress"
       accessible
       accessibilityLabel={`Tiến trình đặt lịch, bước ${active + 1} trên ${BOOKING_INTAKE_STEPS.length}: ${BOOKING_INTAKE_STEPS[active] ?? ''}`}
-      style={progressStyles.track}
     >
-      {BOOKING_INTAKE_STEPS.map((label, index) => {
-        const done = index < active;
-        const current = index === active;
-        return (
-          <React.Fragment key={label}>
-            {index > 0 && (
-              <View
-                style={[
-                  progressStyles.connector,
-                  { backgroundColor: index <= active ? colors.primary : colors.border },
-                ]}
-              />
-            )}
-            <View style={progressStyles.step}>
+      <View style={progressStyles.dotRow}>
+        {BOOKING_INTAKE_STEPS.map((label, index) => {
+          const done = index < active;
+          const reached = index <= active;
+          return (
+            <React.Fragment key={label}>
+              {index > 0 && (
+                <View style={[progressStyles.connector, { backgroundColor: reached ? colors.primary : colors.border }]} />
+              )}
               <View
                 style={[
                   progressStyles.dot,
                   {
-                    backgroundColor: done || current ? colors.primary : colors.surface,
-                    borderColor: done || current ? colors.primary : colors.border,
+                    backgroundColor: reached ? colors.primary : colors.surface,
+                    borderColor: reached ? colors.primary : colors.border,
                   },
                 ]}
               >
-                <Text
-                  style={[
-                    progressStyles.dotText,
-                    { color: done || current ? colors.surface : colors.textSecondary },
-                  ]}
-                >
+                <Text style={[progressStyles.dotText, { color: reached ? colors.surface : colors.textSecondary }]}>
                   {done ? '✓' : String(index + 1)}
                 </Text>
               </View>
-              <Text
-                style={[
-                  progressStyles.stepLabel,
-                  { color: current ? colors.text : colors.textSecondary },
-                  current ? progressStyles.stepLabelActive : null,
-                ]}
-              >
-                {label}
-              </Text>
-            </View>
-          </React.Fragment>
-        );
-      })}
+            </React.Fragment>
+          );
+        })}
+      </View>
+      <View style={progressStyles.labelRow}>
+        {BOOKING_INTAKE_STEPS.map((label, index) => (
+          <Text
+            key={label}
+            style={[
+              progressStyles.stepLabel,
+              { color: index === active ? colors.text : colors.textSecondary },
+              index === active ? progressStyles.stepLabelActive : null,
+            ]}
+          >
+            {label}
+          </Text>
+        ))}
+      </View>
     </View>
   );
 }
@@ -262,6 +261,15 @@ export default function CustomerBookingCreateScreen() {
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [addresses, setAddresses] = useState<AddressData[]>([]);
   const [serviceId, setServiceId] = useState('');
+  // P012 device facts, bound to the service they were answered for (a service change starts blank).
+  const [deviceState, setDeviceState] = useState<{
+    serviceId: string; attrs: BookingDeviceAttributes; code: string | null; preview: CatalogPricingPreview | null;
+  }>({ serviceId: '', attrs: {}, code: null, preview: null });
+  const device = deviceState.serviceId === serviceId
+    ? deviceState
+    : { serviceId, attrs: {} as BookingDeviceAttributes, code: null, preview: null };
+  const patchDevice = (patch: Partial<Omit<typeof deviceState, 'serviceId'>>) =>
+    setDeviceState((d) => ({ ...(d.serviceId === serviceId ? d : { serviceId, attrs: {}, code: null, preview: null }), ...patch }));
   const [addressId, setAddressId] = useState('');
   const [description, setDescription] = useState(prefill?.description ?? '');
   const [bookingPhotos, setBookingPhotos] = useState<BookingPhotoDraft[]>([]);
@@ -551,7 +559,6 @@ export default function CustomerBookingCreateScreen() {
   const selectedAddress =
     addresses.find((address) => address.id === addressId) ?? null;
   const selectedAddressReady = addressReadyForBooking(selectedAddress);
-  const selectedPrice = resolveServicePrice(selectedService);
   const selectedPresentation = getServicePresentation(selectedService?.code);
   const selectedIsOtherService = isOtherService(selectedService);
   const descriptionSuggestions = getBookingDescriptionSuggestions(
@@ -565,6 +572,11 @@ export default function CustomerBookingCreateScreen() {
   const descriptionPlaceholder = selectedIsOtherService
     ? 'Ví dụ: Cửa tủ bếp bung bản lề, cần người đến kiểm tra và sửa'
     : 'Mô tả thiết bị và vấn đề cần sửa';
+  const isAiFlow = Boolean(prefill?.aiSessionId);
+  const showDeviceDetails = !isAiFlow && !!selectedService && isCatalogV2ServiceCode(selectedService.code);
+  const pricingReady = isCatalogV2PreviewReady({
+    service: selectedService, preview: device.preview, selectedVariantCode: device.code, isAiFlow,
+  });
   const reviewDisabled =
     isSubmitting ||
     durableBlocked ||
@@ -747,6 +759,7 @@ export default function CustomerBookingCreateScreen() {
         schedule: schedule ?? undefined,
         customerNote,
         aiSessionId: prefill?.aiSessionId ?? null,
+        ...(showDeviceDetails ? { deviceAttributes: device.attrs, selectedVariantCode: device.code } : {}),
         photos: bookingPhotos.map(({ uri, name, type, sizeBytes }) => ({
           uri,
           name,
@@ -1005,6 +1018,10 @@ export default function CustomerBookingCreateScreen() {
       Alert.alert('Chưa chọn dịch vụ', 'Hãy chọn dịch vụ cần sửa trước khi tiếp tục.');
       return;
     }
+    if (!pricingReady) {
+      Alert.alert('Đang xác nhận giá', 'Vui lòng chờ hệ thống xác nhận giá hoặc chọn Thử lại trước khi tiếp tục.');
+      return;
+    }
     setDescriptionTouched(true);
     if (!description.trim()) {
       descriptionInputRef.current?.focus();
@@ -1025,7 +1042,7 @@ export default function CustomerBookingCreateScreen() {
       return;
     }
     if (!schedule) {
-      setReviewError('Vui lòng chọn ngày và buổi (sáng hoặc chiều), hoặc chọn Tới ngay.');
+      setReviewError('Vui lòng chọn ngày và buổi (sáng, chiều hoặc tối), hoặc chọn Tới ngay.');
       return;
     }
     requestReview();
@@ -1122,6 +1139,7 @@ export default function CustomerBookingCreateScreen() {
           <View style={styles.bookingTopBar}>
             {backBtn}
             <View style={styles.bookingProgress}><BookingIntakeProgress active={1} colors={colors} /></View>
+            <View style={styles.bookingTopSpacer} />
           </View>
           <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>Chọn địa chỉ</Text>
         </View>
@@ -1145,6 +1163,7 @@ export default function CustomerBookingCreateScreen() {
               <BookingIntakeProgress active={bookingStage} colors={colors} />
             </View>
           )}
+          {!visibleCreatedBookingId && <View style={styles.bookingTopSpacer} />}
         </View>
         {durableBlocked && !isSubmitting && !visibleCreatedBookingId && !visibleUncertainAttempt && (
           <View style={styles.section}>
@@ -1253,11 +1272,7 @@ export default function CustomerBookingCreateScreen() {
                 <Text style={{ color: colors.text, fontWeight: '700' }}>
                   {selectedIsOtherService
                     ? 'Yêu cầu ngoài danh sách — kỹ thuật viên sẽ khảo sát và báo giá'
-                    : selectedService.pricingMode === 'fixed_price'
-                    ? `Giá cố định: ${selectedPrice.text}`
-                    : selectedService.pricingMode === 'inspection_required'
-                      ? `Cần khảo sát/báo giá: ${selectedPrice.text}`
-                      : selectedPrice.text}
+                    : servicePricingLabel(selectedService)}
                 </Text>
                 <Text style={[styles.note, { color: colors.textSecondary }]}>
                   {selectedIsOtherService
@@ -1266,6 +1281,19 @@ export default function CustomerBookingCreateScreen() {
                 </Text>
               </View>
             )}
+
+            {showDeviceDetails && selectedService ? (
+              <ServiceDeviceDetails
+                key={selectedService.id}
+                serviceId={selectedService.id}
+                deviceAttributes={device.attrs}
+                selectedVariantCode={device.code}
+                disabled={reviewDisabled}
+                onChangeAttributes={(attrs) => patchDevice({ attrs })}
+                onChangeVariantCode={(code) => patchDevice({ code })}
+                onPreview={(preview) => patchDevice({ preview })}
+              />
+            ) : null}
 
             <View
               onLayout={(event) => {
@@ -1622,7 +1650,7 @@ export default function CustomerBookingCreateScreen() {
         <BookingActionBar>
           {!visibleReviewSnapshot && !visibleCreatedBookingId && (
             bookingStage === 0
-              ? <BookingPrimaryAction label="Tiếp tục: Chọn địa chỉ" onPress={continueToAddress} disabled={reviewDisabled} colors={colors} />
+              ? <BookingPrimaryAction label="Tiếp tục: Chọn địa chỉ" onPress={continueToAddress} disabled={reviewDisabled || !pricingReady} colors={colors} />
               : !addressEditorOpen && <BookingPrimaryAction label={isSubmitting ? 'Đang gửi yêu cầu...'
                 : visibleUncertainAttempt ? 'Chờ xác minh yêu cầu' : 'Xem lại yêu cầu'}
                 onPress={continueToReview} disabled={reviewDisabled} colors={colors} />
@@ -1707,6 +1735,11 @@ export default function CustomerBookingCreateScreen() {
                 {service.name}
                 {serviceId === service.id ? ' ✓' : ''}
               </Text>
+              {servicePriceSummaryText(service.priceSummary) ? (
+                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                  {servicePriceSummaryText(service.priceSummary)?.label}
+                </Text>
+              ) : null}
             </TouchableOpacity>
           )}
           ListEmptyComponent={
@@ -1780,9 +1813,10 @@ export default function CustomerBookingCreateScreen() {
 const styles = StyleSheet.create({
   page: { flex: 1 },
   content: { padding: 16, paddingBottom: 32, gap: 16, flexGrow: 1 },
-  backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-  bookingTopBar: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 58 },
-  bookingProgress: { flex: 1, minWidth: 0 },
+  backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', alignSelf: 'flex-start' },
+  bookingTopBar: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  bookingProgress: { flex: 1, minWidth: 0, marginTop: 9 },
+  bookingTopSpacer: { width: 44, height: 44 },
   stageEdit: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   title: { fontSize: 22, lineHeight: 30, fontWeight: '700', marginVertical: 8 },
   stepEyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
@@ -1839,18 +1873,11 @@ const styles = StyleSheet.create({
 });
 
 const progressStyles = StyleSheet.create({
-  track: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 4 },
-  step: { alignItems: 'center', gap: 4, minWidth: 64 },
-  dot: {
-    width: 26,
-    height: 26,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  dotRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: '25%' },
+  dot: { width: 26, height: 26, borderRadius: 13, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginHorizontal: -13 },
   dotText: { fontSize: 13, lineHeight: 18, fontWeight: '700' },
-  stepLabel: { fontSize: 12, lineHeight: 16, fontWeight: '500', textAlign: 'center' },
+  connector: { flex: 1, height: 2, borderRadius: 1, marginHorizontal: 17 },
+  labelRow: { flexDirection: 'row', marginTop: 4 },
+  stepLabel: { flex: 1, fontSize: 12, lineHeight: 16, fontWeight: '500', textAlign: 'center' },
   stepLabelActive: { fontWeight: '700' },
-  connector: { flex: 1, height: 2, borderRadius: 1, marginTop: 12, marginHorizontal: 4 },
 });

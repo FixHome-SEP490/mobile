@@ -33,6 +33,8 @@ import { createJobsLoader, getCachedJobsState, technicianJobsUserId } from './te
 import { historicalSummaryDates, isHistoricalOrder, resolveJobsView, techOrderDetailTarget } from './technician-order-detail';
 import { findChatForBooking } from './technician-chat-shortcut';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useLiveRefresh } from '../../hooks/useLiveRefresh';
+import { listsNeedRead } from '../../services/live-kinds';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store/auth.store';
@@ -137,6 +139,9 @@ export default function TechnicianJobsScreen() {
     void loader.focus();
     return () => loader.blur();
   }, [loader]));
+  useLiveRefresh(['order:updated', 'invitation:updated'], (batch) => {
+    if (listsNeedRead(batch)) void loader.refresh(true);
+  }, undefined, { pollMs: 30_000 });
   // Switching back into this tab reuses the cached list silently (background
   // refresh, no visible spinner). Tapping the tab icon while already on it is
   // the explicit "reload" gesture — same pattern as CustomerBookingsScreen.
@@ -236,7 +241,6 @@ export default function TechnicianJobsScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
       <View style={styles.header}>
-        <Text style={styles.headerEyebrow}>ĐANG LÀM & LỊCH SỬ</Text>
         <Text style={styles.headerTitle} accessibilityRole="header">Công việc của tôi</Text>
         <View
           style={[
@@ -617,17 +621,10 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   header: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 12,
+    paddingBottom: 16,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
-  },
-  headerEyebrow: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: 4,
+    borderBottomColor: colors.border,
   },
   headerTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
   searchBox: {

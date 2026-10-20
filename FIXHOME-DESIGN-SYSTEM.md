@@ -286,7 +286,7 @@ Quy tắc bổ sung:
 
 - Customer tab giữ “Trang chủ”, “Đơn của tôi”, “Thông báo”, “Tài khoản”; màn bên trong tab tài khoản có thể là “Hồ sơ cá nhân”.
 - Technician tab giữ “Trang chủ”, “Công việc”, “Thông báo”, “Hồ sơ”; màn hồ sơ có thể là “Hồ sơ kỹ thuật viên”.
-  Ngoại lệ Mobile được duyệt tại SEP-136 ngày 12/10/2026: năm tab “Trang chủ”, “Lời mời”, “Công việc”, “Ví”, “Hồ sơ”; “Thông báo” mở qua chuông trên Trang chủ. “Lịch làm việc” hợp nhất khung giờ và ngày nghỉ; “Khu vực hoạt động” hợp nhất vị trí/bán kính và khu vực phục vụ. Web chưa đổi trong phạm vi này.
+  Ngoại lệ Mobile được duyệt tại SEP-136 ngày 12/10/2026: năm tab “Trang chủ”, “Lời mời”, “Công việc”, “Thông báo”, “Hồ sơ”; “Ví” mở từ Hồ sơ (đổi ngày 20/10/2026 theo yêu cầu PO); chuông trên Trang chủ vẫn mở “Thông báo”. “Lịch làm việc” hợp nhất khung giờ và ngày nghỉ; “Khu vực hoạt động” hợp nhất vị trí/bán kính và khu vực phục vụ. Web chưa đổi trong phạm vi này.
 - Web route metadata, heading, breadcrumb và browser title dùng cùng nguồn title; browser title theo mẫu `{Tiêu đề} | FixHome`.
 - `Board đơn sửa chữa` đổi thành “Bảng đơn sửa chữa”; `Workspace thực thi công việc` đổi thành “Chi tiết công việc”; `Công nợ Platform` đổi thành “Công nợ nền tảng”.
 - Mã đơn là metadata bên cạnh/dưới tiêu đề hoặc thuộc title template được định nghĩa chung; không khiến một nền tảng chỉ hiện mã còn nền tảng kia không cho biết đang xem thực thể gì.

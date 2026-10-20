@@ -25,7 +25,7 @@ export function createOrderReadCoordinator(deps: OrderReadDependencies) {
     const status = (error as { response?: { status?: number } } | null)?.response?.status;
     return status === 401 || status === 403;
   }
-  async function refreshOrderSession(key: OrderSessionKey, _reason: string): Promise<void> {
+  async function refreshOrderSession(key: OrderSessionKey, reason: string): Promise<void> {
     if (!matches(key)) return;
     const active = flights.get('order'); if (active) return active;
     const previous = snapshot!;
@@ -35,10 +35,15 @@ export function createOrderReadCoordinator(deps: OrderReadDependencies) {
     // No unopened resource is fetched; stale mutation targets cannot remain ready.
     generation++; flights.clear();
     const gen = generation, requestSeq = ++seq;
-    const resources = { ...previous.resources };
-    for (const kind of opened) resources[kind] = { status: 'loading', requestSeq };
-    const terminal = previous.order.status === 'ready' && ['COMPLETED', 'CANCELLED'].includes(previous.order.data.status);
-    snapshot = { ...previous, resources, order: terminal ? previous.order : { status: 'loading', requestSeq } }; publish();
+    // A live (server push / poll) re-read is quiet: the screen keeps showing the data it has until the new data
+    // arrives, so nothing flashes to a loading state. A failed quiet read changes nothing; the next push or poll retries.
+    const quiet = reason === 'live' && previous.order.status === 'ready';
+    if (!quiet) {
+      const resources = { ...previous.resources };
+      for (const kind of opened) resources[kind] = { status: 'loading', requestSeq };
+      const terminal = previous.order.status === 'ready' && ['COMPLETED', 'CANCELLED'].includes(previous.order.data.status);
+      snapshot = { ...previous, resources, order: terminal ? previous.order : { status: 'loading', requestSeq } }; publish();
+    }
     const request = (async () => {
       try {
         const order = normalizeSessionOrder(await deps.readOrder(key), key.serviceOrderId);
@@ -57,10 +62,11 @@ export function createOrderReadCoordinator(deps: OrderReadDependencies) {
         const terminal = old && ['COMPLETED', 'CANCELLED'].includes(old.status);
         snapshot = { ...snapshot!, access: 'current', order: readyResource(terminal && !['COMPLETED', 'CANCELLED'].includes(order.status) ? old : order, requestSeq, (deps.now ?? Date.now)()) };
         publish();
-        if (matches(key, gen)) await Promise.all(opened.map(kind => loadResource(key, kind)));
+        if (matches(key, gen)) await Promise.all(opened.map(kind => loadResource(key, kind, quiet)));
       } catch (error) {
         if (!matches(key, gen)) return;
         if (deny(error)) { purge('revoked'); return; }
+        if (quiet) return;
         // Known terminal remains terminal even if an auxiliary refresh fails.
         if (previous.order.status === 'ready' && ['COMPLETED', 'CANCELLED'].includes(previous.order.data.status)) snapshot = { ...snapshot!, order: previous.order };
         else snapshot = { ...snapshot!, order: { status: 'error', requestSeq, error: 'unavailable' } };
@@ -73,11 +79,12 @@ export function createOrderReadCoordinator(deps: OrderReadDependencies) {
     flights.set('order', request);
     try { await request; } finally { if (flights.get('order') === request) flights.delete('order'); }
   }
-  async function loadResource(key: OrderSessionKey, kind: OrderResourceKind): Promise<void> {
+  async function loadResource(key: OrderSessionKey, kind: OrderResourceKind, quiet = false): Promise<void> {
     if (!matches(key) || snapshot?.access !== 'current' || snapshot.order.status !== 'ready') return;
     const active = flights.get(kind); if (active) return active;
     const gen = generation, requestSeq = ++seq;
-    snapshot = { ...snapshot, resources: { ...snapshot.resources, [kind]: { status: 'loading', requestSeq } } }; publish();
+    const keep = quiet && snapshot.resources[kind].status === 'ready';
+    if (!keep) { snapshot = { ...snapshot, resources: { ...snapshot.resources, [kind]: { status: 'loading', requestSeq } } }; publish(); }
     const request = (async () => {
       try {
         const payload = await deps.readResource(key, kind);
@@ -87,6 +94,7 @@ export function createOrderReadCoordinator(deps: OrderReadDependencies) {
       } catch (error) {
         if (!matches(key, gen)) return;
         if (deny(error)) { purge('revoked'); return; }
+        if (keep) return;
         snapshot = { ...snapshot!, resources: { ...snapshot!.resources, [kind]: { status: 'error', requestSeq, error: 'unavailable' } } }; publish();
       }
     })();

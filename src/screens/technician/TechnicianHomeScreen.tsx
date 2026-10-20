@@ -36,6 +36,8 @@ import { createHomeOrdersReadGuard, pickPriorityJob, weeklyStats } from './techn
 import { serviceOrderStatusView } from './technician-status';
 import { techOrderDetailTarget } from './technician-order-detail';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useLiveRefresh } from '../../hooks/useLiveRefresh';
+import { listsNeedRead } from '../../services/live-kinds';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList, TechnicianTabParamList } from '../../types';
@@ -175,6 +177,9 @@ export default function TechnicianHomeScreen() {
   };
 
   const displayName = user?.fullName || 'Kỹ thuật viên';
+
+  // PO 18/10/2026: a new job, a status change or a hand-over shows on the overview at once; polls only while the socket is down.
+  useLiveRefresh(['order:updated', 'invitation:updated'], (batch) => { if (listsNeedRead(batch)) void loadOrders(); }, undefined, { pollMs: 60_000 });
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>

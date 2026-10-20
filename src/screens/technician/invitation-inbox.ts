@@ -193,6 +193,8 @@ export function createInvitationInbox(
   let requestGeneration = 0;
   let ownerId: string | null = null;
   let unsubscribe: (() => void) | undefined;
+  // Owner whose list is already on screen: coming back to the tab keeps it and reads quietly instead of blanking it.
+  let shownOwnerId: string | null = null;
 
   const current = () =>
     active && ownerId !== null && session.getUserId() === ownerId;
@@ -526,7 +528,9 @@ export function createInvitationInbox(
       blur();
       ownerId = session.getUserId();
       active = ownerId !== null;
-      state = { ...initialInboxState, loading: active };
+      const keep = ownerId !== null && ownerId === shownOwnerId && !state.loading && !state.error;
+      state = keep ? state : { ...initialInboxState, loading: active };
+      shownOwnerId = ownerId;
       write(state);
 
       unsubscribe = session.subscribe(() => {
@@ -534,11 +538,12 @@ export function createInvitationInbox(
         // including renewal/logout-login of the same User ID.
         const wasActive = active;
         blur();
+        shownOwnerId = null;
         state = { ...initialInboxState, loading: false };
         if (wasActive) write(state);
       });
 
-      return load(true);
+      return load(!keep);
     },
     blur,
   };

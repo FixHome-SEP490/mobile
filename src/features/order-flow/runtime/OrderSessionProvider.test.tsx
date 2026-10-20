@@ -32,3 +32,17 @@ it('restored unresolved marker blocks new writes before session becomes ready', 
   expect(coordinator.getSnapshot()?.pendingIntent).toBe(true);
   act(() => renderer.unmount());
 });
+it('clears a leftover pre-repair marker once the order is UNDER_REPAIR but keeps later-stage markers', async () => {
+  useAuthStore.getState().setAuth('fixture', user);
+  const base = { userId: 'customer', role: 'customer', serviceOrderId: 'o', entityId: 'e', dispatchedAt: 1, status: 'unknown' };
+  const journal = createOrderCommandJournal({ getItem: async () => JSON.stringify([
+    { ...base, intentId: 'a', operation: 'before-upload', entityId: 'a' },
+    { ...base, intentId: 'b', operation: 'extra-create', entityId: 'b' },
+  ]), setItem: async () => undefined });
+  const coordinator = createOrderReadCoordinator({ readOrder: async () => ({ id: 'o', status: 'UNDER_REPAIR' }), readResource: async () => [] });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => { renderer = TestRenderer.create(<OrderSessionProvider serviceOrderId="o" coordinator={coordinator} journal={journal}>{null}</OrderSessionProvider>); });
+  const status = (id: string) => journal.list('customer').find(m => m.intentId === id)?.status;
+  expect(status('a')).toBe('resolved'); expect(status('b')).toBe('unknown');
+  act(() => renderer.unmount());
+});

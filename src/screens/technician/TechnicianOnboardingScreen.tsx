@@ -294,18 +294,18 @@ export default function TechnicianOnboardingScreen() {
 
   const submit = () => void run(() => technicianOnboardingApi.submit(), 5);
 
+  const performLogout = async () => {
+    await authApi.logout();
+    logout();
+    setTimeout(() => navigation.navigate('Auth'), 100);
+  };
+
   const handleLogout = () => {
+    // Alert.alert does not open on React Native Web.
+    if (Platform.OS === 'web') { void performLogout(); return; }
     Alert.alert('Đăng xuất', 'Bạn có chắc muốn đăng xuất?', [
       { text: 'Hủy', style: 'cancel' },
-      {
-        text: 'Đăng xuất',
-        style: 'destructive',
-        onPress: async () => {
-          await authApi.logout();
-          logout();
-          setTimeout(() => navigation.navigate('Auth'), 100);
-        },
-      },
+      { text: 'Đăng xuất', style: 'destructive', onPress: performLogout },
     ]);
   };
 

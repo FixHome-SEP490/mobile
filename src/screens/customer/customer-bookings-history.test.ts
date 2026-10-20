@@ -4,8 +4,10 @@ import {
   customerBookingsUserId,
   homeResumeTarget,
   initialHistoryState,
+  isRepairCard,
   linkedReplacementState,
   mergeHistory,
+  requestStage,
   orderTotalText,
   resolveBookingsView,
   resumeTargetFor,
@@ -654,5 +656,62 @@ describe('homeResumeTarget', () => {
       [booking({ id: 'booking-1', status: 'SUBMITTED', serviceOrderId: undefined })],
       [order({ id: 'order-1', bookingId: 'booking-1', status: 'COMPLETED' })],
     )).toBeNull();
+  });
+});
+
+describe('status filters like the web: all, in progress, completed, cancelled', () => {
+  const state = (): BookingsHistoryState => ({
+    ...initialHistoryState, loading: false, page: 1, ordersPage: 1,
+    bookings: [
+      booking({ id: 'b-open', status: 'MATCHING' }),
+      booking({ id: 'b-cancelled', status: 'CANCELLED' }),
+    ],
+    orders: [
+      order({ id: 'o-active', bookingId: 'x1', status: 'UNDER_REPAIR' }),
+      order({ id: 'o-done', bookingId: 'x2', status: 'COMPLETED' }),
+      order({ id: 'o-cancelled', bookingId: 'x3', status: 'CANCELLED' }),
+    ],
+    total: 2, ordersTotal: 3,
+  });
+  const ids = (tab: 'all' | 'in_progress' | 'completed' | 'cancelled') =>
+    resolveBookingsView(state(), '', tab).filtered.map((card) => (card.kind === 'order' ? card.order.id : card.booking.id)).sort();
+
+  it('puts each card in exactly one status filter, cancelled ones apart from completed', () => {
+    expect(ids('in_progress')).toEqual(['b-open', 'o-active']);
+    expect(ids('completed')).toEqual(['o-done']);
+    expect(ids('cancelled')).toEqual(['b-cancelled', 'o-cancelled']);
+    expect(ids('all')).toHaveLength(5);
+  });
+});
+
+describe('isRepairCard: a repair order is one a technician holds', () => {
+  const linked = (bookingStatus: BookingItem['status'], orderStatus: ServiceOrderItem['status']) => ({
+    kind: 'booking' as const,
+    booking: booking({ id: 'b-split', status: bookingStatus }),
+    order: order({ id: 'o-split', bookingId: 'b-split', status: orderStatus }),
+  });
+  it.each([
+    ['MATCHED', 'ACCEPTED', true], ['MATCHED', 'UNDER_REPAIR', true], ['MATCHED', 'COMPLETED', true],
+    ['MATCHING', 'ACCEPTED', false], ['CLOSED', 'EN_ROUTE', false],
+  ] as const)('booking %s + order %s -> repair %s', (b, o, expected) => {
+    expect(isRepairCard(linked(b, o))).toBe(expected);
+  });
+  it('keeps standalone orders as repairs and unlinked bookings as requests', () => {
+    expect(isRepairCard({ kind: 'order', order: order({ id: 'o-solo' }) })).toBe(true);
+    expect(isRepairCard({ kind: 'booking', booking: booking({ id: 'b-solo' }), order: null })).toBe(false);
+  });
+});
+
+describe('requestStage: stage chips of the requests tab', () => {
+  const req = (status: BookingItem['status'], linkedOrder: ServiceOrderItem | null = null) =>
+    ({ kind: 'booking' as const, booking: booking({ id: 'b-stage', status }), order: linkedOrder });
+  it.each([
+    ['SUBMITTED', 'sent'], ['MATCHING', 'sent'], ['MATCHED', 'sent'], ['PENDING', 'sent'], ['CONFIRMED', 'sent'],
+    ['CLOSED', 'no_tech'], ['CANCELLED', 'cancelled'],
+  ] as const)('booking %s -> %s', (status, stage) => {
+    expect(requestStage(req(status))).toBe(stage);
+  });
+  it('an order that lost its technician is still without a technician', () => {
+    expect(requestStage(req('MATCHING', order({ id: 'o-stage', bookingId: 'b-stage', status: 'ACCEPTED' })))).toBe('no_tech');
   });
 });

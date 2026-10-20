@@ -459,10 +459,11 @@ export function createWalletController(
   }
 
   function focus(): Promise<void> {
-    state = { ...initialWalletState };
-    write(state);
+    // Coming back to the tab keeps the wallet on screen and reads it again quietly; only the first visit shows the loader.
+    const shown = state.summary !== null && !state.error;
+    if (!shown) { state = { ...initialWalletState }; write(state); }
     return Promise.all([
-      loadSummary(),
+      loadSummary(shown),
       loadTransactions(1),
       loadWithdrawals(1),
       loadBankAccount(),

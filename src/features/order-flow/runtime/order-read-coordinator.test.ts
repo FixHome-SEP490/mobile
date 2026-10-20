@@ -119,3 +119,14 @@ it('failed order refresh keeps previously opened facts unavailable rather than s
   offline = true; await c.refreshOrderSession(key, 'refresh');
   expect(c.getSnapshot()?.order.status).toBe('error'); expect(c.getSnapshot()?.resources.extras.status).toBe('error');
 });
+it('live refresh is quiet: ready data stays visible while reading and survives a failed read', async () => {
+  const late = deferred<unknown>(); let fail = false;
+  const c = createOrderReadCoordinator({ readOrder: async () => { if (fail) throw new Error('offline'); return late.promise; }, readResource: async () => [] });
+  c.activate(key); const first = c.refreshOrderSession(key, 'focus'); late.resolve(row); await first;
+  await c.loadResource(key, 'evidence');
+  const seen: string[] = []; c.subscribe(() => seen.push(`${c.getSnapshot()?.order.status}/${c.getSnapshot()?.resources.evidence.status}`));
+  await c.refreshOrderSession(key, 'live');
+  expect(seen.every(s => s === 'ready/ready')).toBe(true);
+  fail = true; await c.refreshOrderSession(key, 'live');
+  expect(c.getSnapshot()?.order.status).toBe('ready'); expect(c.getSnapshot()?.resources.evidence.status).toBe('ready');
+});

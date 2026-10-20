@@ -2,7 +2,7 @@ import { useAppTheme } from '../../constants/theme';
 import { useTabBarClearance } from '../../hooks/useTabBarClearance';
 import { CUSTOMER_UI_ARTWORK } from '../../constants/customer-artwork';
 // src/screens/customer/CustomerHomeScreen.tsx
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MessageCircle } from 'lucide-react-native';
 import {
   View,
@@ -17,6 +17,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useLiveRefresh } from '../../hooks/useLiveRefresh';
+import { listsNeedRead } from '../../services/live-kinds';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store';
@@ -25,12 +27,10 @@ import { usersApi, AddressData } from '../../api/users.api';
 import { bookingsApi } from '../../api/bookings.api';
 import { ordersApi } from '../../api/orders.api';
 import { homeResumeTarget, type HomeResumeItem } from './customer-bookings-history';
-import {
-  HOME_POPULAR_SERVICE_TARGETS,
-  getHomePopularGridColumns,
-} from './customer-home-pager';
+import { chunkHomePopularServices, getHomePopularGridColumns, getHomePopularPagerPage } from './customer-home-pager';
+import { homeCategories, type HomeCategory } from './home-categories';
+import { servicesApi } from '../../api/services.api';
 import { orderDetailTarget } from './customer-order-detail';
-import { OTHER_SERVICE_CATEGORY_CODE } from './service-catalog';
 import ServiceArtwork from '../../components/customer/ServiceArtwork';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { useChatUnreadCount } from '../../hooks/useChatUnreadCount';
@@ -41,63 +41,6 @@ import { BottomSheetModal, BottomSheetBackdrop, BottomSheetFlatList } from '@gor
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 
-interface PopularServiceItem {
-  code: string;
-  name: string;
-  // Local matching hint for the live catalog response; never a server query.
-  serviceAlias: string;
-  categoryCode?: string;
-}
-
-const getPopularServices = (): PopularServiceItem[] => [
-  {
-    code: 'VE_SINH_DIEU_HOA_1HP',
-    name: 'Vệ sinh máy lạnh',
-    serviceAlias: 'Vệ sinh máy lạnh',
-    categoryCode: HOME_POPULAR_SERVICE_TARGETS[0].categoryCode,
-  },
-  {
-    code: 'THAY_VOI_NUOC',
-    name: 'Thay vòi nước',
-    serviceAlias: 'Thay vòi nước',
-    categoryCode: HOME_POPULAR_SERVICE_TARGETS[1].categoryCode,
-  },
-  {
-    code: 'THAY_CONG_TAC_DIEN',
-    name: 'Thay công tắc điện',
-    serviceAlias: 'Thay công tắc điện',
-    categoryCode: HOME_POPULAR_SERVICE_TARGETS[2].categoryCode,
-  },
-  {
-    code: 'SUA_RO_RI_NUOC',
-    name: 'Sửa rò rỉ nước',
-    serviceAlias: 'Sửa rò rỉ nước',
-    categoryCode: HOME_POPULAR_SERVICE_TARGETS[3].categoryCode,
-  },
-  {
-    code: 'LAP_TV_GIA_TREO',
-    name: 'Lắp TV lên giá treo sẵn',
-    serviceAlias: 'Lắp TV lên giá treo sẵn',
-  },
-  {
-    code: 'SUA_BEP_TU',
-    name: 'Sửa bếp từ',
-    serviceAlias: 'Sửa bếp từ',
-    categoryCode: HOME_POPULAR_SERVICE_TARGETS[5].categoryCode,
-  },
-  {
-    code: 'SUA_MAY_GIAT',
-    name: 'Sửa máy giặt',
-    serviceAlias: 'Sửa máy giặt',
-    categoryCode: HOME_POPULAR_SERVICE_TARGETS[6].categoryCode,
-  },
-  {
-    code: 'SUA_TU_LANH',
-    name: 'Sửa tủ lạnh',
-    serviceAlias: 'Sửa tủ lạnh',
-    categoryCode: HOME_POPULAR_SERVICE_TARGETS[7].categoryCode,
-  },
-];
 
 export default function CustomerHomeScreen() {
   const { colors, spacing, fontSize } = useAppTheme();
@@ -109,7 +52,21 @@ export default function CustomerHomeScreen() {
     : 68;
   const stackHero = fontScale >= 1.2;
   const styles = getStyles(colors, spacing, fontSize, fontScale, windowWidth, popularColumns, heroArtWidth);
-  const POPULAR_SERVICES = useMemo(() => getPopularServices(), []);
+  // Big categories from the catalog (Catalog V2, 19/10/2026); tapping one opens its services.
+  const [categories, setCategories] = useState<HomeCategory[]>([]);
+  const [categoriesState, setCategoriesState] = useState<'loading' | 'ready' | 'failed'>('loading');
+  const [categoriesTick, setCategoriesTick] = useState(0);
+  // Two rows per page, swiped sideways, so thirteen categories do not push the rest of Home far down.
+  const categoryPages = chunkHomePopularServices(categories, popularColumns * 2);
+  const [categoryPage, setCategoryPage] = useState(0);
+  useEffect(() => {
+    let live = true;
+    servicesApi.getCategories().then(
+      (list) => { if (live) { setCategories(homeCategories(list)); setCategoriesState('ready'); } },
+      () => { if (live) setCategoriesState('failed'); },
+    );
+    return () => { live = false; };
+  }, [categoriesTick]);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const handleScroll = useScrollHideTabBar();
   const chatUnread = useChatUnreadCount();
@@ -167,9 +124,11 @@ export default function CustomerHomeScreen() {
 
   // Active-order resume (read-only): at most one concise card from real
   // Booking/Order data. Hidden on error/unknown data — never a false claim.
+  const [resumeTick, setResumeTick] = useState(0);
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
+      void resumeTick;
       const session = useAuthStore.getState();
       const ownerId = session.user?.id ?? null;
       if (!session.isAuthenticated || session.user?.role !== UserRole.CUSTOMER || !ownerId) {
@@ -191,7 +150,7 @@ export default function CustomerHomeScreen() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [resumeTick]),
   );
 
   const openResume = useCallback(() => {
@@ -206,13 +165,9 @@ export default function CustomerHomeScreen() {
   }, [navigation, resume]);
 
 
-  const handleServicePress = (service: PopularServiceItem) => {
+  const handleCategoryPress = (category: HomeCategory) => {
     Haptics.selectionAsync();
-    navigation.navigate('CustomerServices', {
-      serviceCode: service.code,
-      serviceAlias: service.serviceAlias,
-      categoryCode: service.categoryCode,
-    });
+    navigation.navigate('CustomerServices', { categoryCode: category.code });
   };
 
   const greetUser = () => {
@@ -222,6 +177,8 @@ export default function CustomerHomeScreen() {
     if (hour < 18) return name ? `Chào buổi chiều, ${name}` : 'Chào buổi chiều';
     return name ? `Chào buổi tối, ${name}` : 'Chào buổi tối';
   };
+
+  useLiveRefresh(['booking:updated', 'invitation:updated', 'order:updated'], (batch) => { if (listsNeedRead(batch)) setResumeTick((tick) => tick + 1); }, undefined, { pollMs: 60_000 });
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -379,22 +336,55 @@ export default function CustomerHomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Eight production-linked services remain visible in the same compact grid. */}
-        <View style={styles.servicesGrid} testID="popular-services-grid">
-          {POPULAR_SERVICES.map((service) => (
+        {/* The big categories, two rows per page; the services inside open on tap. */}
+        <View testID="popular-services-grid">
+          <ScrollView
+            horizontal
+            pagingEnabled
+            testID="popular-services-pager"
+            showsHorizontalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onMomentumScrollEnd={(event) =>
+              setCategoryPage(getHomePopularPagerPage(event.nativeEvent.contentOffset.x, windowWidth, categoryPages.length))}
+          >
+            {categoryPages.map((page, pageIndex) => (
+              <View key={pageIndex} style={[styles.servicesGrid, { width: windowWidth }]} testID={`popular-services-page-${pageIndex}`}>
+                {page.map((category) => (
+                  <TouchableOpacity
+                    key={category.id}
+                    testID={`home-category-${category.code}`}
+                    style={[styles.serviceItem, { width: `${100 / popularColumns}%` }]}
+                    onPress={() => handleCategoryPress(category)}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityLabel={category.name}
+                    accessibilityHint={`Xem các dịch vụ ${category.name}`}
+                  >
+                    <ServiceArtwork code={category.artCode} name={category.name} size={popularArtSize} />
+                    <Text style={styles.serviceName} numberOfLines={2}>{category.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ))}
+          </ScrollView>
+          {categoryPages.length > 1 && (
+            <View style={styles.pagerDots} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              {categoryPages.map((_, index) => (
+                <View key={index} testID={`popular-services-dot-${index}`} style={[styles.pagerDot, index === categoryPage && styles.pagerDotActive]} />
+              ))}
+            </View>
+          )}
+          {categoriesState === 'failed' && (
             <TouchableOpacity
-              key={service.code}
-              style={[styles.serviceItem, { width: `${100 / popularColumns}%` }]}
-              onPress={() => handleServicePress(service)}
-              activeOpacity={0.75}
+              testID="home-categories-retry"
+              style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+              onPress={() => { setCategoriesState('loading'); setCategoriesTick((tick) => tick + 1); }}
               accessibilityRole="button"
-              accessibilityLabel={service.name}
-              accessibilityHint={`Tìm ${service.name} trong danh mục`}
+              accessibilityLabel="Tải lại danh mục dịch vụ"
             >
-              <ServiceArtwork code={service.code} name={service.name} size={popularArtSize} />
-              <Text style={styles.serviceName} numberOfLines={2}>{service.name}</Text>
+              <Text style={styles.viewAllText}>Chưa tải được danh mục. Chạm để thử lại</Text>
             </TouchableOpacity>
-          ))}
+          )}
         </View>
 
         {/* 7. AI entry — Codex "Chưa biết bắt đầu từ đâu?" */}
@@ -419,14 +409,9 @@ export default function CustomerHomeScreen() {
         <TouchableOpacity
           style={styles.otherServiceCard}
           activeOpacity={0.8}
-          onPress={() =>
-            navigation.navigate('CustomerServices', {
-              categoryCode: OTHER_SERVICE_CATEGORY_CODE,
-              query: 'Khác',
-            })
-          }
+          onPress={() => navigation.navigate(isGuest ? 'Auth' : 'CustomerAIDiagnosis')}
           accessibilityRole="button"
-          accessibilityLabel="Đặt dịch vụ khác"
+          accessibilityLabel="Nhờ trợ lý AI tìm dịch vụ"
         >
           <View style={styles.otherServiceIcon}>
             <Ionicons name="ellipsis-horizontal" size={24} color={colors.primaryStrong} />
@@ -860,7 +845,24 @@ const getStyles = (
     justifyContent: 'flex-start',
     paddingVertical: 4,
     paddingHorizontal: 4,
-    minHeight: 96,
+    minHeight: 92,
+  },
+  pagerDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+    paddingTop: 2,
+    paddingBottom: 4,
+  },
+  pagerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.border,
+  },
+  pagerDotActive: {
+    width: 16,
+    backgroundColor: colors.primaryStrong,
   },
   serviceName: {
     fontSize: fontScale >= 1.2 ? 12 : 11,

@@ -153,7 +153,7 @@ export default function CustomerAnimatedBottomBar(props: CustomerAnimatedBottomB
             : `Khách: ${label}, cần đăng nhập`,
           accessibilityHint: routeName === 'Home' ? undefined : 'Đăng nhập để mở mục này',
           isFocused,
-          icon: <Icon size={25} color={isFocused && !sheetOpen ? colors.surface : colors.textSecondary} />,
+          icon: <Icon size={25} color={isFocused && !sheetOpen ? colors.primaryStrong : colors.textSecondary} />,
         };
       })
     : CUSTOMER_TABS.flatMap((routeName) => {
@@ -181,7 +181,7 @@ export default function CustomerAnimatedBottomBar(props: CustomerAnimatedBottomB
           isFocused,
           icon: Icon?.({
             focused: isFocused,
-            color: isFocused && !sheetOpen ? colors.surface : colors.textSecondary,
+            color: isFocused && !sheetOpen ? colors.primaryStrong : colors.textSecondary,
             size: 25,
           }) ?? null,
           badgeCount,
@@ -267,7 +267,7 @@ export default function CustomerAnimatedBottomBar(props: CustomerAnimatedBottomB
             indicatorStyle,
           ]}
         >
-          <LinearGradient colors={['#60A5FA', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.indicatorSurface} />
+          <View style={styles.indicatorSurface} />
         </Animated.View>
 
         {tabs.slice(0, 2).map((tab) => (
@@ -459,15 +459,12 @@ function createStyles(
       borderRadius: 32,
       padding: 6,
     },
+    // Soft tint instead of a second solid blue circle: the booking action stays the one strong element.
     indicatorSurface: {
       flex: 1,
       width: '100%',
       borderRadius: 26,
-      shadowColor: colors.primaryStrong,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 5,
+      backgroundColor: colors.primaryTint,
     },
     tab: {
       flex: 1,
@@ -534,6 +531,8 @@ function createStyles(
       borderRadius: 28,
       alignItems: 'center',
       justifyContent: 'center',
+      borderWidth: 3,
+      borderColor: colors.surface,
       shadowColor: colors.primaryStrong,
       shadowOffset: { width: 0, height: 5 },
       shadowOpacity: 0.28,
@@ -544,9 +543,9 @@ function createStyles(
       opacity: 0.9,
     },
     actionSurface: {
-      width: 56,
-      height: 56,
-      borderRadius: 28,
+      width: 50,
+      height: 50,
+      borderRadius: 25,
       alignItems: 'center',
       justifyContent: 'center',
     },

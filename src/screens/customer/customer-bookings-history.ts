@@ -90,6 +90,11 @@ export type HistoryCard =
   | { kind: 'booking'; booking: BookingItem; order: ServiceOrderItem | null }
   | { kind: 'order'; order: ServiceOrderItem };
 
+/** A repair order is one a technician currently holds (or finished); an order that lost its technician is a booking request again. */
+export function isRepairCard(card: HistoryCard): boolean {
+  return card.kind === 'order' || (card.order !== null && linkedReplacementState(card.booking, card.order) === null);
+}
+
 /**
  * Merge customer-owned bookings with authoritative service orders.
  * An order links to at most one booking via order.bookingId; orders whose
@@ -104,6 +109,16 @@ export function mergeHistory(bookings: BookingItem[], orders: ServiceOrderItem[]
   });
   for (const order of remaining.values()) cards.push({ kind: 'order', order });
   return cards;
+}
+
+export type RequestStage = 'no_tech' | 'sent' | 'cancelled';
+
+/** The stage of a booking request, for the filter chips of the requests tab. */
+export function requestStage(card: HistoryCard): RequestStage {
+  if (card.kind !== 'booking') return 'sent';
+  if (card.order !== null) return 'no_tech';
+  const status = String(card.booking.status).toUpperCase();
+  return status === 'CANCELLED' ? 'cancelled' : status === 'CLOSED' ? 'no_tech' : 'sent';
 }
 
 function dedupeBookings(existing: BookingItem[], incoming: BookingItem[]): BookingItem[] {
@@ -134,12 +149,13 @@ function mergeOrdersPage(existing: ServiceOrderItem[], rows: ServiceOrderItem[],
   const orders = dedupeOrders(existing, rows);
   return {
     orders,
-    ordersTotal: rows.length === 0 ? orders.length : total,
+    ordersTotal: orders.length === existing.length ? orders.length : total,
     ordersPage: page,
   };
 }
 
-export type BookingsTab = 'all' | 'in_progress' | 'completed';
+export type BookingsTab = 'all' | 'in_progress' | 'completed' | 'cancelled';
+type Bucket = Exclude<BookingsTab, 'all'>;
 export type BookingsEmptyNote = 'no-match' | 'more-pages';
 
 export interface BookingsView {
@@ -158,21 +174,22 @@ export interface BookingsView {
   ordersCoverageText: string | null;
 }
 
-function orderBucket(status: CanonicalOrderStatus): 'in_progress' | 'completed' | null {
+function orderBucket(status: CanonicalOrderStatus): Bucket | null {
   const s = String(status).toUpperCase();
   if (['ACCEPTED', 'EN_ROUTE', 'UNDER_REPAIR', 'IN_PROGRESS'].includes(s)) return 'in_progress';
   if (s === 'COMPLETED') return 'completed';
+  if (s === 'CANCELLED') return 'cancelled';
   return null;
 }
 
-function bookingBucket(status: BookingItem['status']): 'in_progress' | 'completed' | null {
+function bookingBucket(status: BookingItem['status']): Bucket | null {
   const s = String(status).toUpperCase();
   if (['SUBMITTED', 'MATCHING', 'MATCHED', 'PENDING', 'CONFIRMED', 'CLOSED'].includes(s)) return 'in_progress';
-  if (s === 'CANCELLED') return 'completed';
+  if (s === 'CANCELLED') return 'cancelled';
   return null;
 }
 
-function cardBucket(card: HistoryCard): 'in_progress' | 'completed' | null {
+function cardBucket(card: HistoryCard): Bucket | null {
   if (card.kind === 'order') return orderBucket(card.order.status);
   if (card.order) return orderBucket(card.order.status);
   return bookingBucket(card.booking.status);
@@ -211,8 +228,7 @@ export function resolveBookingsView(
 ): BookingsView {
   const cards = mergeHistory(state.bookings, state.orders);
   const filtered = cards.filter((card) => {
-    if (activeTab === 'in_progress' && cardBucket(card) !== 'in_progress') return false;
-    if (activeTab === 'completed' && cardBucket(card) !== 'completed') return false;
+    if (activeTab !== 'all' && cardBucket(card) !== activeTab) return false;
     return matchesSearch(card, searchQuery);
   });
   const showLoadMore = state.bookings.length < state.total;
@@ -422,9 +438,12 @@ export function createBookingsHistoryLoader(
       try {
         const result = await getBookingsPage(nextPage, pageSize);
         if (!valid()) return;
+        const merged = dedupeBookings(state.bookings, result.data);
+        // A page that adds nothing (empty, or only rows already held) ends the list: the screen loads
+        // further pages by itself while scrolling, so inconsistent totals must not promise pages forever.
         publish({
-          bookings: dedupeBookings(state.bookings, result.data),
-          total: result.total,
+          bookings: merged,
+          total: merged.length === state.bookings.length ? merged.length : result.total,
           page: nextPage,
         });
       } catch (error) {

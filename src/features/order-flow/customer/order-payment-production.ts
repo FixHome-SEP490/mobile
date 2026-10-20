@@ -15,6 +15,6 @@ export function authenticatedM6Key(runtime: M6OrderRuntime, role: OrderRole) {
 }
 export function createProductionOrderPaymentController(runtime: M6OrderRuntime) {
   return createOrderPaymentController({ ...runtime, getKey: () => authenticatedM6Key(runtime, 'customer'), newIntentId: newEntryIntentId,
-    transport: { payWallet: ordersApi.payInvoiceWithWallet, createVnpayUrl: ordersApi.createVnpayUrl,
+    transport: { payWallet: ordersApi.payInvoiceWithWallet, createVnpayUrl: ordersApi.createVnpayUrl, confirmNoCharge: ordersApi.confirmNoCharge,
       confirmCash: ordersApi.confirmCashSettlement, readWallet: () => customerWalletApi.getSummary(), openUrl: url => WebBrowser.openAuthSessionAsync(url, 'fixhome://') } });
 }

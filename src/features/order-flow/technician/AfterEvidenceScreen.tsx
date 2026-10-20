@@ -213,6 +213,8 @@ export default function AfterEvidenceScreen() {
       </View>
       {revoked ? (
         <ReadOnlyNotice>Quyền xem đơn đã thay đổi, phân công không còn thuộc về bạn hoặc đơn đã qua bước sửa chữa. Bản nháp ảnh đã được xóa; không có thao tác nào được gửi.</ReadOnlyNotice>
+      ) : snapshot?.resources.evidence.status === 'error' ? (
+        <ReadOnlyNotice tone="error">Chưa tải được danh sách ảnh từ máy chủ. Kiểm tra kết nối, ứng dụng sẽ tự tải lại.</ReadOnlyNotice>
       ) : !evidenceReady ? (
         <ReadOnlyNotice>Đang tải danh sách ảnh từ máy chủ. Mọi thao tác chụp, gửi và xóa đều khóa cho đến khi dữ liệu ảnh đầy đủ.</ReadOnlyNotice>
       ) : (
