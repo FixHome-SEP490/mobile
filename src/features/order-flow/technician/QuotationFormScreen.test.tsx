@@ -173,9 +173,7 @@ it('catalog failure is an error with retry and a mismatched part never fills the
   await act(async () => {
     bySuffix(renderer.root, '-source-fixhome')[0].props.onPress();
   });
-  await act(async () => {
-    bySuffix(renderer.root, '-catalog-retry')[0].props.onPress();
-  });
+  // Choosing FixHome loads the catalog by itself (no manual "load" tap); the failure is what we then see.
   expect(mockFetchCatalog).toHaveBeenCalledTimes(1);
   expect(uniqIds(bySuffix(renderer.root, '-catalog-error'))).toHaveLength(1);
   expect(renderer.root.findAll((node: any) => String(node.props?.testID ?? '').includes('catalog-option-'))).toHaveLength(0);
@@ -255,9 +253,6 @@ it('a catalog response resolving after review entry leaves the frozen draft unch
   });
   await openFixhomeRow(renderer);
   await act(async () => {
-    bySuffix(renderer.root, '-catalog-retry')[0].props.onPress();
-  });
-  await act(async () => {
     renderer.root.findAll(
       (node: any) => String(node.props?.testID ?? '').endsWith('catalog-option-part-1'),
     )[0].props.onPress();
@@ -296,9 +291,6 @@ it('a late catalog response after a source switch is ignored', async () => {
   });
   await openFixhomeRow(renderer);
   await act(async () => {
-    bySuffix(renderer.root, '-catalog-retry')[0].props.onPress();
-  });
-  await act(async () => {
     renderer.root.findAll((node: any) => String(node.props?.testID ?? '').includes('catalog-option-'))[0].props.onPress();
   });
   expect(mockFetchPartById).toHaveBeenCalledWith('part-1');
@@ -328,9 +320,6 @@ it('the latest catalog selection wins over an earlier pending one', async () => 
     renderer = create(<QuotationFormScreen />);
   });
   await openFixhomeRow(renderer);
-  await act(async () => {
-    bySuffix(renderer.root, '-catalog-retry')[0].props.onPress();
-  });
   const optionFor = (id: string) => renderer.root.findAll(
     (node: any) => String(node.props?.testID ?? '').endsWith(`catalog-option-${id}`),
   )[0];

@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useReduceMotion } from '../../../hooks/useReduceMotion';
+import { useLiveRefresh } from '../../../hooks/useLiveRefresh';
+import { useOrderSession } from '../runtime/OrderSessionProvider';
 import type { CustomerOrderFlowParamList, TechnicianOrderFlowParamList } from './order-flow-navigation.types';
 import OrderTaskScreen from '../shared/OrderTaskScreen';
 import ArrivalCheckInScreen from '../technician/ArrivalCheckInScreen';
@@ -31,9 +33,14 @@ import { TechnicianWarrantyInboxScreen, TechnicianWarrantyTaskScreen } from '../
 const CustomerStack = createNativeStackNavigator<CustomerOrderFlowParamList>();
 const TechnicianStack = createNativeStackNavigator<TechnicianOrderFlowParamList>();
 
+// Module-level on purpose: an inline render callback is a new component type on every render, which remounts
+// the task screen and drops its confirm draft and in-flight command whenever a parent re-renders.
+const CustomerTask = () => <OrderTaskScreen role="customer" />;
+const TechnicianTask = () => <OrderTaskScreen role="technician" />;
+
 function Screens({ Stack, role, reduceMotion }: { Stack: { Navigator: React.ComponentType<any>; Screen: React.ComponentType<any> }; role: 'customer' | 'technician'; reduceMotion: boolean }) {
   return <Stack.Navigator initialRouteName="OrderTask" screenOptions={{ headerShown: false, animation: reduceMotion ? 'none' : 'slide_from_right' }}>
-    <Stack.Screen name="OrderTask">{() => <OrderTaskScreen role={role} />}</Stack.Screen>
+    <Stack.Screen name="OrderTask" component={role === 'customer' ? CustomerTask : TechnicianTask} />
     <Stack.Screen name="OrderInformation" component={OrderInformationScreen} />
     <Stack.Screen name="OrderProgressHistory" component={OrderProgressHistoryScreen} />
     <Stack.Screen name="EvidenceGallery" component={EvidenceGalleryScreen} />
@@ -67,9 +74,30 @@ function Screens({ Stack, role, reduceMotion }: { Stack: { Navigator: React.Comp
   </Stack.Navigator>;
 }
 
+// Orders update by themselves: a server push for this order (or the 15 s poll while the socket is down) re-reads it.
+// A re-read drops the order to 'loading', which would make a command that is still verifying its own result
+// give up as unknown, so while a command is pending the read waits and runs once the command has settled.
+function LiveOrderRefresh() {
+  const { key, snapshot, refresh } = useOrderSession();
+  const pending = snapshot?.pendingIntent === true;
+  const pendingRef = useRef(pending);
+  const missed = useRef(false);
+  useEffect(() => {
+    pendingRef.current = pending;
+    if (!pending && missed.current) { missed.current = false; void refresh('live'); }
+  }, [pending, refresh]);
+  useLiveRefresh(['order:updated'], () => {
+    if (pendingRef.current) missed.current = true; else void refresh('live');
+  }, event => !event.payload.serviceOrderId || event.payload.serviceOrderId === key?.serviceOrderId, { pollMs: 15_000 });
+  return null;
+}
+
 export default function OrderFlowNavigator({ role }: { role: 'customer' | 'technician' }) {
   const reduceMotion = useReduceMotion(true);
-  return role === 'customer'
-    ? <Screens Stack={CustomerStack} role={role} reduceMotion={reduceMotion} />
-    : <Screens Stack={TechnicianStack} role={role} reduceMotion={reduceMotion} />;
+  return <>
+    <LiveOrderRefresh />
+    {role === 'customer'
+      ? <Screens Stack={CustomerStack} role={role} reduceMotion={reduceMotion} />
+      : <Screens Stack={TechnicianStack} role={role} reduceMotion={reduceMotion} />}
+  </>;
 }

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useSyncExternalSt
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../../../store/auth.store';
+import { isHistoricalOrder } from '../../../api/orders.api';
 import { sameOrderSession } from '../domain/order-session.types';
 import type { OrderResourceKind, OrderSessionKey, OrderSessionSnapshot } from '../domain/order-session.types';
 import { createOrderReadCoordinator, type OrderReadCoordinator } from './order-read-coordinator';
@@ -10,6 +11,9 @@ import { orderReadDependencies } from './order-controller-adapters';
 
 // Non-secret minimal intent markers only. Private order/media snapshots are memory-only.
 export const orderCommandJournal = createOrderCommandJournal(AsyncStorage);
+// Stages that end before UNDER_REPAIR: once the order is past them no screen can verify their markers any more,
+// so a leftover unknown marker would lock every later task (capture, handover) for good.
+const PRE_REPAIR_OPERATIONS = ['en-route', 'check-in', 'face-upload', 'before-upload', 'repair-recovery', 'quote-create', 'quote-decision', 'evidence-delete'];
 export interface OrderSessionContextValue {
   key: OrderSessionKey | null;
   snapshot: OrderSessionSnapshot | null;
@@ -63,6 +67,20 @@ export function OrderSessionProvider({ serviceOrderId, coordinator: supplied, jo
     });
     return () => { active = false; unsubscribe(); listener.remove(); coordinator.invalidate(); };
   }, [coordinator, journal, key]);
+  const orderStatus = snapshot?.access === 'current' && snapshot.order.status === 'ready' && !isHistoricalOrder(snapshot.order.data)
+    ? snapshot.order.data.status : null;
+  useEffect(() => {
+    if (!key || (orderStatus !== 'UNDER_REPAIR' && orderStatus !== 'COMPLETED')) return;
+    void (async () => {
+      await journal.restore();
+      for (const m of journal.list(key.userId)) {
+        if (m.serviceOrderId === key.serviceOrderId && (m.status === 'unknown' || m.status === 'verifying' || m.status === 'submitting')
+          && PRE_REPAIR_OPERATIONS.includes(m.operation) && !(m.operation === 'evidence-delete' && m.stableKey === 'm6-after-delete')) {
+          await journal.mark(key.userId, m.intentId, 'resolved');
+        }
+      }
+    })().catch(() => {});
+  }, [journal, key, orderStatus]);
   useEffect(() => {
     if (key) coordinator.setProofPolicy(key, proofPolicy);
   }, [coordinator, key, proofPolicy]);

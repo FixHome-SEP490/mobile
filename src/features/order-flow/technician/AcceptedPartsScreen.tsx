@@ -6,20 +6,37 @@ import type { CreatePartRequestPayload } from '../../../api/part-requests.api';
 import type { OrderPartReadModel } from '../domain/order-session.types';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { sameOrderSession } from '../domain/order-session.types';
-import { validateCreatePreRepairPayload, PART_ITEMS_MAX } from './parts-controller';
+import { validateCreatePreRepairPayload, PART_ITEMS_MAX, PART_QUANTITY_MAX } from './parts-controller';
 import { useTechnicianParts } from './useTechnicianParts';
 import { fetchStrictCatalog, fetchStrictPartById } from './parts-catalog-adapter';
 import { getRestoredPartsRecovery } from '../domain/extra-and-parts-recovery';
 import {
-  CostItemEditor,
   createCostItemRow,
   type CostItemCatalogOption,
   type CostItemCatalogPanel,
+  type CostItemFieldErrors,
   type CostItemRow,
 } from '../shared/CostItemEditor';
+import { PartPickerRow } from '../shared/PartPickerRow';
+import { FulfillmentMethodPicker } from '../shared/FulfillmentMethodPicker';
+import { ConfirmSummary } from '../shared/ConfirmSummary';
 import { ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+
+const newPartRow = (): CostItemRow => ({ ...createCostItemRow('parts_equipment'), partSource: 'fixhome', quantity: '1' });
+
+/** Inline hints after a failed submit; validateCreatePreRepairPayload stays authoritative. */
+function validatePartRows(rows: CostItemRow[]): Record<string, CostItemFieldErrors> {
+  const out: Record<string, CostItemFieldErrors> = {};
+  for (const row of rows) {
+    const e: CostItemFieldErrors = {};
+    if (!row.partCatalogId) e.partCatalogId = 'Chọn một linh kiện trong danh mục FixHome.';
+    if (!/^\d+$/.test(row.quantity.trim()) || Number(row.quantity) < 1 || Number(row.quantity) > PART_QUANTITY_MAX) e.quantity = `Nhập số lượng từ 1 đến ${PART_QUANTITY_MAX}.`;
+    if (Object.keys(e).length) out[row.key] = e;
+  }
+  return out;
+}
 
 export default function AcceptedPartsScreen() {
   const { key, snapshot, refresh, loadResource, journal } = useOrderSession();
@@ -43,24 +60,22 @@ export default function AcceptedPartsScreen() {
     (pr: OrderPartReadModel) => pr.requestType === 'pre_repair' && pr.status !== 'cancelled',
   );
 
-  const [initialRow] = useState(() => ({
-    ...createCostItemRow('parts_equipment'),
-    partSource: 'fixhome' as const,
-  }));
+  const [initialRow] = useState(newPartRow);
   const [rows, setRows] = useState<CostItemRow[]>(() => [initialRow]);
   const [reason, setReason] = useState('');
   const [fulfillmentMethod, setFulfillmentMethod] = useState<'pickup' | 'delivery'>('pickup');
   const [expandedKey, setExpandedKey] = useState<string | null>(() => initialRow.key);
   const [catalog, setCatalog] = useState<CostItemCatalogPanel>({ status: 'idle', parts: [], error: null });
+  const [formError, setFormError] = useState<string | null>(null);
+  const [rowErrors, setRowErrors] = useState<Record<string, CostItemFieldErrors>>({});
   const [confirmation, setConfirmation] = useState<{ key: NonNullable<typeof key>; payload: CreatePartRequestPayload } | null>(null);
   const confirming = !!confirmation && current && !!key && sameOrderSession(confirmation.key, key);
   const [draftKey, setDraftKey] = useState(key);
   const [draftCurrent, setDraftCurrent] = useState(current);
   if (draftCurrent !== current || !(draftKey === key || !!key && sameOrderSession(draftKey, key))) {
-    const initial = { ...createCostItemRow('parts_equipment'), partSource: 'fixhome' as const };
-    setDraftCurrent(current); setDraftKey(key); setRows([initial]); setExpandedKey(initial.key); setReason(''); setFulfillmentMethod('pickup'); setConfirmation(null); setCatalog({ status: 'idle', parts: [], error: null });
+    const initial = newPartRow();
+    setDraftCurrent(current); setDraftKey(key); setRows([initial]); setExpandedKey(initial.key); setReason(''); setFulfillmentMethod('pickup'); setConfirmation(null); setCatalog({ status: 'idle', parts: [], error: null }); setRowErrors({}); setFormError(null);
   }
-  const [formError, setFormError] = useState<string | null>(null);
 
   const recovery = useMemo(
     () => (key && snapshot ? getRestoredPartsRecovery(journal, key, snapshot) : { hasRecovery: false as const, isUnresolved: false as const }),
@@ -107,13 +122,14 @@ export default function AcceptedPartsScreen() {
     try {
       const part = await fetchStrictPartById(option.id);
       if (!valid()) return;
-      setRows(prev => prev.map(r => r.key === rowKey ? { ...r, partCatalogId: part.id, description: part.name, unitPrice: String(part.sellingPrice), partNameSnapshot: part.name, partSku: part.sku ?? '', warrantyPolicy: part.warrantyPolicy ?? '' } : r));
+      setRows(prev => prev.map(r => r.key === rowKey ? { ...r, partCatalogId: part.id, unitPrice: String(part.sellingPrice), partNameSnapshot: part.name, partSku: part.sku ?? '', warrantyPolicy: part.warrantyPolicy ?? '' } : r));
       setFormError(null);
+      setRowErrors(prev => { const { [rowKey]: _drop, ...rest } = prev; return rest; });
     } catch { if (valid()) setFormError('Không tải được linh kiện đã chọn. Hãy chọn lại.'); }
   };
   const onAddRow = () => {
     if (!canCreate || rows.length >= PART_ITEMS_MAX) return;
-    const newRow = { ...createCostItemRow('parts_equipment'), partSource: 'fixhome' as const };
+    const newRow = newPartRow();
     setRows((prev) => [...prev, newRow]);
     setExpandedKey(newRow.key);
   };
@@ -129,9 +145,18 @@ export default function AcceptedPartsScreen() {
     if (!canCreate) return;
     picks.current[updated.key] = (picks.current[updated.key] ?? 0) + 1;
     setRows((prev) => prev.map((r) => (r.key === updated.key ? updated : r)));
+    setRowErrors(prev => { const { [updated.key]: _drop, ...rest } = prev; return rest; });
   };
 
   const validateDraft = (): CreatePartRequestPayload | null => {
+    const errors = validatePartRows(rows);
+    setRowErrors(errors);
+    const firstBad = rows.find(r => errors[r.key]);
+    if (firstBad) {
+      setExpandedKey(firstBad.key);
+      setFormError(`Có ${Object.keys(errors).length} linh kiện cần bổ sung thông tin. Kiểm tra các mục báo đỏ bên dưới.`);
+      return null;
+    }
     try {
       const payload = validateCreatePreRepairPayload({
         items: rows.map(row => ({ partCatalogId: row.partSource === 'fixhome' && row.kind === 'parts_equipment' ? row.partCatalogId : '', quantity: /^\d+$/.test(row.quantity.trim()) ? Number(row.quantity) : NaN, note: row.description.trim() || undefined })),
@@ -199,7 +224,7 @@ export default function AcceptedPartsScreen() {
     return (
       <TaskScreenShell title="Chuẩn bị linh kiện" stage={1} onBack={() => navigation.goBack()}>
         <ReadOnlyNotice>
-          Yêu cầu linh kiện dự kiến chỉ có thể tạo khi đơn ở trạng thái ĐÃ TIẾP NHẬN (ACCEPTED) trước khi xuất phát.
+          Yêu cầu linh kiện dự kiến chỉ tạo được khi đơn ở trạng thái Đã tiếp nhận, trước khi bạn xuất phát.
         </ReadOnlyNotice>
       </TaskScreenShell>
     );
@@ -251,107 +276,105 @@ export default function AcceptedPartsScreen() {
       }}
     >
       {showRecovery && state.phase !== 'resolved' && (
-        <ReadOnlyNotice>
+        <ReadOnlyNotice tone="warning">
           Có thao tác yêu cầu linh kiện chưa rõ kết quả từ phiên trước. Vui lòng kiểm tra lại từ máy chủ.
         </ReadOnlyNotice>
       )}
 
       {hasActivePreRepair && (
-        <ReadOnlyNotice>
+        <ReadOnlyNotice tone="warning">
           Đơn hàng này đã có một yêu cầu linh kiện dự kiến đang hoạt động. Bạn không thể tạo thêm yêu cầu mới.
         </ReadOnlyNotice>
       )}
 
-      {state.error && <ReadOnlyNotice>{state.error}</ReadOnlyNotice>}
-      {formError && <ReadOnlyNotice>{formError}</ReadOnlyNotice>}
-      {state.actionSuccess && <ReadOnlyNotice>{state.actionSuccess}</ReadOnlyNotice>}
+      {state.error && <ReadOnlyNotice tone="error">{state.error}</ReadOnlyNotice>}
+      {formError && <ReadOnlyNotice tone="error">{formError}</ReadOnlyNotice>}
+      {state.actionSuccess && <ReadOnlyNotice tone="success">{state.actionSuccess}</ReadOnlyNotice>}
 
-      {confirming && (
-        <View style={styles.confirmBox} testID="pre-parts-confirm-sheet">
-          <Text style={styles.confirmTitle}>Xác nhận yêu cầu linh kiện dự kiến</Text>
-          <Text style={styles.confirmText}>
-            Hình thức nhận: {fulfillmentMethod === 'delivery' ? 'Giao hàng tận nơi' : 'Tự lấy tại kho'}.
-            Số loại linh kiện: {rows.length}.
-          </Text>
-        </View>
-      )}
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Hình thức nhận linh kiện</Text>
-        <View style={styles.fulfillmentRow}>
-          <TouchableOpacity
-            testID="pre-parts-method-pickup"
-            accessibilityRole="radio"
-            accessibilityState={{ selected: fulfillmentMethod === 'pickup', disabled: !canCreate }}
-            disabled={!canCreate || confirming}
-            style={[styles.methodBtn, fulfillmentMethod === 'pickup' && styles.methodBtnSelected]}
-            onPress={() => { if (canCreate) setFulfillmentMethod('pickup'); }}
-          >
-            <Text style={[styles.methodBtnText, fulfillmentMethod === 'pickup' && styles.methodBtnTextSelected]}>
-              Tự lấy tại kho
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            testID="pre-parts-method-delivery"
-            accessibilityRole="radio"
-            accessibilityState={{ selected: fulfillmentMethod === 'delivery', disabled: !canCreate }}
-            disabled={!canCreate || confirming}
-            style={[styles.methodBtn, fulfillmentMethod === 'delivery' && styles.methodBtnSelected]}
-            onPress={() => { if (canCreate) setFulfillmentMethod('delivery'); }}
-          >
-            <Text style={[styles.methodBtnText, fulfillmentMethod === 'delivery' && styles.methodBtnTextSelected]}>
-              Giao tận nơi
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.inputLabel}>Lý do chuẩn bị trước (tùy chọn)</Text>
-        <TextInput accessibilityLabel="Ghi chú linh kiện"
-          testID="pre-parts-reason-input"
-          style={styles.reasonInput}
-          multiline
-          numberOfLines={2}
-          placeholder="Ví dụ: Đơn máy giặt cần mang sẵn van xả và tụ motor..."
-          placeholderTextColor={colors.textSecondary}
-          value={reason}
-          onChangeText={text => { if (canCreate) setReason(text); }}
-          editable={canCreate && !confirming}
-          maxLength={2000}
+      {confirming ? (
+        <ConfirmSummary
+          testID="pre-parts-confirm-sheet"
+          title="Kiểm tra lại yêu cầu linh kiện dự kiến"
+          intro="Kho sẽ chuẩn bị đúng danh sách dưới đây. Bấm “Xác nhận gửi yêu cầu” để gửi."
+          items={(confirmation?.payload.items ?? []).map((item, index) => ({
+            title: rows[index]?.partNameSnapshot || 'Linh kiện',
+            detail: [rows[index]?.partSku ? `Mã ${rows[index].partSku}` : '', item.note ? `Ghi chú: ${item.note}` : ''].filter(Boolean).join(' · ') || undefined,
+            amount: `× ${item.quantity}`,
+          }))}
+          lines={[
+            { label: 'Hình thức nhận', value: fulfillmentMethod === 'delivery' ? 'Giao tận nơi' : 'Tự lấy tại kho' },
+            ...(confirmation?.payload.reason ? [{ label: 'Lý do', value: confirmation.payload.reason }] : []),
+          ]}
+          total={{ label: 'Số loại linh kiện', value: String(rows.length) }}
         />
-      </View>
+      ) : (
+        <>
+          <View style={styles.card}>
+            <Text accessibilityRole="header" style={styles.sectionTitle}>Hình thức nhận linh kiện</Text>
+            <FulfillmentMethodPicker
+              testIDPrefix="pre-parts-method"
+              value={fulfillmentMethod}
+              disabled={!canCreate}
+              onChange={method => { if (canCreate) setFulfillmentMethod(method); }}
+            />
+          </View>
 
-      <View style={{ gap: 8, marginBottom: spacing.sm }}>
-        {canCreate ? rows.map((row) => (
-          <CostItemEditor
-            key={row.key}
-            row={row}
-            catalog={catalog}
-            expanded={expandedKey === row.key}
-            canRemove={rows.length > 1}
-            onToggle={() => setExpandedKey((prev) => (prev === row.key ? null : row.key))}
-            onChange={(next) => onRowChange(next)}
-            onRemove={() => onRemoveRow(row.key)}
-            onLoadCatalog={search => {
-              void loadCatalog(search);
-            }}
-            onSelectCatalogPart={(part) => onSelectPart(row.key, part)}
-          />
-        )) : rows.map(row => <View key={row.key}><Text>{row.description || 'Linh kiện'} · {row.quantity || '—'}</Text></View>)}
+          <View style={styles.card}>
+            <Text style={styles.inputLabel}>Lý do chuẩn bị trước (tùy chọn)</Text>
+            <TextInput accessibilityLabel="Ghi chú linh kiện"
+              testID="pre-parts-reason-input"
+              style={styles.reasonInput}
+              multiline
+              numberOfLines={2}
+              placeholder="Ví dụ: Đơn máy giặt cần mang sẵn van xả và tụ motor..."
+              placeholderTextColor={colors.textSecondary}
+              value={reason}
+              onChangeText={text => { if (canCreate) setReason(text); }}
+              editable={canCreate}
+              maxLength={2000}
+            />
+          </View>
 
-        {canCreate && (
-          <TouchableOpacity
-            testID="pre-parts-add-item"
-            accessibilityRole="button"
-            disabled={!canCreate || confirming}
-            onPress={onAddRow}
-            style={styles.addBtn}
-          >
-            <Text style={styles.addBtnText}>+ Thêm linh kiện</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+          <View style={{ gap: 8, marginBottom: spacing.sm }}>
+            <Text accessibilityRole="header" style={styles.sectionTitle}>Danh sách linh kiện ({rows.length})</Text>
+            {canCreate ? rows.map((row) => (
+              <PartPickerRow
+                key={row.key}
+                row={row}
+                errors={rowErrors[row.key]}
+                catalog={catalog}
+                expanded={expandedKey === row.key}
+                canRemove={rows.length > 1}
+                maxQuantity={PART_QUANTITY_MAX}
+                onToggle={() => setExpandedKey((prev) => (prev === row.key ? null : row.key))}
+                onChange={(next) => onRowChange(next)}
+                onRemove={() => onRemoveRow(row.key)}
+                onLoadCatalog={search => {
+                  void loadCatalog(search);
+                }}
+                onSelectCatalogPart={(part) => onSelectPart(row.key, part)}
+              />
+            )) : rows.filter(row => row.partNameSnapshot).map(row => (
+              <View key={row.key} style={styles.readRow}>
+                <Text style={styles.readName}>{row.partNameSnapshot}</Text>
+                <Text style={styles.readQty}>× {row.quantity || '—'}</Text>
+              </View>
+            ))}
+
+            {canCreate && (
+              <TouchableOpacity
+                testID="pre-parts-add-item"
+                accessibilityRole="button"
+                disabled={rows.length >= PART_ITEMS_MAX}
+                onPress={onAddRow}
+                style={styles.addBtn}
+              >
+                <Text style={styles.addBtnText}>+ Thêm linh kiện</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </>
+      )}
     </TaskScreenShell>
   );
 }
@@ -369,33 +392,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.xs,
   },
-  fulfillmentRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  methodBtn: {
-    flex: 1,
-    minHeight: 48,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-  },
-  methodBtnSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
-  },
-  methodBtnText: {
-    fontSize: 14,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  methodBtnTextSelected: {
-    color: colors.primaryStrong,
-    fontWeight: '700',
-  },
   inputLabel: {
     fontSize: 14,
     fontWeight: '700',
@@ -412,25 +408,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlignVertical: 'top',
   },
-  confirmBox: {
-    backgroundColor: colors.primarySoft,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  confirmTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.primaryStrong,
-    marginBottom: 4,
-  },
-  confirmText: {
-    fontSize: 14,
-    color: colors.text,
-    lineHeight: 20,
-  },
   addBtn: {
     minHeight: 48,
     alignItems: 'center',
@@ -445,4 +422,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
+  readRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+  },
+  readName: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text },
+  readQty: { fontSize: 15, fontWeight: '600', color: colors.textSecondary },
 });

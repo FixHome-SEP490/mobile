@@ -84,12 +84,11 @@ it('paid invoice stays updating and hides the declaration entry', async () => {
   await act(async () => renderer.unmount());
 });
 
-it('back and focus never write; refresh only reloads reads', async () => {
+it('back and focus never write; no manual refresh button', async () => {
   mockSnapshot = snapshotWith('unpaid', null);
   let renderer!: ReturnType<typeof create>;
   await act(async () => { renderer = create(<PaymentWaitingScreen />); });
-  await act(async () => { renderer.root.findByProps({ testID: 'task-refresh' }).props.onPress(); });
-  expect(mockRefresh).toHaveBeenCalledWith('manual');
+  expect(renderer.root.findAllByProps({ testID: 'task-refresh' }).length).toBe(0);
   expect(mockVerify).not.toHaveBeenCalled();
   await act(async () => renderer.unmount());
 });

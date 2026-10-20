@@ -172,7 +172,7 @@ describe('ExtraWaitingScreen (T11)', () => {
 
     const root = tree.root;
     expect(root.findAllByProps({ testID: 'waiting-revise-btn' }).length).toBe(0);
-    expect(root.findByProps({ testID: 'task-refresh' })).toBeTruthy();
+    expect(root.findAllByProps({ testID: 'task-refresh' }).length).toBe(0);
   });
 
   it('continues base repair scope when clicking primary continue button', () => {

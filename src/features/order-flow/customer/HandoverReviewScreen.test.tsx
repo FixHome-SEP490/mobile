@@ -72,7 +72,6 @@ it('missing invoice keeps handover inspectable and continue returns to the live 
   expect(renderer.root.findByProps({ testID: 'handover-continue-payment' }).props.disabled).toBe(false);
   await act(async () => { renderer.root.findByProps({ testID: 'handover-continue-payment' }).props.onPress(); });
   expect(mockNavigate).toHaveBeenCalledWith('OrderTask');
-  await act(async () => { renderer.root.findByProps({ testID: 'task-refresh' }).props.onPress(); });
-  expect(mockRefresh).toHaveBeenCalledWith('manual');
+  expect(renderer.root.findAllByProps({ testID: 'task-refresh' }).length).toBe(0);
   await act(async () => renderer.unmount());
 });

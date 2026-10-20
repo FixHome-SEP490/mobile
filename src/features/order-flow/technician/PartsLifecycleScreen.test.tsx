@@ -328,3 +328,42 @@ describe('PartsLifecycleScreen (T12)', () => {
     expect(root.findAllByProps({ testID: 'parts-back-task' }).length).toBe(0);
   });
 });
+
+describe('PartsLifecycleScreen UX', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFocused = true;
+    mockJournalList = [];
+    mockState = { phase: 'idle', operation: null, targetId: null, error: null, actionSuccess: null, resolvedEntityId: null };
+  });
+
+  it('QR code is masked by default and can be revealed to check it', () => {
+    ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot([{ id: 'pr-q', serviceOrderId: 'order-1', technicianId: 'tech-1', status: 'ready', fulfillmentMethod: 'pickup', items: [] }]));
+    let tree: any;
+    act(() => { tree = create(<PartsLifecycleScreen />); });
+    act(() => { tree.root.findByProps({ testID: 'parts-receive-btn-pr-q' }).props.onPress(); });
+    expect(tree.root.findByProps({ testID: 'parts-qr-input' }).props.secureTextEntry).toBe(true);
+    act(() => { tree.root.findByProps({ testID: 'parts-qr-reveal' }).props.onPress(); });
+    expect(tree.root.findByProps({ testID: 'parts-qr-input' }).props.secureTextEntry).toBe(false);
+  });
+
+  it('usage confirmation names the item and the draft button reads Quay lại', () => {
+    ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot([{ id: 'pr-u', serviceOrderId: 'order-1', technicianId: 'tech-1', status: 'received', items: [{ id: 'it-1', quantity: 1, partNameSnapshot: 'Tụ khởi động', usageStatus: 'pending' }] }]));
+    let tree: any;
+    act(() => { tree = create(<PartsLifecycleScreen />); });
+    act(() => { tree.root.findByProps({ testID: 'parts-usage-used-it-1' }).props.onPress(); });
+    expect(JSON.stringify(tree.toJSON()).replace(/","/g, '')).toContain('Xác nhận đã dùng: Tụ khởi động');
+    expect(JSON.stringify(tree.toJSON())).toContain('Quay lại');
+  });
+
+  it('shows a short request code instead of the raw id and offers a way forward when empty', () => {
+    ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot([{ id: 'aaaaaaaa-bbbb-cccc-dddd-123456abcdef', serviceOrderId: 'order-1', technicianId: 'tech-1', status: 'requested', items: [] }]));
+    let tree: any;
+    act(() => { tree = create(<PartsLifecycleScreen />); });
+    expect(JSON.stringify(tree.toJSON())).toContain('#ABCDEF');
+    ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot([]));
+    act(() => { tree.update(<PartsLifecycleScreen />); });
+    act(() => { tree.root.findByProps({ testID: 'parts-empty-cta' }).props.onPress(); });
+    expect(mockNavigate).toHaveBeenCalledWith('ExtraProposal');
+  });
+});

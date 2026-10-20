@@ -16,7 +16,7 @@ import { lightTheme as colors, spacing } from '../../../constants/theme';
  * Local resolved never advances the order; the server readback decides.
  */
 export default function ArrivalCheckInScreen() {
-  const { key, snapshot, refresh } = useOrderSession();
+  const { key, snapshot } = useOrderSession();
   const { controller, state } = useTechnicianArrivalProof();
   const navigation = useNavigation<any>();
   // Position draft is keyed by session/order owner: revocation or reassignment
@@ -32,8 +32,6 @@ export default function ArrivalCheckInScreen() {
   const order = orderValue && !isHistoricalOrder(orderValue) ? orderValue : null;
   const assignmentValid = !!order && !!key && order.technician?.id === key.userId && order.id === key.serviceOrderId;
   const revoked = !snapshot || snapshot.access !== 'current' || !key || !order || !assignmentValid;
-  const refreshing = snapshot?.order.status === 'loading';
-  const canRefresh = snapshot?.access === 'current' && !!key && !refreshing;
   const busy = state.phase === 'submitting' || state.phase === 'verifying' || capturing;
   const owner = key ? `${key.userId}/${key.sessionGeneration}/${key.serviceOrderId}` : null;
   const position = !revoked && draft.owner === owner ? draft.position : null;
@@ -140,27 +138,6 @@ export default function ArrivalCheckInScreen() {
           }}
         >
           <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Xem thông tin đơn ›</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          testID="task-manual-refresh"
-          accessibilityRole="button"
-          disabled={!canRefresh}
-          onPress={() => {
-            if (canRefresh) void refresh('manual');
-          }}
-          style={{
-            flex: 1,
-            backgroundColor: colors.surface,
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderRadius: 12,
-            minHeight: 52,
-            justifyContent: 'center',
-            paddingHorizontal: spacing.md,
-            opacity: !canRefresh ? 0.5 : 1,
-          }}
-        >
-          <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Làm mới dữ liệu ›</Text>
         </TouchableOpacity>
       </View>
     </TaskScreenShell>
