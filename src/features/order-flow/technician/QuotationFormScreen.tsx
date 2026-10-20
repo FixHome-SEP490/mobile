@@ -195,7 +195,7 @@ export default function QuotationFormScreen() {
             partSku: part.sku ?? '',
             warrantyPolicy: part.warrantyPolicy ?? '',
             unitPrice: String(part.sellingPrice),
-            description: r.description.trim() ? r.description : part.name,
+            description: part.name,
           }
           : r)));
         setFormError(null);

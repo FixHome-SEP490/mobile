@@ -107,7 +107,7 @@ export default function AcceptedPartsScreen() {
     try {
       const part = await fetchStrictPartById(option.id);
       if (!valid()) return;
-      setRows(prev => prev.map(r => r.key === rowKey ? { ...r, partCatalogId: part.id, description: r.description.trim() || part.name, unitPrice: String(part.sellingPrice), partNameSnapshot: part.name, partSku: part.sku ?? '', warrantyPolicy: part.warrantyPolicy ?? '' } : r));
+      setRows(prev => prev.map(r => r.key === rowKey ? { ...r, partCatalogId: part.id, description: part.name, unitPrice: String(part.sellingPrice), partNameSnapshot: part.name, partSku: part.sku ?? '', warrantyPolicy: part.warrantyPolicy ?? '' } : r));
       setFormError(null);
     } catch { if (valid()) setFormError('Không tải được linh kiện đã chọn. Hãy chọn lại.'); }
   };

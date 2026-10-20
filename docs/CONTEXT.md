@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-20 19:39 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/web-be-sync-20261020
+> Cập nhật lần cuối: 2026-10-20 20:09 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/web-be-sync-20261020
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -359,6 +359,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-20 20:09 (UTC+7) | Hgnv11 | feat/web-be-sync-20261020 | Báo giá, chi phí phát sinh, linh kiện đã nhận: danh sách linh kiện FixHome cuộn trong khung, hiện SKU và giá; chọn linh kiện luôn ghi tên vào Mô tả
 - 2026-10-20 19:39 (UTC+7) | Hgnv11 | feat/web-be-sync-20261020 | Kỹ thuật viên: sheet Kỹ năng và dịch vụ nhận làm gọn lại, hàng phẳng, công tắc nhận làm, nút Lưu thay đổi chỉ hiện khi có chỉnh sửa
 - 2026-10-20 16:40 (UTC+7) | Hgnv11 | feat/web-be-sync-20261020 | Đồng bộ web và backend: ca tối, hóa đơn 0 ₫ (no-charge) và VNPay từ 5.000 ₫, loại linh kiện theo báo giá, trạng thái trả linh kiện
 - 2026-10-20 01:57 (UTC+7) | Hgnv11 | fix/activity-split | Hoạt động: số đếm hai tab và các chip lấy từ server (GET /bookings/my/activity-counts), không còn đếm theo số đã tải; mỗi tab chỉ tải dữ liệu của mình
@@ -398,7 +399,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-17 02:08 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | C45 map parity: 20 Jest mục tiêu, full Jest 285/3412, typecheck/lint/Expo check và web export đạt; native map runtime CHƯA KIỂM CHỨNG.
 - 2026-10-17 02:04 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | Sửa C45 tracker đọc trực tiếp `data`, withdrawal history đọc top-level `data`/`meta`, và guard `stopPropagation`; full Jest 285/3411, focused 24/24, lint/typecheck/Expo check PASS.
 - 2026-10-17 01:56 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | C45 xóa mốc GPS sau khi map hết hạn; Jest bao phủ GPS mới/thiếu/cũ, đơn kết thúc, blur và background; native runtime CHƯA KIỂM CHỨNG.
-- 2026-10-17 01:53 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | C45 thêm map native marker GPS/địa chỉ đích có điều kiện freshness/lifecycle; Expo Web dùng fallback không tải `react-native-maps`.
 
 ### Lịch sử giữ lại khi tích hợp
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+import { formatVnd } from '../../../utils/format';
 
 /**
  * M4 shared quotation row draft. Presentation-only: the frozen controller
@@ -367,22 +368,34 @@ export function CostItemEditor({
                       </TouchableOpacity>
                     </View>
                   )}
-                  {catalog?.status === 'ready' &&
-                    catalog.parts.map(part => (
-                      <TouchableOpacity
-                        key={part.id}
-                        testID={id(`catalog-option-${part.id}`)}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: row.partCatalogId === part.id }}
-                        onPress={() => onSelectCatalogPart?.(part)}
-                        style={[styles.catalogOption, row.partCatalogId === part.id && styles.optionSelected]}
-                      >
-                        <Text style={styles.catalogName} numberOfLines={1}>
-                          {part.name}
-                        </Text>
-                        <Text style={styles.catalogMeta}>{part.id}</Text>
-                      </TouchableOpacity>
-                    ))}
+                  {catalog?.status === 'ready' && (
+                    <View>
+                      <Text style={styles.catalogCount}>
+                        {catalog.parts.length} linh kiện · nhập từ khóa rồi bấm tìm để lọc
+                      </Text>
+                      {/* Danh sách dài cuộn trong khung cố định, không kéo dài cả form. */}
+                      <ScrollView nestedScrollEnabled style={styles.catalogList} keyboardShouldPersistTaps="handled">
+                        {catalog.parts.map(part => (
+                          <TouchableOpacity
+                            key={part.id}
+                            testID={id(`catalog-option-${part.id}`)}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: row.partCatalogId === part.id }}
+                            onPress={() => onSelectCatalogPart?.(part)}
+                            style={[styles.catalogOption, row.partCatalogId === part.id && styles.optionSelected]}
+                          >
+                            <View style={styles.catalogText}>
+                              <Text style={styles.catalogName} numberOfLines={2}>
+                                {part.name}
+                              </Text>
+                              {!!part.sku && <Text style={styles.catalogMeta}>{part.sku}</Text>}
+                            </View>
+                            <Text style={styles.catalogPrice}>{formatVnd(part.sellingPrice)}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
                   <FieldError testID={id('error-catalog')} message={errors?.partCatalogId} />
                 </View>
               )}
@@ -517,9 +530,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   secondaryActionText: { color: colors.primaryStrong, fontSize: 15, fontWeight: '600' },
-  catalogOption: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, gap: 2 },
-  catalogName: { color: colors.text, fontSize: 15, fontWeight: '600' },
-  catalogMeta: { color: colors.textSecondary, fontSize: 12 },
+  catalogCount: { color: colors.textSecondary, fontSize: 12, marginBottom: 6 },
+  catalogList: { maxHeight: 264, borderWidth: 1, borderColor: colors.border, borderRadius: 10 },
+  catalogOption: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
+  catalogText: { flex: 1, minWidth: 0, gap: 2 },
+  catalogName: { color: colors.text, fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  catalogMeta: { color: colors.textSecondary, fontSize: 12, lineHeight: 16 },
+  catalogPrice: { color: colors.primaryStrong, fontSize: 14, lineHeight: 20, fontWeight: '600' },
   removeAction: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   removeText: { color: colors.error, fontSize: 15, fontWeight: '600' },
 });
