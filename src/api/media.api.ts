@@ -156,13 +156,21 @@ export const mediaApi = {
     return toVideoLink(isRecord(res.data) && 'data' in res.data ? res.data.data : res.data, '/bookings/media/stream/');
   },
 
-  /** Source for an `<Image>` of a private booking photo: the bytes need the bearer token. */
-  async getBookingPhotoSource(bookingId: string, mediaId: string): Promise<{ uri: string; headers: Record<string, string> }> {
-    const token = await storageService.getToken();
-    return {
-      uri: apiUrl(`/bookings/${encodeURIComponent(bookingId)}/media/${encodeURIComponent(mediaId)}/content`),
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    };
+  /**
+   * A private booking photo as a data URI. Read through apiClient (not `<Image headers>`) so an expired
+   * access token is refreshed and the photo also shows on web, where Image ignores request headers.
+   */
+  async getBookingPhotoUri(bookingId: string, mediaId: string): Promise<string> {
+    const res = await apiClient.get(
+      `/bookings/${encodeURIComponent(bookingId)}/media/${encodeURIComponent(mediaId)}/content`,
+      { responseType: 'blob' },
+    );
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => (typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Unreadable photo')));
+      reader.onerror = () => reject(reader.error ?? new Error('Unreadable photo'));
+      reader.readAsDataURL(res.data as Blob);
+    });
   },
 
   async uploadPublicImage(image: MediaUploadImage): Promise<UploadedPublicMedia> {

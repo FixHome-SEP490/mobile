@@ -127,9 +127,9 @@ it('presents every API preview in deadline order with a separate decision footer
   }
   const art = renderer.root.findAll(node => node.type === View && node.props.testID === 'invitation-service-art');
   expect(art).toHaveLength(2);
-  expect(StyleSheet.flatten(art[0].props.style)).toMatchObject({ minHeight: 180, backgroundColor: lightTheme.primarySoft });
+  expect(StyleSheet.flatten(art[0].props.style)).toMatchObject({ minHeight: 112, backgroundColor: lightTheme.primarySoft });
   const footer = buttons(`Xem và quyết định lời mời ${sooner.booking!.serviceName!}`)[0];
-  expect(StyleSheet.flatten(footer.props.style).borderTopWidth).toBe(1);
+  expect(StyleSheet.flatten(footer.props.style).backgroundColor).toBe(lightTheme.primaryStrong);
   expect(text()).toContain('Địa chỉ đầy đủ');
   expectNoPrivateOrPrototypeData();
   expect(mockRespond).not.toHaveBeenCalled();
@@ -141,7 +141,7 @@ it('opens spacious T03 inside the same screen with only preview metadata and no 
   await render([inv]);
   expectNoPrivateOrPrototypeData();
   review();
-  expect(text()).toContain('Xem kỹ, rồi nhận việc');
+  expect(text()).toContain('Chi tiết lời mời');
   expect(text()).toContain('Khu vực được phép xem');
   expect(text()).toContain('Khung giờ mong muốn');
   expect(text()).toContain('Số lượng');
@@ -238,7 +238,7 @@ it('uses native touch/text floors and leaves content clear of the existing tab b
   await render([invitation('a11y', 'Kiểm tra bơm (fixture)', 20)]);
   review();
   for (const node of renderer.root.findAllByType(TouchableOpacity)) {
-    expect(StyleSheet.flatten(node.props.style).minHeight).toBeGreaterThanOrEqual(44);
+    expect((StyleSheet.flatten(node.props.style).minHeight ?? StyleSheet.flatten(node.props.style).height)).toBeGreaterThanOrEqual(44);
     expect(node.props.accessibilityRole).toBe('button');
   }
   for (const node of renderer.root.findAllByType(Text)) {
@@ -249,11 +249,12 @@ it('uses native touch/text floors and leaves content clear of the existing tab b
   expect(StyleSheet.flatten(renderer.root.findByType(FlatList).props.contentContainerStyle).paddingBottom).toBeGreaterThanOrEqual(114);
 });
 
-it('keeps heading and banners in the scrollable list so large text cannot trap the review below fixed content', async () => {
+it('keeps the app-style header fixed and banners in the scrollable list so large text cannot trap the review', async () => {
   mockAvailability.isAvailable = false;
   mockState = { ...initialInboxState, loading: false, recoveryPending: true };
   await render([invitation('scroll', 'Kiểm tra bơm (fixture)', 20)]);
   const list = renderer.root.findByType(FlatList);
-  expect(list.findAll(node => node.type === Text && node.props.children === 'Lời mời')).toHaveLength(1);
+  expect(renderer.root.findAll(node => node.type === Text && node.props.children === 'Lời mời')).toHaveLength(1);
+  expect(list.findAll(node => node.type === Text && node.props.children === 'Lời mời')).toHaveLength(0);
   expect(list.findAll(node => node.type === TouchableOpacity && node.props.accessibilityLabel === 'Bật lại nhận đơn mới')).toHaveLength(1);
 });

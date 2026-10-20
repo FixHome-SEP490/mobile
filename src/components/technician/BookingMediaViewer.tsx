@@ -65,22 +65,28 @@ function VideoTile({ bookingId, media }: { bookingId: string; media: BookingMedi
 
 function PhotoTile({ bookingId, media }: { bookingId: string; media: BookingMedia }) {
   const { colors } = useAppTheme();
-  const [source, setSource] = useState<{ uri: string; headers?: Record<string, string> } | null>(
-    media.isPrivate ? null : media.url ? { uri: media.url } : null,
-  );
+  const [uri, setUri] = useState<string | null>(!media.isPrivate && media.url ? media.url : null);
   const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!media.isPrivate) return;
     let live = true;
-    mediaApi.getBookingPhotoSource(bookingId, media.id).then((s) => { if (live) setSource(s); }, () => { if (live) setFailed(true); });
+    mediaApi.getBookingPhotoUri(bookingId, media.id).then((u) => { if (live) setUri(u); }, () => { if (live) setFailed(true); });
     return () => { live = false; };
-  }, [bookingId, media.id, media.isPrivate]);
+  }, [bookingId, media.id, media.isPrivate, attempt]);
   return (
     <View style={[styles.tile, { backgroundColor: colors.border }]} testID={`booking-photo-${media.id}`}>
-      {source && !failed ? (
-        <Image source={source} style={styles.fill} resizeMode="contain" onError={() => setFailed(true)} accessibilityLabel="Ảnh khách gửi" />
+      {uri && !failed ? (
+        <Image source={{ uri }} style={styles.fill} resizeMode="cover" onError={() => setFailed(true)} accessibilityLabel="Ảnh khách gửi" />
       ) : failed ? (
-        <View style={styles.center}><Text style={[styles.errorText, { color: colors.text }]}>Chưa tải được ảnh.</Text></View>
+        <TouchableOpacity
+          style={styles.center}
+          onPress={() => { setFailed(false); setUri(null); setAttempt((n) => n + 1); }}
+          accessibilityRole="button"
+          accessibilityLabel="Tải lại ảnh khách gửi"
+        >
+          <Text style={[styles.errorText, { color: colors.text }]}>Chưa tải được ảnh. Chạm để thử lại.</Text>
+        </TouchableOpacity>
       ) : (
         <View style={styles.center}><ActivityIndicator color={colors.primary} /></View>
       )}

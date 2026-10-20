@@ -7,7 +7,7 @@ import type { TechnicianBookingPreview } from '../../api/bookings.api';
 jest.mock('lucide-react-native', () => ({ Sparkles: () => null }));
 jest.mock('../../api/media.api', () => ({
   apiUrl: (p: string) => p,
-  mediaApi: { getBookingPhotoSource: jest.fn().mockResolvedValue({ uri: 'x', headers: {} }), getBookingVideoLink: jest.fn() },
+  mediaApi: { getBookingPhotoUri: jest.fn().mockResolvedValue('data:image/jpeg;base64,AAAA'), getBookingVideoLink: jest.fn() },
 }));
 
 const base: TechnicianBookingPreview = {

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import type { InvitationItem } from '../../../api/bookings.api';
-import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors } from '../../../constants/theme';
 
 export interface InvitationDecisionViewProps {
@@ -16,8 +15,6 @@ export interface InvitationDecisionViewProps {
   onAccept: () => void;
   /** Called only after the separate explicit decline confirm below. */
   onDecline: () => void;
-  /** Read-only: clears the focused view, never POSTs. */
-  onBack: () => void;
   /** GET-only inbox reload. */
   onRefresh: () => void;
 }
@@ -37,12 +34,10 @@ export default function InvitationDecisionView({
   inFlight,
   onAccept,
   onDecline,
-  onBack,
   onRefresh,
 }: InvitationDecisionViewProps) {
   const [confirmingDecline, setConfirmingDecline] = useState(false);
   const booking = invitation.booking;
-  const location = [booking?.district, booking?.province].filter(Boolean).join(', ');
   const disabled = !actionable || inFlight !== null;
   const busy = inFlight !== null;
 
@@ -52,22 +47,6 @@ export default function InvitationDecisionView({
       <Text style={{ fontSize: 14, lineHeight: 22, color: colors.textSecondary }}>
         Bạn đang xem các thông tin cần để quyết định. Địa chỉ chi tiết và thông tin riêng của khách hàng chỉ mở sau khi nhận việc thành công.
       </Text>
-      <View style={{ gap: 8 }}>
-        <Text style={{ fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-          Khu vực được phép xem: <Text style={{ color: colors.text }}>{location || 'Chưa xác định'}</Text>
-        </Text>
-        <Text style={{ fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-          Hạn phản hồi:{' '}
-          <Text style={{ color: colors.text }}>
-            {invitation.expiresAt && Number.isFinite(Date.parse(invitation.expiresAt))
-              ? vnDateTimeString(invitation.expiresAt)
-              : 'Chưa xác định'}
-          </Text>
-          {countdownLabel ? (
-            <Text style={{ color: countdownUrgent ? colors.error : colors.warning }}> · {countdownLabel}</Text>
-          ) : null}
-        </Text>
-      </View>
       {!actionable && (
         <Text testID="invitation-closed" style={{ fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
           {closedLabel}. Bạn không thể phản hồi lời mời này.
@@ -170,16 +149,6 @@ export default function InvitationDecisionView({
         </View>
       )}
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        <TouchableOpacity
-          testID="invitation-back"
-          accessibilityRole="button"
-          accessibilityLabel="Quay lại danh sách lời mời"
-          accessibilityHint="Trở về danh sách lời mời mà không gửi phản hồi"
-          onPress={onBack}
-          style={{ flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Text style={{ color: colors.primaryStrong, fontWeight: '600', fontSize: 14, lineHeight: 20 }}>Quay lại</Text>
-        </TouchableOpacity>
         <TouchableOpacity
           testID="invitation-refresh"
           accessibilityRole="button"
