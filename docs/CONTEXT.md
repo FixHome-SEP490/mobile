@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-20 20:09 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/web-be-sync-20261020
+> Cập nhật lần cuối: 2026-10-20 21:11 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -257,7 +257,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 ### Đối chiếu source SEP-132 trên nhánh integration
 
 - `ordersApi.getMyOrdersPage` từ chối body không có mảng danh sách; mảng rỗng hợp lệ vẫn trả trang rỗng. Giữ `bookingMode`, `slot`, `customerNote`, `departAvailableAt` và parser tiền/status hiện hành.
-- `GlassTabBar` giữ liquid glass tap/pan và indicator; `TechnicianNavigator` bật `technicianResponsive`, giữ năm tab với Ví ở vị trí thứ tư và `useTechnicianLocationPing`. Thông báo/badge mở từ chuông Home. Customer dùng `CustomerAnimatedBottomBar` với bốn tab và CTA đặt lịch nổi 56dp ở vùng giữa; năm vùng chạm tách khỏi nền tab clipping, lựa chọn đặt lịch thường/AI chỉ điều hướng, không tạo booking. Guest vẫn qua Auth handoff và Reduce Motion bỏ spring.
+- `GlassTabBar` giữ liquid glass tap/pan và indicator; `TechnicianNavigator` bật `technicianResponsive`, giữ năm tab với Thông báo ở vị trí thứ tư (huy hiệu số chưa đọc) và `useTechnicianLocationPing`. Ví mở từ Hồ sơ và Thu nhập; chuông Home vẫn mở Thông báo như màn riêng. Customer dùng `CustomerAnimatedBottomBar` với bốn tab và CTA đặt lịch nổi 56dp ở vùng giữa; năm vùng chạm tách khỏi nền tab clipping, lựa chọn đặt lịch thường/AI chỉ điều hướng, không tạo booking. Guest vẫn qua Auth handoff và Reduce Motion bỏ spring.
 - Root giữ `TechnicianNotifications` sau guard kỹ thuật viên và `TechnicianServiceAreas`; không còn tab Notifications.
 - SEP-135/136: splash logo chạy theo bootstrap thật. Không có phiên: first-run mở chọn vai trò; tiếp tục khách hàng hoặc bỏ qua mở Guest Home, lần sau mở Guest Home. Phiên hợp lệ mở Home đúng vai trò. Guest tái sử dụng `CustomerHomeScreen`, chỉ duyệt danh mục công khai; AI, đặt lịch và tab riêng mở Auth. Logout remount về Guest; Login Back giữ đường duyệt, Khám phá mở Guest. Handoff Login/Google/OTP chờ root đăng ký route đúng phiên và vai trò.
 - Tích hợp Customer Booking Create/Detail/Matching/Order/Profile, địa chỉ chính xác, ảnh booking và recovery controller; giữ gia hạn matching và các mutation controller hiện hành. Tích hợp Technician Jobs, work-order, chat, Profile/KYC/onboarding, ví/thu nhập và test production. Các GET `getTechnicianJobs`, `getTechnicianJobsPage`, `getTechnicianOrder` dùng cùng endpoint hiện hành; history chỉ chiếu trường tóm tắt được phép, full order vẫn dùng parser tiền dev. Notifications chỉ cập nhật trạng thái đọc sau API xác nhận và chặn GET cũ ghi đè trạng thái mới. Không nhập developer preview hoặc thay dependency/Expo.
@@ -277,13 +277,14 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - Ca tối: đặt lịch, đổi lịch, đặt lại có buổi `evening` (Tối 18:00 - 23:00) cạnh sáng và chiều (`utils/booking-session.ts`, `BookingSessionPicker`). Sáng và chiều đóng khi bắt đầu, ca tối còn mở tới 23:00 và khi đã bắt đầu thì khung đến tính từ giờ hiện tại (`isSessionOpen`, `sessionCloseAt`); nhãn `slot` `evening` của đơn, lời mời và booking hiển thị đúng.
 - Hóa đơn 0 ₫: màn Thanh toán chỉ còn một lựa chọn "Xác nhận miễn phí" gọi `POST /invoices/:id/no-charge` (phương thức `no_charge`, thao tác `no-charge` trong nhật ký lệnh, vẫn đối chiếu lại hóa đơn, không tạo Payment hay ví). Lỗi `ORDER_INVALID_TRANSITION`, `EVIDENCE_REQUIRED_AFTER`, `VALIDATION_FAILED`, `CONFLICT`, `OWNERSHIP_DENIED`, `NOT_FOUND` là chưa xác nhận gì, được thử lại; lỗi khác giữ trạng thái chưa rõ. VNPay tắt khi hóa đơn dưới 5.000 ₫ (ví và tiền mặt vẫn dùng được).
 - Linh kiện: loại yêu cầu `quotation` (phần thiếu theo báo giá đã duyệt) hiện nhãn "Theo báo giá"; dòng trả linh kiện đọc thêm `returnStatus`, `blocksNewWork`, `trackingOnly`, `usageRecorded` (hiện "Số lượng thực nhận lệch với khai báo", "Quản lý mới nhận một phần", dòng "chưa nhận được việc mới"); `partReturnsApi.getMine` (`GET /part-returns/mine`) đã có nhưng CHƯA có màn dùng. Cờ theo dõi trả linh kiện và Catalog V2 là cờ của backend, chưa kiểm chứng trên server thật.
+- Giao diện chuẩn bị linh kiện (`AcceptedPartsScreen`), đề xuất chi phí phát sinh (`ExtraProposalScreen`) và quản lý linh kiện (`PartsLifecycleScreen`) làm lại theo ui-ux-pro-max (CHƯA KIỂM CHỨNG trên máy thật): màn chuẩn bị dùng `PartPickerRow` (chọn danh mục, số lượng bấm +/−, ghi chú cho kho; ghi chú là `note`, không còn bị tên linh kiện ghi đè) thay cho `CostItemEditor`; `CatalogPicker` dùng chung tự tải danh mục khi mở hàng, có nút Tìm, phân trang "Xem thêm" thay cho khung cuộn lồng; `FulfillmentMethodPicker` có trạng thái chọn nhìn thấy được ở cả hai màn; `ConfirmSummary` liệt kê từng dòng trước khi gửi và thay form khi xác nhận; lỗi theo ô (`validateCostItemRows`) và lỗi lý do hiện ngay tại ô; `ReadOnlyNotice` có `tone` (lỗi là `alert`); `TaskScreenShell` có `summary` (tổng ước tính cố định cạnh nút) và footer chia hàng 1:2; ảnh bằng chứng dạng ảnh nhỏ; màn bổ sung có hai nút thêm riêng "linh kiện" và "tiền công"; mã QR nhận hàng mặc định ẩn, có nút "Hiện mã để kiểm tra". Không đổi API, enum hay quyền.
 - Chưa làm: bảng tổng hợp thanh toán của đơn trên màn khách như web (`order-billing.ts`, gồm cảnh báo hóa đơn 0 ₫ lệch với báo giá; backend vẫn chặn bằng `CONFLICT`). CHƯA KIỂM CHỨNG với backend thật.
 
 ## 4. Kiến trúc và thư mục chính
 
 - `src/features/order-flow/`: domain/runtime và shared/navigation cho redesign, một provider/reader mỗi phiên đơn. M3 có controller và task screens di chuyển/check-in/face/BEFORE, bằng chứng đúng ID/chủ ảnh và tracker chỉ bật tại màn di chuyển. M4 có controller/hook báo giá, editor và quyết định hai vai trò. M5 dùng controller/hook phát sinh và linh kiện, journal lưu ID trả về thật và kết quả sử dụng cần đối soát; không lưu QR hoặc payload nhạy cảm. Recovery ưu tiên intent chưa rõ, chỉ GET đúng phạm vi. Booking/lời mời phân biệt chắc chắn chưa gửi với POST chưa rõ. Preview vẫn chưa thay route production.
 - `src/api/`: axios dùng chung (`client.ts`) và khoảng 20 module gọi API, có test.
-- `src/navigation/`: App, Auth, Customer, Technician navigator. Tab khách: Trang chủ, Đơn của tôi, Thông báo, Hồ sơ (thêm nút trợ lý AI). Tab kỹ thuật viên: Trang chủ, Lời mời, Công việc, Ví, Hồ sơ. Chuông Home mở Thông báo.
+- `src/navigation/`: App, Auth, Customer, Technician navigator. Tab khách: Trang chủ, Đơn của tôi, Thông báo, Hồ sơ (thêm nút trợ lý AI). Tab kỹ thuật viên: Trang chủ, Lời mời, Công việc, Thông báo, Hồ sơ. Ví mở từ Hồ sơ; chuông Home vẫn mở Thông báo.
 - `src/screens/`: `auth`, `chat`, `customer`, `technician`. Logic thuần đặt trong file `kebab-case.ts` cạnh màn hình, có `.test.ts` đi kèm.
 - `src/services/`: `storage.service.ts` (SecureStore), `chat-socket.service.ts` (chat và tín hiệu gọi), `google-auth.service.ts`, `image-for-ai.ts` (thu ảnh về 1280 px, base64; chọn hoặc quay video; đổi ảnh sang JPEG để tải lên), `call-native.ts` (nạp lười WebRTC và loa), `webrtc-call.service.ts` (micro, kết nối WebRTC).
 - `src/store/`: Zustand `auth.store`, `badge.store`, `ui.store`, `call.store` (vòng đời cuộc gọi).
@@ -359,6 +360,8 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-20 21:11 (UTC+7) | Hgnv11 | dev | Làm lại giao diện chuẩn bị linh kiện, chi phí phát sinh và quản lý linh kiện của thợ (PartPickerRow, CatalogPicker, ConfirmSummary, lỗi theo ô, tổng cố định, ảnh nhỏ); không đổi API; chưa chạy trên máy thật.
+- 2026-10-20 20:39 (UTC+7) | Hgnv11 | dev | Tab thứ tư của kỹ thuật viên đổi từ Ví sang Thông báo (Ví vào qua Hồ sơ); màn Thông báo ẩn nút Quay lại khi nằm trong tab, tiêu đề 24/32 và màu nền/viền/cỡ chữ đồng bộ với Thông báo khách; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-20 20:09 (UTC+7) | Hgnv11 | feat/web-be-sync-20261020 | Báo giá, chi phí phát sinh, linh kiện đã nhận: danh sách linh kiện FixHome cuộn trong khung, hiện SKU và giá; chọn linh kiện luôn ghi tên vào Mô tả
 - 2026-10-20 19:39 (UTC+7) | Hgnv11 | feat/web-be-sync-20261020 | Kỹ thuật viên: sheet Kỹ năng và dịch vụ nhận làm gọn lại, hàng phẳng, công tắc nhận làm, nút Lưu thay đổi chỉ hiện khi có chỉnh sửa
 - 2026-10-20 16:40 (UTC+7) | Hgnv11 | feat/web-be-sync-20261020 | Đồng bộ web và backend: ca tối, hóa đơn 0 ₫ (no-charge) và VNPay từ 5.000 ₫, loại linh kiện theo báo giá, trạng thái trả linh kiện
@@ -397,8 +400,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-17 13:51 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | C50/C45 owner visual polish: shortcut Guest/Customer, copy mã ở CompletedOrder Customer, wallet và Withdrawal/KYC; 12 suites/125 focused tests PASS, Expo Web guest viewport 320–430dp PASS; không gửi API KYC, ngân hàng hoặc rút tiền thật.
 - 2026-10-17 02:11 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | Ổn định test AppState unresolved bằng GPS fixture tạo theo test, `Date.now` cố định và flush lifecycle qua `act`; serial lẫn regular Jest đều 285/3412 PASS, lint/typecheck/check:expo PASS.
 - 2026-10-17 02:08 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | C45 map parity: 20 Jest mục tiêu, full Jest 285/3412, typecheck/lint/Expo check và web export đạt; native map runtime CHƯA KIỂM CHỨNG.
-- 2026-10-17 02:04 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | Sửa C45 tracker đọc trực tiếp `data`, withdrawal history đọc top-level `data`/`meta`, và guard `stopPropagation`; full Jest 285/3411, focused 24/24, lint/typecheck/Expo check PASS.
-- 2026-10-17 01:56 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | C45 xóa mốc GPS sau khi map hết hạn; Jest bao phủ GPS mới/thiếu/cũ, đơn kết thúc, blur và background; native runtime CHƯA KIỂM CHỨNG.
 
 ### Lịch sử giữ lại khi tích hợp
 
