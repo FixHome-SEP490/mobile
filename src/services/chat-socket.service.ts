@@ -2,6 +2,7 @@
 import { io, Socket } from 'socket.io-client';
 import { APP_CONFIG } from '../constants';
 import { storageService } from './storage.service';
+import { clearApiCache } from '../api/client';
 import type { ChatMessage } from '../api/messaging.api';
 
 export interface TypingEvent {
@@ -185,10 +186,13 @@ class ChatSocketService {
         );
         socket.on('typing', (e: TypingEvent) => this.emitToHandlers('onTyping', e));
         for (const name of LIVE_EVENT_NAMES) {
-          socket.on(name, (payload: unknown) => this.emitToHandlers('onLiveUpdate', {
-            name,
-            payload: payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {},
-          }));
+          socket.on(name, (payload: unknown) => {
+            clearApiCache(); // server data changed: cached reads are stale
+            this.emitToHandlers('onLiveUpdate', {
+              name,
+              payload: payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {},
+            });
+          });
         }
         socket.on('connect:ready', (payload: { iceServers?: IceServer[] }) => {
           this.ice = Array.isArray(payload?.iceServers) ? payload.iceServers : [];

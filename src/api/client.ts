@@ -157,6 +157,22 @@ function getOrStartRefresh(session: AuthSessionSnapshot): Promise<string> {
   return entry.promise;
 }
 
+// Short-lived GET cache: re-entering a screen right after leaving it reads from memory instead of
+// reloading. Any successful mutation, socket push, or session change clears it.
+const GET_CACHE_TTL_MS = 30_000;
+const GET_CACHE_MAX = 100;
+const getCache = new Map<string, { at: number; data: unknown }>();
+
+export function clearApiCache(): void {
+  getCache.clear();
+}
+
+function cacheKey(config: InternalAxiosRequestConfig): string | null {
+  if ((config.method ?? 'get').toLowerCase() !== 'get' || isAuthEndpoint(config.url)) return null;
+  const userId = useAuthStore.getState().user?.id ?? '';
+  return `${userId}|${config.baseURL ?? ''}${config.url}?${JSON.stringify(config.params ?? {})}`;
+}
+
 const apiClient: AxiosInstance = axios.create({
   baseURL: APP_CONFIG.API_BASE_URL,
   timeout: APP_CONFIG.REQUEST_TIMEOUT,
@@ -179,6 +195,19 @@ apiClient.interceptors.request.use(
       request._authSession = currentSession;
     }
 
+    const key = cacheKey(request);
+    const hit = key ? getCache.get(key) : undefined;
+    if (hit && Date.now() - hit.at < GET_CACHE_TTL_MS) {
+      request.adapter = async () => ({
+        data: hit.data,
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config: request,
+        request: { fromCache: true },
+      });
+    }
+
     const token = await storageService.getToken();
     assertCurrentAuthSession(request._authSession);
 
@@ -193,7 +222,16 @@ apiClient.interceptors.request.use(
 // Response interceptor – refresh only within the initiating auth session.
 // Only safe read methods are automatically replayed.
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const key = cacheKey(response.config as InternalAxiosRequestConfig);
+    if (!key) {
+      if (response.config.method?.toLowerCase() !== 'get') clearApiCache();
+    } else if (!(response.request as { fromCache?: boolean } | undefined)?.fromCache) {
+      if (getCache.size >= GET_CACHE_MAX) getCache.delete(getCache.keys().next().value as string);
+      getCache.set(key, { at: Date.now(), data: response.data });
+    }
+    return response;
+  },
   async (error: AxiosError) => {
     const originalRequest = error.config as SessionAwareRequestConfig | undefined;
 
