@@ -70,3 +70,17 @@ it('never turns a failed preview into a price, and retries on demand', async () 
   await flush();
   expect(texts(r)).toContain('Cần khảo sát để báo giá');
 });
+
+it('offers floor-standing AC without a horsepower question, and a dryer answer that skips door/capacity', async () => {
+  const { r } = mount({ deviceAttributes: { acMounting: 'floor', acHorsepower: undefined } });
+  getPreview.mockResolvedValue(answer({ ...base, status: 'INSPECTION_REQUIRED', selectedVariant: null, missingAttributes: ['acHorsepower'] }));
+  await flush();
+  expect(texts(r)).toContain('Tủ đứng');
+  expect(texts(r)).not.toContain('Công suất máy lạnh');
+
+  const w = mount({ deviceAttributes: { washerHasDryer: true } });
+  await flush();
+  expect(texts(w.r)).toContain('Chức năng sấy');
+  expect(texts(w.r)).not.toContain('Kiểu cửa máy giặt');
+  expect(texts(w.r)).not.toContain('Khối lượng giặt mỗi lần');
+});

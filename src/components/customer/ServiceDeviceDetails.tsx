@@ -16,9 +16,11 @@ import { formatVnd } from '../../utils/format';
 
 type LoadState = 'loading' | 'ready' | 'failed';
 
-const MOUNTING = [{ value: 'wall', label: 'Treo tường' }, { value: 'ceiling', label: 'Âm trần cassette' }] as const;
+const MOUNTING = [{ value: 'wall', label: 'Treo tường' }, { value: 'ceiling', label: 'Âm trần cassette' }, { value: 'floor', label: 'Tủ đứng' }] as const;
+
 const HORSEPOWER = [{ value: 'up_to_1_5', label: '≤ 1.5 HP' }, { value: '2_to_2_5', label: '2 – 2.5 HP' }] as const;
 const WASHER_STYLE = [{ value: 'top', label: 'Cửa trên' }, { value: 'front', label: 'Cửa ngang' }] as const;
+const WASHER_DRYER = [{ value: 'no', label: 'Không sấy' }, { value: 'yes', label: 'Có sấy' }] as const;
 const WASHER_KG = [{ value: 9, label: '≤ 9 kg' }, { value: 10, label: 'Trên 9 kg' }] as const;
 
 interface Props {
@@ -130,9 +132,11 @@ export default function ServiceDeviceDetails({
   const missing = new Set(preview?.missingAttributes ?? []);
   const a = deviceAttributes;
   const showMounting = missing.has('acMounting') || !!a.acMounting;
-  const showHp = (missing.has('acHorsepower') || !!a.acHorsepower) && a.acMounting !== 'ceiling';
-  const showStyle = missing.has('washerLoadingStyle') || !!a.washerLoadingStyle;
-  const showKg = missing.has('washerCapacityKg') || typeof a.washerCapacityKg === 'number';
+  const showHp = (missing.has('acHorsepower') || !!a.acHorsepower) && a.acMounting !== 'ceiling' && a.acMounting !== 'floor';
+  const hasDryer = a.washerHasDryer === true;
+  const showStyle = !hasDryer && (missing.has('washerLoadingStyle') || !!a.washerLoadingStyle);
+  const showKg = !hasDryer && (missing.has('washerCapacityKg') || typeof a.washerCapacityKg === 'number');
+  const showDryer = showStyle || showKg || a.washerHasDryer !== undefined;
   const variants = preview?.possibleVariants ?? [];
   const showScopes = variants.length > 0 && (missing.has('service-specific-scope-confirmation')
     || (preview?.status === 'FIXED_PRICE' && variants.length > 1));
@@ -146,15 +150,17 @@ export default function ServiceDeviceDetails({
         {state === 'loading' ? <ActivityIndicator size="small" color={colors.primary} accessibilityLabel="Đang kiểm tra phạm vi giá" /> : null}
       </View>
 
-      {showMounting || showHp || showStyle || showKg ? (
+      {showMounting || showHp || showStyle || showKg || showDryer ? (
         <Text style={[styles.hint, { color: colors.textSecondary }]}>
           Trả lời vài thông tin để hệ thống đối chiếu đúng phạm vi đã được duyệt cho thiết bị của bạn.
         </Text>
       ) : null}
       {showMounting ? <Choice testID="device-fact-ac-mounting" title="Cách lắp đặt dàn lạnh" options={MOUNTING} value={a.acMounting} disabled={busy}
-        onPick={(v) => { const n = { ...a, acMounting: v }; if (v === 'ceiling') delete n.acHorsepower; applyFacts(n); }} /> : null}
+        onPick={(v) => { const n = { ...a, acMounting: v }; if (v === 'ceiling' || v === 'floor') delete n.acHorsepower; applyFacts(n); }} /> : null}
       {showHp ? <Choice testID="device-fact-ac-horsepower" title="Công suất máy lạnh" options={HORSEPOWER} value={a.acHorsepower} disabled={busy}
         onPick={(v) => applyFacts({ ...a, acHorsepower: v })} /> : null}
+      {showDryer ? <Choice testID="device-fact-washer-dryer" title="Chức năng sấy" options={WASHER_DRYER} value={a.washerHasDryer === undefined ? undefined : a.washerHasDryer ? 'yes' : 'no'} disabled={busy}
+        onPick={(v) => { const n = { ...a, washerHasDryer: v === 'yes' }; if (v === 'yes') { delete n.washerLoadingStyle; delete n.washerCapacityKg; } applyFacts(n); }} /> : null}
       {showStyle ? <Choice testID="device-fact-washer-style" title="Kiểu cửa máy giặt" options={WASHER_STYLE} value={a.washerLoadingStyle} disabled={busy}
         onPick={(v) => applyFacts({ ...a, washerLoadingStyle: v })} /> : null}
       {showKg ? <Choice testID="device-fact-washer-capacity" title="Khối lượng giặt mỗi lần" options={WASHER_KG} value={a.washerCapacityKg as 9 | 10 | undefined} disabled={busy}

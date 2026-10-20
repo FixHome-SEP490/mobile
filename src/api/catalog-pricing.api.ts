@@ -9,10 +9,11 @@ import apiClient from './client';
 /** Customer-reported facts. An unanswered fact is simply omitted ("unknown" never travels). */
 export interface BookingDeviceAttributes {
   brand?: string;
-  acMounting?: 'wall' | 'ceiling';
+  acMounting?: 'wall' | 'ceiling' | 'floor';
   acHorsepower?: 'up_to_1_5' | '2_to_2_5';
   washerLoadingStyle?: 'top' | 'front';
   washerCapacityKg?: number;
+  washerHasDryer?: boolean;
 }
 
 export interface CatalogPricingVariant {
@@ -111,8 +112,8 @@ export const catalogPricingApi = {
     query: BookingDeviceAttributes & { selectedVariantCode?: string } = {},
     signal?: AbortSignal,
   ): Promise<CatalogPricingPreview> {
-    const params: Record<string, string | number> = {};
-    for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== null && v !== '') params[k] = v as string | number;
+    const params: Record<string, string | number | boolean> = {};
+    for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== null && v !== '') params[k] = v as string | number | boolean;
     const res = await apiClient.get(`/services/${encodeURIComponent(serviceId)}/catalog-v2-pricing`, { params, signal });
     return normalizePricingPreview(res.data);
   },
