@@ -21,7 +21,7 @@ import * as Haptics from 'expo-haptics';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { useAppTheme } from '../../constants/theme';
 import {
-  partRequestsApi, partReturnsApi, canDeclareMoreQty, createIdempotencyKey, isPartReturnsUnavailableError, pendingDeclaredQty,
+  partRequestsApi, partReturnsApi, canDeclareMoreQty, createIdempotencyKey, isPartReturnsUnavailableError, partReturnStatusText, pendingDeclaredQty,
   type PartRequest, type FulfillmentMethod, type PartCustodyReturnRecord,
 } from '../../api/part-requests.api';
 import { partsCatalogApi, type FixHomePart } from '../../api/parts-catalog.api';
@@ -567,7 +567,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
                   <View style={[styles.statusBadge, { borderColor: statusColor(pr.status, colors) }]}>
                     <Text style={[styles.statusBadgeText, { color: statusColor(pr.status, colors) }]}>{statusLabel(pr.status)}</Text>
                   </View>
-                  <Text style={styles.typeTag}>{pr.requestType === 'pre_repair' ? 'Trước sửa chữa' : 'Phát sinh khi sửa'}</Text>
+                  <Text style={styles.typeTag}>{pr.requestType === 'pre_repair' ? 'Trước sửa chữa' : pr.requestType === 'quotation' ? 'Theo báo giá' : 'Phát sinh khi sửa'}</Text>
                   <Text style={styles.jobMeta}>{pr.fulfillmentMethod === 'delivery' ? 'Giao hàng' : 'Tự lấy'}</Text>
                 </View>
                 {!!pr.reason && <Text style={styles.jobMeta}>Lý do: {pr.reason}</Text>}
@@ -650,16 +650,20 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
                   const record = returns[item.id];
                   if (!record) return null;
                   const pending = pendingDeclaredQty(record);
+                  // Older Backends send no status: fall back to the quantities.
+                  const statusNote = record.returnStatus ? partReturnStatusText(record.returnStatus)
+                    : pending > 0 ? partReturnStatusText('declared') : record.outstandingQty === 0 ? partReturnStatusText('received') : null;
                   const max = canDeclareMoreQty(record);
                   const open = declareItemId === item.id;
                   return (
                     <View key={`ret-${item.id}`} style={styles.returnBox} testID={`part-return-${item.id}`}>
                       <Text style={styles.resultName}>{`Hoàn trả: ${item.partNameSnapshot}`}</Text>
                       <Text style={styles.jobMeta}>{`Cấp ${record.issuedQty} · Dùng ${record.usedQty} · Cần trả ${record.outstandingQty}`}</Text>
-                      {pending > 0 ? (
-                        <Text style={[styles.jobMeta, { color: colors.tone.warning.text }]}>Đang chờ quản lý xác nhận</Text>
-                      ) : record.outstandingQty === 0 ? (
-                        <Text style={[styles.jobMeta, { color: colors.tone.success.text }]}>Đã nhận</Text>
+                      {statusNote ? (
+                        <Text style={[styles.jobMeta, { color: colors.tone[statusNote.tone].text }]}>{statusNote.text}</Text>
+                      ) : null}
+                      {record.blocksNewWork ? (
+                        <Text style={[styles.jobMeta, { color: colors.tone.warning.text }]}>Bạn chưa trả đủ linh kiện nên chưa nhận được việc mới.</Text>
                       ) : null}
                       {max > 0 && !open ? (
                         <TouchableOpacity

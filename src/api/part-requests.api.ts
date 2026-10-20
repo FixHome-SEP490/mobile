@@ -2,7 +2,7 @@
 import apiClient from './client';
 
 export type PartRequestStatus = 'requested' | 'ready' | 'delivering' | 'received' | 'completed' | 'cancelled';
-export type PartRequestType = 'pre_repair' | 'additional';
+export type PartRequestType = 'pre_repair' | 'additional' | 'quotation';
 export type FulfillmentMethod = 'pickup' | 'delivery';
 export type PartUsageStatus = 'pending' | 'used' | 'returned';
 export type PartSource = 'fixhome' | 'technician' | 'external';
@@ -31,6 +31,8 @@ export interface PartRequest {
   reason?: string | null;
   shippingFee: number;
   additionalCostId?: string | null;
+  /** Set on a `quotation` request: the approved quotation whose missing FixHome parts it supplies (BE P013). */
+  quotationId?: string | null;
   qrToken?: string | null;
   qrGeneratedAt?: string | null;
   receivedAt?: string | null;
@@ -119,6 +121,25 @@ export interface PartCustodyReturnRecord {
   managerAcceptedQty: number;
   outstandingQty: number;
   version: number;
+  /** Return tracking (BE 20/10/2026), present only when the Backend sends it. */
+  returnStatus?: PartReturnStatus;
+  /** True while this line keeps the technician from taking new jobs. */
+  blocksNewWork?: boolean;
+  trackingOnly?: boolean;
+  usageRecorded?: boolean;
+}
+
+export type PartReturnStatus = 'outstanding' | 'declared' | 'partially_received' | 'exception' | 'received' | 'not_required';
+
+/** What to tell the technician about one return line, or null when there is nothing to add. */
+export function partReturnStatusText(status: PartReturnStatus | undefined): { text: string; tone: 'warning' | 'success' } | null {
+  switch (status) {
+    case 'declared': return { text: 'Đang chờ quản lý xác nhận', tone: 'warning' };
+    case 'partially_received': return { text: 'Quản lý mới nhận một phần, còn thiếu', tone: 'warning' };
+    case 'exception': return { text: 'Số lượng thực nhận lệch với khai báo, hãy liên hệ quản lý', tone: 'warning' };
+    case 'received': return { text: 'Đã nhận', tone: 'success' };
+    default: return null;
+  }
 }
 
 export interface DeclareReturnPayload {
@@ -149,6 +170,13 @@ export const partReturnsApi = {
     const res = await apiClient.get<{ data: PartCustodyReturnRecord[] } | PartCustodyReturnRecord[]>(
       `/service-orders/${orderId}/part-returns`,
     );
+    const result = unwrap(res.data);
+    return Array.isArray(result) ? result : [];
+  },
+
+  /** Every line the technician still owes or has settled, across orders, including finished ones (BE tracking mode). */
+  async getMine(): Promise<PartCustodyReturnRecord[]> {
+    const res = await apiClient.get<{ data: PartCustodyReturnRecord[] } | PartCustodyReturnRecord[]>('/part-returns/mine');
     const result = unwrap(res.data);
     return Array.isArray(result) ? result : [];
   },

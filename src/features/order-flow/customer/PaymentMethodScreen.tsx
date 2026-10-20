@@ -12,6 +12,10 @@ import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import type { PaymentMethod } from './payment-facts';
 
+/** VNPay does not take less than this; the backend answers 422 before it creates a payment. */
+const VNPAY_MIN = 5000;
+
+const NO_CHARGE_METHOD = { id: 'no_charge' as PaymentMethod, label: 'Xác nhận miễn phí', hint: 'Hóa đơn 0 ₫, không cần trả tiền' };
 const METHODS: { id: PaymentMethod; label: string; hint: string }[] = [
   { id: 'wallet', label: 'Ví FixHome', hint: 'Thanh toán bằng số dư ví của bạn' },
   { id: 'vnpay', label: 'VNPay', hint: 'Mở cổng thanh toán VNPay trong trình duyệt' },
@@ -92,7 +96,7 @@ export default function PaymentMethodScreen() {
       // VNPay initiation only creates the link; this explicit confirmation opens it once.
       // Cash confirm only sends the captured declaration; the dispatcher shows the outcome.
       if (method === 'vnpay') void controller.openPaymentUrl();
-      else if (method === 'cash') navigation.navigate('OrderTask');
+      else if (method === 'cash' || method === 'no_charge') navigation.navigate('OrderTask');
     });
   };
 
@@ -133,7 +137,7 @@ export default function PaymentMethodScreen() {
               accessibilityHint: 'Đối chiếu kết quả thanh toán chưa rõ từ máy chủ',
               onPress: () => { void controller.verify(); navigation.navigate('OrderTask'); } }
           : sheetValid && sheetMethod
-            ? { label: sheetMethod === 'vnpay' ? 'Xác nhận mở VNPay' : 'Xác nhận tiền mặt',
+            ? { label: sheetMethod === 'vnpay' ? 'Xác nhận mở VNPay' : sheetMethod === 'no_charge' ? 'Xác nhận miễn phí' : 'Xác nhận tiền mặt',
                 testID: 'payment-confirm-submit', disabled: busy, onPress: submitSheet }
             : state.urlReady
               ? { label: 'Mở cổng thanh toán', testID: 'payment-open-browser', disabled: busy, onPress: openBrowser }
@@ -172,13 +176,17 @@ export default function PaymentMethodScreen() {
       {sheetValid && sheet && sheetMethod ? (
         <View style={{ backgroundColor: colors.tone.warning.bg, borderColor: colors.tone.warning.fg, borderWidth: 1, borderRadius: 12, padding: spacing.md }} testID="payment-confirm-sheet">
           <Text style={{ fontSize: 16, fontWeight: '700', color: colors.tone.warning.text }}>
-            {sheetMethod === 'vnpay' ? 'Xác nhận mở cổng VNPay' : 'Xác nhận thanh toán tiền mặt'}
+            {sheetMethod === 'vnpay' ? 'Xác nhận mở cổng VNPay' : sheetMethod === 'no_charge' ? 'Xác nhận hóa đơn miễn phí' : 'Xác nhận thanh toán tiền mặt'}
           </Text>
           <DetailRow label="Mã hóa đơn" value={sheet.invoiceId} />
           <DetailRow label="Số tiền đã chốt" value={sheet.amount} />
           {sheetMethod === 'cash' ? (
             <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }}>
               Chỉ xác nhận khi bạn đã trực tiếp trả đúng số tiền trên cho kỹ thuật viên.
+            </Text>
+          ) : sheetMethod === 'no_charge' ? (
+            <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }}>
+              Hóa đơn này là 0 ₫ nên không có khoản thanh toán nào. Xác nhận để hoàn tất đơn.
             </Text>
           ) : (
             <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }}>
@@ -198,9 +206,10 @@ export default function PaymentMethodScreen() {
         </View>
       ) : null}
       <View style={{ gap: 8 }}>
-        {METHODS.map(method => {
+        {(invoice?.amount === 0 ? [NO_CHARGE_METHOD] : METHODS).map(method => {
           const cashBlocked = method.id === 'cash' && !cashAwaiting;
-          const disabled = frozen || !unpaid || !invoice || cashBlocked || busy;
+          const vnpayTooSmall = method.id === 'vnpay' && !!invoice && invoice.amount < VNPAY_MIN;
+          const disabled = frozen || !unpaid || !invoice || cashBlocked || vnpayTooSmall || busy;
           return (
             <TouchableOpacity
               key={method.id}
@@ -224,7 +233,7 @@ export default function PaymentMethodScreen() {
             >
               <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>{method.label} ›</Text>
               <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-                {method.id === 'cash' && !cashAwaiting ? 'Chờ kỹ thuật viên khai báo số tiền đã nhận.' : method.hint}
+                {method.id === 'cash' && !cashAwaiting ? 'Chờ kỹ thuật viên khai báo số tiền đã nhận.' : vnpayTooSmall ? 'VNPay chỉ nhận từ 5.000 ₫; hãy dùng ví hoặc tiền mặt.' : method.hint}
               </Text>
             </TouchableOpacity>
           );

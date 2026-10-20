@@ -9,6 +9,7 @@ import { cashFact, financialResult, hasCompletionRequest, invoiceFact, isUnresol
 export interface OrderPaymentTransport {
   payWallet: (invoiceId: string) => Promise<unknown>;
   createVnpayUrl: (invoiceId: string) => Promise<string>;
+  confirmNoCharge: (invoiceId: string) => Promise<unknown>;
   confirmCash: (orderId: string, dto: CashConfirmationDto) => Promise<unknown>;
   readWallet: () => Promise<unknown>;
   openUrl: (url: string) => Promise<unknown>;
@@ -26,7 +27,9 @@ export interface OrderPaymentState {
   confirmation: PaymentConfirmation | null; result: FinancialResult; message: string | null;
   wallet: Resource<CustomerWalletSummary>; urlReady: boolean;
 }
-const paymentOperations = ['wallet-pay', 'vnpay-url', 'cash-confirm'];
+const paymentOperations = ['wallet-pay', 'vnpay-url', 'no-charge', 'cash-confirm'];
+/** Answers that prove the no-charge call changed nothing: it validates and locks before any write. CONFLICT is a zero invoice that does not match the approved costs; the invoice is read back, so a locked screen is worse than a retry. */
+const NO_CHARGE_REJECTED = ['OWNERSHIP_DENIED', 'NOT_FOUND', 'ORDER_INVALID_TRANSITION', 'EVIDENCE_REQUIRED_AFTER', 'VALIDATION_FAILED', 'CONFLICT'];
 const VNPAY_LINK_TTL_MS = 15 * 60 * 1000;
 /** Exclusive durable order/invoice lock. No amount or redirect data is persisted. */
 export function createOrderPaymentController(deps: OrderPaymentDependencies) {
@@ -49,7 +52,7 @@ export function createOrderPaymentController(deps: OrderPaymentDependencies) {
   function eligible(key: OrderSessionKey, method: PaymentMethod) {
     const order = m6Order(snapshot(), key), invoice = invoiceFact(snapshot(), key), cash = cashFact(snapshot(), key);
     if (!owned(key) || !order || !hasCompletionRequest(order) || !['UNDER_REPAIR', 'COMPLETED'].includes(order.status)
-      || !invoice || invoice.status !== 'unpaid' || (method !== 'cash' && invoice.amount <= 0) || cash === undefined) return null;
+      || !invoice || invoice.status !== 'unpaid' || (method === 'no_charge' ? invoice.amount !== 0 : method !== 'cash' && invoice.amount <= 0) || cash === undefined) return null;
     if (method !== 'cash' && cash !== null) return null;
     if (method === 'cash' && cash && cash.status !== 'pending_confirmation') return null;
     return { key: { ...key }, invoiceId: invoice.id, amount: invoice.amount, method,
@@ -110,7 +113,7 @@ export function createOrderPaymentController(deps: OrderPaymentDependencies) {
     const pending = !resolved && !failed && redirect && redirect.intentId === marker?.intentId && !redirect.failed;
     if (resolved) redirect = null;
     publish({ phase: resolved ? 'resolved' : failed ? 'failed-known' : pending ? 'pending' : 'unknown',
-      method: marker?.operation === 'wallet-pay' ? 'wallet' : marker?.operation === 'vnpay-url' ? 'vnpay' : marker?.operation === 'cash-confirm' ? 'cash' : null,
+      method: marker?.operation === 'wallet-pay' ? 'wallet' : marker?.operation === 'vnpay-url' ? 'vnpay' : marker?.operation === 'no-charge' ? 'no_charge' : marker?.operation === 'cash-confirm' ? 'cash' : null,
       confirmation: null, result: financialResult(snapshot(), key), urlReady: !!pending && !redirect?.opened,
       message: resolved ? null : failed ? 'Thanh toán chưa được thực hiện. Hãy kiểm tra dữ liệu trước khi xác nhận lại.' : FINANCIAL_UNKNOWN });
   }
@@ -118,7 +121,7 @@ export function createOrderPaymentController(deps: OrderPaymentDependencies) {
     const target = state.confirmation; if (!target || busy || state.phase !== 'confirming' || !matches(target)) return;
     const key = target.key; busy = true; let sent = false, precommit = false;
     publish({ phase: 'submitting', target, message: null });
-    const operation = target.method === 'wallet' ? 'wallet-pay' : target.method === 'vnpay' ? 'vnpay-url' : 'cash-confirm';
+    const operation = target.method === 'wallet' ? 'wallet-pay' : target.method === 'vnpay' ? 'vnpay-url' : target.method === 'no_charge' ? 'no-charge' : 'cash-confirm';
     const intentId = deps.newIntentId();
     const adapter = createOrderCommandAdapter(deps.journal, { isCurrent: owned, refresh: key => refresh(key) });
     try {
@@ -139,6 +142,14 @@ export function createOrderPaymentController(deps: OrderPaymentDependencies) {
         } else if (target.method === 'vnpay') {
           const url = paymentHttpsUrl(await deps.transport.createVnpayUrl(target.invoiceId));
           if (url && same(key)) redirect = { key: { ...key }, intentId, invoiceId: target.invoiceId, url, opened: false, failed: false };
+        } else if (target.method === 'no_charge') {
+          try { await deps.transport.confirmNoCharge(target.invoiceId); }
+          catch (error) {
+            const response = financialRecord(financialRecord(error)?.response), body = financialRecord(response?.data);
+            const code = financialRecord(body?.error)?.code;
+            precommit = body?.success === false && typeof code === 'string' && NO_CHARGE_REJECTED.includes(code);
+            throw error;
+          }
         } else if (target.cashDto) await deps.transport.confirmCash(key.serviceOrderId, target.cashDto);
       }, () => !sent ? 'failed-known' : verdict(key, deps.journal.list(key.userId).find(m => m.intentId === intentId)!));
       if (precommit || !sent) {
@@ -166,7 +177,7 @@ export function createOrderPaymentController(deps: OrderPaymentDependencies) {
   return {
     getState: () => state,
     subscribe(fn: () => void) { listeners.add(fn); return () => { listeners.delete(fn); }; },
-    requestPayment: (method: PaymentMethod) => ['wallet', 'vnpay', 'cash'].includes(method) ? prepare(method) : Promise.resolve(),
+    requestPayment: (method: PaymentMethod) => ['wallet', 'vnpay', 'cash', 'no_charge'].includes(method) ? prepare(method) : Promise.resolve(),
     async requestCashConfirmation(input: CashConfirmationDto) {
       let dto: CashConfirmationDto;
       try { dto = validateCashConfirmation(input); }

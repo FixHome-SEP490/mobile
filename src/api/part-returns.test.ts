@@ -1,5 +1,5 @@
 import {
-  canDeclareMoreQty, createIdempotencyKey, isPartReturnsUnavailableError, pendingDeclaredQty, type PartCustodyReturnRecord,
+  canDeclareMoreQty, createIdempotencyKey, isPartReturnsUnavailableError, partReturnStatusText, pendingDeclaredQty, type PartCustodyReturnRecord,
 } from './part-requests.api';
 
 const rec = (over: Partial<PartCustodyReturnRecord>): PartCustodyReturnRecord => ({
@@ -20,5 +20,15 @@ describe('part returns', () => {
     for (const status of [403, 404, 501, 503]) expect(isPartReturnsUnavailableError({ response: { status } })).toBe(true);
     expect(isPartReturnsUnavailableError({ response: { status: 500 } })).toBe(false);
     expect(createIdempotencyKey('declare')).toMatch(/^[A-Za-z0-9._:-]{8,128}$/);
+  });
+
+  it('names each tracked return status and stays silent when nothing needs saying', () => {
+    expect(partReturnStatusText('declared')?.tone).toBe('warning');
+    expect(partReturnStatusText('partially_received')?.text).toContain('một phần');
+    expect(partReturnStatusText('exception')?.text).toContain('lệch');
+    expect(partReturnStatusText('received')).toEqual({ text: 'Đã nhận', tone: 'success' });
+    expect(partReturnStatusText('outstanding')).toBeNull();
+    expect(partReturnStatusText('not_required')).toBeNull();
+    expect(partReturnStatusText(undefined)).toBeNull();
   });
 });

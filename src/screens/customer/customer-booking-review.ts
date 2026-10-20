@@ -85,7 +85,7 @@ export function buildBookingReviewSnapshot({
     );
   }
 
-  if (!schedule && (!date || !time)) throw new Error('Vui lòng chọn ngày và buổi (sáng hoặc chiều).');
+  if (!schedule && (!date || !time)) throw new Error('Vui lòng chọn ngày và buổi (sáng, chiều hoặc tối).');
   const window = schedule ? buildScheduleWindow(schedule, now) : buildCustomerBookingWindow({ date: date!, time: time!, now });
   const note = customerNote?.trim() ?? '';
   if (note.length > 1000) throw new Error('Ghi chú cho thợ tối đa 1000 ký tự.');

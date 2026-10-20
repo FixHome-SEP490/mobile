@@ -239,7 +239,7 @@ export default function PartsLifecycleScreen() {
             <View key={req.id} style={styles.requestCard} testID={`parts-request-${req.id}`}>
               <View style={styles.requestHeader}>
                 <Text style={styles.requestTitle}>
-                  Yêu cầu #{rIdx + 1} ({req.requestType === 'pre_repair' ? 'Linh kiện dự kiến' : 'Linh kiện sửa chữa'})
+                  Yêu cầu #{rIdx + 1} ({req.requestType === 'pre_repair' ? 'Linh kiện dự kiến' : req.requestType === 'quotation' ? 'Linh kiện theo báo giá' : 'Linh kiện sửa chữa'})
                 </Text>
                 <View style={[styles.statusBadge, getStatusBadgeStyle(req.status)]}>
                   <Text style={styles.statusText}>{statusLabel(req.status)}</Text>

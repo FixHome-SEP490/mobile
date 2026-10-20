@@ -19,8 +19,20 @@ describe('session scheduling helpers', () => {
   it('lists only sessions that have not started, 14 days ahead', () => {
     const list = upcomingSessions(14, now);
     expect(list[0]).toEqual({ date: '2026-10-15', slot: 'afternoon' });
-    expect(list).toHaveLength(27);
-    expect(list[list.length - 1]).toEqual({ date: '2026-10-28', slot: 'afternoon' });
+    expect(list).toHaveLength(41);
+    expect(list[list.length - 1]).toEqual({ date: '2026-10-28', slot: 'evening' });
+  });
+
+  it('keeps the evening open until 23:00 and books it from now once it has started', () => {
+    const evening = new Date('2026-10-15T13:30:00Z'); // 20:30 Vietnam time
+    expect(upcomingSessions(1, evening)).toEqual([{ date: '2026-10-15', slot: 'evening' }]);
+    expect(upcomingSessions(1, new Date('2026-10-15T16:00:00Z')).some((s) => s.date === '2026-10-15')).toBe(false); // 23:00
+    expect(buildScheduleWindow({ mode: 'scheduled', date: '2026-10-15', slot: 'evening' }, evening)).toEqual({
+      mode: 'scheduled', date: '2026-10-15', slot: 'evening',
+      preferredStartAt: '2026-10-15T13:30:00.000Z', preferredEndAt: '2026-10-15T16:00:00.000Z',
+    });
+    expect(buildScheduleWindow({ mode: 'scheduled', date: '2026-10-16', slot: 'evening' }, now).preferredStartAt).toBe('2026-10-16T11:00:00.000Z');
+    expect(sessionLabel({ bookingMode: 'scheduled', slot: 'evening', start: '2026-10-15T11:00:00Z' })).toBe('Buổi tối (18:00 - 23:00), 15/10/2026');
   });
 
   it('labels days and summarises the schedule', () => {

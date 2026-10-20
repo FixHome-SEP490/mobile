@@ -62,7 +62,7 @@ function getRestoredM6Recovery(
   if (!order || order.id !== key.serviceOrderId || isHistoricalOrder(order)) return null;
   if (key.role === 'technician' && order.technician?.id !== key.userId) return null;
   const allowed = key.role === 'customer'
-    ? ['wallet-pay', 'vnpay-url', 'cash-confirm']
+    ? ['wallet-pay', 'vnpay-url', 'no-charge', 'cash-confirm']
     : ['after-upload', 'evidence-delete', 'request-completion', 'cash-declare'];
   const match = journal.list(key.userId).find(m =>
     allowed.includes(m.operation) && m.serviceOrderId === key.serviceOrderId && m.role === key.role

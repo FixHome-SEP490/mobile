@@ -73,9 +73,9 @@ export interface ServiceOrderItem {
   customerPhone: string;
   addressSummary: string;
   scheduledAt: string;
-  /** scheduled = one morning/afternoon session; urgent = come now (PO 08/10/2026). */
+  /** scheduled = one morning/afternoon/evening session; urgent = come now (PO 08/10/2026). */
   bookingMode?: 'scheduled' | 'urgent';
-  slot?: 'morning' | 'afternoon' | null;
+  slot?: 'morning' | 'afternoon' | 'evening' | null;
   customerNote?: string | null;
   /** Labor warranty (days) fixed when the technician was assigned. */
   laborWarrantyDays?: number | null;
@@ -689,6 +689,11 @@ export const ordersApi = {
 
   async payInvoiceWithWallet(id: string): Promise<unknown> {
     return unwrap((await apiClient.post(`/invoices/${id}/pay-with-wallet`)).data);
+  },
+
+  /** A genuine zero invoice is confirmed without a provider or wallet transaction (BE P013). */
+  async confirmNoCharge(id: string): Promise<unknown> {
+    return unwrap((await apiClient.post(`/invoices/${id}/no-charge`)).data);
   },
 
   async createVnpayUrl(id: string): Promise<string> {

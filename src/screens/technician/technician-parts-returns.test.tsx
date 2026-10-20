@@ -69,3 +69,12 @@ it('hides the whole return block when the backend has the feature off', async ()
   expect(texts(r)).not.toContain('Hoàn trả:');
   expect(texts(r)).toContain('Block');
 });
+
+it('shows the tracked status, the new-work block and the quotation label', async () => {
+  (partRequestsApi.getByOrderId as jest.Mock).mockResolvedValue([{ ...request, requestType: 'quotation' }]);
+  (partReturnsApi.getByOrderId as jest.Mock).mockResolvedValue([{ ...record, returnStatus: 'exception', blocksNewWork: true }]);
+  const r = await mount();
+  expect(texts(r)).toContain('Theo báo giá');
+  expect(texts(r)).toContain('lệch với khai báo');
+  expect(texts(r)).toContain('chưa nhận được việc mới');
+});

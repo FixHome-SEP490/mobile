@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-20 01:57 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: fix/activity-split
+> Cập nhật lần cuối: 2026-10-20 16:40 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/web-be-sync-20261020
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -272,6 +272,13 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 - Chỉ đổi giao diện `CustomerWalletScreen`, không đổi logic nạp, rút, kiểm tra hay phân trang: đầu trang có nút Quay lại, dòng nhỏ "Ví của tôi", tiêu đề "Ví FixHome" và nút làm mới; thẻ số dư nền `#193E70` cỡ 32 như ví thợ (lỗi tải vẫn hiện "Chưa tải được số dư", không bao giờ hiện 0); hai nút Nạp tiền (đặc) và Rút tiền (viền) cao 48 bo 14; mỗi giao dịch là một thẻ viền mảnh bo 14; phân trang là "Trước, Trang n/tổng, Sau"; bỏ nút "Chi tiết" và mã tham chiếu thô (chuỗi UUID khách không dùng được) khỏi từng giao dịch. Kéo xuống để làm mới. Test `CustomerWalletScreen.test.tsx`. CHƯA xem trên máy thật.
 
+### Đồng bộ web và backend 20/10/2026 (nhánh `feat/web-be-sync-20261020`, mốc web `54b2bff`, backend `7d8a116`)
+
+- Ca tối: đặt lịch, đổi lịch, đặt lại có buổi `evening` (Tối 18:00 - 23:00) cạnh sáng và chiều (`utils/booking-session.ts`, `BookingSessionPicker`). Sáng và chiều đóng khi bắt đầu, ca tối còn mở tới 23:00 và khi đã bắt đầu thì khung đến tính từ giờ hiện tại (`isSessionOpen`, `sessionCloseAt`); nhãn `slot` `evening` của đơn, lời mời và booking hiển thị đúng.
+- Hóa đơn 0 ₫: màn Thanh toán chỉ còn một lựa chọn "Xác nhận miễn phí" gọi `POST /invoices/:id/no-charge` (phương thức `no_charge`, thao tác `no-charge` trong nhật ký lệnh, vẫn đối chiếu lại hóa đơn, không tạo Payment hay ví). Lỗi `ORDER_INVALID_TRANSITION`, `EVIDENCE_REQUIRED_AFTER`, `VALIDATION_FAILED`, `CONFLICT`, `OWNERSHIP_DENIED`, `NOT_FOUND` là chưa xác nhận gì, được thử lại; lỗi khác giữ trạng thái chưa rõ. VNPay tắt khi hóa đơn dưới 5.000 ₫ (ví và tiền mặt vẫn dùng được).
+- Linh kiện: loại yêu cầu `quotation` (phần thiếu theo báo giá đã duyệt) hiện nhãn "Theo báo giá"; dòng trả linh kiện đọc thêm `returnStatus`, `blocksNewWork`, `trackingOnly`, `usageRecorded` (hiện "Số lượng thực nhận lệch với khai báo", "Quản lý mới nhận một phần", dòng "chưa nhận được việc mới"); `partReturnsApi.getMine` (`GET /part-returns/mine`) đã có nhưng CHƯA có màn dùng. Cờ theo dõi trả linh kiện và Catalog V2 là cờ của backend, chưa kiểm chứng trên server thật.
+- Chưa làm: bảng tổng hợp thanh toán của đơn trên màn khách như web (`order-billing.ts`, gồm cảnh báo hóa đơn 0 ₫ lệch với báo giá; backend vẫn chặn bằng `CONFLICT`). CHƯA KIỂM CHỨNG với backend thật.
+
 ## 4. Kiến trúc và thư mục chính
 
 - `src/features/order-flow/`: domain/runtime và shared/navigation cho redesign, một provider/reader mỗi phiên đơn. M3 có controller và task screens di chuyển/check-in/face/BEFORE, bằng chứng đúng ID/chủ ảnh và tracker chỉ bật tại màn di chuyển. M4 có controller/hook báo giá, editor và quyết định hai vai trò. M5 dùng controller/hook phát sinh và linh kiện, journal lưu ID trả về thật và kết quả sử dụng cần đối soát; không lưu QR hoặc payload nhạy cảm. Recovery ưu tiên intent chưa rõ, chỉ GET đúng phạm vi. Booking/lời mời phân biệt chắc chắn chưa gửi với POST chưa rõ. Preview vẫn chưa thay route production.
@@ -352,6 +359,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-20 16:40 (UTC+7) | Hgnv11 | feat/web-be-sync-20261020 | Đồng bộ web và backend: ca tối, hóa đơn 0 ₫ (no-charge) và VNPay từ 5.000 ₫, loại linh kiện theo báo giá, trạng thái trả linh kiện
 - 2026-10-20 01:57 (UTC+7) | Hgnv11 | fix/activity-split | Hoạt động: số đếm hai tab và các chip lấy từ server (GET /bookings/my/activity-counts), không còn đếm theo số đã tải; mỗi tab chỉ tải dữ liệu của mình
 - 2026-10-20 00:54 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Ví của khách làm lại theo kiểu ví của thợ: thẻ số dư xanh đậm, nút Nạp tiền và Rút tiền, giao dịch dạng thẻ, kéo để làm mới
 - 2026-10-20 00:36 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Thanh tab khách: tab đang chọn là viên xanh nhạt, chỉ nút Đặt lịch xanh đặc có viền
@@ -391,7 +399,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-17 01:56 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | C45 xóa mốc GPS sau khi map hết hạn; Jest bao phủ GPS mới/thiếu/cũ, đơn kết thúc, blur và background; native runtime CHƯA KIỂM CHỨNG.
 - 2026-10-17 01:53 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | C45 thêm map native marker GPS/địa chỉ đích có điều kiện freshness/lifecycle; Expo Web dùng fallback không tải `react-native-maps`.
 - 2026-10-17 01:42 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | PR-D thêm tra cứu đơn Guest theo mã + điện thoại, giới hạn chung manual/poll 5/60 giây, 429 backoff, kiểm soát focus/background/stale GPS và copy đúng `order.code` ở hai màn Customer; focused 15 suites/124 tests, full Jest 285 suites/3402 tests, lint/typecheck/check:expo/diff check đạt; native/runtime CHƯA KIỂM CHỨNG.
-- 2026-10-17 01:29 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | PR-C thêm quản lý ngân hàng, rút tiền một lần không replay khi ACK chưa rõ, đối soát GET và lịch sử phân trang với ba status thật; focused 3 suites/18 tests, API runtime/thiết bị/giao dịch tài chính CHƯA KIỂM CHỨNG.
 
 ### Lịch sử giữ lại khi tích hợp
 

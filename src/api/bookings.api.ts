@@ -219,7 +219,7 @@ const normalizeBooking = (booking: RawBooking): BookingItem => ({
     : booking.media?.map((m) => m.url) || [],
 });
 
-export type BookingSlot = 'morning' | 'afternoon';
+export type BookingSlot = 'morning' | 'afternoon' | 'evening';
 
 export interface SessionOption {
   date: string;

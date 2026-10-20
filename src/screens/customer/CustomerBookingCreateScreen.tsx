@@ -1042,7 +1042,7 @@ export default function CustomerBookingCreateScreen() {
       return;
     }
     if (!schedule) {
-      setReviewError('Vui lòng chọn ngày và buổi (sáng hoặc chiều), hoặc chọn Tới ngay.');
+      setReviewError('Vui lòng chọn ngày và buổi (sáng, chiều hoặc tối), hoặc chọn Tới ngay.');
       return;
     }
     requestReview();
