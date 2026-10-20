@@ -12,6 +12,7 @@ import {
   Image,
   Modal,
   ActivityIndicator,
+  Switch,
 } from 'react-native';
 import {
   BottomSheetModal,
@@ -26,12 +27,10 @@ import {
   CalendarRange,
   ChartColumn,
   Camera,
-  CheckSquare,
   ChevronRight,
   MapPin,
   MessageSquareText,
   ShieldCheck,
-  Square,
   Star,
   Wallet,
   Wrench,
@@ -665,78 +664,78 @@ export default function TechnicianProfileScreen() {
               const offering = myOfferings[service.id];
               const isFixedPrice = String(service.pricingMode).toLowerCase() === 'fixed_price';
               const verification = offering ? VERIFICATION_VIEW[offering.verificationStatus] : undefined;
+              // Nút Lưu chỉ hiện khi bản nháp khác dữ liệu đã lưu trên server.
+              const dirty = offering
+                ? draft.enabled !== offering.isActive
+                  || draft.typicalWarrantyDays !== (offering.typicalWarrantyDays != null ? String(offering.typicalWarrantyDays) : draft.typicalWarrantyDays)
+                  || (!isFixedPrice && draft.listedLaborPrice !== (offering.listedLaborPrice != null ? String(offering.listedLaborPrice) : ''))
+                : draft.enabled;
+              const saving = savingSkillId === service.id;
+              const setDraft = (patch: Partial<typeof draft>) =>
+                setSkillDrafts((prev) => ({ ...prev, [service.id]: { ...prev[service.id], ...patch } }));
               return (
-                <View style={styles.skillCard}>
-                  <View style={styles.skillCardHeader}>
-                    <TouchableOpacity
-                      style={styles.skillToggleRow}
-                      onPress={() =>
-                        setSkillDrafts((prev) => ({
-                          ...prev,
-                          [service.id]: { ...prev[service.id], enabled: !prev[service.id].enabled },
-                        }))
-                      }
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: draft.enabled }}
-                      accessibilityLabel={service.name}
-                    >
-                      {draft.enabled ? (
-                        <CheckSquare size={22} color={colors.primaryStrong} strokeWidth={1.75} />
-                      ) : (
-                        <Square size={22} color={colors.textSecondary} strokeWidth={1.75} />
-                      )}
+                <View style={styles.skillRow}>
+                  <View style={styles.skillRowHeader}>
+                    <View style={styles.skillTitleCol}>
                       <Text style={styles.skillName} numberOfLines={2}>{service.name}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.skillSaveBtn}
-                      disabled={savingSkillId === service.id}
-                      onPress={() => handleSaveSkill(service)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Lưu ${service.name}`}
-                    >
-                      {savingSkillId === service.id ? (
-                        <ActivityIndicator size="small" color={colors.primaryStrong} />
-                      ) : (
-                        <Text style={styles.skillSaveBtnText}>Lưu</Text>
-                      )}
-                    </TouchableOpacity>
+                      {verification && <StatusBadge view={verification} />}
+                    </View>
+                    <Switch
+                      value={draft.enabled}
+                      onValueChange={(enabled) => setDraft({ enabled })}
+                      trackColor={{ false: colors.border, true: colors.primaryStrong }}
+                      thumbColor={colors.surface}
+                      {...{ activeThumbColor: colors.surface }} // react-native-web: mặc định thumb bật là xanh teal
+                      accessibilityRole="switch"
+                      accessibilityLabel={`Nhận làm ${service.name}`}
+                      accessibilityState={{ checked: draft.enabled }}
+                    />
                   </View>
                   {draft.enabled && (
-                    <>
-                      <View style={styles.skillFieldsRow}>
-                        {!isFixedPrice && (
-                          <View style={styles.skillField}>
-                            <Text style={styles.fieldLabel}>Giá công (₫)</Text>
-                            <BottomSheetTextInput
-                              value={draft.listedLaborPrice}
-                              onChangeText={(v) =>
-                                setSkillDrafts((prev) => ({ ...prev, [service.id]: { ...prev[service.id], listedLaborPrice: v } }))
-                              }
-                              keyboardType="numeric"
-                              placeholder="Nhập giá công"
-                              placeholderTextColor={colors.textSecondary}
-                              accessibilityLabel={`Giá công ${service.name}`}
-                              style={styles.skillFieldInput}
-                            />
-                          </View>
-                        )}
-                        <View style={styles.skillField}>
-                          <Text style={styles.fieldLabel}>Bảo hành (ngày)</Text>
+                    <View style={styles.skillFieldsRow}>
+                      {!isFixedPrice && (
+                        <View style={styles.skillFieldWide}>
+                          <Text style={styles.fieldLabel}>Giá công (₫)</Text>
                           <BottomSheetTextInput
-                            value={draft.typicalWarrantyDays}
-                            onChangeText={(v) =>
-                              setSkillDrafts((prev) => ({ ...prev, [service.id]: { ...prev[service.id], typicalWarrantyDays: v } }))
-                            }
+                            value={draft.listedLaborPrice}
+                            onChangeText={(v) => setDraft({ listedLaborPrice: v })}
                             keyboardType="numeric"
-                            placeholder="Số ngày"
+                            placeholder="Nhập giá công"
                             placeholderTextColor={colors.textSecondary}
-                            accessibilityLabel={`Bảo hành ${service.name}`}
+                            accessibilityLabel={`Giá công ${service.name}`}
                             style={styles.skillFieldInput}
                           />
                         </View>
+                      )}
+                      <View style={styles.skillField}>
+                        <Text style={styles.fieldLabel}>Bảo hành (ngày)</Text>
+                        <BottomSheetTextInput
+                          value={draft.typicalWarrantyDays}
+                          onChangeText={(v) => setDraft({ typicalWarrantyDays: v })}
+                          keyboardType="numeric"
+                          placeholder="Số ngày"
+                          placeholderTextColor={colors.textSecondary}
+                          accessibilityLabel={`Bảo hành ${service.name}`}
+                          style={styles.skillFieldInput}
+                        />
                       </View>
-                      {verification && <StatusBadge view={verification} />}
-                    </>
+                    </View>
+                  )}
+                  {dirty && (
+                    <TouchableOpacity
+                      style={styles.skillSaveBtn}
+                      disabled={saving}
+                      onPress={() => handleSaveSkill(service)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Lưu ${service.name}`}
+                      accessibilityState={{ disabled: saving, busy: saving }}
+                    >
+                      {saving ? (
+                        <ActivityIndicator size="small" color={colors.surface} />
+                      ) : (
+                        <Text style={styles.skillSaveBtnText}>Lưu thay đổi</Text>
+                      )}
+                    </TouchableOpacity>
                   )}
                 </View>
               );
@@ -827,17 +826,18 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   sheetHeader: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 6, gap: 8 },
   sheetSpinner: { marginTop: 24 },
   loadingBlock: { alignItems: 'center', paddingVertical: 24, gap: 8 },
-  pickerListContent: { padding: 16, paddingTop: 12, gap: 12 },
-  skillSectionHeader: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.textSecondary, marginTop: 6, marginBottom: 2 },
+  pickerListContent: { paddingHorizontal: 16, paddingBottom: 32 },
+  skillSectionHeader: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.textSecondary, paddingTop: 16, paddingBottom: 8, backgroundColor: colors.surface },
   skillSectionCount: { fontWeight: '500' },
-  skillCard: { padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 14, gap: 12, backgroundColor: colors.surface },
-  skillCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  skillToggleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, minHeight: 44 },
-  skillName: { fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.text, flexShrink: 1 },
-  skillSaveBtn: { minHeight: 44, minWidth: 64, paddingHorizontal: 16, borderRadius: 14, backgroundColor: colors.primarySoft, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
-  skillSaveBtnText: { color: colors.primaryStrong, fontWeight: '700', fontSize: 14, lineHeight: 20 },
-  skillFieldsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  skillField: { minWidth: 120, flex: 1 },
+  skillRow: { paddingVertical: 12, gap: 12, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  skillRowHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  skillTitleCol: { flex: 1, minWidth: 0, gap: 6, alignItems: 'flex-start' },
+  skillName: { fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.text },
+  skillSaveBtn: { minHeight: 44, paddingHorizontal: 16, borderRadius: 14, backgroundColor: colors.primaryStrong, justifyContent: 'center', alignItems: 'center' },
+  skillSaveBtnText: { color: colors.surface, fontWeight: '600', fontSize: 14, lineHeight: 20 },
+  skillFieldsRow: { flexDirection: 'row', gap: 12 },
+  skillField: { flex: 1, minWidth: 0 },
+  skillFieldWide: { flex: 1.4, minWidth: 0 },
   skillFieldInput: { minHeight: 44, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.textSecondary, borderRadius: 14, color: colors.text, fontSize: 16, backgroundColor: colors.surface },
 
 
