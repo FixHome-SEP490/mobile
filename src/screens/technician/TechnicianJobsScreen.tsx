@@ -242,29 +242,34 @@ export default function TechnicianJobsScreen() {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
       <View style={styles.header}>
         <Text style={styles.headerTitle} accessibilityRole="header">Công việc của tôi</Text>
-        <View
-          style={[
-            styles.searchBox,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}
-        >
-          <Search size={18} color={colors.textSecondary} strokeWidth={1.75} />
-          <TextInput
-            style={styles.searchInput}
-            value={codeQuery}
-            onChangeText={setCodeQuery}
-            placeholder="Tìm theo mã"
-            placeholderTextColor={colors.muted}
-            accessibilityLabel="Tìm theo mã"
-            accessibilityHint="Lọc theo mã trong các công việc đã tải"
-            returnKeyType="search"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        </View>
+        <Text style={styles.headerSubtitle}>
+          {loading ? 'Đang tải công việc…' : showCounts ? `${resolveJobsView(jobsState, 'all').filtered.length} công việc` : (jobsCoverageText ?? '')}
+        </Text>
       </View>
 
       <View style={styles.container}>
+        <View style={styles.searchWrap}>
+          <View
+            style={[
+              styles.searchBox,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <Search size={18} color={colors.textSecondary} strokeWidth={1.75} />
+            <TextInput
+              style={styles.searchInput}
+              value={codeQuery}
+              onChangeText={setCodeQuery}
+              placeholder="Tìm theo mã"
+              placeholderTextColor={colors.muted}
+              accessibilityLabel="Tìm theo mã"
+              accessibilityHint="Lọc theo mã trong các công việc đã tải"
+              returnKeyType="search"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+        </View>
         {/* Bộ lọc công việc — chỉ lọc trên phần đã tải, không bịa số lượng */}
         <ScrollView
           horizontal
@@ -620,19 +625,21 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 16,
+    minHeight: 69, // = Home header
+    justifyContent: 'center',
+    paddingVertical: 12,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.divider,
   },
-  headerTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
+  headerTitle: { fontSize: 20, lineHeight: 24, fontWeight: '700', color: colors.text },
+  headerSubtitle: { fontSize: 12, lineHeight: 16, color: colors.textSecondary },
+  searchWrap: { paddingHorizontal: 16, paddingTop: 12 },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     minHeight: 48,
-    marginTop: 12,
     paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1,

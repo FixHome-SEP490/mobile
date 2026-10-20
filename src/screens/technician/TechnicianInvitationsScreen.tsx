@@ -50,6 +50,7 @@ type NavProp = NativeStackNavigationProp<RootStackParamList>;
 // Floating GlassTabBar: 64pt pill + breathing room, plus the bottom inset (min 16).
 const TAB_BAR_CLEARANCE = 64 + 16;
 const TICK_MS = 30000;
+const NOTICE_MS = 5000;
 
 const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 const VN_TIME = { hour: '2-digit', minute: '2-digit' } as const;
@@ -77,20 +78,9 @@ export default function TechnicianInvitationsScreen() {
     controllerRef.current = createInvitationInbox(bookingsApi, {
       getMyOrdersPage: ordersApi.getTechnicianJobsPage,
       getOrder: ordersApi.getTechnicianOrder,
-    }, setState, (notice, isCurrent) => {
-      Alert.alert(notice.title, notice.message, notice.orderId ? [
-        {
-          text: 'Xem đơn vừa nhận',
-          onPress: () => {
-            if (isCurrent()) {
-              navigation.navigate('TechnicianOrderDetail', {
-                serviceOrderId: notice.orderId!,
-              });
-            }
-          },
-        },
-        { text: 'Để sau', style: 'cancel' },
-      ] : undefined);
+    }, setState, (notice) => {
+      // A verified accept is announced by the 5 s banner below, not a modal.
+      if (!notice.orderId) Alert.alert(notice.title, notice.message);
     }, {
       getUserId: () => {
         const session = useAuthStore.getState();
@@ -114,6 +104,9 @@ export default function TechnicianInvitationsScreen() {
   // Re-evaluate countdowns/expiry while focused. Deadlines come from the server (`expiresAt`).
   const [now, setNow] = useState(() => Date.now());
   const [reviewingInvitationId, setReviewingInvitationId] = useState<string | null>(null);
+  // After the technician answers, the detail closes by itself and a notice shows for 5 s.
+  const [responded, setResponded] = useState<{ id: string; action: 'ACCEPT' | 'DECLINE' } | null>(null);
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
   useFocusEffect(useCallback(() => {
     setNow(Date.now());
     const timer = setInterval(() => setNow(Date.now()), TICK_MS);
@@ -132,19 +125,30 @@ export default function TechnicianInvitationsScreen() {
   // T03 focused scene (UX01A, Main M2T-20261011-011): local view-only selector.
   // When set, the viewport shows only that invitation; Back only clears this
   // selector, never POSTs, reloads or mutates controller/nav/API state.
+  const responseGone = !!responded && !loading && !invitations.some((inv) => inv.id === responded.id);
+  const noticeKey = acceptedOrderId
+    ? `accept:${acceptedOrderId}`
+    : responseGone && responded.action === 'DECLINE' ? `decline:${responded.id}` : null;
+  useEffect(() => {
+    if (!noticeKey) return;
+    const timer = setTimeout(() => setDismissedKey(noticeKey), NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [noticeKey]);
+  const showAccepted = !!acceptedOrderId && dismissedKey !== noticeKey;
+  const showDeclined = !!noticeKey && noticeKey.startsWith('decline:') && dismissedKey !== noticeKey;
   const focusedInvitation = reviewingInvitationId
     ? (sorted.find((inv) => inv.id === reviewingInvitationId) ?? null)
     : null;
-  const isFocused = reviewingInvitationId !== null;
+  const isFocused = reviewingInvitationId !== null && !(responseGone && responded.id === reviewingInvitationId);
   const focusedMissing = isFocused && !loading && !error && focusedInvitation === null;
   useEffect(() => {
-    if (reviewingInvitationId === null) return;
+    if (!isFocused) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       setReviewingInvitationId(null);
       return true;
     });
     return () => sub.remove();
-  }, [reviewingInvitationId]);
+  }, [isFocused]);
   // Keep the tab badge in step with what this screen shows (only once a real load finished).
   useEffect(() => {
     if (!loading && !error) setPendingInvitations(liveCount);
@@ -156,6 +160,7 @@ export default function TechnicianInvitationsScreen() {
     void controller.load().finally(() => setPulling(false));
   };
   const respond = (inv: InvitationItem, action: 'ACCEPT' | 'DECLINE') => {
+    setResponded({ id: inv.id, action });
     // Haptic nudge only; skipped when the OS Reduce Motion setting is on.
     // The mutation guard and controller flow below stay unchanged.
     if (!reduceMotion) {
@@ -394,7 +399,13 @@ export default function TechnicianInvitationsScreen() {
                 </View>
               )}
 
-              {acceptedOrderId ? (
+              {showDeclined ? (
+                <View style={[styles.banner, { backgroundColor: colors.tone.info.bg }]} accessibilityLiveRegion="polite">
+                  <Info size={18} color={colors.tone.info.fg} strokeWidth={1.75} />
+                  <Text style={[styles.bannerText, { color: colors.tone.info.text }]}>Đã từ chối lời mời.</Text>
+                </View>
+              ) : null}
+              {showAccepted && acceptedOrderId ? (
                 <View style={[styles.acceptedCard, { backgroundColor: colors.tone.success.bg }]}>
                   <View style={styles.acceptedTitleRow}>
                     <CheckCircle2 size={18} color={colors.tone.success.fg} strokeWidth={1.75} />
@@ -464,7 +475,13 @@ export default function TechnicianInvitationsScreen() {
               </View>
             )}
 
-            {acceptedOrderId ? (
+            {showDeclined ? (
+              <View style={[styles.banner, { backgroundColor: colors.tone.info.bg }]} accessibilityLiveRegion="polite">
+                <Info size={18} color={colors.tone.info.fg} strokeWidth={1.75} />
+                <Text style={[styles.bannerText, { color: colors.tone.info.text }]}>Đã từ chối lời mời.</Text>
+              </View>
+            ) : null}
+            {showAccepted && acceptedOrderId ? (
               <View style={[styles.acceptedCard, { backgroundColor: colors.tone.success.bg }]}>
                 <View style={styles.acceptedTitleRow}>
                   <CheckCircle2 size={18} color={colors.tone.success.fg} strokeWidth={1.75} />
@@ -562,12 +579,12 @@ export default function TechnicianInvitationsScreen() {
 const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   headerStack: { gap: 16, paddingTop: 16 },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider },
   topBarTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
-  tabHeader: { paddingHorizontal: 16, paddingVertical: 16, gap: 4, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
-  tabTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
+  tabHeader: { minHeight: 69, justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider }, // 69 = Home header
+  tabTitle: { fontSize: 20, lineHeight: 24, fontWeight: '700', color: colors.text },
   topBarSpacer: { width: 44, height: 44 },
-  headerSubtitle: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
+  headerSubtitle: { fontSize: 12, lineHeight: 16, color: colors.textSecondary },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
