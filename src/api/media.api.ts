@@ -1,6 +1,5 @@
 import apiClient from './client';
 import { APP_CONFIG } from '../constants';
-import { storageService } from '../services/storage.service';
 
 export interface MediaUploadImage {
   uri: string;
