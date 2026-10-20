@@ -13,6 +13,7 @@ import {
   Modal,
   ActivityIndicator,
   Switch,
+  Platform,
 } from 'react-native';
 import {
   BottomSheetModal,
@@ -357,18 +358,18 @@ export default function TechnicianProfileScreen() {
     }
   };
 
+  const performLogout = async () => {
+    if (!reduceMotion) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    await authApi.logout();
+    logout();
+  };
+
   const handleLogout = () => {
+    // Alert.alert does not open on React Native Web.
+    if (Platform.OS === 'web') { void performLogout(); return; }
     Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất?', [
       { text: 'Hủy', style: 'cancel' },
-      {
-        text: 'Đăng xuất',
-        style: 'destructive',
-        onPress: async () => {
-          if (!reduceMotion) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-          await authApi.logout();
-          logout();
-        },
-      },
+      { text: 'Đăng xuất', style: 'destructive', onPress: performLogout },
     ]);
   };
 

@@ -100,7 +100,9 @@ export default function TechnicianInvitationsScreen() {
     });
   }
   const controller = controllerRef.current;
-  const { invitations, loading, refreshing, error, actionInFlight, acceptedOrderId, recoveryPending } = state;
+  const { invitations, loading, error, actionInFlight, acceptedOrderId, recoveryPending } = state;
+  // Spinner only for a user pull; focus/poll reloads are silent (controller `refreshing` would shift the list).
+  const [pulling, setPulling] = useState(false);
   useFocusEffect(useCallback(() => {
     void controller.focus();
     return () => controller.blur();
@@ -148,6 +150,10 @@ export default function TechnicianInvitationsScreen() {
   }, [loading, error, liveCount, setPendingInvitations]);
 
   const onRefresh = () => { void controller.load(); };
+  const onPull = () => {
+    setPulling(true);
+    void controller.load().finally(() => setPulling(false));
+  };
   const respond = (inv: InvitationItem, action: 'ACCEPT' | 'DECLINE') => {
     // Haptic nudge only; skipped when the OS Reduce Motion setting is on.
     // The mutation guard and controller flow below stay unchanged.
@@ -326,7 +332,7 @@ export default function TechnicianInvitationsScreen() {
           (loading || error ? true : isFocused ? !focusedInvitation : sorted.length === 0) ? styles.emptyFlex : styles.listContent,
           { paddingBottom: TAB_BAR_CLEARANCE + Math.max(insets.bottom, 16) },
         ]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={pulling} onRefresh={onPull} />}
         ListHeaderComponent={
           isFocused ? (
             <View style={styles.headerStack}>

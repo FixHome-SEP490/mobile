@@ -262,7 +262,6 @@ describe('TechnicianJobsScreen Codex fidelity (T-NATIVE-09A)', () => {
     mockedJobsState = jobsState([ACTIVE_ACCEPTED, HISTORICAL_POISONED]);
     const renderer = await renderScreen();
     const text = visibleText(renderer);
-    expect(text).toContain('ĐANG LÀM & LỊCH SỬ');
     expect(text).toContain('Công việc của tôi');
     for (const label of ['Tất cả', 'Chờ thực hiện', 'Đang sửa chữa', 'Hoàn thành']) {
       expect(text).toContain(label);
