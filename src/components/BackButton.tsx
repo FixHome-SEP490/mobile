@@ -37,7 +37,7 @@ export default function BackButton({ onPress, label }: { onPress?: () => void; l
 }
 
 // Lazy: root-navigation builds a container ref at import, which screen tests that mock @react-navigation/native lack.
-export const goHome = () => require('../navigation/root-navigation').goHome();
+export const goHome = () => { void import('../navigation/root-navigation').then((m) => m.goHome()); };
 
 /** Header shortcut that skips every screen in between. */
 export function HomeButton() {
