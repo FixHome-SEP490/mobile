@@ -345,7 +345,7 @@ describe('TechnicianInvitationsScreen real-UI presentation (T-RUI3)', () => {
       const minHeight = Math.max(
         0,
         ...stylesOf(node.props.style).map((style) =>
-          typeof style.minHeight === 'number' ? style.minHeight : 0,
+          typeof style.minHeight === 'number' ? style.minHeight : typeof style.height === 'number' ? style.height : 0,
         ),
       );
       expect(minHeight).toBeGreaterThanOrEqual(44);

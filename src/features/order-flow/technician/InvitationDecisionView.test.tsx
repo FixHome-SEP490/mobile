@@ -31,13 +31,12 @@ function props(overrides: Partial<React.ComponentProps<typeof InvitationDecision
     inFlight: null,
     onAccept: jest.fn(),
     onDecline: jest.fn(),
-    onBack: jest.fn(),
     onRefresh: jest.fn(),
     ...overrides,
   };
 }
 
-it('expired invitation shows closed state with back/refresh only and never responds', async () => {
+it('expired invitation shows closed state with refresh only and never responds', async () => {
   const p = props({ actionable: false });
   let renderer!: ReturnType<typeof create>;
   await act(async () => {
@@ -47,10 +46,8 @@ it('expired invitation shows closed state with back/refresh only and never respo
   expect(() => renderer.root.findByProps({ testID: 'invitation-decline' })).toThrow();
   expect(renderer.root.findByProps({ testID: 'invitation-closed' })).toBeTruthy();
   await act(async () => {
-    renderer.root.findByProps({ testID: 'invitation-back' }).props.onPress();
     renderer.root.findByProps({ testID: 'invitation-refresh' }).props.onPress();
   });
-  expect(p.onBack).toHaveBeenCalledTimes(1);
   expect(p.onRefresh).toHaveBeenCalledTimes(1);
   expect(p.onAccept).not.toHaveBeenCalled();
   expect(p.onDecline).not.toHaveBeenCalled();

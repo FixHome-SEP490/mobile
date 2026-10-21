@@ -45,3 +45,13 @@ it('invoice and cash null remain null', async () => {
   expect(await ordersApi.getInvoice('o')).toBeNull();
   expect(await ordersApi.getCashSettlement('o')).toBeNull();
 });
+it('overrun release reads the eligibility and posts without a body to the same route', async () => {
+  api.get.mockResolvedValue({ data: { data: { eligible: true, block: null, currentOrderCode: 'C1', windowMinutes: 180 } } });
+  expect(await ordersApi.overrunReleaseStatus('o')).toEqual({ eligible: true, block: null, currentOrderCode: 'C1', windowMinutes: 180 });
+  expect(api.get).toHaveBeenCalledWith('/service-orders/o/overrun-release');
+  api.get.mockResolvedValue({ data: { data: null } });
+  expect((await ordersApi.overrunReleaseStatus('o')).eligible).toBe(false);
+  api.post.mockResolvedValue({ data: { data: { currentOrderCode: 'C1' } } });
+  expect(await ordersApi.releaseForOverrun('o')).toEqual({ currentOrderCode: 'C1' });
+  expect(api.post).toHaveBeenCalledWith('/service-orders/o/overrun-release', {});
+});

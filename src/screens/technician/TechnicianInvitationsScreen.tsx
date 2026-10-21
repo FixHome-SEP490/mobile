@@ -21,7 +21,7 @@ import {
   BackHandler,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AlertTriangle, ArrowUpRight, CheckCircle2, ChevronLeft, Clock, Info, MailOpen, MapPin, RefreshCw, Wrench, X } from 'lucide-react-native';
+import { AlertTriangle, ArrowUpRight, CheckCircle2, Clock, FileText, Image as ImageIcon, Info, MailOpen, MapPin, RefreshCw, Wrench } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -41,6 +41,7 @@ import { sessionLabel } from '../../utils/booking-session';
 import { isSameVnDay, vnDateTimeString, vnTimeString } from '../../utils/vn-time';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import StatusBadge from '../../components/StatusBadge';
+import BackButton from '../../components/BackButton';
 import InvitationJobDetails from '../../components/technician/InvitationJobDetails';
 import InvitationDecisionView from '../../features/order-flow/technician/InvitationDecisionView';
 
@@ -49,6 +50,7 @@ type NavProp = NativeStackNavigationProp<RootStackParamList>;
 // Floating GlassTabBar: 64pt pill + breathing room, plus the bottom inset (min 16).
 const TAB_BAR_CLEARANCE = 64 + 16;
 const TICK_MS = 30000;
+const NOTICE_MS = 5000;
 
 const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 const VN_TIME = { hour: '2-digit', minute: '2-digit' } as const;
@@ -76,20 +78,9 @@ export default function TechnicianInvitationsScreen() {
     controllerRef.current = createInvitationInbox(bookingsApi, {
       getMyOrdersPage: ordersApi.getTechnicianJobsPage,
       getOrder: ordersApi.getTechnicianOrder,
-    }, setState, (notice, isCurrent) => {
-      Alert.alert(notice.title, notice.message, notice.orderId ? [
-        {
-          text: 'Xem đơn vừa nhận',
-          onPress: () => {
-            if (isCurrent()) {
-              navigation.navigate('TechnicianOrderDetail', {
-                serviceOrderId: notice.orderId!,
-              });
-            }
-          },
-        },
-        { text: 'Để sau', style: 'cancel' },
-      ] : undefined);
+    }, setState, (notice) => {
+      // A verified accept is announced by the 5 s banner below, not a modal.
+      if (!notice.orderId) Alert.alert(notice.title, notice.message);
     }, {
       getUserId: () => {
         const session = useAuthStore.getState();
@@ -113,6 +104,9 @@ export default function TechnicianInvitationsScreen() {
   // Re-evaluate countdowns/expiry while focused. Deadlines come from the server (`expiresAt`).
   const [now, setNow] = useState(() => Date.now());
   const [reviewingInvitationId, setReviewingInvitationId] = useState<string | null>(null);
+  // After the technician answers, the detail closes by itself and a notice shows for 5 s.
+  const [responded, setResponded] = useState<{ id: string; action: 'ACCEPT' | 'DECLINE' } | null>(null);
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
   useFocusEffect(useCallback(() => {
     setNow(Date.now());
     const timer = setInterval(() => setNow(Date.now()), TICK_MS);
@@ -131,19 +125,30 @@ export default function TechnicianInvitationsScreen() {
   // T03 focused scene (UX01A, Main M2T-20261011-011): local view-only selector.
   // When set, the viewport shows only that invitation; Back only clears this
   // selector, never POSTs, reloads or mutates controller/nav/API state.
+  const responseGone = !!responded && !loading && !invitations.some((inv) => inv.id === responded.id);
+  const noticeKey = acceptedOrderId
+    ? `accept:${acceptedOrderId}`
+    : responseGone && responded.action === 'DECLINE' ? `decline:${responded.id}` : null;
+  useEffect(() => {
+    if (!noticeKey) return;
+    const timer = setTimeout(() => setDismissedKey(noticeKey), NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [noticeKey]);
+  const showAccepted = !!acceptedOrderId && dismissedKey !== noticeKey;
+  const showDeclined = !!noticeKey && noticeKey.startsWith('decline:') && dismissedKey !== noticeKey;
   const focusedInvitation = reviewingInvitationId
     ? (sorted.find((inv) => inv.id === reviewingInvitationId) ?? null)
     : null;
-  const isFocused = reviewingInvitationId !== null;
+  const isFocused = reviewingInvitationId !== null && !(responseGone && responded.id === reviewingInvitationId);
   const focusedMissing = isFocused && !loading && !error && focusedInvitation === null;
   useEffect(() => {
-    if (reviewingInvitationId === null) return;
+    if (!isFocused) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       setReviewingInvitationId(null);
       return true;
     });
     return () => sub.remove();
-  }, [reviewingInvitationId]);
+  }, [isFocused]);
   // Keep the tab badge in step with what this screen shows (only once a real load finished).
   useEffect(() => {
     if (!loading && !error) setPendingInvitations(liveCount);
@@ -155,6 +160,7 @@ export default function TechnicianInvitationsScreen() {
     void controller.load().finally(() => setPulling(false));
   };
   const respond = (inv: InvitationItem, action: 'ACCEPT' | 'DECLINE') => {
+    setResponded({ id: inv.id, action });
     // Haptic nudge only; skipped when the OS Reduce Motion setting is on.
     // The mutation guard and controller flow below stay unchanged.
     if (!reduceMotion) {
@@ -198,20 +204,6 @@ export default function TechnicianInvitationsScreen() {
     return (
       // Privacy: only allowlisted preview fields are rendered.
       <View style={[styles.card, reviewing ? styles.detailCard : null]}>
-        {reviewing && (
-          <View style={styles.detailHeading}>
-            <Text style={styles.detailTitle} accessibilityRole="header">Xem kỹ, rồi nhận việc</Text>
-            <TouchableOpacity
-              style={styles.closeReviewBtn}
-              onPress={() => setReviewingInvitationId(null)}
-              accessibilityRole="button"
-              accessibilityLabel={`Đóng phần xem lời mời ${serviceName}`}
-            >
-              <X size={20} color={colors.textSecondary} strokeWidth={1.75} />
-            </TouchableOpacity>
-          </View>
-        )}
-
         {/* Native fallback, not a photograph of the requested service.
             The prototype's DOM appliance art is not a native approved asset. */}
         <View
@@ -222,12 +214,15 @@ export default function TechnicianInvitationsScreen() {
           importantForAccessibility="no-hide-descendants"
         >
           <View style={styles.artIconPlate}>
-            <Wrench size={72} color={colors.primaryStrong} strokeWidth={1.25} />
+            <Wrench size={40} color={colors.primaryStrong} strokeWidth={1.5} />
           </View>
         </View>
 
         <View style={[styles.cardContent, reviewing ? styles.detailContent : null]}>
-          <StatusBadge view={statusView} />
+          <View style={styles.badgeRow}>
+            <StatusBadge view={statusView} />
+            {countdownView && !reviewing ? <StatusBadge view={countdownView} /> : null}
+          </View>
           {actionable ? <Text style={styles.priorityText}>{priority}</Text> : null}
           <Text style={[styles.serviceName, reviewing ? styles.detailServiceName : null]} accessibilityRole="header">
             {serviceName}
@@ -235,27 +230,45 @@ export default function TechnicianInvitationsScreen() {
 
           {reviewing ? (
             <View style={styles.previewDetails}>
-              <View style={styles.detailField}>
-                <Text style={styles.fieldLabel}>Khu vực được phép xem</Text>
-                <Text style={styles.fieldValue}>{location || 'Chưa xác định'}</Text>
-                {distance ? <Text style={styles.fieldValue} testID="invitation-detail-distance">{distance}</Text> : null}
-              </View>
-              <View style={styles.detailField}>
-                <Text style={styles.fieldLabel}>Khung giờ mong muốn</Text>
-                <Text style={styles.fieldValue}>{timeWindow || 'Chưa xác định'}</Text>
-              </View>
-              <View style={styles.detailField}>
-                <Text style={styles.fieldLabel}>Số lượng</Text>
-                <Text style={styles.fieldValue}>{b?.quantity != null ? `SL ${b.quantity}` : 'Chưa xác định'}</Text>
-              </View>
-              <View style={styles.detailField}>
-                <Text style={styles.fieldLabel}>Mức độ khẩn</Text>
-                {b?.urgency ? <StatusBadge view={urgencyView(b.urgency)} /> : <Text style={styles.fieldValue}>Chưa xác định</Text>}
-              </View>
-              <View style={styles.detailField}>
-                <Text style={styles.fieldLabel}>Hạn phản hồi</Text>
-                <Text style={styles.fieldValue}>{knownDeadline ? vnDateTimeString(inv.expiresAt!, VN_DATETIME) : 'Chưa xác định'}</Text>
+              <View
+                style={[styles.deadlineBox, { backgroundColor: countdown?.urgent ? colors.tone.danger.bg : colors.tone.warning.bg }]}
+                testID="invitation-deadline"
+              >
+                <Clock size={20} color={countdown?.urgent ? colors.tone.danger.fg : colors.tone.warning.fg} strokeWidth={1.75} />
+                <View style={styles.deadlineText}>
+                  <Text style={styles.fieldLabel}>Hạn phản hồi</Text>
+                  <Text style={styles.deadlineValue}>{knownDeadline ? vnDateTimeString(inv.expiresAt!, VN_DATETIME) : 'Chưa xác định'}</Text>
+                </View>
                 {countdownView ? <StatusBadge view={countdownView} /> : null}
+              </View>
+              <View style={styles.infoTile}>
+                <MapPin size={18} color={colors.primaryStrong} strokeWidth={1.75} style={styles.rowIcon} />
+                <View style={styles.tileBody}>
+                  <Text style={styles.fieldLabel}>Khu vực được phép xem</Text>
+                  <Text style={styles.fieldValue}>{location || 'Chưa xác định'}</Text>
+                  {distance ? <Text style={styles.fieldValue} testID="invitation-detail-distance">{distance}</Text> : null}
+                </View>
+              </View>
+              <View style={styles.infoTile}>
+                <Clock size={18} color={colors.primaryStrong} strokeWidth={1.75} style={styles.rowIcon} />
+                <View style={styles.tileBody}>
+                  <Text style={styles.fieldLabel}>Khung giờ mong muốn</Text>
+                  <Text style={styles.fieldValue}>{timeWindow || 'Chưa xác định'}</Text>
+                </View>
+              </View>
+              <View style={styles.tilePair}>
+                <View style={[styles.infoTile, styles.tileHalf]}>
+                  <View style={styles.tileBody}>
+                    <Text style={styles.fieldLabel}>Số lượng</Text>
+                    <Text style={styles.fieldValue}>{b?.quantity != null ? `SL ${b.quantity}` : 'Chưa xác định'}</Text>
+                  </View>
+                </View>
+                <View style={[styles.infoTile, styles.tileHalf]}>
+                  <View style={styles.tileBody}>
+                    <Text style={styles.fieldLabel}>Mức độ khẩn</Text>
+                    {b?.urgency ? <View style={styles.badgeRow}><StatusBadge view={urgencyView(b.urgency)} /></View> : <Text style={styles.fieldValue}>Chưa xác định</Text>}
+                  </View>
+                </View>
               </View>
               {b ? <InvitationJobDetails booking={b} /> : null}
             </View>
@@ -265,7 +278,12 @@ export default function TechnicianInvitationsScreen() {
                 <MapPin size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
                 <Text style={styles.metaText}>{[location || 'Khu vực chưa xác định', distance].filter(Boolean).join(' · ')}</Text>
               </View>
-              {b?.description ? <Text style={styles.metaText} numberOfLines={2} testID="invitation-description">{b.description}</Text> : null}
+              {b?.description ? (
+                <View style={styles.metaRow}>
+                  <FileText size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                  <Text style={styles.metaText} numberOfLines={2} testID="invitation-description">{b.description}</Text>
+                </View>
+              ) : null}
               <View style={styles.metaRow}>
                 <Clock size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
                 <Text style={styles.metaText}>{timeWindow || 'Khung giờ chưa xác định'}</Text>
@@ -273,7 +291,12 @@ export default function TechnicianInvitationsScreen() {
               {b?.quantity != null ? <Text style={styles.fieldValue}>{`Số lượng: SL ${b.quantity}`}</Text> : null}
               <View style={styles.badgeRow}>
                 {b?.urgency ? <StatusBadge view={urgencyView(b.urgency)} /> : null}
-                {countdownView ? <StatusBadge view={countdownView} /> : null}
+                {b?.media?.length ? (
+                  <View style={styles.mediaChip} testID="invitation-media-chip">
+                    <ImageIcon size={14} color={colors.primaryStrong} strokeWidth={1.75} />
+                    <Text style={styles.mediaChipText}>{`${b.media.length} ảnh/video của khách`}</Text>
+                  </View>
+                ) : null}
               </View>
             </>
           )}
@@ -296,7 +319,7 @@ export default function TechnicianInvitationsScreen() {
               accessibilityState={{ disabled: !!inFlight, expanded: false }}
             >
               <Text style={styles.reviewBtnText}>Xem & quyết định</Text>
-              <ArrowUpRight size={20} color={colors.text} strokeWidth={1.75} />
+              <ArrowUpRight size={20} color={colors.surface} strokeWidth={2} />
             </TouchableOpacity>
           )}
 
@@ -310,7 +333,6 @@ export default function TechnicianInvitationsScreen() {
               inFlight={inFlight ?? null}
               onAccept={() => respond(inv, 'ACCEPT')}
               onDecline={() => respond(inv, 'DECLINE')}
-              onBack={() => setReviewingInvitationId(null)}
               onRefresh={onRefresh}
             />
           )}
@@ -322,6 +344,24 @@ export default function TechnicianInvitationsScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+
+      {isFocused ? (
+        <View style={styles.topBar}>
+          <BackButton onPress={() => setReviewingInvitationId(null)} label="Quay lại danh sách lời mời" />
+          <Text style={styles.topBarTitle} accessibilityRole="header">Chi tiết lời mời</Text>
+          <View style={styles.topBarSpacer} />
+        </View>
+      ) : (
+        // Main tab: same header as the other tabs (no back, left-aligned page title).
+        <View style={styles.tabHeader}>
+          <Text style={styles.tabTitle} accessibilityRole="header">Lời mời</Text>
+          {!loading && !error && (
+            <Text style={styles.headerSubtitle}>
+              {liveCount > 0 ? `${liveCount} lời mời chờ xác nhận` : 'Không có lời mời chờ xác nhận'}
+            </Text>
+          )}
+        </View>
+      )}
 
       <FlatList
         data={loading || error ? [] : isFocused ? (focusedInvitation ? [focusedInvitation] : []) : sorted}
@@ -336,19 +376,6 @@ export default function TechnicianInvitationsScreen() {
         ListHeaderComponent={
           isFocused ? (
             <View style={styles.headerStack}>
-              <View style={styles.focusedTopBar}>
-                {(focusedMissing || loading || Boolean(error)) ? <TouchableOpacity
-                  style={styles.backBtn}
-                  onPress={() => setReviewingInvitationId(null)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Quay lại danh sách lời mời"
-                  accessibilityHint="Trở về danh sách lời mời mà không gửi phản hồi"
-                >
-                  <ChevronLeft size={20} color={colors.text} strokeWidth={1.75} />
-                  <Text style={styles.backBtnText}>Quay lại</Text>
-                </TouchableOpacity> : null}
-              </View>
-
               {availability.isAvailable === false && (
                 <View style={[styles.banner, { backgroundColor: colors.tone.warning.bg }]}>
                   <AlertTriangle size={18} color={colors.tone.warning.fg} strokeWidth={1.75} />
@@ -372,7 +399,13 @@ export default function TechnicianInvitationsScreen() {
                 </View>
               )}
 
-              {acceptedOrderId ? (
+              {showDeclined ? (
+                <View style={[styles.banner, { backgroundColor: colors.tone.info.bg }]} accessibilityLiveRegion="polite">
+                  <Info size={18} color={colors.tone.info.fg} strokeWidth={1.75} />
+                  <Text style={[styles.bannerText, { color: colors.tone.info.text }]}>Đã từ chối lời mời.</Text>
+                </View>
+              ) : null}
+              {showAccepted && acceptedOrderId ? (
                 <View style={[styles.acceptedCard, { backgroundColor: colors.tone.success.bg }]}>
                   <View style={styles.acceptedTitleRow}>
                     <CheckCircle2 size={18} color={colors.tone.success.fg} strokeWidth={1.75} />
@@ -407,15 +440,6 @@ export default function TechnicianInvitationsScreen() {
             </View>
           ) : (
           <View style={styles.headerStack}>
-            <View style={styles.header}>
-              <Text style={styles.headerTitle} accessibilityRole="header">Lời mời</Text>
-              {!loading && !error && (
-                <Text style={styles.headerSubtitle}>
-                  {liveCount > 0 ? `${liveCount} lời mời chờ xác nhận` : 'Không có lời mời chờ xác nhận'}
-                </Text>
-              )}
-            </View>
-
             {availability.autoAccept !== null && (
               <View style={styles.autoRow}>
                 <Text style={styles.autoLabel}>Tự nhận việc</Text>
@@ -451,7 +475,13 @@ export default function TechnicianInvitationsScreen() {
               </View>
             )}
 
-            {acceptedOrderId ? (
+            {showDeclined ? (
+              <View style={[styles.banner, { backgroundColor: colors.tone.info.bg }]} accessibilityLiveRegion="polite">
+                <Info size={18} color={colors.tone.info.fg} strokeWidth={1.75} />
+                <Text style={[styles.bannerText, { color: colors.tone.info.text }]}>Đã từ chối lời mời.</Text>
+              </View>
+            ) : null}
+            {showAccepted && acceptedOrderId ? (
               <View style={[styles.acceptedCard, { backgroundColor: colors.tone.success.bg }]}>
                 <View style={styles.acceptedTitleRow}>
                   <CheckCircle2 size={18} color={colors.tone.success.fg} strokeWidth={1.75} />
@@ -548,16 +578,13 @@ export default function TechnicianInvitationsScreen() {
 
 const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
-  headerStack: { gap: 16 },
-  focusedTopBar: { flexDirection: 'row', alignItems: 'center', paddingTop: 8 },
-  backBtn: { minHeight: 44, minWidth: 44, flexDirection: 'row', alignItems: 'center', gap: 4, paddingRight: 12 },
-  backBtnText: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.text },
-  header: {
-    paddingTop: 24,
-    gap: 8,
-  },
-  headerTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
-  headerSubtitle: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
+  headerStack: { gap: 16, paddingTop: 16 },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  topBarTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
+  tabHeader: { minHeight: 69, justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider }, // 69 = Home header
+  tabTitle: { fontSize: 20, lineHeight: 24, fontWeight: '700', color: colors.text },
+  topBarSpacer: { width: 44, height: 44 },
+  headerSubtitle: { fontSize: 12, lineHeight: 16, color: colors.textSecondary },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -603,7 +630,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   emptyDesc: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
   refreshBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16 },
   refreshBtnText: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong },
-  listContent: { paddingHorizontal: 24, gap: 24 },
+  listContent: { paddingHorizontal: 20, gap: 16 },
   card: {
     backgroundColor: colors.surface,
     borderRadius: 24,
@@ -611,26 +638,31 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
     borderWidth: 1,
     borderColor: colors.border,
   },
-  serviceArt: { minHeight: 180, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
-  artIconPlate: { width: 112, height: 112, borderRadius: 24, backgroundColor: colors.surface, borderColor: colors.primaryTint, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  cardContent: { padding: 24, gap: 12 },
-  detailContent: { paddingHorizontal: 0 },
+  serviceArt: { minHeight: 112, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
+  artIconPlate: { width: 72, height: 72, borderRadius: 20, backgroundColor: colors.surface, borderColor: colors.primaryTint, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  cardContent: { padding: 20, gap: 12 },
+  detailContent: { paddingHorizontal: 0, paddingBottom: 0 },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   serviceName: { fontSize: 20, lineHeight: 28, fontWeight: '700', color: colors.text },
   metaRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   rowIcon: { marginTop: 2 },
   metaText: { flex: 1, fontSize: 14, lineHeight: 20, color: colors.textSecondary },
   lockText: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
-  reviewBtn: { minHeight: 48, marginTop: 4, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  reviewBtnText: { flexShrink: 1, fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.text },
+  reviewBtn: { minHeight: 52, marginTop: 8, paddingHorizontal: 20, borderRadius: 16, backgroundColor: colors.primaryStrong, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  reviewBtnText: { flexShrink: 1, fontSize: 15, lineHeight: 22, fontWeight: '700', color: colors.surface },
+  mediaChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, minHeight: 28, borderRadius: 999, backgroundColor: colors.primarySoft },
+  mediaChipText: { fontSize: 12, lineHeight: 18, fontWeight: '600', color: colors.primaryStrong },
   detailCard: { borderWidth: 0, backgroundColor: colors.background },
-  detailHeading: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 16 },
-  detailTitle: { flex: 1, fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
-  closeReviewBtn: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center' },
-  detailArt: { minHeight: 200, borderRadius: 24 },
+  detailArt: { minHeight: 120, borderRadius: 24 },
   detailServiceName: { fontSize: 24, lineHeight: 32 },
-  previewDetails: { marginTop: 8 },
-  detailField: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 8 },
+  previewDetails: { marginTop: 8, gap: 12 },
+  deadlineBox: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16 },
+  deadlineText: { flex: 1, gap: 2 },
+  deadlineValue: { fontSize: 15, lineHeight: 22, fontWeight: '700', color: colors.text },
+  infoTile: { flexDirection: 'row', gap: 12, padding: 16, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  tilePair: { flexDirection: 'row', gap: 12 },
+  tileHalf: { flex: 1 },
+  tileBody: { flex: 1, gap: 4 },
   fieldLabel: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
   fieldValue: { fontSize: 14, lineHeight: 22, color: colors.text },
   reviewSurface: { marginTop: 8, gap: 12 },

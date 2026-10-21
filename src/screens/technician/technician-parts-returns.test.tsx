@@ -10,7 +10,7 @@ jest.mock('expo-camera', () => ({ CameraView: () => null, useCameraPermissions: 
 jest.mock('../../api/parts-catalog.api', () => ({ partsCatalogApi: { search: jest.fn().mockResolvedValue([]), getById: jest.fn() } }));
 jest.mock('../../api/part-requests.api', () => ({
   ...jest.requireActual('../../api/part-requests.api'),
-  partRequestsApi: { getByOrderId: jest.fn() },
+  partRequestsApi: { getByOrderId: jest.fn(), updateItemUsage: jest.fn() },
   partReturnsApi: { getByOrderId: jest.fn(), declare: jest.fn() },
 }));
 
@@ -42,6 +42,7 @@ beforeEach(() => {
   (partRequestsApi.getByOrderId as jest.Mock).mockResolvedValue([request]);
   (partReturnsApi.getByOrderId as jest.Mock).mockReset();
   (partReturnsApi.declare as jest.Mock).mockReset().mockResolvedValue(undefined);
+  (partRequestsApi.updateItemUsage as jest.Mock).mockReset().mockResolvedValue({});
 });
 
 it('shows what is owed and sends the declaration with the record version and an idempotency key', async () => {
@@ -77,4 +78,34 @@ it('shows the tracked status, the new-work block and the quotation label', async
   expect(texts(r)).toContain('Theo báo giá');
   expect(texts(r)).toContain('lệch với khai báo');
   expect(texts(r)).toContain('chưa nhận được việc mới');
+});
+
+it('records an exact used quantity with the ledger version and replaces the whole-line buttons', async () => {
+  (partReturnsApi.getByOrderId as jest.Mock).mockResolvedValue([record]);
+  const r = await mount();
+  expect(r.root.findAllByType(TouchableOpacity).some((t) => t.findAllByType(Text).some((x) => x.props.children === 'Đã dùng'))).toBe(false);
+  await press(r, 'Ghi số lượng thực dùng');
+  await press(r, 'Tăng số lượng đã dùng');
+  expect(texts(r)).toContain('Đã nhận 3 · Cần trả 1.');
+  await press(r, 'Lưu số lượng');
+  expect(partRequestsApi.updateItemUsage).toHaveBeenCalledWith('req-1', 'item-1', {
+    usageStatus: 'used', usedQty: 2, expectedVersion: 7, idempotencyKey: expect.stringMatching(/^parts-used-/),
+  });
+});
+
+it('never lets the used quantity go below what is recorded and reads the numbers again after a conflict', async () => {
+  (partReturnsApi.getByOrderId as jest.Mock).mockResolvedValue([{ ...record, usageRecorded: true }]);
+  (partRequestsApi.updateItemUsage as jest.Mock).mockRejectedValue({ response: { status: 409, data: { error: { message: 'Linh kiện đã ghi số lượng thực dùng.' } } } });
+  const r = await mount();
+  await press(r, 'Ghi số lượng thực dùng');
+  await press(r, 'Giảm số lượng đã dùng');
+  await press(r, 'Lưu số lượng');
+  expect(partRequestsApi.updateItemUsage).not.toHaveBeenCalled();
+  await press(r, 'Tăng số lượng đã dùng');
+  const reads = (partReturnsApi.getByOrderId as jest.Mock).mock.calls.length;
+  await press(r, 'Lưu số lượng');
+  await flush();
+  expect(partRequestsApi.updateItemUsage).toHaveBeenCalledTimes(1);
+  expect((partReturnsApi.getByOrderId as jest.Mock).mock.calls.length).toBeGreaterThan(reads);
+  expect(texts(r)).toContain('Linh kiện đã ghi số lượng thực dùng.');
 });

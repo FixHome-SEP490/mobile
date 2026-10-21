@@ -1,6 +1,15 @@
 import apiClient from './client';
+import { Platform } from 'react-native';
 import { APP_CONFIG } from '../constants';
-import { storageService } from '../services/storage.service';
+
+// Browsers need a real Blob; the {uri,name,type} shape only works in React Native.
+async function appendFile(form: FormData, f: { uri: string; name: string; type: string }) {
+  if (Platform.OS === 'web') {
+    const blob = await (await fetch(f.uri)).blob();
+    form.append('file', blob.type ? blob : new Blob([blob], { type: f.type }), f.name);
+  }
+  else form.append('file', f as unknown as Blob);
+}
 
 export interface MediaUploadImage {
   uri: string;
@@ -156,22 +165,26 @@ export const mediaApi = {
     return toVideoLink(isRecord(res.data) && 'data' in res.data ? res.data.data : res.data, '/bookings/media/stream/');
   },
 
-  /** Source for an `<Image>` of a private booking photo: the bytes need the bearer token. */
-  async getBookingPhotoSource(bookingId: string, mediaId: string): Promise<{ uri: string; headers: Record<string, string> }> {
-    const token = await storageService.getToken();
-    return {
-      uri: apiUrl(`/bookings/${encodeURIComponent(bookingId)}/media/${encodeURIComponent(mediaId)}/content`),
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    };
+  /**
+   * A private booking photo as a data URI. Read through apiClient (not `<Image headers>`) so an expired
+   * access token is refreshed and the photo also shows on web, where Image ignores request headers.
+   */
+  async getBookingPhotoUri(bookingId: string, mediaId: string): Promise<string> {
+    const res = await apiClient.get(
+      `/bookings/${encodeURIComponent(bookingId)}/media/${encodeURIComponent(mediaId)}/content`,
+      { responseType: 'blob' },
+    );
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => (typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Unreadable photo')));
+      reader.onerror = () => reject(reader.error ?? new Error('Unreadable photo'));
+      reader.readAsDataURL(res.data as Blob);
+    });
   },
 
   async uploadPublicImage(image: MediaUploadImage): Promise<UploadedPublicMedia> {
     const form = new FormData();
-    form.append('file', {
-      uri: image.uri,
-      name: image.name,
-      type: image.type,
-    } as unknown as Blob);
+    await appendFile(form, image);
 
     const response = await apiClient.post('/media/upload', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -183,11 +196,7 @@ export const mediaApi = {
 
   async uploadBookingPhoto(image: MediaUploadImage, opts: UploadProgressOptions = {}): Promise<UploadedBookingPhoto> {
     const form = new FormData();
-    form.append('file', {
-      uri: image.uri,
-      name: image.name,
-      type: image.type,
-    } as unknown as Blob);
+    await appendFile(form, image);
 
     const response = await apiClient.post('/media/booking-photo-upload', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -204,7 +213,7 @@ export const mediaApi = {
   /** A short private video of the problem (PO 18/10/2026): mp4/mov/webm up to 50 MB, never sent to the AI. */
   async uploadBookingVideo(video: MediaUploadVideo, opts: UploadProgressOptions = {}): Promise<UploadedBookingVideo> {
     const form = new FormData();
-    form.append('file', { uri: video.uri, name: video.name, type: video.type } as unknown as Blob);
+    await appendFile(form, video);
     const response = await apiClient.post('/media/booking-video-upload', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
       ...progressConfig(opts, 180_000),

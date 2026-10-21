@@ -169,6 +169,7 @@ export function clearApiCache(): void {
 
 function cacheKey(config: InternalAxiosRequestConfig): string | null {
   if ((config.method ?? 'get').toLowerCase() !== 'get' || isAuthEndpoint(config.url)) return null;
+  if (config.responseType && config.responseType !== 'json') return null; // never keep photo/video bytes in memory
   const userId = useAuthStore.getState().user?.id ?? '';
   return `${userId}|${config.baseURL ?? ''}${config.url}?${JSON.stringify(config.params ?? {})}`;
 }

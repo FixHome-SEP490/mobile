@@ -52,10 +52,16 @@ export type RootStackParamList = {
         };
       }
     | undefined;
-  /** `rebooked: 'choose'` after "Đặt lại thợ" when the former technician was not free. */
-  CustomerMatching: { bookingId: string; rebooked?: 'choose' };
-  /** `rebooked: 'invited'` after "Đặt lại thợ" when the former technician was invited. */
-  CustomerBookingDetail: { bookingId: string; rebooked?: 'invited' };
+  /**
+   * `rebooked: 'choose'` after "Đặt lại thợ" when the former technician was not free.
+   * `released: true` when the technician stepped off the order because the previous job overran (BE 20/10/2026).
+   */
+  CustomerMatching: { bookingId: string; rebooked?: 'choose'; released?: true };
+  /**
+   * `rebooked: 'invited'` after "Đặt lại thợ" when the former technician was invited.
+   * `released: true` when opened from the `TECHNICIAN_RELEASED` notification.
+   */
+  CustomerBookingDetail: { bookingId: string; rebooked?: 'invited'; released?: true };
   /** `screen` opens a Customer OrderFlow child directly (e.g. the warranty list from the Warranties tab). */
   CustomerOrderDetail: { serviceOrderId: string; screen?: 'CustomerWarranty' };
   CustomerRepairHistory: undefined;

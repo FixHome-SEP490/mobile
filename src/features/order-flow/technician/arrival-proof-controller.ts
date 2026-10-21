@@ -16,11 +16,13 @@ export interface ArrivalProofState {
   phase: 'idle' | 'submitting' | 'verifying' | 'unknown' | 'denied' | 'resolved';
   operation?: OrderCommandOperation; message: string | null;
 }
+/** `deferAutoStart`: more BEFORE photos follow, so a fixed-price order must stay EN_ROUTE (BE 20/10/2026). */
+export interface BeforeUploadOptions { deferAutoStart?: boolean }
 export interface ArrivalProofTransport {
   depart: (id: string) => Promise<unknown>;
   checkIn: (id: string, dto: CheckInDto) => Promise<unknown>;
   uploadFace: (id: string, asset: EvidenceUploadImage) => Promise<unknown>;
-  uploadBefore: (id: string, asset: EvidenceUploadImage) => Promise<unknown>;
+  uploadBefore: (id: string, asset: EvidenceUploadImage, options?: BeforeUploadOptions) => Promise<unknown>;
   recoverRepair: (id: string) => Promise<unknown>;
   deleteEvidence: (id: string, evidenceId: string) => Promise<unknown>;
 }
@@ -152,7 +154,7 @@ export function createArrivalProofController(deps: ArrivalProofDependencies) {
     } catch { if (sameKey(key)) publish({ phase: 'unknown', operation, message: unknownMessage }); }
     finally { busy = false; }
   }
-  async function upload(operation: 'face-upload' | 'before-upload', asset: CameraOrderAsset) {
+  async function upload(operation: 'face-upload' | 'before-upload', asset: CameraOrderAsset, options?: BeforeUploadOptions) {
     if (asset.source !== 'camera' || !asset.uri || !['image/jpeg', 'image/png', 'image/webp'].includes(asset.type)
       || !Number.isFinite(asset.sizeBytes) || asset.sizeBytes <= 0 || asset.sizeBytes > 10 * 1024 * 1024) {
       publish({ phase: 'denied', operation, message: 'Hãy chụp ảnh bằng camera, định dạng JPEG/PNG/WebP và dung lượng không quá 10 MB.' }); return;
@@ -161,7 +163,7 @@ export function createArrivalProofController(deps: ArrivalProofDependencies) {
       const image = { uri: asset.uri, name: asset.name, type: asset.type };
       let result: unknown;
       try {
-        result = await (operation === 'face-upload' ? deps.transport.uploadFace : deps.transport.uploadBefore)(key.serviceOrderId, image);
+        result = await (operation === 'face-upload' ? deps.transport.uploadFace(key.serviceOrderId, image) : deps.transport.uploadBefore(key.serviceOrderId, image, options));
       } catch (error) {
         if (__DEV__) { const e = error as { code?: string; message?: string; response?: { status?: number } }; console.warn('[arrival-proof] POST failed', operation, JSON.stringify({ status: e.response?.status, code: e.code, message: e.message })); }
         throw error;
@@ -209,7 +211,7 @@ export function createArrivalProofController(deps: ArrivalProofDependencies) {
         : 'Vị trí hiện tại nằm ngoài phạm vi được hệ thống cho phép. Hãy kiểm tra điểm hẹn và lấy mẫu vị trí mới.' });
     },
     uploadFace: (asset: CameraOrderAsset) => upload('face-upload', asset),
-    uploadBefore: (asset: CameraOrderAsset) => upload('before-upload', asset),
+    uploadBefore: (asset: CameraOrderAsset, options?: BeforeUploadOptions) => upload('before-upload', asset, options),
     recoverRepair: (confirmed: boolean) => confirmed ? run('repair-recovery', key => deps.transport.recoverRepair(key.serviceOrderId), ['evidence', 'extras', 'quotations']) : Promise.resolve(),
     deleteBefore: (evidenceId: string, confirmed: boolean) => confirmed ? run('evidence-delete', key => deps.transport.deleteEvidence(key.serviceOrderId, evidenceId), ['evidence'], evidenceId) : Promise.resolve(),
     async verify() {

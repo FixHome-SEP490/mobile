@@ -28,6 +28,14 @@ function supportCase(
 }
 
 describe('resolveCustomerNotificationTarget', () => {
+  it('marks a TECHNICIAN_RELEASED booking notification so the request page points to a new technician', async () => {
+    const getSupportCase = jest.fn();
+    await expect(resolveCustomerNotificationTarget(
+      { type: 'TECHNICIAN_RELEASED', referenceType: 'BOOKING', referenceId: BOOKING_ID },
+      { getSupportCase },
+    )).resolves.toEqual({ name: 'CustomerBookingDetail', params: { bookingId: BOOKING_ID, released: true } });
+  });
+
   it('opens the order of a departure warning and the booking when no technician accepted', async () => {
     const getSupportCase = jest.fn();
 

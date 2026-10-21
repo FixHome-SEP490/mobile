@@ -1,6 +1,7 @@
 // src/api/bookings.api.ts
 import apiClient from './client';
 import type { BookingDeviceAttributes } from './catalog-pricing.api';
+import type { BookingSchedule } from '../utils/booking-session';
 
 const USER_UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -394,15 +395,9 @@ export const bookingsApi = {
     return normalizeBooking(unwrap<RawBooking>(res.data));
   },
 
-  async reschedule(
-    id: string,
-    preferredStartAt: string,
-    preferredEndAt: string,
-  ): Promise<BookingItem> {
-    const res = await apiClient.patch(`/bookings/${id}/schedule`, {
-      preferredStartAt,
-      preferredEndAt,
-    });
+  /** Moves a booking to another session; the server turns it into the arrival window, as on the web. It refuses "tới ngay". */
+  async reschedule(id: string, schedule: Extract<BookingSchedule, { mode: 'scheduled' }>): Promise<BookingItem> {
+    const res = await apiClient.patch(`/bookings/${id}/schedule`, schedule);
     return normalizeBooking(unwrap<RawBooking>(res.data));
   },
 

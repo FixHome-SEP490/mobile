@@ -14,6 +14,20 @@ function unwrap<T>(payload: { data: T } | T): T {
   return payload as T;
 }
 
+export type OverrunReleaseBlock =
+  | 'NOT_ASSIGNED'
+  | 'ORDER_NOT_WAITING'
+  | 'ALREADY_ARRIVED'
+  | 'NO_CURRENT_JOB'
+  | 'NOT_STARTING_SOON';
+
+export interface OverrunReleaseStatus {
+  eligible: boolean;
+  block: OverrunReleaseBlock | null;
+  currentOrderCode: string | null;
+  windowMinutes: number | null;
+}
+
 export interface OrdersPage {
   data: ServiceOrderItem[];
   total: number;
@@ -466,6 +480,22 @@ export const ordersApi = {
     return post(`/service-orders/${id}/cancel`, { reason });
   },
 
+  /** BE 20/10/2026: may this upcoming order be released because the current job overruns (no reputation penalty)? */
+  async overrunReleaseStatus(id: string): Promise<OverrunReleaseStatus> {
+    const data = await get<Partial<OverrunReleaseStatus> | null>(`/service-orders/${id}/overrun-release`);
+    return {
+      eligible: data?.eligible === true,
+      block: data?.block ?? null,
+      currentOrderCode: data?.currentOrderCode ?? null,
+      windowMinutes: typeof data?.windowMinutes === 'number' ? data.windowMinutes : null,
+    };
+  },
+
+  /** The technician steps off an upcoming order while still on another job; the customer picks another technician. */
+  async releaseForOverrun(id: string) {
+    return post(`/service-orders/${id}/overrun-release`);
+  },
+
   async getEvidence(id: string): Promise<EvidenceResponse[]> {
     return (
       await get<EvidenceResponse[]>(`/service-orders/${id}/evidence`)
@@ -480,15 +510,17 @@ export const ordersApi = {
   },
 
   /**
-   * BEFORE-only evidence upload. Native multipart/form-data with an explicit
+   * BEFORE-only evidence upload (several photos: every photo but the last sets `deferAutoStart`). Native multipart/form-data with an explicit
    * per-request Content-Type override (the shared client defaults to JSON);
    * no boundary is hardcoded and the global default is untouched. The POST
    * response may carry a private storage reference — callers must ignore the
    * body and re-fetch signed GET URLs instead of rendering it.
    */
-  async uploadEvidenceBefore(id: string, image: EvidenceUploadImage): Promise<unknown> {
+  async uploadEvidenceBefore(id: string, image: EvidenceUploadImage, options: { deferAutoStart?: boolean } = {}): Promise<unknown> {
     const form = new FormData();
     form.append('type', 'before');
+    // BE 20/10/2026: `true` keeps a fixed-price order EN_ROUTE for the next photo; the last photo omits it or sends `false`.
+    if (options.deferAutoStart !== undefined) form.append('deferAutoStart', String(options.deferAutoStart));
     form.append('file', {
       uri: image.uri,
       name: image.name,

@@ -1023,18 +1023,19 @@ export default function CustomerMatchingScreen() {
 
   return (
     <SafeAreaView style={[styles.page, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
+      <View style={[styles.bar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <BackButton />
         <View style={styles.headerCopy}>
           <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>
             {acceptedHandoff ? 'Có người cùng bạn lo nhà.' : isAuthenticated && role === UserRole.CUSTOMER && waiting ? 'Trạng thái lời mời' : 'Chọn kỹ thuật viên'}
           </Text>
           {loadedContextKey === currentContextKey && (
-            <Text style={[styles.note, { color: colors.textSecondary }]}>Mã tham chiếu: {bookingId.slice(0, 8)}</Text>
+            <Text style={[styles.refNote, { color: colors.textSecondary }]}>Mã tham chiếu: {bookingId.slice(0, 8)}</Text>
           )}
         </View>
-        </View>
+        <View style={styles.barSpacer} />
+      </View>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {!isAuthenticated || role !== UserRole.CUSTOMER ? (
           <Text style={{ color: colors.error }}>Hãy đăng nhập bằng tài khoản khách hàng để xem yêu cầu này.</Text>
         ) : (
@@ -1049,7 +1050,7 @@ export default function CustomerMatchingScreen() {
             )}
             {!!error && <Text accessibilityRole="alert" style={[styles.note, { color: colors.error }]}>{error}</Text>}
             {!!booking && ownsVisibleBooking && (
-              <View style={[styles.summary, { borderColor: colors.border }]}>
+              <View style={[styles.summary, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 {acceptedHandoff ? (
                   <View testID="matching-accepted-handoff" style={styles.accepted}>
                     <View style={[styles.acceptedMark, { backgroundColor: colors.tone.success.bg }]}>
@@ -1058,7 +1059,7 @@ export default function CustomerMatchingScreen() {
                     <Text style={[styles.statusPill, { backgroundColor: colors.tone.success.bg, color: colors.tone.success.text }]}>
                       Kỹ thuật viên đã nhận đơn
                     </Text>
-                    <Text style={[styles.heading, { color: colors.text }]}>{booking.serviceName || 'Yêu cầu dịch vụ'}</Text>
+                    <Text style={[styles.serviceTitle, { color: colors.text }]}>{booking.serviceName || 'Yêu cầu dịch vụ'}</Text>
                     <Text style={[styles.note, { color: colors.textSecondary }]}>Đơn sửa chữa đã được xác nhận trên hệ thống.</Text>
                   </View>
                 ) : (
@@ -1071,16 +1072,24 @@ export default function CustomerMatchingScreen() {
                         {booking.status === 'MATCHING' && booking.invitations?.some((invite) => invite.status === 'PENDING')
                           ? 'Đã gửi lời mời · Chờ phản hồi' : bookingStatusLabel(booking.status)}
                       </Text>
-                      <Text style={[styles.heading, { color: colors.text }]}>{booking.serviceName || 'Yêu cầu dịch vụ'}</Text>
+                      <Text style={[styles.serviceTitle, { color: colors.text }]}>{booking.serviceName || 'Yêu cầu dịch vụ'}</Text>
                       {!!booking.preferredStartAt && Number.isFinite(Date.parse(booking.preferredStartAt)) && (
-                        <Text style={[styles.note, { color: colors.textSecondary }]}>
-                          {booking.bookingMode || booking.slot ? 'Buổi hẹn' : 'Giờ mong muốn'}: {booking.bookingMode || booking.slot
-                            ? sessionLabel({ bookingMode: booking.bookingMode, slot: booking.slot, start: booking.preferredStartAt })
-                            : vnDateTimeString(booking.preferredStartAt)}
-                        </Text>
+                        <View style={styles.infoRow}>
+                          <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
+                          <Text style={[styles.infoText, { color: colors.textSecondary }]}>
+                            {booking.bookingMode || booking.slot ? 'Buổi hẹn' : 'Giờ mong muốn'}: {booking.bookingMode || booking.slot
+                              ? sessionLabel({ bookingMode: booking.bookingMode, slot: booking.slot, start: booking.preferredStartAt })
+                              : vnDateTimeString(booking.preferredStartAt)}
+                          </Text>
+                        </View>
                       )}
                     </View>
                   </View>
+                )}
+                {route.params.released && (
+                  <Text testID="released-choose-notice" accessibilityRole="alert" style={[styles.note, { color: colors.tone.warning.text }]}>
+                    Thợ trước không kịp tới buổi hẹn. Bạn chọn thợ khác, giá và lịch hẹn giữ nguyên.
+                  </Text>
                 )}
                 {route.params.rebooked === 'choose' && (
                   <Text testID="rebook-choose-notice" accessibilityRole="alert" style={[styles.note, { color: colors.tone.warning.text }]}>
@@ -1125,17 +1134,21 @@ export default function CustomerMatchingScreen() {
                                 : status === 'EXPIRED'
                                   ? 'Đã hết hạn'
                                   : 'Đã kết thúc';
+                      const tone = status === 'ACCEPTED' ? colors.tone.success
+                        : status === 'DECLINED' || status === 'EXPIRED' ? colors.tone.warning
+                          : status === 'PENDING' ? { bg: colors.primarySoft, text: colors.primaryStrong }
+                            : null;
                       const expiresAt =
                         status === 'PENDING' && invitation.expiresAt
                           ? Date.parse(invitation.expiresAt)
                           : Number.NaN;
                       return (
                         <View key={invitation.id} style={[styles.invitationRow, { borderColor: colors.border }]}>
-                          <View style={[styles.invitationRank, { backgroundColor: colors.divider }]}>
-                            <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>#{invitation.priorityOrder}</Text>
+                          <View style={[styles.invitationRank, { backgroundColor: tone?.bg ?? colors.divider }]}>
+                            <Text style={[styles.eyebrow, { color: tone?.text ?? colors.textSecondary }]}>#{invitation.priorityOrder}</Text>
                           </View>
                           <View style={styles.visualCopy}>
-                          <Text style={[styles.invitationText, { color: colors.text }]}>
+                          <Text style={[styles.invitationText, { color: tone?.text ?? colors.text }]}>
                             Ưu tiên {invitation.priorityOrder}: {statusText}
                           </Text>
                           {Number.isFinite(expiresAt) && (
@@ -1230,10 +1243,13 @@ export default function CustomerMatchingScreen() {
                   <Text style={{ color: colors.primaryStrong, fontSize: 13, fontWeight: '600' }}>Xem chi tiết yêu cầu</Text>
                   <Ionicons name="chevron-forward" size={16} color={colors.primaryStrong} />
                 </TouchableOpacity>
-                <Text style={[styles.note, { color: colors.textSecondary }]}>
-                  Đang chờ phản hồi trên hệ thống.
-                  {' '}Rời màn hình không hủy lời mời.
-                </Text>
+                <View style={[styles.infoBox, { backgroundColor: colors.primarySoft }]}>
+                  <Ionicons name="information-circle-outline" size={18} color={colors.primaryStrong} />
+                  <Text style={[styles.infoBoxText, { color: colors.text }]}>
+                    Đang chờ phản hồi trên hệ thống.
+                    {' '}Rời màn hình không hủy lời mời.
+                  </Text>
+                </View>
 
               </>
             )}
@@ -1320,24 +1336,31 @@ export default function CustomerMatchingScreen() {
 
 const styles = StyleSheet.create({
   page: { flex: 1 },
-  content: { padding: 16, paddingBottom: 32, gap: 16 },
+  content: { padding: 16, paddingBottom: 32, gap: 12 },
   bookingDetailLink: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
-  headerCopy: { flex: 1, minWidth: 0, gap: 4 },
+  bar: { minHeight: 56, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 4, borderBottomWidth: StyleSheet.hairlineWidth },
+  barSpacer: { width: 44 },
+  headerCopy: { flex: 1, minWidth: 0, gap: 2 },
   eyebrow: { fontSize: 12, lineHeight: 18, fontWeight: '600', letterSpacing: 0.5 },
   backBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 22, lineHeight: 30, fontWeight: '700' },
+  title: { fontSize: 18, lineHeight: 24, fontWeight: '700', textAlign: 'center' },
+  refNote: { fontSize: 12, lineHeight: 16, textAlign: 'center' },
+  serviceTitle: { fontSize: 20, lineHeight: 28, fontWeight: '700' },
+  infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  infoText: { flex: 1, fontSize: 13, lineHeight: 19 },
+  infoBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, padding: 12, borderRadius: 12 },
+  infoBoxText: { flex: 1, fontSize: 13, lineHeight: 19 },
   sectionTitle: { fontSize: 20, lineHeight: 28, fontWeight: '600', marginTop: 8 },
   heading: { fontSize: 16, lineHeight: 24, fontWeight: '600' },
   note: { fontSize: 14, lineHeight: 22 },
-  summary: { paddingBottom: 24, borderBottomWidth: 1, gap: 16 },
+  summary: { padding: 16, borderWidth: 1, borderRadius: 16, gap: 12 },
   matchingVisual: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 8 },
   visualCopy: { flex: 1, minWidth: 0, gap: 8 },
-  statusPill: { alignSelf: 'flex-start', fontSize: 12, lineHeight: 18, fontWeight: '600', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  statusPill: { alignSelf: 'flex-start', fontSize: 12, lineHeight: 18, fontWeight: '700', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999, overflow: 'hidden' },
   accepted: { alignItems: 'center', gap: 16, paddingVertical: 8 },
   acceptedMark: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center' },
-  orderReference: { borderWidth: 1, borderRadius: 20, padding: 16, gap: 8 },
-  card: { padding: 16, borderWidth: 1, borderRadius: 20, gap: 12 },
+  orderReference: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 8 },
+  card: { padding: 16, borderWidth: 1, borderRadius: 16, gap: 12 },
   invitationRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingTop: 12, borderTopWidth: 1 },
   invitationRank: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   invitationText: { fontSize: 14, lineHeight: 22, fontWeight: '600' },

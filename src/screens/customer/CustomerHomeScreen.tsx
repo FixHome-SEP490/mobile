@@ -219,7 +219,6 @@ export default function CustomerHomeScreen() {
                   color="rgba(255,255,255,0.96)"
                   strokeWidth={2.1}
                   testID="home-chat-message-icon"
-                  accessible={false}
                 />
                 {chatUnread > 0 && (
                   <View style={styles.notificationBadge}>

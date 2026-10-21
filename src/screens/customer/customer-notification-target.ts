@@ -5,7 +5,7 @@ const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type CustomerNotificationTarget =
-  | { name: 'CustomerBookingDetail'; params: { bookingId: string } }
+  | { name: 'CustomerBookingDetail'; params: { bookingId: string; released?: true } }
   | { name: 'CustomerOrderDetail'; params: { serviceOrderId: string } };
 
 export interface CustomerNotificationTargetDeps {
@@ -19,7 +19,7 @@ function validId(value: unknown): string | null {
 }
 
 export async function resolveCustomerNotificationTarget(
-  item: Pick<CustomerNotificationItem, 'referenceId' | 'referenceType'>,
+  item: Pick<CustomerNotificationItem, 'referenceId' | 'referenceType'> & { type?: string },
   deps: CustomerNotificationTargetDeps,
 ): Promise<CustomerNotificationTarget | null> {
   const referenceId = validId(item.referenceId);
@@ -28,9 +28,11 @@ export async function resolveCustomerNotificationTarget(
   const type = item.referenceType.trim().toUpperCase();
 
   if (type === 'BOOKING') {
+    // The technician could not make it (BE 20/10/2026): the request page points to choosing another one.
+    const released = item.type?.trim().toUpperCase() === 'TECHNICIAN_RELEASED';
     return {
       name: 'CustomerBookingDetail',
-      params: { bookingId: referenceId },
+      params: released ? { bookingId: referenceId, released: true } : { bookingId: referenceId },
     };
   }
 

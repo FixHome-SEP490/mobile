@@ -50,12 +50,18 @@ import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import StatusBadge from '../../components/StatusBadge';
 import ContactActions from '../../components/ContactActions';
 import { serviceOrderStatusView } from './technician-status';
+import {
+  loadReleasable,
+  releaseConfirmText,
+  releaseErrorText,
+  type ReleasableJob,
+} from './technician-overrun-release';
 import { formatVnd } from '../../utils/format';
 
 import { vnDateTimeString } from '../../utils/vn-time';
 
 const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
-type JobTab = 'all' | 'pending' | 'in_progress' | 'completed';
+type JobTab = 'all' | 'pending' | 'in_progress' | 'completed' | 'overrun';
 
 // Floating GlassTabBar: 64pt pill + breathing room, plus the bottom inset (min 16).
 const TAB_BAR_CLEARANCE = 64 + 16;
@@ -71,6 +77,9 @@ export default function TechnicianJobsScreen() {
   const [jobsState, setJobsState] = useState(getCachedJobsState);
   const { jobs, loading, refreshing, loadingMoreJobs, error, actionLoading, blockedOrderIds } = jobsState;
   const [checkInBusy, setCheckInBusy] = useState<string | null>(null);
+  const [releasable, setReleasable] = useState<{ items: ReleasableJob[]; failed: number; loading: boolean }>({ items: [], failed: 0, loading: true });
+  const [releasingId, setReleasingId] = useState<string | null>(null);
+  const releaseSeq = useRef(0);
   const [arrivalStates, setArrivalStates] = useState<Record<string, Exclude<ArrivalVerificationState, 'clear'>>>({});
   const technicianUserId = useAuthStore(technicianJobsUserId);
   const jobsRef = useRef(jobsState.jobs);
@@ -173,6 +182,37 @@ export default function TechnicianJobsScreen() {
     }
   }, [jobsState.jobs, technicianUserId]);
 
+  // "Không kịp tới" tab: eligibility is Backend-decided per order, so it is read only while the tab is open.
+  const reloadReleasable = useCallback(async () => {
+    const seq = ++releaseSeq.current;
+    const result = await loadReleasable(jobsRef.current, ordersApi.overrunReleaseStatus);
+    if (seq === releaseSeq.current) setReleasable({ ...result, loading: false });
+  }, []);
+  useEffect(() => {
+    if (activeTab === 'overrun' && !loading) void reloadReleasable();
+  }, [activeTab, loading, jobsState.jobs, reloadReleasable]);
+
+  const doRelease = async (orderId: string) => {
+    setReleasingId(orderId);
+    try {
+      await ordersApi.releaseForOverrun(orderId);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await loader.refresh(true);
+    } catch (err) {
+      Alert.alert('Không thể nhả đơn', releaseErrorText(err));
+      void reloadReleasable();
+    } finally {
+      setReleasingId(null);
+    }
+  };
+  const handleRelease = ({ job, status }: ReleasableJob) => {
+    const code = job.code || job.id.slice(0, 8);
+    Alert.alert(`Không kịp tới đơn #${code}?`, releaseConfirmText(code, status.currentOrderCode), [
+      { text: 'Quay lại', style: 'cancel' },
+      { text: 'Nhả đơn', style: 'destructive', onPress: () => void doRelease(job.id) },
+    ]);
+  };
+
   const onRefresh = () => {
     setManualRefreshing(true);
     void loader.refresh(true).finally(() => setManualRefreshing(false));
@@ -212,7 +252,8 @@ export default function TechnicianJobsScreen() {
     }
   };
 
-  const jobsView = resolveJobsView(jobsState, activeTab);
+  const overrunTab = activeTab === 'overrun';
+  const jobsView = resolveJobsView(jobsState, overrunTab ? 'pending' : activeTab);
   const { filtered: filteredJobs, showLoadMoreJobs, jobsCoverageText, emptyNote } = jobsView;
   // Local code-only search over the loaded, tab-filtered rows: trimmed,
   // case-insensitive, matching `job.code` ONLY. It is deliberately not a
@@ -222,19 +263,24 @@ export default function TechnicianJobsScreen() {
   // server total.
   const trimmedCodeQuery = codeQuery.trim().toLowerCase();
   const searching = trimmedCodeQuery !== '';
-  const visibleJobs = searching
+  const visibleJobs = overrunTab ? [] : searching
     ? filteredJobs.filter((job) =>
         String(job.code ?? '').toLowerCase().includes(trimmedCodeQuery),
       )
     : filteredJobs;
+  const visibleReleasable = searching
+    ? releasable.items.filter(({ job }) => String(job.code ?? '').toLowerCase().includes(trimmedCodeQuery))
+    : releasable.items;
+  const nothingToShow = overrunTab ? !releasable.loading && visibleReleasable.length === 0 : visibleJobs.length === 0;
   // Counts only mean something once every page is loaded (filtering is loaded-only).
   const showCounts = !showLoadMoreJobs && !loading;
-  const tabCount = (tab: JobTab) => (showCounts ? ` ${resolveJobsView(jobsState, tab).filtered.length}` : '');
+  const tabCount = (tab: JobTab) => (showCounts && tab !== 'overrun' ? ` ${resolveJobsView(jobsState, tab).filtered.length}` : '');
   const tabs: { key: JobTab; label: string }[] = [
     { key: 'all', label: 'Tất cả' },
     { key: 'pending', label: 'Chờ thực hiện' },
     { key: 'in_progress', label: 'Đang sửa chữa' },
     { key: 'completed', label: 'Hoàn thành' },
+    { key: 'overrun', label: 'Không kịp tới' },
   ];
 
   return (
@@ -242,29 +288,34 @@ export default function TechnicianJobsScreen() {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
       <View style={styles.header}>
         <Text style={styles.headerTitle} accessibilityRole="header">Công việc của tôi</Text>
-        <View
-          style={[
-            styles.searchBox,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}
-        >
-          <Search size={18} color={colors.textSecondary} strokeWidth={1.75} />
-          <TextInput
-            style={styles.searchInput}
-            value={codeQuery}
-            onChangeText={setCodeQuery}
-            placeholder="Tìm theo mã"
-            placeholderTextColor={colors.muted}
-            accessibilityLabel="Tìm theo mã"
-            accessibilityHint="Lọc theo mã trong các công việc đã tải"
-            returnKeyType="search"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        </View>
+        <Text style={styles.headerSubtitle}>
+          {loading ? 'Đang tải công việc…' : showCounts ? `${resolveJobsView(jobsState, 'all').filtered.length} công việc` : (jobsCoverageText ?? '')}
+        </Text>
       </View>
 
       <View style={styles.container}>
+        <View style={styles.searchWrap}>
+          <View
+            style={[
+              styles.searchBox,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <Search size={18} color={colors.textSecondary} strokeWidth={1.75} />
+            <TextInput
+              style={styles.searchInput}
+              value={codeQuery}
+              onChangeText={setCodeQuery}
+              placeholder="Tìm theo mã"
+              placeholderTextColor={colors.muted}
+              accessibilityLabel="Tìm theo mã"
+              accessibilityHint="Lọc theo mã trong các công việc đã tải"
+              returnKeyType="search"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+        </View>
         {/* Bộ lọc công việc — chỉ lọc trên phần đã tải, không bịa số lượng */}
         <ScrollView
           horizontal
@@ -310,7 +361,7 @@ export default function TechnicianJobsScreen() {
             contentContainerStyle={[
               styles.scrollContent,
               { paddingBottom: TAB_BAR_CLEARANCE + Math.max(insets.bottom, 16) },
-              visibleJobs.length === 0 && styles.emptyScroll,
+              nothingToShow && styles.emptyScroll,
             ]}
             style={styles.listScroll}
             alwaysBounceVertical
@@ -340,18 +391,20 @@ export default function TechnicianJobsScreen() {
                 </TouchableOpacity>
               </View>
             )}
-            {visibleJobs.length === 0 && !error && (
+            {nothingToShow && !error && (
               <View style={styles.emptyContainer}>
-                {searching ? (
+                {searching && !overrunTab ? (
                   <Search size={56} color={colors.muted} strokeWidth={1.5} />
                 ) : (
                   <Briefcase size={56} color={colors.muted} strokeWidth={1.5} />
                 )}
                 <Text style={styles.emptyTitle} accessibilityRole="header">
-                  {searching ? 'Không tìm thấy mã phù hợp trong phần đã tải' : 'Chưa có công việc nào'}
+                  {overrunTab ? 'Chưa có đơn nào cần nhả' : searching ? 'Không tìm thấy mã phù hợp trong phần đã tải' : 'Chưa có công việc nào'}
                 </Text>
                 <Text style={styles.emptyDesc}>
-                  {searching
+                  {overrunTab
+                    ? 'Bạn chỉ nhả được đơn khi đang làm dở một đơn khác và đơn này sắp tới giờ hẹn. Nhả đơn không bị trừ điểm uy tín.'
+                    : searching
                     ? 'Chỉ các công việc đã tải mới được lọc theo mã. Nếu còn trang tiếp theo, chọn “Tải thêm công việc” để kiểm tra thêm.'
                     : emptyNote === 'more-pages'
                       ? 'Mục này chưa có công việc phù hợp trong phần đã tải. Chọn “Tải thêm công việc” để xem tiếp.'
@@ -367,6 +420,71 @@ export default function TechnicianJobsScreen() {
                 >
                   <Text style={styles.textBtnLabel}>Làm mới</Text>
                 </TouchableOpacity>
+              </View>
+            )}
+            {overrunTab && releasable.loading && (
+              <Text style={styles.loadingText}>Đang kiểm tra các đơn có thể nhả…</Text>
+            )}
+            {overrunTab && releasable.failed > 0 && (
+              <View style={[styles.stateBox, styles.releaseNote, { backgroundColor: colors.tone.warning.bg }]} accessibilityRole="alert">
+                <Text style={[styles.stateBoxText, { color: colors.tone.warning.text }]}>
+                  {`Chưa kiểm tra được ${releasable.failed} đơn. Kéo xuống để thử lại.`}
+                </Text>
+              </View>
+            )}
+            {overrunTab && visibleReleasable.length > 0 && (
+              <View style={styles.list}>
+                {visibleReleasable.map((item) => {
+                  const { job, status } = item;
+                  const code = job.code || job.id.slice(0, 8);
+                  const busy = releasingId === job.id;
+                  return (
+                    <View key={job.id} style={styles.jobCard}>
+                      <View style={styles.info}>
+                        <View style={styles.badgeRow}>
+                          <StatusBadge view={serviceOrderStatusView(job.status)} />
+                          <Text style={styles.jobCode}>#{code}</Text>
+                        </View>
+                        <Text style={styles.jobTitle}>{job.serviceName || 'Dịch vụ sửa chữa'}</Text>
+                        {!!job.scheduledAt && (
+                          <View style={styles.iconRow}>
+                            <Clock size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                            <Text style={styles.jobMeta}>{vnDateTimeString(job.scheduledAt, VN_DATETIME)}</Text>
+                          </View>
+                        )}
+                        {!!job.addressSummary && (
+                          <View style={styles.iconRow}>
+                            <MapPin size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                            <Text style={styles.jobAddress} numberOfLines={2}>{job.addressSummary}</Text>
+                          </View>
+                        )}
+                        <Text style={styles.jobMeta}>
+                          {status.currentOrderCode ? `Bạn đang làm đơn #${status.currentOrderCode}. ` : ''}Nhả đơn không bị trừ điểm uy tín.
+                        </Text>
+                      </View>
+                      <View style={styles.actionsRow}>
+                        <TouchableOpacity
+                          style={[styles.actionBtn, { backgroundColor: colors.tone.warning.text }]}
+                          onPress={() => handleRelease(item)}
+                          disabled={releasingId !== null}
+                          activeOpacity={0.85}
+                          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Không kịp tới đơn ${code}`}
+                        >
+                          {busy ? (
+                            <ActivityIndicator size="small" color={colors.surface} />
+                          ) : (
+                            <>
+                              <AlertTriangle size={18} color={colors.surface} strokeWidth={1.75} />
+                              <Text style={styles.actionBtnText}>Không kịp tới</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
             )}
             <View style={styles.list}>
@@ -620,19 +738,21 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 16,
+    minHeight: 69, // = Home header
+    justifyContent: 'center',
+    paddingVertical: 12,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.divider,
   },
-  headerTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
+  headerTitle: { fontSize: 20, lineHeight: 24, fontWeight: '700', color: colors.text },
+  headerSubtitle: { fontSize: 12, lineHeight: 16, color: colors.textSecondary },
+  searchWrap: { paddingHorizontal: 16, paddingTop: 12 },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     minHeight: 48,
-    marginTop: 12,
     paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1,
@@ -699,6 +819,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   contactRow: { marginTop: 12, gap: 8 },
   primaryCol: { gap: 8 },
   stateBox: { gap: 8, padding: 12, borderRadius: 14 },
+  releaseNote: { marginBottom: 12 },
   stateBoxRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   stateBoxText: { flex: 1, fontSize: 14, lineHeight: 20, fontWeight: '500' },
   actionBtn: {

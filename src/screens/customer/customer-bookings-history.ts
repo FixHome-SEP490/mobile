@@ -1,6 +1,7 @@
 import type { BookingItem, BookingsPage } from '../../api/bookings.api';
 import type { CanonicalOrderStatus, OrdersPage, ServiceOrderItem } from '../../api/orders.api';
 import { UserRole, type UserInfo } from '../../types/auth.types';
+import { canChooseTechnicians } from '../../utils/booking-candidate-selection';
 
 export function customerBookingsUserId(session: { isAuthenticated: boolean; user: UserInfo | null }): string | null {
   return session.isAuthenticated && session.user?.role === UserRole.CUSTOMER
@@ -46,7 +47,6 @@ export function getCachedHistoryState(): BookingsHistoryState {
 
 export const BOOKINGS_PAGE_SIZE = 20;
 /** Navigate to technician selection only for these list-known statuses without a linked order. */
-const RESUMABLE_STATUSES = new Set(['SUBMITTED', 'CLOSED']);
 
 const deniedMessage = 'Không có quyền xem lịch sử đặt lịch. Vui lòng kiểm tra đăng nhập.';
 
@@ -58,8 +58,8 @@ function accessDenied(error: unknown) {
 /** Real bookingId for safe resume, or null when the row must stay read-only. Never invents IDs. */
 export function bookingResumeTarget(booking: BookingItem): string | null {
   if (!booking || typeof booking.id !== 'string' || booking.id.length === 0) return null;
-  if (booking.serviceOrderId) return null;
-  return RESUMABLE_STATUSES.has(String(booking.status).toUpperCase()) ? booking.id : null;
+  // Same gate as the picker (and the web): an ended session has nothing to choose from.
+  return canChooseTechnicians(booking) ? booking.id : null;
 }
 
 export type LinkedReplacementState = 'waiting' | 'support';

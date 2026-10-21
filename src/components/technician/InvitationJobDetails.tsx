@@ -31,7 +31,7 @@ export default function InvitationJobDetails({ booking }: { booking: TechnicianB
   const noteStyle = [styles.value, styles.note, { color: colors.tone.warning.text, backgroundColor: colors.tone.warning.bg }];
   return (
     <View testID="invitation-job-details" style={styles.wrap}>
-      <View style={[styles.row, { borderBottomColor: colors.border }]}>
+      <View style={[styles.row, styles.card, { borderColor: colors.border, backgroundColor: colors.surface }]}>
         <Text style={[styles.label, { color: colors.textSecondary }]}>Khách mô tả</Text>
         <Text style={[styles.value, { color: booking.description ? colors.text : colors.textSecondary }]}>
           {booking.description ?? 'Khách chưa ghi mô tả.'}
@@ -52,7 +52,7 @@ export default function InvitationJobDetails({ booking }: { booking: TechnicianB
         ) : null}
       </View>
       {ai && aiOpen ? (
-        <View testID="invitation-ai-summary" style={[styles.row, { borderBottomColor: colors.border }]}>
+        <View testID="invitation-ai-summary" style={[styles.row, styles.card, { borderColor: colors.border, backgroundColor: colors.surface }]}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>AI nhận định</Text>
           {ai.deviceName ? <Text style={[styles.value, { color: colors.text }]}>{`Thiết bị: ${ai.deviceName}`}</Text> : null}
           <Lines label="Có thể là" items={ai.suspectedFaults} />
@@ -70,7 +70,12 @@ export default function InvitationJobDetails({ booking }: { booking: TechnicianB
           <Text style={noteStyle}>Đây là gợi ý sơ bộ, bạn kiểm tra tận nơi rồi mới kết luận.</Text>
         </View>
       ) : null}
-      {booking.media?.length ? <BookingMediaViewer bookingId={booking.id} media={booking.media} /> : null}
+      {booking.media?.length ? (
+        <View style={styles.mediaSection}>
+          <Text style={[styles.heading, { color: colors.text }]}>{`Ảnh/video khách gửi (${booking.media.length})`}</Text>
+          <BookingMediaViewer bookingId={booking.id} media={booking.media} />
+        </View>
+      ) : null}
       <Text style={noteStyle} testID="invitation-privacy-note">
         Địa chỉ cụ thể, số điện thoại và ghi chú riêng của khách hiện sau khi bạn nhận đơn.
       </Text>
@@ -80,7 +85,10 @@ export default function InvitationJobDetails({ booking }: { booking: TechnicianB
 
 const styles = StyleSheet.create({
   wrap: { gap: 12, marginTop: 8 },
-  row: { paddingVertical: 12, borderBottomWidth: 1, gap: 6 },
+  row: { paddingVertical: 12, gap: 6 },
+  card: { padding: 16, borderRadius: 16, borderWidth: 1 },
+  mediaSection: { gap: 8 },
+  heading: { fontSize: 14, lineHeight: 20, fontWeight: '700' },
   label: { fontSize: 12, lineHeight: 18 },
   value: { fontSize: 14, lineHeight: 22 },
   note: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },

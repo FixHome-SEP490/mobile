@@ -120,7 +120,7 @@ export default function CustomerBookingDetailScreen() {
   const runPrimaryAction = () => {
     if (!booking || !nextAction) return;
     if (nextAction.kind === 'choose_technician') {
-      navigation.navigate('CustomerMatching', { bookingId: booking.id });
+      navigation.navigate('CustomerMatching', route.params.released ? { bookingId: booking.id, released: true } : { bookingId: booking.id });
       return;
     }
     if (nextAction.kind === 'open_order' && nextAction.serviceOrderId) {
@@ -264,6 +264,12 @@ export default function CustomerBookingDetailScreen() {
           )}
           {booking.status === 'CANCELLED' && (
             <RebookSheet bookingId={booking.id} visible={rebookOpen} onClose={() => setRebookOpen(false)} />
+          )}
+
+          {route.params.released && nextAction?.kind === 'choose_technician' && (
+            <Text testID="booking-released-notice" accessibilityRole="alert" style={styles.actionDetail}>
+              Thợ trước không kịp tới buổi hẹn. Bạn chọn thợ khác, giá và lịch hẹn giữ nguyên.
+            </Text>
           )}
 
           {nextAction && (

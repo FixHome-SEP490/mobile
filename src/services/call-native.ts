@@ -8,7 +8,7 @@
 // there throws. They are loaded on first use, so the rest of the app keeps
 // working everywhere and a call simply says it needs the FixHome build.
 
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 import type * as WebRtc from 'react-native-webrtc';
 import type InCallManagerType from 'react-native-incall-manager';
 
@@ -34,6 +34,8 @@ export function loadWebRtc(): WebRtcModule | null {
 export function loadInCallManager(): InCallManager | null {
   if (inCall !== undefined) return inCall;
   if (Platform.OS === 'web') return (inCall = null);
+  // The package's JS loads fine without its native half (Expo Go) and then throws on every call.
+  if (!NativeModules.InCallManager) return (inCall = null);
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const mod = require('react-native-incall-manager');

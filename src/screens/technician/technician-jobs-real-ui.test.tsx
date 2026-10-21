@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import { serviceOrderStatusView } from './technician-status';
 import { resolveJobsView, techOrderDetailTarget } from './technician-order-detail';
@@ -66,7 +66,9 @@ jest.mock('../../components/ContactActions', () => ({
 
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),
+  notificationAsync: jest.fn(),
   ImpactFeedbackStyle: { Medium: 'medium' },
+  NotificationFeedbackType: { Success: 'success' },
 }));
 
 jest.mock('expo-location', () => ({
@@ -120,6 +122,8 @@ jest.mock('../../api/orders.api', () => ({
     enRoute: jest.fn(),
     checkIn: jest.fn(),
     getOrder: jest.fn(),
+    overrunReleaseStatus: jest.fn(async () => ({ eligible: true, block: null, currentOrderCode: 'SO-CUR', windowMinutes: 180 })),
+    releaseForOverrun: jest.fn(async () => ({})),
   },
 }));
 
@@ -222,7 +226,7 @@ describe('TechnicianJobsScreen real-UI presentation (T-RUI2B)', () => {
     const chips = renderer.root.findAll(
       (node) => node.type === TouchableOpacity && node.props.accessibilityRole === 'radio',
     );
-    expect(chips).toHaveLength(4);
+    expect(chips).toHaveLength(5);
     for (const chip of chips) {
       expect(StyleSheet.flatten(chip.props.style).minHeight).toBeGreaterThanOrEqual(44);
     }
@@ -283,6 +287,51 @@ describe('TechnicianJobsScreen real-UI presentation (T-RUI2B)', () => {
         (node) => node.type === TouchableOpacity && node.props.accessibilityLabel === 'Nhắn tin với khách hàng',
       ).length,
     ).toBe(1);
+    await act(async () => renderer.unmount());
+  });
+
+  it('lists releasable orders in the Không kịp tới tab and releases after confirmation', async () => {
+    mockedJobsState = loadedState();
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const { ordersApi } = jest.requireMock('../../api/orders.api') as { ordersApi: { releaseForOverrun: jest.Mock } };
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<TechnicianJobsScreen />);
+    });
+    const chip = renderer.root.find(
+      (node) => node.type === TouchableOpacity && node.props.accessibilityRole === 'radio'
+        && node.props.accessibilityLabel === 'Không kịp tới',
+    );
+    await act(async () => chip.props.onPress());
+    expect(visibleText(renderer)).toContain('Bạn đang làm đơn #SO-CUR.');
+    const release = renderer.root.find(
+      (node) => node.type === TouchableOpacity && node.props.accessibilityLabel === 'Không kịp tới đơn SO-1',
+    );
+    await act(async () => release.props.onPress());
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(ordersApi.releaseForOverrun).not.toHaveBeenCalled();
+    const buttons = alertSpy.mock.calls[0][2] as { text: string; onPress?: () => void }[];
+    await act(async () => buttons.find((b) => b.text === 'Nhả đơn')!.onPress!());
+    expect(ordersApi.releaseForOverrun).toHaveBeenCalledWith(activeJob.id);
+    expect(mockLoader.refresh).toHaveBeenCalledWith(true);
+    alertSpy.mockRestore();
+    await act(async () => renderer.unmount());
+  });
+
+  it('shows the explained empty state when no order may be released', async () => {
+    mockedJobsState = loadedState();
+    const { ordersApi } = jest.requireMock('../../api/orders.api') as { ordersApi: { overrunReleaseStatus: jest.Mock } };
+    ordersApi.overrunReleaseStatus.mockResolvedValueOnce({ eligible: false, block: 'NO_CURRENT_JOB', currentOrderCode: null, windowMinutes: 180 });
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<TechnicianJobsScreen />);
+    });
+    const chip = renderer.root.find(
+      (node) => node.type === TouchableOpacity && node.props.accessibilityLabel === 'Không kịp tới',
+    );
+    await act(async () => chip.props.onPress());
+    expect(visibleText(renderer)).toContain('Chưa có đơn nào cần nhả');
+    expect(visibleText(renderer)).toContain('không bị trừ điểm uy tín');
     await act(async () => renderer.unmount());
   });
 });

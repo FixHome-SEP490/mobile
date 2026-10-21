@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-20 21:11 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
+> Cập nhật lần cuối: 2026-10-21 08:12 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/web-be-sync-20261021
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -214,6 +214,14 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 - P1 như web (owner lock 19/10/2026): trong `technician-parts-section.tsx` (màn đơn của thợ), mỗi dòng linh kiện FixHome đã nhận qua QR có khối "Hoàn trả" đọc `GET /service-orders/:orderId/part-returns`: "Cấp / Dùng / Cần trả", dòng "Đang chờ quản lý xác nhận" hoặc "Đã nhận", và nút "Khai trả" chọn số lượng (nguyên, từ 1 tới phần còn phải trả chưa khai) rồi gửi `POST /part-requests/:requestId/items/:itemId/declare-return {quantity, expectedVersion, idempotencyKey}`. Khai trả chưa phải là đã trả xong; quản lý dịch vụ nhận thực tế ở console web.
 - Lỗi 409 thì đọc lại số liệu trước khi gửi lại. Backend chưa bật custody (403/404/501/503) thì khối này ẩn và QR/đã dùng/hoàn trả cũ không đổi. Test: `part-returns.test.ts`, `technician-parts-returns.test.tsx`. Runtime với backend bật custody và trên thiết bị CHƯA KIỂM CHỨNG.
 
+### Đồng bộ Backend + web 20/10/2026 (nhánh `feat/web-be-sync-20261021`)
+
+- Thợ nhả đơn khi đơn trước chưa xong (BE #138, web #155): màn Công việc có thêm bộ lọc "Không kịp tới". Với mỗi đơn `ACCEPTED/EN_ROUTE` còn giữ, màn đọc `GET /service-orders/:id/overrun-release` (`{eligible, block, currentOrderCode, windowMinutes}`) và chỉ liệt kê đơn `eligible`; nút "Không kịp tới" hỏi xác nhận rồi `POST` cùng đường dẫn (không body). Không trừ điểm uy tín; ngưỡng do Backend quyết (`matching.overrun_release_window_minutes`, mặc định 180 phút, migration 047). Lỗi 4xx đọc `error.details.block` ra câu tiếng Việt. Không đọc được eligibility của một đơn thì báo "Chưa kiểm tra được N đơn", không coi là không đủ điều kiện. Logic ở `technician-overrun-release.ts`.
+- Khách: thông báo `TECHNICIAN_RELEASED` (`referenceType: BOOKING`) mở chi tiết yêu cầu với `released: true`; khi yêu cầu đang `CLOSED` thì hiện "Thợ trước không kịp tới buổi hẹn. Bạn chọn thợ khác, giá và lịch hẹn giữ nguyên." và nút "Chọn lại kỹ thuật viên" mở `CustomerMatching` (cũng nhận `released: true` để hiện cùng câu đó). Booking đã `MATCHING` thì không hiện câu này. Mobile không suy "đang chờ thợ" từ `!order.technician` như web vì `order.technician` có thể là thợ cũ.
+- Linh kiện dùng một phần (BE 77b59de, web 83b2d0b): dòng FixHome có bản ghi custody (`part-returns`) thay hai nút "Đã dùng/Hoàn trả" bằng "Ghi số lượng thực dùng": bước tăng/giảm từ số đã ghi tới `issuedQty - managerAcceptedQty`, gửi `PATCH /part-requests/:id/items/:itemId/usage {usageStatus, usedQty, expectedVersion, idempotencyKey}` (`usageStatus` = `used` nếu `usedQty > 0`, ngược lại `returned`). Hóa đơn mới chỉ tính số đã dùng; dòng không có custody giữ hai nút cũ. Lỗi (kể cả 409) thì đọc lại số liệu, không tự gửi lại. Màn OrderFlow `PartsLifecycleScreen` chưa có bước này (vẫn gửi cả dòng, Backend từ chối 409 với dòng đã ghi một phần).
+- Nhiều ảnh trước sửa chữa (BE `deferAutoStart`, web CameraCapture nhiều ảnh): `BeforeEvidenceScreen` giữ tối đa 10 ảnh nháp (xem bằng `PhotoDraftGallery`: ảnh lớn, đếm, dải thumbnail), "Gửi N ảnh" gửi lần lượt qua `arrival-proof-controller`; mọi ảnh trừ ảnh cuối gửi `deferAutoStart=true` để đơn giá cố định còn `EN_ROUTE`, ảnh cuối không gửi cờ nên Backend tự bắt đầu sửa. Ảnh nào chưa được xác nhận (`phase !== resolved`) thì dừng hàng đợi và giữ các ảnh còn lại. `TechnicianOrderDetailScreen` (đường cũ) vẫn gửi từng ảnh không cờ.
+- KYC `face_video` (BE #139): mobile vẫn gửi `face_photo`, Backend còn nhận; không đổi. Migration 046/047 phải chạy trên DB dùng chung trước khi thử. Runtime với Backend thật và trên thiết bị CHƯA KIỂM CHỨNG. Test: `technician-overrun-release.test.ts`, `technician-jobs-real-ui.test.tsx`, `CustomerBookingDetailScreen.test.tsx`, `customer-notification-target.test.ts`, `technician-parts-returns.test.tsx`, `BeforeEvidenceScreen.test.tsx`, `arrival-proof-controller.test.ts`, `orders-evidence-upload.api.test.ts`.
+
 ### Chat: ảnh, video, khoá khi đơn hoàn tất, mã đơn (19/10/2026, nhánh `feat/chat-parity-n4-n3`)
 
 - PO 18/10/2026, như web. `ConversationItem` đọc thêm `orderCode` (hiện cạnh tên dịch vụ ở danh sách và đầu chat) và `closedReason`. Hội thoại khoá vì đơn hoàn tất (`canSend` false, `closedReason: order_completed`) hiện lý do: khách được dẫn tới "Gửi yêu cầu bảo hành" (`CustomerOrderDetail` tab bảo hành), thợ được báo chat mở lại khi khách gửi yêu cầu; gửi bị 409 `CONVERSATION_CLOSED` thì báo khoá và đọc lại hội thoại.
@@ -360,6 +368,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-21 08:12 (UTC+7) | Hgnv11 | feat/web-be-sync-20261021 | Đồng bộ BE+web 20/10: thợ nhả đơn (bộ lọc Không kịp tới) và thông báo TECHNICIAN_RELEASED cho khách, số lượng linh kiện dùng một phần, nhiều ảnh BEFORE với deferAutoStart; chưa kiểm chứng với Backend thật và thiết bị
 - 2026-10-20 21:11 (UTC+7) | Hgnv11 | dev | Làm lại giao diện chuẩn bị linh kiện, chi phí phát sinh và quản lý linh kiện của thợ (PartPickerRow, CatalogPicker, ConfirmSummary, lỗi theo ô, tổng cố định, ảnh nhỏ); không đổi API; chưa chạy trên máy thật.
 - 2026-10-20 20:39 (UTC+7) | Hgnv11 | dev | Tab thứ tư của kỹ thuật viên đổi từ Ví sang Thông báo (Ví vào qua Hồ sơ); màn Thông báo ẩn nút Quay lại khi nằm trong tab, tiêu đề 24/32 và màu nền/viền/cỡ chữ đồng bộ với Thông báo khách; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-20 20:09 (UTC+7) | Hgnv11 | feat/web-be-sync-20261020 | Báo giá, chi phí phát sinh, linh kiện đã nhận: danh sách linh kiện FixHome cuộn trong khung, hiện SKU và giá; chọn linh kiện luôn ghi tên vào Mô tả
@@ -399,7 +408,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-17 14:00 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | Thay acronym KYC hiển thị trong tiến trình rút tiền và thông báo lỗi bằng thuật ngữ “xác minh danh tính”; status/API giữ nguyên.
 - 2026-10-17 13:51 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | C50/C45 owner visual polish: shortcut Guest/Customer, copy mã ở CompletedOrder Customer, wallet và Withdrawal/KYC; 12 suites/125 focused tests PASS, Expo Web guest viewport 320–430dp PASS; không gửi API KYC, ngân hàng hoặc rút tiền thật.
 - 2026-10-17 02:11 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | Ổn định test AppState unresolved bằng GPS fixture tạo theo test, `Date.now` cố định và flush lifecycle qua `act`; serial lẫn regular Jest đều 285/3412 PASS, lint/typecheck/check:expo PASS.
-- 2026-10-17 02:08 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | C45 map parity: 20 Jest mục tiêu, full Jest 285/3412, typecheck/lint/Expo check và web export đạt; native map runtime CHƯA KIỂM CHỨNG.
 
 ### Lịch sử giữ lại khi tích hợp
 

@@ -123,7 +123,7 @@ describe('Technician T03 focused invitation scene (FH-TECH-02 UX01A)', () => {
     expect(reviewButtons()).toHaveLength(2);
     review('Sửa bơm A (fixture)');
     const t = visibleText();
-    expect(t).toContain('Xem kỹ, rồi nhận việc');
+    expect(t).toContain('Chi tiết lời mời');
     expect(t).toContain('Sửa bơm A (fixture)');
     expect(t).not.toContain('Sửa quạt B (fixture)');
     expect(buttons('Nhận việc Sửa bơm A (fixture)')).toHaveLength(1);
@@ -233,7 +233,7 @@ describe('Technician T03 focused invitation scene (FH-TECH-02 UX01A)', () => {
     await render([invitation('geo', 'Sửa bơm cỡ (fixture)', 20)]);
     review('Sửa bơm cỡ (fixture)');
     for (const node of renderer.root.findAllByType(TouchableOpacity)) {
-      expect(StyleSheet.flatten(node.props.style).minHeight).toBeGreaterThanOrEqual(44);
+      expect((StyleSheet.flatten(node.props.style).minHeight ?? StyleSheet.flatten(node.props.style).height)).toBeGreaterThanOrEqual(44);
       expect(node.props.accessibilityRole).toBe('button');
     }
     for (const node of renderer.root.findAllByType(Text)) {
