@@ -21,7 +21,7 @@ import * as Haptics from 'expo-haptics';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { useAppTheme } from '../../constants/theme';
 import {
-  partRequestsApi, partReturnsApi, canDeclareMoreQty, createIdempotencyKey, isPartReturnsUnavailableError, partReturnStatusText, pendingDeclaredQty,
+  partRequestsApi, partReturnsApi, canDeclareMoreQty, createIdempotencyKey, isPartReturnsUnavailableError, partReturnStatusText, pendingDeclaredQty, usedQtyRange,
   type PartRequest, type FulfillmentMethod, type PartCustodyReturnRecord,
 } from '../../api/part-requests.api';
 import { partsCatalogApi, type FixHomePart } from '../../api/parts-catalog.api';
@@ -125,6 +125,10 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
   const [declareItemId, setDeclareItemId] = useState<string | null>(null);
   const [declareQty, setDeclareQty] = useState(1);
   const [declaring, setDeclaring] = useState(false);
+  // Actual used quantity of a custody line (BE 20/10/2026): e.g. issued 3, used 1, return due 2.
+  const [usageEditId, setUsageEditId] = useState<string | null>(null);
+  const [usageQty, setUsageQty] = useState(0);
+  const [savingUsage, setSavingUsage] = useState(false);
   const loadReturns = async () => {
     try {
       const list = await partReturnsApi.getByOrderId(orderId);
@@ -152,6 +156,33 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
       if ((err as { response?: { status?: number } } | null)?.response?.status === 409) await loadReturns();
     } finally {
       setDeclaring(false);
+    }
+  };
+
+  const submitUsedQty = async (requestId: string, record: PartCustodyReturnRecord) => {
+    const { min, max } = usedQtyRange(record);
+    if (savingUsage || !Number.isInteger(usageQty) || usageQty < min || usageQty > max
+      || (record.usageRecorded && usageQty === record.usedQty)) return;
+    setSavingUsage(true);
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      await partRequestsApi.updateItemUsage(requestId, record.partRequestItemId, {
+        usageStatus: usageQty > 0 ? 'used' : 'returned',
+        usedQty: usageQty,
+        expectedVersion: record.version,
+        idempotencyKey: createIdempotencyKey('parts-used'),
+      });
+      setUsageEditId(null);
+      setActionSuccess(`Đã ghi nhận dùng ${usageQty}, cần trả ${record.issuedQty - usageQty} linh kiện.`);
+      await loadPartRequests();
+    } catch (err) {
+      setActionError(errorMessage(err, 'Không ghi nhận được số lượng đã dùng. Vui lòng thử lại.'));
+      // Stale version or a quantity decided elsewhere: read the numbers again before retrying.
+      setUsageEditId(null);
+      await loadReturns();
+    } finally {
+      setSavingUsage(false);
     }
   };
 
@@ -622,7 +653,23 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
                       </Text>
                       {!!item.note && <Text style={styles.jobMeta}>{item.note}</Text>}
                     </View>
-                    {isUnderRepair && pr.status === 'received' ? (
+                    {isUnderRepair && pr.status === 'received' && item.partSource === 'fixhome' && returns[item.id] ? (
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityState={{ expanded: usageEditId === item.id }}
+                        style={styles.ghostBtn}
+                        disabled={savingUsage}
+                        onPress={() => {
+                          const record = returns[item.id];
+                          setUsageQty(record.usedQty);
+                          setUsageEditId(usageEditId === item.id ? null : item.id);
+                          setActionError(null);
+                          setActionSuccess(null);
+                        }}
+                      >
+                        <Text style={styles.ghostBtnText}>{usageEditId === item.id ? 'Đóng nhập số lượng' : 'Ghi số lượng thực dùng'}</Text>
+                      </TouchableOpacity>
+                    ) : isUnderRepair && pr.status === 'received' ? (
                       <View style={styles.usageBtnRow}>
                         <TouchableOpacity accessibilityRole="button"
                           style={[styles.usageBtn, item.usageStatus === 'used' && styles.usageBtnActiveGreen]}
@@ -662,6 +709,31 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
                       {statusNote ? (
                         <Text style={[styles.jobMeta, { color: colors.tone[statusNote.tone].text }]}>{statusNote.text}</Text>
                       ) : null}
+                      {usageEditId === item.id ? (() => {
+                        const { min, max } = usedQtyRange(record);
+                        return (
+                          <View style={{ gap: 8 }} testID={`part-usage-editor-${item.id}`}>
+                            <View style={styles.usageBtnRow}>
+                              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Giảm số lượng đã dùng" style={styles.usageBtn} disabled={usageQty <= min} onPress={() => setUsageQty((q) => Math.max(min, q - 1))}>
+                                <Minus size={16} color={colors.text} strokeWidth={1.75} />
+                              </TouchableOpacity>
+                              <Text style={styles.resultName} accessibilityLabel={`Số lượng đã dùng ${usageQty}`}>{usageQty}</Text>
+                              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Tăng số lượng đã dùng" style={styles.usageBtn} disabled={usageQty >= max} onPress={() => setUsageQty((q) => Math.min(max, q + 1))}>
+                                <Plus size={16} color={colors.text} strokeWidth={1.75} />
+                              </TouchableOpacity>
+                            </View>
+                            <Text style={styles.jobMeta}>{`Đã nhận ${record.issuedQty} · Cần trả ${record.issuedQty - usageQty}. Hóa đơn mới chỉ tính số lượng đã dùng; số còn lại cần khai trả và chờ quản lý xác nhận.`}</Text>
+                            <TouchableOpacity
+                              accessibilityRole="button"
+                              style={styles.primaryBtn}
+                              disabled={savingUsage || (record.usageRecorded === true && usageQty === record.usedQty)}
+                              onPress={() => void submitUsedQty(pr.id, record)}
+                            >
+                              {savingUsage ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.primaryBtnText}>Lưu số lượng</Text>}
+                            </TouchableOpacity>
+                          </View>
+                        );
+                      })() : null}
                       {record.blocksNewWork ? (
                         <Text style={[styles.jobMeta, { color: colors.tone.warning.text }]}>Bạn chưa trả đủ linh kiện nên chưa nhận được việc mới.</Text>
                       ) : null}

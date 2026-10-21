@@ -57,6 +57,14 @@ function unwrap<T>(payload: { data: T } | T): T {
   return payload as T;
 }
 
+/** Whole-line status, or (custody rows, BE 20/10/2026) an exact used quantity with the ledger version. */
+export interface UpdateItemUsagePayload {
+  usageStatus: 'used' | 'returned';
+  usedQty?: number;
+  expectedVersion?: number;
+  idempotencyKey?: string;
+}
+
 export const partRequestsApi = {
   async createPreRepair(orderId: string, payload: CreatePartRequestPayload): Promise<PartRequest> {
     const res = await apiClient.post<{ data: PartRequest } | PartRequest>(
@@ -89,10 +97,10 @@ export const partRequestsApi = {
     return unwrap(res.data);
   },
 
-  async updateItemUsage(requestId: string, itemId: string, usageStatus: 'used' | 'returned'): Promise<PartRequestItem> {
+  async updateItemUsage(requestId: string, itemId: string, usage: 'used' | 'returned' | UpdateItemUsagePayload): Promise<PartRequestItem> {
     const res = await apiClient.patch<{ data: PartRequestItem } | PartRequestItem>(
       `/part-requests/${requestId}/items/${itemId}/usage`,
-      { usageStatus },
+      typeof usage === 'string' ? { usageStatus: usage } : usage,
     );
     return unwrap(res.data);
   },
@@ -164,6 +172,12 @@ export const pendingDeclaredQty = (r: PartCustodyReturnRecord) => Math.max(0, r.
 
 /** What the technician may still declare: the return-due quantity not declared yet. */
 export const canDeclareMoreQty = (r: PartCustodyReturnRecord) => Math.max(0, r.outstandingQty - pendingDeclaredQty(r));
+
+/** The used quantity may only grow, and never past what the manager has not already accepted back. */
+export const usedQtyRange = (r: PartCustodyReturnRecord) => ({
+  min: r.usedQty,
+  max: Math.max(r.usedQty, r.issuedQty - r.managerAcceptedQty),
+});
 
 export const partReturnsApi = {
   async getByOrderId(orderId: string): Promise<PartCustodyReturnRecord[]> {
