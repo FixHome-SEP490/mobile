@@ -148,3 +148,12 @@ it('session or assignment changed during storage does not send late mutation', a
   const f = fixture(), save = f.storage.setItem; f.storage.setItem = async (k, v) => { await save(k, v); f.blur(); };
   await createArrivalProofController(f.deps).uploadBefore(asset); expect(f.transport.uploadBefore).not.toHaveBeenCalled();
 });
+it('sends deferAutoStart to the BEFORE transport so several photos can follow each other while EN_ROUTE', async () => {
+  const f = fixture(); let n = 0;
+  f.transport.uploadBefore.mockImplementation(async () => { n += 1; f.server.evidence.push(evidence(`before-${n}`, 'BEFORE')); return { id: `before-${n}` }; });
+  const c = createArrivalProofController(f.deps);
+  await c.uploadBefore(asset, { deferAutoStart: true }); expect(c.getState().phase).toBe('resolved');
+  await c.uploadBefore(asset, { deferAutoStart: false }); expect(c.getState().phase).toBe('resolved');
+  expect(f.transport.uploadBefore.mock.calls.map((call) => (call as unknown[])[2])).toEqual([{ deferAutoStart: true }, { deferAutoStart: false }]);
+});
+

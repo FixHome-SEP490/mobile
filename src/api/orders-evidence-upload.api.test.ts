@@ -36,6 +36,17 @@ describe('uploadEvidenceBefore multipart contract (BEFORE only)', () => {
     expect(config).toEqual({ headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60000 });
   });
 
+  it('sends deferAutoStart only when asked, as the string the Backend parses', async () => {
+    await ordersApi.uploadEvidenceBefore(ORDER_ID, image, { deferAutoStart: true });
+    expect(appends).toContainEqual(['deferAutoStart', 'true']);
+    appends.length = 0;
+    await ordersApi.uploadEvidenceBefore(ORDER_ID, image, { deferAutoStart: false });
+    expect(appends).toContainEqual(['deferAutoStart', 'false']);
+    appends.length = 0;
+    await ordersApi.uploadEvidenceBefore(ORDER_ID, image);
+    expect(appends.map(([name]) => name)).not.toContain('deferAutoStart');
+  });
+
   it('never hardcodes a multipart boundary and never sends another evidence type', async () => {
     await ordersApi.uploadEvidenceBefore(ORDER_ID, image);
     const [, , config] = post.mock.calls[0];

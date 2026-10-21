@@ -12,6 +12,7 @@ const mockDeleteBefore = jest.fn();
 const mockVerify = jest.fn();
 let mockPhase: string = 'idle';
 let mockMessage: string | null = null;
+let mockUploadPhase = 'resolved';
 const mockCapturePhoto = jest.fn();
 const mockConfirmPermission = jest.fn();
 const mockNavigate = jest.fn();
@@ -28,7 +29,7 @@ jest.mock('./useTechnicianArrivalProof', () => ({
   useTechnicianArrivalProof: (args?: unknown) => {
     expect(args ?? {}).toEqual({});
     return {
-      controller: { uploadBefore: mockUploadBefore, deleteBefore: mockDeleteBefore, verify: mockVerify },
+      controller: { uploadBefore: mockUploadBefore, deleteBefore: mockDeleteBefore, verify: mockVerify, getState: () => ({ phase: mockUploadPhase }) },
       state: { phase: mockPhase, message: mockMessage },
     };
   },
@@ -91,6 +92,7 @@ beforeEach(() => {
   mockNavigate.mockClear();
   mockPhase = 'idle';
   mockMessage = null;
+  mockUploadPhase = 'resolved';
   mockCapturePhoto.mockReset().mockResolvedValue({ ok: true, asset });
   mockConfirmPermission.mockReset().mockResolvedValue(true);
 });
@@ -208,5 +210,50 @@ it.each([
   expect(mockVerify).toHaveBeenCalledTimes(1);
   expect(mockCapturePhoto).not.toHaveBeenCalled();
   expect(mockUploadBefore).not.toHaveBeenCalled();
+  await act(async () => renderer.unmount());
+});
+
+const press = (renderer: ReturnType<typeof create>, testID: string) => act(async () => {
+  await renderer.root.findByProps({ testID }).props.onPress();
+});
+
+it('queues several photos, defers the repair start on all but the last and clears what was sent', async () => {
+  mockSnapshot = beforeSnapshot([face]);
+  const second = { ...asset, uri: 'file:///cache/before-2.jpg', name: 'before-2.jpg' };
+  mockCapturePhoto.mockReset().mockResolvedValueOnce({ ok: true, asset }).mockResolvedValueOnce({ ok: true, asset: second });
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => {
+    renderer = create(<BeforeEvidenceScreen />);
+  });
+  await press(renderer, 'before-capture');
+  await press(renderer, 'before-add');
+  expect(renderer.root.findByProps({ testID: 'before-preview' }).props.source).toEqual({ uri: second.uri });
+  expect(renderer.root.findAllByProps({ testID: 'before-preview-thumb-0' }).length).toBeGreaterThan(0);
+  await act(async () => {
+    renderer.root.findByProps({ testID: 'before-preview-thumb-0' }).props.onPress();
+  });
+  expect(renderer.root.findByProps({ testID: 'before-preview' }).props.source).toEqual({ uri: asset.uri });
+  expect(JSON.stringify(renderer.toJSON())).toContain('Gửi 2 ảnh');
+  await press(renderer, 'before-send');
+  expect(mockUploadBefore.mock.calls).toEqual([[asset, { deferAutoStart: true }], [second, { deferAutoStart: false }]]);
+  expect(renderer.root.findAllByProps({ testID: 'before-preview' })).toHaveLength(0);
+  await act(async () => renderer.unmount());
+});
+
+it('stops the queue at the first photo that is not confirmed and keeps the rest to resend', async () => {
+  mockSnapshot = beforeSnapshot([face]);
+  mockUploadPhase = 'unknown';
+  const second = { ...asset, uri: 'file:///cache/before-2.jpg', name: 'before-2.jpg' };
+  mockCapturePhoto.mockReset().mockResolvedValueOnce({ ok: true, asset }).mockResolvedValueOnce({ ok: true, asset: second });
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => {
+    renderer = create(<BeforeEvidenceScreen />);
+  });
+  await press(renderer, 'before-capture');
+  await press(renderer, 'before-add');
+  await press(renderer, 'before-send');
+  expect(mockUploadBefore).toHaveBeenCalledTimes(1);
+  expect(renderer.root.findAllByProps({ testID: 'before-preview' }).length).toBeGreaterThan(0);
+  expect(JSON.stringify(renderer.toJSON())).toContain('Gửi 2 ảnh');
   await act(async () => renderer.unmount());
 });
