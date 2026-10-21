@@ -60,6 +60,7 @@ import {
 import { usersApi, type AddressData } from '../../api/users.api';
 import { useAuthStore } from '../../store';
 import { UserRole, type RootStackParamList } from '../../types';
+import { extractApiErrorMessage } from '../../utils/input-validation';
 import BookingSessionPicker from '../../components/BookingSessionPicker';
 import { bookingMediaIds, chatAttachmentSummary, type ChatAttachmentId } from './ai-chat-logic';
 import type { BookingSchedule } from '../../utils/booking-session';
@@ -870,7 +871,17 @@ export default function CustomerBookingCreateScreen() {
             // Remove the retry lock only after receiving and storing the upload ID
             // for the SAME currently authenticated owner.
             photoAttemptUris.delete(photo.uri);
-          } catch {
+          } catch (uploadError) {
+            // The server answered with a refusal: nothing was stored, so the photo is not "uncertain"
+            // and the customer can simply retry. Only a missing answer (timeout/network) keeps the lock.
+            const status = (uploadError as { response?: { status?: unknown } } | null)?.response?.status;
+            if (typeof status === 'number') {
+              photoAttemptUris.delete(photo.uri);
+              if (sameSubmissionSession() && ownerUserId === customerOwnerId) {
+                setPhotoUploadError(`${extractApiErrorMessage(uploadError, 'Máy chủ không nhận ảnh này.')} (mã ${status}). Yêu cầu chưa được tạo; hãy thử lại hoặc đổi ảnh khác.`);
+              }
+              return;
+            }
             // Never drop A's uncertain retry guard just because B logged in.
             photoAttemptUris.add(photo.uri);
             if (sameSubmissionSession() && ownerUserId === customerOwnerId) {
@@ -1612,7 +1623,13 @@ export default function CustomerBookingCreateScreen() {
                 {photoUploadError}
               </Text>
             )}
-
+            {(hasUncertainReviewPhoto || !!photoUploadError) && (
+              <TouchableOpacity testID="review-fix-photos" accessibilityRole="button" accessibilityLabel="Sửa ảnh sự cố"
+                disabled={isSubmitting} style={styles.stageEdit}
+                onPress={() => { dismissReview(); showBookingStage(0); }}>
+                <Text style={{ color: colors.primary, fontWeight: '600' }}>Sửa ảnh sự cố</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
         {!!visibleCreatedBookingId && (

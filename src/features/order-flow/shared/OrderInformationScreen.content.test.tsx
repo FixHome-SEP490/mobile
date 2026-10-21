@@ -1,3 +1,4 @@
+import type { CanonicalOrderStatus } from '../../../api/orders.api';
 import React from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
@@ -14,14 +15,15 @@ jest.mock('react-native-safe-area-context', () => {
   return { SafeAreaView: Native.View, useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) };
 });
 jest.mock('../../../hooks/useKeyboardInset', () => ({ useKeyboardInset: () => 0 }));
+jest.mock('../../../components/AcceptedRescheduleSheet', () => ({ __esModule: true, default: () => null }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => {}) }));
 
-function renderTree(role: 'customer' | 'technician'): ReactTestRenderer {
+function renderTree(role: 'customer' | 'technician', status: CanonicalOrderStatus = 'UNDER_REPAIR'): ReactTestRenderer {
   const key = { userId: 'u1', role, sessionGeneration: 1, serviceOrderId: 'order-1' };
   mockSnapshot = createOrderSessionSnapshot(key);
   mockSnapshot.access = 'current';
   mockSnapshot.order = readyResource({
-    id: 'order-1', code: 'SO-1', bookingId: 'b1', serviceName: 'Sửa điều hòa', status: 'UNDER_REPAIR',
+    id: 'order-1', code: 'SO-1', bookingId: 'b1', serviceName: 'Sửa điều hòa', status,
     customerName: 'An', customerPhone: '0900', addressSummary: 'Quận 1', scheduledAt: '2030-10-21T01:00:00.000Z',
     bookingMode: 'scheduled', slot: 'morning', customerNote: 'Gọi trước', laborWarrantyDays: 90,
     technician: { id: 't1', fullName: 'Bình', phoneNumber: '0911', averageRating: null },
@@ -32,8 +34,8 @@ function renderTree(role: 'customer' | 'technician'): ReactTestRenderer {
   return r;
 }
 
-function render(role: 'customer' | 'technician') {
-  const tree = renderTree(role);
+function render(role: 'customer' | 'technician', status?: CanonicalOrderStatus) {
+  const tree = renderTree(role, status);
   const output = JSON.stringify(tree.toJSON()).replace(/","/g, '');
   act(() => tree.unmount());
   return output;
@@ -49,6 +51,11 @@ describe('OrderInformationScreen content', () => {
     expect(out).toContain('Báo giá sau khi kiểm tra');
     expect(out).toContain('90 ngày');
     expect(out).toContain('Bình · 0911');
+  });
+  it('offers rescheduling only to the customer once the technician accepted and before the repair starts', () => {
+    expect(render('customer', 'ACCEPTED')).toContain('order-reschedule-entry');
+    expect(render('customer', 'UNDER_REPAIR')).not.toContain('order-reschedule-entry');
+    expect(render('technician', 'ACCEPTED')).not.toContain('order-reschedule-entry');
   });
   it('shows the customer to the technician', () => {
     const out = render('technician');

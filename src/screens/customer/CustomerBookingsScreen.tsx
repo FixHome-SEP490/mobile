@@ -15,6 +15,7 @@ import {
   AccessibilityInfo,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -45,7 +46,8 @@ import {
   type HistoryCard,
 } from './customer-bookings-history';
 import { orderDetailTarget } from './customer-order-detail';
-import { buildBookingWindow } from '../../utils/booking-window';
+import BookingRescheduleSheet from '../../components/BookingRescheduleSheet';
+import type { BookingSchedule } from '../../utils/booking-session';
 import {
   canCancelBookingConservative,
   canRescheduleBookingConservative,
@@ -54,15 +56,6 @@ import {
 } from './customer-booking-manage';
 import { vnDateString, vnTimeString } from '../../utils/vn-time';
 
-const MANAGE_DATE_OFFSETS = [0, 1, 2, 3, 7] as const;
-const MANAGE_START_TIMES = ['08:00', '09:00', '10:00', '13:00', '14:00', '15:00', '16:00'] as const;
-
-function manageDateLabel(offset: number): string {
-  if (offset === 0) return 'Hôm nay';
-  if (offset === 1) return 'Ngày mai';
-  return 'Sau ' + offset + ' ngày';
-}
-
 export default function CustomerBookingsScreen() {
   const { colors, spacing, fontSize, isDark } = useAppTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -70,8 +63,7 @@ export default function CustomerBookingsScreen() {
   const [manageBookingId, setManageBookingId] = useState<string | null>(null);
   const [manageMode, setManageMode] = useState<'cancel' | 'reschedule' | null>(null);
   const [cancelReason, setCancelReason] = useState('');
-  const [rescheduleDayOffset, setRescheduleDayOffset] = useState(1);
-  const [rescheduleTime, setRescheduleTime] = useState('09:00');
+  const [rescheduleSchedule, setRescheduleSchedule] = useState<BookingSchedule | null>(null);
   const [manageBusy, setManageBusy] = useState(false);
   const [manageError, setManageError] = useState<string | null>(null);
   const [activityTab, setActivityTab] = useState<BookingsTab>('in_progress');
@@ -153,8 +145,7 @@ export default function CustomerBookingsScreen() {
     setManageBookingId(booking.id);
     setManageMode(mode);
     setCancelReason('');
-    setRescheduleDayOffset(1);
-    setRescheduleTime('09:00');
+    setRescheduleSchedule(null);
     setManageError(null);
   };
 
@@ -162,8 +153,7 @@ export default function CustomerBookingsScreen() {
     getCustomerId: () => customerBookingsUserId(useAuthStore.getState()),
     getBooking: (id: string) => bookingsApi.getBooking(id),
     cancelBooking: (id: string, reason: string) => bookingsApi.cancelBooking(id, reason),
-    reschedule: (id: string, start: string, end: string) =>
-      bookingsApi.reschedule(id, start, end),
+    reschedule: (id: string, schedule: Extract<BookingSchedule, { mode: 'scheduled' }>) => bookingsApi.reschedule(id, schedule),
   };
 
   const handleBookingCancel = async (booking: BookingItem) => {
@@ -209,14 +199,8 @@ export default function CustomerBookingsScreen() {
 
   const handleBookingReschedule = async (booking: BookingItem) => {
     if (manageBusy) return;
-    let window: ReturnType<typeof buildBookingWindow>;
-    try {
-      window = buildBookingWindow({
-        dayOffset: rescheduleDayOffset,
-        time: rescheduleTime,
-      });
-    } catch (error) {
-      setManageError((error as Error).message || 'Khung giờ không hợp lệ.');
+    if (rescheduleSchedule?.mode !== 'scheduled') {
+      setManageError('Vui lòng chọn ngày và buổi (sáng, chiều hoặc tối).');
       return;
     }
     setManageBusy(true);
@@ -225,13 +209,14 @@ export default function CustomerBookingsScreen() {
       const result = await rescheduleBookingConservative(
         bookingMutationDeps,
         booking,
-        window.preferredStartAt,
-        window.preferredEndAt,
+        rescheduleSchedule,
       );
       if (result.kind === 'rescheduled') {
         setManageBookingId(null);
         setManageMode(null);
-        await loader.refresh();
+        // The old invitations are gone: go straight to choosing technicians for the new session, as on the web.
+        navigation.navigate('CustomerMatching', { bookingId: result.booking.id });
+        void loader.refresh();
         return;
       }
       if (result.kind === 'linked' && result.booking.serviceOrderId) {
@@ -478,6 +463,7 @@ export default function CustomerBookingsScreen() {
           onRequestClose={closeBookingManage}
         >
           <KeyboardAvoidingView style={styles.manageModalBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={closeBookingManage} accessibilityLabel="Đóng" accessibilityRole="button" />
             <View style={[styles.manageModalSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={styles.manageTitle}>Hủy yêu cầu đặt lịch</Text>
             <Text style={styles.meta}>
@@ -537,120 +523,20 @@ export default function CustomerBookingsScreen() {
           </KeyboardAvoidingView>
         </Modal>
 
-        <Modal
+        <BookingRescheduleSheet
           visible={manageBookingId === booking.id && manageMode === 'reschedule'}
-          transparent
-          animationType={reduceMotion ? 'none' : 'slide'}
-          onRequestClose={closeBookingManage}
-        >
-          <KeyboardAvoidingView style={styles.manageModalBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-            <View style={[styles.manageModalSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <ScrollView keyboardShouldPersistTaps="handled">
-            <Text style={styles.manageTitle}>
-              Đổi lịch trước khi có đơn sửa chữa
-            </Text>
-            <Text style={styles.meta}>
-              Chỉ áp dụng cho yêu cầu đã gửi hoặc đang tìm kỹ thuật viên, khi chưa
-              có đơn sửa chữa.
-            </Text>
-            <Text style={styles.manageLabel}>Ngày</Text>
-            <View style={styles.manageChips}>
-              {MANAGE_DATE_OFFSETS.map((offset) => (
-                <TouchableOpacity
-                  key={offset}
-                  onPress={() => setRescheduleDayOffset(offset)}
-                  disabled={manageBusy}
-                  style={[
-                    styles.manageChip,
-                    {
-                      borderColor:
-                        rescheduleDayOffset === offset
-                          ? colors.primary
-                          : colors.border,
-                      backgroundColor:
-                        rescheduleDayOffset === offset
-                          ? colors.primarySoft
-                          : colors.surface,
-                    },
-                  ]}
-                  accessibilityRole="radio"
-                  accessibilityState={{
-                    checked: rescheduleDayOffset === offset,
-                  }}
-                >
-                  <Text style={{ color: colors.text }}>
-                    {manageDateLabel(offset)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <Text style={styles.manageLabel}>Giờ bắt đầu (khung 2 giờ)</Text>
-            <View style={styles.manageChips}>
-              {MANAGE_START_TIMES.map((time) => (
-                <TouchableOpacity
-                  key={time}
-                  onPress={() => setRescheduleTime(time)}
-                  disabled={manageBusy}
-                  style={[
-                    styles.manageChip,
-                    {
-                      borderColor:
-                        rescheduleTime === time
-                          ? colors.primary
-                          : colors.border,
-                      backgroundColor:
-                        rescheduleTime === time
-                          ? colors.primarySoft
-                          : colors.surface,
-                    },
-                  ]}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: rescheduleTime === time }}
-                >
-                  <Text style={{ color: colors.text }}>{time}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            {!!manageError && (
-              <Text style={styles.manageError}>{manageError}</Text>
-            )}
-            <View style={styles.manageActions}>
-              <TouchableOpacity
-                style={[
-                  styles.resumeBtn,
-                  { backgroundColor: colors.primary, flex: 1 },
-                ]}
-                onPress={() => {
-                  if (!reduceMotion) {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  }
-                  void handleBookingReschedule(booking);
-                }}
-                disabled={manageBusy}
-                accessibilityRole="button"
-              >
-                <Text style={styles.resumeText}>
-                  {manageBusy ? 'Đang xác minh...' : 'Lưu lịch mới'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.secondaryBtn,
-                  { borderColor: colors.border, flex: 1 },
-                ]}
-                onPress={closeBookingManage}
-                disabled={manageBusy}
-                accessibilityRole="button"
-              >
-                <Text style={[styles.secondaryText, { color: colors.text }]}>
-                  Hủy thay đổi
-                </Text>
-              </TouchableOpacity>
-            </View>
-              </ScrollView>
-            </View>
-          </KeyboardAvoidingView>
-        </Modal>
+          booking={booking}
+          schedule={rescheduleSchedule}
+          busy={manageBusy}
+          error={manageError}
+          animated={!reduceMotion}
+          onChange={setRescheduleSchedule}
+          onSave={() => {
+            if (!reduceMotion) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            void handleBookingReschedule(booking);
+          }}
+          onClose={closeBookingManage}
+        />
 
         {!!resumeId && (
           <TouchableOpacity
@@ -1201,11 +1087,6 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     fontWeight: '800',
     color: colors.text,
   },
-  manageLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.text,
-  },
   manageInput: {
     minHeight: 72,
     borderWidth: 1,
@@ -1217,19 +1098,6 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     color: colors.tone.danger.text,
     fontSize: 12,
     fontWeight: '600',
-  },
-  manageChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  manageChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    minHeight: 44,
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderRadius: 8,
   },
   card: {
     backgroundColor: colors.surface,

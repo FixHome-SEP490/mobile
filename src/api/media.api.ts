@@ -1,5 +1,15 @@
 import apiClient from './client';
+import { Platform } from 'react-native';
 import { APP_CONFIG } from '../constants';
+
+// Browsers need a real Blob; the {uri,name,type} shape only works in React Native.
+async function appendFile(form: FormData, f: { uri: string; name: string; type: string }) {
+  if (Platform.OS === 'web') {
+    const blob = await (await fetch(f.uri)).blob();
+    form.append('file', blob.type ? blob : new Blob([blob], { type: f.type }), f.name);
+  }
+  else form.append('file', f as unknown as Blob);
+}
 
 export interface MediaUploadImage {
   uri: string;
@@ -174,11 +184,7 @@ export const mediaApi = {
 
   async uploadPublicImage(image: MediaUploadImage): Promise<UploadedPublicMedia> {
     const form = new FormData();
-    form.append('file', {
-      uri: image.uri,
-      name: image.name,
-      type: image.type,
-    } as unknown as Blob);
+    await appendFile(form, image);
 
     const response = await apiClient.post('/media/upload', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -190,11 +196,7 @@ export const mediaApi = {
 
   async uploadBookingPhoto(image: MediaUploadImage, opts: UploadProgressOptions = {}): Promise<UploadedBookingPhoto> {
     const form = new FormData();
-    form.append('file', {
-      uri: image.uri,
-      name: image.name,
-      type: image.type,
-    } as unknown as Blob);
+    await appendFile(form, image);
 
     const response = await apiClient.post('/media/booking-photo-upload', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -211,7 +213,7 @@ export const mediaApi = {
   /** A short private video of the problem (PO 18/10/2026): mp4/mov/webm up to 50 MB, never sent to the AI. */
   async uploadBookingVideo(video: MediaUploadVideo, opts: UploadProgressOptions = {}): Promise<UploadedBookingVideo> {
     const form = new FormData();
-    form.append('file', { uri: video.uri, name: video.name, type: video.type } as unknown as Blob);
+    await appendFile(form, video);
     const response = await apiClient.post('/media/booking-video-upload', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
       ...progressConfig(opts, 180_000),

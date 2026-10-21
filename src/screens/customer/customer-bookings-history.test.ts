@@ -220,6 +220,10 @@ it.each([
   expect(bookingResumeTarget(booking({ id, status: status as BookingItem['status'] }))).toBe(expected);
 });
 
+it('does not resume once the booked session has ended', () => {
+  expect(bookingResumeTarget(booking({ status: 'CLOSED', preferredEndAt: '2020-01-01T00:00:00Z' }))).toBeNull();
+});
+
 it('never resumes when the id is missing or an order is already linked', () => {
   expect(bookingResumeTarget(booking({ id: '' }))).toBeNull();
   expect(bookingResumeTarget(booking({ status: 'SUBMITTED', serviceOrderId: 'order-1' }))).toBeNull();

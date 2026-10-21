@@ -1,4 +1,6 @@
 import type { BookingItem } from '../../api/bookings.api';
+import type { BookingSchedule } from '../../utils/booking-session';
+import { vnParts } from '../../utils/vn-time';
 
 export function canCancelBookingConservative(booking: BookingItem): boolean {
   return (
@@ -31,11 +33,7 @@ export interface BookingMutationDeps {
   getCustomerId: () => string | null;
   getBooking: (id: string) => Promise<BookingItem>;
   cancelBooking: (id: string, reason: string) => Promise<BookingItem>;
-  reschedule: (
-    id: string,
-    preferredStartAt: string,
-    preferredEndAt: string,
-  ) => Promise<BookingItem>;
+  reschedule: (id: string, schedule: Extract<BookingSchedule, { mode: 'scheduled' }>) => Promise<BookingItem>;
 }
 
 function sameOwner(
@@ -93,33 +91,29 @@ export async function cancelBookingConservative(
   return { kind: 'uncertain', booking: fresh };
 }
 
+/** The server picks the exact window, so read-back compares the chosen day and session instead. */
+function appliedSchedule(fresh: BookingItem, schedule: Extract<BookingSchedule, { mode: 'scheduled' }>): boolean {
+  const p = vnParts(fresh.preferredStartAt ?? fresh.preferredAt);
+  const day = `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
+  return fresh.bookingMode === 'scheduled' && fresh.slot === schedule.slot && day === schedule.date;
+}
+
 export async function rescheduleBookingConservative(
   deps: BookingMutationDeps,
   booking: BookingItem,
-  preferredStartAt: string,
-  preferredEndAt: string,
+  schedule: Extract<BookingSchedule, { mode: 'scheduled' }>,
 ): Promise<BookingMutationResult> {
   const customerId = deps.getCustomerId();
-  const start = Date.parse(preferredStartAt);
-  const end = Date.parse(preferredEndAt);
   if (
     !customerId ||
     !sameOwner(booking, customerId) ||
-    !canRescheduleBookingConservative(booking) ||
-    !Number.isFinite(start) ||
-    !Number.isFinite(end) ||
-    end <= start ||
-    end <= Date.now()
+    !canRescheduleBookingConservative(booking)
   ) {
     return { kind: 'uncertain', booking: null };
   }
 
   try {
-    await deps.reschedule(
-      booking.id,
-      preferredStartAt,
-      preferredEndAt,
-    );
+    await deps.reschedule(booking.id, schedule);
   } catch {
     // Unknown PATCH outcome: reconcile by GET, never blind retry.
   }
@@ -127,10 +121,7 @@ export async function rescheduleBookingConservative(
   const fresh = await freshOwned(deps, booking.id, customerId);
   if (!fresh) return { kind: 'uncertain', booking: null };
   if (fresh.serviceOrderId) return { kind: 'linked', booking: fresh };
-  if (
-    fresh.preferredStartAt === preferredStartAt &&
-    fresh.preferredEndAt === preferredEndAt
-  ) {
+  if (appliedSchedule(fresh, schedule)) {
     return { kind: 'rescheduled', booking: fresh };
   }
   if (canRescheduleBookingConservative(fresh)) {
