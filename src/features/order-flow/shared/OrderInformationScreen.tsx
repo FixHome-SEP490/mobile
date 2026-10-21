@@ -9,6 +9,7 @@ import { formatVnd } from '../../../utils/format';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import RebookSheet from '../../../components/RebookSheet';
+import AcceptedRescheduleSheet from '../../../components/AcceptedRescheduleSheet';
 import { serviceOrderStatusView } from '../../../screens/technician/technician-status';
 import { sessionLabel } from '../../../utils/booking-session';
 import { findChatForBooking } from '../../../screens/technician/technician-chat-shortcut';
@@ -28,8 +29,11 @@ export default function OrderInformationScreen() {
   const order = orderValue && !isHistoricalOrder(orderValue) ? orderValue : null;
   const [openingChat, setOpeningChat] = useState(false);
   const [rebookOpen, setRebookOpen] = useState(false);
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [copyMessage, setCopyMessage] = useState('');
   const canRebook = snapshot?.key.role === 'customer' && !!order?.bookingId && ['COMPLETED', 'CANCELLED'].includes(String(order.status).toUpperCase());
+  // Same rule as the web: the technician accepted but has not set out yet.
+  const canReschedule = snapshot?.key.role === 'customer' && !!order?.bookingId && String(order.status).toUpperCase() === 'ACCEPTED';
   const openChat = async (bookingId: string) => {
     if (openingChat) return;
     setOpeningChat(true);
@@ -91,10 +95,12 @@ export default function OrderInformationScreen() {
     </View>}
     {order && !history ? <View style={{ gap: 8 }}>
       {order.bookingId ? <Pressable testID="order-chat-entry" accessibilityRole="button" disabled={openingChat} onPress={() => void openChat(order.bookingId)} style={entry}><Text style={entryText}>{openingChat ? 'Đang mở…' : 'Nhắn tin ›'}</Text></Pressable> : null}
+      {canReschedule ? <Pressable testID="order-reschedule-entry" accessibilityRole="button" onPress={() => setRescheduleOpen(true)} style={entry}><Text style={entryText}>Đổi lịch hẹn ›</Text></Pressable> : null}
       {canRebook ? <Pressable testID="order-rebook-entry" accessibilityRole="button" onPress={() => setRebookOpen(true)} style={entry}><Text style={entryText}>Đặt lại thợ ›</Text></Pressable> : null}
       <Pressable testID="order-support-entry" accessibilityRole="button" onPress={() => navigation.navigate('SupportCases')} style={entry}><Text style={entryText}>Yêu cầu hỗ trợ ›</Text></Pressable>
       <Pressable testID="order-cancel-entry" accessibilityRole="button" onPress={() => navigation.navigate('OrderException')} style={entry}><Text style={entryText}>Hủy đơn hoặc kiểm tra điều kiện ›</Text></Pressable>
     </View> : null}
+    {canReschedule ? <AcceptedRescheduleSheet bookingId={order!.bookingId} current={{ bookingMode: order!.bookingMode, slot: order!.slot, start: order!.scheduledAt }} visible={rescheduleOpen} onClose={() => setRescheduleOpen(false)} onDone={() => void refresh('manual')} /> : null}
     {canRebook ? <RebookSheet bookingId={order!.bookingId} visible={rebookOpen} onClose={() => setRebookOpen(false)} /> : null}
   </TaskScreenShell>;
 }

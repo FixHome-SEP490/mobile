@@ -120,6 +120,7 @@ jest.mock('../../hooks/useScrollHideTabBar', () => ({
   useScrollHideTabBar: () => jest.fn(),
 }));
 
+jest.mock('../../components/BookingRescheduleSheet', () => ({ __esModule: true, default: () => null }));
 jest.mock('../../components/customer/CustomerSkeleton', () => ({
   __esModule: true,
   default: () => null,

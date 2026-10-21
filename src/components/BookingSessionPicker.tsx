@@ -73,9 +73,12 @@ function sameSessions(left: ReturnType<typeof upcomingSessions>, right: ReturnTy
 export default function BookingSessionPicker({
   value,
   onChange,
+  allowUrgent = true,
 }: {
   value: BookingSchedule | null;
   onChange: (next: BookingSchedule | null) => void;
+  /** False when "Tới ngay" makes no sense, e.g. when moving an existing booking (the server refuses it). */
+  allowUrgent?: boolean;
 }) {
   const { colors } = useAppTheme();
   const { width: windowWidth } = useWindowDimensions();
@@ -128,7 +131,7 @@ export default function BookingSessionPicker({
     return () => clearTimeout(timeout);
   }, [refreshSessions, sessions]);
 
-  const isUrgent = mode === 'urgent';
+  const isUrgent = allowUrgent && mode === 'urgent';
   const candidateSchedule = value?.mode === 'scheduled' ? value : null;
   const scheduled = mode === 'scheduled' && candidateSchedule
     && sessions.some((session) => session.date === candidateSchedule.date && session.slot === candidateSchedule.slot)
@@ -222,20 +225,22 @@ export default function BookingSessionPicker({
           <Text style={[styles.cardTitle, { color: colors.text }]}>Đặt trước theo buổi</Text>
           <Text style={[styles.cardHint, { color: colors.textSecondary }]}>Chọn ngày và buổi sáng, chiều hoặc tối</Text>
         </Pressable>
-        <Pressable
-          testID="mode-urgent"
-          accessibilityRole="radio"
-          accessibilityState={{ checked: isUrgent }}
-          onPress={() => {
-            setModeOverride({ valueKey, mode: 'urgent' });
-            emit({ mode: 'urgent' });
-          }}
-          style={card(isUrgent)}
-        >
-          <Clock size={16} color={colors.primaryStrong} strokeWidth={1.75} />
-          <Text style={[styles.cardTitle, { color: colors.text }]}>Tới ngay</Text>
-          <Text style={[styles.cardHint, { color: colors.textSecondary }]}>Thợ gần bạn đang rảnh tới trong khoảng 2 giờ</Text>
-        </Pressable>
+        {allowUrgent && (
+          <Pressable
+            testID="mode-urgent"
+            accessibilityRole="radio"
+            accessibilityState={{ checked: isUrgent }}
+            onPress={() => {
+              setModeOverride({ valueKey, mode: 'urgent' });
+              emit({ mode: 'urgent' });
+            }}
+            style={card(isUrgent)}
+          >
+            <Clock size={16} color={colors.primaryStrong} strokeWidth={1.75} />
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Tới ngay</Text>
+            <Text style={[styles.cardHint, { color: colors.textSecondary }]}>Thợ gần bạn đang rảnh tới trong khoảng 2 giờ</Text>
+          </Pressable>
+        )}
       </View>
 
       {!isUrgent && (

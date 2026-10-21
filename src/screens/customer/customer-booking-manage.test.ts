@@ -62,13 +62,13 @@ it('cancel race to ServiceOrder never retries Booking cancel', async () => {
   expect(result.kind).toBe('linked');
 });
 
-it('reschedule only succeeds after exact GET readback', async () => {
-  const start = '2030-10-22T10:00:00Z';
-  const end = '2030-10-22T12:00:00Z';
-  const fresh = booking({ status: 'SUBMITTED', preferredStartAt: start, preferredEndAt: end });
+it('reschedule only succeeds after the GET read-back shows the chosen session', async () => {
+  // 2030-10-22 09:00 in Vietnam is 02:00 UTC.
+  const fresh = booking({ preferredStartAt: '2030-10-22T01:00:00Z', preferredEndAt: '2030-10-22T05:00:00Z', bookingMode: 'scheduled', slot: 'morning' });
   const d = deps(fresh);
-  const result = await rescheduleBookingConservative(d, booking(), start, end);
-  expect(d.reschedule).toHaveBeenCalledTimes(1);
+  const schedule = { mode: 'scheduled', date: '2030-10-22', slot: 'morning' } as const;
+  const result = await rescheduleBookingConservative(d, booking(), schedule);
+  expect(d.reschedule).toHaveBeenCalledWith('booking-1', schedule);
   expect(d.getBooking).toHaveBeenCalledTimes(1);
   expect(result.kind).toBe('rescheduled');
 });
@@ -79,9 +79,16 @@ it('ambiguous reschedule with unchanged fresh state becomes explicit retryable, 
   const result = await rescheduleBookingConservative(
     d,
     booking(),
-    '2030-10-22T10:00:00Z',
-    '2030-10-22T12:00:00Z',
+    { mode: 'scheduled', date: '2030-10-22', slot: 'morning' },
   );
   expect(d.reschedule).toHaveBeenCalledTimes(1);
   expect(result.kind).toBe('retryable');
+});
+
+it('a "tới ngay" booking can be moved to a fixed session', async () => {
+  const fresh = booking({ preferredStartAt: '2030-10-22T06:00:00Z', bookingMode: 'scheduled', slot: 'afternoon' });
+  const result = await rescheduleBookingConservative(
+    deps(fresh), booking({ bookingMode: 'urgent' }), { mode: 'scheduled', date: '2030-10-22', slot: 'afternoon' },
+  );
+  expect(result.kind).toBe('rescheduled');
 });
