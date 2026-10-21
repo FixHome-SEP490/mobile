@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardInset } from '../../../hooks/useKeyboardInset';
-import BackButton from '../../../components/BackButton';
+import BackButton, { HomeButton } from '../../../components/BackButton';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 
 export interface TaskAction {
@@ -62,7 +62,7 @@ export function TaskScreenShell({ title, stage, children, primary, secondary, su
     <View style={styles.header}>
       <BackButton onPress={onBack ?? (() => {})} />
       <Text accessibilityRole="header" style={styles.headerTitle}>{title}</Text>
-      <View style={{ width: 44, height: 44 }} />
+      <HomeButton />
     </View>
     {stage !== undefined && <StageHeader stage={stage} />}
     <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, contentStyle]} keyboardShouldPersistTaps="handled">

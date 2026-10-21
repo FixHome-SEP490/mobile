@@ -26,3 +26,10 @@ export function handoffAuthenticatedRoute(name: LandingRoute): void {
   pending = { name, userId: session.user.id, generation: session.sessionGeneration };
   flushAuthHandoff();
 }
+
+/** Drop every pushed screen and land on the signed-in user's main tabs. */
+export function goHome(): void {
+  const role = useAuthStore.getState().user?.role;
+  if (!rootNavigationRef.isReady() || !role) return;
+  rootNavigationRef.resetRoot({ index: 0, routes: [{ name: role === 'technician' ? 'TechnicianMain' : 'CustomerMain' }] });
+}

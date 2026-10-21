@@ -6,6 +6,7 @@ import { Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
+import { goHome } from '../../../components/BackButton';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from './TaskScreenShell';
 import { quoteMoneyText } from './DecisionSummary';
 import { formatVnd } from '../../../utils/format';
@@ -71,7 +72,7 @@ export default function CompletedOrderScreen({ role }: { role: 'customer' | 'tec
       primary={{
         label: role === 'customer' ? 'Về đơn của tôi' : 'Về danh sách công việc',
         testID: 'completed-back-home',
-        onPress: () => navigation.goBack(),
+        onPress: goHome,
       }}
     >
       <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }}>

@@ -35,3 +35,21 @@ function HistoryBackButton() {
 export default function BackButton({ onPress, label }: { onPress?: () => void; label?: string }) {
   return onPress ? <BackIcon onPress={onPress} label={label} /> : <HistoryBackButton />;
 }
+
+// Lazy: root-navigation builds a container ref at import, which screen tests that mock @react-navigation/native lack.
+export const goHome = () => require('../navigation/root-navigation').goHome();
+
+/** Header shortcut that skips every screen in between. */
+export function HomeButton() {
+  const { colors } = useAppTheme();
+  return (
+    <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityLabel="Về trang chủ"
+      onPress={goHome}
+      style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Ionicons name="home-outline" size={22} color={colors.text} />
+    </TouchableOpacity>
+  );
+}
