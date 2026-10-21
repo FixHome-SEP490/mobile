@@ -458,22 +458,22 @@ export default function CustomerBookingAddressEditor({
   };
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets contentContainerStyle={{ padding: 16, paddingBottom: 24 }}>
-    <View testID="booking-new-address-editor" style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View testID="booking-new-address-editor" style={[styles.card, { backgroundColor: colors.surface }]}>
       <Text accessibilityRole="header" style={[styles.heading, { color: colors.text }]}>Thêm địa chỉ tại nơi cần sửa</Text>
       <Text style={[styles.hint, { color: colors.textSecondary }]}>Tìm địa chỉ → Ghim vị trí → Xác nhận địa chỉ → Lưu</Text>
       <TextInput accessibilityLabel="Tên địa chỉ mới" placeholder="Tên gợi nhớ (Ví dụ: Nhà riêng)" value={label}
-        onChangeText={setLabel} maxLength={100} editable={!saveAttempted}
-        style={[styles.input, { color: colors.text, borderColor: colors.border }]} />
+        onChangeText={setLabel} maxLength={100} editable={!saveAttempted} placeholderTextColor={colors.textSecondary}
+        style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]} />
       <TextInput accessibilityLabel="Tìm địa chỉ mới" placeholder="Nhập số nhà, tên đường..." value={line1}
-        onChangeText={searchAddress} maxLength={255} editable={!saveAttempted}
-        style={[styles.input, { color: colors.text, borderColor: colors.border }]} />
+        onChangeText={searchAddress} maxLength={255} editable={!saveAttempted} placeholderTextColor={colors.textSecondary}
+        style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]} />
       {searching && <ActivityIndicator accessibilityLabel="Đang tìm địa chỉ" color={colors.primary} />}
       {suggestions.map((suggestion) => (
         <TouchableOpacity key={suggestion.placeId} accessibilityRole="button"
           accessibilityLabel={`Chọn gợi ý địa chỉ: ${suggestion.description}`}
-          style={styles.suggestion} onPress={() => chooseSuggestion(suggestion)}>
+          style={[styles.suggestion, { backgroundColor: colors.primarySoft }]} onPress={() => chooseSuggestion(suggestion)}>
           <Text style={{ color: colors.text }}>{suggestion.description}</Text>
         </TouchableOpacity>
       ))}
@@ -506,7 +506,7 @@ export default function CustomerBookingAddressEditor({
       {(pin.status === 'pending-confirmation' || pin.status === 'confirmed') && !lookingUp && <View style={{ gap: 8 }}>
         <Text style={{ color: colors.text, fontWeight: '600' }}>Xác nhận địa chỉ</Text>
         <Text style={{ color: colors.textSecondary }}>{line1.split(',').map(part => part.trim()).filter((part, index, all) => part && all.indexOf(part) === index).join(', ') || 'Nhập số nhà, tên đường tại ghim.'}</Text>
-        <TextInput accessibilityLabel="Địa chỉ tại ghim" placeholder="Số nhà, tên đường" value={line1} onChangeText={searchAddress} maxLength={255} editable={!saveAttempted} style={[styles.input, { color: colors.text, borderColor: colors.border }]} />
+        <TextInput accessibilityLabel="Địa chỉ tại ghim" placeholder="Số nhà, tên đường" value={line1} onChangeText={setLine1} maxLength={255} editable={!saveAttempted} placeholderTextColor={colors.textSecondary} style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]} />
         <CustomerAdministrativeAreaPicker value={area} disabled={saveAttempted} onOpen={cancelPending} onChange={next => { if (!ownerValid() || saveAttemptRef.current) return; cancelPending(); setArea(next); setMessage(''); }} />
         {maySave && <Text style={{ color: colors.success }}>Địa chỉ sẵn sàng để lưu.</Text>}
       </View>}
@@ -528,11 +528,15 @@ export default function CustomerBookingAddressEditor({
       {!withinBackendLimits && <Text accessibilityRole="alert" style={{ color: colors.textSecondary }}>
         Tên, địa chỉ hoặc khu vực dài quá giới hạn Backend. Hãy chọn một địa chỉ ngắn và đầy đủ hơn.
       </Text>}
-      {saveDecision.kind === 'blocked' && !saveAttempted && (
+      {!maySave && !saveAttempted && (
         <Text style={[styles.hint, { color: colors.textSecondary }]}>
-          {saveDecision.reason === 'administrative-area'
-            ? 'Chọn tỉnh/thành và phường/xã ở phần Xác nhận địa chỉ.'
-            : 'Hãy chọn đúng điểm trên bản đồ và xác nhận ghim trước khi lưu.'}
+          {!label.trim()
+            ? 'Nhập tên gợi nhớ cho địa chỉ để lưu.'
+            : saveDecision.kind !== 'blocked'
+              ? 'Hoàn tất các bước ở trên để bật nút lưu.'
+              : saveDecision.reason === 'administrative-area'
+                ? 'Chọn tỉnh/thành và phường/xã ở phần Xác nhận địa chỉ.'
+                : 'Hãy chọn đúng điểm trên bản đồ và xác nhận ghim trước khi lưu.'}
         </Text>
       )}
       {knownId && <Text style={[styles.hint, { color: colors.textSecondary }]}>Đã nhận mã lưu; đang chờ xác minh trong danh sách.</Text>}
@@ -564,11 +568,11 @@ export default function CustomerBookingAddressEditor({
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: 18, padding: 15, gap: 12 },
+  card: { borderRadius: 14, padding: 16, gap: 12 },
   heading: { fontSize: 20, lineHeight: 27, fontWeight: '700' },
   hint: { fontSize: 12, lineHeight: 18 },
-  input: { borderWidth: 1, borderRadius: 12, minHeight: 50, fontSize: 14, paddingHorizontal: 12 },
-  suggestion: { minHeight: 48, justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 12 },
+  input: { borderWidth: 1, borderRadius: 14, minHeight: 52, fontSize: 16, paddingHorizontal: 12 },
+  suggestion: { minHeight: 48, justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12 },
   mapWrap: { height: 220, borderRadius: 12, borderWidth: 1, overflow: 'hidden' },
   map: { width: '100%', height: '100%' },
   action: { minHeight: 52, borderRadius: 14, justifyContent: 'center', alignItems: 'center', padding: 12 },

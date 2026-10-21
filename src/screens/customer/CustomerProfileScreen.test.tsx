@@ -276,7 +276,7 @@ describe('CustomerProfileScreen exact pin flow', () => {
     const suggestion = findButton(tree, `Chọn gợi ý địa chỉ: ${candidate.description}`);
     expect(suggestion).toBeDefined();
     act(() => suggestion?.props.onPress());
-    expect(findButton(tree, 'Thêm địa chỉ')?.props.disabled).toBe(true);
+    expect(findButton(tree, 'Thêm địa chỉ')?.props.accessibilityState.disabled).toBe(true);
 
     const map = tree.root.findByProps({ testID: 'address-map' });
     await act(async () => {
@@ -287,7 +287,7 @@ describe('CustomerProfileScreen exact pin flow', () => {
     expect(findButton(tree, 'Xác nhận ghim đã chọn')).toBeDefined();
 
     act(() => findButton(tree, 'Xác nhận ghim đã chọn')?.props.onPress());
-    expect(findButton(tree, 'Thêm địa chỉ')?.props.disabled).toBe(false);
+    expect(findButton(tree, 'Thêm địa chỉ')?.props.accessibilityState.disabled).toBe(false);
     await act(async () => {
       findButton(tree, 'Thêm địa chỉ')?.props.onPress();
       await flushPromises();
@@ -396,7 +396,7 @@ describe('CustomerProfileScreen exact pin flow', () => {
     act(() => findButton(tree, 'Sửa địa chỉ Nhà')?.props.onPress());
     act(() => findTextInput(tree, 'Địa chỉ chi tiết')?.props.onChangeText('Địa chỉ mới nhập tay'));
 
-    expect(findButton(tree, 'Cập nhật địa chỉ')?.props.disabled).toBe(false);
+    expect(findButton(tree, 'Cập nhật địa chỉ')?.props.accessibilityState.disabled).toBe(false);
     await act(async () => {
       findButton(tree, 'Cập nhật địa chỉ')?.props.onPress();
       await flushPromises();
@@ -444,7 +444,7 @@ describe('CustomerProfileScreen exact pin flow', () => {
     expect(tree.root.findAllByType(Text).some((node) => node.props.children === 'Tỉnh Cũ')).toBe(false);
     expect(tree.root.findAllByType(Text).some((node) => node.props.children === 'Vị trí bạn đã chọn')).toBe(true);
     expect(findButton(tree, 'Thử lại tra cứu địa chỉ')).toBeDefined();
-    expect(findButton(tree, 'Cập nhật địa chỉ')?.props.disabled).toBe(true);
+    expect(findButton(tree, 'Cập nhật địa chỉ')?.props.accessibilityState.disabled).toBe(true);
 
     await act(async () => {
       findButton(tree, 'Thử lại tra cứu địa chỉ')?.props.onPress();
@@ -472,7 +472,7 @@ describe('CustomerProfileScreen exact pin flow', () => {
     expect(findButton(tree, 'Thử lại tra cứu địa chỉ')).toBeDefined();
     act(() => findButton(tree, 'Xác nhận ghim đã chọn')?.props.onPress());
     expect(findButton(tree, 'Thử lại tra cứu địa chỉ')).toBeDefined();
-    expect(findButton(tree, 'Thêm địa chỉ')?.props.disabled).toBe(true);
+    expect(findButton(tree, 'Thêm địa chỉ')?.props.accessibilityState.disabled).toBe(true);
   });
 });
 
@@ -500,9 +500,9 @@ describe('CustomerProfileScreen C16 account presentation', () => {
   it('updates a moved pin with explicitly chosen canonical codes and prevents duplicate submission', async () => {
     mockGetAddresses.mockResolvedValue([saved]); mockReverse.mockResolvedValue({ formattedAddress: 'New street' });
     const tree = await mountScreen(); await movePin(tree); await pickCanonical(tree);
-    expect(findButton(tree, 'Cập nhật địa chỉ')?.props.disabled).toBe(false);
+    expect(findButton(tree, 'Cập nhật địa chỉ')?.props.accessibilityState.disabled).toBe(false);
     act(() => findTextInput(tree, 'Địa chỉ chi tiết')?.props.onChangeText('Corrected street'));
-    expect(findButton(tree, 'Cập nhật địa chỉ')?.props.disabled).toBe(false);
+    expect(findButton(tree, 'Cập nhật địa chỉ')?.props.accessibilityState.disabled).toBe(false);
     mockGetAddresses.mockResolvedValue([{ ...canonical, line1: 'Corrected street' }]);
     mockUpdateAddress.mockResolvedValue({ ...canonical, line1: 'Corrected street' });
     const submit = findButton(tree, 'Cập nhật địa chỉ')!;
@@ -517,7 +517,7 @@ describe('CustomerProfileScreen C16 account presentation', () => {
     const tree = await mountScreen(); await movePin(tree); await pickCanonical(tree);
     await act(async () => { findButton(tree, 'Cập nhật địa chỉ')?.props.onPress(); await flushPromises(); });
     expect(findTextInput(tree, 'Địa chỉ chi tiết')?.props.value).toBe('New street');
-    expect(findButton(tree, 'Cập nhật địa chỉ')?.props.disabled).toBe(false);
+    expect(findButton(tree, 'Cập nhật địa chỉ')?.props.accessibilityState.disabled).toBe(false);
     expect(tree.root.findAllByType(Text).some(node => node.props.children === 'Địa chỉ không hợp lệ.')).toBe(true);
   });
   it('rejects a late reverse response after the owner selected administrative fields', async () => {
@@ -527,7 +527,7 @@ describe('CustomerProfileScreen C16 account presentation', () => {
     act(() => findTextInput(tree, 'Địa chỉ chi tiết')?.props.onChangeText('Manually entered street'));
     await act(async () => { resolve({ formattedAddress: 'Stale street', province: 'Wrong', district: 'Wrong' }); await flushPromises(); });
     expect(findTextInput(tree, 'Địa chỉ chi tiết')?.props.value).not.toBe('Stale street');
-    expect(findButton(tree, 'Cập nhật địa chỉ')?.props.disabled).toBe(false);
+    expect(findButton(tree, 'Cập nhật địa chỉ')?.props.accessibilityState.disabled).toBe(false);
   });
   it('does not write for another role even through a previously enabled handler', async () => {
     mockGetAddresses.mockResolvedValue([saved]); mockReverse.mockResolvedValue({ formattedAddress: 'New street' });
@@ -542,7 +542,7 @@ describe('CustomerProfileScreen C16 account presentation', () => {
     mockUpdateAddress.mockRejectedValueOnce(new Error('timeout'));
     const tree = await mountScreen(); await movePin(tree); await pickCanonical(tree);
     await act(async () => { findButton(tree, 'Cập nhật địa chỉ')?.props.onPress(); await flushPromises(); });
-    expect(findButton(tree, 'Cập nhật địa chỉ')?.props.disabled).toBe(true);
+    expect(findButton(tree, 'Cập nhật địa chỉ')?.props.accessibilityState.disabled).toBe(true);
     mockGetAddresses.mockResolvedValue([canonical]);
     await act(async () => { findButton(tree, 'Kiểm tra địa chỉ đã lưu')?.props.onPress(); await flushPromises(); });
     expect(mockUpdateAddress).toHaveBeenCalledTimes(1);
