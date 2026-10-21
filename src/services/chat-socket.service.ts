@@ -4,6 +4,7 @@ import { APP_CONFIG } from '../constants';
 import { storageService } from './storage.service';
 import { clearApiCache } from '../api/client';
 import type { ChatMessage } from '../api/messaging.api';
+import { useAuthStore } from '../store/auth.store';
 
 export interface TypingEvent {
   conversationId: string;
@@ -94,6 +95,9 @@ class ChatSocketService {
   /** Threads opened after connect; re-joined whenever the socket comes back. */
   private joined = new Set<string>();
   private hasConnectedOnce = false;
+  /** Bumped by disconnect() so a connect() still reading the token never opens a socket for the old session. */
+  private epoch = 0;
+  private watchingSession = false;
   /** Handed over on connect:ready; empty is valid on one Wi-Fi network. */
   private ice: IceServer[] = [];
 
@@ -130,13 +134,22 @@ class ChatSocketService {
    * already emitted on it with it.
    */
   async connect(): Promise<void> {
+    // Logout, a forced sign-out and an account switch all bump sessionGeneration: drop the socket (and its
+    // rooms) of the previous session so it never keeps receiving that user's messages and calls.
+    if (!this.watchingSession) {
+      this.watchingSession = true;
+      useAuthStore.subscribe((state, previous) => {
+        if (state.sessionGeneration !== previous.sessionGeneration) this.disconnect();
+      });
+    }
     if (this.socket?.connected) return;
     if (this.connecting) return this.connecting;
 
+    const epoch = this.epoch;
     this.connecting = new Promise<void>((resolve) => {
       void (async () => {
         const token = await storageService.getToken();
-        if (!token) {
+        if (!token || epoch !== this.epoch) {
           resolve();
           return;
         }
@@ -210,10 +223,11 @@ class ChatSocketService {
       })();
     });
 
+    const attempt = this.connecting;
     try {
-      await this.connecting;
+      await attempt;
     } finally {
-      this.connecting = null;
+      if (this.connecting === attempt) this.connecting = null;
     }
   }
 
@@ -305,6 +319,8 @@ class ChatSocketService {
   }
 
   disconnect(): void {
+    this.epoch += 1;
+    this.connecting = null;
     this.socket?.removeAllListeners();
     this.socket?.disconnect();
     this.socket = null;
