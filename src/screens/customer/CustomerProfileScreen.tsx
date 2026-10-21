@@ -483,7 +483,10 @@ export default function CustomerProfileScreen() {
       setAddressPinMessage('Yêu cầu trước chưa được xác minh. Kiểm tra danh sách, không gửi lại.');
       return;
     }
-    if (!addressName.trim() || !addressDetail.trim()) return;
+    if (!addressName.trim() || !addressDetail.trim()) {
+      Alert.alert('Chưa thể thêm địa chỉ', !addressName.trim() ? 'Vui lòng nhập tên gợi nhớ (ví dụ: Nhà riêng).' : 'Vui lòng nhập địa chỉ chi tiết.');
+      return;
+    }
 
     const decision = resolveAddressSaveLocation({
       isCreating: !editAddressId,
@@ -496,9 +499,13 @@ export default function CustomerProfileScreen() {
       legacyAddress: legacyAddress ?? undefined,
     });
     if (decision.kind === 'blocked') {
-      setAddressPinMessage(decision.reason === 'administrative-area'
+      const hint = decision.reason === 'administrative-area'
         ? 'Chọn tỉnh/thành và phường/xã phía trên để lưu vị trí.'
-        : 'Hãy chọn vị trí chính xác trên bản đồ rồi xác nhận trước khi lưu.');
+        : addressPin.status === 'candidate'
+          ? 'Ghim đỏ chỉ là gợi ý. Chạm lên bản đồ đúng điểm cần sửa, rồi bấm “Xác nhận vị trí”.'
+          : 'Hãy chọn vị trí chính xác trên bản đồ rồi xác nhận trước khi lưu.';
+      setAddressPinMessage(hint);
+      Alert.alert('Chưa thể thêm địa chỉ', hint);
       return;
     }
 
@@ -814,6 +821,20 @@ export default function CustomerProfileScreen() {
   const cancelAddressEditor = () => {
     finishAddressEditor();
     addressSheetRef.current?.dismiss();
+  };
+
+  const handleSetDefaultAddress = async (id: string) => {
+    if (addressWriteBusyRef.current) return;
+    addressWriteBusyRef.current = true;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await usersApi.updateAddress(id, { isDefault: true });
+      await refreshAddresses();
+    } catch (err: unknown) {
+      Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể đặt làm địa chỉ mặc định.'));
+    } finally {
+      addressWriteBusyRef.current = false;
+    }
   };
 
   const handleDeleteAddress = async (id: string) => {
@@ -1261,41 +1282,60 @@ export default function CustomerProfileScreen() {
             ) : (
               addresses.map((addr) => (
                 <View key={addr.id} style={[styles.addressItem, isDarkMode && styles.inputDark]}>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={[styles.addressName, isDarkMode && styles.textDark]}>{addr.label}</Text>
-                      {addr.isDefault && (
-                        <View style={styles.defaultBadge}>
-                          <Ionicons name="star" size={10} color={colors.primary} />
-                          <Text style={styles.defaultBadgeText}>Mặc định</Text>
-                        </View>
-                      )}
+                  <View style={styles.addressTop}>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.addressNameRow}>
+                        <Text style={[styles.addressName, isDarkMode && styles.textDark]}>{addr.label}</Text>
+                        {addr.isDefault && (
+                          <View style={styles.defaultBadge}>
+                            <Ionicons name="checkmark-circle" size={12} color={colors.primary} />
+                            <Text style={styles.defaultBadgeText}>Mặc định</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.addressDetail}>{addr.line1}</Text>
                     </View>
-                    <Text style={styles.addressDetail}>{addr.line1}</Text>
-                    <Text style={styles.addressPinStatus}>
-                      {isValidCoordinates({ lat: addr.lat, lng: addr.lng })
-                        ? 'Đã có ghim chính xác'
-                        : 'Chưa có ghim hợp lệ'}
-                    </Text>
+                    <TouchableOpacity
+                      onPress={() => handleEditAddress(addr)}
+                      style={styles.iconBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Sửa địa chỉ ${addr.label}`}
+                    >
+                      <Ionicons name="pencil" size={18} color={colors.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleDeleteAddress(addr.id)}
+                      style={styles.iconBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Xoá địa chỉ ${addr.label}`}
+                    >
+                      <Ionicons name="trash" size={18} color={colors.error} />
+                    </TouchableOpacity>
                   </View>
-                  <TouchableOpacity
-                    onPress={() => handleEditAddress(addr)}
-                    style={styles.iconBtn}
-                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Sửa địa chỉ ${addr.label}`}
-                  >
-                    <Ionicons name="pencil" size={18} color={colors.primary} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => handleDeleteAddress(addr.id)}
-                    style={styles.iconBtn}
-                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Xoá địa chỉ ${addr.label}`}
-                  >
-                    <Ionicons name="trash" size={18} color={colors.error} />
-                  </TouchableOpacity>
+                  <View style={styles.addressFooter}>
+                    {isValidCoordinates({ lat: addr.lat, lng: addr.lng }) ? (
+                      <View style={styles.addressPinRow}>
+                        <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+                        <Text style={styles.addressPinStatus}>Đã có ghim chính xác</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.addressPinRow}>
+                        <Ionicons name="alert-circle-outline" size={16} color={colors.textSecondary} />
+                        <Text style={styles.addressPinStatus}>Chưa có ghim hợp lệ</Text>
+                      </View>
+                    )}
+                    {!addr.isDefault && (
+                      <TouchableOpacity
+                        onPress={() => void handleSetDefaultAddress(addr.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Đặt ${addr.label} làm địa chỉ mặc định`}
+                        style={styles.setDefaultBtn}
+                      >
+                        <Ionicons name="checkmark-circle-outline" size={16} color={colors.primary} />
+                        <Text style={styles.defaultBadgeText}>Đặt mặc định</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
               ))
             )}
@@ -1304,17 +1344,19 @@ export default function CustomerProfileScreen() {
           <Text style={[styles.sectionTitle, isDarkMode && styles.textDark, { alignSelf: 'flex-start' }]}>
             {editAddressId ? 'Sửa địa chỉ' : 'Thêm địa chỉ mới'}
           </Text>
+          <View style={styles.formSection}>
+          <Text style={styles.fieldLabel}>Thông tin địa chỉ</Text>
           <BottomSheetTextInput
-            style={[styles.input, isDarkMode && styles.inputDark]}
+            style={[styles.input, styles.inputFlush, isDarkMode && styles.inputDark]}
             placeholder="Tên gợi nhớ (VD: Nhà riêng)"
             placeholderTextColor={colors.muted}
             value={addressName}
             onChangeText={setAddressName}
             accessibilityLabel="Tên gợi nhớ"
           />
-          <View style={{ width: '100%' }}>
+          <View style={{ width: '100%', gap: 8 }}>
             <BottomSheetTextInput
-              style={[styles.input, isDarkMode && styles.inputDark]}
+              style={[styles.input, styles.inputFlush, isDarkMode && styles.inputDark]}
               placeholder="Tìm địa chỉ (số nhà, tên đường...)"
               placeholderTextColor={colors.muted}
               value={addressDetail}
@@ -1326,12 +1368,12 @@ export default function CustomerProfileScreen() {
               <ActivityIndicator
                 size="small"
                 color={colors.primary}
-                style={{ marginTop: -8, marginBottom: 8 }}
+                
                 accessibilityLabel="Đang tìm gợi ý địa chỉ"
               />
             )}
             {addressSearchMessage && (
-              <View style={{ marginTop: -4, marginBottom: 8, alignSelf: 'stretch' }}>
+              <View style={{ alignSelf: 'stretch' }}>
                 <Text accessibilityLiveRegion="polite" style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17 }}>
                   {addressSearchMessage}
                 </Text>
@@ -1362,17 +1404,19 @@ export default function CustomerProfileScreen() {
               </View>
             )}
           </View>
+          </View>
 
+          <View style={styles.formSection}>
           {(addressWard || addressProvince) ? (
-            <Text style={{ fontSize: 12, color: colors.textSecondary, alignSelf: 'flex-start', marginBottom: 12 }}>
+            <Text style={{ fontSize: 12, color: colors.textSecondary, alignSelf: 'flex-start' }}>
               <Ionicons name="location" size={12} /> {[addressWard, addressProvince].filter(Boolean).join(', ')}
             </Text>
           ) : null}
 
-          <Text style={{ fontSize: 13, color: colors.textSecondary, alignSelf: 'flex-start', marginBottom: 6, fontWeight: '500' }}>
-            Chọn vị trí chính xác:
+          <Text style={styles.fieldLabel}>
+            Chọn vị trí chính xác
           </Text>
-          <Text style={{ fontSize: 12, lineHeight: 17, color: colors.textSecondary, alignSelf: 'flex-start', marginBottom: 8 }}>
+          <Text style={{ fontSize: 12, lineHeight: 17, color: colors.textSecondary, alignSelf: 'flex-start' }}>
             {Platform.OS === 'web'
               ? 'Bản đồ không hỗ trợ chọn ghim trên trình duyệt. Bạn vẫn có thể quản lý địa chỉ đã lưu.'
               : mapCoordinates
@@ -1383,7 +1427,7 @@ export default function CustomerProfileScreen() {
                     : 'Chạm bản đồ để đặt ghim tại vị trí cần sửa.'
                 : 'Chưa có vị trí được chọn. Khung bản đồ mặc định không phải vị trí hiện tại của bạn; hãy tìm địa chỉ để đưa bản đồ đến gần khu vực cần chọn.'}
           </Text>
-          <View style={{ width: '100%', height: 200, borderRadius: 12, overflow: 'hidden', marginBottom: 12, borderWidth: 1, borderColor: colors.border }}>
+          <View style={{ width: '100%', height: 200, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}>
             <MapView
               key={mapCameraVersion}
               style={{ width: '100%', height: '100%' }}
@@ -1409,21 +1453,21 @@ export default function CustomerProfileScreen() {
           </View>
 
           {reverseGeocodingAddress && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start' }}>
               <ActivityIndicator size="small" color={colors.primary} accessibilityLabel="Đang tra cứu địa chỉ" />
               <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Đang tra cứu địa chỉ cho ghim đã chọn…</Text>
             </View>
           )}
           {addressPinMessage && (
-            <Text accessibilityLiveRegion="polite" style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17, alignSelf: 'stretch', marginBottom: 8 }}>
+            <Text accessibilityLiveRegion="polite" style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17, alignSelf: 'stretch' }}>
               {addressPinMessage}
             </Text>
           )}
           {(addressPin.status === 'pending-confirmation' || addressPin.status === 'confirmed') && (
-            <View style={{ flexDirection: 'row', alignSelf: 'stretch', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignSelf: 'stretch', alignItems: 'center', gap: 8 }}>
               {addressPin.status === 'pending-confirmation' ? (
                 <TouchableOpacity
-                  style={[styles.locationBtn, { marginBottom: 0, opacity: reverseGeocodingAddress ? 0.6 : 1 }]}
+                  style={[styles.locationBtn, { flex: 1, opacity: reverseGeocodingAddress ? 0.6 : 1 }]}
                   onPress={handleConfirmAddressPin}
                   disabled={reverseGeocodingAddress}
                   accessibilityRole="button"
@@ -1434,7 +1478,7 @@ export default function CustomerProfileScreen() {
                   <Text style={styles.locationBtnText}>Xác nhận vị trí</Text>
                 </TouchableOpacity>
               ) : (
-                <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '600', minHeight: 44, textAlignVertical: 'center' }}>
+                <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '600', minHeight: 24, textAlignVertical: 'center' }}>
                   Đã xác nhận vị trí
                 </Text>
               )}
@@ -1470,7 +1514,10 @@ export default function CustomerProfileScreen() {
               </>
             )}
           </TouchableOpacity>
+          </View>
 
+          <View style={styles.formSection}>
+          <Text style={styles.fieldLabel}>Khu vực</Text>
           <CustomerAdministrativeAreaPicker
             key={`area-${addressPickerVersion}`}
             value={{ ward: addressWard, district: addressDistrict, province: addressProvince, provinceCode: addressProvinceCode, districtCode: addressDistrictCode }}
@@ -1490,15 +1537,20 @@ export default function CustomerProfileScreen() {
             <Text style={[styles.locationBtnText, { color: colors.text }]}>Đặt làm địa chỉ mặc định</Text>
             <Switch value={addressIsDefault} onValueChange={setAddressIsDefault} />
           </View>
+          </View>
 
           {addressSaveLocation.kind === 'blocked' && (
-            <Text accessibilityLiveRegion="polite" style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17, alignSelf: 'stretch', marginBottom: 8 }}>
+            <Text accessibilityLiveRegion="polite" style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17, alignSelf: 'stretch', marginBottom: 12 }}>
               {!addressName.trim() || !addressDetail.trim()
                 ? 'Nhập tên gợi nhớ và địa chỉ chi tiết để tiếp tục.'
                 : addressSaveLocation.reason === 'administrative-area'
                   ? 'Chọn tỉnh/thành và phường/xã phía trên để lưu vị trí.'
                   : Platform.OS === 'web'
                     ? 'Dùng ứng dụng di động để đặt và xác nhận ghim chính xác.'
+                    : addressPin.status === 'candidate'
+                      ? 'Ghim đỏ chỉ là gợi ý. Chạm lên bản đồ đúng điểm cần sửa, rồi bấm “Xác nhận vị trí” để thêm.'
+                    : addressPin.status === 'pending-confirmation'
+                      ? 'Bấm “Xác nhận vị trí” phía trên bản đồ để thêm.'
                     : editAddressId
                       ? 'Địa chỉ đã đổi. Chọn gợi ý, đặt ghim mới trên bản đồ rồi xác nhận.'
                       : 'Chọn gợi ý, đặt ghim chính xác trên bản đồ rồi xác nhận trước khi lưu.'}
@@ -1527,7 +1579,7 @@ export default function CustomerProfileScreen() {
             <TouchableOpacity
               style={[styles.saveBtn, savingAddress && { opacity: 0.7 }]}
               onPress={handleSaveAddress}
-              disabled={!canSaveAddress}
+              disabled={savingAddress || reverseGeocodingAddress || hasUnverifiedAddressWrite || user?.role !== 'customer'}
               accessibilityRole="button"
               accessibilityLabel={editAddressId ? 'Cập nhật địa chỉ' : 'Thêm địa chỉ'}
               accessibilityState={{ disabled: !canSaveAddress, busy: savingAddress }}
@@ -1678,31 +1730,39 @@ const getStyles = (colors: any) => StyleSheet.create({
   modalContent: { width: '100%', backgroundColor: colors.surface, borderRadius: 20, padding: 16, alignItems: 'center' },
   modalTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 16 },
   input: { width: '100%', backgroundColor: colors.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, color: colors.text, marginBottom: 12 },
+  inputFlush: { marginBottom: 0 },
+  formSection: { width: '100%', gap: 12, marginBottom: 24 },
+  fieldLabel: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.text },
   inputDark: { backgroundColor: '#334155', color: colors.background },
-  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', width: '100%', marginTop: 8, gap: 12 },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', width: '100%', marginTop: 4, gap: 12 },
   cancelBtn: { minHeight: 48, justifyContent: 'center', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 12, backgroundColor: colors.border },
   cancelBtnText: { color: colors.textSecondary, fontWeight: '600', fontSize: 14 },
   saveBtn: { minHeight: 48, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
   saveBtnText: { color: colors.surface, fontWeight: '600', fontSize: 14 },
-  addressItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, padding: 12, borderRadius: 12, marginBottom: 8 },
-  addressName: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 4 },
-  addressDetail: { fontSize: 12, color: colors.textSecondary },
-  addressPinStatus: { fontSize: 12, lineHeight: 17, color: colors.textSecondary, marginTop: 4 },
+  addressItem: { backgroundColor: colors.background, padding: 16, borderRadius: 14, marginBottom: 12, gap: 12 },
+  addressTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  addressFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  addressPinRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  addressNameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 6 },
+  addressName: { fontSize: 15, lineHeight: 21, fontWeight: '700', color: colors.text },
+  addressDetail: { fontSize: 13, lineHeight: 19, color: colors.textSecondary },
+  addressPinStatus: { fontSize: 12, lineHeight: 17, color: colors.textSecondary },
   addressStateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16 },
   addressStateText: { fontSize: 13, lineHeight: 19, color: colors.textSecondary },
   addressErrorBox: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 16, marginBottom: 8, backgroundColor: colors.background },
   addressErrorText: { fontSize: 13, lineHeight: 19, color: colors.text, marginBottom: 4 },
   addressRetryBtn: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   addressRetryText: { fontSize: 13, lineHeight: 19, fontWeight: '700', color: colors.primary },
-  iconBtn: { minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center', marginLeft: 4 },
-  locationBtn: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 16, backgroundColor: colors.primaryTint, borderRadius: 12, alignSelf: 'flex-start', marginBottom: 16 },
+  iconBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surface },
+  locationBtn: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 16, backgroundColor: colors.primaryTint, borderRadius: 12, alignSelf: 'stretch', justifyContent: 'center' },
   locationBtnText: { color: colors.primary, fontSize: 13, fontWeight: '600' },
-  defaultBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primaryTint, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  defaultBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primaryTint, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+  setDefaultBtn: { minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, borderRadius: 999, backgroundColor: colors.primaryTint },
   defaultBadgeText: { fontSize: 12, lineHeight: 17, fontWeight: '700', color: colors.primaryStrong },
-  suggestionBox: { width: '100%', backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border, marginTop: -8, marginBottom: 12, overflow: 'hidden' },
+  suggestionBox: { width: '100%', backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
   suggestionItem: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
   suggestionText: { fontSize: 13, color: colors.text },
-  defaultRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: 8 },
+  defaultRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', minHeight: 48 },
   cameraIconBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: colors.primaryStrong, width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: colors.surface },
   avatarModalContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
   closeAvatarModalBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10, width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
