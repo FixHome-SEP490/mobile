@@ -6,13 +6,14 @@ const BOOKING_ID = '11111111-1111-4111-8111-111111111111';
 const ORDER_ID = '22222222-2222-4222-8222-222222222222';
 const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
+let mockRouteParams: Record<string, unknown> = { bookingId: BOOKING_ID };
 const mockGetBooking = jest.fn();
 const mockState: { booking: Record<string, unknown> | null; loading: boolean; refreshing: boolean; error: string | null } = {
   booking: null, loading: false, refreshing: false, error: 'Không thể tải chi tiết yêu cầu đặt lịch.',
 };
 
 jest.mock('@react-navigation/native', () => ({
-  useRoute: () => ({ params: { bookingId: BOOKING_ID } }),
+  useRoute: () => ({ params: mockRouteParams }),
   useNavigation: () => ({ navigate: mockNavigate, goBack: mockGoBack }),
   // Read-only initial render: no authenticated GET, navigation or mutation.
   useFocusEffect: () => undefined,
@@ -84,6 +85,7 @@ function styleOf(node: ReactTestInstance | undefined): ViewStyle {
 }
 beforeEach(() => {
   jest.clearAllMocks();
+  mockRouteParams = { bookingId: BOOKING_ID };
   Object.assign(mockState, {
     booking: null, loading: false, refreshing: false,
     error: 'Không thể tải chi tiết yêu cầu đặt lịch.',
@@ -213,6 +215,39 @@ describe('CustomerBookingDetail REAL read-only presentation', () => {
       act(() => choose?.props.onPress());
       expect(mockNavigate).toHaveBeenCalledWith('CustomerMatching', { bookingId: BOOKING_ID });
       expect(mockGetBooking).not.toHaveBeenCalled();
+    } finally { act(() => tree.unmount()); }
+  });
+
+  it('points a released request to choosing another technician and keeps the notice on the next screen', async () => {
+    mockRouteParams = { bookingId: BOOKING_ID, released: true };
+    Object.assign(mockState, {
+      booking: {
+        id: BOOKING_ID, customerId: 'customer-1', serviceName: 'Sửa điều hòa',
+        status: 'CLOSED', urgency: 'NORMAL', serviceOrderId: ORDER_ID,
+        createdAt: '2030-10-20T08:00:00.000Z',
+      },
+      error: null,
+    });
+    const tree = await mount();
+    try {
+      expect(textValues(tree)).toContain('Thợ trước không kịp tới buổi hẹn. Bạn chọn thợ khác, giá và lịch hẹn giữ nguyên.');
+      act(() => touch(tree, 'Chọn lại kỹ thuật viên')?.props.onPress());
+      expect(mockNavigate).toHaveBeenCalledWith('CustomerMatching', { bookingId: BOOKING_ID, released: true });
+    } finally { act(() => tree.unmount()); }
+  });
+
+  it('hides the released notice once the request is no longer waiting for a new choice', async () => {
+    mockRouteParams = { bookingId: BOOKING_ID, released: true };
+    Object.assign(mockState, {
+      booking: {
+        id: BOOKING_ID, customerId: 'customer-1', serviceName: 'Sửa điều hòa',
+        status: 'MATCHING', urgency: 'NORMAL', createdAt: '2030-10-20T08:00:00.000Z',
+      },
+      error: null,
+    });
+    const tree = await mount();
+    try {
+      expect(tree.root.findAllByProps({ testID: 'booking-released-notice' })).toHaveLength(0);
     } finally { act(() => tree.unmount()); }
   });
 });

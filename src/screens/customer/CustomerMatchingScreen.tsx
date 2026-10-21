@@ -1082,6 +1082,11 @@ export default function CustomerMatchingScreen() {
                     </View>
                   </View>
                 )}
+                {route.params.released && (
+                  <Text testID="released-choose-notice" accessibilityRole="alert" style={[styles.note, { color: colors.tone.warning.text }]}>
+                    Thợ trước không kịp tới buổi hẹn. Bạn chọn thợ khác, giá và lịch hẹn giữ nguyên.
+                  </Text>
+                )}
                 {route.params.rebooked === 'choose' && (
                   <Text testID="rebook-choose-notice" accessibilityRole="alert" style={[styles.note, { color: colors.tone.warning.text }]}>
                     Thợ cũ không rảnh buổi bạn chọn. Vui lòng chọn thợ khác cho yêu cầu mới.
