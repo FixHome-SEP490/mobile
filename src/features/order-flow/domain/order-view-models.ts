@@ -97,7 +97,8 @@ export function normalizeOrderResource<K extends OrderResourceKind>(kind: K, pay
         const i = record(item);
         if (typeof i.id !== 'string' || typeof i.partNameSnapshot !== 'string' || typeof i.quantity !== 'number'
           || !Number.isInteger(i.quantity) || i.quantity < 1 || !['pending', 'used', 'returned'].includes(String(i.usageStatus))) throw new Error('Invalid parts item');
-        return { id: i.id, partNameSnapshot: i.partNameSnapshot, quantity: i.quantity, usageStatus: i.usageStatus };
+        return { id: i.id, partNameSnapshot: i.partNameSnapshot, quantity: i.quantity, usageStatus: i.usageStatus,
+          ...(typeof i.partCatalogId === 'string' ? { partCatalogId: i.partCatalogId } : {}), ...(typeof i.partSource === 'string' ? { partSource: i.partSource } : {}) };
       });
       return { id: row.id, serviceOrderId: row.serviceOrderId, status: row.status, requestType: row.requestType,
         fulfillmentMethod: row.fulfillmentMethod, ...(role === 'technician' ? { technicianId: row.technicianId } : {}), items };

@@ -745,7 +745,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderBottomColor: colors.border,
   },
   headerIconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  headerProfile: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 },
+  headerProfile: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   headerAvatar: { width: 38, height: 38, borderRadius: 19, marginRight: 8 },
   headerAvatarFallback: {
     width: 38, height: 38, borderRadius: 19, marginRight: 8,

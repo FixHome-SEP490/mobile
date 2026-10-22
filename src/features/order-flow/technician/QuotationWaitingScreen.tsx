@@ -7,6 +7,7 @@ import { useTechnicianQuotation } from './useTechnicianQuotation';
 import { getRestoredQuotationRecovery } from '../domain/quotation-recovery';
 import type { OrderQuotation } from '../domain/order-session.types';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import TechnicianOrderHub from '../shared/TechnicianOrderHub';
 import { quoteMoneyText } from '../shared/DecisionSummary';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { lightTheme as colors } from '../../../constants/theme';
@@ -133,14 +134,6 @@ export default function QuotationWaitingScreen() {
       {state.phase === 'unknown' && <ReadOnlyNotice>{state.message ?? 'Kết quả chưa xác định. Không gửi lại.'}</ReadOnlyNotice>}
 
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        <TouchableOpacity
-          testID="task-detail-link"
-          accessibilityRole="button"
-          onPress={() => navigation.navigate('OrderInformation')}
-          style={{ flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12 }}
-        >
-          <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Chi tiết đơn</Text>
-        </TouchableOpacity>
         {sentQuote && (
           <TouchableOpacity
             testID="quote-proposal-link"
@@ -152,6 +145,7 @@ export default function QuotationWaitingScreen() {
           </TouchableOpacity>
         )}
       </View>
+      <TechnicianOrderHub />
     </TaskScreenShell>
   );
 }

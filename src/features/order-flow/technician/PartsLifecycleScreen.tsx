@@ -9,8 +9,11 @@ import { validateReceiveQrToken } from './parts-controller';
 import { PartsQrScanner } from './PartsQrScanner';
 import { useTechnicianParts } from './useTechnicianParts';
 import { getRestoredPartsRecovery } from '../domain/extra-and-parts-recovery';
-import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import { ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
+import { partsBlockers } from '../domain/order-capabilities';
+import { PartItemRow } from './PartItemRow';
+import { usePartReturns } from './usePartReturns';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 
 interface QrReceiveModalState {
@@ -45,6 +48,8 @@ export default function PartsLifecycleScreen() {
     ? partsResource.data.filter(pr => pr.serviceOrderId === key?.serviceOrderId && pr.technicianId === key?.userId)
     : [];
 
+  const returns = usePartReturns(current, partsResource?.status === 'ready' ? partsResource.requestSeq : 0);
+  const blockers = key ? partsBlockers(partsList, key.userId) : { open: 0, unsettled: 0 };
   const [qrModal, setQrModal] = useState<QrReceiveModalState | null>(null);
   const [cancelModal, setCancelModal] = useState<CancelModalState | null>(null);
 
@@ -183,6 +188,16 @@ export default function PartsLifecycleScreen() {
         </ReadOnlyNotice>
       )}
 
+      {isUnderRepair && partsList.length > 0 && !focusedRequestId && (
+        blockers.open + blockers.unsettled > 0 ? (
+          <ReadOnlyNotice tone="warning">
+            Chưa thể gửi bàn giao:
+            {blockers.unsettled > 0 ? ` ${blockers.unsettled} linh kiện chưa ghi dùng hoặc trả.` : ''}
+            {blockers.open > 0 ? ` ${blockers.open} yêu cầu chưa nhận (nhận bằng QR hoặc hủy yêu cầu).` : ''}
+          </ReadOnlyNotice>
+        ) : <ReadOnlyNotice tone="success">Linh kiện đã xử lý đủ, không còn gì chặn gửi bàn giao.</ReadOnlyNotice>
+      )}
+      {returns.message && <ReadOnlyNotice tone={returns.message.tone}>{returns.message.text}</ReadOnlyNotice>}
       {state.error && <ReadOnlyNotice tone="error">{state.error}</ReadOnlyNotice>}
       {state.actionSuccess && <ReadOnlyNotice tone="success">{state.actionSuccess}</ReadOnlyNotice>}
 
@@ -262,57 +277,23 @@ export default function PartsLifecycleScreen() {
                 </View>
               </View>
 
-              <DetailRow label="Mã yêu cầu" value={`#${String(req.id).slice(-6).toUpperCase()}`} />
-              <DetailRow
-                label="Hình thức nhận"
-                value={req.fulfillmentMethod === 'delivery' ? 'Giao hàng tận nơi' : req.fulfillmentMethod === 'pickup' ? 'Tự lấy tại kho' : 'Chưa có thông tin'}
-              />
+              <Text style={styles.requestMeta}>{`${req.fulfillmentMethod === 'delivery' ? 'Giao tận nơi' : req.fulfillmentMethod === 'pickup' ? 'Tự lấy tại kho' : 'Chưa có hình thức nhận'} · Mã #${String(req.id).slice(-6).toUpperCase()}`}</Text>
 
-              <Text style={styles.itemsHeader}>Danh sách linh kiện ({req.items?.length ?? 0}):</Text>
-              {(req.items ?? []).map((it) => {
-                const canMarkUsage = isReceived && isUnderRepair;
-                const isUsed = it.usageStatus === 'used';
-                const isReturned = it.usageStatus === 'returned';
-
-                return (
-                  <View key={it.id} style={styles.itemRow} testID={`parts-item-${it.id}`}>
-                    <View style={styles.itemInfo}>
-                      <Text style={styles.itemName}>{it.partNameSnapshot || 'Linh kiện'}</Text>
-                      <Text style={styles.itemQty}>Số lượng: {it.quantity}</Text>
-                      <Text style={styles.itemUsage}>
-                        Tình trạng: {isUsed ? 'Đã dùng' : isReturned ? 'Hoàn trả' : 'Chưa ghi nhận'}
-                      </Text>
-                    </View>
-
-                    {canMarkUsage && (
-                      <View style={styles.usageActions}>
-                        <TouchableOpacity
-                          testID={`parts-usage-used-${it.id}`}
-                          accessibilityRole="button" accessibilityState={{ disabled: frozen || isUsed, selected: isUsed }}
-                          disabled={frozen || isUsed}
-                          style={[styles.usageBtn, isUsed && styles.usageBtnActive]}
-                          onPress={() => onUpdateUsage(req.id, it.id, 'used')}
-                        >
-                          <Text style={[styles.usageBtnText, isUsed && styles.usageBtnTextActive]}>
-                            Đã dùng
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          testID={`parts-usage-returned-${it.id}`}
-                          accessibilityRole="button" accessibilityState={{ disabled: frozen || isReturned, selected: isReturned }}
-                          disabled={frozen || isReturned}
-                          style={[styles.usageBtn, isReturned && styles.usageBtnActive]}
-                          onPress={() => onUpdateUsage(req.id, it.id, 'returned')}
-                        >
-                          <Text style={[styles.usageBtnText, isReturned && styles.usageBtnTextActive]}>
-                            Hoàn trả
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
+              <Text style={styles.itemsHeader}>Linh kiện ({req.items?.length ?? 0})</Text>
+              {(req.items ?? []).map(it => (
+                <PartItemRow
+                  key={it.id}
+                  item={it}
+                  received={isReceived}
+                  canMarkUsage={isUnderRepair}
+                  frozen={frozen}
+                  record={returns.records[it.id]}
+                  busy={returns.busy}
+                  onWhole={status => onUpdateUsage(req.id, it.id, status)}
+                  onSaveUsed={quantity => returns.saveUsedQty(req.id, returns.records[it.id], quantity)}
+                  onDeclare={quantity => returns.declareReturn(req.id, returns.records[it.id], quantity)}
+                />
+              ))}
 
               <View style={styles.requestFooter}>
                 {canReceive && (
@@ -361,6 +342,7 @@ export default function PartsLifecycleScreen() {
 }
 
 const styles = StyleSheet.create({
+  requestMeta: { color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginBottom: spacing.xs },
   requestCard: {
     backgroundColor: colors.surface,
     borderRadius: 14,

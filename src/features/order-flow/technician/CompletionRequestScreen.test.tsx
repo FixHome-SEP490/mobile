@@ -86,6 +86,23 @@ it('known blockers disable sending with zero writes', async () => {
   await act(async () => renderer.unmount());
 });
 
+it('names the parts that block the handover and links to parts management', async () => {
+  mockSnapshot = snapshotWith([], []);
+  mockSnapshot.resources.parts = readyResource([
+    { id: 'pr-1', serviceOrderId: 'order-1', technicianId: 'tech-1', status: 'received', items: [{ id: 'i1', partNameSnapshot: 'Tụ', quantity: 1, usageStatus: 'pending' }] },
+    { id: 'pr-2', serviceOrderId: 'order-1', technicianId: 'tech-1', status: 'ready', items: [{ id: 'i2', partNameSnapshot: 'Van', quantity: 1, usageStatus: 'pending' }] },
+  ] as any, 1, 1);
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<CompletionRequestScreen />); });
+  expect(renderer.root.findByProps({ testID: 'completion-open-sheet' }).props.disabled).toBe(true);
+  const text = JSON.stringify(renderer.toJSON());
+  expect(text).toContain('1 linh kiện đã nhận chưa ghi dùng hoặc trả');
+  expect(text).toContain('1 yêu cầu linh kiện chưa nhận');
+  await act(async () => { renderer.root.findByProps({ testID: 'completion-open-parts' }).props.onPress(); });
+  expect(mockNavigate).toHaveBeenCalledWith('PartsLifecycle');
+  await act(async () => renderer.unmount());
+});
+
 it('manual after next never requests; explicit confirm sends once', async () => {
   let renderer!: ReturnType<typeof create>;
   await act(async () => { renderer = create(<CompletionRequestScreen />); });

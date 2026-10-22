@@ -111,36 +111,106 @@ beforeEach(() => {
   mockFetchPartById.mockRejectedValue(new Error('Catalog part ID mismatch'));
 });
 
-it('review shapes rows through the controller validator and sends once on explicit confirm', async () => {
-  let renderer!: ReturnType<typeof create>;
-  await act(async () => {
-    renderer = create(<QuotationFormScreen />);
-  });
-  // The single initial labor row starts expanded (one form at a time).
-  await act(async () => {
-    bySuffix(renderer.root, '-description')[0].props.onChangeText('Vệ sinh dàn lạnh');
-  });
-  await act(async () => {
-    bySuffix(renderer.root, '-quantity')[0].props.onChangeText('2');
-  });
-  await act(async () => {
-    bySuffix(renderer.root, '-unitprice')[0].props.onChangeText('150000');
-  });
-  await act(async () => {
-    renderer.root.findByProps({ testID: 'quote-review' }).props.onPress();
-  });
-  expect(mockConfirm).toHaveBeenCalledTimes(1);
-  expect(mockConfirm.mock.calls[0][0]).toEqual({
-    items: [{ type: 'labor', description: 'Vệ sinh dàn lạnh', quantity: '2', unitPrice: '150000' }],
-  });
-  expect(uniqIds(renderer.root.findAllByProps({ testID: 'quote-review-sheet' }))).toHaveLength(1);
-  expect(mockSubmit).not.toHaveBeenCalled();
+const serverPart = (id: string, sellingPrice: number) => ({ id, sku: null, name: 'Bo mạch', description: null, sellingPrice, warrantyDays: 365, warrantyPolicy: null, isActive: true, createdAt: '', updatedAt: '' });
+const request = (over: Record<string, unknown> = {}, items: unknown[] = [{ id: 'i1', partCatalogId: 'part-1', partSource: 'fixhome', partNameSnapshot: 'Bo mạch', quantity: 2, usageStatus: 'pending' }]) =>
+  ({ id: 'pr-1', serviceOrderId: 'order-1', technicianId: 'tech-1', requestType: 'pre_repair', status: 'received', fulfillmentMethod: 'pickup', items, ...over });
+const withParts = (requests: unknown[]) => { mockSnapshot.resources.parts = readyResource(requests as any, 1, 1); };
+const render = async () => { let r!: ReturnType<typeof create>; await act(async () => { r = create(<QuotationFormScreen />); }); return r; };
+const press = async (r: ReturnType<typeof create>, testID: string) => {
+  await act(async () => { r.root.findByProps({ testID }).props.onPress(); });
+  await act(async () => {});
+};
+async function fillLabor(r: ReturnType<typeof create>) {
+  await act(async () => { bySuffix(r.root, '-description')[0].props.onChangeText('Vệ sinh dàn lạnh'); });
+  await act(async () => { bySuffix(r.root, '-quantity')[0].props.onChangeText('2'); });
+  await act(async () => { bySuffix(r.root, '-unitprice')[0].props.onChangeText('150000'); });
+}
 
-  await act(async () => {
-    renderer.root.findByProps({ testID: 'quote-send' }).props.onPress();
-  });
+it('review shapes rows through the controller validator and sends once on explicit confirm', async () => {
+  const r = await render();
+  await fillLabor(r);
+  await press(r, 'quote-review');
+  expect(mockConfirm).toHaveBeenCalledTimes(1);
+  expect(mockConfirm.mock.calls[0][0]).toEqual({ items: [{ type: 'labor', description: 'Vệ sinh dàn lạnh', quantity: '2', unitPrice: '150000' }] });
+  expect(uniqIds(r.root.findAllByProps({ testID: 'quote-review-sheet' }))).toHaveLength(1);
+  expect(mockSubmit).not.toHaveBeenCalled();
+  await press(r, 'quote-send');
   expect(mockSubmit).toHaveBeenCalledTimes(1);
-  await act(async () => renderer.unmount());
+  await act(async () => r.unmount());
+});
+
+it('an empty form marks the fields and never reaches the controller', async () => {
+  const r = await render();
+  await press(r, 'quote-review');
+  expect(mockConfirm).not.toHaveBeenCalled();
+  expect(r.root.findByProps({ testID: 'quote-form-error' })).toBeTruthy();
+  expect(JSON.stringify(r.toJSON())).toMatch(/Nhập mô tả hạng mục/);
+  await act(async () => r.unmount());
+});
+
+it('an earlier requested part can be ticked: whole line, server price and FixHome warranty, no new stock pick needed', async () => {
+  withParts([request()]);
+  mockFetchPartById.mockResolvedValue(serverPart('part-1', 500000));
+  const r = await render();
+  await press(r, 'quote-earlier-i1');
+  expect(mockFetchPartById).toHaveBeenCalledWith('part-1');
+  expect(JSON.stringify(r.toJSON())).toMatch(/Bảo hành 365 ngày theo FixHome/);
+  await fillLabor(r);
+  await press(r, 'quote-review');
+  expect(mockConfirm.mock.calls[0][0].items).toEqual([
+    { type: 'labor', description: 'Vệ sinh dàn lạnh', quantity: '2', unitPrice: '150000' },
+    { type: 'parts_equipment', description: 'Bo mạch', quantity: '2', unitPrice: '500000', partSource: 'fixhome', partCatalogId: 'part-1', partNameSnapshot: 'Bo mạch' },
+  ]);
+  await act(async () => r.unmount());
+});
+
+it('lists only live FixHome pre-repair lines of this technician and unticking removes the line', async () => {
+  withParts([
+    request(),
+    request({ id: 'pr-2', status: 'cancelled' }, [{ id: 'i2', partCatalogId: 'part-2', partSource: 'fixhome', partNameSnapshot: 'Tụ', quantity: 1, usageStatus: 'pending' }]),
+    request({ id: 'pr-3', requestType: 'additional' }, [{ id: 'i3', partCatalogId: 'part-3', partSource: 'fixhome', partNameSnapshot: 'Quạt', quantity: 1, usageStatus: 'pending' }]),
+    request({ id: 'pr-4', technicianId: 'tech-2' }, [{ id: 'i4', partCatalogId: 'part-4', partSource: 'fixhome', partNameSnapshot: 'Van', quantity: 1, usageStatus: 'pending' }]),
+    request({ id: 'pr-5' }, [{ id: 'i5', partCatalogId: 'part-5', partSource: 'fixhome', partNameSnapshot: 'Gas', quantity: 1, usageStatus: 'returned' }]),
+    request({ id: 'pr-6' }, [{ id: 'i6', partCatalogId: 'part-6', partSource: 'external', partNameSnapshot: 'Ngoài', quantity: 1, usageStatus: 'pending' }]),
+  ]);
+  mockFetchPartById.mockResolvedValue(serverPart('part-1', 500000));
+  const r = await render();
+  expect(uniqIds(r.root.findAll((n: any) => String(n.props?.testID ?? '').startsWith('quote-earlier-')))).toEqual(['quote-earlier-i1']);
+  await press(r, 'quote-earlier-i1');
+  await press(r, 'quote-earlier-i1');
+  expect(JSON.stringify(r.toJSON())).not.toMatch(/Bảo hành 365 ngày/);
+  await act(async () => r.unmount());
+});
+
+it('offers no outside-part source and no paid warranty anywhere', async () => {
+  withParts([request()]);
+  const r = await render();
+  expect(JSON.stringify(r.toJSON())).not.toMatch(/Nguồn linh kiện|ngoài|Thợ tự|Bảo hành có phí|Phí \(đ/i);
+  await act(async () => r.unmount());
+});
+
+it('a failed price lookup drops the ticked line and says so', async () => {
+  withParts([request()]);
+  mockFetchPartById.mockRejectedValue(new Error('Catalog part ID mismatch'));
+  const r = await render();
+  await press(r, 'quote-earlier-i1');
+  expect(JSON.stringify(r.toJSON())).toMatch(/Không lấy được giá linh kiện/);
+  await fillLabor(r);
+  await press(r, 'quote-review');
+  expect(mockConfirm.mock.calls[0][0].items).toHaveLength(1);
+  await act(async () => r.unmount());
+});
+
+it('review waits while a ticked part price is still loading', async () => {
+  withParts([request()]);
+  mockFetchPartById.mockReturnValue(new Promise(() => {}));
+  const r = await render();
+  await press(r, 'quote-earlier-i1');
+  await fillLabor(r);
+  await press(r, 'quote-review');
+  expect(mockConfirm).not.toHaveBeenCalled();
+  expect(JSON.stringify(r.toJSON())).toMatch(/Đang lấy giá linh kiện/);
+  await act(async () => r.unmount());
 });
 
 it('denied validation surfaces the controller message and sends nothing', async () => {
@@ -148,255 +218,62 @@ it('denied validation surfaces the controller message and sends nothing', async 
     mockState = { ...idleState(), phase: 'denied', message: 'Số lượng phải là số nguyên.' };
     return false;
   });
-  let renderer!: ReturnType<typeof create>;
-  await act(async () => {
-    renderer = create(<QuotationFormScreen />);
-  });
-  await act(async () => {
-    renderer.root.findByProps({ testID: 'quote-review' }).props.onPress();
-  });
-  expect(renderer.root.findByProps({ testID: 'quote-form-error' })).toBeTruthy();
-  expect(renderer.root.findAllByProps({ testID: 'quote-review-sheet' })).toHaveLength(0);
+  const r = await render();
+  await fillLabor(r);
+  await press(r, 'quote-review');
+  expect(r.root.findByProps({ testID: 'quote-form-error' })).toBeTruthy();
+  expect(r.root.findAllByProps({ testID: 'quote-review-sheet' })).toHaveLength(0);
   expect(mockSubmit).not.toHaveBeenCalled();
-  await act(async () => renderer.unmount());
-});
-
-it('catalog failure is an error with retry and a mismatched part never fills the price', async () => {
-  mockFetchCatalog.mockRejectedValueOnce(new Error('Network offline'));
-  let renderer!: ReturnType<typeof create>;
-  await act(async () => {
-    renderer = create(<QuotationFormScreen />);
-  });
-  await act(async () => {
-    bySuffix(renderer.root, '-kind-parts')[0].props.onPress();
-  });
-  await act(async () => {
-    bySuffix(renderer.root, '-source-fixhome')[0].props.onPress();
-  });
-  // Choosing FixHome loads the catalog by itself (no manual "load" tap); the failure is what we then see.
-  expect(mockFetchCatalog).toHaveBeenCalledTimes(1);
-  expect(uniqIds(bySuffix(renderer.root, '-catalog-error'))).toHaveLength(1);
-  expect(renderer.root.findAll((node: any) => String(node.props?.testID ?? '').includes('catalog-option-'))).toHaveLength(0);
-
-  mockFetchCatalog.mockResolvedValueOnce({
-    data: [{ id: 'part-1', sku: null, name: 'Bo mạch', description: null, sellingPrice: 500000, warrantyDays: 365, warrantyPolicy: null, isActive: true, createdAt: '', updatedAt: '' }],
-    meta: { page: 1, limit: 50, total: 1, totalPages: 1 },
-  });
-  await act(async () => {
-    bySuffix(renderer.root, '-catalog-retry')[0].props.onPress();
-  });
-  const options = renderer.root.findAll((node: any) => String(node.props?.testID ?? '').includes('catalog-option-'));
-  expect(uniqIds(options)).toHaveLength(1);
-
-  await act(async () => {
-    options[0].props.onPress();
-  });
-  expect(mockFetchPartById).toHaveBeenCalledWith('part-1');
-  expect(renderer.root.findByProps({ testID: 'quote-form-error' })).toBeTruthy();
-  expect(bySuffix(renderer.root, '-unitprice')[0].props.value).toBe('');
-  await act(async () => renderer.unmount());
+  await act(async () => r.unmount());
 });
 
 it('unknown offers GET-only verify and an approved quote keeps the form read-only', async () => {
   mockState = { ...idleState(), phase: 'unknown', message: 'Kết quả chưa xác định.' };
-  let renderer!: ReturnType<typeof create>;
-  await act(async () => {
-    renderer = create(<QuotationFormScreen />);
-  });
-  await act(async () => {
-    renderer.root.findByProps({ testID: 'quote-verify' }).props.onPress();
-  });
+  let r = await render();
+  await press(r, 'quote-verify');
   expect(mockVerify).toHaveBeenCalledTimes(1);
   expect(mockSubmit).not.toHaveBeenCalled();
-  await act(async () => renderer.unmount());
+  await act(async () => r.unmount());
 
   mockState = idleState();
-  const fixture = formSnapshot([{ id: 'q-old', serviceOrderId: 'order-1', technicianId: 'tech-1', status: 'APPROVED', version: 1 }]);
-  mockSnapshot = fixture.snapshot;
-  await act(async () => {
-    renderer = create(<QuotationFormScreen />);
-  });
-  expect(renderer.root.findByProps({ testID: 'quote-review' }).props.disabled).toBe(true);
-  expect(mockSubmit).not.toHaveBeenCalled();
-  await act(async () => renderer.unmount());
-});
-
-function catalogListPart(id: string) {
-  return { id, sku: null, name: id === 'part-1' ? 'Bo mạch' : 'Tụ', description: null, sellingPrice: 500000, warrantyDays: 365, warrantyPolicy: null, isActive: true, createdAt: '', updatedAt: '' };
-}
-
-function serverPart(id: string, sellingPrice: number) {
-  return { id, sku: null, name: id === 'part-1' ? 'Bo mạch' : 'Tụ', description: null, sellingPrice, warrantyDays: 365, warrantyPolicy: null, isActive: true, createdAt: '', updatedAt: '' };
-}
-
-async function openFixhomeRow(renderer: any) {
-  await act(async () => {
-    bySuffix(renderer.root, '-kind-parts')[0].props.onPress();
-  });
-  await act(async () => {
-    bySuffix(renderer.root, '-source-fixhome')[0].props.onPress();
-  });
-}
-
-it('a catalog response resolving after review entry leaves the frozen draft unchanged', async () => {
-  let resolvePart!: (part: unknown) => void;
-  mockFetchPartById.mockImplementation(() => new Promise(resolve => {
-    resolvePart = resolve as (part: unknown) => void;
-  }));
-  mockFetchCatalog.mockResolvedValueOnce({
-    data: [catalogListPart('part-1')],
-    meta: { page: 1, limit: 50, total: 1, totalPages: 1 },
-  });
-  let renderer!: ReturnType<typeof create>;
-  await act(async () => {
-    renderer = create(<QuotationFormScreen />);
-  });
-  await openFixhomeRow(renderer);
-  await act(async () => {
-    renderer.root.findAll(
-      (node: any) => String(node.props?.testID ?? '').endsWith('catalog-option-part-1'),
-    )[0].props.onPress();
-  });
-  expect(mockFetchPartById).toHaveBeenCalledWith('part-1');
-  // The technician opens the frozen review while the detail GET is in flight.
-  await act(async () => {
-    renderer.root.findByProps({ testID: 'quote-review' }).props.onPress();
-  });
-  expect(uniqIds(renderer.root.findAllByProps({ testID: 'quote-review-sheet' }))).toHaveLength(1);
-  await act(async () => {
-    resolvePart(serverPart('part-1', 500000));
-  });
-  // The form stays hidden behind the frozen review; cancel back to the draft
-  // and confirm the late response never filled the price nor errored.
-  await act(async () => {
-    renderer.root.findAll(node => node.props?.accessibilityLabel === 'Quay lại')[0].props.onPress();
-  });
-  expect(bySuffix(renderer.root, '-unitprice')[0].props.value).toBe('');
-  expect(renderer.root.findAllByProps({ testID: 'quote-form-error' })).toHaveLength(0);
-  await act(async () => renderer.unmount());
-});
-
-it('a late catalog response after a source switch is ignored', async () => {
-  let resolvePart!: (part: unknown) => void;
-  mockFetchPartById.mockImplementation(() => new Promise(resolve => {
-    resolvePart = resolve as (part: unknown) => void;
-  }));
-  mockFetchCatalog.mockResolvedValueOnce({
-    data: [catalogListPart('part-1')],
-    meta: { page: 1, limit: 50, total: 1, totalPages: 1 },
-  });
-  let renderer!: ReturnType<typeof create>;
-  await act(async () => {
-    renderer = create(<QuotationFormScreen />);
-  });
-  await openFixhomeRow(renderer);
-  await act(async () => {
-    renderer.root.findAll((node: any) => String(node.props?.testID ?? '').includes('catalog-option-'))[0].props.onPress();
-  });
-  expect(mockFetchPartById).toHaveBeenCalledWith('part-1');
-  // The technician switches source while the detail GET is still in flight.
-  await act(async () => {
-    bySuffix(renderer.root, '-source-external')[0].props.onPress();
-  });
-  await act(async () => {
-    resolvePart(serverPart('part-1', 500000));
-  });
-  expect(bySuffix(renderer.root, '-unitprice')[0].props.value).toBe('');
-  expect(renderer.root.findAllByProps({ testID: 'quote-form-error' })).toHaveLength(0);
-  await act(async () => renderer.unmount());
-});
-
-it('the latest catalog selection wins over an earlier pending one', async () => {
-  const resolvers: Record<string, (part: unknown) => void> = {};
-  mockFetchPartById.mockImplementation((id: string) => new Promise(resolve => {
-    resolvers[id] = resolve as (part: unknown) => void;
-  }));
-  mockFetchCatalog.mockResolvedValueOnce({
-    data: [catalogListPart('part-1'), catalogListPart('part-2')],
-    meta: { page: 1, limit: 50, total: 2, totalPages: 1 },
-  });
-  let renderer!: ReturnType<typeof create>;
-  await act(async () => {
-    renderer = create(<QuotationFormScreen />);
-  });
-  await openFixhomeRow(renderer);
-  const optionFor = (id: string) => renderer.root.findAll(
-    (node: any) => String(node.props?.testID ?? '').endsWith(`catalog-option-${id}`),
-  )[0];
-  await act(async () => {
-    optionFor('part-1').props.onPress();
-  });
-  await act(async () => {
-    optionFor('part-2').props.onPress();
-  });
-  expect(mockFetchPartById).toHaveBeenCalledWith('part-1');
-  expect(mockFetchPartById).toHaveBeenCalledWith('part-2');
-  // The earlier pick resolves last but must not overwrite the latest selection.
-  await act(async () => {
-    resolvers['part-1'](serverPart('part-1', 500000));
-  });
-  await act(async () => {
-    resolvers['part-2'](serverPart('part-2', 700000));
-  });
-  expect(bySuffix(renderer.root, '-unitprice')[0].props.value).toBe('700000');
-  expect(renderer.root.findAllByProps({ testID: 'quote-form-error' })).toHaveLength(0);
-  await act(async () => renderer.unmount());
+  mockSnapshot = formSnapshot([{ id: 'q-old', serviceOrderId: 'order-1', technicianId: 'tech-1', status: 'APPROVED', version: 1 }]).snapshot;
+  r = await render();
+  expect(r.root.findByProps({ testID: 'quote-review' }).props.disabled).toBe(true);
+  expect(bySuffix(r.root, '-description')).toHaveLength(0);
+  await act(async () => r.unmount());
 });
 
 it('busy and unknown deny draft review and sends, keeping verify usable', async () => {
-  let renderer!: ReturnType<typeof create>;
-  await act(async () => {
-    renderer = create(<QuotationFormScreen />);
-  });
-  // Idle: the single row form is editable.
-  expect(bySuffix(renderer.root, '-description').length).toBeGreaterThan(0);
+  const r = await render();
+  expect(bySuffix(r.root, '-description').length).toBeGreaterThan(0);
 
-  // Busy: the form unmounts to read-only, the footer locks, re-entry posts nothing.
   mockState = { ...idleState(), phase: 'submitting' };
-  await act(async () => {
-    renderer.update(<QuotationFormScreen />);
-  });
-  expect(bySuffix(renderer.root, '-description')).toHaveLength(0);
-  expect(renderer.root.findByProps({ testID: 'quote-review' }).props.disabled).toBe(true);
-  await act(async () => {
-    renderer.root.findByProps({ testID: 'quote-review' }).props.onPress();
-  });
+  await act(async () => { r.update(<QuotationFormScreen />); });
+  expect(bySuffix(r.root, '-description')).toHaveLength(0);
+  expect(r.root.findByProps({ testID: 'quote-review' }).props.disabled).toBe(true);
+  await press(r, 'quote-review');
   expect(mockSubmit).not.toHaveBeenCalled();
-  expect(mockVerify).not.toHaveBeenCalled();
-  await act(async () => renderer.unmount());
+  await act(async () => r.unmount());
 
   mockState = { ...idleState(), phase: 'unknown', message: 'Kết quả chưa xác định.' };
-  await act(async () => {
-    renderer = create(<QuotationFormScreen />);
-  });
-  // The review/send entry is gone while unknown; only GET verify remains.
-  expect(renderer.root.findAllByProps({ testID: 'quote-review' })).toHaveLength(0);
-  expect(renderer.root.findByProps({ testID: 'quote-verify' }).props.disabled).toBe(false);
-  await act(async () => {
-    renderer.root.findByProps({ testID: 'quote-verify' }).props.onPress();
-  });
+  const u = await render();
+  expect(u.root.findAllByProps({ testID: 'quote-review' })).toHaveLength(0);
+  expect(u.root.findByProps({ testID: 'quote-verify' }).props.disabled).toBe(false);
+  await press(u, 'quote-verify');
   expect(mockVerify).toHaveBeenCalledTimes(1);
   expect(mockSubmit).not.toHaveBeenCalled();
-  await act(async () => renderer.unmount());
+  await act(async () => u.unmount());
 });
 
 it('back cancels the review with zero POST', async () => {
-  let renderer!: ReturnType<typeof create>;
-  await act(async () => {
-    renderer = create(<QuotationFormScreen />);
-  });
-  await act(async () => {
-    renderer.root.findByProps({ testID: 'quote-review' }).props.onPress();
-  });
-  expect(uniqIds(renderer.root.findAllByProps({ testID: 'quote-review-sheet' }))).toHaveLength(1);
-  await act(async () => {
-    renderer.root.findAll(node => node.props?.accessibilityLabel === 'Quay lại')[0].props.onPress();
-  });
+  const r = await render();
+  await fillLabor(r);
+  await press(r, 'quote-review');
+  expect(uniqIds(r.root.findAllByProps({ testID: 'quote-review-sheet' }))).toHaveLength(1);
+  await act(async () => { r.root.findAll(node => node.props?.accessibilityLabel === 'Quay lại')[0].props.onPress(); });
   expect(mockCancelConfirm).toHaveBeenCalledTimes(1);
   expect(mockSubmit).not.toHaveBeenCalled();
-  await act(async () => {
-    renderer.update(<QuotationFormScreen />);
-  });
-  expect(renderer.root.findAllByProps({ testID: 'quote-review-sheet' })).toHaveLength(0);
-  await act(async () => renderer.unmount());
+  await act(async () => { r.update(<QuotationFormScreen />); });
+  expect(r.root.findAllByProps({ testID: 'quote-review-sheet' })).toHaveLength(0);
+  await act(async () => r.unmount());
 });

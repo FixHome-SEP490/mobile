@@ -249,9 +249,6 @@ export default function CustomerServicesScreen() {
   const visibleGroups = groups.filter((group) => group.services.length > 0);
   // One category (or a shortcut) is a flat list under its own title; "Tất cả" is grouped by category.
   const flatBrowse = Boolean(selectedCategoryName) || hasPopularIntent;
-  const subtitle = browseMode
-    ? (discoveryComplete && !discoveryError && !categoryLoadFailed ? `${displayedDiscoveryServices.length} dịch vụ` : '')
-    : (!loading && !error && services.length > 0 ? `${total} dịch vụ` : '');
 
   const aiEntry = (
     <TouchableOpacity
@@ -280,10 +277,10 @@ export default function CustomerServicesScreen() {
         <BackButton />
         <View style={styles.headerCopy}>
           <Text style={styles.headerTitle} numberOfLines={1} accessibilityRole="header">
-            {browseMode ? selectedCategoryName ?? 'Khám phá dịch vụ' : selectedCategoryName ?? 'Kết quả tìm kiếm'}
+            {browseMode ? 'Khám phá dịch vụ' : 'Kết quả tìm kiếm'}
           </Text>
-          {!!subtitle && <Text style={styles.headerSubtitle} accessibilityLiveRegion="polite">{subtitle}</Text>}
         </View>
+        <View style={{ width: 44, height: 44 }} />
       </View>
 
       {/* Search */}
@@ -291,7 +288,7 @@ export default function CustomerServicesScreen() {
         <Ionicons name="search" size={20} color={colors.muted} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Tìm điều hòa, máy giặt…"
+          placeholder={selectedCategoryName ? `Tìm trong ${selectedCategoryName}…` : 'Tìm điều hòa, máy giặt…'}
           placeholderTextColor={colors.muted}
           value={activeSearchQuery}
           onChangeText={onSearchChange}
@@ -498,15 +495,13 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     paddingBottom: 12,
     gap: 8,
   },
-  headerCopy: { flex: 1 },
+  headerCopy: { flex: 1, alignItems: 'center' },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '700',
     color: colors.text,
-    lineHeight: 28,
-    letterSpacing: -0.4,
+    lineHeight: 24,
   },
-  headerSubtitle: { fontSize: 13, lineHeight: 18, color: colors.textSecondary, marginTop: 1 },
 
   // Search
   searchContainer: {

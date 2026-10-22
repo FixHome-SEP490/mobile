@@ -6,6 +6,7 @@ import RepairWorkspaceScreen from './RepairWorkspaceScreen';
 
 let mockSnapshot: OrderSessionSnapshot;
 let mockRefresh: jest.Mock;
+const mockLoadResource = jest.fn();
 const mockNavigate = jest.fn();
 
 jest.mock('../runtime/OrderSessionProvider', () => ({
@@ -13,6 +14,7 @@ jest.mock('../runtime/OrderSessionProvider', () => ({
     key: mockSnapshot.key,
     snapshot: mockSnapshot,
     refresh: (...args: unknown[]) => mockRefresh(...args),
+    loadResource: mockLoadResource,
   }),
 }));
 jest.mock('@react-navigation/native', () => ({

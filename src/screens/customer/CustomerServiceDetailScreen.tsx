@@ -220,6 +220,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   headerTitleBlock: {
     flex: 1,
     paddingTop: 2,
+    alignItems: 'center',
   },
   headerEyebrow: {
     fontSize: 10,

@@ -24,6 +24,18 @@ jest.mock('expo-camera', () => ({
   useCameraPermissions: () => [mockCameraPermission, mockRequestCameraPermission],
 }));
 
+const mockGetReturns: jest.Mock = jest.fn();
+const mockDeclare: jest.Mock = jest.fn(async () => {});
+const mockApiUsage: jest.Mock = jest.fn(async () => ({}));
+jest.mock('../../../api/part-requests.api', () => {
+  const actual = jest.requireActual('../../../api/part-requests.api');
+  return {
+    ...actual,
+    partReturnsApi: { ...actual.partReturnsApi, getByOrderId: (...args: unknown[]) => mockGetReturns(...args), declare: (...args: unknown[]) => mockDeclare(...args) },
+    partRequestsApi: { ...actual.partRequestsApi, updateItemUsage: (...args: unknown[]) => mockApiUsage(...args) },
+  };
+});
+
 jest.mock('../runtime/OrderSessionProvider', () => ({
   useOrderSession: () => ({
     key: mockKey,
@@ -128,6 +140,7 @@ describe('PartsLifecycleScreen (T12)', () => {
   });
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetReturns.mockResolvedValue([]);
     mockFocused = true;
     mockCameraPermission = { granted: false, canAskAgain: true };
     mockJournalList = [];
@@ -365,5 +378,62 @@ describe('PartsLifecycleScreen UX', () => {
     act(() => { tree.update(<PartsLifecycleScreen />); });
     act(() => { tree.root.findByProps({ testID: 'parts-empty-cta' }).props.onPress(); });
     expect(mockNavigate).toHaveBeenCalledWith('ExtraProposal');
+  });
+
+  describe('custody and handover blockers', () => {
+    const received = (usageStatus: 'pending' | 'used' | 'returned') => ({ id: 'pr-c', serviceOrderId: 'order-1', technicianId: 'tech-1', requestType: 'pre_repair', status: 'received', fulfillmentMethod: 'pickup', items: [{ id: 'it-1', partNameSnapshot: 'Bo mạch', quantity: 3, usageStatus }] }) as unknown as OrderPartReadModel;
+    const record = (over: Record<string, unknown> = {}) => ({ partRequestId: 'pr-c', partRequestItemId: 'it-1', partNameSnapshot: 'Bo mạch', issuedQty: 3, usedQty: 0, declaredQty: 0, managerAcceptedQty: 0, outstandingQty: 3, version: 4, usageRecorded: false, ...over });
+    const render = async () => { let tree: any; await act(async () => { tree = create(<PartsLifecycleScreen />); }); return tree; };
+    const press = async (tree: any, match: (node: any) => boolean) => { await act(async () => { tree.root.find(match).props.onPress(); }); };
+    const byId = (id: string) => (node: any) => node.props?.testID === id && typeof node.props.onPress === 'function';
+    const byLabel = (label: string) => (node: any) => node.props?.accessibilityLabel === label && typeof node.props.onPress === 'function';
+
+    it('says what blocks the handover and clears once every line is settled', async () => {
+      ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot([received('pending')]));
+      let tree = await render();
+      expect(JSON.stringify(tree.toJSON())).toMatch(/Chưa thể gửi bàn giao:.*1 linh kiện chưa ghi dùng hoặc trả/);
+      await act(async () => tree.unmount());
+      ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot([received('used')]));
+      tree = await render();
+      expect(JSON.stringify(tree.toJSON())).toMatch(/không còn gì chặn gửi bàn giao/);
+      await act(async () => tree.unmount());
+    });
+
+    it('records the exact used quantity of a custody line with its ledger version', async () => {
+      mockGetReturns.mockResolvedValue([record()]);
+      ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot([received('pending')]));
+      const tree = await render();
+      expect(JSON.stringify(tree.toJSON())).toMatch(/Cấp 3/);
+      expect(tree.root.findAll(byId('parts-usage-used-it-1'))).toHaveLength(0);
+      await press(tree, byId('part-usage-open-it-1'));
+      await press(tree, byLabel('Tăng số lượng đã dùng'));
+      await press(tree, byLabel('Tăng số lượng đã dùng'));
+      await press(tree, byId('part-usage-save-it-1'));
+      expect(mockApiUsage).toHaveBeenCalledWith('pr-c', 'it-1', { usageStatus: 'used', usedQty: 2, expectedVersion: 4, idempotencyKey: expect.any(String) });
+      expect(mockRefresh).toHaveBeenCalledWith('command-readback');
+      await act(async () => tree.unmount());
+    });
+
+    it('declares a return of what is still owed and refuses more than that', async () => {
+      mockGetReturns.mockResolvedValue([record({ usedQty: 1, outstandingQty: 2, usageRecorded: true })]);
+      ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot([received('used')]));
+      const tree = await render();
+      await press(tree, byId('part-declare-open-it-1'));
+      await press(tree, byLabel('Tăng số lượng trả'));
+      await press(tree, byLabel('Tăng số lượng trả'));
+      expect(tree.root.findAll(byLabel('Tăng số lượng trả'))[0].props.accessibilityState.disabled).toBe(true);
+      await press(tree, byId('part-declare-send-it-1'));
+      expect(mockDeclare).toHaveBeenCalledWith('pr-c', 'it-1', { quantity: 2, expectedVersion: 4, idempotencyKey: expect.any(String) });
+      await act(async () => tree.unmount());
+    });
+
+    it('keeps the whole-line buttons when the custody ledger is unavailable', async () => {
+      mockGetReturns.mockRejectedValue({ response: { status: 404 } });
+      ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot([received('pending')]));
+      const tree = await render();
+      expect(tree.root.findAll(byId('parts-usage-used-it-1')).length).toBeGreaterThan(0);
+      expect(JSON.stringify(tree.toJSON())).not.toMatch(/Chưa tải được số liệu hoàn trả/);
+      await act(async () => tree.unmount());
+    });
   });
 });

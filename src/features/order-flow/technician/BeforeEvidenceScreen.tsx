@@ -7,6 +7,7 @@ import { useTechnicianArrivalProof } from './useTechnicianArrivalProof';
 import { captureCameraPhoto, confirmCameraPermission } from './camera-capture';
 import type { CameraOrderAsset } from './arrival-proof-controller';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import TechnicianOrderHub from '../shared/TechnicianOrderHub';
 import PhotoDraftGallery from '../../../components/technician/PhotoDraftGallery';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
@@ -296,26 +297,7 @@ export default function BeforeEvidenceScreen() {
       {state.phase === 'resolved' ? (
         <ReadOnlyNotice>Đã ghi nhận. Đang chờ máy chủ xác nhận; số ảnh yêu cầu do máy chủ quyết định sau khi làm mới.</ReadOnlyNotice>
       ) : null}
-      <TouchableOpacity
-        testID="task-scope-link"
-        accessibilityRole="button"
-        disabled={revoked}
-        onPress={() => {
-          if (!revoked) navigation.navigate('ScopeDetail');
-        }}
-        style={{
-          backgroundColor: colors.surface,
-          borderWidth: 1,
-          borderColor: colors.border,
-          borderRadius: 12,
-          minHeight: 52,
-          justifyContent: 'center',
-          paddingHorizontal: spacing.md,
-          opacity: revoked ? 0.5 : 1,
-        }}
-      >
-        <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Tiếp tục: xem phạm vi ›</Text>
-      </TouchableOpacity>
+      <TechnicianOrderHub />
     </TaskScreenShell>
   );
 }

@@ -1116,9 +1116,9 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     justifyContent: 'center',
   },
   headerBtnMuted: { opacity: 0.5 },
-  headerTitleBox: { flex: 1, paddingHorizontal: 4 },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
-  headerSubtitle: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, marginTop: 4 },
+  headerTitleBox: { flex: 1, alignItems: 'center', paddingHorizontal: 4 },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  headerSubtitle: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, marginTop: 4, textAlign: 'center' },
 
   listContent: { paddingVertical: 16, paddingBottom: 28 },
 

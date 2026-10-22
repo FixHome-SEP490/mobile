@@ -7,6 +7,7 @@ import { useTechnicianArrivalProof } from './useTechnicianArrivalProof';
 import { captureCameraPhoto, confirmCameraPermission } from './camera-capture';
 import type { CameraOrderAsset } from './arrival-proof-controller';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import TechnicianOrderHub from '../shared/TechnicianOrderHub';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 
 /** T05 — EN_ROUTE with own arrival, no own confirmed face. Camera-only private capture. */
@@ -173,26 +174,7 @@ export default function FaceCheckInScreen() {
       {state.phase === 'resolved' ? (
         <ReadOnlyNotice>Đã gửi ảnh. Đang chờ máy chủ xác nhận; trạng thái mới sẽ tự cập nhật sau khi làm mới.</ReadOnlyNotice>
       ) : null}
-      <TouchableOpacity
-        testID="task-detail-link"
-        accessibilityRole="button"
-        disabled={revoked}
-        onPress={() => {
-          if (!revoked) navigation.navigate('OrderInformation');
-        }}
-        style={{
-          backgroundColor: colors.surface,
-          borderWidth: 1,
-          borderColor: colors.border,
-          borderRadius: 12,
-          minHeight: 52,
-          justifyContent: 'center',
-          paddingHorizontal: spacing.md,
-          opacity: revoked ? 0.5 : 1,
-        }}
-      >
-        <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Xem thông tin đơn ›</Text>
-      </TouchableOpacity>
+      <TechnicianOrderHub />
     </TaskScreenShell>
   );
 }

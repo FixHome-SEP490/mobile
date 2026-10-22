@@ -177,9 +177,6 @@ it('revoked assignment disables actions and back/detail never write', async () =
     await renderer.root.findByProps({ testID: 'face-capture' }).props.onPress();
   });
   expect(mockCapturePhoto).not.toHaveBeenCalled();
-  await act(async () => {
-    renderer.root.findByProps({ testID: 'task-detail-link' }).props.onPress();
-  });
   expect(mockNavigate).not.toHaveBeenCalled();
   expect(mockUploadFace).not.toHaveBeenCalled();
   await act(async () => renderer.unmount());

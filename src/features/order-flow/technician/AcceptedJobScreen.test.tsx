@@ -6,6 +6,7 @@ import AcceptedJobScreen from './AcceptedJobScreen';
 
 let mockSnapshot: OrderSessionSnapshot;
 let mockRefresh: jest.Mock;
+const mockLoadResource = jest.fn();
 const mockDepart = jest.fn();
 const mockVerify = jest.fn();
 let mockPhase: string = 'idle';
@@ -17,6 +18,7 @@ jest.mock('../runtime/OrderSessionProvider', () => ({
     key: mockSnapshot.key,
     snapshot: mockSnapshot,
     refresh: (...args: unknown[]) => mockRefresh(...args),
+    loadResource: mockLoadResource,
   }),
 }));
 jest.mock('./useTechnicianArrivalProof', () => ({
@@ -83,10 +85,6 @@ it('future server departure time denies without POST and back/detail never write
     renderer.root.findByProps({ testID: 'depart-confirm' }).props.onPress();
   });
   expect(mockDepart).not.toHaveBeenCalled();
-  await act(async () => {
-    renderer.root.findByProps({ testID: 'task-detail-link' }).props.onPress();
-  });
-  expect(mockNavigate).toHaveBeenCalledWith('OrderInformation');
   expect(mockDepart).not.toHaveBeenCalled();
   await act(async () => renderer.unmount());
 });
