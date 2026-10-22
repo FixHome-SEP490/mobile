@@ -183,9 +183,17 @@ export function EarlierPartCard({ line, row, disabled, onToggle, onQuantity }: {
 }
 
 /** A FixHome part the technician still holds: tick to use it in this proposal (quantity up to what is left). */
-export function HeldPartCard({ name, available, row, disabled, onToggle, onQuantity }: {
-  name: string; available: number; row?: CostItemRow; disabled: boolean; onToggle: () => void; onQuantity: (quantity: string) => void;
+export function HeldPartCard({ name, available, row, disabled, readOnly, onToggle, onQuantity }: {
+  name: string; available: number; row?: CostItemRow; disabled: boolean; readOnly?: boolean; onToggle: () => void; onQuantity: (quantity: string) => void;
 }) {
+  if (readOnly) {
+    return (
+      <View testID="held-part-row" accessible accessibilityLabel={`${name}, còn ${available}`} style={[styles.item, styles.heldRow]}>
+        <Text style={styles.cardTitle}>{name}</Text>
+        <Text style={styles.meta}>Còn {available}</Text>
+      </View>
+    );
+  }
   const selected = !!row;
   const qty = row && digits(row.quantity) ? Number(row.quantity) : 1;
   const step = (delta: number) => onQuantity(String(Math.min(available, Math.max(1, qty + delta))));
@@ -282,6 +290,7 @@ const styles = StyleSheet.create({
   checkOn: { backgroundColor: colors.primaryStrong, borderColor: colors.primaryStrong },
   chip: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, minHeight: 24, justifyContent: 'center' },
   chipText: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
+  heldRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56 },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   iconBtn: { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   qtyInput: { width: 64, minHeight: 44, borderWidth: 1, borderColor: colors.border, borderRadius: 10, textAlign: 'center', color: colors.text, fontSize: 16, backgroundColor: colors.surface },

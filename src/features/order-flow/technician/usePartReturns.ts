@@ -7,6 +7,7 @@ import {
   type PartCustodyReturnRecord,
 } from '../../../api/part-requests.api';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
+import { extractApiErrorMessage } from '../../../utils/input-validation';
 
 export interface PartReturnsMessage { tone: 'error' | 'success'; text: string }
 
@@ -53,7 +54,7 @@ export function usePartReturns(enabled: boolean, refreshKey: unknown) {
       await Promise.all([refresh('command-readback'), load()]);
       return true;
     } catch (err) {
-      if (alive.current) setMessage({ tone: 'error', text: failure });
+      if (alive.current) setMessage({ tone: 'error', text: extractApiErrorMessage(err, failure) });
       // Stale version or a quantity decided elsewhere: read the numbers again before retrying.
       if ((err as { response?: { status?: number } } | null)?.response?.status === 409) await load();
       return false;

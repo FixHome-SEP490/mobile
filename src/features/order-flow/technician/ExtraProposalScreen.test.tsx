@@ -564,9 +564,8 @@ describe('ExtraProposalScreen UX', () => {
     expect(rows.length).toBeGreaterThan(0);
   });
 
-  it('lets the technician tick a part they still hold and sends it with the quantity left', async () => {
+  it('shows what is left after the approved quotation but does not let it be ticked into the proposal', () => {
     const PART_A = '99999999-8888-4777-8666-000000000001';
-    const part = (id: string, name: string, sellingPrice: number) => ({ id, name, sellingPrice });
     ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot());
     mockSnapshot.resources.parts = readyResource([
       { id: 'pr-1', serviceOrderId: 'order-1', technicianId: 'tech-1', requestType: 'pre_repair', status: 'received', items: [
@@ -576,18 +575,11 @@ describe('ExtraProposalScreen UX', () => {
     mockSnapshot.resources.quotations = readyResource([
       { id: 'q-1', serviceOrderId: 'order-1', status: 'APPROVED', items: [{ type: 'PARTS', description: 'x', quantity: 1, unitPrice: 1, partSource: 'fixhome', partCatalogId: PART_A }] },
     ] as any, 1, 1);
-    jest.mocked(fetchStrictPartById).mockResolvedValueOnce(part(PART_A, 'Co đồng 90° Φ10', 30000) as any);
     let tree: any;
     act(() => { tree = create(<ExtraProposalScreen />); });
     expect(tree.root.findByType(HeldPartCard).props.available).toBe(1);
-    act(() => { tree.root.findByProps({ testID: 'proposal-reason-input' }).props.onChangeText('Thay co'); });
-    await act(async () => { tree.root.findByType(HeldPartCard).props.onToggle(); });
-    act(() => { tree.root.findByType(LaborCard).props.onRemove(); });
-    act(() => { tree.root.findByProps({ testID: 'proposal-submit' }).props.onPress(); });
-    act(() => { tree.root.findByProps({ testID: 'proposal-confirm-submit' }).props.onPress(); });
-    expect(mockCreateProposal).toHaveBeenCalledWith(mockKey, expect.objectContaining({
-      items: [expect.objectContaining({ partCatalogId: PART_A, quantity: 1, unitPrice: 30000, partSource: 'fixhome' })],
-    }));
+    expect(tree.root.findByType(HeldPartCard).props.readOnly).toBe(true);
+    expect(tree.root.findAllByProps({ accessibilityRole: 'checkbox' })).toHaveLength(0);
   });
 
   it('adds labor rows in the list and opens the stock picker for parts', () => {

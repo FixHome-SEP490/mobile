@@ -14,3 +14,20 @@ it('a fully returned line is settled as used 0 without asking, and offers no usa
   expect(r.root.findAllByProps({ testID: 'part-usage-open-i1' })).toHaveLength(0);
   expect(JSON.stringify(r.toJSON())).toContain('Đã trả lại');
 });
+
+it('declaring everything back settles the usage at once, without waiting for the manager to receive it', async () => {
+  const waiting = { partRequestItemId: 'i1', issuedQty: 2, usedQty: 0, declaredQty: 2, managerAcceptedQty: 0, outstandingQty: 2, version: 1, usageRecorded: false } as never;
+  const onSaveUsed = jest.fn(async () => true);
+  let r!: ReturnType<typeof create>;
+  await act(async () => { r = create(<PartItemRow item={item} received canMarkUsage frozen={false} record={waiting} busy={false} onWhole={() => {}} onSaveUsed={onSaveUsed} onDeclare={async () => true} />); });
+  expect(onSaveUsed).toHaveBeenCalledWith(0);
+  expect(JSON.stringify(r.toJSON())).toContain('Đã khai trả');
+  expect(JSON.stringify(r.toJSON())).not.toContain('Đã trả lại');
+});
+
+it('declaring only part of it back still leaves the usage to the technician', async () => {
+  const partial = { partRequestItemId: 'i1', issuedQty: 2, usedQty: 0, declaredQty: 1, managerAcceptedQty: 0, outstandingQty: 2, version: 1, usageRecorded: false } as never;
+  const onSaveUsed = jest.fn(async () => true);
+  await act(async () => { create(<PartItemRow item={item} received canMarkUsage frozen={false} record={partial} busy={false} onWhole={() => {}} onSaveUsed={onSaveUsed} onDeclare={async () => true} />); });
+  expect(onSaveUsed).not.toHaveBeenCalled();
+});

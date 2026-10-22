@@ -47,3 +47,32 @@ export function heldParts(
     .map(([key, { name, pending, used }]) => ({ key, name, quantity: Math.max(0, pending - Math.max(0, (committed.get(key) ?? 0) - used)) }))
     .filter(part => part.quantity > 0);
 }
+
+/**
+ * The most the technician may record as used on a line: the approved quotation's quantity of that SKU, less what other
+ * pre-repair / quotation lines of the same SKU already used (the Backend limits usage per SKU and approved source).
+ * Additional-cost lines are covered by their own approved cost (undefined here); unknown quotations also give undefined.
+ */
+export function approvedUsageCap(
+  item: { id: string; partCatalogId?: string | null },
+  requestType: string | undefined,
+  requests: HeldRequest[],
+  quotations: Pick<OrderQuotation, 'serviceOrderId' | 'status' | 'items'>[] | null,
+  orderId: string,
+  usedOf: (itemId: string) => number,
+): number | undefined {
+  if (!quotations || !item.partCatalogId || (requestType !== 'pre_repair' && requestType !== 'quotation')) return undefined;
+  let approved = 0;
+  for (const quote of quotations) {
+    if (quote.serviceOrderId !== orderId || String(quote.status).toUpperCase() !== 'APPROVED') continue;
+    for (const line of quote.items) {
+      if (['PARTS', 'PARTS_EQUIPMENT'].includes(String(line.type).toUpperCase()) && (line.partSource ?? 'fixhome') === 'fixhome' && line.partCatalogId === item.partCatalogId) approved += line.quantity;
+    }
+  }
+  let othersUsed = 0;
+  for (const request of requests) {
+    if (request.serviceOrderId !== orderId || (request.requestType !== 'pre_repair' && request.requestType !== 'quotation')) continue;
+    for (const other of request.items) if (other.id !== item.id && other.partCatalogId === item.partCatalogId) othersUsed += usedOf(other.id);
+  }
+  return Math.max(0, approved - othersUsed);
+}

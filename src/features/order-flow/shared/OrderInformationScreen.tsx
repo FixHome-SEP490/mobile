@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from './TaskScreenShell';
+import OrderCostHistory from './OrderCostHistory';
 import { formatVnd } from '../../../utils/format';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
@@ -93,6 +94,7 @@ export default function OrderInformationScreen() {
       <DetailRow label="Tổng tiền" value={formatVnd(typeof order.grandTotal === 'number' ? order.grandTotal : Number.isFinite(Number(order.grandTotal)) ? Number(order.grandTotal) : undefined)} />
       {order.scopeDescription ? <DetailRow label="Phạm vi ban đầu" value={order.scopeDescription} /> : null}
     </View>}
+    {order && !history ? <OrderCostHistory /> : null}
     {order && !history ? <View style={{ gap: 8 }}>
       {order.bookingId ? <Pressable testID="order-chat-entry" accessibilityRole="button" disabled={openingChat} onPress={() => void openChat(order.bookingId)} style={entry}><Text style={entryText}>{openingChat ? 'Đang mở…' : 'Nhắn tin ›'}</Text></Pressable> : null}
       {canReschedule ? <Pressable testID="order-reschedule-entry" accessibilityRole="button" onPress={() => setRescheduleOpen(true)} style={entry}><Text style={entryText}>Đổi lịch hẹn ›</Text></Pressable> : null}

@@ -8,7 +8,7 @@ import OrderInformationScreen from './OrderInformationScreen';
 
 let mockSnapshot: OrderSessionSnapshot;
 const mockSetClipboard = Clipboard.setStringAsync as jest.Mock;
-jest.mock('../runtime/OrderSessionProvider', () => ({ useOrderSession: () => ({ key: mockSnapshot.key, snapshot: mockSnapshot, refresh: jest.fn() }) }));
+jest.mock('../runtime/OrderSessionProvider', () => ({ useOrderSession: () => ({ key: mockSnapshot.key, snapshot: mockSnapshot, refresh: jest.fn(), loadResource: jest.fn(async () => {}) }) }));
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn() }) }));
 jest.mock('react-native-safe-area-context', () => {
   const Native = jest.requireActual('react-native');
@@ -68,6 +68,37 @@ describe('OrderInformationScreen content', () => {
     await act(async () => { await tree.root.findByProps({ testID: 'order-code-copy' }).props.onPress(); });
     expect(mockSetClipboard).toHaveBeenCalledWith('SO-1');
     expect(tree.root.findAllByType(Text).map(node => String(node.props.children)).join(' ')).toContain('Đã sao chép mã đơn.');
+    act(() => tree.unmount());
+  });
+});
+
+describe('OrderInformationScreen cost history', () => {
+  it('lists every quotation round and extra cost with status, lines and totals', () => {
+    const tree = renderTree('customer');
+    act(() => {
+      mockSnapshot.resources.quotations = readyResource([
+        { id: 'q1', serviceOrderId: 'order-1', status: 'SUPERSEDED', version: 1, laborTotal: '100000', partsTotal: '0', items: [{ id: 'a', type: 'LABOR', description: 'Công kiểm tra', quantity: 1, unitPrice: 100000, lineTotal: 100000 }] },
+        { id: 'q2', serviceOrderId: 'order-1', status: 'APPROVED', version: 2, laborTotal: '100000', partsTotal: '60000', items: [
+          { id: 'b', type: 'LABOR', description: 'Công kiểm tra', quantity: 1, unitPrice: 100000, lineTotal: 100000 },
+          { id: 'c', type: 'PARTS', description: 'Co đồng Φ12', quantity: 2, unitPrice: 30000, lineTotal: 60000, warrantyTermDays: 30 },
+        ] },
+      ] as any, 1, 1);
+      mockSnapshot.resources.extras = readyResource([
+        { id: 'e1', serviceOrderId: 'order-1', status: 'approved', reason: 'Hỏng van', totalLaborDelta: 50000, totalPartsDelta: 450000, shippingFee: 25000, createdAt: '2030-10-21T01:00:00.000Z',
+          items: [{ id: 'd', type: 'parts_equipment', description: 'Bình chứa nước', quantity: 1, unitPrice: 450000, lineTotal: 450000 }] },
+      ] as any, 1, 1);
+      tree.update(<OrderInformationScreen />);
+    });
+    const out = JSON.stringify(tree.toJSON()).replace(/","/g, '');
+    expect(out).toContain('Báo giá lần 1');
+    expect(out).toContain('Đã được thay thế');
+    expect(out).toContain('Báo giá lần 2');
+    expect(out).toContain('Đã duyệt báo giá');
+    expect(out).toContain('Co đồng Φ12');
+    expect(out).toContain('Phát sinh lần 1');
+    expect(out).toContain('Hỏng van');
+    expect(out).toContain('Tổng phát sinh');
+    expect(out).toContain('525.000');
     act(() => tree.unmount());
   });
 });

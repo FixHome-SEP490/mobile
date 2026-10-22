@@ -16,7 +16,7 @@ type Item = OrderPartReadModel['items'][number];
 /** Stable label + tone (never colour alone): what the technician still has to settle on this line. */
 function usageView(usage: Item['usageStatus'], received: boolean): { label: string; tone: ToneName } | null {
   if (usage === 'used') return { label: 'Đã dùng', tone: 'success' };
-  if (usage === 'returned') return { label: 'Đã trả lại', tone: 'neutral' };
+  if (usage === 'returned') return { label: 'Đã báo trả', tone: 'neutral' };
   return received ? { label: 'Chưa ghi dùng/trả', tone: 'warning' } : null;
 }
 
@@ -50,19 +50,28 @@ function ActionButton({ testID, label, primary, disabled, onPress }: { testID: s
  * given back). With one (the quantities FixHome issued) they record the exact used quantity, e.g. issued 3,
  * used 1, return 2, and declare what they hand back; the Service Manager confirms at the counter.
  */
-export function PartItemRow({ item, received, canMarkUsage, frozen, record, busy, onWhole, onSaveUsed, onDeclare }: {
+export function PartItemRow({ item, received, canMarkUsage, frozen, record, busy, maxUsed, onWhole, onSaveUsed, onDeclare }: {
   item: Item; received: boolean; canMarkUsage: boolean; frozen: boolean; record?: PartCustodyReturnRecord; busy: boolean;
+  /** Approved quotation quantity left for this SKU; the Backend rejects more. Undefined when not limited or not known. */
+  maxUsed?: number;
   onWhole: (status: 'used' | 'returned') => void;
   onSaveUsed: (quantity: number) => Promise<boolean>;
   onDeclare: (quantity: number) => Promise<boolean>;
 }) {
   const [mode, setMode] = useState<'usage' | 'declare' | null>(null);
   const [qty, setQty] = useState(0);
-  // Everything issued is back and nothing was used: there is no usage left to ask for. Settle it as "used 0".
-  const fullyReturned = !!record && record.issuedQty > 0 && record.usedQty === 0 && record.managerAcceptedQty >= record.issuedQty;
-  const view = usageView(fullyReturned ? 'returned' : item.usageStatus, received);
+  // Everything issued is declared back and nothing was used: there is no usage left to ask for, so settle it as "used 0"
+  // right away. The manager's receipt is a separate step and never holds up the handover.
+  const fullyReturned = !!record && record.issuedQty > 0 && record.usedQty === 0 && record.declaredQty >= record.issuedQty;
+  const fullyAccepted = fullyReturned && record!.managerAcceptedQty >= record!.issuedQty;
+  // "Đã trả lại" is only said once the manager has received it; until then the technician has only reported it.
+  const view = fullyReturned
+    ? (fullyAccepted ? { label: 'Đã trả lại', tone: 'neutral' as ToneName } : { label: 'Đã khai trả', tone: 'info' as ToneName })
+    : usageView(item.usageStatus, received);
   const tone = view ? colors.tone[view.tone] : null;
-  const range = record ? usedQtyRange(record) : null;
+  const base = record ? usedQtyRange(record) : null;
+  const range = base && { min: base.min, max: maxUsed === undefined ? base.max : Math.max(base.min, Math.min(base.max, maxUsed)) };
+  const capped = !!base && !!range && range.max < base.max;
   const declareMax = record ? canDeclareMoreQty(record) : 0;
   const pending = record ? pendingDeclaredQty(record) : 0;
   // Older Backends send no status: fall back to the quantities.
@@ -85,7 +94,9 @@ export function PartItemRow({ item, received, canMarkUsage, frozen, record, busy
         {view && tone ? <View style={[styles.chip, { backgroundColor: tone.bg }]}><Text style={[styles.chipText, { color: tone.text }]}>{view.label}</Text></View> : null}
       </View>
       <Text style={styles.meta}>
-        {record ? `Cấp ${record.issuedQty} · Dùng ${record.usedQty} · Cần trả ${record.outstandingQty}` : `Số lượng ${item.quantity}`}
+        {record
+          ? [`Số lượng ${record.issuedQty}`, record.usageRecorded ? `Đã dùng ${record.usedQty}` : null, record.usageRecorded && record.outstandingQty > 0 ? `Còn phải trả ${record.outstandingQty}` : null].filter(Boolean).join(' · ')
+          : `Số lượng ${item.quantity}`}
       </Text>
       {note ? <Text style={[styles.meta, { color: colors.tone[note.tone].text }]}>{note.text}</Text> : null}
       {record?.blocksNewWork ? <Text style={[styles.meta, { color: colors.tone.warning.text }]}>Bạn chưa trả đủ linh kiện nên chưa nhận được việc mới.</Text> : null}
@@ -101,6 +112,7 @@ export function PartItemRow({ item, received, canMarkUsage, frozen, record, busy
         <View testID={`part-usage-editor-${item.id}`} style={styles.panel}>
           <Text style={styles.panelTitle}>Số lượng đã dùng</Text>
           <Stepper value={qty} min={range.min} max={range.max} label="số lượng đã dùng" onChange={setQty} />
+          {capped ? <Text style={[styles.meta, { color: colors.tone.warning.text }]}>{`Báo giá đã duyệt chỉ cho dùng tối đa ${range.max}. Phần còn lại hãy khai trả về kho.`}</Text> : null}
           <Text style={styles.meta}>Đã nhận {record.issuedQty} · Cần trả {record.issuedQty - qty}. Hóa đơn chỉ tính số đã dùng; số còn lại phải trả về kho.</Text>
           <View style={styles.actions}>
             <ActionButton testID={`part-usage-save-${item.id}`} label="Lưu số lượng" primary disabled={locked || (record.usageRecorded === true && qty === record.usedQty)} onPress={() => void done(onSaveUsed(qty))} />
@@ -132,7 +144,7 @@ export function PartItemRow({ item, received, canMarkUsage, frozen, record, busy
 }
 
 const styles = StyleSheet.create({
-  row: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingVertical: spacing.sm, gap: 6 },
+  row: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingVertical: spacing.md, gap: 6 },
   head: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   name: { flex: 1, color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '600' },
   chip: { flexShrink: 0, maxWidth: '50%', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, minHeight: 24, justifyContent: 'center' },

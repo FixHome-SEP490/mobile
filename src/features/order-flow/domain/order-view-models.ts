@@ -86,7 +86,17 @@ export function normalizeOrderResource<K extends OrderResourceKind>(kind: K, pay
     return rows.map(row => {
       const status = String(row.status).toLowerCase();
       if (!additionalCostWireStatuses.includes(status as AdditionalCostWireStatus)) throw new Error('Invalid additional cost status');
-      return { ...row, status };
+      // Money columns are bigint, so the wire carries them as digit strings; screens read numbers.
+      const money = (value: unknown) => (typeof value === 'string' && /^\d+$/.test(value.trim()) ? Number(value) : value);
+      return {
+        ...row, status,
+        totalLaborDelta: money(row.totalLaborDelta), totalPartsDelta: money(row.totalPartsDelta),
+        ...(row.shippingFee !== undefined ? { shippingFee: money(row.shippingFee) } : {}),
+        ...(Array.isArray(row.items) ? { items: row.items.map(item => {
+          const i = record(item);
+          return { ...i, unitPrice: money(i.unitPrice), lineTotal: money(i.lineTotal), ...(i.warrantyFee != null ? { warrantyFee: money(i.warrantyFee) } : {}) };
+        }) } : {}),
+      };
     }) as OrderResourceData[K];
   }
   if (kind === 'parts') {

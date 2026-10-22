@@ -369,6 +369,23 @@ describe('PartsLifecycleScreen UX', () => {
     expect(JSON.stringify(tree.toJSON())).toContain('Quay lại');
   });
 
+  it('groups requests by where the parts come from, extra-cost parts under their own heading', () => {
+    const request = (id: string, requestType: string) => ({ id, serviceOrderId: 'order-1', technicianId: 'tech-1', requestType, status: 'received', fulfillmentMethod: 'delivery',
+      items: [{ id: `${id}-i`, partNameSnapshot: `Part ${id}`, quantity: 1, usageStatus: 'pending' }] }) as unknown as OrderPartReadModel;
+    ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot([request('p1', 'pre_repair'), request('q1', 'quotation'), request('a1', 'additional'), request('a2', 'additional')]));
+    let tree: any;
+    act(() => { tree = create(<PartsLifecycleScreen />); });
+    const out = JSON.stringify(tree.toJSON()).replace(/","/g, '');
+    expect(out).toContain('Yêu cầu trước khi sửa');
+    expect(out).toContain('Theo báo giá');
+    expect(out).toContain('Chi phí phát sinh');
+    expect(out).toContain('Lần 1 · Giao tận nơi');
+    expect(out).toContain('Lần 2 · Giao tận nơi');
+    const extra = tree.root.findByProps({ testID: 'parts-group-additional' });
+    expect(extra.findAllByProps({ testID: 'parts-item-a1-i' }).length).toBeGreaterThan(0);
+    expect(extra.findAllByProps({ testID: 'parts-item-p1-i' })).toHaveLength(0);
+  });
+
   it('shows a short request code instead of the raw id and offers a way forward when empty', () => {
     ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot([{ id: 'aaaaaaaa-bbbb-cccc-dddd-123456abcdef', serviceOrderId: 'order-1', technicianId: 'tech-1', status: 'requested', items: [] }]));
     let tree: any;
@@ -403,7 +420,7 @@ describe('PartsLifecycleScreen UX', () => {
       mockGetReturns.mockResolvedValue([record()]);
       ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot([received('pending')]));
       const tree = await render();
-      expect(JSON.stringify(tree.toJSON())).toMatch(/Cấp 3/);
+      expect(JSON.stringify(tree.toJSON())).toMatch(/Số lượng 3/);
       expect(tree.root.findAll(byId('parts-usage-used-it-1'))).toHaveLength(0);
       await press(tree, byId('part-usage-open-it-1'));
       await press(tree, byLabel('Tăng số lượng đã dùng'));

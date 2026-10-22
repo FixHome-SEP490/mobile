@@ -40,7 +40,6 @@ const evidenceAsset = (url: string) => url.replace(/\/s--[^/]+\//, '/').split('?
 const newLabor = (): CostItemRow => ({ ...createCostItemRow('labor'), quantity: '1' });
 const newPart = (): CostItemRow => ({ ...createCostItemRow('parts_equipment'), partSource: 'fixhome', quantity: '1' });
 const isPart = (row: CostItemRow) => row.kind === 'parts_equipment';
-const HELD_KEY = 'held-';
 
 export default function ExtraProposalScreen() {
   const { key, snapshot, refresh, loadResource, journal } = useOrderSession();
@@ -219,35 +218,6 @@ export default function ExtraProposalScreen() {
     setPicked([]);
     setPickError(null);
     setCatalog({ status: 'idle', parts: [], error: null });
-  };
-  /** Tick = use the part the technician already holds; price and warranty are read by exact ID. The depot only supplies the shortfall. */
-  const toggleHeld = (part: { key: string; name: string; quantity: number }) => {
-    if (!canEdit || part.key.startsWith('name:')) return;
-    const rowKey = `${HELD_KEY}${part.key}`;
-    if (latest.current.rows.some(r => r.key === rowKey)) { setRows(prev => prev.filter(r => r.key !== rowKey)); return; }
-    if (rows.length >= QUOTE_MAX_ITEMS) { setFormError(`Số lượng hạng mục tối đa ${QUOTE_MAX_ITEMS}.`); return; }
-    const owner = key;
-    setRows(prev => [...prev, { ...newPart(), key: rowKey, partCatalogId: part.key, quantity: String(part.quantity), description: part.name, partNameSnapshot: part.name }]);
-    setFormError(null);
-    void (async () => {
-      try {
-        const fetched = await fetchStrictPartById(part.key);
-        const live = latest.current;
-        if (!mountedRef.current || !live.key || !sameOrderSession(owner, live.key)) return;
-        setRows(prev => prev.map(r => (r.key === rowKey
-          ? { ...r, unitPrice: String(fetched.sellingPrice), description: fetched.name, partNameSnapshot: fetched.name, partSku: fetched.sku ?? '', warrantyPolicy: fetched.warrantyPolicy ?? '', warrantyTermDays: fetched.warrantyDays != null ? String(fetched.warrantyDays) : '' }
-          : r)));
-      } catch {
-        if (!mountedRef.current) return;
-        setRows(prev => prev.filter(r => r.key !== rowKey));
-        setFormError('Không lấy được giá linh kiện từ FixHome. Hãy chọn lại.');
-      }
-    })();
-  };
-  const setHeldQuantity = (rowKey: string, available: number, quantity: string) => {
-    if (!canEdit) return;
-    const n = Math.min(available, Math.max(1, Number(quantity) || 1));
-    setRows(prev => prev.map(r => (r.key === rowKey ? { ...r, quantity: String(n) } : r)));
   };
   const onAddRow = (kind: 'labor' | 'parts_equipment') => {
     if (!canEdit || rows.length >= QUOTE_MAX_ITEMS) return;
@@ -482,13 +452,10 @@ export default function ExtraProposalScreen() {
               <Section title="Linh kiện">
                 <GroupLabel title="Còn lại sau báo giá" />
                 {heldParts.length
-                  ? heldParts.map(part => (
-                    <HeldPartCard key={part.key} name={part.name} available={part.quantity} row={rows.find(r => r.key === `${HELD_KEY}${part.key}`)} disabled={!canEdit || part.key.startsWith('name:')}
-                      onToggle={() => toggleHeld(part)} onQuantity={quantity => setHeldQuantity(`${HELD_KEY}${part.key}`, part.quantity, quantity)} />
-                  ))
+                  ? heldParts.map(part => <HeldPartCard key={part.key} name={part.name} available={part.quantity} disabled readOnly onToggle={() => undefined} onQuantity={() => undefined} />)
                   : <Text style={styles.heldEmpty}>{heldReady ? 'Không còn linh kiện sau báo giá.' : 'Đang tải…'}</Text>}
                 <GroupLabel title="Cần thêm từ kho" hint="Kho cấp sau khi khách duyệt." />
-                {rows.filter(row => isPart(row) && !row.key.startsWith(HELD_KEY)).map(row => (
+                {rows.filter(isPart).map(row => (
                   <PartLineCard key={row.key} row={row} maxQuantity={PART_QUANTITY_MAX} disabled={!canEdit}
                     onQuantity={quantity => onRowChange({ ...row, quantity })} onRemove={() => onRemoveRow(row.key)} />
                 ))}
