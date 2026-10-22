@@ -400,6 +400,7 @@ export default function AcceptedPartsScreen() {
             <BottomSheetModal
               ref={sheetRef}
               snapPoints={['90%']}
+              enableDynamicSizing={false}
               enablePanDownToClose
               keyboardBehavior="interactive"
               keyboardBlurBehavior="restore"

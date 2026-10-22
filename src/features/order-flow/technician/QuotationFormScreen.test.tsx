@@ -277,3 +277,21 @@ it('back cancels the review with zero POST', async () => {
   expect(r.root.findAllByProps({ testID: 'quote-review-sheet' })).toHaveLength(0);
   await act(async () => r.unmount());
 });
+
+it('an earlier requested part can be used in a smaller quantity, never above what was requested', async () => {
+  withParts([request({}, [{ id: 'i1', partCatalogId: 'part-1', partSource: 'fixhome', partNameSnapshot: 'Bo mạch', quantity: 3, usageStatus: 'pending' }])]);
+  mockFetchPartById.mockResolvedValue(serverPart('part-1', 500000));
+  const r = await render();
+  await press(r, 'quote-earlier-i1');
+  const plus = () => r.root.findAll((n: any) => n.props?.testID === 'quote-earlier-i1-plus' && !!n.props.accessibilityState)[0];
+  expect(plus().props.accessibilityState.disabled).toBe(true);
+  await press(r, 'quote-earlier-i1-minus');
+  await press(r, 'quote-earlier-i1-minus');
+  await press(r, 'quote-earlier-i1-minus');
+  expect(JSON.stringify(r.toJSON())).toContain('Số lượng dùng 1');
+  await press(r, 'quote-earlier-i1-plus');
+  await fillLabor(r);
+  await press(r, 'quote-review');
+  expect(mockConfirm.mock.calls[0][0].items[1]).toMatchObject({ partCatalogId: 'part-1', quantity: '2' });
+  await act(async () => r.unmount());
+});

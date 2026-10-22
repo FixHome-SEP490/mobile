@@ -253,6 +253,62 @@ describe('createTechnicianQuotationController', () => {
     };
   });
 
+  it('a server rejection is final: its own message is shown and nothing stays unresolved, even if the read-back then fails', async () => {
+    let posted = false;
+    transport.createQuotation = jest.fn(async () => {
+      posted = true;
+      throw Object.assign(new Error('Request failed'), { response: { status: 409, data: { message: 'Số lượng linh kiện FixHome trong báo giá không khớp các dòng đã yêu cầu.' } } });
+    });
+    coordinator.refreshOrderSession.mockImplementation(async () => {
+      if (posted) throw Object.assign(new Error('Unauthorized'), { response: { status: 401 } });
+    });
+    const ctrl = createTechnicianQuotationController(deps);
+    ctrl.confirm(validPayload);
+    await ctrl.submit();
+    expect(ctrl.getState().phase).toBe('denied');
+    expect(ctrl.getState().message).toMatch(/không khớp các dòng đã yêu cầu/);
+    expect(journal.hasUnresolved(key)).toBe(false);
+  });
+
+  it('a 401 or a timeout is still not proof: the send stays unknown', async () => {
+    transport.createQuotation = jest.fn(async () => {
+      throw Object.assign(new Error('Unauthorized'), { response: { status: 401 } });
+    });
+    const ctrl = createTechnicianQuotationController(deps);
+    ctrl.confirm(validPayload);
+    await ctrl.submit();
+    expect(ctrl.getState().phase).toBe('unknown');
+  });
+
+  describe('an old send that left no id', () => {
+    const begin = (dispatchedAt: number) => journal.begin(key, { intentId: 'old-1', entityId: 'order-1', operation: 'quote-create' }, dispatchedAt);
+
+    it('is cleared by "check again" when the order has no quote of this technician, so the form opens again', async () => {
+      await begin(Date.now() - 10 * 60_000);
+      const ctrl = createTechnicianQuotationController(deps);
+      await ctrl.verify();
+      expect(ctrl.getState().phase).toBe('denied');
+      expect(ctrl.getState().message).toMatch(/không đến được hệ thống/);
+      expect(journal.hasUnresolved(key)).toBe(false);
+    });
+
+    it('stays unknown when this technician already has a quote on the order (cannot tell which send made it)', async () => {
+      await begin(Date.now() - 10 * 60_000);
+      snapshot.resources.quotations = readyResource([{ id: 'q-old', serviceOrderId: 'order-1', technicianId: 'tech-1', status: 'SUPERSEDED', version: 1, items: [] }] as any, 2, 2);
+      const ctrl = createTechnicianQuotationController(deps);
+      await ctrl.verify();
+      expect(ctrl.getState().phase).toBe('unknown');
+      expect(journal.hasUnresolved(key)).toBe(true);
+    });
+
+    it('stays unknown while the send is recent, because it may still land', async () => {
+      await begin(Date.now() - 10_000);
+      const ctrl = createTechnicianQuotationController(deps);
+      await ctrl.verify();
+      expect(ctrl.getState().phase).toBe('unknown');
+    });
+  });
+
   it('explicit confirm captures target; cancelConfirm clears draft with zero writes', async () => {
     const ctrl = createTechnicianQuotationController(deps);
     expect(ctrl.confirm(validPayload)).toBe(true);

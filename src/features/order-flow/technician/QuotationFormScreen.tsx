@@ -436,7 +436,8 @@ export default function QuotationFormScreen() {
             <GroupLabel title="Đã yêu cầu trước khi sửa" hint="Chọn để đưa nguyên dòng vào báo giá, đúng số lượng đã yêu cầu." />
             {partsStatus === 'ready' ? (
               earlierLines.length ? earlierLines.map(line => (
-                <EarlierPartCard key={line.id} line={line} row={rows.find(r => r.key === `${EARLIER_KEY}${line.id}`)} disabled={frozen} onToggle={() => toggleEarlier(line)} />
+                <EarlierPartCard key={line.id} line={line} row={rows.find(r => r.key === `${EARLIER_KEY}${line.id}`)} disabled={frozen} onToggle={() => toggleEarlier(line)}
+                  onQuantity={quantity => { const r = rows.find(x => x.key === `${EARLIER_KEY}${line.id}`); if (r) updateRow(r.key, { ...r, quantity }); }} />
               )) : <Text style={styles.empty}>Bạn chưa yêu cầu linh kiện nào trước khi sửa. Cần linh kiện thì thêm từ kho bên dưới.</Text>
             ) : partsStatus === 'error' ? (
               <View style={styles.emptyBox}>
@@ -511,6 +512,7 @@ export default function QuotationFormScreen() {
         <BottomSheetModal
           ref={sheetRef}
           snapPoints={['90%']}
+          enableDynamicSizing={false}
           enablePanDownToClose
           keyboardBehavior="interactive"
           keyboardBlurBehavior="restore"

@@ -18,12 +18,12 @@ export interface EarlierPartLine {
 const digits = (value: string) => /^\d+$/.test(value.trim());
 
 /** One section = title (and hint) outside, one bordered card inside, rows separated by hairlines. */
-export function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+export function Section({ title, hint, required, children }: { title: string; hint?: string; required?: boolean; children: React.ReactNode }) {
   const items = React.Children.toArray(children).filter(Boolean);
   return (
     <View style={styles.section}>
       <View style={styles.sectionHead}>
-        <Text accessibilityRole="header" style={styles.sectionTitle}>{title}</Text>
+        <Text accessibilityRole="header" accessibilityLabel={required ? `${title}, bắt buộc` : undefined} style={styles.sectionTitle}>{title}{required ? <Text style={{ color: colors.error }}> *</Text> : null}</Text>
         {hint ? <Text style={styles.sectionHint}>{hint}</Text> : null}
       </View>
       <View style={styles.card}>
@@ -60,9 +60,9 @@ export function AddRow({ label, testID, hint, disabled, onPress }: { label: stri
 }
 
 /** Navigation row, same look as the order hub rows. */
-export function LinkRow({ label, testID, Icon, onPress }: { label: string; testID: string; Icon: LucideIcon; onPress: () => void }) {
+export function LinkRow({ label, testID, Icon, onPress, disabled }: { label: string; testID: string; Icon: LucideIcon; onPress: () => void; disabled?: boolean }) {
   return (
-    <Pressable testID={testID} accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.linkRow, pressed && styles.pressedRow]}>
+    <Pressable testID={testID} accessibilityRole="button" accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.linkRow, pressed && styles.pressedRow, disabled && styles.disabled]}>
       <View style={styles.linkTile} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"><Icon size={20} strokeWidth={1.75} color={colors.primaryStrong} /></View>
       <Text style={styles.linkLabel}>{label}</Text>
       <ChevronRight size={20} strokeWidth={1.75} color={colors.muted} />
@@ -144,24 +144,75 @@ function PartPrice({ row }: { row: CostItemRow }) {
   );
 }
 
-/** A part asked for earlier: tick it to put the whole line (same quantity) into the quote. */
-export function EarlierPartCard({ line, row, disabled, onToggle }: { line: EarlierPartLine; row?: CostItemRow; disabled: boolean; onToggle: () => void }) {
+/** A part asked for earlier: tick it to put it into the quote, using up to the quantity that was asked for. */
+export function EarlierPartCard({ line, row, disabled, onToggle, onQuantity }: {
+  line: EarlierPartLine; row?: CostItemRow; disabled: boolean; onToggle: () => void; onQuantity: (quantity: string) => void;
+}) {
   const selected = !!row;
   const tone = colors.tone[line.tone];
+  // Never more than was asked for: more than that is added from the stock list, which asks the warehouse for it.
+  const qty = row && digits(row.quantity) ? Number(row.quantity) : line.quantity;
+  const step = (delta: number) => onQuantity(String(Math.min(line.quantity, Math.max(1, qty + delta))));
   return (
-    <Pressable testID={`quote-earlier-${line.id}`} accessibilityRole="checkbox" accessibilityLabel={`${line.name}, số lượng ${line.quantity}, ${line.statusLabel}`}
-      accessibilityState={{ checked: selected, disabled }} disabled={disabled} onPress={onToggle}
-      style={({ pressed }) => [styles.item, styles.earlier, selected && styles.earlierOn, pressed && styles.pressed, disabled && styles.disabled]}>
-      <View style={[styles.check, selected && styles.checkOn]}>{selected ? <Check size={16} strokeWidth={2.5} color={colors.surface} /> : null}</View>
-      <View style={styles.earlierBody}>
-        <Text style={styles.cardTitle}>{line.name}</Text>
-        <View style={styles.earlierMeta}>
-          <Text style={styles.meta}>Số lượng {line.quantity}</Text>
-          <View style={[styles.chip, { backgroundColor: tone.bg }]}><Text style={[styles.chipText, { color: tone.text }]}>{line.statusLabel}</Text></View>
+    <View style={[styles.item, selected && styles.earlierOn, disabled && styles.disabled]}>
+      <Pressable testID={`quote-earlier-${line.id}`} accessibilityRole="checkbox" accessibilityLabel={`${line.name}, đã yêu cầu ${line.quantity}, ${line.statusLabel}`}
+        accessibilityState={{ checked: selected, disabled }} disabled={disabled} onPress={onToggle}
+        style={({ pressed }) => [styles.earlier, pressed && styles.pressed]}>
+        <View style={[styles.check, selected && styles.checkOn]}>{selected ? <Check size={16} strokeWidth={2.5} color={colors.surface} /> : null}</View>
+        <View style={styles.earlierBody}>
+          <Text style={styles.cardTitle}>{line.name}</Text>
+          <View style={styles.earlierMeta}>
+            <Text style={styles.meta}>Đã yêu cầu {line.quantity}</Text>
+            <View style={[styles.chip, { backgroundColor: tone.bg }]}><Text style={[styles.chipText, { color: tone.text }]}>{line.statusLabel}</Text></View>
+          </View>
         </View>
-        {row ? <PartPrice row={row} /> : null}
-      </View>
-    </Pressable>
+      </Pressable>
+      {row ? (
+        <>
+          <View style={styles.stepper}>
+            <Text style={styles.label}>Số lượng dùng (tối đa {line.quantity})</Text>
+            <IconButton testID={`quote-earlier-${line.id}-minus`} label={`Giảm số lượng ${line.name}`} disabled={disabled || qty <= 1} onPress={() => step(-1)}><Minus size={18} color={colors.primaryStrong} /></IconButton>
+            <Text accessibilityLabel={`Số lượng dùng ${qty}`} style={styles.qtyText}>{qty}</Text>
+            <IconButton testID={`quote-earlier-${line.id}-plus`} label={`Tăng số lượng ${line.name}`} disabled={disabled || qty >= line.quantity} onPress={() => step(1)}><Plus size={18} color={colors.primaryStrong} /></IconButton>
+          </View>
+          <PartPrice row={row} />
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+/** A FixHome part the technician still holds: tick to use it in this proposal (quantity up to what is left). */
+export function HeldPartCard({ name, available, row, disabled, onToggle, onQuantity }: {
+  name: string; available: number; row?: CostItemRow; disabled: boolean; onToggle: () => void; onQuantity: (quantity: string) => void;
+}) {
+  const selected = !!row;
+  const qty = row && digits(row.quantity) ? Number(row.quantity) : 1;
+  const step = (delta: number) => onQuantity(String(Math.min(available, Math.max(1, qty + delta))));
+  return (
+    <View testID="held-part-row" style={[styles.item, selected && styles.earlierOn]}>
+      <Pressable accessibilityRole="checkbox" accessibilityLabel={`${name}, còn ${available}`} accessibilityState={{ checked: selected, disabled }} disabled={disabled} onPress={onToggle}
+        style={({ pressed }) => [styles.earlier, pressed && styles.pressed, disabled && styles.disabled]}>
+        <View style={[styles.check, selected && styles.checkOn]}>{selected ? <Check size={16} strokeWidth={2.5} color={colors.surface} /> : null}</View>
+        <View style={styles.earlierBody}>
+          <Text style={styles.cardTitle}>{name}</Text>
+          <View style={styles.earlierMeta}>
+            <Text style={styles.meta}>Còn {available}</Text>
+          </View>
+        </View>
+      </Pressable>
+      {row ? (
+        <>
+          <View style={styles.stepper}>
+            <Text style={styles.label}>Dùng</Text>
+            <IconButton testID={`held-${row.key}-minus`} label={`Giảm số lượng ${name}`} disabled={disabled || qty <= 1} onPress={() => step(-1)}><Minus size={18} color={colors.primaryStrong} /></IconButton>
+            <Text accessibilityLabel={`Số lượng ${name}: ${qty}`} style={styles.qtyText}>{qty}</Text>
+            <IconButton testID={`held-${row.key}-plus`} label={`Tăng số lượng ${name}`} disabled={disabled || qty >= available} onPress={() => step(1)}><Plus size={18} color={colors.primaryStrong} /></IconButton>
+          </View>
+          <PartPrice row={row} />
+        </>
+      ) : null}
+    </View>
   );
 }
 
@@ -222,7 +273,8 @@ const styles = StyleSheet.create({
   priceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   warrantyRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   warrantyText: { flex: 1, color: colors.tone.success.text, fontSize: 13, lineHeight: 19 },
-  earlier: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, minHeight: 64 },
+  earlier: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, minHeight: 48 },
+  qtyText: { minWidth: 40, textAlign: 'center', color: colors.text, fontSize: 18, fontWeight: '700' },
   earlierOn: { backgroundColor: colors.primarySoft },
   earlierBody: { flex: 1, minWidth: 0, gap: 4 },
   earlierMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },

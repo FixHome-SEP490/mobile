@@ -1,5 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { BottomSheetBackdrop, BottomSheetModal } from '@gorhom/bottom-sheet';
+import * as Haptics from 'expo-haptics';
 import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import { isHistoricalOrder, type CreateAdditionalCostPayload, type CreateAdditionalCostItem, type CostRequest } from '../../../api/orders.api';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
@@ -7,10 +9,10 @@ import { sameOrderSession } from '../domain/order-session.types';
 import { QUOTE_MAX_ITEMS, validateQuotationPayload } from './technician-quotation-controller';
 import { useTechnicianExtraCost } from './useTechnicianExtraCost';
 import { fetchStrictCatalog, fetchStrictPartById } from './parts-catalog-adapter';
+import { PART_QUANTITY_MAX } from './parts-controller';
 import { getRestoredExtraRecovery } from '../domain/extra-and-parts-recovery';
 import { isCostDecisionBlocked } from '../../../screens/customer/customer-additional-cost-decision';
 import {
-  CostItemEditor,
   costItemRowToPayloadItem,
   costItemRowSubtotal,
   createCostItemRow,
@@ -23,6 +25,9 @@ import {
 import { FulfillmentMethodPicker } from '../shared/FulfillmentMethodPicker';
 import { ConfirmSummary } from '../shared/ConfirmSummary';
 import { EVIDENCE_MAX, EvidencePhotoPicker } from './EvidencePhotoPicker';
+import { PartPickerRow } from '../shared/PartPickerRow';
+import { heldParts as computeHeldParts } from './held-parts';
+import { AddRow, GroupLabel, HeldPartCard, LaborCard, PartLineCard, Section } from './QuotationItemCards';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { formatVnd } from '../../../utils/format';
@@ -32,6 +37,11 @@ export const EXTRA_REASON_MAX = 2000;
 // Compare the same private server asset across renewed short-lived signatures.
 const evidenceAsset = (url: string) => url.replace(/\/s--[^/]+\//, '/').split('?')[0];
 
+const newLabor = (): CostItemRow => ({ ...createCostItemRow('labor'), quantity: '1' });
+const newPart = (): CostItemRow => ({ ...createCostItemRow('parts_equipment'), partSource: 'fixhome', quantity: '1' });
+const isPart = (row: CostItemRow) => row.kind === 'parts_equipment';
+const HELD_KEY = 'held-';
+
 export default function ExtraProposalScreen() {
   const { key, snapshot, refresh, loadResource, journal } = useOrderSession();
   const navigation = useNavigation<any>();
@@ -40,7 +50,7 @@ export default function ExtraProposalScreen() {
 
   const focused = useIsFocused();
   const revisingCostId: string | undefined = route.params?.proposalId ?? route.params?.costId;
-  useLoadUnloadedResources(snapshot, ['extras', 'evidence'], loadResource);
+  useLoadUnloadedResources(snapshot, ['extras', 'evidence', 'parts', 'quotations'], loadResource);
   const orderValue = snapshot?.order.status === 'ready' ? snapshot.order.data : null;
   const order = orderValue && !isHistoricalOrder(orderValue) ? orderValue : null;
   const current = focused && !!key && !!order && snapshot?.access === 'current' && sameOrderSession(snapshot.key, key) && key.role === 'technician' && order.id === key.serviceOrderId && order.technician?.id === key.userId;
@@ -49,7 +59,11 @@ export default function ExtraProposalScreen() {
   const rawExtras = extrasResource?.status === 'ready' ? extrasResource.data : [];
   const revisingTarget = rawExtras.find(c => c.id === revisingCostId && c.serviceOrderId === key?.serviceOrderId && c.technicianId === key?.userId) ?? null;
   const canRevise = !revisingCostId || (!!revisingTarget && String(revisingTarget.status).toUpperCase() === 'PENDING_APPROVAL' && !isCostDecisionBlocked(revisingTarget.expiresAt) && !rawExtras.some(c => c.serviceOrderId === key?.serviceOrderId && c.supersedesId === revisingCostId));
-  const [initialRow] = useState(() => createCostItemRow('labor'));
+  const [initialRow] = useState(newLabor);
+  const [picked, setPicked] = useState<CostItemRow[]>([]);
+  const [pickError, setPickError] = useState<string | null>(null);
+  const sheetRef = useRef<BottomSheetModal>(null);
+  const wanted = useRef(new Set<string>());
   const [rows, setRows] = useState<CostItemRow[]>([initialRow]);
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
@@ -75,14 +89,14 @@ export default function ExtraProposalScreen() {
       partWarrantyOption: item.partWarrantyOption === 'paid_warranty' ? 'paid_warranty' : 'no_warranty',
       warrantyTermDays: item.warrantyTermDays == null ? '' : String(item.warrantyTermDays), warrantyFee: item.warrantyFee == null ? '' : String(item.warrantyFee),
       laborWarrantyDays: item.warrantyDays == null ? '' : String(item.warrantyDays),
-    } as CostItemRow); }) : [createCostItemRow('labor')];
+    } as CostItemRow); }) : [newLabor()];
     setDraftScope({ key, revision: revisingCostId, current, hydrated: !!target });
     setRows(next); setExpandedKey(next[0].key); setReason(target?.reason ?? '');
     setNote((target as (CostRequest & { note?: string }) | null)?.note ?? '');
     setFulfillmentMethod(target?.fulfillmentMethod ?? 'pickup');
     setShippingFee(target?.shippingFee == null ? '' : String(target.shippingFee));
     setEvidenceRefs(target?.evidenceUrls ?? []);
-    setConfirmation(null); setFormError(null); setRowErrors({}); setReasonError(null); setCatalog({ status: 'idle', parts: [], error: null });
+    setConfirmation(null); setFormError(null); setRowErrors({}); setReasonError(null); setCatalog({ status: 'idle', parts: [], error: null }); setPicked([]); setPickError(null);
   }
   const recovery = useMemo(() => key && snapshot ? getRestoredExtraRecovery(journal, key, snapshot) : { hasRecovery: false as const, isUnresolved: false as const }, [journal, key, snapshot]);
   const showRecovery = recovery.hasRecovery && recovery.isUnresolved && (recovery.operation === 'extra-create' || recovery.operation === 'extra-revise');
@@ -93,6 +107,13 @@ export default function ExtraProposalScreen() {
   const frozen = busy || isUnknown || showRecovery;
   const canEdit = current && isUnderRepair && canRevise && extrasResource?.status === 'ready' && !frozen && state.phase !== 'resolved' && !confirming;
   const refreshing = snapshot?.order.status === 'loading' || extrasResource?.status === 'loading';
+  // What the technician still holds once the approved quotation has taken its share (e.g. received 2, quote uses 1 -> 1 left).
+  const partsResource = snapshot?.resources.parts;
+  const quotationsResource = snapshot?.resources.quotations;
+  const heldParts = current && key && partsResource?.status === 'ready' && Array.isArray(partsResource.data) && quotationsResource?.status === 'ready'
+    ? computeHeldParts(partsResource.data, quotationsResource.data, key.serviceOrderId, key.userId)
+    : [];
+  const heldReady = partsResource?.status === 'ready' && quotationsResource?.status === 'ready';
   const hasFixHome = rows.some(r => r.kind === 'parts_equipment' && r.partSource === 'fixhome');
   const buildPayload = (): CreateAdditionalCostPayload => {
     const trimmedReason = reason.trim();
@@ -129,7 +150,7 @@ export default function ExtraProposalScreen() {
   useLayoutEffect(() => { latest.current = { key, current, rows, canEdit, confirmation, confirming, frozen }; });
   const loadGeneration = useRef(0);
   const picks = useRef<Record<string, number>>({});
-  useLayoutEffect(() => { loadGeneration.current += 1; picks.current = {}; }, [key?.userId, key?.role, key?.sessionGeneration, key?.serviceOrderId, current]);
+  useLayoutEffect(() => { loadGeneration.current += 1; picks.current = {}; wanted.current.clear(); }, [key?.userId, key?.role, key?.sessionGeneration, key?.serviceOrderId, current]);
   const loadCatalog = async (search?: string) => {
     if (!canEdit) return;
     const generation = ++loadGeneration.current;
@@ -142,28 +163,95 @@ export default function ExtraProposalScreen() {
       setCatalog({ status: result.data.length ? 'ready' : 'empty', parts: result.data, error: null });
     } catch { if (valid()) setCatalog({ status: 'error', parts: [], error: 'Không tải được danh mục. Hãy thử tải lại.' }); }
   };
-  const onSelectPart = async (rowKey: string, option: CostItemCatalogOption) => {
-    const row = rows.find(r => r.key === rowKey);
-    if (!canEdit || !row || row.kind !== 'parts_equipment' || row.partSource !== 'fixhome') return;
-    const generation = (picks.current[rowKey] ?? 0) + 1;
-    picks.current[rowKey] = generation;
+  /** Tick or untick a stock part; picks outlive new searches. Price and name come from the by-ID read. */
+  const togglePick = async (option: CostItemCatalogOption) => {
+    if (!canEdit) return;
+    setPickError(null);
+    if (wanted.current.has(option.id)) {
+      wanted.current.delete(option.id);
+      setPicked(prev => prev.filter(r => r.partCatalogId !== option.id));
+      return;
+    }
+    wanted.current.add(option.id);
     const owner = key;
-    const valid = () => {
-      const live = latest.current;
-      const r = live.rows.find(r => r.key === rowKey);
-      return mountedRef.current && !!live.key && sameOrderSession(owner, live.key) && live.canEdit && picks.current[rowKey] === generation && r?.kind === 'parts_equipment' && r.partSource === 'fixhome';
-    };
     try {
       const part = await fetchStrictPartById(option.id);
-      if (!valid()) return;
-      setRows(prev => prev.map(r => r.key === rowKey ? { ...r, partCatalogId: part.id, description: part.name, unitPrice: String(part.sellingPrice), partNameSnapshot: part.name, partSku: part.sku ?? '', warrantyPolicy: part.warrantyPolicy ?? '' } : r));
-      setFormError(null);
-      setRowErrors(prev => { const { [rowKey]: _drop, ...rest } = prev; return rest; });
-    } catch { if (valid()) setFormError('Không tải được linh kiện đã chọn. Hãy chọn lại.'); }
+      const live = latest.current;
+      if (!mountedRef.current || !live.key || !sameOrderSession(owner, live.key) || !live.canEdit || !wanted.current.has(option.id)) return;
+      setPicked(prev => prev.some(r => r.partCatalogId === part.id) ? prev : [...prev, {
+        ...newPart(), partCatalogId: part.id, unitPrice: String(part.sellingPrice), description: part.name, partNameSnapshot: part.name,
+        partSku: part.sku ?? '', warrantyPolicy: part.warrantyPolicy ?? '', warrantyTermDays: part.warrantyDays != null ? String(part.warrantyDays) : '',
+      }]);
+    } catch {
+      if (!wanted.current.has(option.id)) return;
+      wanted.current.delete(option.id);
+      if (mountedRef.current) setPickError('Không tải được linh kiện đã chọn. Hãy chọn lại.');
+    }
+  };
+  const setPickQuantity = (rowKey: string, quantity: string) => {
+    if (!canEdit) return;
+    setPickError(null);
+    setPicked(prev => prev.map(r => (r.key === rowKey ? { ...r, quantity } : r)));
+  };
+  /** Moves every pick into the proposal; a FixHome part already listed adds up its quantity. */
+  const addPicked = () => {
+    if (!canEdit || !picked.length) return;
+    if (picked.some(r => !/^\d+$/.test(r.quantity.trim()) || Number(r.quantity) < 1 || Number(r.quantity) > PART_QUANTITY_MAX)) {
+      setPickError(`Nhập số lượng từ 1 đến ${PART_QUANTITY_MAX} cho mọi linh kiện đã chọn.`);
+      return;
+    }
+    const merged = [...rows];
+    for (const item of picked) {
+      const i = merged.findIndex(r => isPart(r) && r.partSource === 'fixhome' && r.partCatalogId === item.partCatalogId);
+      if (i >= 0) merged[i] = { ...merged[i], quantity: String(Math.min(PART_QUANTITY_MAX, Number(merged[i].quantity) + Number(item.quantity))) };
+      else merged.push(item);
+    }
+    if (merged.length > QUOTE_MAX_ITEMS) { setPickError(`Số lượng hạng mục tối đa ${QUOTE_MAX_ITEMS}.`); return; }
+    setRows(merged);
+    wanted.current.clear();
+    setPicked([]);
+    setFormError(null);
+    void Haptics.selectionAsync();
+    sheetRef.current?.dismiss();
+  };
+  const onSheetDismiss = () => {
+    wanted.current.clear();
+    setPicked([]);
+    setPickError(null);
+    setCatalog({ status: 'idle', parts: [], error: null });
+  };
+  /** Tick = use the part the technician already holds; price and warranty are read by exact ID. The depot only supplies the shortfall. */
+  const toggleHeld = (part: { key: string; name: string; quantity: number }) => {
+    if (!canEdit || part.key.startsWith('name:')) return;
+    const rowKey = `${HELD_KEY}${part.key}`;
+    if (latest.current.rows.some(r => r.key === rowKey)) { setRows(prev => prev.filter(r => r.key !== rowKey)); return; }
+    if (rows.length >= QUOTE_MAX_ITEMS) { setFormError(`Số lượng hạng mục tối đa ${QUOTE_MAX_ITEMS}.`); return; }
+    const owner = key;
+    setRows(prev => [...prev, { ...newPart(), key: rowKey, partCatalogId: part.key, quantity: String(part.quantity), description: part.name, partNameSnapshot: part.name }]);
+    setFormError(null);
+    void (async () => {
+      try {
+        const fetched = await fetchStrictPartById(part.key);
+        const live = latest.current;
+        if (!mountedRef.current || !live.key || !sameOrderSession(owner, live.key)) return;
+        setRows(prev => prev.map(r => (r.key === rowKey
+          ? { ...r, unitPrice: String(fetched.sellingPrice), description: fetched.name, partNameSnapshot: fetched.name, partSku: fetched.sku ?? '', warrantyPolicy: fetched.warrantyPolicy ?? '', warrantyTermDays: fetched.warrantyDays != null ? String(fetched.warrantyDays) : '' }
+          : r)));
+      } catch {
+        if (!mountedRef.current) return;
+        setRows(prev => prev.filter(r => r.key !== rowKey));
+        setFormError('Không lấy được giá linh kiện từ FixHome. Hãy chọn lại.');
+      }
+    })();
+  };
+  const setHeldQuantity = (rowKey: string, available: number, quantity: string) => {
+    if (!canEdit) return;
+    const n = Math.min(available, Math.max(1, Number(quantity) || 1));
+    setRows(prev => prev.map(r => (r.key === rowKey ? { ...r, quantity: String(n) } : r)));
   };
   const onAddRow = (kind: 'labor' | 'parts_equipment') => {
     if (!canEdit || rows.length >= QUOTE_MAX_ITEMS) return;
-    const row = createCostItemRow(kind); setRows(prev => [...prev, row]); setExpandedKey(row.key);
+    const row = kind === 'labor' ? newLabor() : newPart(); setRows(prev => [...prev, row]); setExpandedKey(row.key);
   };
   const onRemoveRow = (rowKey: string) => {
     if (!canEdit || rows.length <= 1) return;
@@ -360,109 +448,130 @@ export default function ExtraProposalScreen() {
         />
       ) : (
         <>
-          <View style={styles.card}>
-            <Text style={styles.inputLabel}>Lý do phát sinh chi phí *</Text>
-            <TextInput
-              testID="proposal-reason-input"
-              style={[styles.reasonInput, !!reasonError && styles.inputError]}
-              multiline
-              numberOfLines={3}
-              placeholder="Nhập lý do chi tiết (ví dụ: phát hiện hỏng van áp suất gas trong lúc sửa)..."
-              placeholderTextColor={colors.textSecondary}
-              value={reason}
-              onChangeText={text => { if (canEdit) { setReason(text); if (reasonError) setReasonError(null); } }}
-              editable={canEdit}
-              accessibilityLabel="Lý do phát sinh chi phí"
-              accessibilityHint={reasonError ?? undefined}
-              maxLength={EXTRA_REASON_MAX}
-            />
-            {reasonError ? <Text testID="proposal-reason-error" accessibilityRole="alert" style={styles.fieldError}>{reasonError}</Text> : null}
-            <Text style={styles.charCount}>{reason.length}/{EXTRA_REASON_MAX}</Text>
-          </View>
-
-          <View style={{ gap: 8, marginBottom: spacing.sm }}>
-            <Text accessibilityRole="header" style={styles.inputLabel}>Hạng mục chi phí ({rows.length})</Text>
-            {canEdit ? rows.map((row) => (
-              <CostItemEditor
-                key={row.key}
-                row={row}
-                errors={rowErrors[row.key]}
-                catalog={catalog}
-                expanded={expandedKey === row.key}
-                canRemove={rows.length > 1}
-                onToggle={() => setExpandedKey((prev) => (prev === row.key ? null : row.key))}
-                onChange={(next) => onRowChange(next)}
-                onRemove={() => onRemoveRow(row.key)}
-                onLoadCatalog={search => {
-                  void loadCatalog(search);
-                }}
-                onSelectCatalogPart={(part) => onSelectPart(row.key, part)}
+          <Section title="Lý do phát sinh" required>
+            <View style={styles.pad}>
+              <TextInput
+                testID="proposal-reason-input"
+                style={[styles.reasonInput, !!reasonError && styles.inputError]}
+                multiline
+                numberOfLines={3}
+                placeholder="Ví dụ: phát hiện hỏng van áp suất gas trong lúc sửa"
+                placeholderTextColor={colors.muted}
+                value={reason}
+                onChangeText={text => { if (canEdit) { setReason(text); if (reasonError) setReasonError(null); } }}
+                editable={canEdit}
+                accessibilityLabel="Lý do phát sinh chi phí"
+                accessibilityHint={reasonError ?? undefined}
+                maxLength={EXTRA_REASON_MAX}
               />
-            )) : rows.map((row, index) => {
-              const subtotal = rowSubtotals[index];
-              return <View key={row.key} style={styles.card}><DetailRow label={row.description || 'Hạng mục'} value={subtotal === null ? `${row.quantity || '—'} × ${row.unitPrice || '—'}` : `${row.quantity} × ${formatVnd(Number(row.unitPrice))} = ${formatVnd(subtotal)}`} /></View>;
-            })}
-            {canEdit && (
-              <View style={styles.addRow}>
-                <TouchableOpacity
-                  testID="proposal-add-parts"
-                  accessibilityRole="button"
-                  disabled={rows.length >= QUOTE_MAX_ITEMS}
-                  onPress={() => onAddRow('parts_equipment')}
-                  style={[styles.addBtn, styles.addHalf]}
-                >
-                  <Text style={styles.addBtnText}>+ Thêm linh kiện</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  testID="proposal-add-labor"
-                  accessibilityRole="button"
-                  disabled={rows.length >= QUOTE_MAX_ITEMS}
-                  onPress={() => onAddRow('labor')}
-                  style={[styles.addBtn, styles.addHalf]}
-                >
-                  <Text style={styles.addBtnText}>+ Thêm tiền công</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
+              {reasonError ? <Text testID="proposal-reason-error" accessibilityRole="alert" style={styles.fieldError}>{reasonError}</Text> : null}
+              <Text style={styles.charCount}>{reason.length}/{EXTRA_REASON_MAX}</Text>
+            </View>
+          </Section>
 
-          {hasFixHome && (
-            <View style={styles.card}>
-              <Text accessibilityRole="header" style={styles.inputLabel}>Hình thức nhận linh kiện</Text>
-              <FulfillmentMethodPicker
-                testIDPrefix="proposal-method"
-                value={fulfillmentMethod}
-                disabled={!canEdit}
-                onChange={method => { if (canEdit) setFulfillmentMethod(method); }}
-              />
-              {fulfillmentMethod === 'delivery' && (
-                <View style={styles.shipping}>
-                  <Text style={styles.inputLabel}>Phí giao linh kiện (đ) *</Text>
-                  <TextInput testID="proposal-shipping-fee" accessibilityLabel="Phí giao linh kiện" keyboardType="number-pad" placeholder="25000" placeholderTextColor={colors.textSecondary} value={shippingFee} editable={canEdit} onChangeText={text => { if (canEdit) setShippingFee(text); }} style={[styles.reasonInput, styles.singleLine]} />
-                  <Text style={styles.infoText}>{shippingValue !== null && shippingNeeded ? `Khách sẽ thấy phí giao ${formatVnd(shippingValue)}.` : 'Nhập số nguyên, đơn vị đồng (nhập 0 nếu không thu phí).'}</Text>
-                </View>
-              )}
+          {canEdit ? (
+            <>
+              <Section title="Tiền công">
+                {rows.filter(row => !isPart(row)).map((row, index) => (
+                  <LaborCard key={row.key} row={row} index={index} errors={rowErrors[row.key]} disabled={!canEdit}
+                    onChange={next => onRowChange(next)} onRemove={() => onRemoveRow(row.key)} />
+                ))}
+                <AddRow testID="proposal-add-labor" label="Thêm tiền công" disabled={rows.length >= QUOTE_MAX_ITEMS} onPress={() => onAddRow('labor')} />
+              </Section>
+
+              <Section title="Linh kiện">
+                <GroupLabel title="Còn lại sau báo giá" />
+                {heldParts.length
+                  ? heldParts.map(part => (
+                    <HeldPartCard key={part.key} name={part.name} available={part.quantity} row={rows.find(r => r.key === `${HELD_KEY}${part.key}`)} disabled={!canEdit || part.key.startsWith('name:')}
+                      onToggle={() => toggleHeld(part)} onQuantity={quantity => setHeldQuantity(`${HELD_KEY}${part.key}`, part.quantity, quantity)} />
+                  ))
+                  : <Text style={styles.heldEmpty}>{heldReady ? 'Không còn linh kiện sau báo giá.' : 'Đang tải…'}</Text>}
+                <GroupLabel title="Cần thêm từ kho" hint="Kho cấp sau khi khách duyệt." />
+                {rows.filter(row => isPart(row) && !row.key.startsWith(HELD_KEY)).map(row => (
+                  <PartLineCard key={row.key} row={row} maxQuantity={PART_QUANTITY_MAX} disabled={!canEdit}
+                    onQuantity={quantity => onRowChange({ ...row, quantity })} onRemove={() => onRemoveRow(row.key)} />
+                ))}
+                <AddRow testID="proposal-add-parts" label="Chọn linh kiện từ kho FixHome" hint="Mở khung tìm và chọn linh kiện trong kho FixHome"
+                  disabled={rows.length >= QUOTE_MAX_ITEMS} onPress={() => sheetRef.current?.present()} />
+              </Section>
+            </>
+          ) : (
+            <View style={styles.section}>
+              <Text accessibilityRole="header" style={styles.sectionTitle}>Hạng mục chi phí · {rows.length}</Text>
+              {rows.map((row, index) => {
+                const subtotal = rowSubtotals[index];
+                return <View key={row.key} style={styles.card}><DetailRow label={row.description || 'Hạng mục'} value={subtotal === null ? `${row.quantity || '—'} × ${row.unitPrice || '—'}` : `${row.quantity} × ${formatVnd(Number(row.unitPrice))} = ${formatVnd(subtotal)}`} /></View>;
+              })}
             </View>
           )}
 
-          <View style={styles.card}>
-            <Text style={styles.inputLabel}>Ghi chú (tùy chọn)</Text>
-            <TextInput accessibilityLabel="Ghi chú đề xuất" placeholder="Thông tin thêm cho khách hàng" placeholderTextColor={colors.textSecondary} value={note} editable={canEdit} onChangeText={text => { if (canEdit) setNote(text); }} multiline style={styles.reasonInput} />
-          </View>
+          {hasFixHome && (
+            <Section title="Hình thức nhận linh kiện">
+              <View style={styles.pad}>
+                <FulfillmentMethodPicker
+                  testIDPrefix="proposal-method"
+                  value={fulfillmentMethod}
+                  disabled={!canEdit}
+                  onChange={method => { if (canEdit) setFulfillmentMethod(method); }}
+                />
+                {fulfillmentMethod === 'delivery' && (
+                  <View style={styles.shipping}>
+                    <Text style={styles.inputLabel}>Phí giao linh kiện (đ) <Text style={{ color: colors.error }}>*</Text></Text>
+                    <TextInput testID="proposal-shipping-fee" accessibilityLabel="Phí giao linh kiện" keyboardType="number-pad" placeholder="25000" placeholderTextColor={colors.muted} value={shippingFee} editable={canEdit} onChangeText={text => { if (canEdit) setShippingFee(text); }} style={[styles.reasonInput, styles.singleLine]} />
+                    <Text style={styles.infoText}>{shippingValue !== null && shippingNeeded ? `Khách sẽ thấy phí giao ${formatVnd(shippingValue)}.` : 'Nhập số nguyên, đơn vị đồng (nhập 0 nếu không thu phí).'}</Text>
+                  </View>
+                )}
+              </View>
+            </Section>
+          )}
 
-          <View style={styles.card}>
-            <Text style={styles.inputLabel}>Ảnh bằng chứng (tùy chọn)</Text>
-            <EvidencePhotoPicker
-              photos={evidence}
-              isSelected={photo => evidenceRefs.some(ref => evidenceAsset(ref) === evidenceAsset(photo.mediaUrl))}
-              disabled={!canEdit}
-              loaded={snapshot?.resources.evidence.status === 'ready'}
-              onToggle={photo => { if (canEdit) setEvidenceRefs(refs => refs.some(ref => evidenceAsset(ref) === evidenceAsset(photo.mediaUrl)) ? refs.filter(ref => evidenceAsset(ref) !== evidenceAsset(photo.mediaUrl)) : refs.length < EVIDENCE_MAX ? [...refs, photo.mediaUrl] : refs); }}
-              onCapture={() => { if (canEdit) navigation.navigate('AfterEvidence', { fromProposal: true, ...(revisingCostId ? { proposalId: revisingCostId } : {}) }); }}
-              onReload={() => { void loadResource('evidence'); }}
-            />
-          </View>
+          <Section title="Ghi chú">
+            <View style={styles.pad}>
+              <TextInput accessibilityLabel="Ghi chú đề xuất" placeholder="Thông tin thêm cho khách hàng" placeholderTextColor={colors.muted} value={note} editable={canEdit} onChangeText={text => { if (canEdit) setNote(text); }} multiline style={styles.reasonInput} />
+            </View>
+          </Section>
+
+          <Section title="Ảnh bằng chứng">
+            <View style={styles.pad}>
+              <EvidencePhotoPicker
+                photos={evidence}
+                isSelected={photo => evidenceRefs.some(ref => evidenceAsset(ref) === evidenceAsset(photo.mediaUrl))}
+                disabled={!canEdit}
+                loaded={snapshot?.resources.evidence.status === 'ready'}
+                onToggle={photo => { if (canEdit) setEvidenceRefs(refs => refs.some(ref => evidenceAsset(ref) === evidenceAsset(photo.mediaUrl)) ? refs.filter(ref => evidenceAsset(ref) !== evidenceAsset(photo.mediaUrl)) : refs.length < EVIDENCE_MAX ? [...refs, photo.mediaUrl] : refs); }}
+                onCapture={() => { if (canEdit) navigation.navigate('AfterEvidence', { fromProposal: true, ...(revisingCostId ? { proposalId: revisingCostId } : {}) }); }}
+                onReload={() => { void loadResource('evidence'); }}
+              />
+            </View>
+          </Section>
         </>
+      )}
+      {canEdit && (
+        <BottomSheetModal
+          ref={sheetRef}
+          snapPoints={['90%']}
+          enableDynamicSizing={false}
+          enablePanDownToClose
+          keyboardBehavior="interactive"
+          keyboardBlurBehavior="restore"
+          android_keyboardInputMode="adjustResize"
+          onDismiss={onSheetDismiss}
+          backdropComponent={props => <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} />}
+        >
+          <PartPickerRow
+            picked={picked}
+            catalog={catalog}
+            error={pickError}
+            maxQuantity={PART_QUANTITY_MAX}
+            canAdd={canEdit}
+            onToggle={option => { void togglePick(option); }}
+            onQuantity={setPickQuantity}
+            onAdd={addPicked}
+            onClose={() => sheetRef.current?.dismiss()}
+            onLoadCatalog={search => { void loadCatalog(search); }}
+          />
+        </BottomSheetModal>
       )}
     </TaskScreenShell>
   );
@@ -472,23 +581,31 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
     padding: spacing.md,
-    marginBottom: spacing.sm,
   },
+  heldEmpty: { color: colors.textSecondary, fontSize: 14, lineHeight: 21, padding: spacing.md },
+  pad: { padding: spacing.md, gap: 8 },
+  section: { gap: 8 },
+  sectionTitle: { color: colors.text, fontSize: 16, lineHeight: 24, fontWeight: '700' },
   inputLabel: {
     fontSize: 14,
-    fontWeight: '700',
+    lineHeight: 20,
+    fontWeight: '600',
     color: colors.text,
     marginBottom: spacing.xs,
   },
   reasonInput: {
-    minHeight: 80,
+    minHeight: 94,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
-    padding: spacing.sm,
-    fontSize: 14,
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 16,
+    lineHeight: 24,
     color: colors.text,
+    backgroundColor: colors.surface,
     textAlignVertical: 'top',
   },
   singleLine: { minHeight: 48, textAlignVertical: 'center' },
@@ -505,24 +622,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textSecondary,
     marginTop: 4,
-  },
-  addRow: { flexDirection: 'row', gap: 8 },
-  addHalf: { flex: 1 },
-  addBtn: {
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 8,
-  },
-  addBtnText: {
-    color: colors.primaryStrong,
-    fontSize: 15,
-    fontWeight: '600',
-    textAlign: 'center',
   },
   totalBar: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },
   totalLabel: { flex: 1, fontSize: 14, color: colors.textSecondary },

@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-23 00:39 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/technician-order-hub
+> Cập nhật lần cuối: 2026-10-23 03:12 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/technician-order-hub
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -372,6 +372,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-23 03:12 (UTC+7) | Hgnv11 | feat/technician-order-hub | Màn đề xuất chi phí phát sinh làm lại theo kiểu màn báo giá (mục Tiền công và Linh kiện, chọn linh kiện FixHome từ kho qua bottom sheet, tick linh kiện còn lại sau báo giá, nguồn ngoài và thợ tự mang bị bỏ); Backend chỉ cấp phần thiếu so với số thợ đang giữ; chưa kiểm chứng trên máy thật
 - 2026-10-23 00:39 (UTC+7) | Hgnv11 | feat/technician-order-hub | Làm gọn UI đặt lịch (bước Tình trạng cần sửa: tiêu đề mục đồng nhất, dấu * đỏ cho mục bắt buộc, thẻ Chi phí ước tính, thẻ thông tin thiết bị ẩn khi chỉ cần khảo sát) và gỡ nút lặp với Quản lý đơn ở T02/T03/T05/T06 của thợ; chỉ đổi giao diện, chưa kiểm chứng trên máy thật.
 - 2026-10-23 00:31 (UTC+7) | Hgnv11 | feat/technician-order-hub | Đánh giá/bảo hành của khách không còn bị khóa bởi lệnh thanh toán, hủy hay tải ảnh chưa rõ kết quả còn sót trong nhật ký của đơn đã COMPLETED; chưa kiểm chứng trên máy thật.
 - 2026-10-22 20:13 (UTC+7) | Hgnv11 | feat/technician-order-hub | Làm lại màn Quản lý linh kiện của thợ: dòng linh kiện có nhãn trạng thái, ghi số lượng thực dùng và khai trả theo custody như web, banner nêu rõ cái đang chặn bàn giao, màn bàn giao nêu số linh kiện chặn kèm nút mở quản lý; không đổi API; chưa chạy trên máy thật.
@@ -411,7 +412,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-17 15:10 (UTC+7) | Hgnv11 | feat/mobile-layout-polish | Thống nhất cỡ và độ đậm tiêu đề màn (18 có nút Quay lại, 24 màn gốc tab), bo góc 13 thành 14; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-17 14:53 (UTC+7) | Hgnv11 | feat/mobile-layout-polish | Năm bottom sheet (địa chỉ x2, cách đặt lịch, xem lại yêu cầu, sửa hồ sơ) co theo nội dung thay cho chiều cao cố định; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-17 14:41 (UTC+7) | Hgnv11 | feat/mobile-layout-polish | Chuẩn hóa khoảng cách về lưới 4/8/12/16 ở 48 màn, chữ tối thiểu 12, bỏ hai dòng chú thích ở Home khách; thiết bị CHƯA KIỂM CHỨNG.
-- 2026-10-17 14:40 (UTC+7) | Hgnv11 | feat/mobile-layout-polish | Chuẩn hóa khoảng cách về lưới 4/8/12/16 ở 48 màn, chữ tối thiểu 12, bỏ hai dòng chú thích ở Home khách; thiết bị CHƯA KIỂM CHỨNG.
 
 ### Lịch sử giữ lại khi tích hợp
 
