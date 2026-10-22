@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState, type ComponentType, type ReactNode } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Check } from 'lucide-react-native';
 import { lightTheme as colors } from '../../../constants/theme';
 import { formatVnd } from '../../../utils/format';
 
@@ -16,15 +17,13 @@ export interface CatalogPickerPanel<T extends CatalogPickerOption = CatalogPicke
   error: string | null;
 }
 
-const PAGE = 8;
-
 /**
  * FixHome catalog search + pick list shared by the quotation/extra editor and
  * the pre-repair parts picker. Loads on first mount (idle) so the technician
- * never has to find a "load catalog" button; the list is paged instead of a
- * nested ScrollView so it never fights the page scroll.
+ * never has to find a "load catalog" button; the list scrolls inside a
+ * fixed-height box so a long catalog never stretches the page.
  */
-export function CatalogPicker<T extends CatalogPickerOption>({ idPrefix, selectedId, catalog, hint, error, onLoad, onSelect }: {
+export function CatalogPicker<T extends CatalogPickerOption>({ idPrefix, selectedId, catalog, hint, error, onLoad, onSelect, selectedIds, renderSelected, fill, ListComponent = ScrollView, InputComponent = TextInput }: {
   idPrefix: string;
   selectedId: string;
   catalog?: CatalogPickerPanel<T>;
@@ -32,20 +31,27 @@ export function CatalogPicker<T extends CatalogPickerOption>({ idPrefix, selecte
   error?: string;
   onLoad?: (search?: string) => void;
   onSelect?: (part: T) => void;
+  /** Multi-select: every id here shows as picked (a check mark, no "Đã chọn" text) and selectedId is ignored. */
+  selectedIds?: string[];
+  /** Extra content under a picked option (e.g. its quantity stepper). */
+  renderSelected?: (part: T) => ReactNode;
+  /** Fill the parent's height and let the list take the remaining space (bottom sheet). */
+  fill?: boolean;
+  ListComponent?: ComponentType<any>;
+  InputComponent?: ComponentType<any>;
 }) {
   const id = (suffix: string) => `${idPrefix}${suffix}`;
   const [search, setSearch] = useState('');
-  const [shown, setShown] = useState(PAGE);
   const idle = !catalog || catalog.status === 'idle';
   // Mount-only on purpose: a failed load shows an explicit retry instead of looping.
   useEffect(() => { if (idle) onLoad?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const runSearch = () => { setShown(PAGE); onLoad?.(search); };
+  const runSearch = () => onLoad?.(search);
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, fill && styles.fill]}>
       {hint ? <Text style={styles.hint}>{hint}</Text> : null}
       <View style={styles.searchRow}>
-        <TextInput
+        <InputComponent
           testID={id('catalog-search')}
           accessibilityLabel="Tìm linh kiện FixHome"
           value={search}
@@ -94,20 +100,20 @@ export function CatalogPicker<T extends CatalogPickerOption>({ idPrefix, selecte
         </View>
       )}
       {catalog?.status === 'ready' && (
-        <View style={styles.wrap}>
+        <View style={[styles.wrap, fill && styles.fill]}>
           <Text style={styles.count}>{catalog.parts.length} linh kiện</Text>
-          <View style={styles.list}>
-            {catalog.parts.slice(0, shown).map(part => {
-              const selected = selectedId === part.id;
+          <ListComponent nestedScrollEnabled style={[styles.list, fill ? styles.fill : styles.listCap]}>
+            {catalog.parts.map(part => {
+              const selected = selectedIds ? selectedIds.includes(part.id) : selectedId === part.id;
               return (
+                <View key={part.id} style={[styles.optionWrap, selected && styles.optionSelected]}>
                 <TouchableOpacity
-                  key={part.id}
                   testID={id(`catalog-option-${part.id}`)}
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
                   accessibilityLabel={`${part.name}${part.sku ? `, mã ${part.sku}` : ''}, ${formatVnd(part.sellingPrice)}${selected ? ', đã chọn' : ''}`}
                   onPress={() => onSelect?.(part)}
-                  style={[styles.option, selected && styles.optionSelected]}
+                  style={styles.option}
                 >
                   <View style={styles.optionText}>
                     <Text style={styles.optionName} numberOfLines={2}>{part.name}</Text>
@@ -115,17 +121,15 @@ export function CatalogPicker<T extends CatalogPickerOption>({ idPrefix, selecte
                   </View>
                   <View style={styles.optionSide}>
                     <Text style={styles.optionPrice}>{formatVnd(part.sellingPrice)}</Text>
-                    {selected && <Text style={styles.chosen}>Đã chọn</Text>}
+                    {selected && !selectedIds && <Text style={styles.chosen}>Đã chọn</Text>}
                   </View>
+                  {selectedIds && <View style={[styles.check, selected && styles.checkOn]}>{selected && <Check size={14} color={colors.surface} />}</View>}
                 </TouchableOpacity>
+                {selected && renderSelected?.(part)}
+                </View>
               );
             })}
-          </View>
-          {catalog.parts.length > shown && (
-            <TouchableOpacity testID={id('catalog-more')} accessibilityRole="button" onPress={() => setShown(n => n + PAGE)} style={styles.secondaryAction}>
-              <Text style={styles.secondaryActionText}>Xem thêm ({catalog.parts.length - shown})</Text>
-            </TouchableOpacity>
-          )}
+          </ListComponent>
         </View>
       )}
       {error ? <Text testID={id('error-catalog')} accessibilityRole="alert" style={styles.errorText}>{error}</Text> : null}
@@ -146,8 +150,13 @@ const styles = StyleSheet.create({
   errorText: { color: colors.error, fontSize: 13, lineHeight: 19 },
   secondaryAction: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 16 },
   secondaryActionText: { color: colors.primaryStrong, fontSize: 15, fontWeight: '600' },
-  list: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, overflow: 'hidden' },
-  option: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  fill: { flex: 1 },
+  listCap: { maxHeight: 320 },
+  list: { borderWidth: 1, borderColor: colors.border, borderRadius: 10 },
+  optionWrap: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  option: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingHorizontal: 12, paddingVertical: 8 },
+  check: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: colors.muted, alignItems: 'center', justifyContent: 'center' },
+  checkOn: { backgroundColor: colors.primaryStrong, borderColor: colors.primaryStrong },
   optionSelected: { backgroundColor: colors.primarySoft },
   optionText: { flex: 1, minWidth: 0, gap: 2 },
   optionName: { color: colors.text, fontSize: 15, lineHeight: 20, fontWeight: '600' },
