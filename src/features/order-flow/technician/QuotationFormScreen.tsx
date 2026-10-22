@@ -1,8 +1,8 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { BottomSheetBackdrop, BottomSheetModal } from '@gorhom/bottom-sheet';
 import * as Haptics from 'expo-haptics';
-import { Plus } from 'lucide-react-native';
+import { ClipboardList, Info } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
@@ -24,7 +24,7 @@ import {
 import { PartPickerRow } from '../shared/PartPickerRow';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
-import { EarlierPartCard, LaborCard, PartLineCard, SectionTitle, type EarlierPartLine } from './QuotationItemCards';
+import { AddRow, EarlierPartCard, GroupLabel, LaborCard, LinkRow, PartLineCard, Section, type EarlierPartLine } from './QuotationItemCards';
 import { formatVnd } from '../../../utils/format';
 import { lightTheme as colors, spacing, type ToneName } from '../../../constants/theme';
 
@@ -120,7 +120,6 @@ export default function QuotationFormScreen() {
   const refreshing = snapshot?.order.status === 'loading' || quotationsStatus === 'loading';
 
   const laborRows = rows.filter(row => !isPart(row));
-  const earlierRows = rows.filter(row => row.key.startsWith(EARLIER_KEY));
   const freshRows = rows.filter(row => isPart(row) && !row.key.startsWith(EARLIER_KEY));
   const liveTotal = sum(rows);
 
@@ -380,9 +379,9 @@ export default function QuotationFormScreen() {
       }
       primary={
         reviewing
-          ? { label: busy ? 'Đang xử lý.' : 'Gửi báo giá', testID: 'quote-send', disabled: busy, onPress: sendQuotation }
+          ? { label: busy ? 'Đang xử lý…' : 'Gửi báo giá', testID: 'quote-send', disabled: busy, onPress: sendQuotation }
           : {
-              label: busy ? 'Đang xử lý.' : verifyMode ? 'Kiểm tra lại' : state.phase === 'resolved' ? 'Tiếp tục' : 'Xem báo giá',
+              label: busy ? 'Đang xử lý…' : verifyMode ? 'Kiểm tra lại' : state.phase === 'resolved' ? 'Tiếp tục' : 'Xem báo giá',
               testID: verifyMode ? 'quote-verify' : state.phase === 'resolved' ? 'quote-continue' : 'quote-review',
               disabled: busy || (!canEdit && state.phase !== 'unknown' && state.phase !== 'resolved' && !showRecovery),
               onPress: onPrimary,
@@ -425,58 +424,56 @@ export default function QuotationFormScreen() {
 
       {canEdit && (
         <>
-          <SectionTitle title="Tiền công" count={laborRows.length} hint="Công kiểm tra, sửa chữa, lắp đặt. Bảo hành công do bạn khai báo." />
-          {laborRows.map((row, index) => (
-            <LaborCard key={row.key} row={row} index={index} errors={fieldErrors[row.key]} disabled={frozen}
-              onChange={next => updateRow(row.key, next)} onRemove={() => removeRow(row.key)} />
-          ))}
-          <Pressable testID="quote-add-item" accessibilityRole="button" disabled={frozen} onPress={addLabor}
-            style={({ pressed }) => [styles.addBtn, pressed && styles.pressed]}>
-            <Plus size={20} strokeWidth={1.75} color={colors.primaryStrong} />
-            <Text style={styles.outlineText}>Thêm tiền công</Text>
-          </Pressable>
+          <Section title="Tiền công" hint="Công kiểm tra, sửa chữa, lắp đặt. Bảo hành công do bạn khai báo.">
+            {laborRows.map((row, index) => (
+              <LaborCard key={row.key} row={row} index={index} errors={fieldErrors[row.key]} disabled={frozen}
+                onChange={next => updateRow(row.key, next)} onRemove={() => removeRow(row.key)} />
+            ))}
+            <AddRow testID="quote-add-item" label="Thêm tiền công" disabled={frozen} onPress={addLabor} />
+          </Section>
 
-          <SectionTitle title="Linh kiện" count={earlierRows.length + freshRows.length} hint="Chỉ dùng linh kiện của FixHome. Giá và bảo hành theo từng linh kiện, không chỉnh tay." />
-          <Text style={styles.subTitle}>Đã yêu cầu trước khi sửa</Text>
-          {partsStatus === 'ready' ? (
-            earlierLines.length ? earlierLines.map(line => (
-              <EarlierPartCard key={line.id} line={line} row={rows.find(r => r.key === `${EARLIER_KEY}${line.id}`)} disabled={frozen} onToggle={() => toggleEarlier(line)} />
-            )) : <Text style={styles.empty}>Bạn chưa yêu cầu linh kiện nào trước khi sửa. Cần linh kiện thì thêm từ kho bên dưới.</Text>
-          ) : partsStatus === 'error' ? (
-            <View style={{ gap: 8 }}>
-              <ReadOnlyNotice tone="error">Không tải được danh sách linh kiện đã yêu cầu.</ReadOnlyNotice>
-              <TouchableOpacity testID="quote-parts-retry" accessibilityRole="button" onPress={() => { void loadResource('parts'); }} style={styles.outlineBtn}>
-                <Text style={styles.outlineText}>Tải lại linh kiện</Text>
-              </TouchableOpacity>
-            </View>
-          ) : <Text style={styles.empty}>Đang tải danh sách linh kiện đã yêu cầu…</Text>}
+          <Section title="Linh kiện" hint="Chỉ dùng linh kiện của FixHome. Giá và bảo hành theo từng linh kiện, không chỉnh tay.">
+            <GroupLabel title="Đã yêu cầu trước khi sửa" hint="Chọn để đưa nguyên dòng vào báo giá, đúng số lượng đã yêu cầu." />
+            {partsStatus === 'ready' ? (
+              earlierLines.length ? earlierLines.map(line => (
+                <EarlierPartCard key={line.id} line={line} row={rows.find(r => r.key === `${EARLIER_KEY}${line.id}`)} disabled={frozen} onToggle={() => toggleEarlier(line)} />
+              )) : <Text style={styles.empty}>Bạn chưa yêu cầu linh kiện nào trước khi sửa. Cần linh kiện thì thêm từ kho bên dưới.</Text>
+            ) : partsStatus === 'error' ? (
+              <View style={styles.emptyBox}>
+                <ReadOnlyNotice tone="error">Không tải được danh sách linh kiện đã yêu cầu.</ReadOnlyNotice>
+                <TouchableOpacity testID="quote-parts-retry" accessibilityRole="button" onPress={() => { void loadResource('parts'); }} style={styles.outlineBtn}>
+                  <Text style={styles.outlineText}>Tải lại linh kiện</Text>
+                </TouchableOpacity>
+              </View>
+            ) : <Text style={styles.empty}>Đang tải danh sách linh kiện đã yêu cầu…</Text>}
 
-          {freshRows.length > 0 && <Text style={styles.subTitle}>Thêm từ kho FixHome</Text>}
-          {freshRows.map(row => (
-            <PartLineCard key={row.key} row={row} maxQuantity={PART_QUANTITY_MAX} disabled={frozen}
-              onQuantity={quantity => updateRow(row.key, { ...row, quantity })} onRemove={() => removeRow(row.key)} />
-          ))}
-          <Pressable testID="quote-add-part" accessibilityRole="button" accessibilityHint="Mở khung tìm và chọn linh kiện trong kho FixHome" disabled={frozen}
-            onPress={() => sheetRef.current?.present()} style={({ pressed }) => [styles.addBtn, pressed && styles.pressed]}>
-            <Plus size={20} strokeWidth={1.75} color={colors.primaryStrong} />
-            <Text style={styles.outlineText}>Thêm linh kiện từ kho FixHome</Text>
-          </Pressable>
+            <GroupLabel title="Cần thêm linh kiện" hint="Linh kiện chọn thêm từ kho sẽ tự tạo yêu cầu cấp sau khi khách hàng duyệt báo giá." />
+            {freshRows.map(row => (
+              <PartLineCard key={row.key} row={row} maxQuantity={PART_QUANTITY_MAX} disabled={frozen}
+                onQuantity={quantity => updateRow(row.key, { ...row, quantity })} onRemove={() => removeRow(row.key)} />
+            ))}
+            <AddRow testID="quote-add-part" label="Chọn linh kiện từ kho FixHome" hint="Mở khung tìm và chọn linh kiện trong kho FixHome" disabled={frozen}
+              onPress={() => sheetRef.current?.present()} />
+          </Section>
 
-          <SectionTitle title="Ghi chú" />
-          <TextInput
-            testID="quote-note"
-            accessibilityLabel="Ghi chú báo giá"
-            value={note}
-            onChangeText={value => {
-              if (frozen || reviewing) return;
-              setNote(value);
-              setReviewing(false);
-            }}
-            placeholder="Ghi chú cho khách hàng (tùy chọn)"
-            placeholderTextColor={colors.muted}
-            maxLength={5000}
-            style={styles.noteInput}
-          />
+          <View style={styles.noteWrap}>
+            <Text accessibilityRole="header" style={styles.noteTitle}>Ghi chú</Text>
+            <TextInput
+              testID="quote-note"
+              accessibilityLabel="Ghi chú báo giá"
+              value={note}
+              onChangeText={value => {
+                if (frozen || reviewing) return;
+                setNote(value);
+                setReviewing(false);
+              }}
+              placeholder="Ghi chú cho khách hàng (tùy chọn)"
+              placeholderTextColor={colors.muted}
+              maxLength={5000}
+              multiline
+              style={styles.noteInput}
+            />
+          </View>
         </>
       )}
 
@@ -505,14 +502,10 @@ export default function QuotationFormScreen() {
       )}
       {state.phase === 'unknown' && <ReadOnlyNotice>{state.message ?? 'Kết quả chưa xác định. Không gửi lại.'}</ReadOnlyNotice>}
 
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <TouchableOpacity testID="task-detail-link" accessibilityRole="button" onPress={() => navigation.navigate('OrderInformation')} style={[styles.outlineBtn, { flex: 1 }]}>
-          <Text style={styles.outlineText}>Chi tiết đơn</Text>
-        </TouchableOpacity>
-        <TouchableOpacity testID="quote-scope-link" accessibilityRole="button" onPress={() => navigation.navigate('ScopeDetail')} style={[styles.outlineBtn, { flex: 1 }]}>
-          <Text style={styles.outlineText}>Phạm vi và giá</Text>
-        </TouchableOpacity>
-      </View>
+      <Section title="Xem thêm">
+        <LinkRow testID="task-detail-link" label="Chi tiết đơn" Icon={Info} onPress={() => navigation.navigate('OrderInformation')} />
+        <LinkRow testID="quote-scope-link" label="Phạm vi và giá" Icon={ClipboardList} onPress={() => navigation.navigate('ScopeDetail')} />
+      </Section>
 
       {canEdit && (
         <BottomSheetModal
@@ -547,15 +540,18 @@ const styles = StyleSheet.create({
   total: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   totalLabel: { color: colors.textSecondary, fontSize: 14, lineHeight: 20 },
   totalValue: { color: colors.text, fontSize: 18, lineHeight: 26, fontWeight: '700' },
-  subTitle: { color: colors.textSecondary, fontSize: 14, lineHeight: 20, fontWeight: '600' },
-  empty: { color: colors.textSecondary, fontSize: 14, lineHeight: 21 },
+  group: { gap: 2, marginTop: spacing.sm },
+  subTitle: { color: colors.text, fontSize: 14, lineHeight: 20, fontWeight: '600' },
+  subHint: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
+  empty: { color: colors.textSecondary, fontSize: 14, lineHeight: 21, padding: spacing.md },
+  emptyBox: { padding: spacing.md, gap: 8 },
   outlineBtn: { minHeight: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12 },
   outlineText: { color: colors.primaryStrong, fontSize: 15, fontWeight: '600' },
-  addBtn: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.primaryStrong, borderRadius: 12, backgroundColor: colors.primarySoft },
-  pressed: { opacity: 0.7 },
-  noteInput: { minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, color: colors.text, fontSize: 16, backgroundColor: colors.surface },
+  noteWrap: { gap: 8 },
+  noteTitle: { color: colors.text, fontSize: 16, lineHeight: 24, fontWeight: '700' },
+  noteInput: { minHeight: 94, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 14, textAlignVertical: 'top', color: colors.text, fontSize: 16, lineHeight: 24, backgroundColor: colors.surface },
   review: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: 8 },
-  reviewTitle: { color: colors.text, fontSize: 18, lineHeight: 26, fontWeight: '700' },
+  reviewTitle: { color: colors.text, fontSize: 16, lineHeight: 24, fontWeight: '700' },
   reviewLine: { gap: 2, paddingBottom: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   reviewName: { color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '600' },
   reviewMeta: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },

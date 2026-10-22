@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Check, Minus, Plus, ShieldCheck, Trash2 } from 'lucide-react-native';
+import { Check, ChevronRight, Minus, Plus, ShieldCheck, Trash2, type LucideIcon } from 'lucide-react-native';
 import { costItemRowSubtotal, type CostItemFieldErrors, type CostItemRow } from '../shared/CostItemEditor';
 import { lightTheme as colors, spacing, type ToneName } from '../../../constants/theme';
 import { formatVnd } from '../../../utils/format';
@@ -17,12 +17,56 @@ export interface EarlierPartLine {
 
 const digits = (value: string) => /^\d+$/.test(value.trim());
 
-export function SectionTitle({ title, count, hint }: { title: string; count?: number; hint?: string }) {
+/** One section = title (and hint) outside, one bordered card inside, rows separated by hairlines. */
+export function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  const items = React.Children.toArray(children).filter(Boolean);
   return (
-    <View style={styles.sectionHead}>
-      <Text accessibilityRole="header" style={styles.sectionTitle}>{title}{count ? ` · ${count}` : ''}</Text>
+    <View style={styles.section}>
+      <View style={styles.sectionHead}>
+        <Text accessibilityRole="header" style={styles.sectionTitle}>{title}</Text>
+        {hint ? <Text style={styles.sectionHint}>{hint}</Text> : null}
+      </View>
+      <View style={styles.card}>
+        {items.map((item, i) => (
+          <React.Fragment key={i}>
+            {i > 0 && (items[i - 1] as React.ReactElement).type !== GroupLabel && <View style={styles.divider} />}
+            {item}
+          </React.Fragment>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/** Caption that names a group of rows inside a section card. */
+export function GroupLabel({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <View style={styles.groupLabel}>
+      <Text accessibilityRole="header" style={styles.groupTitle}>{title}</Text>
       {hint ? <Text style={styles.sectionHint}>{hint}</Text> : null}
     </View>
+  );
+}
+
+/** The one "add" control, last row of a section card. */
+export function AddRow({ label, testID, hint, disabled, onPress }: { label: string; testID: string; hint?: string; disabled?: boolean; onPress: () => void }) {
+  return (
+    <Pressable testID={testID} accessibilityRole="button" accessibilityHint={hint} accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress}
+      style={({ pressed }) => [styles.addRow, pressed && styles.pressedRow, disabled && styles.disabled]}>
+      <Plus size={20} strokeWidth={1.75} color={colors.primaryStrong} />
+      <Text style={styles.addText}>{label}</Text>
+    </Pressable>
+  );
+}
+
+/** Navigation row, same look as the order hub rows. */
+export function LinkRow({ label, testID, Icon, onPress }: { label: string; testID: string; Icon: LucideIcon; onPress: () => void }) {
+  return (
+    <Pressable testID={testID} accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.linkRow, pressed && styles.pressedRow]}>
+      <View style={styles.linkTile} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"><Icon size={20} strokeWidth={1.75} color={colors.primaryStrong} /></View>
+      <Text style={styles.linkLabel}>{label}</Text>
+      <ChevronRight size={20} strokeWidth={1.75} color={colors.muted} />
+    </Pressable>
   );
 }
 
@@ -51,7 +95,7 @@ export function LaborCard({ row, index, errors, disabled, onChange, onRemove }: 
   const subtotal = costItemRowSubtotal(row);
   const id = (suffix: string) => `quote-labor-${row.key}-${suffix}`;
   return (
-    <View testID={`quote-labor-${row.key}`} style={styles.card}>
+    <View testID={`quote-labor-${row.key}`} style={styles.item}>
       <View style={styles.cardHead}>
         <Text style={styles.cardTitle}>Công việc {index + 1}</Text>
         <IconButton testID={id('remove')} label={`Xóa công việc ${index + 1}`} disabled={disabled} onPress={onRemove}><Trash2 size={20} strokeWidth={1.75} color={colors.error} /></IconButton>
@@ -107,7 +151,7 @@ export function EarlierPartCard({ line, row, disabled, onToggle }: { line: Earli
   return (
     <Pressable testID={`quote-earlier-${line.id}`} accessibilityRole="checkbox" accessibilityLabel={`${line.name}, số lượng ${line.quantity}, ${line.statusLabel}`}
       accessibilityState={{ checked: selected, disabled }} disabled={disabled} onPress={onToggle}
-      style={({ pressed }) => [styles.card, styles.earlier, selected && styles.earlierOn, pressed && styles.pressed, disabled && styles.disabled]}>
+      style={({ pressed }) => [styles.item, styles.earlier, selected && styles.earlierOn, pressed && styles.pressed, disabled && styles.disabled]}>
       <View style={[styles.check, selected && styles.checkOn]}>{selected ? <Check size={16} strokeWidth={2.5} color={colors.surface} /> : null}</View>
       <View style={styles.earlierBody}>
         <Text style={styles.cardTitle}>{line.name}</Text>
@@ -128,7 +172,7 @@ export function PartLineCard({ row, maxQuantity, disabled, onQuantity, onRemove 
   const qty = digits(row.quantity) ? Number(row.quantity) : 1;
   const step = (delta: number) => onQuantity(String(Math.min(maxQuantity, Math.max(1, qty + delta))));
   return (
-    <View testID={`quote-part-${row.key}`} style={styles.card}>
+    <View testID={`quote-part-${row.key}`} style={styles.item}>
       <View style={styles.cardHead}>
         <View style={styles.earlierBody}>
           <Text style={styles.cardTitle}>{row.partNameSnapshot || row.description}</Text>
@@ -149,10 +193,21 @@ export function PartLineCard({ row, maxQuantity, disabled, onQuantity, onRemove 
 }
 
 const styles = StyleSheet.create({
-  sectionHead: { gap: 2, marginTop: spacing.sm },
-  sectionTitle: { color: colors.text, fontSize: 18, lineHeight: 26, fontWeight: '600' },
+  section: { gap: 8 },
+  sectionHead: { gap: 2 },
+  sectionTitle: { color: colors.text, fontSize: 16, lineHeight: 24, fontWeight: '700' },
   sectionHint: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
-  card: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: 8 },
+  card: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
+  item: { padding: spacing.md, gap: 8 },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
+  groupLabel: { paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: 4, gap: 2 },
+  groupTitle: { color: colors.text, fontSize: 14, lineHeight: 20, fontWeight: '600' },
+  addRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: spacing.md },
+  addText: { color: colors.primaryStrong, fontSize: 15, lineHeight: 22, fontWeight: '600' },
+  pressedRow: { backgroundColor: colors.divider },
+  linkRow: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: spacing.md, paddingVertical: 8 },
+  linkTile: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
+  linkLabel: { flex: 1, color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '500' },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   cardTitle: { flex: 1, color: colors.text, fontSize: 16, lineHeight: 22, fontWeight: '600' },
   field: { gap: 4 },
@@ -168,7 +223,7 @@ const styles = StyleSheet.create({
   warrantyRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   warrantyText: { flex: 1, color: colors.tone.success.text, fontSize: 13, lineHeight: 19 },
   earlier: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, minHeight: 64 },
-  earlierOn: { borderColor: colors.primaryStrong, backgroundColor: colors.primarySoft },
+  earlierOn: { backgroundColor: colors.primarySoft },
   earlierBody: { flex: 1, minWidth: 0, gap: 4 },
   earlierMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   check: { width: 24, height: 24, borderRadius: 8, borderWidth: 1.5, borderColor: colors.muted, alignItems: 'center', justifyContent: 'center', marginTop: 2, backgroundColor: colors.surface },
