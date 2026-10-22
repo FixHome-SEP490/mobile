@@ -266,7 +266,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   pad: { flex: 1, padding: 16 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, paddingVertical: 4, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider },
   iconBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-  headerTitleGroup: { flex: 1, gap: 1, justifyContent: 'center' },
+  headerTitleGroup: { flex: 1, gap: 1, justifyContent: 'center', alignItems: 'center' },
   headerEyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.textSecondary },
   headerTitle: { fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.text },
   content: { padding: 16, gap: 12 },

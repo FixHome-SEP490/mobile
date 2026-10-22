@@ -9,9 +9,13 @@ import { validateReceiveQrToken } from './parts-controller';
 import { PartsQrScanner } from './PartsQrScanner';
 import { useTechnicianParts } from './useTechnicianParts';
 import { getRestoredPartsRecovery } from '../domain/extra-and-parts-recovery';
-import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import { ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
-import { lightTheme as colors, spacing } from '../../../constants/theme';
+import { partsBlockers } from '../domain/order-capabilities';
+import { PartItemRow } from './PartItemRow';
+import { approvedUsageCap } from './held-parts';
+import { usePartReturns } from './usePartReturns';
+import { lightTheme as colors, spacing, type ToneName } from '../../../constants/theme';
 
 interface QrReceiveModalState {
   requestId: string;
@@ -32,7 +36,7 @@ export default function PartsLifecycleScreen() {
   const focused = useIsFocused();
   const { controller, state } = useTechnicianParts();
 
-  useLoadUnloadedResources(snapshot, ['parts'], loadResource);
+  useLoadUnloadedResources(snapshot, ['parts', 'quotations'], loadResource);
 
   const orderValue = snapshot?.order.status === 'ready' ? snapshot.order.data : null;
   const order = orderValue && !isHistoricalOrder(orderValue) ? orderValue : null;
@@ -45,6 +49,16 @@ export default function PartsLifecycleScreen() {
     ? partsResource.data.filter(pr => pr.serviceOrderId === key?.serviceOrderId && pr.technicianId === key?.userId)
     : [];
 
+  const quotationsResource = snapshot?.resources.quotations;
+  const quotationsList = quotationsResource?.status === 'ready' ? quotationsResource.data : null;
+  const returns = usePartReturns(current, partsResource?.status === 'ready' ? partsResource.requestSeq : 0);
+  const usedOf = (itemId: string) => {
+    const record = returns.records[itemId];
+    if (record) return record.usedQty;
+    const line = partsList.flatMap(pr => pr.items).find(i => i.id === itemId);
+    return line?.usageStatus === 'used' ? line.quantity : 0;
+  };
+  const blockers = key ? partsBlockers(partsList, key.userId) : { open: 0, unsettled: 0 };
   const [qrModal, setQrModal] = useState<QrReceiveModalState | null>(null);
   const [cancelModal, setCancelModal] = useState<CancelModalState | null>(null);
 
@@ -150,15 +164,88 @@ export default function PartsLifecycleScreen() {
     return status;
   };
 
-  const getStatusBadgeStyle = (status: string) => {
-    const s = String(status).toLowerCase();
-    if (s === 'requested') return styles.status_requested;
-    if (s === 'ready') return styles.status_ready;
-    if (s === 'delivering') return styles.status_delivering;
-    if (s === 'received') return styles.status_received;
-    if (s === 'cancelled') return styles.status_cancelled;
-    return null;
+  const statusTone = (status: string): ToneName => {
+    const v = String(status).toLowerCase();
+    return v === 'requested' ? 'warning' : v === 'ready' ? 'info' : v === 'delivering' ? 'violet' : v === 'received' ? 'success' : 'neutral';
   };
+
+  /** Where the request came from: shown as the section the card sits in. */
+  const SOURCES: { type: string; title: string; hint: string }[] = [
+    { type: 'pre_repair', title: 'Yêu cầu trước khi sửa', hint: 'Linh kiện bạn đã yêu cầu để chuẩn bị cho báo giá.' },
+    { type: 'quotation', title: 'Theo báo giá', hint: 'Phần còn thiếu sau khi khách duyệt báo giá.' },
+    { type: 'additional', title: 'Chi phí phát sinh', hint: 'Linh kiện của chi phí phát sinh khách đã duyệt.' },
+  ];
+
+  const renderRequest = (req: OrderPartReadModel, index: number, count: number) => {
+    const canReceive = receiveEligible(req);
+    const canCancel = req.status === 'requested';
+    const isReceived = req.status === 'received';
+    const tone = colors.tone[statusTone(req.status)];
+    const method = req.fulfillmentMethod === 'delivery' ? 'Giao tận nơi' : req.fulfillmentMethod === 'pickup' ? 'Tự lấy tại kho' : 'Chưa có hình thức nhận';
+    return (
+      <View key={req.id} style={styles.requestCard} testID={`parts-request-${req.id}`}>
+        <View style={styles.requestHeader}>
+          <View style={styles.requestTitleWrap}>
+            <Text style={styles.requestTitle}>{count > 1 ? `Lần ${index + 1} · ${method}` : method}</Text>
+            <Text style={styles.requestMeta}>{`Mã #${String(req.id).slice(-6).toUpperCase()}`}</Text>
+          </View>
+          <View accessible accessibilityLabel={`Trạng thái: ${statusLabel(req.status)}`} style={[styles.statusBadge, { backgroundColor: tone.bg }]}>
+            <Text style={[styles.statusText, { color: tone.text }]}>{statusLabel(req.status)}</Text>
+          </View>
+        </View>
+
+        {(req.items ?? []).map(it => (
+          <PartItemRow
+            key={it.id}
+            item={it}
+            received={isReceived}
+            canMarkUsage={isUnderRepair}
+            frozen={frozen}
+            record={returns.records[it.id]}
+            busy={returns.busy}
+            maxUsed={approvedUsageCap(it, req.requestType, partsList, quotationsList, key!.serviceOrderId, usedOf)}
+            onWhole={status => onUpdateUsage(req.id, it.id, status)}
+            onSaveUsed={quantity => returns.saveUsedQty(req.id, returns.records[it.id], quantity)}
+            onDeclare={quantity => returns.declareReturn(req.id, returns.records[it.id], quantity)}
+          />
+        ))}
+
+        {(canReceive || canCancel) && (
+          <View style={styles.requestFooter}>
+            {canReceive && (
+              <TouchableOpacity
+                testID={`parts-receive-btn-${req.id}`}
+                accessibilityRole="button" accessibilityState={{ disabled: frozen }}
+                disabled={frozen}
+                style={styles.receiveActionBtn}
+                onPress={() => onOpenReceive(req)}
+              >
+                <Text style={styles.receiveActionBtnText}>Nhận linh kiện (QR)</Text>
+              </TouchableOpacity>
+            )}
+            {canCancel && (
+              <TouchableOpacity
+                testID={`parts-cancel-btn-${req.id}`}
+                accessibilityRole="button" accessibilityState={{ disabled: frozen }}
+                disabled={frozen}
+                style={styles.cancelActionBtn}
+                onPress={() => onOpenCancel(req)}
+              >
+                <Text style={styles.cancelActionBtnText}>Hủy yêu cầu</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const visibleRequests = partsList.filter(req => !focusedRequestId || req.id === focusedRequestId);
+  const otherRequests = visibleRequests.filter(req => !SOURCES.some(source => source.type === req.requestType));
+  const groups = [
+    ...SOURCES.map(source => ({ ...source, requests: visibleRequests.filter(req => req.requestType === source.type) })),
+    { type: 'other', title: 'Linh kiện khác', hint: '', requests: otherRequests },
+  ].filter(group => group.requests.length);
 
   return (
     <TaskScreenShell
@@ -183,6 +270,16 @@ export default function PartsLifecycleScreen() {
         </ReadOnlyNotice>
       )}
 
+      {isUnderRepair && partsList.length > 0 && !focusedRequestId && (
+        blockers.open + blockers.unsettled > 0 ? (
+          <ReadOnlyNotice tone="warning">
+            Chưa thể gửi bàn giao:
+            {blockers.unsettled > 0 ? ` ${blockers.unsettled} linh kiện chưa ghi dùng hoặc trả.` : ''}
+            {blockers.open > 0 ? ` ${blockers.open} yêu cầu chưa nhận (nhận bằng QR hoặc hủy yêu cầu).` : ''}
+          </ReadOnlyNotice>
+        ) : <ReadOnlyNotice tone="success">Linh kiện đã xử lý đủ, không còn gì chặn gửi bàn giao.</ReadOnlyNotice>
+      )}
+      {returns.message && <ReadOnlyNotice tone={returns.message.tone}>{returns.message.text}</ReadOnlyNotice>}
       {state.error && <ReadOnlyNotice tone="error">{state.error}</ReadOnlyNotice>}
       {state.actionSuccess && <ReadOnlyNotice tone="success">{state.actionSuccess}</ReadOnlyNotice>}
 
@@ -246,101 +343,15 @@ export default function PartsLifecycleScreen() {
       {partsResource?.status === 'error' && <ReadOnlyNotice tone="error">Không tải được yêu cầu linh kiện. Hãy làm mới dữ liệu.</ReadOnlyNotice>}
       {partsResource?.status === 'loading' && <ReadOnlyNotice>Đang tải yêu cầu linh kiện…</ReadOnlyNotice>}
       {partsList.length > 0 ? (
-        partsList.filter(req => !focusedRequestId || req.id === focusedRequestId).map((req, rIdx) => {
-          const canReceive = receiveEligible(req);
-          const canCancel = req.status === 'requested';
-          const isReceived = req.status === 'received';
-
-          return (
-            <View key={req.id} style={styles.requestCard} testID={`parts-request-${req.id}`}>
-              <View style={styles.requestHeader}>
-                <Text style={styles.requestTitle}>
-                  Yêu cầu #{rIdx + 1} ({req.requestType === 'pre_repair' ? 'Linh kiện dự kiến' : req.requestType === 'quotation' ? 'Linh kiện theo báo giá' : 'Linh kiện sửa chữa'})
-                </Text>
-                <View accessible accessibilityLabel={`Trạng thái: ${statusLabel(req.status)}`} style={[styles.statusBadge, getStatusBadgeStyle(req.status)]}>
-                  <Text style={styles.statusText}>{statusLabel(req.status)}</Text>
-                </View>
+        groups.map(group => (
+            <View key={group.type} style={styles.group} testID={`parts-group-${group.type}`}>
+              <View style={styles.groupHead}>
+                <Text accessibilityRole="header" style={styles.groupTitle}>{group.title}</Text>
+                {group.hint ? <Text style={styles.groupHint}>{group.hint}</Text> : null}
               </View>
-
-              <DetailRow label="Mã yêu cầu" value={`#${String(req.id).slice(-6).toUpperCase()}`} />
-              <DetailRow
-                label="Hình thức nhận"
-                value={req.fulfillmentMethod === 'delivery' ? 'Giao hàng tận nơi' : req.fulfillmentMethod === 'pickup' ? 'Tự lấy tại kho' : 'Chưa có thông tin'}
-              />
-
-              <Text style={styles.itemsHeader}>Danh sách linh kiện ({req.items?.length ?? 0}):</Text>
-              {(req.items ?? []).map((it) => {
-                const canMarkUsage = isReceived && isUnderRepair;
-                const isUsed = it.usageStatus === 'used';
-                const isReturned = it.usageStatus === 'returned';
-
-                return (
-                  <View key={it.id} style={styles.itemRow} testID={`parts-item-${it.id}`}>
-                    <View style={styles.itemInfo}>
-                      <Text style={styles.itemName}>{it.partNameSnapshot || 'Linh kiện'}</Text>
-                      <Text style={styles.itemQty}>Số lượng: {it.quantity}</Text>
-                      <Text style={styles.itemUsage}>
-                        Tình trạng: {isUsed ? 'Đã dùng' : isReturned ? 'Hoàn trả' : 'Chưa ghi nhận'}
-                      </Text>
-                    </View>
-
-                    {canMarkUsage && (
-                      <View style={styles.usageActions}>
-                        <TouchableOpacity
-                          testID={`parts-usage-used-${it.id}`}
-                          accessibilityRole="button" accessibilityState={{ disabled: frozen || isUsed, selected: isUsed }}
-                          disabled={frozen || isUsed}
-                          style={[styles.usageBtn, isUsed && styles.usageBtnActive]}
-                          onPress={() => onUpdateUsage(req.id, it.id, 'used')}
-                        >
-                          <Text style={[styles.usageBtnText, isUsed && styles.usageBtnTextActive]}>
-                            Đã dùng
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          testID={`parts-usage-returned-${it.id}`}
-                          accessibilityRole="button" accessibilityState={{ disabled: frozen || isReturned, selected: isReturned }}
-                          disabled={frozen || isReturned}
-                          style={[styles.usageBtn, isReturned && styles.usageBtnActive]}
-                          onPress={() => onUpdateUsage(req.id, it.id, 'returned')}
-                        >
-                          <Text style={[styles.usageBtnText, isReturned && styles.usageBtnTextActive]}>
-                            Hoàn trả
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-
-              <View style={styles.requestFooter}>
-                {canReceive && (
-                  <TouchableOpacity
-                    testID={`parts-receive-btn-${req.id}`}
-                    accessibilityRole="button" accessibilityState={{ disabled: frozen }}
-                    disabled={frozen}
-                    style={styles.receiveActionBtn}
-                    onPress={() => onOpenReceive(req)}
-                  >
-                    <Text style={styles.receiveActionBtnText}>Nhận linh kiện (QR)</Text>
-                  </TouchableOpacity>
-                )}
-                {canCancel && (
-                  <TouchableOpacity
-                    testID={`parts-cancel-btn-${req.id}`}
-                    accessibilityRole="button" accessibilityState={{ disabled: frozen }}
-                    disabled={frozen}
-                    style={styles.cancelActionBtn}
-                    onPress={() => onOpenCancel(req)}
-                  >
-                    <Text style={styles.cancelActionBtnText}>Hủy yêu cầu</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+              {group.requests.map((req, index) => renderRequest(req, index, group.requests.length))}
             </View>
-          );
-        })
+        ))
       ) : (
         <>
           <ReadOnlyNotice>Chưa có yêu cầu linh kiện nào cho đơn hàng này.</ReadOnlyNotice>
@@ -361,49 +372,45 @@ export default function PartsLifecycleScreen() {
 }
 
 const styles = StyleSheet.create({
+  group: { gap: 8 },
+  groupHead: { gap: 2 },
+  groupTitle: { color: colors.text, fontSize: 16, lineHeight: 24, fontWeight: '700' },
+  groupHint: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
+  requestMeta: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
   requestCard: {
     backgroundColor: colors.surface,
     borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
     padding: spacing.md,
-    marginBottom: spacing.sm,
   },
   requestHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     gap: 8,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
+  requestTitleWrap: { flex: 1, minWidth: 0, gap: 2 },
   requestTitle: {
-    flex: 1,
     fontSize: 15,
-    fontWeight: '700',
+    lineHeight: 22,
+    fontWeight: '600',
     color: colors.text,
   },
   statusBadge: {
     flexShrink: 0,
     maxWidth: '45%',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: colors.tone.neutral.bg,
+    paddingVertical: 2,
+    minHeight: 24,
+    justifyContent: 'center',
+    borderRadius: 8,
   },
-  status_requested: { backgroundColor: colors.tone.warning.bg },
-  status_ready: { backgroundColor: colors.tone.info.bg },
-  status_delivering: { backgroundColor: colors.tone.violet.bg },
-  status_received: { backgroundColor: colors.primarySoft },
-  status_cancelled: { backgroundColor: colors.tone.neutral.bg },
   statusText: {
     fontSize: 12,
+    lineHeight: 16,
     fontWeight: '600',
-    color: colors.text,
-  },
-  itemsHeader: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    marginBottom: 4,
   },
   itemRow: {
     borderTopWidth: StyleSheet.hairlineWidth,

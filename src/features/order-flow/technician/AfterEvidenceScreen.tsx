@@ -1,5 +1,6 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
-import { Image, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ArrowLeft, Camera, FileText, Trash2 } from 'lucide-react-native';
 import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
@@ -7,7 +8,8 @@ import { useTechnicianCompletion } from './useTechnicianCompletion';
 import { captureCameraPhoto, confirmCameraPermission } from './camera-capture';
 import type { CameraOrderAsset } from './arrival-proof-controller';
 import { sameOrderSession } from '../domain/order-session.types';
-import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import { ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import { LinkRow, Section } from './QuotationItemCards';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
@@ -181,7 +183,7 @@ export default function AfterEvidenceScreen() {
       onBack={() => navigation.goBack()}
       secondary={
         footerNext
-          ? { label: 'Xem bàn giao', testID: 'task-handover-next', disabled: !handoverAllowed,
+          ? { label: 'Bàn giao', testID: 'task-handover-next', disabled: !handoverAllowed,
               accessibilityHint: 'Mở bước bàn giao đã có ảnh xác nhận từ máy chủ',
               onPress: () => { if (handoverAllowed) navigation.navigate('CompletionRequest'); } }
           : { label: 'Làm mới dữ liệu', testID: 'task-refresh', disabled: !canRefresh || busy,
@@ -207,9 +209,25 @@ export default function AfterEvidenceScreen() {
         },
       }}
     >
-      <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }}>
-        <DetailRow label="Mã đơn" value={order?.code} />
-        <DetailRow label="Ảnh sau sửa chữa đã xác nhận" value={evidenceReady ? String(ownAfter.length) : 'Đang tải…'} />
+      <View style={styles.summary}>
+        <View>
+          <Text style={styles.caption}>Mã đơn</Text>
+          <Text selectable style={styles.code}>{order?.code || 'Chưa có thông tin'}</Text>
+        </View>
+        <View style={styles.countRow}>
+          <Text style={styles.count} accessibilityLabel={evidenceReady ? `${ownAfter.length} ảnh đã xác nhận` : 'Đang tải số ảnh'}>{evidenceReady ? String(ownAfter.length) : '…'}</Text>
+          <View style={styles.countText}>
+            <Text style={styles.countTitle}>Ảnh sau sửa chữa đã xác nhận</Text>
+            {knownMinimum !== null ? <Text style={styles.caption}>Cần tối thiểu {knownMinimum} ảnh</Text> : null}
+          </View>
+          {evidenceReady ? (
+            <View style={[styles.chip, { backgroundColor: colors.tone[knownInsufficient ? 'warning' : ownAfter.length ? 'success' : 'neutral'].bg }]}>
+              <Text style={[styles.chipText, { color: colors.tone[knownInsufficient ? 'warning' : ownAfter.length ? 'success' : 'neutral'].text }]}>
+                {knownInsufficient ? 'Cần thêm ảnh' : ownAfter.length ? 'Đã có ảnh' : 'Chưa có ảnh'}
+              </Text>
+            </View>
+          ) : null}
+        </View>
       </View>
       {revoked ? (
         <ReadOnlyNotice>Quyền xem đơn đã thay đổi, phân công không còn thuộc về bạn hoặc đơn đã qua bước sửa chữa. Bản nháp ảnh đã được xóa; không có thao tác nào được gửi.</ReadOnlyNotice>
@@ -221,118 +239,109 @@ export default function AfterEvidenceScreen() {
         <ReadOnlyNotice>Hãy chụp ảnh hiện trạng sau sửa chữa bằng camera. Chỉ ảnh đã được máy chủ xác nhận mới dùng cho bàn giao.</ReadOnlyNotice>
       )}
       {knownInsufficient ? (
-        <ReadOnlyNotice>Số ảnh sau sửa chữa chưa đạt yêu cầu đã biết của đợt kiểm tra. Hãy chụp và gửi thêm trước khi sang bàn giao.</ReadOnlyNotice>
+        <ReadOnlyNotice tone="warning">Số ảnh sau sửa chữa chưa đạt yêu cầu đã biết của đợt kiểm tra. Hãy chụp và gửi thêm trước khi sang bàn giao.</ReadOnlyNotice>
       ) : null}
       {asset ? (
-        <View style={{ backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md, gap: 12 }}>
-          <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>Đã chụp xong. Kiểm tra kỹ rồi mới gửi.</Text>
-          <Image
-            testID="after-preview"
-            source={{ uri: asset.uri }}
-            style={{ width: '100%', height: 220, borderRadius: 10, backgroundColor: colors.border }}
-            resizeMode="cover"
-            accessibilityLabel="Ảnh sau sửa chữa vừa chụp"
-          />
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity
-              testID="after-retake"
-              accessibilityRole="button"
-              accessibilityLabel="Chụp lại ảnh"
-              disabled={busy}
-              onPress={() => { void capture(); }}
-              style={{ flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', opacity: busy ? 0.5 : 1 }}
-            >
-              <Text style={{ color: colors.primaryStrong, fontWeight: '600', fontSize: 14, lineHeight: 20 }}>Chụp lại</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              testID="after-cancel"
-              accessibilityRole="button"
-              accessibilityLabel="Hủy ảnh vừa chụp"
-              disabled={busy}
-              onPress={() => { setDraft({ owner, asset: null, error: null, confirmDeleteId: null }); }}
-              style={{ flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', opacity: busy ? 0.5 : 1 }}
-            >
-              <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: 14, lineHeight: 20 }}>Hủy ảnh</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ) : null}
-      {ownAfter.map(item => (
-        <View key={item.id} style={{ backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md, gap: 8 }}>
-          <DetailRow label="Ảnh đã gửi" value={item.createdAt ? vnDateTimeString(item.createdAt) : item.id} />
-          {confirmDeleteId === item.id ? (
-            <View style={{ gap: 8 }}>
-              <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }}>Xóa ảnh này khỏi đơn? Thao tác cần máy chủ xác nhận.</Text>
-              <TouchableOpacity
-                testID={`after-delete-confirm-${item.id}`}
-                accessibilityRole="button"
-                accessibilityLabel="Xác nhận xóa ảnh"
-                disabled={busy}
-                onPress={confirmDelete}
-                style={{
-                  minHeight: 52, borderRadius: 12, borderWidth: 1, borderColor: colors.error,
-                  alignItems: 'center', justifyContent: 'center', opacity: busy ? 0.5 : 1,
-                }}
-              >
-                <Text style={{ color: colors.error, fontWeight: '700', fontSize: 14, lineHeight: 20 }}>Xác nhận xóa</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                testID={`after-delete-cancel-${item.id}`}
-                accessibilityRole="button"
-                accessibilityLabel="Giữ lại ảnh"
-                onPress={() => setDraft({ owner, asset: null, error: null, confirmDeleteId: null })}
-                style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
-              >
-                <Text style={{ color: colors.primaryStrong, fontWeight: '600', fontSize: 14, lineHeight: 20 }}>Giữ lại ảnh</Text>
-              </TouchableOpacity>
+        <Section title="Ảnh vừa chụp" hint="Đã chụp xong. Kiểm tra kỹ rồi mới gửi.">
+          <View style={styles.previewWrap}>
+            <Image
+              testID="after-preview"
+              source={{ uri: asset.uri }}
+              style={styles.preview}
+              resizeMode="cover"
+              accessibilityLabel="Ảnh sau sửa chữa vừa chụp"
+            />
+            <View style={styles.actions}>
+              <Pressable testID="after-retake" accessibilityRole="button" accessibilityLabel="Chụp lại ảnh" disabled={busy}
+                onPress={() => { void capture(); }} style={({ pressed }) => [styles.action, busy && styles.dim, pressed && styles.pressed]}>
+                <Text style={styles.actionText}>Chụp lại</Text>
+              </Pressable>
+              <Pressable testID="after-cancel" accessibilityRole="button" accessibilityLabel="Hủy ảnh vừa chụp" disabled={busy}
+                onPress={() => { setDraft({ owner, asset: null, error: null, confirmDeleteId: null }); }} style={({ pressed }) => [styles.action, busy && styles.dim, pressed && styles.pressed]}>
+                <Text style={styles.actionTextMuted}>Hủy ảnh</Text>
+              </Pressable>
             </View>
-          ) : (
-            <TouchableOpacity
-              testID={`after-delete-${item.id}`}
-              accessibilityRole="button"
-              accessibilityLabel="Xóa ảnh này"
-              disabled={!canCapture}
-              onPress={() => askDelete(item.id)}
-              style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center', opacity: !canCapture ? 0.5 : 1 }}
-            >
-              <Text style={{ color: colors.error, fontWeight: '600', fontSize: 14, lineHeight: 20 }}>Xóa ảnh này</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      ))}
+          </View>
+        </Section>
+      ) : null}
+      {ownAfter.length > 0 ? (
+        <Section title="Ảnh đã gửi">
+          {ownAfter.map((item, index) => (
+            <View key={item.id} style={styles.photoRow}>
+              <View style={styles.photoMain}>
+                <View style={styles.tile} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"><Camera size={20} strokeWidth={1.75} color={colors.primaryStrong} /></View>
+                <View style={styles.photoText}>
+                  <Text style={styles.photoTitle}>Ảnh {index + 1}</Text>
+                  <Text style={styles.caption}>{item.createdAt ? vnDateTimeString(item.createdAt) : item.id}</Text>
+                </View>
+                {confirmDeleteId !== item.id ? (
+                  <Pressable testID={`after-delete-${item.id}`} accessibilityRole="button" accessibilityLabel="Xóa ảnh này" disabled={!canCapture}
+                    onPress={() => askDelete(item.id)} hitSlop={4} style={({ pressed }) => [styles.iconBtn, !canCapture && styles.dim, pressed && styles.pressed]}>
+                    <Trash2 size={20} strokeWidth={1.75} color={colors.error} />
+                  </Pressable>
+                ) : null}
+              </View>
+              {confirmDeleteId === item.id ? (
+                <View style={styles.confirm}>
+                  <Text style={styles.confirmText}>Xóa ảnh này khỏi đơn? Thao tác cần máy chủ xác nhận.</Text>
+                  <View style={styles.actions}>
+                    <Pressable testID={`after-delete-cancel-${item.id}`} accessibilityRole="button" accessibilityLabel="Giữ lại ảnh"
+                      onPress={() => setDraft({ owner, asset: null, error: null, confirmDeleteId: null })} style={({ pressed }) => [styles.action, pressed && styles.pressed]}>
+                      <Text style={styles.actionText}>Giữ lại ảnh</Text>
+                    </Pressable>
+                    <Pressable testID={`after-delete-confirm-${item.id}`} accessibilityRole="button" accessibilityLabel="Xác nhận xóa ảnh" disabled={busy}
+                      onPress={confirmDelete} style={({ pressed }) => [styles.action, styles.danger, busy && styles.dim, pressed && styles.pressed]}>
+                      <Text style={styles.dangerText}>Xác nhận xóa</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          ))}
+        </Section>
+      ) : null}
       {captureError ? <ReadOnlyNotice>{captureError}</ReadOnlyNotice> : null}
       {state.phase === 'denied' && state.message ? <ReadOnlyNotice>{state.message}</ReadOnlyNotice> : null}
       {isUnresolved ? (
         <ReadOnlyNotice>Chưa xác nhận được kết quả hoặc có thao tác đang chờ đối chiếu. Không gửi lại; hãy kiểm tra từ hệ thống trước khi thử lại.</ReadOnlyNotice>
       ) : null}
-      {fromProposal ? (
-        <TouchableOpacity
-          testID="after-return-proposal"
-          accessibilityRole="button"
-          accessibilityLabel="Quay lại đề xuất phát sinh"
-          accessibilityHint="Trở về màn đề xuất, giữ nguyên bản nháp đang soạn"
-          onPress={returnToProposal}
-          style={{
-            backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12,
-            minHeight: 52, justifyContent: 'center', paddingHorizontal: spacing.md,
-          }}
-        >
-          <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>‹ Quay lại đề xuất</Text>
-        </TouchableOpacity>
-      ) : null}
-      <TouchableOpacity
-        testID="task-handover-link"
-        accessibilityRole="button"
-        accessibilityLabel="Xem bước bàn giao"
-        disabled={!handoverAllowed}
-        onPress={() => { if (handoverAllowed) navigation.navigate('CompletionRequest'); }}
-        style={{
-          backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12,
-          minHeight: 52, justifyContent: 'center', paddingHorizontal: spacing.md, opacity: !handoverAllowed ? 0.5 : 1,
-        }}
-      >
-        <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Xem bàn giao ›</Text>
-      </TouchableOpacity>
+      <Section title="Xem thêm">
+        {fromProposal ? (
+          <LinkRow testID="after-return-proposal" label="Quay lại đề xuất phát sinh" Icon={ArrowLeft} onPress={returnToProposal} />
+        ) : null}
+        <LinkRow testID="task-handover-link" label="Xem bàn giao" Icon={FileText} disabled={!handoverAllowed}
+          onPress={() => { if (handoverAllowed) navigation.navigate('CompletionRequest'); }} />
+      </Section>
     </TaskScreenShell>
   );
 }
+
+const styles = StyleSheet.create({
+  summary: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.md },
+  caption: { color: colors.textSecondary, fontSize: 12, lineHeight: 16, fontWeight: '500' },
+  code: { color: colors.text, fontSize: 16, lineHeight: 24, fontWeight: '700' },
+  countRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  count: { minWidth: 44, color: colors.primaryStrong, fontSize: 32, lineHeight: 40, fontWeight: '700' },
+  countText: { flex: 1, minWidth: 0, gap: 2 },
+  countTitle: { color: colors.text, fontSize: 14, lineHeight: 20, fontWeight: '600' },
+  chip: { flexShrink: 0, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, minHeight: 24, justifyContent: 'center' },
+  chipText: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
+  previewWrap: { padding: spacing.md, gap: 12 },
+  preview: { width: '100%', height: 220, borderRadius: 10, backgroundColor: colors.border },
+  actions: { flexDirection: 'row', gap: 8 },
+  action: { flex: 1, minHeight: 48, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md },
+  actionText: { color: colors.primaryStrong, fontSize: 14, lineHeight: 20, fontWeight: '600', textAlign: 'center' },
+  actionTextMuted: { color: colors.textSecondary, fontSize: 14, lineHeight: 20, fontWeight: '600', textAlign: 'center' },
+  danger: { backgroundColor: colors.tone.danger.bg, borderColor: colors.error },
+  dangerText: { color: colors.tone.danger.text, fontSize: 14, lineHeight: 20, fontWeight: '700', textAlign: 'center' },
+  photoRow: { padding: spacing.md, gap: 12 },
+  photoMain: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  tile: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
+  photoText: { flex: 1, minWidth: 0 },
+  photoTitle: { color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '600' },
+  iconBtn: { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  confirm: { backgroundColor: colors.background, borderRadius: 12, padding: spacing.md, gap: 8 },
+  confirmText: { color: colors.text, fontSize: 14, lineHeight: 20 },
+  dim: { opacity: 0.5 },
+  pressed: { opacity: 0.7 },
+});

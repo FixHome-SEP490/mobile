@@ -120,6 +120,7 @@ export default function CustomerRepairHistoryScreen() {
           <Text style={styles.headerTitle} accessibilityRole="header">Lịch sử sửa chữa</Text>
           <Text style={styles.headerSubtitle}>Những đơn đã sửa chữa và hoàn tất</Text>
         </View>
+        <View style={{ width: 44, height: 44 }} />
       </View>
 
       <View style={styles.searchWrap}>
@@ -311,10 +312,10 @@ const getStyles = (colors: any) => StyleSheet.create({
     justifyContent: 'center',
     marginRight: 4,
   },
-  headerCopy: { flex: 1 },
-  headerOverline: { fontSize: 12, lineHeight: 16, fontWeight: '700', letterSpacing: 1, color: colors.textSecondary },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
-  headerSubtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  headerCopy: { flex: 1, alignItems: 'center' },
+  headerOverline: { fontSize: 12, lineHeight: 16, fontWeight: '700', letterSpacing: 1, color: colors.textSecondary, textAlign: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  headerSubtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2, textAlign: 'center' },
   searchWrap: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
   searchBar: {
     minHeight: 48,

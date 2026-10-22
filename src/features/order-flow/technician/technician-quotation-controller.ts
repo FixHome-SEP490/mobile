@@ -210,6 +210,16 @@ export interface TechnicianQuotationDependencies {
   now?: () => number;
 }
 
+/** The server answered and said no (not auth, timeout or 5xx): the command had no effect, so its own message is the answer. */
+function serverRejection(error: unknown): string | null {
+  const response = (error as { response?: { status?: number; data?: { message?: unknown } } } | null)?.response;
+  if (!response || ![400, 403, 404, 409, 422].includes(Number(response.status))) return null;
+  const message = response.data?.message;
+  const text = Array.isArray(message) ? message.filter(m => typeof m === 'string').join(' ') : message;
+  return typeof text === 'string' && text.trim() ? text.trim() : 'Máy chủ không chấp nhận báo giá này. Hãy kiểm tra lại nội dung.';
+}
+/** A send this old that left no id and no quote of yours on the order never reached the server. */
+const STALE_SEND_MS = 120_000;
 const unknownMessage = 'Kết quả tạo báo giá chưa xác định. Không gửi lại; hãy kiểm tra từ hệ thống hoặc liên hệ hỗ trợ.';
 
 export function createTechnicianQuotationController(deps: TechnicianQuotationDependencies) {
@@ -271,7 +281,10 @@ export function createTechnicianQuotationController(deps: TechnicianQuotationDep
 
   async function checkVerdict(key: OrderSessionKey, marker: OrderCommandMarker): Promise<CommandReadbackVerdict> {
     if (!marker.resultEntityId) {
-      // Timeout lost ID cannot correlate by time, content, or max version
+      // Timeout lost ID cannot correlate by time, content, or max version. The only proof of "never created" is
+      // a long-past send while the order has no quote of this technician at all.
+      const own = currentQuotations(key);
+      if (own && !own.some(q => q.technicianId === key.userId) && Date.now() - marker.dispatchedAt > STALE_SEND_MS) return 'failed-known';
       return 'unresolved';
     }
     const order = currentOrder(key);
@@ -470,6 +483,7 @@ export function createTechnicianQuotationController(deps: TechnicianQuotationDep
 
       publish({ ...state, phase: 'submitting', operation: 'quote-create', message: null });
       let sent = false;
+      let rejection: string | null = null;
       let createdId: string | undefined;
 
       try {
@@ -498,7 +512,13 @@ export function createTechnicianQuotationController(deps: TechnicianQuotationDep
             }
 
             sent = true;
-            const res = await deps.transport.createQuotation(key.serviceOrderId, draft.payload);
+            let res: unknown;
+            try {
+              res = await deps.transport.createQuotation(key.serviceOrderId, draft.payload);
+            } catch (error) {
+              rejection = serverRejection(error);
+              throw error;
+            }
             if (res && typeof res === 'object' && 'id' in res && typeof (res as { id: unknown }).id === 'string') {
               createdId = (res as { id: string }).id;
               await deps.journal.recordEntity(key.userId, intentId, createdId);
@@ -515,6 +535,12 @@ export function createTechnicianQuotationController(deps: TechnicianQuotationDep
         );
 
         if (!sameKey(key)) return;
+        if (rejection) {
+          // Whatever the read-back said afterwards (it may have failed on a stale token), a server "no" is final.
+          await deps.journal.mark(key.userId, intentId, 'failed-known');
+          if (sameKey(key)) publish({ phase: 'denied', operation: 'quote-create', message: rejection, confirmDraft: null });
+          return;
+        }
         const marker = deps.journal.list(key.userId).find(m => m.intentId === intentId);
         const resolved = marker?.status === 'resolved';
         publish({
@@ -556,10 +582,13 @@ export function createTechnicianQuotationController(deps: TechnicianQuotationDep
         }
         if (sameKey(key)) {
           const hasUnres = deps.journal.hasUnresolved(key);
+          const after = deps.journal.list(key.userId).filter(m => markers.some(x => x.intentId === m.intentId));
+          const neverSent = after.length > 0 && after.every(m => m.status === 'failed-known');
           publish({
             ...state,
-            phase: markers.length && !hasUnres ? 'resolved' : hasUnres ? 'unknown' : 'idle',
-            message: hasUnres ? unknownMessage : null,
+            phase: hasUnres ? 'unknown' : neverSent ? 'denied' : markers.length ? 'resolved' : 'idle',
+            message: hasUnres ? unknownMessage : neverSent ? 'Lần gửi báo giá trước không đến được hệ thống nên chưa có báo giá nào. Bạn có thể lập và gửi lại.' : null,
+            confirmDraft: null,
           });
         }
       } catch {

@@ -65,3 +65,13 @@ it('ineligible phase and foreign role reject review/warranty; eligible pending c
   const tech = m7Fixture('technician'), c = createCustomerAftercareController({ ...tech.runtime, transport: f.transport }); await c.prepareClaim({ warrantyCoverageId: ids.coverage, description: 'Lỗi vẫn còn xuất hiện' }); await c.submitConfirmation(); expect(f.transport.createClaim).not.toHaveBeenCalled();
   f.server.order.status = 'COMPLETED'; f.server.coverages[0].status = 'pending'; await f.c.prepareClaim({ warrantyCoverageId: ids.coverage, description: 'Lỗi vẫn còn xuất hiện' }); expect(f.c.canClaim(ids.coverage)).toBe(true); await f.c.submitConfirmation(); expect(f.transport.createClaim).toHaveBeenCalledTimes(1);
 });
+it('an unclear payment leftover of a completed order does not lock the review, a pending review marker still does', async () => {
+  const f = setup(); await f.journal.restore();
+  await f.journal.begin(f.key, { intentId: 'pay-1', entityId: ids.order, operation: 'wallet-pay', stableKey: 'pay-0001' });
+  await f.c.loadReview();
+  expect(f.c.canSubmitReview()).toBe(true);
+  await f.c.prepareReview({ rating: 5 });
+  expect(f.c.getState().phase).toBe('confirming');
+  f.transport.submitReview.mockRejectedValue(Error('timeout')); await f.c.submitConfirmation();
+  expect(f.c.canSubmitReview()).toBe(false);
+});

@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { useTechnicianArrivalProof } from './useTechnicianArrivalProof';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import TechnicianOrderHub from '../shared/TechnicianOrderHub';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 
@@ -114,48 +115,7 @@ export default function AcceptedJobScreen() {
       {state.phase === 'resolved' ? (
         <ReadOnlyNotice>Đã ghi nhận. Đang tải trạng thái mới từ máy chủ…</ReadOnlyNotice>
       ) : null}
-      <View style={{ gap: 8 }}>
-        <TouchableOpacity
-          testID="task-accepted-parts-link"
-          accessibilityRole="button"
-          disabled={revoked}
-          onPress={() => {
-            if (!revoked) navigation.navigate('AcceptedParts');
-          }}
-          style={{
-            backgroundColor: colors.surface,
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderRadius: 12,
-            minHeight: 52,
-            justifyContent: 'center',
-            paddingHorizontal: spacing.md,
-            opacity: revoked ? 0.5 : 1,
-          }}
-        >
-          <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Chuẩn bị linh kiện trước ›</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          testID="task-detail-link"
-          accessibilityRole="button"
-          disabled={revoked}
-          onPress={() => {
-            if (!revoked) navigation.navigate('OrderInformation');
-          }}
-          style={{
-            backgroundColor: colors.surface,
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderRadius: 12,
-            minHeight: 52,
-            justifyContent: 'center',
-            paddingHorizontal: spacing.md,
-            opacity: revoked ? 0.5 : 1,
-          }}
-        >
-          <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Xem thông tin đơn ›</Text>
-        </TouchableOpacity>
-      </View>
+      <TechnicianOrderHub />
     </TaskScreenShell>
   );
 }

@@ -6,6 +6,7 @@ import TravelScreen from './TravelScreen';
 
 let mockSnapshot: OrderSessionSnapshot;
 let mockRefresh: jest.Mock;
+const mockLoadResource = jest.fn();
 const mockNavigate = jest.fn();
 const mockArrivalHook = jest.fn();
 
@@ -14,6 +15,7 @@ jest.mock('../runtime/OrderSessionProvider', () => ({
     key: mockSnapshot.key,
     snapshot: mockSnapshot,
     refresh: (...args: unknown[]) => mockRefresh(...args),
+    loadResource: mockLoadResource,
   }),
 }));
 jest.mock('./useTechnicianArrivalProof', () => ({

@@ -580,7 +580,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   safeArea: { flex: 1, backgroundColor: colors.background },
   headerStack: { gap: 16, paddingTop: 16 },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider },
-  topBarTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
+  topBarTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '700', color: colors.text },
   tabHeader: { minHeight: 69, justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider }, // 69 = Home header
   tabTitle: { fontSize: 20, lineHeight: 24, fontWeight: '700', color: colors.text },
   topBarSpacer: { width: 44, height: 44 },

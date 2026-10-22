@@ -86,7 +86,7 @@ export interface OrderPartReadModel {
   technicianId?: string;
   requestType?: PartRequest['requestType'];
   fulfillmentMethod?: PartRequest['fulfillmentMethod'];
-  items: Pick<PartRequestItem, 'id' | 'partNameSnapshot' | 'quantity' | 'usageStatus'>[];
+  items: (Pick<PartRequestItem, 'id' | 'partNameSnapshot' | 'quantity' | 'usageStatus'> & Partial<Pick<PartRequestItem, 'partCatalogId' | 'partSource'>>)[];
 }
 export interface OrderResourceData {
   evidence: EvidenceResponse[];

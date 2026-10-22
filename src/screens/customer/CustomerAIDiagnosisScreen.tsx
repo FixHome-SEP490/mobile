@@ -112,6 +112,7 @@ export default function CustomerAIDiagnosisScreen() {
               <Text style={styles.mainTitle} accessibilityRole="header">Kể FixHome nghe</Text>
               <Text style={styles.headerSubtitle}>Trợ lý FixHome</Text>
             </View>
+            <View style={{ width: 44, height: 44 }} />
           </View>
           <View style={styles.advisoryArt}>
             <Ionicons name="sparkles-outline" size={36} color={colors.primaryStrong} />
@@ -204,11 +205,11 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   screenBody: { flex: 1 },
   content: { padding: 16, gap: 16, paddingBottom: 24 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
-  headerCopy: { flex: 1, minWidth: 0, gap: 4 },
+  headerCopy: { flex: 1, minWidth: 0, gap: 4, alignItems: 'center' },
   backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.divider, alignItems: 'center', justifyContent: 'center' },
-  eyebrow: { fontSize: 12, lineHeight: 18, fontWeight: '600', letterSpacing: 0.5, color: colors.textSecondary },
-  mainTitle: { fontSize: 24, lineHeight: 32, fontWeight: '700', color: colors.text },
-  headerSubtitle: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
+  eyebrow: { fontSize: 12, lineHeight: 18, fontWeight: '600', letterSpacing: 0.5, color: colors.textSecondary, textAlign: 'center' },
+  mainTitle: { fontSize: 20, lineHeight: 28, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  headerSubtitle: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, textAlign: 'center' },
   advisoryArt: { minHeight: 88, borderRadius: 24, backgroundColor: colors.primarySoft, flexDirection: 'row', alignItems: 'center', gap: 16, padding: 24 },
   artTitle: { flex: 1, fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.primaryStrong },
   helperText: { fontSize: 14, lineHeight: 24, color: colors.textSecondary },

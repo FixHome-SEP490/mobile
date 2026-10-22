@@ -53,8 +53,18 @@ export function createCustomerAftercareController(deps: CustomerAftercareDepende
       else publish({ [kind]: { status: 'error', error: 'unavailable', requestSeq } });
     }
   }
+  /** A COMPLETED order can no longer take a payment, cancel or upload command, so an unclear leftover of one (e.g. a VNPay link opened outside the app) must not lock the optional review or warranty. */
+  async function settleLeftovers(key: OrderSessionKey) {
+    if (!completed(key)) return;
+    try {
+      for (const m of deps.journal.list(key.userId)) {
+        if (m.role === 'customer' && m.serviceOrderId === key.serviceOrderId && !operations.includes(m.operation) && !['resolved', 'failed-known'].includes(m.status)) await deps.journal.mark(key.userId, m.intentId, 'resolved');
+      }
+    } catch { /* journal not readable yet: the lock stays, which is the safe side */ }
+  }
   async function refresh(key: OrderSessionKey, kind: 'review' | 'warranty' | 'claims') {
     await deps.coordinator.refreshOrderSession(key, 'aftercare-readback'); if (!owned(key)) { if (same(key)) purge(); return; }
+    await settleLeftovers(key);
     if (kind === 'warranty') { await read(key, 'coverages'); if (owned(key)) await read(key, 'claims'); }
     else await read(key, kind);
   }

@@ -327,7 +327,7 @@ export default function CustomerWalletScreen() {
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.background },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4 },
-  headerTitleGroup: { flex: 1, justifyContent: 'center', gap: 1 },
+  headerTitleGroup: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 1 },
   headerEyebrow: { fontSize: 12, lineHeight: 16, color: colors.textSecondary, fontWeight: '600' },
   headerTitle: { fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.text },
   iconBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },

@@ -1,10 +1,11 @@
 import React from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { useTechnicianArrivalProof } from './useTechnicianArrivalProof';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import TechnicianOrderHub from '../shared/TechnicianOrderHub';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 
@@ -64,26 +65,7 @@ export default function TravelScreen() {
           Hãy di chuyển tới điểm hẹn. Chỉ nhấn “Tôi đã tới nơi” khi bạn đã đứng tại điểm hẹn; bước xác minh vị trí nằm ở màn hình tiếp theo.
         </ReadOnlyNotice>
       )}
-      <TouchableOpacity
-        testID="task-detail-link"
-        accessibilityRole="button"
-        disabled={revoked}
-        onPress={() => {
-          if (!revoked) navigation.navigate('OrderInformation');
-        }}
-        style={{
-          backgroundColor: colors.surface,
-          borderWidth: 1,
-          borderColor: colors.border,
-          borderRadius: 12,
-          minHeight: 52,
-          justifyContent: 'center',
-          paddingHorizontal: spacing.md,
-          opacity: revoked ? 0.5 : 1,
-        }}
-      >
-        <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Xem thông tin đơn ›</Text>
-      </TouchableOpacity>
+      <TechnicianOrderHub />
     </TaskScreenShell>
   );
 }

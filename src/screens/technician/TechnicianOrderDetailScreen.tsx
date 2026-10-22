@@ -3259,7 +3259,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
     borderBottomWidth: 1,
     borderBottomColor: colors.divider,
   },
-  headerTitle: { fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.text },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.text },
   headerBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   scrollContent: { padding: 16, paddingBottom: 48, gap: 12, backgroundColor: colors.background, flexGrow: 1 },
   centerLoading: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
