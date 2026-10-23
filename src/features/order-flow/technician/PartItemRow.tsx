@@ -89,7 +89,7 @@ export function PartItemRow({ item, received, canMarkUsage, frozen, record, busy
     settled.current = true;
     void onSaveUsed(0);
   });
-  const open = (next: 'usage' | 'declare') => { setQty(next === 'usage' ? record!.usedQty : 1); setMode(next); };
+  const open = (next: 'usage' | 'declare') => { setQty(next === 'usage' ? record!.usedQty : quickDeclare ? declareMax : 1); setMode(next); };
 
   return (
     <View testID={`parts-item-${item.id}`} style={styles.row}>
@@ -139,8 +139,7 @@ export function PartItemRow({ item, received, canMarkUsage, frozen, record, busy
       {record && mode === null && (
         <View style={styles.actions}>
           {received && canMarkUsage && !fullyReturned && <ActionButton testID={`part-usage-open-${item.id}`} label={record.usageRecorded ? 'Sửa số lượng đã dùng' : 'Ghi số lượng đã dùng'} primary={!record.usageRecorded} disabled={locked} onPress={() => open('usage')} />}
-          {quickDeclare && <ActionButton testID={`part-declare-all-${item.id}`} label={`Khai trả ${declareMax} cái còn lại`} primary disabled={locked} onPress={() => void onDeclare(declareMax)} />}
-          {declareMax > 0 && <ActionButton testID={`part-declare-open-${item.id}`} label={quickDeclare ? 'Khai trả số khác' : 'Khai trả'} disabled={locked} onPress={() => open('declare')} />}
+          {declareMax > 0 && <ActionButton testID={`part-declare-open-${item.id}`} label={quickDeclare ? `Khai trả ${declareMax} cái còn lại` : 'Khai trả'} primary={quickDeclare} disabled={locked} onPress={() => open('declare')} />}
         </View>
       )}
     </View>

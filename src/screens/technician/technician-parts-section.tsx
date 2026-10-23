@@ -393,6 +393,13 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
         </View>
       )}
 
+      {Object.values(returns).some((r) => r.blocksNewWork) && (
+        <View style={styles.errorBanner}>
+          <AlertCircle size={16} color={colors.tone.warning.fg} strokeWidth={1.75} />
+          <Text style={[styles.jobMeta, { flex: 1, color: colors.tone.warning.text }]}>Bạn chưa trả đủ linh kiện nên chưa nhận được việc mới.</Text>
+        </View>
+      )}
+
       <View style={styles.ruleBanner}>
         <Text style={styles.ruleBannerTitle}>Quy tắc quản lý linh kiện FixHome</Text>
         <Text style={styles.jobMeta}>• Linh kiện dự kiến: lấy trước từ kho, chưa tính tiền khách.</Text>
@@ -734,9 +741,6 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
                           </View>
                         );
                       })() : null}
-                      {record.blocksNewWork ? (
-                        <Text style={[styles.jobMeta, { color: colors.tone.warning.text }]}>Bạn chưa trả đủ linh kiện nên chưa nhận được việc mới.</Text>
-                      ) : null}
                       {max > 0 && !open ? (
                         <TouchableOpacity
                           accessibilityRole="button"

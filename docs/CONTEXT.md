@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-23 16:19 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
+> Cập nhật lần cuối: 2026-10-23 16:28 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -372,6 +372,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-23 16:28 (UTC+7) | Hgnv11 | dev | Màn linh kiện và hóa đơn của đơn bớt gây hiểu nhầm: khai trả linh kiện qua khung xác nhận có số điền sẵn, xác nhận đã dùng hoặc hoàn trả nằm ngay dưới thông báo, một thông báo chưa trả đủ linh kiện, Hóa đơn có tổng tiền công và tổng linh kiện, Ảnh và bằng chứng có giờ chụp, Thông tin đơn ẩn nút hủy khi đơn đã đóng; Thông báo của khách bỏ dòng đếm và hai chip lọc
 - 2026-10-23 16:19 (UTC+7) | Hgnv11 | dev | Các trang con của đơn (Thông tin đơn, Hóa đơn, Tiến độ, Ảnh và bằng chứng, Chi tiết yêu cầu hỗ trợ, Đơn hoàn thành) chia theo nhóm có tiêu đề như bên thợ; Hóa đơn tách Tiền công và Linh kiện và ghi Báo giá cần dùng so với Thực dùng theo sourceItemId của dòng hóa đơn; màn Hoạt động của khách không còn tự nhảy sang tab Yêu cầu đặt lịch
 - 2026-10-23 14:51 (UTC+7) | Hgnv11 | dev | Màn Quản lý linh kiện của kỹ thuật viên: ghi Báo giá duyệt cạnh số lượng, sửa số đã dùng được cả giảm (backend cho phép trước khi hóa đơn được tạo), nút Khai trả X cái còn lại sau khi ghi số đã dùng, gộp các thông báo cần xử lý thành một khối, mục Linh kiện sửa chữa tự đọc lại không nháy
 - 2026-10-23 06:16 (UTC+7) | Hgnv11 | dev | Màn Đề xuất (ProposalDetail) đổi thành Chi tiết báo giá hoặc Chi tiết chi phí phát sinh và dùng chung thẻ của OrderCostHistory (OrderCostHistory nhận onlyId): bỏ mã thô và câu nhắc M2, nút Xem đề xuất gốc đổi thành Xem chi tiết báo giá; chỉ đổi giao diện; chưa kiểm chứng trên máy thật
@@ -411,7 +412,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-17 20:46 (UTC+7) | foxonworld | feat/technician-reputation-parity-20261017 | Thống nhất card uy tín compact hai vai trò, sheet quy định/lịch sử và cảnh báo server luôn hiện; giữ riêng chip Độ tin cậy, native visual/runtime CHƯA KIỂM CHỨNG.
 - 2026-10-17 20:08 (UTC+7) | foxonworld | integration/mobile-c50-c45-reviewed-20261017 | Thu hẹp async act, bảo đảm cleanup và đặt timeout riêng 15 giây cho test radar Matching; CI Ubuntu sau sửa CHƯA KIỂM CHỨNG.
 - 2026-10-17 18:20 (UTC+7) | foxonworld | integration/mobile-c50-c45-20261017 | Tích hợp lịch tháng và CTA với UI/clearance, lịch nhận việc và ký quỹ từ dev; giữ C50/C45, lịch sử hai nhánh và dọn cleanup test bộ lọc thông báo; runtime CHƯA KIỂM CHỨNG.
-- 2026-10-17 17:48 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | Booking Customer giữ hai buổi sáng/chiều; lịch 14 ngày có lịch tháng, không chọn buổi ngầm và làm mới theo focus/app/time.
 
 ### Lịch sử giữ lại khi tích hợp
 

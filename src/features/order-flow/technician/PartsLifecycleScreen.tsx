@@ -339,8 +339,18 @@ export default function PartsLifecycleScreen() {
 
       {usageModal && !frozen && (
         <ReadOnlyNotice tone="warning">
-          {usageModal.status === 'used' ? 'Xác nhận đã dùng' : 'Xác nhận hoàn trả'}: {usageItemName ?? 'linh kiện đã chọn'}. Thao tác chỉ được gửi khi bạn bấm xác nhận ở cuối màn hình.
+          {usageModal.status === 'used' ? 'Xác nhận đã dùng' : 'Xác nhận hoàn trả'}: {usageItemName ?? 'linh kiện đã chọn'}.
         </ReadOnlyNotice>
+      )}
+      {usageModal && !frozen && (
+        <View style={styles.requestFooter}>
+          <TouchableOpacity testID="parts-usage-confirm-inline" accessibilityRole="button" style={styles.receiveActionBtn} onPress={onSubmitUsage}>
+            <Text style={styles.receiveActionBtnText}>{usageModal.status === 'used' ? 'Xác nhận đã dùng' : 'Xác nhận hoàn trả'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity testID="parts-usage-cancel-inline" accessibilityRole="button" style={styles.cancelActionBtn} onPress={closeDraft}>
+            <Text style={styles.cancelActionBtnText}>Hủy</Text>
+          </TouchableOpacity>
+        </View>
       )}
       {partsResource?.status === 'error' && <ReadOnlyNotice tone="error">Không tải được yêu cầu linh kiện. Hãy làm mới dữ liệu.</ReadOnlyNotice>}
       {partsResource?.status === 'loading' && <ReadOnlyNotice>Đang tải yêu cầu linh kiện…</ReadOnlyNotice>}

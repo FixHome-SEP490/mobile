@@ -65,8 +65,9 @@ export default function InvoiceDetailScreen() {
         return <>
           {labor.length > 0 && <Section title="Tiền công">
             {labor.map((item, i) => <LineRow key={item.id} name={item.description} detail={`Số lượng ${item.quantity}`} value={money(item.lineTotal)} last={i === labor.length - 1} />)}
+            {state.invoice.laborTotal !== undefined && <DetailRow label="Tổng tiền công" value={money(state.invoice.laborTotal)} />}
           </Section>}
-          {parts.length > 0 && <Section title="Linh kiện">{parts.map(partRow)}</Section>}
+          {parts.length > 0 && <Section title="Linh kiện">{parts.map(partRow)}{state.invoice.partsTotal !== undefined && <DetailRow label="Tổng linh kiện" value={money(state.invoice.partsTotal)} />}</Section>}
         </>;
       })()}
       {vs && vs.unused.length > 0 && <Section title="Linh kiện báo giá nhưng không dùng đến">

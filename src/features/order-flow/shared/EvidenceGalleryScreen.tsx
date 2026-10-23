@@ -1,11 +1,12 @@
 import React from 'react';
-import { Image, TouchableOpacity, View } from 'react-native';
+import { Image, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { visibleEvidence } from './order-detail-view-models';
 import { ReadOnlyNotice, Section, TaskScreenShell } from './TaskScreenShell';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from './useLoadUnloadedResources';
+import { vnDateTimeString } from '../../../utils/vn-time';
 
 const typeLabel: Record<string, string> = { BEFORE: 'Trước sửa chữa', AFTER: 'Sau sửa chữa', CHECKIN_FACE: 'Ảnh khuôn mặt' };
 
@@ -33,6 +34,7 @@ export default function EvidenceGalleryScreen() {
           {group.map(photo => <TouchableOpacity key={photo.id} accessibilityRole="button" accessibilityLabel={`Mở ${(typeLabel[photo.type] ?? 'ảnh bổ sung').toLowerCase()}`}
             onPress={() => navigation.push('EvidenceViewer', { evidenceId: photo.id })} style={{ width: '48%', backgroundColor: colors.background, borderRadius: 12, overflow: 'hidden' }}>
             <Image source={{ uri: photo.mediaUrl }} resizeMode="cover" style={{ height: 112, width: '100%' }} />
+            <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 16, padding: 6 }}>{vnDateTimeString(photo.capturedAt ?? photo.createdAt)}</Text>
           </TouchableOpacity>)}
         </View>
       </Section>;

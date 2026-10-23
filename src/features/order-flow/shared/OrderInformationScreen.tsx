@@ -65,7 +65,7 @@ export default function OrderInformationScreen() {
     ...(canReschedule ? [{ screen: 'reschedule', testID: 'order-reschedule-entry', label: 'Đổi lịch hẹn', Icon: CalendarClock, onPress: () => setRescheduleOpen(true) }] : []),
     ...(canRebook ? [{ screen: 'rebook', testID: 'order-rebook-entry', label: 'Đặt lại thợ', Icon: Repeat, onPress: () => setRebookOpen(true) }] : []),
     { screen: 'SupportCases', testID: 'order-support-entry', label: 'Yêu cầu hỗ trợ', Icon: Headset },
-    { screen: 'OrderException', testID: 'order-cancel-entry', label: 'Hủy đơn hoặc kiểm tra điều kiện', Icon: XCircle },
+    ...(['COMPLETED', 'CANCELLED'].includes(String(order?.status).toUpperCase()) ? [] : [{ screen: 'OrderException', testID: 'order-cancel-entry', label: 'Hủy đơn hoặc kiểm tra điều kiện', Icon: XCircle }]),
   ];
   const historicalOrder = history && orderValue && isHistoricalOrder(orderValue) ? orderValue : null;
   return <TaskScreenShell title="Thông tin đơn" onBack={() => navigation.goBack()}

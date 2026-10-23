@@ -52,6 +52,12 @@ describe('OrderInformationScreen content', () => {
     expect(out).toContain('90 ngày');
     expect(out).toContain('Bình · 0911');
   });
+  it('offers cancelling only while the order is still open', () => {
+    expect(render('customer', 'ACCEPTED')).toContain('order-cancel-entry');
+    expect(render('customer', 'COMPLETED')).not.toContain('order-cancel-entry');
+    expect(render('customer', 'CANCELLED')).not.toContain('order-cancel-entry');
+    expect(render('customer', 'COMPLETED')).toContain('order-support-entry');
+  });
   it('offers rescheduling only to the customer once the technician accepted and before the repair starts', () => {
     expect(render('customer', 'ACCEPTED')).toContain('order-reschedule-entry');
     expect(render('customer', 'UNDER_REPAIR')).not.toContain('order-reschedule-entry');

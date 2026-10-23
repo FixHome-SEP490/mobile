@@ -101,10 +101,7 @@ export default function CustomerNotificationsScreen() {
 
   const [markingAll, setMarkingAll] = useState(false);
   const [markAllError, setMarkAllError] = useState<string | null>(null);
-  const loadedUnreadCount = notifications.filter((item) => !item.isRead).length;
   // Like the web filter: narrows the pages already loaded, GET /notifications has no filter parameter.
-  const [unreadOnly, setUnreadOnly] = useState(false);
-  const shown = unreadOnly ? notifications.filter((item) => !item.isRead) : notifications;
 
   const onMarkAllRead = async () => {
     if (markingAll) return;
@@ -276,13 +273,6 @@ export default function CustomerNotificationsScreen() {
         </View>
       );
     }
-    if (unreadOnly && notifications.length > 0) {
-      return (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyTitle}>Không có thông báo chưa đọc</Text>
-        </View>
-      );
-    }
     return (
       <View style={styles.emptyContainer}>
         <View style={styles.emptyIconCircle}>
@@ -328,8 +318,6 @@ export default function CustomerNotificationsScreen() {
       <View style={styles.header}>
         <View style={styles.headerCopy}>
           <Text style={styles.headerTitle} accessibilityRole="header">Thông báo</Text>
-          {!loading && <Text style={styles.headerSubtitle}>{loadedUnreadCount} chưa đọc · {notifications.length} đã tải</Text>}
-
         </View>
         <TouchableOpacity
           style={[styles.markAllBtn, markingAll && { opacity: 0.6 }]}
@@ -346,22 +334,6 @@ export default function CustomerNotificationsScreen() {
       </View>
 
       {!!markAllError && <Text style={styles.markAllError} accessibilityRole="alert">{markAllError}</Text>}
-      {!loading && notifications.length > 0 && (
-        <View style={styles.filterRow}>
-          {([[false, 'Tất cả'], [true, `Chưa đọc (${loadedUnreadCount})`]] as const).map(([value, label]) => (
-            <TouchableOpacity
-              key={label}
-              testID={value ? 'notifications-filter-unread' : 'notifications-filter-all'}
-              style={[styles.filterChip, unreadOnly === value && styles.filterChipActive]}
-              onPress={() => setUnreadOnly(value)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: unreadOnly === value }}
-            >
-              <Text style={[styles.filterChipText, unreadOnly === value && styles.filterChipTextActive]}>{label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
       {loading && !refreshing ? (
         <View style={styles.loadingWrap}>
           <Text style={styles.loadingText}>Đang tải thông báo…</Text>
@@ -369,7 +341,7 @@ export default function CustomerNotificationsScreen() {
         </View>
       ) : (
         <FlatList
-          data={shown}
+          data={notifications}
           keyExtractor={(item, index) => item.id?.toString() || index.toString()}
           renderItem={renderItem}
           ListHeaderComponent={
@@ -416,7 +388,6 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   headerCopy: { flex: 1, minWidth: 0, gap: 4 },
   headerOverline: { fontSize: 12, lineHeight: 16, fontWeight: '700', letterSpacing: 1, color: colors.textSecondary },
-  headerSubtitle: { fontSize: 12, lineHeight: 17, color: colors.textSecondary },
   unreadPill: { alignSelf: 'flex-start', backgroundColor: colors.primarySoft, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginTop: 2 },
   unreadPillText: { fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.primaryStrong ?? colors.primary },
   markAllError: { fontSize: 13, lineHeight: 19, color: colors.error, paddingHorizontal: 16, paddingVertical: 12 },
@@ -439,11 +410,6 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     borderRadius: 16,
     gap: 4,
   },
-  filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 12 },
-  filterChip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  filterChipActive: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
-  filterChipText: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
-  filterChipTextActive: { color: colors.primaryStrong ?? colors.primary },
   markAllText: {
     fontSize: 12,
     fontWeight: '600',
