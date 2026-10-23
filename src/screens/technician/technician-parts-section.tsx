@@ -186,9 +186,9 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
     }
   };
 
-  const loadPartRequests = async () => {
+  const loadPartRequests = async (quiet = false) => {
     try {
-      setLoading(true);
+      if (!quiet) setLoading(true);
       setPartRequests(await partRequestsApi.getByOrderId(orderId));
       void loadReturns();
     } catch (err) {
@@ -221,7 +221,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
   };
 
   useEffect(() => {
-    void loadPartRequests();
+    void loadPartRequests(refreshKey > 0);
     // refreshKey: a part request of this order changed on the server (PO 18/10/2026).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId, refreshKey]);

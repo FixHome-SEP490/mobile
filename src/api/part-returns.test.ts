@@ -35,9 +35,9 @@ describe('part returns', () => {
 
 describe('usedQtyRange', () => {
   const base = { partRequestId: 'r', partRequestItemId: 'i', partNameSnapshot: 'P', issuedQty: 3, usedQty: 1, declaredQty: 0, managerAcceptedQty: 0, outstandingQty: 2, version: 1 };
-  it('grows from the recorded quantity up to what the manager has not accepted back', () => {
-    expect(usedQtyRange(base)).toEqual({ min: 1, max: 3 });
-    expect(usedQtyRange({ ...base, managerAcceptedQty: 1 })).toEqual({ min: 1, max: 2 });
-    expect(usedQtyRange({ ...base, usedQty: 3, managerAcceptedQty: 1 })).toEqual({ min: 3, max: 3 });
+  it('may go back to 0 and up to what the manager has not accepted back', () => {
+    expect(usedQtyRange(base)).toEqual({ min: 0, max: 3 });
+    expect(usedQtyRange({ ...base, managerAcceptedQty: 1 })).toEqual({ min: 0, max: 2 });
+    expect(usedQtyRange({ ...base, usedQty: 3, managerAcceptedQty: 1 })).toEqual({ min: 0, max: 3 });
   });
 });

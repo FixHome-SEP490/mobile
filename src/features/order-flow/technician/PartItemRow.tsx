@@ -50,8 +50,10 @@ function ActionButton({ testID, label, primary, disabled, onPress }: { testID: s
  * given back). With one (the quantities FixHome issued) they record the exact used quantity, e.g. issued 3,
  * used 1, return 2, and declare what they hand back; the Service Manager confirms at the counter.
  */
-export function PartItemRow({ item, received, canMarkUsage, frozen, record, busy, maxUsed, onWhole, onSaveUsed, onDeclare }: {
+export function PartItemRow({ item, received, canMarkUsage, frozen, record, busy, quotedQty, maxUsed, onWhole, onSaveUsed, onDeclare }: {
   item: Item; received: boolean; canMarkUsage: boolean; frozen: boolean; record?: PartCustodyReturnRecord; busy: boolean;
+  /** Quantity of this SKU on the approved quotation; undefined when there is no approved quotation line for it. */
+  quotedQty?: number;
   /** Approved quotation quantity left for this SKU; the Backend rejects more. Undefined when not limited or not known. */
   maxUsed?: number;
   onWhole: (status: 'used' | 'returned') => void;
@@ -74,6 +76,8 @@ export function PartItemRow({ item, received, canMarkUsage, frozen, record, busy
   const capped = !!base && !!range && range.max < base.max;
   const declareMax = record ? canDeclareMoreQty(record) : 0;
   const pending = record ? pendingDeclaredQty(record) : 0;
+  // Usage is recorded, so what is left to hand back is known: one tap declares all of it.
+  const quickDeclare = !!record && record.usageRecorded === true && record.usedQty < record.issuedQty && declareMax > 0;
   // Older Backends send no status: fall back to the quantities.
   const note = record ? (record.returnStatus ? partReturnStatusText(record.returnStatus)
     : pending > 0 ? partReturnStatusText('declared') : record.outstandingQty === 0 ? partReturnStatusText('received') : null) : null;
@@ -95,11 +99,10 @@ export function PartItemRow({ item, received, canMarkUsage, frozen, record, busy
       </View>
       <Text style={styles.meta}>
         {record
-          ? [`Số lượng ${record.issuedQty}`, record.usageRecorded ? `Đã dùng ${record.usedQty}` : null, record.usageRecorded && record.outstandingQty > 0 ? `Còn phải trả ${record.outstandingQty}` : null].filter(Boolean).join(' · ')
-          : `Số lượng ${item.quantity}`}
+          ? [quotedQty === undefined ? null : `Báo giá duyệt ${quotedQty}`, `Số lượng ${record.issuedQty}`, record.usageRecorded ? `Đã dùng ${record.usedQty}` : null, record.usageRecorded && record.outstandingQty > 0 ? `Còn phải trả ${record.outstandingQty}` : null].filter(Boolean).join(' · ')
+          : [quotedQty === undefined ? null : `Báo giá duyệt ${quotedQty}`, `Số lượng ${item.quantity}`].filter(Boolean).join(' · ')}
       </Text>
       {note ? <Text style={[styles.meta, { color: colors.tone[note.tone].text }]}>{note.text}</Text> : null}
-      {record?.blocksNewWork ? <Text style={[styles.meta, { color: colors.tone.warning.text }]}>Bạn chưa trả đủ linh kiện nên chưa nhận được việc mới.</Text> : null}
 
       {received && canMarkUsage && !record && (
         <View style={styles.actions}>
@@ -136,7 +139,8 @@ export function PartItemRow({ item, received, canMarkUsage, frozen, record, busy
       {record && mode === null && (
         <View style={styles.actions}>
           {received && canMarkUsage && !fullyReturned && <ActionButton testID={`part-usage-open-${item.id}`} label={record.usageRecorded ? 'Sửa số lượng đã dùng' : 'Ghi số lượng đã dùng'} primary={!record.usageRecorded} disabled={locked} onPress={() => open('usage')} />}
-          {declareMax > 0 && <ActionButton testID={`part-declare-open-${item.id}`} label="Khai trả" disabled={locked} onPress={() => open('declare')} />}
+          {quickDeclare && <ActionButton testID={`part-declare-all-${item.id}`} label={`Khai trả ${declareMax} cái còn lại`} primary disabled={locked} onPress={() => void onDeclare(declareMax)} />}
+          {declareMax > 0 && <ActionButton testID={`part-declare-open-${item.id}`} label={quickDeclare ? 'Khai trả số khác' : 'Khai trả'} disabled={locked} onPress={() => open('declare')} />}
         </View>
       )}
     </View>

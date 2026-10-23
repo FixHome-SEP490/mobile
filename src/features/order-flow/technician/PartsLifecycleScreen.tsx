@@ -13,7 +13,7 @@ import { ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { partsBlockers } from '../domain/order-capabilities';
 import { PartItemRow } from './PartItemRow';
-import { approvedUsageCap } from './held-parts';
+import { approvedQuoteQty, approvedUsageCap } from './held-parts';
 import { usePartReturns } from './usePartReturns';
 import { lightTheme as colors, spacing, type ToneName } from '../../../constants/theme';
 
@@ -203,6 +203,7 @@ export default function PartsLifecycleScreen() {
             frozen={frozen}
             record={returns.records[it.id]}
             busy={returns.busy}
+            quotedQty={approvedQuoteQty(it, req.requestType, quotationsList, key!.serviceOrderId)}
             maxUsed={approvedUsageCap(it, req.requestType, partsList, quotationsList, key!.serviceOrderId, usedOf)}
             onWhole={status => onUpdateUsage(req.id, it.id, status)}
             onSaveUsed={quantity => returns.saveUsedQty(req.id, returns.records[it.id], quantity)}
@@ -270,15 +271,16 @@ export default function PartsLifecycleScreen() {
         </ReadOnlyNotice>
       )}
 
-      {isUnderRepair && partsList.length > 0 && !focusedRequestId && (
-        blockers.open + blockers.unsettled > 0 ? (
-          <ReadOnlyNotice tone="warning">
-            Chưa thể gửi bàn giao:
-            {blockers.unsettled > 0 ? ` ${blockers.unsettled} linh kiện chưa ghi dùng hoặc trả.` : ''}
-            {blockers.open > 0 ? ` ${blockers.open} yêu cầu chưa nhận (nhận bằng QR hoặc hủy yêu cầu).` : ''}
-          </ReadOnlyNotice>
-        ) : <ReadOnlyNotice tone="success">Linh kiện đã xử lý đủ, không còn gì chặn gửi bàn giao.</ReadOnlyNotice>
-      )}
+      {!focusedRequestId && (() => {
+        const handover = isUnderRepair && partsList.length > 0;
+        const lines = [
+          handover && blockers.unsettled > 0 ? `${blockers.unsettled} linh kiện chưa ghi dùng hoặc trả.` : '',
+          handover && blockers.open > 0 ? `${blockers.open} yêu cầu chưa nhận (nhận bằng QR hoặc hủy yêu cầu).` : '',
+          Object.values(returns.records).some(r => r.blocksNewWork) ? 'Chưa trả đủ linh kiện nên chưa nhận được việc mới.' : '',
+        ].filter(Boolean);
+        if (lines.length) return <ReadOnlyNotice tone="warning">{[handover && blockers.open + blockers.unsettled > 0 ? 'Chưa thể gửi bàn giao:' : 'Cần xử lý:', ...lines.map(l => `• ${l}`)].join('\n')}</ReadOnlyNotice>;
+        return handover ? <ReadOnlyNotice tone="success">Linh kiện đã xử lý đủ, không còn gì chặn gửi bàn giao.</ReadOnlyNotice> : null;
+      })()}
       {returns.message && <ReadOnlyNotice tone={returns.message.tone}>{returns.message.text}</ReadOnlyNotice>}
       {state.error && <ReadOnlyNotice tone="error">{state.error}</ReadOnlyNotice>}
       {state.actionSuccess && <ReadOnlyNotice tone="success">{state.actionSuccess}</ReadOnlyNotice>}

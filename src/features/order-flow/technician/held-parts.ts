@@ -53,13 +53,11 @@ export function heldParts(
  * pre-repair / quotation lines of the same SKU already used (the Backend limits usage per SKU and approved source).
  * Additional-cost lines are covered by their own approved cost (undefined here); unknown quotations also give undefined.
  */
-export function approvedUsageCap(
-  item: { id: string; partCatalogId?: string | null },
+export function approvedQuoteQty(
+  item: { partCatalogId?: string | null },
   requestType: string | undefined,
-  requests: HeldRequest[],
   quotations: Pick<OrderQuotation, 'serviceOrderId' | 'status' | 'items'>[] | null,
   orderId: string,
-  usedOf: (itemId: string) => number,
 ): number | undefined {
   if (!quotations || !item.partCatalogId || (requestType !== 'pre_repair' && requestType !== 'quotation')) return undefined;
   let approved = 0;
@@ -69,6 +67,19 @@ export function approvedUsageCap(
       if (['PARTS', 'PARTS_EQUIPMENT'].includes(String(line.type).toUpperCase()) && (line.partSource ?? 'fixhome') === 'fixhome' && line.partCatalogId === item.partCatalogId) approved += line.quantity;
     }
   }
+  return approved;
+}
+
+export function approvedUsageCap(
+  item: { id: string; partCatalogId?: string | null },
+  requestType: string | undefined,
+  requests: HeldRequest[],
+  quotations: Pick<OrderQuotation, 'serviceOrderId' | 'status' | 'items'>[] | null,
+  orderId: string,
+  usedOf: (itemId: string) => number,
+): number | undefined {
+  const approved = approvedQuoteQty(item, requestType, quotations, orderId);
+  if (approved === undefined) return undefined;
   let othersUsed = 0;
   for (const request of requests) {
     if (request.serviceOrderId !== orderId || (request.requestType !== 'pre_repair' && request.requestType !== 'quotation')) continue;
