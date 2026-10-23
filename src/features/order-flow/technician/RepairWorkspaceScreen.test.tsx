@@ -82,11 +82,11 @@ it('shows the current repair scope with detail links and no premature completion
   expect(footerIndex).toBeGreaterThan(scrollIndex);
   await act(async () => {
     renderer.root.findByProps({ testID: 'task-gallery-link' }).props.onPress();
-    renderer.root.findByProps({ testID: 'task-link-ScopeDetail' }).props.onPress();
+    renderer.root.findByProps({ testID: 'task-link-OrderInformation' }).props.onPress();
     renderer.root.findByProps({ testID: 'task-link-PersonalOrderNotes' }).props.onPress();
   });
   expect(mockNavigate).toHaveBeenNthCalledWith(1, 'EvidenceGallery');
-  expect(mockNavigate).toHaveBeenNthCalledWith(2, 'ScopeDetail');
+  expect(mockNavigate).toHaveBeenNthCalledWith(2, 'OrderInformation');
   expect(mockNavigate).toHaveBeenNthCalledWith(3, 'PersonalOrderNotes');
   await act(async () => renderer.unmount());
 });

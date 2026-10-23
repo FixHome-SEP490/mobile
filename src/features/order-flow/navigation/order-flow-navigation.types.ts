@@ -6,7 +6,6 @@ export type CustomerOrderFlowParamList = {
   OrderProgressHistory: undefined;
   EvidenceGallery: undefined;
   EvidenceViewer: { evidenceId: string };
-  ScopeDetail: undefined;
   InvoiceDetail: undefined;
   ProposalDetail: { proposalId?: string } | undefined;
   /** Manual C09a wallet payment. Focused screen; never an automatic OrderTask taskId. */

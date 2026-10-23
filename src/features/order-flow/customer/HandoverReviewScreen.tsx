@@ -84,7 +84,7 @@ export default function HandoverReviewScreen() {
         {(
           [
             ['EvidenceGallery', 'Xem ảnh bàn giao'],
-            ['ScopeDetail', 'Xem phạm vi và báo giá'],
+            ['OrderInformation', 'Xem thông tin đơn'],
             ['InvoiceDetail', 'Xem hóa đơn'],
           ] as const
         ).map(([screen, label]) => (

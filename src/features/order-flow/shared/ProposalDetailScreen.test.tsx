@@ -44,7 +44,7 @@ it('opens exact non-pending proposal IDs as status/version-bearing readonly reco
     await act(async () => renderer.update(<ProposalDetailScreen />));
     const text = renderer.root.findAllByType(Text).map(node => String(node.props.children)).join(' ');
     expect(text).toContain(statusLabel);
-    expect(text).toContain(`Phiên bản báo giá ${version}`);
+    expect(text).toMatch(new RegExp(`Báo giá lần ,?${version}`));
     expect(text).not.toContain('Chấp nhận');
     expect(text).not.toContain('Từ chối');
   }

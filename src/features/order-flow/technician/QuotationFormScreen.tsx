@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { BottomSheetBackdrop, BottomSheetModal } from '@gorhom/bottom-sheet';
 import * as Haptics from 'expo-haptics';
-import { ClipboardList, Info } from 'lucide-react-native';
+import { Info } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
@@ -505,7 +505,6 @@ export default function QuotationFormScreen() {
 
       <Section title="Xem thêm">
         <LinkRow testID="task-detail-link" label="Chi tiết đơn" Icon={Info} onPress={() => navigation.navigate('OrderInformation')} />
-        <LinkRow testID="quote-scope-link" label="Phạm vi và giá" Icon={ClipboardList} onPress={() => navigation.navigate('ScopeDetail')} />
       </Section>
 
       {canEdit && (

@@ -90,7 +90,11 @@ export default function OrderInformationScreen() {
         : <DetailRow label="Khách hàng" value={[order.customerName, order.customerPhone].filter(Boolean).join(' · ') || 'Chưa có thông tin'} />}
       {order.customerNote ? <DetailRow label="Ghi chú của khách" value={order.customerNote} /> : null}
       <DetailRow label="Hình thức giá" value={PRICING_LABELS[String(order.pricingMode ?? '').toUpperCase()] ?? 'Chưa xác định'} />
-      {order.laborWarrantyDays ? <DetailRow label="Bảo hành tiền công" value={`${order.laborWarrantyDays} ngày`} /> : null}
+      {String(order.pricingMode ?? '').toUpperCase() === 'FIXED_PRICE' ? <>
+        <DetailRow label="Giá đã chốt" value={formatVnd(order.fixedUnitPrice)} />
+        <DetailRow label="Số lượng" value={order.quantity ?? 'Chưa có dữ liệu'} />
+      </> : null}
+      {order.laborWarrantyDays ?<DetailRow label="Bảo hành tiền công" value={`${order.laborWarrantyDays} ngày`} /> : null}
       <DetailRow label="Tổng tiền" value={formatVnd(typeof order.grandTotal === 'number' ? order.grandTotal : Number.isFinite(Number(order.grandTotal)) ? Number(order.grandTotal) : undefined)} />
       {order.scopeDescription ? <DetailRow label="Phạm vi ban đầu" value={order.scopeDescription} /> : null}
     </View>}

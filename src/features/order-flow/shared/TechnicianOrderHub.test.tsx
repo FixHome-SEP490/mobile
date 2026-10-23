@@ -45,7 +45,7 @@ it('disables every shortcut when access is revoked', async () => {
   mockSnapshot = snapshotWith('EN_ROUTE', []);
   mockSnapshot.access = 'revoked';
   const r = await render();
-  const link = r.root.findByProps({ testID: 'task-link-ScopeDetail' });
+  const link = r.root.findByProps({ testID: 'task-link-OrderInformation' });
   expect(link.props.disabled).toBe(true);
   await act(async () => link.props.onPress?.());
   expect(mockNavigate).not.toHaveBeenCalled();

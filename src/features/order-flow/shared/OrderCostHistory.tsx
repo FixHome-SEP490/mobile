@@ -7,7 +7,7 @@ import { formatVnd } from '../../../utils/format';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing, type ToneName } from '../../../constants/theme';
 
-const QUOTE_STATUS: Record<string, { label: string; tone: ToneName }> = {
+export const QUOTE_STATUS: Record<string, { label: string; tone: ToneName }> = {
   DRAFT: { label: 'Bản nháp', tone: 'neutral' },
   SENT: { label: 'Chờ duyệt báo giá', tone: 'warning' },
   APPROVED: { label: 'Đã duyệt báo giá', tone: 'success' },
@@ -55,10 +55,11 @@ function Total({ label, value, strong }: { label: string; value: string; strong?
 }
 
 /**
+ * With `onlyId`, just that one quotation or extra-cost proposal (same card, original round number).
  * Every quotation round and every extra-cost proposal of the order, oldest first, each with its status,
  * lines and totals, so the customer or technician can see how the price got to where it is. Read only.
  */
-export default function OrderCostHistory() {
+export default function OrderCostHistory({ onlyId }: { onlyId?: string } = {}) {
   const { key, snapshot, loadResource } = useOrderSession();
   useLoadUnloadedResources(snapshot, ['quotations', 'extras'], loadResource);
   if (!key || !snapshot || snapshot.access !== 'current') return null;
@@ -75,16 +76,18 @@ export default function OrderCostHistory() {
     ? extras.data.filter(own).sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')))
     : [];
   const failed = quotes.status === 'error' || extras.status === 'error';
+  const shownQuotes = quoteRows.filter(q => !onlyId || q.id === onlyId);
+  const shownExtras = extraRows.map((cost, index) => ({ cost, index })).filter(({ cost }) => !onlyId || cost.id === onlyId);
 
-  if (!failed && !quoteRows.length && !extraRows.length) return null;
+  if (!failed && !shownQuotes.length && !shownExtras.length) return null;
   return (
     <View testID="order-cost-history" style={styles.wrap}>
       {failed ? <ReadOnlyNotice tone="error">Không tải được lịch sử báo giá hoặc chi phí phát sinh.</ReadOnlyNotice> : null}
 
-      {quoteRows.length ? (
+      {shownQuotes.length ? (
         <View style={styles.section}>
-          <Text accessibilityRole="header" style={styles.title}>Báo giá</Text>
-          {quoteRows.map((quote, index) => (
+          {onlyId ? null : <Text accessibilityRole="header" style={styles.title}>Báo giá</Text>}
+          {shownQuotes.map((quote, index) => (
             <View key={quote.id} testID={`cost-quote-${quote.id}`} style={styles.card}>
               <View style={styles.head}>
                 <Text style={styles.cardTitle}>Báo giá lần {quote.version ?? index + 1}</Text>
@@ -100,10 +103,10 @@ export default function OrderCostHistory() {
         </View>
       ) : null}
 
-      {extraRows.length ? (
+      {shownExtras.length ? (
         <View style={styles.section}>
-          <Text accessibilityRole="header" style={styles.title}>Chi phí phát sinh</Text>
-          {extraRows.map((cost, index) => {
+          {onlyId ? null : <Text accessibilityRole="header" style={styles.title}>Chi phí phát sinh</Text>}
+          {shownExtras.map(({ cost, index }) => {
             const labor = num(cost.totalLaborDelta);
             const parts = num(cost.totalPartsDelta);
             const shipping = num(cost.shippingFee) ?? 0;

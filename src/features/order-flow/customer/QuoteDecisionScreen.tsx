@@ -313,14 +313,6 @@ export default function QuoteDecisionScreen() {
         >
           <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Chi tiết đơn</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          testID="quote-scope-link"
-          accessibilityRole="button"
-          onPress={() => navigation.navigate('ScopeDetail')}
-          style={{ flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12 }}
-        >
-          <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Phạm vi và giá</Text>
-        </TouchableOpacity>
       </View>
       {quote && (
         <TouchableOpacity
@@ -329,7 +321,7 @@ export default function QuoteDecisionScreen() {
           onPress={() => navigation.navigate('ProposalDetail', { proposalId: quote.id })}
           style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12 }}
         >
-          <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Xem đề xuất gốc</Text>
+          <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Xem chi tiết báo giá</Text>
         </TouchableOpacity>
       )}
     </TaskScreenShell>

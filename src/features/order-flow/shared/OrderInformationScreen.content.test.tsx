@@ -18,7 +18,7 @@ jest.mock('../../../hooks/useKeyboardInset', () => ({ useKeyboardInset: () => 0 
 jest.mock('../../../components/AcceptedRescheduleSheet', () => ({ __esModule: true, default: () => null }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => {}) }));
 
-function renderTree(role: 'customer' | 'technician', status: CanonicalOrderStatus = 'UNDER_REPAIR'): ReactTestRenderer {
+function renderTree(role: 'customer' | 'technician', status: CanonicalOrderStatus = 'UNDER_REPAIR', pricingMode = 'INSPECTION_REQUIRED'): ReactTestRenderer {
   const key = { userId: 'u1', role, sessionGeneration: 1, serviceOrderId: 'order-1' };
   mockSnapshot = createOrderSessionSnapshot(key);
   mockSnapshot.access = 'current';
@@ -27,15 +27,15 @@ function renderTree(role: 'customer' | 'technician', status: CanonicalOrderStatu
     customerName: 'An', customerPhone: '0900', addressSummary: 'Quận 1', scheduledAt: '2030-10-21T01:00:00.000Z',
     bookingMode: 'scheduled', slot: 'morning', customerNote: 'Gọi trước', laborWarrantyDays: 90,
     technician: { id: 't1', fullName: 'Bình', phoneNumber: '0911', averageRating: null },
-    pricingMode: 'INSPECTION_REQUIRED', quantity: 1, laborTotal: 0, partsTotal: 0, grandTotal: 0, paymentStatus: 'UNPAID', createdAt: '',
+    pricingMode, fixedUnitPrice: 150000, quantity: 2, laborTotal: 0, partsTotal: 0, grandTotal: 0, paymentStatus: 'UNPAID', createdAt: '',
   }, 1, 1);
   let r!: ReturnType<typeof create>;
   act(() => { r = create(<OrderInformationScreen />); });
   return r;
 }
 
-function render(role: 'customer' | 'technician', status?: CanonicalOrderStatus) {
-  const tree = renderTree(role, status);
+function render(role: 'customer' | 'technician', status?: CanonicalOrderStatus, pricingMode?: string) {
+  const tree = renderTree(role, status, pricingMode);
   const output = JSON.stringify(tree.toJSON()).replace(/","/g, '');
   act(() => tree.unmount());
   return output;
@@ -57,6 +57,7 @@ describe('OrderInformationScreen content', () => {
     expect(render('customer', 'UNDER_REPAIR')).not.toContain('order-reschedule-entry');
     expect(render('technician', 'ACCEPTED')).not.toContain('order-reschedule-entry');
   });
+it('shows the locked price and quantity only for a fixed-price order', () => {    const fixed = render('customer', 'UNDER_REPAIR', 'FIXED_PRICE');    expect(fixed).toContain('Giá đã chốt');    expect(fixed).toContain('150.000');    expect(fixed).toContain('Số lượng');    expect(render('customer')).not.toContain('Giá đã chốt');  });
   it('shows the customer to the technician', () => {
     const out = render('technician');
     expect(out).toContain('An · 0900');

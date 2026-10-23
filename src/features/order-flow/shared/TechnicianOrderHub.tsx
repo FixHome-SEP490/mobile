@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import {
-  Camera, ChevronRight, ClipboardList, FileText, HandCoins, History, Info, NotebookPen, Package, ReceiptText, Wrench,
+  Camera, ChevronRight, FileText, HandCoins, History, Info, NotebookPen, Package, ReceiptText, Wrench,
   type LucideIcon,
 } from 'lucide-react-native';
 import { isHistoricalOrder } from '../../../api/orders.api';
@@ -10,12 +10,11 @@ import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { useLoadUnloadedResources } from './useLoadUnloadedResources';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 
-type HubScreen = 'PartsLifecycle' | 'OrderInformation' | 'ScopeDetail' | 'PersonalOrderNotes' | 'OrderProgressHistory'
+type HubScreen = 'PartsLifecycle' | 'OrderInformation' | 'PersonalOrderNotes' | 'OrderProgressHistory'
   | 'AfterEvidence' | 'CompletionRequest' | 'CashDeclaration' | 'ExtraProposal';
 
 const MANAGE: { screen: HubScreen; label: string; Icon: LucideIcon }[] = [
   { screen: 'PartsLifecycle', label: 'Linh kiện', Icon: Package },
-  { screen: 'ScopeDetail', label: 'Phạm vi và báo giá', Icon: ClipboardList },
   { screen: 'OrderInformation', label: 'Thông tin đơn', Icon: Info },
   { screen: 'PersonalOrderNotes', label: 'Ghi chú riêng trên thiết bị', Icon: NotebookPen },
   { screen: 'OrderProgressHistory', label: 'Xem tiến độ', Icon: History },

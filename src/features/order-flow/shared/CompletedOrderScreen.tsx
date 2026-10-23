@@ -128,7 +128,7 @@ export default function CompletedOrderScreen({ role }: { role: 'customer' | 'tec
       <View style={{ gap: 8 }}>
         {(
           [
-            ['ScopeDetail', 'Xem phạm vi và báo giá'],
+            ['OrderInformation', 'Xem thông tin đơn'],
             ['InvoiceDetail', 'Xem hóa đơn'],
             ['EvidenceGallery', 'Xem ảnh và bằng chứng'],
             ['OrderProgressHistory', 'Xem tiến độ'],

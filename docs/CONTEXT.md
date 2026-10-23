@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-23 04:50 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/technician-order-hub
+> Cập nhật lần cuối: 2026-10-23 06:16 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -372,6 +372,11 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-23 06:16 (UTC+7) | Hgnv11 | dev | Màn Đề xuất (ProposalDetail) đổi thành Chi tiết báo giá hoặc Chi tiết chi phí phát sinh và dùng chung thẻ của OrderCostHistory (OrderCostHistory nhận onlyId): bỏ mã thô và câu nhắc M2, nút Xem đề xuất gốc đổi thành Xem chi tiết báo giá; chỉ đổi giao diện; chưa kiểm chứng trên máy thật
+- 2026-10-23 06:08 (UTC+7) | Hgnv11 | dev | Làm lại màn Chờ duyệt báo giá của kỹ thuật viên: tiêu đề Báo giá lần N kèm nhãn Chờ duyệt báo giá, bỏ mã báo giá thô, giờ gửi theo giờ Việt Nam, khối Đang chờ khách hàng duyệt, tiền công và linh kiện căn phải, nút Xem chi tiết báo giá; chỉ đổi giao diện; chưa kiểm chứng trên máy thật
+- 2026-10-23 06:05 (UTC+7) | Hgnv11 | dev | Gộp màn Phạm vi và báo giá (ScopeDetail) vào Thông tin đơn cho cả khách và kỹ thuật viên: Thông tin đơn thêm Giá đã chốt và Số lượng cho đơn giá cố định, các lối vào cũ trỏ về Thông tin đơn, bỏ route ScopeDetail và danh sách vật tư riêng (kỹ thuật viên vẫn có Linh kiện); chỉ đổi điều hướng và giao diện; chưa kiểm chứng trên máy thật
+- 2026-10-23 05:48 (UTC+7) | Hgnv11 | dev | Làm lại giao diện thẻ báo giá chờ duyệt của khách (DecisionSummary): tiêu đề Báo giá lần N kèm nhãn trạng thái, bỏ mã báo giá thô, giờ gửi theo giờ Việt Nam, chia Tiền công và Linh kiện, thành tiền từng dòng căn phải, khối Ước tính nổi bật; chỉ đổi giao diện, không đổi API hay logic chọn bảo hành; chưa kiểm chứng trên máy thật
+- 2026-10-23 05:30 (UTC+7) | Hgnv11 | dev | Gỡ kẹt "Chưa xác nhận được kết quả" ở Ảnh trước/khuôn mặt: gửi ảnh bị máy chủ trả 400/403/413/415/422 thì ghi failed-known để chụp và gửi lại được; lỗi mạng, 5xx, 409 vẫn giữ unknown (không suy đoán); chưa kiểm chứng trên máy thật
 - 2026-10-23 04:50 (UTC+7) | Hgnv11 | feat/technician-order-hub | Màn Thông tin đơn liệt kê từng lần báo giá và chi phí phát sinh (OrderCostHistory), chi phí phát sinh đọc tiền dạng chuỗi bigint, màn Quản lý linh kiện nhóm theo nguồn và giới hạn số đã dùng theo báo giá đã duyệt, khai trả đủ thì tự ghi đã dùng 0 để bàn giao không chờ quản lý nhận, nhãn Đã trả lại chỉ khi kho đã nhận; chưa kiểm chứng trên máy thật
 - 2026-10-23 03:12 (UTC+7) | Hgnv11 | feat/technician-order-hub | Màn đề xuất chi phí phát sinh làm lại theo kiểu màn báo giá (mục Tiền công và Linh kiện, chọn linh kiện FixHome từ kho qua bottom sheet, tick linh kiện còn lại sau báo giá, nguồn ngoài và thợ tự mang bị bỏ); Backend chỉ cấp phần thiếu so với số thợ đang giữ; chưa kiểm chứng trên máy thật
 - 2026-10-23 00:39 (UTC+7) | Hgnv11 | feat/technician-order-hub | Làm gọn UI đặt lịch (bước Tình trạng cần sửa: tiêu đề mục đồng nhất, dấu * đỏ cho mục bắt buộc, thẻ Chi phí ước tính, thẻ thông tin thiết bị ẩn khi chỉ cần khảo sát) và gỡ nút lặp với Quản lý đơn ở T02/T03/T05/T06 của thợ; chỉ đổi giao diện, chưa kiểm chứng trên máy thật.
@@ -407,11 +412,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-17 17:48 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | Booking Customer giữ hai buổi sáng/chiều; lịch 14 ngày có lịch tháng, không chọn buổi ngầm và làm mới theo focus/app/time.
 - 2026-10-17 16:50 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | Polish Customer: reset shortcut, đủ mã vệ sinh catalog, nhãn TV đúng phạm vi, cutout plumbing riêng, catalog dễ đọc, CTA trong vùng chạm và sheet uy tín truy cập được; chờ AGY recapture viewport thật.
 - 2026-10-17 16:39 (UTC+7) | Hgnv11 | feat/mobile-layout-polish | Nhãn booking đóng thành Chưa có thợ nhận, giờ hẹn bỏ giây, hàng tùy chọn của thẻ Hoạt động gọn lại, nút trên màn cùng kích cỡ; thiết bị CHƯA KIỂM CHỨNG.
-- 2026-10-17 16:23 (UTC+7) | foxonworld | feat/mobile-c50-c45-20261017 | UX1–UX5: định tuyến catalog theo service code, booking hai bước/review riêng, receipt gọn, radar matching có điều kiện, reputation customer sheet và CTA giữa nổi; thiết bị/visual QA CHƯA KIỂM CHỨNG.
-- 2026-10-17 16:18 (UTC+7) | Hgnv11 | feat/mobile-layout-polish | Trang chủ và Đơn của tôi của khách chừa đủ chỗ dưới đáy để thanh tab không che dòng cuối; thiết bị CHƯA KIỂM CHỨNG.
-- 2026-10-17 15:19 (UTC+7) | Hgnv11 | feat/mobile-layout-polish | Nhãn truy cập cho 14 ô nhập, khung xám cho bốn danh sách, nút Thử lại khi đọc đơn lỗi ở OrderTaskScreen; thiết bị CHƯA KIỂM CHỨNG.
-- 2026-10-17 15:10 (UTC+7) | Hgnv11 | feat/mobile-layout-polish | Thống nhất cỡ và độ đậm tiêu đề màn (18 có nút Quay lại, 24 màn gốc tab), bo góc 13 thành 14; thiết bị CHƯA KIỂM CHỨNG.
-- 2026-10-17 14:53 (UTC+7) | Hgnv11 | feat/mobile-layout-polish | Năm bottom sheet (địa chỉ x2, cách đặt lịch, xem lại yêu cầu, sửa hồ sơ) co theo nội dung thay cho chiều cao cố định; thiết bị CHƯA KIỂM CHỨNG.
 
 ### Lịch sử giữ lại khi tích hợp
 
