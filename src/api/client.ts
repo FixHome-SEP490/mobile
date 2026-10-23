@@ -236,6 +236,10 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as SessionAwareRequestConfig | undefined;
 
+    // A refused mutation may still have committed (e.g. a disputed cash confirm answers 409 after saving),
+    // so the read-back must not be served a stale cached GET.
+    if (originalRequest && (originalRequest.method ?? 'get').toLowerCase() !== 'get') clearApiCache();
+
     if (error.response?.status !== 401 || !originalRequest) {
       return Promise.reject(error);
     }

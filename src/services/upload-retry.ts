@@ -3,7 +3,7 @@
 // A fixed timeout either kills a slow but healthy upload at 90% or waits minutes
 // on a dead one. Instead an attempt is abandoned only when no byte has moved for
 // a while, and it is tried again a few times with growing pauses. A refusal from
-// the server (a 4xx other than 408/429) is final: sending again cannot help.
+// the server (a 4xx other than 401/408/429) is final: sending again cannot help.
 
 /** No byte moved for this long: the attempt is dead. */
 export const UPLOAD_STALL_MS = 45_000;
@@ -45,7 +45,8 @@ function statusOf(error: unknown): number | undefined {
 export function isRetryable(error: unknown): boolean {
   const status = statusOf(error);
   if (status === undefined) return true;
-  return status === 408 || status === 429 || status >= 500;
+  // 401: the api client already refreshed the token but never replays a POST, so send it again with the new one.
+  return status === 401 || status === 408 || status === 429 || status >= 500;
 }
 
 function wait(ms: number, signal?: AbortSignal): Promise<void> {
