@@ -1,9 +1,9 @@
 import React from 'react';
-import { Image, Text, TouchableOpacity, View } from 'react-native';
+import { Image, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { visibleEvidence } from './order-detail-view-models';
-import { ReadOnlyNotice, TaskScreenShell } from './TaskScreenShell';
+import { ReadOnlyNotice, Section, TaskScreenShell } from './TaskScreenShell';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from './useLoadUnloadedResources';
 
@@ -25,12 +25,17 @@ export default function EvidenceGalleryScreen() {
     {current && resource?.status === 'loading' && <ReadOnlyNotice>Đang tải ảnh từ máy chủ…</ReadOnlyNotice>}
     {current && resource?.status === 'error' && <ReadOnlyNotice>Chưa tải được ảnh. Dữ liệu lỗi không được xem như danh sách rỗng.</ReadOnlyNotice>}
     {current && resource?.status === 'ready' && photos.length === 0 && <ReadOnlyNotice>Đơn chưa có ảnh hiển thị cho tài khoản này.</ReadOnlyNotice>}
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-      {photos.map(photo => <TouchableOpacity key={photo.id} accessibilityRole="button" accessibilityLabel={`Mở ${(typeLabel[photo.type] ?? 'ảnh bổ sung').toLowerCase()}`}
-        onPress={() => navigation.push('EvidenceViewer', { evidenceId: photo.id })} style={{ width: '48%', minHeight: 130, backgroundColor: colors.surface, borderRadius: 12, overflow: 'hidden' }}>
-        <Image source={{ uri: photo.mediaUrl }} resizeMode="cover" style={{ height: 112, width: '100%' }} />
-        <Text style={{ color: colors.text, padding: 8, fontWeight: '600' }}>{typeLabel[photo.type] ?? 'Ảnh bổ sung'}</Text>
-      </TouchableOpacity>)}
-    </View>
+    {Object.keys(typeLabel).concat(photos.some(p => !typeLabel[p.type]) ? [''] : []).map(type => {
+      const group = photos.filter(photo => (typeLabel[photo.type] ? photo.type : '') === type);
+      if (!group.length) return null;
+      return <Section key={type || 'other'} title={`${typeLabel[type] ?? 'Ảnh bổ sung'} (${group.length})`}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingVertical: spacing.md }}>
+          {group.map(photo => <TouchableOpacity key={photo.id} accessibilityRole="button" accessibilityLabel={`Mở ${(typeLabel[photo.type] ?? 'ảnh bổ sung').toLowerCase()}`}
+            onPress={() => navigation.push('EvidenceViewer', { evidenceId: photo.id })} style={{ width: '48%', backgroundColor: colors.background, borderRadius: 12, overflow: 'hidden' }}>
+            <Image source={{ uri: photo.mediaUrl }} resizeMode="cover" style={{ height: 112, width: '100%' }} />
+          </TouchableOpacity>)}
+        </View>
+      </Section>;
+    })}
   </TaskScreenShell>;
 }

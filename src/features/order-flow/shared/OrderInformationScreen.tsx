@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { isHistoricalOrder } from '../../../api/orders.api';
-import { DetailRow, ReadOnlyNotice, TaskScreenShell } from './TaskScreenShell';
+import { DetailRow, ReadOnlyNotice, Section, TaskScreenShell } from './TaskScreenShell';
+import { HubSection, type HubLink } from './TechnicianOrderHub';
+import { CalendarClock, Headset, MessageCircle, Repeat, XCircle } from 'lucide-react-native';
 import OrderCostHistory from './OrderCostHistory';
 import { formatVnd } from '../../../utils/format';
 import { vnDateTimeString } from '../../../utils/vn-time';
@@ -57,12 +60,19 @@ export default function OrderInformationScreen() {
       setCopyMessage('Không thể sao chép mã đơn.');
     }
   };
+  const actions: HubLink[] = [
+    ...(order?.bookingId ? [{ screen: 'chat', testID: 'order-chat-entry', label: openingChat ? 'Đang mở…' : 'Nhắn tin', Icon: MessageCircle, disabled: openingChat, onPress: () => void openChat(order.bookingId) }] : []),
+    ...(canReschedule ? [{ screen: 'reschedule', testID: 'order-reschedule-entry', label: 'Đổi lịch hẹn', Icon: CalendarClock, onPress: () => setRescheduleOpen(true) }] : []),
+    ...(canRebook ? [{ screen: 'rebook', testID: 'order-rebook-entry', label: 'Đặt lại thợ', Icon: Repeat, onPress: () => setRebookOpen(true) }] : []),
+    { screen: 'SupportCases', testID: 'order-support-entry', label: 'Yêu cầu hỗ trợ', Icon: Headset },
+    { screen: 'OrderException', testID: 'order-cancel-entry', label: 'Hủy đơn hoặc kiểm tra điều kiện', Icon: XCircle },
+  ];
   const historicalOrder = history && orderValue && isHistoricalOrder(orderValue) ? orderValue : null;
   return <TaskScreenShell title="Thông tin đơn" onBack={() => navigation.goBack()}
     secondary={{ label: 'Làm mới dữ liệu', testID: 'readonly-detail-refresh', disabled: !canRefresh || refreshing,
       onPress: () => { if (canRefresh && !refreshing) void refresh('manual'); } }}>
     {!order && <ReadOnlyNotice>{snapshot?.access === 'revoked' ? 'Quyền truy cập đã thay đổi; dữ liệu đơn đã được xóa.' : 'Đang tải hoặc chưa có quyền xem dữ liệu đơn.'}</ReadOnlyNotice>}
-    {historicalOrder && <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }}>
+    {historicalOrder && <Section title="Đơn lịch sử">
       <DetailRow label="Mã đơn" value={historicalOrder.code} />
       <DetailRow label="Trạng thái" value={serviceOrderStatusView(historicalOrder.status).label} />
       <DetailRow label="Tạo lúc" value={vnDateTimeString(historicalOrder.createdAt)} />
@@ -70,25 +80,35 @@ export default function OrderInformationScreen() {
       <DetailRow label="Hủy lúc" value={historicalOrder.cancelledAt ? vnDateTimeString(historicalOrder.cancelledAt) : 'Không có dữ liệu'} />
       <DetailRow label="Mã đơn dịch vụ" value={historicalOrder.id} />
       <DetailRow label="Loại bản ghi" value="Đơn lịch sử rút gọn" />
-    </View>}
-    {order && !history && <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }}>
-      <DetailRow label="Mã đơn" value={order.code} />
+    </Section>}
+    {order && !history && <>
+      <Section title="Đơn hàng">
       {snapshot?.key.role === 'customer' && order.code ? (
-        <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.sm }}>
-          <Pressable testID="order-code-copy" accessibilityRole="button" accessibilityLabel="Sao chép mã đơn" style={[entry, { minHeight: 48 }]} onPress={() => void copyOrderCode(order.code)}>
-            <Text style={entryText}>Sao chép mã đơn</Text>
-          </Pressable>
-          {copyMessage ? <Text accessibilityLiveRegion="polite" style={{ color: colors.textSecondary, fontSize: 13, marginTop: 6 }}>{copyMessage}</Text> : null}
+        <View style={{ paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: colors.border, gap: 5 }}>
+          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Mã đơn</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+            <Text selectable style={{ flex: 1, color: colors.text, fontSize: 15, lineHeight: 22 }}>{order.code}</Text>
+            <Pressable testID="order-code-copy" accessibilityRole="button" accessibilityLabel="Sao chép mã đơn" onPress={() => void copyOrderCode(order.code)}
+              style={{ minHeight: 44, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: 8, backgroundColor: colors.primarySoft }}>
+              <Ionicons name="copy-outline" size={16} color={colors.primaryStrong} />
+              <Text style={{ color: colors.primaryStrong, fontSize: 13, fontWeight: '600' }}>Sao chép</Text>
+            </Pressable>
+          </View>
+          {copyMessage ? <Text accessibilityLiveRegion="polite" style={{ color: colors.textSecondary, fontSize: 13 }}>{copyMessage}</Text> : null}
         </View>
-      ) : null}
+      ) : <DetailRow label="Mã đơn" value={order.code} />}
       <DetailRow label="Dịch vụ" value={order.serviceName} />
       <DetailRow label="Trạng thái" value={serviceOrderStatusView(order.status).label} />
       <DetailRow label="Lịch hẹn" value={order.bookingMode || order.slot ? sessionLabel({ bookingMode: order.bookingMode, slot: order.slot, start: order.scheduledAt }) : vnDateTimeString(order.scheduledAt)} />
       <DetailRow label="Địa chỉ" value={order.addressSummary} />
+      </Section>
+      <Section title="Liên hệ">
       {snapshot?.key.role === 'customer'
         ? <DetailRow label="Kỹ thuật viên" value={order.technician ? [order.technician.fullName, order.technician.phoneNumber].filter(Boolean).join(' · ') : 'Chưa có kỹ thuật viên'} />
         : <DetailRow label="Khách hàng" value={[order.customerName, order.customerPhone].filter(Boolean).join(' · ') || 'Chưa có thông tin'} />}
       {order.customerNote ? <DetailRow label="Ghi chú của khách" value={order.customerNote} /> : null}
+      </Section>
+      <Section title="Giá và bảo hành">
       <DetailRow label="Hình thức giá" value={PRICING_LABELS[String(order.pricingMode ?? '').toUpperCase()] ?? 'Chưa xác định'} />
       {String(order.pricingMode ?? '').toUpperCase() === 'FIXED_PRICE' ? <>
         <DetailRow label="Giá đã chốt" value={formatVnd(order.fixedUnitPrice)} />
@@ -96,20 +116,13 @@ export default function OrderInformationScreen() {
       </> : null}
       {order.laborWarrantyDays ?<DetailRow label="Bảo hành tiền công" value={`${order.laborWarrantyDays} ngày`} /> : null}
       <DetailRow label="Tổng tiền" value={formatVnd(typeof order.grandTotal === 'number' ? order.grandTotal : Number.isFinite(Number(order.grandTotal)) ? Number(order.grandTotal) : undefined)} />
-      {order.scopeDescription ? <DetailRow label="Phạm vi ban đầu" value={order.scopeDescription} /> : null}
-    </View>}
+      </Section>
+      {order.scopeDescription ? <Section title="Phạm vi ban đầu"><DetailRow label="Nội dung" value={order.scopeDescription} /></Section> : null}
+    </>}
     {order && !history ? <OrderCostHistory /> : null}
-    {order && !history ? <View style={{ gap: 8 }}>
-      {order.bookingId ? <Pressable testID="order-chat-entry" accessibilityRole="button" disabled={openingChat} onPress={() => void openChat(order.bookingId)} style={entry}><Text style={entryText}>{openingChat ? 'Đang mở…' : 'Nhắn tin ›'}</Text></Pressable> : null}
-      {canReschedule ? <Pressable testID="order-reschedule-entry" accessibilityRole="button" onPress={() => setRescheduleOpen(true)} style={entry}><Text style={entryText}>Đổi lịch hẹn ›</Text></Pressable> : null}
-      {canRebook ? <Pressable testID="order-rebook-entry" accessibilityRole="button" onPress={() => setRebookOpen(true)} style={entry}><Text style={entryText}>Đặt lại thợ ›</Text></Pressable> : null}
-      <Pressable testID="order-support-entry" accessibilityRole="button" onPress={() => navigation.navigate('SupportCases')} style={entry}><Text style={entryText}>Yêu cầu hỗ trợ ›</Text></Pressable>
-      <Pressable testID="order-cancel-entry" accessibilityRole="button" onPress={() => navigation.navigate('OrderException')} style={entry}><Text style={entryText}>Hủy đơn hoặc kiểm tra điều kiện ›</Text></Pressable>
-    </View> : null}
+    {order && !history ? <HubSection title="Thao tác" items={actions} onOpen={screen => navigation.navigate(screen as never)} /> : null}
     {canReschedule ? <AcceptedRescheduleSheet bookingId={order!.bookingId} current={{ bookingMode: order!.bookingMode, slot: order!.slot, start: order!.scheduledAt }} visible={rescheduleOpen} onClose={() => setRescheduleOpen(false)} onDone={() => void refresh('manual')} /> : null}
     {canRebook ? <RebookSheet bookingId={order!.bookingId} visible={rebookOpen} onClose={() => setRebookOpen(false)} /> : null}
   </TaskScreenShell>;
 }
 
-const entry = { minHeight: 52, justifyContent: 'center' as const, paddingHorizontal: spacing.md, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border };
-const entryText = { color: colors.primaryStrong, fontSize: 15, fontWeight: '600' as const };

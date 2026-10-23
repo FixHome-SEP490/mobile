@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { SupportDraft } from './support-controller';
 import { useOrderSupport } from './useOrderSupport';
-import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import { DetailRow, ReadOnlyNotice, Section, TaskScreenShell } from '../shared/TaskScreenShell';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 
 const input = { minHeight: 52, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: spacing.md, color: colors.text, backgroundColor: colors.surface, textAlignVertical: 'top' as const };
@@ -57,9 +57,9 @@ export function SupportCaseDetailScreen() {
   return <TaskScreenShell title="Chi tiết yêu cầu hỗ trợ" onBack={() => navigation.goBack()} secondary={{ label: 'Làm mới', disabled: !id || state.phase === 'verifying', onPress: () => id && void controller.loadDetail(id) }}>
     {state.detail.status === 'loading' || state.detail.status === 'unloaded' ? <ReadOnlyNotice>Đang xác minh yêu cầu hỗ trợ…</ReadOnlyNotice> : null}
     {state.detail.status === 'error' ? <ReadOnlyNotice>Không thể xác minh yêu cầu này. Hãy mở từ danh sách của bạn và thử làm mới.</ReadOnlyNotice> : null}
-    {item ? <View style={{ backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: spacing.md }}>
+    {item ? <Section title="Yêu cầu hỗ trợ">
       <DetailRow label="Mã yêu cầu" value={item.id} /><DetailRow label="Tình trạng" value={caseStatusLabel[item.status] || 'Chưa xác định'} /><DetailRow label="Loại hỗ trợ" value={caseTypeLabel[item.caseType] || 'Yêu cầu hỗ trợ'} /><DetailRow label="Lý do" value={item.reason} /><DetailRow label="Mô tả" value={item.description} /><DetailRow label="Hạn phản hồi" value={item.respondBy} /><DetailRow label="Lý do xử lý" value={item.resolutionReason} /><DetailRow label="Thời điểm xử lý" value={item.resolvedAt} />
-    </View> : null}
+    </Section> : null}
   </TaskScreenShell>;
 }
 

@@ -31,5 +31,6 @@ export default function ProposalDetailScreen() {
     </TouchableOpacity>)}
     {current && proposalId && lookup?.kind === 'not-found' && <ReadOnlyNotice>Không tìm thấy mục này trong đơn của bạn.</ReadOnlyNotice>}
     {current && only ? <OrderCostHistory onlyId={only.id} /> : null}
+    {current && only?.kind === 'quotation' ? <ReadOnlyNotice>Linh kiện được tính theo số lượng thực tế đã dùng. Phần báo giá không dùng đến sẽ không bị tính tiền trên hóa đơn.</ReadOnlyNotice> : null}
   </TaskScreenShell>;
 }

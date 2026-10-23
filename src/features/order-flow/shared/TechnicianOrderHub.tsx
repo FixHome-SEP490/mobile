@@ -28,13 +28,13 @@ const REPAIR: { screen: HubScreen; label: string; Icon: LucideIcon }[] = [
   { screen: 'CashDeclaration', label: 'Khai báo tiền mặt đã nhận', Icon: HandCoins },
 ];
 
-function Row({ screen, label, Icon, hint, disabled, last, onPress }: {
-  screen: HubScreen; label: string; Icon: LucideIcon; hint?: string; disabled: boolean; last: boolean; onPress: () => void;
+function Row({ screen, label, Icon, hint, disabled, last, onPress, testID }: {
+  screen: string; testID?: string; label: string; Icon: LucideIcon; hint?: string; disabled: boolean; last: boolean; onPress: () => void;
 }) {
   const tone = hint ? colors.tone.warning : colors.tone.neutral;
   return (
     <Pressable
-      testID={`task-link-${screen}`}
+      testID={testID ?? `task-link-${screen}`}
       accessibilityRole="button"
       accessibilityLabel={hint ? `${label}, ${hint}` : label}
       accessibilityState={{ disabled }}
@@ -49,6 +49,20 @@ function Row({ screen, label, Icon, hint, disabled, last, onPress }: {
       {hint ? <View style={[styles.badge, { backgroundColor: tone.bg }]}><Text style={[styles.badgeText, { color: tone.text }]}>{hint}</Text></View> : null}
       <ChevronRight size={20} strokeWidth={1.75} color={colors.muted} />
     </Pressable>
+  );
+}
+
+export interface HubLink { screen: string; label: string; Icon: LucideIcon; testID?: string; onPress?: () => void; disabled?: boolean }
+
+/** A titled card of navigation rows, the same look as the technician's step groups. */
+export function HubSection({ title, items, onOpen }: { title: string; items: HubLink[]; onOpen: (screen: string) => void }) {
+  return (
+    <View style={styles.wrap}>
+      <Text accessibilityRole="header" style={styles.title}>{title}</Text>
+      <View style={styles.card}>
+        {items.map((item, i) => <Row key={item.screen} {...item} disabled={!!item.disabled} last={i === items.length - 1} onPress={() => (item.onPress ?? (() => onOpen(item.screen)))()} />)}
+      </View>
+    </View>
   );
 }
 

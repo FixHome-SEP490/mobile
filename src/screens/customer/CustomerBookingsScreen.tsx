@@ -285,8 +285,8 @@ export default function CustomerBookingsScreen() {
   const urgentCount = requestCards.filter((card) =>
     card.kind === 'booking' && !card.order && resumeTargetFor(card.booking, !requestView.ordersCoverageComplete) !== null,
   ).length;
-  // What needs the customer's action opens first; otherwise the repairs, then the requests.
-  const activeKind = kindTab ?? (urgentCount > 0 ? 'request' : repairCards.length > 0 || requestCards.length === 0 ? 'repair' : 'request');
+  // Opens on the repairs (the requests when there are none); what needs the customer stays flagged on the requests tab, never by switching tab for them.
+  const activeKind = kindTab ?? (repairCards.length > 0 || requestCards.length === 0 ? 'repair' : 'request');
   const view = activeKind === 'request' ? requestView : repairView;
   const shownRequests = requestCards.filter((card) => requestFilter === 'all' || requestStage(card) === requestFilter);
   const { filtered: filteredCards, showList, emptyNote, showLoadMore, showLoadMoreOrders } = view;

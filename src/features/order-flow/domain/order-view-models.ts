@@ -17,7 +17,12 @@ function invoiceItems(value: unknown) {
     const item = record(entry);
     if (typeof item.id !== 'string' || !item.id || typeof item.description !== 'string' || !item.description.trim()
       || typeof item.quantity !== 'number' || !Number.isInteger(item.quantity) || item.quantity <= 0 || !validMoney(item.lineTotal)) throw new Error('Invalid invoice item');
-    return { id: item.id, description: item.description, quantity: item.quantity, lineTotal: item.lineTotal };
+    return {
+      id: item.id, description: item.description, quantity: item.quantity, lineTotal: item.lineTotal,
+      ...(typeof item.type === 'string' ? { type: item.type } : {}),
+      ...(typeof item.sourceType === 'string' ? { sourceType: item.sourceType } : {}),
+      ...(typeof item.sourceItemId === 'string' ? { sourceItemId: item.sourceItemId } : {}),
+    };
   });
 }
 export function normalizeSessionOrder(payload: unknown, orderId: string): TechnicianOrderItem {

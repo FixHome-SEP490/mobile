@@ -84,6 +84,14 @@ export function ReadOnlyNotice({ children, style, tone = 'info' }: { children: R
   </View>;
 }
 
+/** A titled card, the grouping used across the order screens (title above, rows inside one card). */
+export function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return <View style={{ gap: spacing.sm }}>
+    <Text accessibilityRole="header" style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 20, fontWeight: '600', marginTop: spacing.sm }}>{title}</Text>
+    <View style={{ backgroundColor: colors.surface, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, paddingHorizontal: spacing.md }}>{children}</View>
+  </View>;
+}
+
 export function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return <View style={styles.row}><Text style={styles.rowLabel}>{label}</Text><Text selectable style={styles.rowValue}>{value || 'Chưa có thông tin'}</Text></View>;
 }

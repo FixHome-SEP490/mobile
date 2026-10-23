@@ -57,7 +57,7 @@ export interface OrderInvoice {
   issuedAt?: string;
   paidAt?: string | null;
   /** Undefined for a legacy payload with no lines, never silently replaced by []. */
-  items?: { id: string; description: string; quantity: number; lineTotal: number | string }[];
+  items?: { id: string; description: string; quantity: number; lineTotal: number | string; sourceType?: string; sourceItemId?: string | null; type?: string }[];
 }
 export interface OrderHistoryEntry {
   id: string;
