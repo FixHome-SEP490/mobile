@@ -1,27 +1,16 @@
 import React from 'react';
 import { paymentStatusLabel } from './payment-status-label';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { invoiceDisplayState, invoiceVsQuotation } from './order-detail-view-models';
-import { DetailRow, ReadOnlyNotice, Section, TaskScreenShell } from './TaskScreenShell';
+import { DetailRow, LineRow, ReadOnlyNotice, Section, TaskScreenShell } from './TaskScreenShell';
 import { formatVnd } from '../../../utils/format';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from './useLoadUnloadedResources';
 
 function money(value: number | string) {
   return typeof value === 'number' ? formatVnd(value) : /^\d+(?:\.\d+)?$/.test(value) ? `${value} ₫` : 'Chưa có dữ liệu';
-}
-
-/** One invoice line: name and quantity on the left, money on the right; a quantity that differs from the quotation gets its own line. */
-function LineRow({ name, detail, warn, value, last }: { name: string; detail: string; warn?: boolean; value: string; last: boolean }) {
-  return <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingVertical: 12, borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
-    <View style={{ flex: 1, gap: 2 }}>
-      <Text style={{ color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '600' }}>{name}</Text>
-      <Text style={{ color: warn ? colors.tone.warning.text : colors.textSecondary, fontSize: 13, lineHeight: 19 }}>{detail}</Text>
-    </View>
-    <Text style={{ color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '600' }}>{value}</Text>
-  </View>;
 }
 
 export default function InvoiceDetailScreen() {

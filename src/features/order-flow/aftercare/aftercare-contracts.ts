@@ -98,7 +98,10 @@ export function normalizeCoverage(value: unknown, orderId: string): WarrantyCove
   if (!uuid4(r.id) || r.serviceOrderId !== orderId || !['pending', 'active', 'expired', 'voided'].includes(String(r.status))
     || !validTimestamp(r.startsAt) || !validTimestamp(r.expiresAt) || typeof r.warrantyDaysSnapshot !== 'number' || !Number.isSafeInteger(r.warrantyDaysSnapshot) || r.warrantyDaysSnapshot < 0) throw Error('Hạng mục bảo hành chưa xác định.');
   return { id: r.id, serviceOrderId: orderId, warrantyDaysSnapshot: r.warrantyDaysSnapshot, startsAt: r.startsAt, expiresAt: r.expiresAt, status: r.status as string,
-    ...(r.note === undefined ? {} : { note: nullableText(r.note) }), ...(r.invoiceItemId === undefined ? {} : { invoiceItemId: nullableText(r.invoiceItemId) }) };
+    ...(r.note === undefined ? {} : { note: nullableText(r.note) }), ...(r.invoiceItemId === undefined ? {} : { invoiceItemId: nullableText(r.invoiceItemId) }),
+    // What the coverage is for (the invoice line it came from), so the customer can tell which item to claim.
+    ...(r.itemType === 'labor' || r.itemType === 'parts_equipment' ? { itemType: r.itemType } : {}),
+    ...(typeof r.itemDescription === 'string' && r.itemDescription.trim() ? { itemDescription: r.itemDescription.trim() } : {}) };
 }
 export type WarrantyCommand = 'accept' | 'decline' | 'check-in' | 'propose' | 'complete';
 export type InspectionResult = 'covered_workmanship' | 'covered_part' | 'not_covered';

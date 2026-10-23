@@ -92,6 +92,17 @@ export function Section({ title, children }: { title: string; children: React.Re
   </View>;
 }
 
+/** One invoice line: name and quantity on the left, money on the right; a quantity that differs from the quotation gets its own line. */
+export function LineRow({ name, detail, warn, value, last }: { name: string; detail: string; warn?: boolean; value: string; last: boolean }) {
+  return <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingVertical: 12, borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+    <View style={{ flex: 1, gap: 2 }}>
+      <Text style={{ color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '600' }}>{name}</Text>
+      <Text style={{ color: warn ? colors.tone.warning.text : colors.textSecondary, fontSize: 13, lineHeight: 19 }}>{detail}</Text>
+    </View>
+    <Text style={{ color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '600' }}>{value}</Text>
+  </View>;
+}
+
 export function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return <View style={styles.row}><Text style={styles.rowLabel}>{label}</Text><Text selectable style={styles.rowValue}>{value || 'Chưa có thông tin'}</Text></View>;
 }

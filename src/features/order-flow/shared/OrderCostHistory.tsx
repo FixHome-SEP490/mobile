@@ -35,19 +35,35 @@ function Chip({ status, map }: { status: string; map: Record<string, { label: st
   return <View style={[styles.chip, { backgroundColor: tone.bg }]}><Text style={[styles.chipText, { color: tone.text }]}>{view.label}</Text></View>;
 }
 
-function LineRow({ line }: { line: Line }) {
+function LineRow({ line, first }: { line: Line; first: boolean }) {
   const isLabor = String(line.type ?? '').toLowerCase() === 'labor';
   const total = num(line.lineTotal) ?? (num(line.unitPrice) !== undefined ? num(line.unitPrice)! * line.quantity : undefined);
   return (
-    <View style={styles.line}>
+    <View style={[styles.line, first && styles.lineFirst]}>
       <View style={styles.lineMain}>
         <Text style={styles.lineName}>{line.description}</Text>
-        <Text style={styles.meta}>{isLabor ? 'Tiền công' : 'Linh kiện'} · {line.quantity} × {money(line.unitPrice)}</Text>
+        <Text style={styles.meta}>{line.quantity} × {money(line.unitPrice)}</Text>
         {!isLabor && line.warrantyTermDays ? <Text style={styles.meta}>Bảo hành {line.warrantyTermDays} ngày</Text> : null}
       </View>
       <Text style={styles.lineTotal}>{formatVnd(total)}</Text>
     </View>
   );
+}
+
+/** Labour and parts are told apart by a heading and a subtotal, not by a prefix on every line. */
+function Groups({ lines, labor, parts }: { lines: Line[]; labor: string; parts: string }) {
+  const isLabor = (line: Line) => String(line.type ?? '').toLowerCase() === 'labor';
+  const groups = [
+    { title: 'Tiền công', rows: lines.filter(isLabor), subtotal: labor },
+    { title: 'Linh kiện', rows: lines.filter(line => !isLabor(line)), subtotal: parts },
+  ].filter(group => group.rows.length);
+  return <>{groups.map(group => (
+    <View key={group.title} style={styles.group}>
+      <Text accessibilityRole="header" style={styles.groupTitle}>{group.title}</Text>
+      {group.rows.map((line, i) => <LineRow key={line.id ?? `${group.title}-${i}`} line={line} first={i === 0} />)}
+      <Total label={`Tạm tính ${group.title.toLowerCase()}`} value={group.subtotal} />
+    </View>
+  ))}</>;
 }
 
 function Total({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
@@ -94,10 +110,9 @@ export default function OrderCostHistory({ onlyId }: { onlyId?: string } = {}) {
                 <Chip status={quote.status} map={QUOTE_STATUS} />
               </View>
               {quote.sentAt ? <Text style={styles.meta}>Gửi lúc {vnDateTimeString(quote.sentAt)}</Text> : null}
-              {quote.items.map((item, i) => <LineRow key={item.id ?? `${quote.id}-${i}`} line={item} />)}
+              <Groups lines={quote.items} labor={money(quote.laborTotal)} parts={money(quote.partsTotal)} />
+              {num(quote.laborTotal) !== undefined && num(quote.partsTotal) !== undefined ? <Total strong label="Tổng báo giá" value={formatVnd(num(quote.laborTotal)! + num(quote.partsTotal)!)} /> : null}
               {quote.note ? <Text style={styles.meta}>Ghi chú: {quote.note}</Text> : null}
-              <Total label="Tiền công" value={money(quote.laborTotal)} />
-              <Total label="Linh kiện" value={money(quote.partsTotal)} />
             </View>
           ))}
         </View>
@@ -118,9 +133,7 @@ export default function OrderCostHistory({ onlyId }: { onlyId?: string } = {}) {
                 </View>
                 {cost.createdAt ? <Text style={styles.meta}>Đề xuất lúc {vnDateTimeString(cost.createdAt)}</Text> : null}
                 {cost.reason ? <Text style={styles.reason}>{cost.reason}</Text> : null}
-                {cost.items.map((item, i) => <LineRow key={item.id ?? `${cost.id}-${i}`} line={item} />)}
-                <Total label="Tiền công" value={formatVnd(labor)} />
-                <Total label="Linh kiện" value={formatVnd(parts)} />
+                <Groups lines={cost.items} labor={formatVnd(labor)} parts={formatVnd(parts)} />
                 {shipping > 0 ? <Total label="Phí giao linh kiện" value={formatVnd(shipping)} /> : null}
                 {labor !== undefined && parts !== undefined ? <Total strong label="Tổng phát sinh" value={formatVnd(labor + parts + shipping)} /> : null}
               </View>
@@ -143,7 +156,10 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
   meta: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
   reason: { color: colors.text, fontSize: 14, lineHeight: 21 },
+  group: { gap: 8, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  groupTitle: { color: colors.textSecondary, fontSize: 13, lineHeight: 19, fontWeight: '700' },
   line: { flexDirection: 'row', gap: 12, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  lineFirst: { paddingTop: 0, borderTopWidth: 0 },
   lineMain: { flex: 1, minWidth: 0, gap: 2 },
   lineName: { color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '500' },
   lineTotal: { color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '700' },

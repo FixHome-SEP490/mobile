@@ -28,8 +28,8 @@ const REPAIR: { screen: HubScreen; label: string; Icon: LucideIcon }[] = [
   { screen: 'CashDeclaration', label: 'Khai báo tiền mặt đã nhận', Icon: HandCoins },
 ];
 
-function Row({ screen, label, Icon, hint, disabled, last, onPress, testID }: {
-  screen: string; testID?: string; label: string; Icon: LucideIcon; hint?: string; disabled: boolean; last: boolean; onPress: () => void;
+function Row({ screen, label, Icon, hint, disabled, last, onPress, testID, sub, accessibilityHint }: {
+  screen: string; testID?: string; sub?: string; accessibilityHint?: string; label: string; Icon: LucideIcon; hint?: string; disabled: boolean; last: boolean; onPress: () => void;
 }) {
   const tone = hint ? colors.tone.warning : colors.tone.neutral;
   return (
@@ -37,6 +37,7 @@ function Row({ screen, label, Icon, hint, disabled, last, onPress, testID }: {
       testID={testID ?? `task-link-${screen}`}
       accessibilityRole="button"
       accessibilityLabel={hint ? `${label}, ${hint}` : label}
+      accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
@@ -45,14 +46,17 @@ function Row({ screen, label, Icon, hint, disabled, last, onPress, testID }: {
       <View style={[styles.tile, { backgroundColor: hint ? tone.bg : colors.primarySoft }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <Icon size={20} strokeWidth={1.75} color={hint ? tone.fg : colors.primaryStrong} />
       </View>
-      <Text style={styles.label}>{label}</Text>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={styles.label}>{label}</Text>
+        {sub ? <Text style={styles.sub}>{sub}</Text> : null}
+      </View>
       {hint ? <View style={[styles.badge, { backgroundColor: tone.bg }]}><Text style={[styles.badgeText, { color: tone.text }]}>{hint}</Text></View> : null}
       <ChevronRight size={20} strokeWidth={1.75} color={colors.muted} />
     </Pressable>
   );
 }
 
-export interface HubLink { screen: string; label: string; Icon: LucideIcon; testID?: string; onPress?: () => void; disabled?: boolean }
+export interface HubLink { screen: string; label: string; Icon: LucideIcon; testID?: string; onPress?: () => void; disabled?: boolean; sub?: string; accessibilityHint?: string }
 
 /** A titled card of navigation rows, the same look as the technician's step groups. */
 export function HubSection({ title, items, onOpen }: { title: string; items: HubLink[]; onOpen: (screen: string) => void }) {
@@ -112,7 +116,8 @@ const styles = StyleSheet.create({
   pressed: { backgroundColor: colors.divider },
   disabled: { opacity: 0.5 },
   tile: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  label: { flex: 1, color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '500' },
+  label: { color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '500' },
+  sub: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
   badge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, minHeight: 24, justifyContent: 'center' },
   badgeText: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
 });

@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-23 16:28 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
+> Cập nhật lần cuối: 2026-10-23 23:15 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -372,6 +372,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-23 23:15 (UTC+7) | Hgnv11 | dev | Giữ SDK 57 vì Expo Go trên iPhone chỉ chạy 57: CI không còn đỏ khi Expo ra bản vá mới (bước check:expo chỉ cảnh báo); bàn giao hiện trước thanh toán, Thanh toán và Ví FixHome và Bàn giao chia nhóm có tiêu đề, Báo giá trong Thông tin đơn chia Tiền công và Linh kiện có tổng, Bảo hành ghi rõ hạng mục được bảo hành
 - 2026-10-23 16:28 (UTC+7) | Hgnv11 | dev | Màn linh kiện và hóa đơn của đơn bớt gây hiểu nhầm: khai trả linh kiện qua khung xác nhận có số điền sẵn, xác nhận đã dùng hoặc hoàn trả nằm ngay dưới thông báo, một thông báo chưa trả đủ linh kiện, Hóa đơn có tổng tiền công và tổng linh kiện, Ảnh và bằng chứng có giờ chụp, Thông tin đơn ẩn nút hủy khi đơn đã đóng; Thông báo của khách bỏ dòng đếm và hai chip lọc
 - 2026-10-23 16:19 (UTC+7) | Hgnv11 | dev | Các trang con của đơn (Thông tin đơn, Hóa đơn, Tiến độ, Ảnh và bằng chứng, Chi tiết yêu cầu hỗ trợ, Đơn hoàn thành) chia theo nhóm có tiêu đề như bên thợ; Hóa đơn tách Tiền công và Linh kiện và ghi Báo giá cần dùng so với Thực dùng theo sourceItemId của dòng hóa đơn; màn Hoạt động của khách không còn tự nhảy sang tab Yêu cầu đặt lịch
 - 2026-10-23 14:51 (UTC+7) | Hgnv11 | dev | Màn Quản lý linh kiện của kỹ thuật viên: ghi Báo giá duyệt cạnh số lượng, sửa số đã dùng được cả giảm (backend cho phép trước khi hóa đơn được tạo), nút Khai trả X cái còn lại sau khi ghi số đã dùng, gộp các thông báo cần xử lý thành một khối, mục Linh kiện sửa chữa tự đọc lại không nháy
@@ -411,7 +412,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-17 23:40 (UTC+7) | foxonworld | feat/customer-symptom-chips-20261017 | Thêm chip triệu chứng theo dịch vụ/nhóm Web, thêm/bỏ giữ mô tả tự nhập/AI và 5.000 ký tự; hiển thị chỉ dẫn vuốt ngang dải ngày Booking. Giữ nguyên lịch 14 ngày, urgency và API.
 - 2026-10-17 20:46 (UTC+7) | foxonworld | feat/technician-reputation-parity-20261017 | Thống nhất card uy tín compact hai vai trò, sheet quy định/lịch sử và cảnh báo server luôn hiện; giữ riêng chip Độ tin cậy, native visual/runtime CHƯA KIỂM CHỨNG.
 - 2026-10-17 20:08 (UTC+7) | foxonworld | integration/mobile-c50-c45-reviewed-20261017 | Thu hẹp async act, bảo đảm cleanup và đặt timeout riêng 15 giây cho test radar Matching; CI Ubuntu sau sửa CHƯA KIỂM CHỨNG.
-- 2026-10-17 18:20 (UTC+7) | foxonworld | integration/mobile-c50-c45-20261017 | Tích hợp lịch tháng và CTA với UI/clearance, lịch nhận việc và ký quỹ từ dev; giữ C50/C45, lịch sử hai nhánh và dọn cleanup test bộ lọc thông báo; runtime CHƯA KIỂM CHỨNG.
 
 ### Lịch sử giữ lại khi tích hợp
 

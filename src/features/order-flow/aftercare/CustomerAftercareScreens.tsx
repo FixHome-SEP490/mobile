@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useCustomerAftercare } from '../customer/useCustomerAftercare';
-import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import { DetailRow, ReadOnlyNotice, Section, TaskScreenShell } from '../shared/TaskScreenShell';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { vnDateTimeString } from '../../../utils/vn-time';
 
@@ -54,14 +54,25 @@ export function CustomerWarrantyScreen() {
     {coverages.map((coverage: any) => {
       const claim = claims.find((item: any) => item.warrantyCoverageId === coverage.id && !['resolved', 'rejected', 'closed'].includes(String(item.status).toLowerCase()));
       const expired = String(coverage.status).toLowerCase() === 'expired';
-      return <View key={coverage.id} style={{ backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md, gap: 8 }}>
-        <Text style={{ ...label, fontWeight: '700' }}>{coverage.note || 'Phạm vi bảo hành'}</Text>
+      const labor = coverage.itemType === 'labor';
+      const days = Number(coverage.warrantyDaysSnapshot) || 0;
+      const title = coverage.itemDescription || coverage.note || 'Bảo hành của đơn';
+      return <Section key={coverage.id} title={coverage.itemType ? (labor ? 'Bảo hành tiền công' : 'Bảo hành linh kiện') : 'Bảo hành'}>
+        <View style={{ paddingVertical: 12, gap: 2, borderBottomWidth: 0.5, borderBottomColor: colors.border }}>
+          <Text style={{ ...label, fontWeight: '700', fontSize: 16 }}>{title}</Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+            {days ? `Bảo hành ${days} ngày` : 'Thời hạn bảo hành theo đơn'}
+          </Text>
+        </View>
         <DetailRow label="Tình trạng" value={coverageLabel[String(coverage.status).toLowerCase()] || 'Chưa xác định'} />
+        {coverage.startsAt ? <DetailRow label="Bắt đầu" value={vnDateTimeString(coverage.startsAt)} /> : null}
         <DetailRow label="Hết hạn" value={coverage.expiresAt ? vnDateTimeString(coverage.expiresAt) : 'Chưa có thông tin'} />
+        <View style={{ paddingVertical: 12 }}>
         {claim ? <Pressable accessibilityRole="button" accessibilityLabel="Mở yêu cầu bảo hành" onPress={() => navigation.navigate('CustomerWarrantyClaim', { claimId: claim.id })} style={link}><Text style={linkText}>Mở yêu cầu bảo hành ›</Text></Pressable>
           : <Pressable accessibilityRole="button" accessibilityLabel="Tạo yêu cầu bảo hành" onPress={() => navigation.navigate('WarrantyClaimCreate', { coverageId: coverage.id })} style={link}><Text style={linkText}>Tạo yêu cầu bảo hành ›</Text></Pressable>}
-        {expired ? <Text style={{ color: colors.textSecondary }}>Phạm vi đã hết hạn. Máy chủ vẫn xác định khả năng tiếp nhận yêu cầu.</Text> : null}
-      </View>;
+        {expired ? <Text style={{ color: colors.textSecondary, marginTop: 8 }}>Đã hết hạn bảo hành. Máy chủ vẫn xác định khả năng tiếp nhận yêu cầu.</Text> : null}
+        </View>
+      </Section>;
     })}
     {state.message ? <Status>{state.message}</Status> : null}
   </TaskScreenShell>;

@@ -7,7 +7,7 @@ import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { useCustomerOrderPayment } from './useCustomerOrderPayment';
 import { hasCompletionRequest, invoiceFact } from './payment-facts';
 import { sameOrderSession } from '../domain/order-session.types';
-import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import { DetailRow, ReadOnlyNotice, Section, TaskScreenShell } from '../shared/TaskScreenShell';
 import { quoteMoneyText } from '../shared/DecisionSummary';
 import { formatVnd } from '../../../utils/format';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
@@ -115,14 +115,17 @@ export default function WalletPaymentScreen() {
                   disabled: frozen || !unpaid, onPress: request }
       }
     >
-      <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }}>
-        <DetailRow label="Mã hóa đơn" value={invoice?.id} />
-        <DetailRow label="Tổng tiền phải trả" value={invoice ? quoteMoneyText(invoice.grandTotal) : 'Chưa có dữ liệu'} />
+      <Section title="Thanh toán bằng ví">
+        <View style={{ paddingVertical: 12, gap: 4, borderBottomWidth: 0.5, borderBottomColor: colors.border }}>
+          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Tổng tiền phải trả</Text>
+          <Text style={{ color: colors.primaryStrong, fontSize: 26, lineHeight: 34, fontWeight: '700' }}>{invoice ? quoteMoneyText(invoice.grandTotal) : 'Chưa có dữ liệu'}</Text>
+        </View>
         <DetailRow
           label="Số dư ví"
           value={balance !== null ? formatVnd(balance) : walletError ? 'Chưa tải được số dư' : 'Đang tải…'}
         />
-      </View>
+        <DetailRow label="Mã hóa đơn" value={invoice ? `#${invoice.id.slice(0, 8).toUpperCase()}` : undefined} />
+      </Section>
       {unknown ? (
         <ReadOnlyNotice>Có thao tác thanh toán chưa rõ kết quả. Bạn không thể gửi thêm yêu cầu; hãy kiểm tra kết quả từ máy chủ trước.</ReadOnlyNotice>
       ) : null}
@@ -136,7 +139,7 @@ export default function WalletPaymentScreen() {
       {sheetValid && sheet ? (
         <View style={{ backgroundColor: colors.tone.warning.bg, borderColor: colors.tone.warning.fg, borderWidth: 1, borderRadius: 12, padding: spacing.md }} testID="wallet-confirm-sheet">
           <Text style={{ fontSize: 16, fontWeight: '700', color: colors.tone.warning.text }}>Xác nhận thanh toán bằng ví</Text>
-          <DetailRow label="Mã hóa đơn" value={sheet.invoiceId} />
+          <DetailRow label="Mã hóa đơn" value={`#${sheet.invoiceId.slice(0, 8).toUpperCase()}`} />
           <DetailRow label="Số tiền trừ ví" value={formatVnd(sheet.amount)} />
           <DetailRow label="Số dư ví lúc xác nhận" value={formatVnd(sheet.balance)} />
           <TouchableOpacity

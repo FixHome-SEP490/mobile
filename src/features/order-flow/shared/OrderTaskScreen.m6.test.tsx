@@ -1,3 +1,4 @@
+import { handoverSeenKey, markHandoverSeen, resetHandoverSeen } from '../customer/handover-seen';
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import type { OrderSessionSnapshot } from '../domain/order-session.types';
@@ -118,7 +119,7 @@ const unpaidInvoice = { id: 'invoice-1', serviceOrderId: 'order-1', paymentStatu
 const paidInvoice = { id: 'invoice-1', serviceOrderId: 'order-1', paymentStatus: 'paid', grandTotal: 120000 };
 const pendingCash = { id: 'cash-1', serviceOrderId: 'order-1', status: 'pending_confirmation', declaredAmount: 120000, declaredByTechnicianId: 'user-1', declaredAt: '2026-10-13T02:00:00.000Z' };
 
-beforeEach(() => { mockSetParams.mockClear(); mockJournal = null; });
+beforeEach(() => { mockSetParams.mockClear(); mockJournal = null; resetHandoverSeen(); });
 
 it.each([
   ['C08', 'customer', baseOrder('customer', 'UNDER_REPAIR', requested), null, null, 'dispatched-C08'],
@@ -130,6 +131,8 @@ it.each([
   ['T16', 'technician', baseOrder('technician', 'COMPLETED'), null, null, 'completed-back-home'],
 ] as const)('dispatches M6 task %s to its focused screen', async (_task, role, order, invoice, cash, testID) => {
   mockRole = role;
+  // Payment (C09) and cash confirmation (C10) open once the customer has been through the handover.
+  if (_task === 'C09' || _task === 'C10') markHandoverSeen(handoverSeenKey('order-1', requested.completionRequestedAt));
   mockSnapshot = snapshotFor(role, order);
   if (invoice) mockSnapshot.resources.invoice = readyResource(invoice as any, 1, 1);
   if (cash) mockSnapshot.resources.cash = readyResource(cash as any, 1, 1);
@@ -137,6 +140,23 @@ it.each([
   await act(async () => { renderer = create(<OrderTaskScreen role={mockRole} />); });
   expect(renderer.root.findByProps({ testID })).toBeTruthy();
   await act(async () => renderer.unmount());
+});
+
+it('shows the handover before payment or cash confirmation until the customer has reviewed it', async () => {
+  for (const cash of [null, pendingCash]) {
+    mockRole = 'customer';
+    mockSnapshot = snapshotFor('customer', baseOrder('customer', 'UNDER_REPAIR', requested));
+    mockSnapshot.resources.invoice = readyResource(unpaidInvoice as any, 1, 1);
+    if (cash) mockSnapshot.resources.cash = readyResource(cash as any, 1, 1);
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => { renderer = create(<OrderTaskScreen role={mockRole} />); });
+    expect(renderer.root.findByProps({ testID: 'dispatched-C08' })).toBeTruthy();
+    expect(renderer.root.findAllByProps({ testID: cash ? 'dispatched-C10' : 'dispatched-C09' })).toHaveLength(0);
+    await act(async () => { markHandoverSeen(handoverSeenKey('order-1', requested.completionRequestedAt)); });
+    expect(renderer.root.findByProps({ testID: cash ? 'dispatched-C10' : 'dispatched-C09' })).toBeTruthy();
+    await act(async () => renderer.unmount());
+    resetHandoverSeen();
+  }
 });
 
 it('paid invoice with under-repair never dispatches the completed screen', async () => {
