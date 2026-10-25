@@ -426,9 +426,9 @@ const getStyles = (colors: any) => StyleSheet.create({
     backgroundColor: colors.surface,
   },
   headerButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  headerText: { flex: 1, paddingRight: 42 },
-  title: { fontSize: 20, lineHeight: 27, fontWeight: '800' },
-  subtitle: { fontSize: 12, lineHeight: 17, marginTop: 1 },
+  headerText: { flex: 1, alignItems: 'center', paddingRight: 44 },
+  title: { fontSize: 18, lineHeight: 26, fontWeight: '700', textAlign: 'center' },
+  subtitle: { fontSize: 12, lineHeight: 17, marginTop: 1, textAlign: 'center' },
   content: { padding: 16, paddingBottom: 40, gap: 12 },
   messageCard: {
     minHeight: 46,

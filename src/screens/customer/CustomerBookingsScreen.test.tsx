@@ -318,7 +318,7 @@ describe('CustomerBookingsScreen activity ordering (C-RUI1)', () => {
     }
   });
 
-  it('opens on the requests, with an urgent count, when a request needs the customer', async () => {
+  it('stays on the repairs and only flags the requests tab when a request needs the customer', async () => {
     const historyMock = jest.requireMock('./customer-bookings-history') as {
       resolveBookingsView: (...args: unknown[]) => unknown;
       resumeTargetFor: (...args: unknown[]) => string | null;
@@ -335,10 +335,10 @@ describe('CustomerBookingsScreen activity ordering (C-RUI1)', () => {
     const tree = await mountCounted();
     try {
       const tab = (id: string) => tree.root.findAllByProps({ testID: `activity-kind-${id}` }).find((node) => node.props.accessibilityRole === 'tab')!;
-      expect(tab('request').props.accessibilityState.selected).toBe(true);
-      expect(tab('request').props.accessibilityLabel).toBe('Yêu cầu đặt lịch, 42, 1 cần bạn xử lý');
-      act(() => tab('repair').props.onPress());
       expect(tab('repair').props.accessibilityState.selected).toBe(true);
+      expect(tab('request').props.accessibilityLabel).toBe('Yêu cầu đặt lịch, 42, 1 cần bạn xử lý');
+      act(() => tab('request').props.onPress());
+      expect(tab('request').props.accessibilityState.selected).toBe(true);
     } finally {
       act(() => tree.unmount());
       historyMock.resolveBookingsView = originalResolve;

@@ -52,7 +52,18 @@ it('same structured code from BEFORE cannot use the departure-only no-effect cla
   const c = createArrivalProofController(f.deps); await c.uploadBefore(asset); await c.uploadBefore(asset);
   expect(f.journal.list('tech')[0].status).toBe('unknown'); expect(f.transport.uploadBefore).toHaveBeenCalledTimes(1);
 });
-it.each([{ ...position, permission: 'denied' as const }, { ...position, timestamp: -30000 }, { ...position, accuracyMeters: Number.NaN }, { ...position, source: 'destination' }])('rejects permission/stale/invalid/non OS sample %p', async sample => {
+it.each([400, 413, 422])('BEFORE upload rejected with HTTP %i proves no effect, so the next upload is allowed', async status => {
+  const f = fixture(); f.transport.uploadBefore.mockRejectedValueOnce({ response: { status } });
+  const c = createArrivalProofController(f.deps); await c.uploadBefore(asset);
+  expect(c.getState().phase).toBe('denied'); expect(c.getState().message).toContain('chụp lại'); expect(f.journal.list('tech')[0].status).toBe('failed-known');
+  await c.uploadBefore(asset); expect(f.transport.uploadBefore).toHaveBeenCalledTimes(2);
+});
+it.each([{ response: { status: 500 } }, { response: { status: 409 } }, new Error('timeout')])('BEFORE upload failing with %p stays unknown (no proof of no effect)', async error => {
+  const f = fixture(); f.transport.uploadBefore.mockRejectedValue(error);
+  const c = createArrivalProofController(f.deps); await c.uploadBefore(asset);
+  expect(c.getState().phase).toBe('unknown'); expect(f.journal.list('tech')[0].status).toBe('unknown');
+});
+it.each([{ ...position, permission: 'denied' as const },{ ...position, timestamp: -30000 }, { ...position, accuracyMeters: Number.NaN }, { ...position, source: 'destination' }])('rejects permission/stale/invalid/non OS sample %p', async sample => {
   const f = fixture(); await createArrivalProofController(f.deps).checkIn(sample as FreshOrderPosition); expect(f.transport.checkIn).not.toHaveBeenCalled();
 });
 it.each(['low_accuracy', 'out_of_geofence'])('explicit own %s checkin allows a new sample, not same measurement', async result => {

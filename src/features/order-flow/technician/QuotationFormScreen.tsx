@@ -1,49 +1,68 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { BottomSheetBackdrop, BottomSheetModal } from '@gorhom/bottom-sheet';
+import * as Haptics from 'expo-haptics';
+import { Info } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { useTechnicianQuotation } from './useTechnicianQuotation';
-import {
-  QUOTE_MAX_ITEMS,
-  validateQuotationPayload,
-} from './technician-quotation-controller';
+import { QUOTE_MAX_ITEMS, validateQuotationPayload } from './technician-quotation-controller';
+import { PART_QUANTITY_MAX } from './parts-controller';
 import { fetchStrictCatalog, fetchStrictPartById } from './parts-catalog-adapter';
 import { getRestoredQuotationRecovery } from '../domain/quotation-recovery';
 import {
-  CostItemEditor,
+  costItemRowSubtotal,
   costItemRowToPayloadItem,
   createCostItemRow,
+  validateCostItemRows,
   type CostItemCatalogOption,
   type CostItemCatalogPanel,
+  type CostItemFieldErrors,
   type CostItemRow,
 } from '../shared/CostItemEditor';
+import { PartPickerRow } from '../shared/PartPickerRow';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
+import { AddRow, EarlierPartCard, GroupLabel, LaborCard, LinkRow, PartLineCard, Section, type EarlierPartLine } from './QuotationItemCards';
 import { formatVnd } from '../../../utils/format';
-import { lightTheme as colors, spacing } from '../../../constants/theme';
+import { lightTheme as colors, spacing, type ToneName } from '../../../constants/theme';
+
+const EARLIER_STATUS: Record<string, { label: string; tone: ToneName }> = {
+  requested: { label: 'Đã gửi yêu cầu', tone: 'neutral' },
+  ready: { label: 'Sẵn sàng lấy', tone: 'info' },
+  delivering: { label: 'Đang giao', tone: 'warning' },
+  received: { label: 'Đã nhận linh kiện', tone: 'success' },
+};
+const EARLIER_KEY = 'req-';
+const newLabor = (): CostItemRow => ({ ...createCostItemRow('labor'), quantity: '1' });
+const newPart = (): CostItemRow => ({ ...createCostItemRow('parts_equipment'), partSource: 'fixhome', quantity: '1' });
+const isPart = (row: CostItemRow) => row.kind === 'parts_equipment';
+const hasPrice = (row: CostItemRow) => /^\d+$/.test(row.unitPrice.trim());
+const sum = (rows: CostItemRow[]) => rows.reduce((total, row) => total + (costItemRowSubtotal(row) ?? 0), 0);
 
 /**
- * T07 — technician inspection-quotation form. The frozen controller validator
- * owns every DTO rule; this screen only shapes row drafts into raw validator
- * input and renders validator messages. One expanded row at a time, catalog
- * from the real strict adapter with explicit retry, server total authoritative.
+ * T07 — technician inspection-quotation form. The frozen controller validator owns every DTO rule;
+ * this screen only shapes row drafts into raw validator input. Parts are FixHome parts only: either
+ * a part already asked for before the repair (ticked as a whole line) or a new one from the stock
+ * list. Price and warranty always come from the server by exact catalog ID; the server total is authoritative.
  */
 export default function QuotationFormScreen() {
   const { key, snapshot, refresh, loadResource, journal } = useOrderSession();
   const navigation = useNavigation<any>();
   const { controller, state } = useTechnicianQuotation();
   const ownerKey = key ? `${key.userId}/${key.sessionGeneration}/${key.serviceOrderId}` : null;
-  const [initialRow] = useState(() => createCostItemRow('labor'));
-  const [rows, setRows] = useState<CostItemRow[]>(() => [initialRow]);
+  const [rows, setRows] = useState<CostItemRow[]>(() => [newLabor()]);
   const [note, setNote] = useState('');
-  const [expandedKey, setExpandedKey] = useState<string | null>(() => initialRow.key);
   const [catalog, setCatalog] = useState<CostItemCatalogPanel>({ status: 'idle', parts: [], error: null });
+  const [picked, setPicked] = useState<CostItemRow[]>([]);
+  const [pickError, setPickError] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState(false);
   const [estimate, setEstimate] = useState<number | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, CostItemFieldErrors>>({});
 
-  useLoadUnloadedResources(snapshot, ['quotations'], loadResource);
+  useLoadUnloadedResources(snapshot, ['quotations', 'parts'], loadResource);
 
   const orderValue = snapshot?.order.status === 'ready' ? snapshot.order.data : null;
   const order = orderValue && !isHistoricalOrder(orderValue) ? orderValue : null;
@@ -51,26 +70,39 @@ export default function QuotationFormScreen() {
   const fixedPrice = String(order?.pricingMode ?? '').toUpperCase() === 'FIXED_PRICE';
   const inspection = String(order?.pricingMode ?? '').toUpperCase() === 'INSPECTION_REQUIRED';
   const quotationsStatus = snapshot?.resources.quotations.status;
+  const partsStatus = snapshot?.resources.parts.status;
   const quotations = quotationsStatus === 'ready' && current
     ? snapshot.resources.quotations.data.filter(q => q.serviceOrderId === key!.serviceOrderId)
     : [];
   const hasApproved = quotations.some(q => String(q.status).toUpperCase() === 'APPROVED');
   const gateOk = current && !!order && order.status === 'EN_ROUTE' && order.arrivalVerified === true && inspection && !fixedPrice;
 
+  // Parts asked for before the repair that the quote may reuse: still alive, FixHome, not given back.
+  const earlierLines = useMemo<EarlierPartLine[]>(() => {
+    const parts = snapshot?.resources.parts;
+    if (!current || parts?.status !== 'ready' || !Array.isArray(parts.data)) return [];
+    return parts.data
+      .filter(pr => pr.serviceOrderId === key!.serviceOrderId && pr.technicianId === key!.userId && pr.requestType === 'pre_repair' && !!EARLIER_STATUS[pr.status])
+      .flatMap(pr => pr.items
+        .filter(item => !!item.partCatalogId && (item.partSource ?? 'fixhome') === 'fixhome' && item.usageStatus !== 'returned')
+        .map(item => ({ id: item.id, catalogId: item.partCatalogId!, name: item.partNameSnapshot, quantity: item.quantity, statusLabel: EARLIER_STATUS[pr.status].label, tone: EARLIER_STATUS[pr.status].tone })));
+  }, [current, key, snapshot]);
+
   const [draftOwner, setDraftOwner] = useState<string | null>(() => ownerKey);
 
-  // Ownership/assignment change clears the memory-bound draft and sheets via
-  // a render-phase guard (no reset effect): the draft belongs to one owner.
+  // Ownership/assignment change clears the memory-bound draft and sheet via a render-phase
+  // guard (no reset effect): the draft belongs to one owner.
   if (draftOwner !== ownerKey) {
-    const initial = createCostItemRow('labor');
     setDraftOwner(ownerKey);
-    setRows([initial]);
-    setExpandedKey(initial.key);
+    setRows([newLabor()]);
     setNote('');
     setCatalog({ status: 'idle', parts: [], error: null });
+    setPicked([]);
+    setPickError(null);
     setReviewing(false);
     setEstimate(null);
     setFormError(null);
+    setFieldErrors({});
   }
 
   const recovery = useMemo(
@@ -87,135 +119,163 @@ export default function QuotationFormScreen() {
   const canEdit = gateOk && !hasApproved && quotationsStatus === 'ready' && !frozen && state.phase !== 'resolved' && !reviewing;
   const refreshing = snapshot?.order.status === 'loading' || quotationsStatus === 'loading';
 
-  // Async catalog fences: generation per load and per row selection, latest
-  // owner/current/source checks, and unmount invalidation — no framework.
+  const laborRows = rows.filter(row => !isPart(row));
+  const freshRows = rows.filter(row => isPart(row) && !row.key.startsWith(EARLIER_KEY));
+  const liveTotal = sum(rows);
+
+  // Async fences: latest owner/editable checks and unmount invalidation — no framework.
+  const sheetRef = useRef<BottomSheetModal>(null);
   const mountedRef = useRef(true);
-  useEffect(() => () => {
-    mountedRef.current = false;
-  }, []);
-  const ownerRef = useRef(ownerKey);
-  const rowsRef = useRef(rows);
-  const canEditRef = useRef(canEdit);
-  useEffect(() => {
-    ownerRef.current = ownerKey;
-    rowsRef.current = rows;
-    canEditRef.current = canEdit;
-  });
-  const catalogLoadGen = useRef(0);
-  const catalogSelectGen = useRef(0);
-  const pendingSelect = useRef<Record<string, string>>({});
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+  const latest = useRef({ ownerKey, canEdit, rows });
+  useLayoutEffect(() => { latest.current = { ownerKey, canEdit, rows }; });
+  const loadGen = useRef(0);
+  const wanted = useRef(new Set<string>());
+  useLayoutEffect(() => { loadGen.current += 1; wanted.current.clear(); }, [ownerKey]);
+  const live = (owner: string | null) => mountedRef.current && latest.current.ownerKey === owner;
 
   const updateRow = (rowKey: string, next: CostItemRow) => {
     if (frozen || reviewing) return;
     setRows(prev => prev.map(r => (r.key === rowKey ? next : r)));
+    setFieldErrors(prev => { if (!prev[rowKey]) return prev; const { [rowKey]: _drop, ...rest } = prev; return rest; });
     setReviewing(false);
   };
 
   const removeRow = (rowKey: string) => {
-    if (frozen || reviewing || rows.length <= 1) return;
+    if (frozen || reviewing) return;
     setRows(prev => prev.filter(r => r.key !== rowKey));
-    setExpandedKey(prev => (prev === rowKey ? null : prev));
     setReviewing(false);
   };
 
-  const addRow = () => {
-    if (frozen || reviewing || !canEdit) return;
-    if (rows.length >= QUOTE_MAX_ITEMS) {
-      setFormError(`Số lượng hạng mục tối đa ${QUOTE_MAX_ITEMS}.`);
-      return;
-    }
-    const next = createCostItemRow('parts_equipment');
-    setRows(prev => [...prev, next]);
-    setExpandedKey(next.key);
-    setReviewing(false);
+  const addLabor = () => {
+    if (!canEdit) return;
+    if (rows.length >= QUOTE_MAX_ITEMS) { setFormError(`Số lượng hạng mục tối đa ${QUOTE_MAX_ITEMS}.`); return; }
+    setRows(prev => [...prev, newLabor()]);
     setFormError(null);
   };
 
+  /** Tick = the whole earlier line goes into the quote with its own quantity; price and warranty are read by exact ID. */
+  const toggleEarlier = (line: EarlierPartLine) => {
+    if (!canEdit) return;
+    const rowKey = `${EARLIER_KEY}${line.id}`;
+    if (latest.current.rows.some(r => r.key === rowKey)) { removeRow(rowKey); return; }
+    if (rows.length >= QUOTE_MAX_ITEMS) { setFormError(`Số lượng hạng mục tối đa ${QUOTE_MAX_ITEMS}.`); return; }
+    const owner = ownerKey;
+    setRows(prev => [...prev, { ...newPart(), key: rowKey, partCatalogId: line.catalogId, quantity: String(line.quantity), description: line.name, partNameSnapshot: line.name }]);
+    setFormError(null);
+    void (async () => {
+      try {
+        const part = await fetchStrictPartById(line.catalogId);
+        // The functional update below is a no-op when the technician already unticked the line.
+        if (!live(owner)) return;
+        setRows(prev => prev.map(r => (r.key === rowKey
+          ? { ...r, unitPrice: String(part.sellingPrice), description: part.name, partNameSnapshot: part.name, partSku: part.sku ?? '', warrantyPolicy: part.warrantyPolicy ?? '', warrantyTermDays: part.warrantyDays != null ? String(part.warrantyDays) : '' }
+          : r)));
+      } catch {
+        if (!live(owner)) return;
+        setRows(prev => prev.filter(r => r.key !== rowKey));
+        setFormError('Không lấy được giá linh kiện từ FixHome. Hãy chọn lại.');
+      }
+    })();
+  };
+
   const loadCatalog = (search?: string) => {
-    if (frozen || reviewing) return;
-    const gen = catalogLoadGen.current + 1;
-    catalogLoadGen.current = gen;
+    if (!canEdit) return;
+    const gen = ++loadGen.current;
     const owner = ownerKey;
     setCatalog({ status: 'loading', parts: [], error: null });
     void (async () => {
       try {
         const result = await fetchStrictCatalog({ limit: 50, ...(search?.trim() ? { search: search.trim() } : {}) });
         // Stale load (superseded request, owner/session switch, unmount) is ignored.
-        if (!mountedRef.current || gen !== catalogLoadGen.current || ownerRef.current !== owner || !canEditRef.current) return;
-        if (!result.data.length) {
-          setCatalog({ status: 'empty', parts: [], error: null });
-          return;
-        }
-        setCatalog({
-          status: 'ready',
-          parts: result.data.map(part => ({
-            id: part.id,
-            name: part.name,
-            sellingPrice: part.sellingPrice,
-            warrantyDays: part.warrantyDays,
-            warrantyPolicy: part.warrantyPolicy,
-            sku: part.sku,
-          })),
-          error: null,
-        });
+        if (!live(owner) || gen !== loadGen.current) return;
+        setCatalog({ status: result.data.length ? 'ready' : 'empty', parts: result.data, error: null });
       } catch {
         // Failure is an explicit error with retry, never an empty placeholder catalogue.
-        if (!mountedRef.current || gen !== catalogLoadGen.current || ownerRef.current !== owner || !canEditRef.current) return;
+        if (!live(owner) || gen !== loadGen.current) return;
         setCatalog({ status: 'error', parts: [], error: 'Không tải được danh mục. Hãy thử tải lại.' });
       }
     })();
   };
 
-  const selectCatalogPart = (rowKey: string, option: CostItemCatalogOption) => {
-    if (frozen || reviewing) return;
-    const row = rowsRef.current.find(r => r.key === rowKey);
-    if (!row || row.kind !== 'parts_equipment' || row.partSource !== 'fixhome') return;
-    const gen = catalogSelectGen.current + 1;
-    catalogSelectGen.current = gen;
+  /** Tick or untick a stock part; the picks outlive new searches. Price and name come from the by-ID read. */
+  const togglePick = async (option: CostItemCatalogOption) => {
+    if (!canEdit) return;
+    setPickError(null);
+    if (wanted.current.has(option.id)) {
+      wanted.current.delete(option.id);
+      setPicked(prev => prev.filter(r => r.partCatalogId !== option.id));
+      return;
+    }
+    wanted.current.add(option.id);
     const owner = ownerKey;
-    pendingSelect.current[rowKey] = option.id;
-    void (async () => {
-      try {
-        // The server rehydrates authoritative price/name/warranty by exact ID.
-        const part = await fetchStrictPartById(option.id);
-        // A response initiated before confirm/unknown must never mutate rows
-        // frozen afterward: drop unless still mounted, latest, same owner, and editable.
-        if (!mountedRef.current || gen !== catalogSelectGen.current || ownerRef.current !== owner || !canEditRef.current) return;
-        // Latest selection wins: an older response never overwrites a newer pick.
-        if (pendingSelect.current[rowKey] !== option.id) return;
-        // The row must still be current, editable, and on the same source —
-        // a source/type change or removal since the tap drops the stale part.
-        const latest = rowsRef.current.find(r => r.key === rowKey);
-        if (!latest || latest.kind !== 'parts_equipment' || latest.partSource !== 'fixhome') return;
-        setRows(prev => prev.map(r => (r.key === rowKey
-          ? {
-            ...r,
-            partCatalogId: part.id,
-            partNameSnapshot: part.name,
-            partSku: part.sku ?? '',
-            warrantyPolicy: part.warrantyPolicy ?? '',
-            unitPrice: String(part.sellingPrice),
-            description: part.name,
-          }
-          : r)));
-        setFormError(null);
-      } catch {
-        if (!mountedRef.current || gen !== catalogSelectGen.current || ownerRef.current !== owner || !canEditRef.current) return;
-        if (pendingSelect.current[rowKey] !== option.id) return;
-        const latest = rowsRef.current.find(r => r.key === rowKey);
-        if (!latest || latest.kind !== 'parts_equipment' || latest.partSource !== 'fixhome') return;
-        setFormError('Mã danh mục không khớp với máy chủ. Hãy chọn lại.');
-      }
-    })();
+    try {
+      const part = await fetchStrictPartById(option.id);
+      if (!live(owner) || !latest.current.canEdit || !wanted.current.has(option.id)) return;
+      setPicked(prev => prev.some(r => r.partCatalogId === part.id) ? prev : [...prev, {
+        ...newPart(), partCatalogId: part.id, unitPrice: String(part.sellingPrice), description: part.name, partNameSnapshot: part.name,
+        partSku: part.sku ?? '', warrantyPolicy: part.warrantyPolicy ?? '', warrantyTermDays: part.warrantyDays != null ? String(part.warrantyDays) : '',
+      }]);
+    } catch {
+      if (!wanted.current.has(option.id)) return;
+      wanted.current.delete(option.id);
+      if (mountedRef.current) setPickError('Không tải được linh kiện đã chọn. Hãy chọn lại.');
+    }
+  };
+
+  const setPickQuantity = (rowKey: string, quantity: string) => {
+    if (!canEdit) return;
+    setPickError(null);
+    setPicked(prev => prev.map(r => (r.key === rowKey ? { ...r, quantity } : r)));
+  };
+
+  /** Moves every pick into the quote; a stock part already listed adds up its quantity. */
+  const addPicked = () => {
+    if (!canEdit || !picked.length) return;
+    if (picked.some(r => !/^\d+$/.test(r.quantity.trim()) || Number(r.quantity) < 1 || Number(r.quantity) > PART_QUANTITY_MAX)) {
+      setPickError(`Nhập số lượng từ 1 đến ${PART_QUANTITY_MAX} cho mọi linh kiện đã chọn.`);
+      return;
+    }
+    const merged = [...rows];
+    for (const item of picked) {
+      const i = merged.findIndex(r => !r.key.startsWith(EARLIER_KEY) && isPart(r) && r.partCatalogId === item.partCatalogId);
+      if (i >= 0) merged[i] = { ...merged[i], quantity: String(Math.min(PART_QUANTITY_MAX, Number(merged[i].quantity) + Number(item.quantity))) };
+      else merged.push(item);
+    }
+    if (merged.length > QUOTE_MAX_ITEMS) { setPickError(`Số lượng hạng mục tối đa ${QUOTE_MAX_ITEMS}.`); return; }
+    setRows(merged);
+    wanted.current.clear();
+    setPicked([]);
+    setFormError(null);
+    void Haptics.selectionAsync();
+    sheetRef.current?.dismiss();
+  };
+
+  /** A closed sheet leaves nothing half-picked behind and reloads the full catalog next time. */
+  const onSheetDismiss = () => {
+    wanted.current.clear();
+    setPicked([]);
+    setPickError(null);
+    setCatalog({ status: 'idle', parts: [], error: null });
   };
 
   const buildPayload = () => ({
-    items: rows.map(costItemRowToPayloadItem),
+    items: [...laborRows, ...rows.filter(isPart)].map(costItemRowToPayloadItem),
     ...(note.trim() ? { note: note.trim() } : {}),
   });
 
   const openReview = () => {
     if (!canEdit) return;
+    if (rows.some(r => isPart(r) && !hasPrice(r))) {
+      setFormError('Đang lấy giá linh kiện từ FixHome. Vui lòng chờ giây lát rồi xem lại báo giá.');
+      return;
+    }
+    const errors = validateCostItemRows(rows);
+    if (Object.keys(errors).length) {
+      setFieldErrors(errors);
+      setFormError('Kiểm tra lại các ô được đánh dấu.');
+      return;
+    }
     const payload = buildPayload();
     if (!controller.confirm(payload)) {
       setFormError(controller.getState().message ?? 'Dữ liệu báo giá chưa hợp lệ.');
@@ -224,10 +284,11 @@ export default function QuotationFormScreen() {
     }
     try {
       const validated = validateQuotationPayload(payload);
-      setEstimate(validated.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0));
+      setEstimate(validated.items.reduce((total, item) => total + item.quantity * item.unitPrice, 0));
     } catch {
       setEstimate(null);
     }
+    setFieldErrors({});
     setFormError(null);
     setReviewing(true);
   };
@@ -290,19 +351,23 @@ export default function QuotationFormScreen() {
     );
   }
 
+  const verifyMode = state.phase === 'unknown' || (state.phase === 'idle' && showRecovery);
+  const showForm = canEdit || reviewing;
+
   return (
     <TaskScreenShell
       title="Tạo báo giá"
       stage={2}
       onBack={onBack}
+      summary={showForm ? (
+        <View testID="quote-total" style={styles.total}>
+          <Text style={styles.totalLabel}>Tạm tính ({rows.length} hạng mục)</Text>
+          <Text style={styles.totalValue}>{formatVnd(reviewing && estimate !== null ? estimate : liveTotal)}</Text>
+        </View>
+      ) : undefined}
       secondary={
         reviewing
-          ? {
-              label: 'Hủy',
-              testID: 'quote-review-cancel',
-              disabled: busy,
-              onPress: cancelReview,
-            }
+          ? { label: 'Hủy', testID: 'quote-review-cancel', disabled: busy, onPress: cancelReview }
           : {
               label: 'Làm mới dữ liệu',
               testID: 'task-refresh',
@@ -314,25 +379,10 @@ export default function QuotationFormScreen() {
       }
       primary={
         reviewing
-          ? {
-              label: busy ? 'Đang xử lý.' : 'Gửi báo giá',
-              testID: 'quote-send',
-              disabled: busy,
-              onPress: sendQuotation,
-            }
+          ? { label: busy ? 'Đang xử lý…' : 'Gửi báo giá', testID: 'quote-send', disabled: busy, onPress: sendQuotation }
           : {
-              label: busy
-                ? 'Đang xử lý.'
-                : state.phase === 'unknown' || (state.phase === 'idle' && showRecovery)
-                  ? 'Kiểm tra lại'
-                  : state.phase === 'resolved'
-                    ? 'Tiếp tục'
-                    : 'Xem báo giá',
-              testID: state.phase === 'unknown' || (state.phase === 'idle' && showRecovery)
-                ? 'quote-verify'
-                : state.phase === 'resolved'
-                  ? 'quote-continue'
-                  : 'quote-review',
+              label: busy ? 'Đang xử lý…' : verifyMode ? 'Kiểm tra lại' : state.phase === 'resolved' ? 'Tiếp tục' : 'Xem báo giá',
+              testID: verifyMode ? 'quote-verify' : state.phase === 'resolved' ? 'quote-continue' : 'quote-review',
               disabled: busy || (!canEdit && state.phase !== 'unknown' && state.phase !== 'resolved' && !showRecovery),
               onPress: onPrimary,
             }
@@ -354,9 +404,9 @@ export default function QuotationFormScreen() {
             onPress={() => {
               void loadResource('quotations');
             }}
-            style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12 }}
+            style={styles.outlineBtn}
           >
-            <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Tải lại báo giá</Text>
+            <Text style={styles.outlineText}>Tải lại báo giá</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -373,87 +423,140 @@ export default function QuotationFormScreen() {
       )}
 
       {canEdit && (
-        <View style={{ gap: 8 }}>
-          {rows.map(row => (
-            <CostItemEditor
-              key={row.key}
-              row={row}
-              catalog={catalog}
-              expanded={expandedKey === row.key}
-              canRemove={rows.length > 1}
-              onToggle={() => setExpandedKey(prev => (prev === row.key ? null : row.key))}
-              onChange={next => updateRow(row.key, next)}
-              onRemove={() => removeRow(row.key)}
-              onLoadCatalog={search => {
-                void loadCatalog(search);
-              }}
-              onSelectCatalogPart={part => selectCatalogPart(row.key, part)}
-            />
-          ))}
-          <TouchableOpacity
-            testID="quote-add-item"
-            accessibilityRole="button"
-            disabled={frozen || reviewing}
-            onPress={addRow}
-            style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12 }}
-          >
-            <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Thêm hạng mục</Text>
-          </TouchableOpacity>
+        <>
+          <Section title="Tiền công" hint="Công kiểm tra, sửa chữa, lắp đặt. Bảo hành công do bạn khai báo.">
+            {laborRows.map((row, index) => (
+              <LaborCard key={row.key} row={row} index={index} errors={fieldErrors[row.key]} disabled={frozen}
+                onChange={next => updateRow(row.key, next)} onRemove={() => removeRow(row.key)} />
+            ))}
+            <AddRow testID="quote-add-item" label="Thêm tiền công" disabled={frozen} onPress={addLabor} />
+          </Section>
 
-          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Ghi chú chung (tùy chọn)</Text>
-          <TextInput
-            testID="quote-note"
-            accessibilityLabel="Ghi chú báo giá"
-            value={note}
-            onChangeText={value => {
-              if (frozen || reviewing) return;
-              setNote(value);
-              setReviewing(false);
-            }}
-            placeholder="Ghi chú cho khách hàng"
-            placeholderTextColor={colors.muted}
-            maxLength={5000}
-            style={{ minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, color: colors.text, fontSize: 16, backgroundColor: colors.surface }}
-          />
-        </View>
+          <Section title="Linh kiện" hint="Chỉ dùng linh kiện của FixHome. Giá và bảo hành theo từng linh kiện, không chỉnh tay.">
+            <GroupLabel title="Đã yêu cầu trước khi sửa" hint="Chọn để đưa nguyên dòng vào báo giá, đúng số lượng đã yêu cầu." />
+            {partsStatus === 'ready' ? (
+              earlierLines.length ? earlierLines.map(line => (
+                <EarlierPartCard key={line.id} line={line} row={rows.find(r => r.key === `${EARLIER_KEY}${line.id}`)} disabled={frozen} onToggle={() => toggleEarlier(line)}
+                  onQuantity={quantity => { const r = rows.find(x => x.key === `${EARLIER_KEY}${line.id}`); if (r) updateRow(r.key, { ...r, quantity }); }} />
+              )) : <Text style={styles.empty}>Bạn chưa yêu cầu linh kiện nào trước khi sửa. Cần linh kiện thì thêm từ kho bên dưới.</Text>
+            ) : partsStatus === 'error' ? (
+              <View style={styles.emptyBox}>
+                <ReadOnlyNotice tone="error">Không tải được danh sách linh kiện đã yêu cầu.</ReadOnlyNotice>
+                <TouchableOpacity testID="quote-parts-retry" accessibilityRole="button" onPress={() => { void loadResource('parts'); }} style={styles.outlineBtn}>
+                  <Text style={styles.outlineText}>Tải lại linh kiện</Text>
+                </TouchableOpacity>
+              </View>
+            ) : <Text style={styles.empty}>Đang tải danh sách linh kiện đã yêu cầu…</Text>}
+
+            <GroupLabel title="Cần thêm linh kiện" hint="Linh kiện chọn thêm từ kho sẽ tự tạo yêu cầu cấp sau khi khách hàng duyệt báo giá." />
+            {freshRows.map(row => (
+              <PartLineCard key={row.key} row={row} maxQuantity={PART_QUANTITY_MAX} disabled={frozen}
+                onQuantity={quantity => updateRow(row.key, { ...row, quantity })} onRemove={() => removeRow(row.key)} />
+            ))}
+            <AddRow testID="quote-add-part" label="Chọn linh kiện từ kho FixHome" hint="Mở khung tìm và chọn linh kiện trong kho FixHome" disabled={frozen}
+              onPress={() => sheetRef.current?.present()} />
+          </Section>
+
+          <View style={styles.noteWrap}>
+            <Text accessibilityRole="header" style={styles.noteTitle}>Ghi chú</Text>
+            <TextInput
+              testID="quote-note"
+              accessibilityLabel="Ghi chú báo giá"
+              value={note}
+              onChangeText={value => {
+                if (frozen || reviewing) return;
+                setNote(value);
+                setReviewing(false);
+              }}
+              placeholder="Ghi chú cho khách hàng (tùy chọn)"
+              placeholderTextColor={colors.muted}
+              maxLength={5000}
+              multiline
+              style={styles.noteInput}
+            />
+          </View>
+        </>
       )}
 
       {reviewing && (
-        <View testID="quote-review-sheet" style={{ backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md, gap: 8 }}>
-          <Text style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>Xem lại báo giá</Text>
+        <View testID="quote-review-sheet" style={styles.review}>
+          <Text accessibilityRole="header" style={styles.reviewTitle}>Xem lại báo giá</Text>
+          {rows.map(row => (
+            <View key={row.key} style={styles.reviewLine}>
+              <Text style={styles.reviewName}>{isPart(row) ? row.partNameSnapshot || row.description : row.description}</Text>
+              <Text style={styles.reviewMeta}>{row.quantity} × {formatVnd(Number(row.unitPrice))} = {formatVnd(costItemRowSubtotal(row) ?? 0)}</Text>
+              {isPart(row) && <Text style={styles.reviewWarranty}>{Number(row.warrantyTermDays) > 0 ? `Bảo hành ${row.warrantyTermDays} ngày theo FixHome` : 'Bảo hành theo chính sách FixHome'}</Text>}
+            </View>
+          ))}
           <DetailRow label="Số hạng mục" value={rows.length} />
           <DetailRow label="Ước tính" value={estimate !== null ? formatVnd(estimate) : 'Chưa tính được'} />
-          <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+          <Text style={styles.reviewHint}>
             Số ước tính để tham khảo; tổng theo máy chủ trên chi tiết đã gửi mới có hiệu lực. Dùng nút gửi ở thanh dưới cùng, ngoài vùng cuộn.
           </Text>
         </View>
       )}
 
       {(formError || (state.phase === 'denied' && state.message)) && (
-        <Text testID="quote-form-error" accessibilityRole="alert" style={{ color: colors.error, fontSize: 14, lineHeight: 21 }}>
+        <Text testID="quote-form-error" accessibilityRole="alert" style={styles.formError}>
           {formError ?? state.message}
         </Text>
       )}
       {state.phase === 'unknown' && <ReadOnlyNotice>{state.message ?? 'Kết quả chưa xác định. Không gửi lại.'}</ReadOnlyNotice>}
 
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <TouchableOpacity
-          testID="task-detail-link"
-          accessibilityRole="button"
-          onPress={() => navigation.navigate('OrderInformation')}
-          style={{ flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12 }}
+      <Section title="Xem thêm">
+        <LinkRow testID="task-detail-link" label="Chi tiết đơn" Icon={Info} onPress={() => navigation.navigate('OrderInformation')} />
+      </Section>
+
+      {canEdit && (
+        <BottomSheetModal
+          ref={sheetRef}
+          snapPoints={['90%']}
+          enableDynamicSizing={false}
+          enablePanDownToClose
+          keyboardBehavior="interactive"
+          keyboardBlurBehavior="restore"
+          android_keyboardInputMode="adjustResize"
+          onDismiss={onSheetDismiss}
+          backdropComponent={props => <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} />}
         >
-          <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Chi tiết đơn</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          testID="quote-scope-link"
-          accessibilityRole="button"
-          onPress={() => navigation.navigate('ScopeDetail')}
-          style={{ flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12 }}
-        >
-          <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Phạm vi và giá</Text>
-        </TouchableOpacity>
-      </View>
+          <PartPickerRow
+            picked={picked}
+            catalog={catalog}
+            error={pickError}
+            maxQuantity={PART_QUANTITY_MAX}
+            canAdd={canEdit}
+            onToggle={option => { void togglePick(option); }}
+            onQuantity={setPickQuantity}
+            onAdd={addPicked}
+            onClose={() => sheetRef.current?.dismiss()}
+            onLoadCatalog={search => loadCatalog(search)}
+          />
+        </BottomSheetModal>
+      )}
     </TaskScreenShell>
   );
 }
+
+const styles = StyleSheet.create({
+  total: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  totalLabel: { color: colors.textSecondary, fontSize: 14, lineHeight: 20 },
+  totalValue: { color: colors.text, fontSize: 18, lineHeight: 26, fontWeight: '700' },
+  group: { gap: 2, marginTop: spacing.sm },
+  subTitle: { color: colors.text, fontSize: 14, lineHeight: 20, fontWeight: '600' },
+  subHint: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
+  empty: { color: colors.textSecondary, fontSize: 14, lineHeight: 21, padding: spacing.md },
+  emptyBox: { padding: spacing.md, gap: 8 },
+  outlineBtn: { minHeight: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12 },
+  outlineText: { color: colors.primaryStrong, fontSize: 15, fontWeight: '600' },
+  noteWrap: { gap: 8 },
+  noteTitle: { color: colors.text, fontSize: 16, lineHeight: 24, fontWeight: '700' },
+  noteInput: { minHeight: 94, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 14, textAlignVertical: 'top', color: colors.text, fontSize: 16, lineHeight: 24, backgroundColor: colors.surface },
+  review: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: 8 },
+  reviewTitle: { color: colors.text, fontSize: 16, lineHeight: 24, fontWeight: '700' },
+  reviewLine: { gap: 2, paddingBottom: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  reviewName: { color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '600' },
+  reviewMeta: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
+  reviewWarranty: { color: colors.tone.success.text, fontSize: 13, lineHeight: 19 },
+  reviewHint: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
+  formError: { color: colors.error, fontSize: 14, lineHeight: 21 },
+});

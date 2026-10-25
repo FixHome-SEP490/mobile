@@ -193,3 +193,11 @@ it('non-paid warrantyTermDays 0 is authoritative (EXTERNAL fee0/term0, FixHome c
     items: [{ description: 'Item', quantity: 1, unitPrice: 1000, type: 'parts_equipment', warrantyTermDays: '30' }],
   }], 'o', 'customer')).toThrow('Invalid quotation item warrantyTermDays');
 });
+it('additional-cost money arrives as digit strings and is read as numbers', () => {
+  const [cost] = normalizeOrderResource('extras', [{
+    id: 'e', serviceOrderId: 'o', status: 'pending_approval', totalLaborDelta: '100000', totalPartsDelta: '480000', shippingFee: '0',
+    items: [{ id: 'i', type: 'parts_equipment', quantity: 1, unitPrice: '450000', lineTotal: '450000', warrantyFee: '20000' }],
+  }], 'o', 'customer') as any[];
+  expect(cost).toMatchObject({ totalLaborDelta: 100000, totalPartsDelta: 480000, shippingFee: 0 });
+  expect(cost.items[0]).toMatchObject({ unitPrice: 450000, lineTotal: 450000, warrantyFee: 20000 });
+});

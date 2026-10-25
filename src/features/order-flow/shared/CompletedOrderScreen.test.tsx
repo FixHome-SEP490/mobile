@@ -58,7 +58,7 @@ it.each(['customer', 'technician'] as const)('completed order shows server facts
   expect(text).toContain('SO-1');
   expect(text).toContain('Đã bàn giao');
   expect(text).not.toMatch(/POST|GET/);
-  for (const screen of ['ScopeDetail', 'InvoiceDetail', 'EvidenceGallery', 'OrderProgressHistory']) {
+  for (const screen of ['OrderInformation', 'InvoiceDetail', 'EvidenceGallery', 'OrderProgressHistory']) {
     await act(async () => { renderer.root.findByProps({ testID: `task-link-${screen}` }).props.onPress(); });
     expect(mockNavigate).toHaveBeenCalledWith(screen);
   }

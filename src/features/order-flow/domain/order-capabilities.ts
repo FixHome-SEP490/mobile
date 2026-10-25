@@ -1,9 +1,19 @@
 import { isHistoricalOrder } from '../../../api/orders.api';
-import type { OrderSessionSnapshot } from './order-session.types';
+import type { OrderPartReadModel, OrderSessionSnapshot } from './order-session.types';
 import { actionableExtras } from './order-task-resolver';
 
 export function matchesDecisionTarget(current: { id: string; version?: number } | undefined, captured: { id: string; version?: number }): boolean {
   return !!current && current.id === captured.id && current.version === captured.version;
+}
+/** What keeps this technician's parts from letting the handover go out: unreceived requests and received lines not yet used or given back. */
+export function partsBlockers(parts: OrderPartReadModel[], userId: string) {
+  let open = 0, unsettled = 0;
+  for (const p of parts) {
+    if (p.technicianId !== userId || p.status === 'cancelled' || p.status === 'completed') continue;
+    if (p.status !== 'received') open++;
+    else unsettled += p.items.filter(i => i.usageStatus !== 'used' && i.usageStatus !== 'returned').length;
+  }
+  return { open, unsettled };
 }
 /** Preliminary UX eligibility only. Authenticated Backend commands remain authoritative. */
 export function getOrderCapabilities(s: OrderSessionSnapshot) {
@@ -15,8 +25,7 @@ export function getOrderCapabilities(s: OrderSessionSnapshot) {
   const extras = actionableExtras(s); if (!extras || extras.length) return denied;
   const partsReady = s.resources.parts.status === 'ready'
     && !s.resources.parts.data.some(p => p.serviceOrderId !== order.id || !p.technicianId)
-    && !s.resources.parts.data.filter(p => p.technicianId === s.key.userId).some(p =>
-      p.status !== 'cancelled' && p.status !== 'completed' && (p.status !== 'received' || p.items.some(i => i.usageStatus !== 'used' && i.usageStatus !== 'returned')));
+    && (b => !b.open && !b.unsettled)(partsBlockers(s.resources.parts.data, s.key.userId));
   const mode = order.pricingMode?.toUpperCase();
   const fixed = mode === 'FIXED_PRICE' && typeof order.fixedUnitPrice === 'number' && Number.isFinite(order.fixedUnitPrice) && order.fixedUnitPrice >= 0;
   const quotes = s.resources.quotations;

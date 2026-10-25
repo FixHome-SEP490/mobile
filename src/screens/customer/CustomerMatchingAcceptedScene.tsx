@@ -31,7 +31,8 @@ export default function CustomerMatchingAcceptedScene({
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.top}>
           <BackButton onPress={onBack} />
-          <Text accessibilityRole="header" style={{ fontSize: 22, fontWeight: '700', color: colors.text }}>Kỹ thuật viên đã nhận đơn</Text>
+          <Text accessibilityRole="header" style={{ flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '700', color: colors.text }}>Kỹ thuật viên đã nhận đơn</Text>
+          <View style={{ width: 44, height: 44 }} />
         </View>
         <View testID="matching-accepted-handoff" style={[styles.hero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={[styles.emblem, { backgroundColor: colors.tone.success.bg }]}>

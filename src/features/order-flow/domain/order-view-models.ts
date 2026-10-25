@@ -17,7 +17,12 @@ function invoiceItems(value: unknown) {
     const item = record(entry);
     if (typeof item.id !== 'string' || !item.id || typeof item.description !== 'string' || !item.description.trim()
       || typeof item.quantity !== 'number' || !Number.isInteger(item.quantity) || item.quantity <= 0 || !validMoney(item.lineTotal)) throw new Error('Invalid invoice item');
-    return { id: item.id, description: item.description, quantity: item.quantity, lineTotal: item.lineTotal };
+    return {
+      id: item.id, description: item.description, quantity: item.quantity, lineTotal: item.lineTotal,
+      ...(typeof item.type === 'string' ? { type: item.type } : {}),
+      ...(typeof item.sourceType === 'string' ? { sourceType: item.sourceType } : {}),
+      ...(typeof item.sourceItemId === 'string' ? { sourceItemId: item.sourceItemId } : {}),
+    };
   });
 }
 export function normalizeSessionOrder(payload: unknown, orderId: string): TechnicianOrderItem {
@@ -86,7 +91,17 @@ export function normalizeOrderResource<K extends OrderResourceKind>(kind: K, pay
     return rows.map(row => {
       const status = String(row.status).toLowerCase();
       if (!additionalCostWireStatuses.includes(status as AdditionalCostWireStatus)) throw new Error('Invalid additional cost status');
-      return { ...row, status };
+      // Money columns are bigint, so the wire carries them as digit strings; screens read numbers.
+      const money = (value: unknown) => (typeof value === 'string' && /^\d+$/.test(value.trim()) ? Number(value) : value);
+      return {
+        ...row, status,
+        totalLaborDelta: money(row.totalLaborDelta), totalPartsDelta: money(row.totalPartsDelta),
+        ...(row.shippingFee !== undefined ? { shippingFee: money(row.shippingFee) } : {}),
+        ...(Array.isArray(row.items) ? { items: row.items.map(item => {
+          const i = record(item);
+          return { ...i, unitPrice: money(i.unitPrice), lineTotal: money(i.lineTotal), ...(i.warrantyFee != null ? { warrantyFee: money(i.warrantyFee) } : {}) };
+        }) } : {}),
+      };
     }) as OrderResourceData[K];
   }
   if (kind === 'parts') {
@@ -97,7 +112,8 @@ export function normalizeOrderResource<K extends OrderResourceKind>(kind: K, pay
         const i = record(item);
         if (typeof i.id !== 'string' || typeof i.partNameSnapshot !== 'string' || typeof i.quantity !== 'number'
           || !Number.isInteger(i.quantity) || i.quantity < 1 || !['pending', 'used', 'returned'].includes(String(i.usageStatus))) throw new Error('Invalid parts item');
-        return { id: i.id, partNameSnapshot: i.partNameSnapshot, quantity: i.quantity, usageStatus: i.usageStatus };
+        return { id: i.id, partNameSnapshot: i.partNameSnapshot, quantity: i.quantity, usageStatus: i.usageStatus,
+          ...(typeof i.partCatalogId === 'string' ? { partCatalogId: i.partCatalogId } : {}), ...(typeof i.partSource === 'string' ? { partSource: i.partSource } : {}) };
       });
       return { id: row.id, serviceOrderId: row.serviceOrderId, status: row.status, requestType: row.requestType,
         fulfillmentMethod: row.fulfillmentMethod, ...(role === 'technician' ? { technicianId: row.technicianId } : {}), items };

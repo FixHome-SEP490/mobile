@@ -8,6 +8,8 @@ export interface OrderReadDependencies {
   readResource: (key: OrderSessionKey, kind: OrderResourceKind) => Promise<unknown>;
   now?: () => number;
 }
+/** Re-reads that never blank the screen. An explicit refresh and the cancellation/aftercare reads still show loading. */
+const QUIET_REASONS = new Set(['live', 'focus', 'foreground', 'command-readback', 'payment-readback']);
 export function createOrderReadCoordinator(deps: OrderReadDependencies) {
   let snapshot: OrderSessionSnapshot | null = null;
   let generation = 0;
@@ -35,9 +37,12 @@ export function createOrderReadCoordinator(deps: OrderReadDependencies) {
     // No unopened resource is fetched; stale mutation targets cannot remain ready.
     generation++; flights.clear();
     const gen = generation, requestSeq = ++seq;
-    // A live (server push / poll) re-read is quiet: the screen keeps showing the data it has until the new data
-    // arrives, so nothing flashes to a loading state. A failed quiet read changes nothing; the next push or poll retries.
-    const quiet = reason === 'live' && previous.order.status === 'ready';
+    // Background re-reads (live, focus, foreground and command/payment read-back) keep showing the data it has until the new data arrives,
+    // so a command read-back, focus or push never flashes the screen to a loading state or drops what the user typed.
+    // Only a live (server push / poll) re-read also swallows its own failure; the next push or poll retries.
+    // Any other failed re-read still ends in the error state below, so a stale target is never trusted.
+    const quiet = QUIET_REASONS.has(reason) && previous.order.status === 'ready';
+    const swallow = quiet && reason === 'live';
     if (!quiet) {
       const resources = { ...previous.resources };
       for (const kind of opened) resources[kind] = { status: 'loading', requestSeq };
@@ -62,11 +67,11 @@ export function createOrderReadCoordinator(deps: OrderReadDependencies) {
         const terminal = old && ['COMPLETED', 'CANCELLED'].includes(old.status);
         snapshot = { ...snapshot!, access: 'current', order: readyResource(terminal && !['COMPLETED', 'CANCELLED'].includes(order.status) ? old : order, requestSeq, (deps.now ?? Date.now)()) };
         publish();
-        if (matches(key, gen)) await Promise.all(opened.map(kind => loadResource(key, kind, quiet)));
+        if (matches(key, gen)) await Promise.all(opened.map(kind => loadResource(key, kind, quiet, swallow)));
       } catch (error) {
         if (!matches(key, gen)) return;
         if (deny(error)) { purge('revoked'); return; }
-        if (quiet) return;
+        if (swallow) return;
         // Known terminal remains terminal even if an auxiliary refresh fails.
         if (previous.order.status === 'ready' && ['COMPLETED', 'CANCELLED'].includes(previous.order.data.status)) snapshot = { ...snapshot!, order: previous.order };
         else snapshot = { ...snapshot!, order: { status: 'error', requestSeq, error: 'unavailable' } };
@@ -79,7 +84,7 @@ export function createOrderReadCoordinator(deps: OrderReadDependencies) {
     flights.set('order', request);
     try { await request; } finally { if (flights.get('order') === request) flights.delete('order'); }
   }
-  async function loadResource(key: OrderSessionKey, kind: OrderResourceKind, quiet = false): Promise<void> {
+  async function loadResource(key: OrderSessionKey, kind: OrderResourceKind, quiet = false, swallow = false): Promise<void> {
     if (!matches(key) || snapshot?.access !== 'current' || snapshot.order.status !== 'ready') return;
     const active = flights.get(kind); if (active) return active;
     const gen = generation, requestSeq = ++seq;
@@ -94,7 +99,7 @@ export function createOrderReadCoordinator(deps: OrderReadDependencies) {
       } catch (error) {
         if (!matches(key, gen)) return;
         if (deny(error)) { purge('revoked'); return; }
-        if (keep) return;
+        if (keep && swallow) return;
         snapshot = { ...snapshot!, resources: { ...snapshot!.resources, [kind]: { status: 'error', requestSeq, error: 'unavailable' } } }; publish();
       }
     })();

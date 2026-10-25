@@ -31,7 +31,7 @@ const mockAuthState = {
   user: { id: 'customer-a', role: 'customer' },
   sessionGeneration: 1,
 };
-const mockNavigation = { goBack: jest.fn(), navigate: jest.fn() };
+const mockNavigation = { goBack: jest.fn(), navigate: jest.fn(), replace: jest.fn(), reset: jest.fn(), addListener: jest.fn(() => () => undefined), isFocused: jest.fn(() => true) };
 const mockUsePreventRemove = jest.fn();
 const mockRoute = { key: 'booking-flow-a', params: { prefill: { serviceId: SERVICE_ID } } };
 const mockGetServices = jest.fn();
@@ -492,6 +492,7 @@ it('keeps review local, then creates exactly the immutable reviewed request on c
     urgency: 'NORMAL',
   });
   expect(textContent(renderer.root)).toContain('Đã gửi yêu cầu');
+  expect(mockNavigation.reset).toHaveBeenCalledWith(expect.objectContaining({ index: 1, routes: [expect.objectContaining({ name: 'CustomerMain' }), expect.objectContaining({ name: 'CustomerMatching', params: expect.objectContaining({ bookingId: expect.any(String) }) })] }));
   const receipt = renderer.root.findByProps({ testID: 'booking-submitted-receipt' });
   expect(textContent(receipt)).toContain('Sửa máy lạnh');
   expect(textContent(receipt)).toContain('Máy lạnh chảy nước');
@@ -1455,17 +1456,9 @@ it('retains an ambiguous in-flight create lock under its original owner across a
   await act(async () => renderer.unmount());
 });
 
-it('shows two intake stages with a neutral fallback for a codeless service', async () => {
+it('titles the screen with the current stage and falls back to neutral artwork for a codeless service', async () => {
   const renderer = await renderScreen();
-  const progress = renderer.root.findAll(
-    (node) => node.type === View && node.props.testID === 'booking-intake-progress',
-  );
-  expect(progress).toHaveLength(1);
-  if (progress.length !== 1) return;
-  const progressText = textContent(progress[0]);
-  expect(progressText).toContain('Tình trạng');
-  expect(progressText).toContain('Địa chỉ & thời gian');
-  expect(String(progress[0].props.accessibilityLabel)).toContain('bước 1 trên 2');
+  expect(textContent(renderer.root.findByProps({ testID: 'booking-header-title' }))).toBe('Tình trạng cần sửa');
   expect(
     renderer.root.findAll(
       (node) => node.type === View && node.props.testID === 'booking-service-artwork-fallback',

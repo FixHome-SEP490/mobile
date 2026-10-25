@@ -186,9 +186,9 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
     }
   };
 
-  const loadPartRequests = async () => {
+  const loadPartRequests = async (quiet = false) => {
     try {
-      setLoading(true);
+      if (!quiet) setLoading(true);
       setPartRequests(await partRequestsApi.getByOrderId(orderId));
       void loadReturns();
     } catch (err) {
@@ -221,7 +221,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
   };
 
   useEffect(() => {
-    void loadPartRequests();
+    void loadPartRequests(refreshKey > 0);
     // refreshKey: a part request of this order changed on the server (PO 18/10/2026).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId, refreshKey]);
@@ -390,6 +390,13 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
         <View style={styles.errorBanner}>
           <AlertCircle size={16} color={colors.tone.danger.fg} strokeWidth={1.75} />
           <Text style={[styles.jobMeta, { flex: 1 }]}>{actionError}</Text>
+        </View>
+      )}
+
+      {Object.values(returns).some((r) => r.blocksNewWork) && (
+        <View style={styles.errorBanner}>
+          <AlertCircle size={16} color={colors.tone.warning.fg} strokeWidth={1.75} />
+          <Text style={[styles.jobMeta, { flex: 1, color: colors.tone.warning.text }]}>Bạn chưa trả đủ linh kiện nên chưa nhận được việc mới.</Text>
         </View>
       )}
 
@@ -734,9 +741,6 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
                           </View>
                         );
                       })() : null}
-                      {record.blocksNewWork ? (
-                        <Text style={[styles.jobMeta, { color: colors.tone.warning.text }]}>Bạn chưa trả đủ linh kiện nên chưa nhận được việc mới.</Text>
-                      ) : null}
                       {max > 0 && !open ? (
                         <TouchableOpacity
                           accessibilityRole="button"

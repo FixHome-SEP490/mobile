@@ -1,15 +1,18 @@
 import React, { useMemo } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Clock } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { useTechnicianQuotation } from './useTechnicianQuotation';
 import { getRestoredQuotationRecovery } from '../domain/quotation-recovery';
 import type { OrderQuotation } from '../domain/order-session.types';
-import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import { ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import TechnicianOrderHub from '../shared/TechnicianOrderHub';
 import { quoteMoneyText } from '../shared/DecisionSummary';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
-import { lightTheme as colors } from '../../../constants/theme';
+import { vnDateTimeString } from '../../../utils/vn-time';
+import { lightTheme as colors, spacing } from '../../../constants/theme';
 
 function latestOwnQuote(quotations: OrderQuotation[] | undefined, serviceOrderId: string, technicianId: string): OrderQuotation | null {
   if (!quotations) return null;
@@ -112,13 +115,25 @@ export default function QuotationWaitingScreen() {
       {!quotationsReady && <ReadOnlyNotice>Đang tải báo giá từ máy chủ.</ReadOnlyNotice>}
 
       {sentQuote && (
-        <View style={{ backgroundColor: colors.surface, borderRadius: 12, padding: 16, gap: 4 }}>
-          <Text style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>Báo giá {sentQuote.id}</Text>
-          <DetailRow label="Phiên bản" value={sentQuote.version ?? 'Chưa rõ'} />
-          <DetailRow label="Gửi lúc" value={sentQuote.sentAt ?? 'Chưa rõ'} />
-          <DetailRow label="Tiền công" value={quoteMoneyText(sentQuote.laborTotal)} />
-          <DetailRow label="Linh kiện" value={quoteMoneyText(sentQuote.partsTotal)} />
-          <DetailRow label="Đang chờ" value="Khách hàng duyệt" />
+        <View style={styles.card}>
+          <View style={styles.head}>
+            <Text accessibilityRole="header" style={styles.title}>Báo giá lần {sentQuote.version ?? '—'}</Text>
+            <View style={[styles.chip, { backgroundColor: colors.tone.warning.bg }]}>
+              <Text style={[styles.chipText, { color: colors.tone.warning.text }]}>Chờ duyệt báo giá</Text>
+            </View>
+          </View>
+          {sentQuote.sentAt ? <Text style={styles.meta}>Gửi lúc {vnDateTimeString(sentQuote.sentAt)}</Text> : null}
+          <View style={[styles.banner, { backgroundColor: colors.tone.info.bg }]}>
+            <Clock size={20} strokeWidth={1.75} color={colors.tone.info.fg} />
+            <View style={styles.bannerText}>
+              <Text style={[styles.bannerTitle, { color: colors.tone.info.text }]}>Đang chờ khách hàng duyệt</Text>
+              <Text style={styles.meta}>Sau khi khách duyệt, bạn có thể bắt đầu sửa chữa.</Text>
+            </View>
+          </View>
+          <View style={styles.totals}>
+            <View style={styles.row}><Text style={styles.label}>Tiền công</Text><Text style={styles.value}>{quoteMoneyText(sentQuote.laborTotal)}</Text></View>
+            <View style={styles.row}><Text style={styles.label}>Linh kiện</Text><Text style={styles.value}>{quoteMoneyText(sentQuote.partsTotal)}</Text></View>
+          </View>
         </View>
       )}
 
@@ -132,26 +147,35 @@ export default function QuotationWaitingScreen() {
       {serverNext && <ReadOnlyNotice>{serverNext}</ReadOnlyNotice>}
       {state.phase === 'unknown' && <ReadOnlyNotice>{state.message ?? 'Kết quả chưa xác định. Không gửi lại.'}</ReadOnlyNotice>}
 
-      <View style={{ flexDirection: 'row', gap: 8 }}>
+      {sentQuote && (
         <TouchableOpacity
-          testID="task-detail-link"
+          testID="quote-proposal-link"
           accessibilityRole="button"
-          onPress={() => navigation.navigate('OrderInformation')}
-          style={{ flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12 }}
+          onPress={() => navigation.navigate('ProposalDetail', { proposalId: sentQuote.id })}
+          style={styles.link}
         >
-          <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Chi tiết đơn</Text>
+          <Text style={styles.linkText}>Xem chi tiết báo giá</Text>
         </TouchableOpacity>
-        {sentQuote && (
-          <TouchableOpacity
-            testID="quote-proposal-link"
-            accessibilityRole="button"
-            onPress={() => navigation.navigate('ProposalDetail', { proposalId: sentQuote.id })}
-            style={{ flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12 }}
-          >
-            <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Xem đề xuất</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      )}
+      <TechnicianOrderHub />
     </TaskScreenShell>
   );
 }
+
+const styles = StyleSheet.create({
+  card: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, padding: spacing.md, gap: spacing.sm },
+  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' },
+  title: { color: colors.text, fontSize: 20, lineHeight: 28, fontWeight: '600' },
+  chip: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, minHeight: 24, justifyContent: 'center' },
+  chipText: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
+  meta: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
+  banner: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderRadius: 12, padding: spacing.md },
+  bannerText: { flex: 1, minWidth: 0, gap: 2 },
+  bannerTitle: { fontSize: 15, lineHeight: 22, fontWeight: '600' },
+  totals: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 12, gap: 6 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 },
+  label: { color: colors.textSecondary, fontSize: 14, lineHeight: 20 },
+  value: { color: colors.text, fontSize: 14, lineHeight: 20, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  link: { minHeight: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12 },
+  linkText: { color: colors.primaryStrong, fontSize: 15, fontWeight: '600' },
+});

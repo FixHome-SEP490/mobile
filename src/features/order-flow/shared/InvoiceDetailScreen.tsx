@@ -1,10 +1,10 @@
 import React from 'react';
 import { paymentStatusLabel } from './payment-status-label';
-import { Text, View } from 'react-native';
+import { Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
-import { invoiceDisplayState } from './order-detail-view-models';
-import { DetailRow, ReadOnlyNotice, TaskScreenShell } from './TaskScreenShell';
+import { invoiceDisplayState, invoiceVsQuotation } from './order-detail-view-models';
+import { DetailRow, LineRow, ReadOnlyNotice, Section, TaskScreenShell } from './TaskScreenShell';
 import { formatVnd } from '../../../utils/format';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from './useLoadUnloadedResources';
@@ -19,9 +19,11 @@ export default function InvoiceDetailScreen() {
   const canRefresh = snapshot?.access === 'current' && !!key;
   const refreshing = snapshot?.order.status === 'loading' || snapshot?.resources.invoice.status === 'loading';
   const current = snapshot?.access === 'current' && snapshot.order.status === 'ready' && !!key;
-  useLoadUnloadedResources(snapshot, ['invoice'], loadResource);
+  useLoadUnloadedResources(snapshot, ['invoice', 'quotations'], loadResource);
   const history = snapshot?.access === 'historical' && key?.role === 'technician';
   const state = current && snapshot ? invoiceDisplayState(snapshot.resources.invoice) : null;
+  const quotations = snapshot?.resources.quotations.status === 'ready' ? snapshot.resources.quotations.data : null;
+  const vs = state?.kind === 'invoice' ? invoiceVsQuotation(state.invoice, quotations) : null;
   return <TaskScreenShell title="Hóa đơn" onBack={() => navigation.goBack()}
     secondary={{ label: 'Làm mới dữ liệu', testID: 'readonly-detail-refresh', disabled: !canRefresh || refreshing,
       onPress: () => { if (canRefresh && !refreshing) void refresh('manual'); } }}>
@@ -30,13 +32,38 @@ export default function InvoiceDetailScreen() {
     {state?.kind === 'loading' && <ReadOnlyNotice>Đang tải hóa đơn…</ReadOnlyNotice>}
     {state?.kind === 'unavailable' && <ReadOnlyNotice>Chưa xác minh được hóa đơn. Không thể suy ra rằng hóa đơn không tồn tại.</ReadOnlyNotice>}
     {state?.kind === 'absent' && <ReadOnlyNotice>Máy chủ xác nhận đơn hiện chưa có hóa đơn.</ReadOnlyNotice>}
-    {state?.kind === 'invoice' && <View style={{ backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: spacing.md }}>
-      <DetailRow label="Mã hóa đơn" value={state.invoice.id} />
-      <DetailRow label="Tổng tiền do máy chủ trả về" value={money(state.total)} />
-      <DetailRow label="Trạng thái thanh toán" value={paymentStatusLabel(state.paymentStatus)} />
-      <ReadOnlyNotice>Thanh toán và hoàn tất đơn là hai trạng thái riêng. Màn hình này chỉ đọc, không gửi yêu cầu thanh toán hay xác nhận hoàn tất.</ReadOnlyNotice>
+    {state?.kind === 'invoice' && <>
+      <Section title="Hóa đơn">
+        <DetailRow label="Mã hóa đơn" value={state.invoice.id} />
+        <DetailRow label="Tổng tiền do máy chủ trả về" value={money(state.total)} />
+        <DetailRow label="Trạng thái thanh toán" value={paymentStatusLabel(state.paymentStatus)} />
+      </Section>
       {state.invoice.items === undefined && <Text style={{ color: colors.textSecondary, paddingVertical: spacing.md }}>Hóa đơn cũ chưa có danh sách dòng hàng.</Text>}
-      {state.invoice.items?.map(item => <DetailRow key={item.id} label={`${item.description} · ${item.quantity}`} value={money(item.lineTotal)} />)}
-    </View>}
+      {state.invoice.items && state.invoice.items.length > 0 && (() => {
+        const items = state.invoice.items!;
+        const isLabor = (type?: string) => String(type ?? '').toLowerCase() === 'labor';
+        const labor = items.filter(item => isLabor(item.type));
+        const parts = items.filter(item => !isLabor(item.type));
+        const partRow = (item: (typeof items)[number], i: number, all: typeof items) => {
+          const quoted = vs?.quotedQty.get(item.id);
+          const less = quoted !== undefined && quoted !== item.quantity;
+          return <LineRow key={item.id} name={item.description} warn={less}
+            detail={quoted === undefined ? `Số lượng ${item.quantity}` : `Báo giá cần dùng ${quoted} · Thực dùng ${item.quantity}`}
+            value={money(item.lineTotal)} last={i === all.length - 1} />;
+        };
+        return <>
+          {labor.length > 0 && <Section title="Tiền công">
+            {labor.map((item, i) => <LineRow key={item.id} name={item.description} detail={`Số lượng ${item.quantity}`} value={money(item.lineTotal)} last={i === labor.length - 1} />)}
+            {state.invoice.laborTotal !== undefined && <DetailRow label="Tổng tiền công" value={money(state.invoice.laborTotal)} />}
+          </Section>}
+          {parts.length > 0 && <Section title="Linh kiện">{parts.map(partRow)}{state.invoice.partsTotal !== undefined && <DetailRow label="Tổng linh kiện" value={money(state.invoice.partsTotal)} />}</Section>}
+        </>;
+      })()}
+      {vs && vs.unused.length > 0 && <Section title="Linh kiện báo giá nhưng không dùng đến">
+        {vs.unused.map((item, i, all) => <LineRow key={item.id} name={item.description} detail={`Báo giá cần dùng ${item.quantity} · Thực dùng 0`} warn value="Không tính tiền" last={i === all.length - 1} />)}
+      </Section>}
+      {vs?.differs && <ReadOnlyNotice>Linh kiện được tính theo số lượng thực tế đã dùng, nên hóa đơn có thể thấp hơn báo giá. Phần không dùng đến không bị tính tiền.</ReadOnlyNotice>}
+      <ReadOnlyNotice>Thanh toán và hoàn tất đơn là hai trạng thái riêng. Màn hình này chỉ đọc, không gửi yêu cầu thanh toán hay xác nhận hoàn tất.</ReadOnlyNotice>
+    </>}
   </TaskScreenShell>;
 }

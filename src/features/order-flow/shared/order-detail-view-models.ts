@@ -1,5 +1,5 @@
 import type { CostRequest, EvidenceResponse } from '../../../api/orders.api';
-import type { OrderInvoice, OrderSessionSnapshot, Resource } from '../domain/order-session.types';
+import type { OrderInvoice, OrderQuotation, OrderSessionSnapshot, Resource } from '../domain/order-session.types';
 
 const NBSP = ' ';
 
@@ -83,4 +83,24 @@ export function invoiceDisplayState(resource: Resource<OrderInvoice | null>): In
   if (resource.status !== 'ready') return { kind: 'unavailable' };
   if (resource.data === null) return { kind: 'absent' };
   return { kind: 'invoice', paymentStatus: resource.data.paymentStatus, total: resource.data.grandTotal, invoice: resource.data };
+}
+
+/**
+ * The invoice bills what was really used, so a quotation line can show fewer pieces on the invoice (or none).
+ * Lines are matched by the quotation item id the Backend keeps on each invoice line; no money is recomputed here.
+ */
+export function invoiceVsQuotation(invoice: OrderInvoice, quotations: OrderQuotation[] | null) {
+  const approved = (quotations ?? []).filter(q => String(q.status).toUpperCase() === 'APPROVED');
+  const quoted = new Map(approved.flatMap(q => q.items).filter(i => i.id).map(i => [i.id!, i]));
+  const billed = new Set<string>();
+  const quotedQty = new Map<string, number>();
+  for (const line of invoice.items ?? []) {
+    if (line.sourceType !== 'QUOTATION' || !line.sourceItemId) continue;
+    billed.add(line.sourceItemId);
+    const q = quoted.get(line.sourceItemId);
+    if (q) quotedQty.set(line.id, q.quantity);
+  }
+  const unused = [...quoted.values()].filter(i => !billed.has(i.id!));
+  const differs = unused.length > 0 || (invoice.items ?? []).some(line => quotedQty.has(line.id) && quotedQty.get(line.id) !== line.quantity);
+  return { quotedQty, unused, differs };
 }

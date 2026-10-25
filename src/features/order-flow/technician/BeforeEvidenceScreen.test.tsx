@@ -173,10 +173,6 @@ it('safe Next and resume never POST and one upload never claims the minimum', as
     renderer = create(<BeforeEvidenceScreen />);
   });
   expect(JSON.stringify(renderer.toJSON())).toMatch(/số ảnh yêu cầu do máy chủ quyết định/);
-  await act(async () => {
-    renderer.root.findByProps({ testID: 'task-scope-link' }).props.onPress();
-  });
-  expect(mockNavigate).toHaveBeenCalledWith('ScopeDetail');
   expect(mockUploadBefore).not.toHaveBeenCalled();
   expect(mockDeleteBefore).not.toHaveBeenCalled();
   await act(async () => renderer.unmount());

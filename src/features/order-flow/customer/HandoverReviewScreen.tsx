@@ -1,20 +1,26 @@
 import React from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { hasCompletionRequest } from './payment-facts';
-import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import { handoverSeenKey, markHandoverSeen } from './handover-seen';
+import { DetailRow, ReadOnlyNotice, Section, TaskScreenShell } from '../shared/TaskScreenShell';
 import { M6InvoiceSummary } from '../shared/M6InvoiceSummary';
-import { quoteMoneyText } from '../shared/DecisionSummary';
+import { HubSection, type HubLink } from '../shared/TechnicianOrderHub';
+import { Camera, Info, ReceiptText } from 'lucide-react-native';
 import { vnDateTimeString } from '../../../utils/vn-time';
-import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 
 /**
  * C08 — handover review. Shows actual AFTER, completion note, approved scope
  * and invoice links. Navigation-only continue; no acceptance mutation.
  */
+const LINKS: HubLink[] = [
+  { screen: 'EvidenceGallery', label: 'Ảnh bàn giao', Icon: Camera },
+  { screen: 'OrderInformation', label: 'Thông tin đơn', Icon: Info },
+  { screen: 'InvoiceDetail', label: 'Chi tiết hóa đơn', Icon: ReceiptText },
+];
+
 export default function HandoverReviewScreen() {
   const { key, snapshot, refresh, loadResource } = useOrderSession();
   const navigation = useNavigation<any>();
@@ -62,10 +68,14 @@ export default function HandoverReviewScreen() {
         testID: 'handover-continue-payment',
         disabled: revoked,
         accessibilityHint: 'Trở về bước thanh toán hiện tại theo trạng thái máy chủ',
-        onPress: () => { if (!revoked) navigation.navigate('OrderTask'); },
+        onPress: () => {
+          if (revoked) return;
+          markHandoverSeen(handoverSeenKey(order.id, order.completionRequestedAt));
+          navigation.navigate('OrderTask');
+        },
       }}
     >
-      <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }}>
+      <Section title="Thông tin bàn giao">
         <DetailRow label="Mã đơn" value={order.code} />
         <DetailRow label="Thời điểm bàn giao" value={order.completionRequestedAt ? vnDateTimeString(order.completionRequestedAt) : 'Chưa có thông tin'} />
         {order.completionNote ? <DetailRow label="Ghi chú bàn giao" value={order.completionNote} /> : null}
@@ -73,45 +83,14 @@ export default function HandoverReviewScreen() {
           label="Ảnh sau sửa chữa"
           value={evidence === null ? 'Đang tải…' : evidence.length ? `${evidence.length} ảnh từ máy chủ` : 'Chưa có ảnh sau sửa chữa'}
         />
-      </View>
+      </Section>
       {!invoiceReady ? (
         <ReadOnlyNotice>Đang chờ hóa đơn từ máy chủ. Bạn vẫn có thể xem bàn giao; nút tiếp tục đưa bạn về đúng bước hiện tại.</ReadOnlyNotice>
       ) : invoice ? (
         <M6InvoiceSummary invoice={invoice} />
       ) : null}
       <ReadOnlyNotice>Bạn không cần xác nhận đồng ý mới được thanh toán. Cần báo vấn đề, hãy dùng kênh hỗ trợ riêng.</ReadOnlyNotice>
-      <View style={{ gap: 8 }}>
-        {(
-          [
-            ['EvidenceGallery', 'Xem ảnh bàn giao'],
-            ['ScopeDetail', 'Xem phạm vi và báo giá'],
-            ['InvoiceDetail', 'Xem hóa đơn'],
-          ] as const
-        ).map(([screen, label]) => (
-          <TouchableOpacity
-            key={screen}
-            testID={`task-link-${screen}`}
-            accessibilityRole="button"
-            disabled={revoked}
-            onPress={() => { if (!revoked) navigation.navigate(screen as never); }}
-            style={{
-              backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: 12,
-              minHeight: 52,
-              justifyContent: 'center',
-              paddingHorizontal: spacing.md,
-              opacity: revoked ? 0.5 : 1,
-            }}
-          >
-            <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>{label} ›</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-        Tổng thanh toán dự kiến: {invoice ? quoteMoneyText(invoice.grandTotal) : 'Chưa có dữ liệu'}
-      </Text>
+      <HubSection title="Xem thêm" items={LINKS.map(link => ({ ...link, disabled: revoked }))} onOpen={screen => { if (!revoked) navigation.navigate(screen as never); }} />
     </TaskScreenShell>
   );
 }

@@ -93,14 +93,22 @@ it('records an exact used quantity with the ledger version and replaces the whol
   });
 });
 
-it('never lets the used quantity go below what is recorded and reads the numbers again after a conflict', async () => {
+it('lets a wrong used quantity be corrected back down before the invoice exists', async () => {
   (partReturnsApi.getByOrderId as jest.Mock).mockResolvedValue([{ ...record, usageRecorded: true }]);
-  (partRequestsApi.updateItemUsage as jest.Mock).mockRejectedValue({ response: { status: 409, data: { error: { message: 'Linh kiện đã ghi số lượng thực dùng.' } } } });
   const r = await mount();
   await press(r, 'Ghi số lượng thực dùng');
   await press(r, 'Giảm số lượng đã dùng');
   await press(r, 'Lưu số lượng');
-  expect(partRequestsApi.updateItemUsage).not.toHaveBeenCalled();
+  expect(partRequestsApi.updateItemUsage).toHaveBeenCalledWith('req-1', 'item-1', {
+    usageStatus: 'returned', usedQty: 0, expectedVersion: 7, idempotencyKey: expect.stringMatching(/^parts-used-/),
+  });
+});
+
+it('reads the numbers again after a conflict', async () => {
+  (partReturnsApi.getByOrderId as jest.Mock).mockResolvedValue([{ ...record, usageRecorded: true }]);
+  (partRequestsApi.updateItemUsage as jest.Mock).mockRejectedValue({ response: { status: 409, data: { error: { message: 'Linh kiện đã ghi số lượng thực dùng.' } } } });
+  const r = await mount();
+  await press(r, 'Ghi số lượng thực dùng');
   await press(r, 'Tăng số lượng đã dùng');
   const reads = (partReturnsApi.getByOrderId as jest.Mock).mock.calls.length;
   await press(r, 'Lưu số lượng');

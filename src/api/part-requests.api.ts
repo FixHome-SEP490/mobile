@@ -173,9 +173,9 @@ export const pendingDeclaredQty = (r: PartCustodyReturnRecord) => Math.max(0, r.
 /** What the technician may still declare: the return-due quantity not declared yet. */
 export const canDeclareMoreQty = (r: PartCustodyReturnRecord) => Math.max(0, r.outstandingQty - pendingDeclaredQty(r));
 
-/** The used quantity may only grow, and never past what the manager has not already accepted back. */
+/** Until the invoice is made the used count may be corrected either way, but never past what the manager has not already accepted back. */
 export const usedQtyRange = (r: PartCustodyReturnRecord) => ({
-  min: r.usedQty,
+  min: 0,
   max: Math.max(r.usedQty, r.issuedQty - r.managerAcceptedQty),
 });
 

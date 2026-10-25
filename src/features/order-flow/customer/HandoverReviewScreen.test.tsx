@@ -57,7 +57,7 @@ it('handover shows actual after, note and server invoice; continue is navigation
   const text = JSON.stringify(renderer.toJSON());
   expect(text).toContain('Đã thay linh kiện');
   expect(text).toContain('1 ảnh từ máy chủ');
-  expect(text).toContain('invoice-1');
+  expect(text).toContain('#INVOICE-');
   expect(text).not.toMatch(/POST|GET/);
   await act(async () => { renderer.root.findByProps({ testID: 'handover-continue-payment' }).props.onPress(); });
   expect(mockNavigate).toHaveBeenCalledWith('OrderTask');

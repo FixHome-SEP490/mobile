@@ -98,8 +98,8 @@ it('shows the exact SENT scope with the awaited party and refreshes without writ
     renderer = create(<QuotationWaitingScreen />);
   });
   const text = JSON.stringify(renderer.toJSON());
-  expect(text).toMatch(/quote-1/);
-  expect(text).toMatch(/Khách hàng duyệt/);
+  expect(text).toMatch(/Báo giá lần/);
+  expect(text).toMatch(/khách hàng duyệt/);
 
   await act(async () => {
     renderer.root.findByProps({ testID: 'quote-proposal-link' }).props.onPress();
@@ -151,6 +151,6 @@ it('a superseded known id is shown as replaced, never as still waiting', async (
   });
   const text = JSON.stringify(renderer.toJSON());
   expect(text).toMatch(/thay thế/);
-  expect(text).not.toMatch(/Khách hàng duyệt/);
+  expect(text).not.toMatch(/khách hàng duyệt/);
   await act(async () => renderer.unmount());
 });

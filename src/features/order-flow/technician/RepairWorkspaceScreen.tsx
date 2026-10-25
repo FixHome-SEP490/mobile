@@ -1,9 +1,10 @@
 import React from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import TechnicianOrderHub from '../shared/TechnicianOrderHub';
 import { formatVnd } from '../../../utils/format';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
@@ -21,7 +22,7 @@ export default function RepairWorkspaceScreen() {
   const canRefresh = snapshot?.access === 'current' && !!key && !refreshing;
   const isFixedPrice = order?.pricingMode?.toUpperCase() === 'FIXED_PRICE';
 
-  const open = (screen: 'EvidenceGallery' | 'ScopeDetail' | 'PersonalOrderNotes' | 'OrderProgressHistory' | 'ExtraProposal' | 'PartsLifecycle' | 'AfterEvidence' | 'CompletionRequest' | 'CashDeclaration') => {
+  const open = (screen: 'EvidenceGallery') => {
     if (!revoked) navigation.navigate(screen as never);
   };
 
@@ -70,40 +71,7 @@ export default function RepairWorkspaceScreen() {
       ) : (
         <ReadOnlyNotice>Bạn đang sửa chữa theo phạm vi đã chốt. Ảnh sau sửa chữa, chi phí phát sinh và yêu cầu hoàn tất sẽ mở ở các bước tiếp theo.</ReadOnlyNotice>
       )}
-      <View style={{ gap: 8 }}>
-        {(
-          [
-            ['AfterEvidence', 'Chụp ảnh sau sửa chữa'],
-            ['CompletionRequest', 'Bàn giao và yêu cầu thanh toán'],
-            ['CashDeclaration', 'Khai báo tiền mặt đã nhận'],
-            ['ExtraProposal', 'Đề xuất chi phí phát sinh'],
-            ['PartsLifecycle', 'Quản lý linh kiện'],
-            ['ScopeDetail', 'Xem phạm vi và báo giá'],
-            ['PersonalOrderNotes', 'Ghi chú riêng trên thiết bị'],
-            ['OrderProgressHistory', 'Xem tiến độ'],
-          ] as const
-        ).map(([screen, label]) => (
-          <TouchableOpacity
-            key={screen}
-            testID={`task-link-${screen}`}
-            accessibilityRole="button"
-            disabled={revoked}
-            onPress={() => open(screen)}
-            style={{
-              backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: 12,
-              minHeight: 52,
-              justifyContent: 'center',
-              paddingHorizontal: spacing.md,
-              opacity: revoked ? 0.5 : 1,
-            }}
-          >
-            <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>{label} ›</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <TechnicianOrderHub />
     </TaskScreenShell>
   );
 }

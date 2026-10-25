@@ -430,6 +430,7 @@ export default function CustomerWarrantiesScreen() {
           <Text style={styles.headerTitle} accessibilityRole="header">Bảo hành</Text>
           <Text style={styles.headerSubtitle}>Theo dõi bảo hành theo từng đơn đã hoàn tất</Text>
         </View>
+        <View style={{ width: 44, height: 44 }} />
       </View>
 
       <View style={styles.searchWrap}>
@@ -583,9 +584,9 @@ const getStyles = (colors: any) => StyleSheet.create({
     backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border,
   },
   backButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
-  headerCopy: { flex: 1 },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
-  headerSubtitle: { fontSize: 12, lineHeight: 17, color: colors.textSecondary, marginTop: 2 },
+  headerCopy: { flex: 1, alignItems: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  headerSubtitle: { fontSize: 12, lineHeight: 17, color: colors.textSecondary, marginTop: 2, textAlign: 'center' },
   searchWrap: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
   searchBar: {
     minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16,

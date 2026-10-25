@@ -85,6 +85,18 @@ it('manual refresh reloads previously opened extras and blocks stale decisions d
   expect(extraReads).toBe(2);
   const extras = c.getSnapshot()?.resources.extras; if (extras?.status === 'ready') expect(extras.data[0].status).toBe('approved');
 });
+it('command read-back keeps the order and opened parts on screen while it reloads, then swaps in the new data', async () => {
+  let parts = 0; let release!: () => void;
+  const gate = new Promise<void>(r => { release = r; });
+  const c = createOrderReadCoordinator({ readOrder: async () => row, readResource: async () => { parts++; if (parts > 1) await gate; return []; } });
+  c.activate(key); await c.refreshOrderSession(key, 'focus'); await c.loadResource(key, 'parts');
+  const readback = c.refreshOrderSession(key, 'command-readback');
+  await Promise.resolve();
+  expect(c.getSnapshot()?.order.status).toBe('ready');
+  expect(c.getSnapshot()?.resources.parts.status).toBe('ready');
+  release(); await readback;
+  expect(c.getSnapshot()?.resources.parts.status).toBe('ready');
+});
 it('foreground reloads invoice and cash without fetching unopened resources', async () => {
   let paid = false; const calls: string[] = [];
   const customer = { ...key, role: 'customer' as const, userId: 'customer' };

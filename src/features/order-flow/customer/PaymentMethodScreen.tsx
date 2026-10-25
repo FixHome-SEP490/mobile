@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
+import { Banknote, ClipboardCheck, CreditCard, Gift, Wallet, type LucideIcon } from 'lucide-react-native';
+import { formatVnd } from '../../../utils/format';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
@@ -8,6 +10,7 @@ import { hasCompletionRequest, invoiceFact, cashFact } from './payment-facts';
 import { sameOrderSession } from '../domain/order-session.types';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import { M6InvoiceSummary } from '../shared/M6InvoiceSummary';
+import { HubSection, type HubLink } from '../shared/TechnicianOrderHub';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import type { PaymentMethod } from './payment-facts';
@@ -21,6 +24,8 @@ const METHODS: { id: PaymentMethod; label: string; hint: string }[] = [
   { id: 'vnpay', label: 'VNPay', hint: 'Mở cổng thanh toán VNPay trong trình duyệt' },
   { id: 'cash', label: 'Tiền mặt', hint: 'Xác nhận đã trả tiền mặt cho kỹ thuật viên' },
 ];
+
+const METHOD_ICONS: Record<PaymentMethod, LucideIcon> = { wallet: Wallet, vnpay: CreditCard, cash: Banknote, no_charge: Gift };
 
 interface FrozenVnpaySheet {
   invoiceId: string;
@@ -153,33 +158,13 @@ export default function PaymentMethodScreen() {
       {invoice ? <M6InvoiceSummary invoice={{ id: invoice.id, grandTotal: invoice.grandTotal, paymentStatus: invoice.paymentStatus, items: invoice.items }} /> : (
         <ReadOnlyNotice>Đang chờ hóa đơn từ máy chủ. Tổng tiền do máy chủ trả về; ứng dụng không tự tính lại.</ReadOnlyNotice>
       )}
-      <TouchableOpacity
-        testID="payment-handover-link"
-        accessibilityRole="button"
-        accessibilityLabel="Xem lại bàn giao"
-        accessibilityHint="Xem ảnh, ghi chú và phạm vi bàn giao trước khi thanh toán"
-        disabled={!current}
-        onPress={() => { if (current) navigation.navigate('HandoverReview'); }}
-        style={{
-          backgroundColor: colors.surface,
-          borderWidth: 1,
-          borderColor: colors.border,
-          borderRadius: 12,
-          minHeight: 52,
-          justifyContent: 'center',
-          paddingHorizontal: spacing.md,
-          opacity: !current ? 0.5 : 1,
-        }}
-      >
-        <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Xem lại bàn giao ›</Text>
-      </TouchableOpacity>
       {sheetValid && sheet && sheetMethod ? (
         <View style={{ backgroundColor: colors.tone.warning.bg, borderColor: colors.tone.warning.fg, borderWidth: 1, borderRadius: 12, padding: spacing.md }} testID="payment-confirm-sheet">
           <Text style={{ fontSize: 16, fontWeight: '700', color: colors.tone.warning.text }}>
             {sheetMethod === 'vnpay' ? 'Xác nhận mở cổng VNPay' : sheetMethod === 'no_charge' ? 'Xác nhận hóa đơn miễn phí' : 'Xác nhận thanh toán tiền mặt'}
           </Text>
-          <DetailRow label="Mã hóa đơn" value={sheet.invoiceId} />
-          <DetailRow label="Số tiền đã chốt" value={sheet.amount} />
+          <DetailRow label="Mã hóa đơn" value={`#${sheet.invoiceId.slice(0, 8).toUpperCase()}`} />
+          <DetailRow label="Số tiền đã chốt" value={formatVnd(sheet.amount)} />
           {sheetMethod === 'cash' ? (
             <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }}>
               Chỉ xác nhận khi bạn đã trực tiếp trả đúng số tiền trên cho kỹ thuật viên.
@@ -205,40 +190,22 @@ export default function PaymentMethodScreen() {
           </TouchableOpacity>
         </View>
       ) : null}
-      <View style={{ gap: 8 }}>
-        {(invoice?.amount === 0 ? [NO_CHARGE_METHOD] : METHODS).map(method => {
-          const cashBlocked = method.id === 'cash' && !cashAwaiting;
-          const vnpayTooSmall = method.id === 'vnpay' && !!invoice && invoice.amount < VNPAY_MIN;
-          const disabled = frozen || !unpaid || !invoice || cashBlocked || vnpayTooSmall || busy;
-          return (
-            <TouchableOpacity
-              key={method.id}
-              testID={`payment-method-${method.id}`}
-              accessibilityRole="button"
-              accessibilityLabel={method.label}
-              accessibilityHint={method.hint}
-              accessibilityState={{ disabled }}
-              disabled={disabled}
-              onPress={() => choose(method.id)}
-              style={{
-                backgroundColor: colors.surface,
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderRadius: 12,
-                minHeight: 56,
-                justifyContent: 'center',
-                paddingHorizontal: spacing.md,
-                opacity: disabled ? 0.5 : 1,
-              }}
-            >
-              <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>{method.label} ›</Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-                {method.id === 'cash' && !cashAwaiting ? 'Chờ kỹ thuật viên khai báo số tiền đã nhận.' : vnpayTooSmall ? 'VNPay chỉ nhận từ 5.000 ₫; hãy dùng ví hoặc tiền mặt.' : method.hint}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      <HubSection title="Phương thức thanh toán" items={(invoice?.amount === 0 ? [NO_CHARGE_METHOD] : METHODS).map((method): HubLink => {
+        const cashBlocked = method.id === 'cash' && !cashAwaiting;
+        const vnpayTooSmall = method.id === 'vnpay' && !!invoice && invoice.amount < VNPAY_MIN;
+        return {
+          screen: method.id, testID: `payment-method-${method.id}`, label: method.label, Icon: METHOD_ICONS[method.id],
+          accessibilityHint: method.hint,
+          sub: cashBlocked ? 'Chờ kỹ thuật viên khai báo số tiền đã nhận.' : vnpayTooSmall ? 'VNPay chỉ nhận từ 5.000 ₫; hãy dùng ví hoặc tiền mặt.' : method.hint,
+          disabled: frozen || !unpaid || !invoice || cashBlocked || vnpayTooSmall || busy,
+          onPress: () => choose(method.id),
+        };
+      })} onOpen={() => {}} />
+      <HubSection title="Bàn giao" items={[{
+        screen: 'HandoverReview', testID: 'payment-handover-link', label: 'Xem lại bàn giao', Icon: ClipboardCheck, disabled: !current,
+        sub: 'Ảnh, ghi chú và phạm vi bàn giao trước khi thanh toán',
+        onPress: () => { if (current) navigation.navigate('HandoverReview'); },
+      }]} onOpen={() => {}} />
       {state.message && state.phase !== 'unknown' ? <ReadOnlyNotice>{state.message}</ReadOnlyNotice> : null}
     </TaskScreenShell>
   );

@@ -61,23 +61,34 @@ it('confirm summary lists every line and the total', async () => {
   expect(out).toContain('Tổng');
 });
 
-it('part picker row offers only catalog, quantity stepper and note, and clamps quantity', async () => {
-  const onChange = jest.fn();
-  const row = { ...createCostItemRow('parts_equipment'), partSource: 'fixhome' as const, quantity: '1' };
+it('part picker sheet multi-selects, shows a stepper per pick and a running total', async () => {
+  const onQuantity = jest.fn();
+  const onToggle = jest.fn();
+  const row = { ...createCostItemRow('parts_equipment'), partSource: 'fixhome' as const, quantity: '1', unitPrice: '1000', partCatalogId: 'p1', partNameSnapshot: 'Van' };
+  const catalog = { status: 'ready' as const, parts: [{ id: 'p1', name: 'Van', sellingPrice: 1000, sku: null, warrantyDays: 0, warrantyPolicy: null }, { id: 'p2', name: 'Tụ', sellingPrice: 500, sku: null, warrantyDays: 0, warrantyPolicy: null }], error: null };
   let r!: ReturnType<typeof create>;
-  await act(async () => {
-    r = create(<PartPickerRow row={row} expanded canRemove={false} maxQuantity={3} onToggle={noop} onChange={onChange} onRemove={noop} catalog={{ status: 'ready', parts: [], error: null }} />);
-  });
+  await act(async () => { r = create(<PartPickerRow picked={[row]} maxQuantity={3} onToggle={onToggle} onQuantity={onQuantity} onAdd={noop} catalog={catalog} />); });
   const out = text(r);
-  expect(out).not.toMatch(/Tiền công|Mua ngoài|Đơn giá|Bảo hành/);
-  expect(r.root.findByProps({ testID: `cost-item-${row.key}-qty-minus` }).props.disabled).toBe(true);
-  await act(async () => { r.root.findByProps({ testID: `cost-item-${row.key}-qty-plus` }).props.onPress(); });
-  expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ quantity: '2' }));
-  await act(async () => { r.root.findByProps({ accessibilityLabel: 'Số lượng' }).props.onChangeText('a7'); });
-  expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ quantity: '7' }));
+  expect(out).not.toMatch(/Tiền công|Mua ngoài|Bảo hành/);
+  expect(out).toContain('Thêm 1 linh kiện vào danh sách');
+  expect(out).not.toContain('Đã chọn:');
+  expect(r.root.findByProps({ testID: 'pick-qty-minus-p1' }).props.disabled).toBe(true);
+  expect(r.root.findAllByProps({ testID: 'pick-qty-p2' })).toHaveLength(0);
+  await act(async () => { r.root.findByProps({ testID: 'pick-qty-plus-p1' }).props.onPress(); });
+  expect(onQuantity).toHaveBeenLastCalledWith(row.key, '2');
+  await act(async () => { r.root.findByProps({ testID: 'pick-qty-p1' }).props.onChangeText('a7'); });
+  expect(onQuantity).toHaveBeenLastCalledWith(row.key, '7');
+  await act(async () => { r.root.findByProps({ testID: 'pick-catalog-option-p2' }).props.onPress(); });
+  expect(onToggle).toHaveBeenCalledWith(expect.objectContaining({ id: 'p2' }));
 });
 
-it('catalog picker loads once when idle, pages long results and marks the chosen part', async () => {
+it('part picker sheet add button is disabled with nothing picked', async () => {
+  let r!: ReturnType<typeof create>;
+  await act(async () => { r = create(<PartPickerRow picked={[]} onToggle={noop} onQuantity={noop} onAdd={noop} catalog={{ status: 'ready', parts: [], error: null }} />); });
+  expect(r.root.findByProps({ testID: 'pre-parts-add-item' }).props.disabled).toBe(true);
+});
+
+it('catalog picker loads once when idle, lists all results in a scroll box and marks the chosen part', async () => {
   const onLoad = jest.fn();
   const parts = Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, name: `Linh kiện ${i}`, sellingPrice: 1000, sku: null }));
   let r!: ReturnType<typeof create>;
@@ -87,8 +98,7 @@ it('catalog picker loads once when idle, pages long results and marks the chosen
   expect(r.root.findAll(n => /^x-catalog-option-/.test(String(n.props?.testID ?? ''))).length).toBeGreaterThan(0);
   expect(r.root.findByProps({ testID: 'x-catalog-option-p1' }).props.accessibilityState.selected).toBe(true);
   expect(text(r)).toContain('Đã chọn');
-  expect(r.root.findAllByProps({ testID: 'x-catalog-option-p9' })).toHaveLength(0);
-  await act(async () => { r.root.findByProps({ testID: 'x-catalog-more' }).props.onPress(); });
   expect(r.root.findAllByProps({ testID: 'x-catalog-option-p9' }).length).toBeGreaterThan(0);
+  expect(r.root.findAllByProps({ testID: 'x-catalog-more' })).toHaveLength(0);
   expect(onLoad).toHaveBeenCalledTimes(1);
 });

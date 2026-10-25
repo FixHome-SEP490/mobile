@@ -98,44 +98,42 @@ function createBaseSnapshot(partsList: OrderPartReadModel[] = [], orderStatus: s
 }
 
 describe('AcceptedPartsScreen (T02a)', () => {
-  it('catalog responses respect latest selection and source switch, including late failures', async () => {
+  const A = '99999999-8888-4777-8666-000000000001';
+  const B = '99999999-8888-4777-8666-000000000002';
+  const picked = (tree: any) => tree.root.findByType(PartPickerRow).props.picked.map((r: any) => r.partCatalogId);
+
+  it('several parts can be picked, and a part unticked before its read returns never appears', async () => {
     ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot());
     let first!: (part: any) => void;
     let second!: (part: any) => void;
-    let fail!: (error: Error) => void;
-    jest.mocked(fetchStrictPartById).mockImplementationOnce(() => new Promise(r => { first = r; })).mockImplementationOnce(() => new Promise(r => { second = r; })).mockImplementationOnce(() => new Promise((_r, reject) => { fail = reject; }));
+    let third!: (part: any) => void;
+    jest.mocked(fetchStrictPartById).mockImplementationOnce(() => new Promise(r => { first = r; })).mockImplementationOnce(() => new Promise(r => { second = r; })).mockImplementationOnce(() => new Promise(r => { third = r; }));
     let tree: any;
     act(() => { tree = create(<AcceptedPartsScreen />); });
-    let editor = tree.root.findByType(PartPickerRow);
-    act(() => { editor.props.onChange({ ...editor.props.row, kind: 'parts_equipment', partSource: 'fixhome' }); });
-    act(() => { tree.root.findByType(PartPickerRow).props.onSelectCatalogPart({ id: '99999999-8888-4777-8666-000000000001' }); });
-    act(() => { tree.root.findByType(PartPickerRow).props.onSelectCatalogPart({ id: '99999999-8888-4777-8666-000000000002' }); });
-    await act(async () => { second({ id: '99999999-8888-4777-8666-000000000002', name: 'Latest', sellingPrice: 200000 }); });
-    await act(async () => { first({ id: '99999999-8888-4777-8666-000000000001', name: 'Old', sellingPrice: 100000 }); });
-    expect(tree.root.findByType(PartPickerRow).props.row.partCatalogId).toBe('99999999-8888-4777-8666-000000000002');
-    act(() => { tree.root.findByType(PartPickerRow).props.onSelectCatalogPart({ id: '99999999-8888-4777-8666-000000000003' }); });
-    editor = tree.root.findByType(PartPickerRow);
-    act(() => { editor.props.onChange({ ...editor.props.row, partSource: 'external', partCatalogId: '', unitPrice: '0' }); });
-    await act(async () => { fail(new Error('Late failure')); });
-    expect(tree.root.findByType(PartPickerRow).props.row.partSource).toBe('external');
-    expect(tree.root.findByType(PartPickerRow).props.row.unitPrice).toBe('0');
-    expect(JSON.stringify(tree.toJSON())).not.toContain('Không tải được linh kiện đã chọn');
+    const toggle = (id: string) => act(() => { tree.root.findByType(PartPickerRow).props.onToggle({ id }); });
+    toggle(A); toggle(B);
+    await act(async () => { second({ id: B, name: 'B', sellingPrice: 200000 }); });
+    await act(async () => { first({ id: A, name: 'A', sellingPrice: 100000 }); });
+    expect(picked(tree).sort()).toEqual([A, B]);
+    toggle(A);
+    expect(picked(tree)).toEqual([B]);
+    toggle(A); toggle(A);
+    await act(async () => { third({ id: A, name: 'A', sellingPrice: 100000 }); });
+    expect(picked(tree)).toEqual([B]);
   });
 
-  it('catalog failure after a session switch cannot attach an error to the new draft', async () => {
+  it('a failed read after a session switch cannot attach an error to the new draft', async () => {
     ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot());
     let fail!: (error: Error) => void;
     jest.mocked(fetchStrictPartById).mockImplementationOnce(() => new Promise((_r, reject) => { fail = reject; }));
     let tree: any;
     act(() => { tree = create(<AcceptedPartsScreen />); });
-    const editor = tree.root.findByType(PartPickerRow);
-    act(() => { editor.props.onChange({ ...editor.props.row, kind: 'parts_equipment', partSource: 'fixhome' }); });
-    act(() => { tree.root.findByType(PartPickerRow).props.onSelectCatalogPart({ id: '99999999-8888-4777-8666-000000000001' }); });
+    act(() => { tree.root.findByType(PartPickerRow).props.onToggle({ id: A }); });
     mockKey = { ...mockKey, sessionGeneration: 2 };
     mockSnapshot = { ...mockSnapshot, key: mockKey };
     act(() => { tree.update(<AcceptedPartsScreen />); });
     await act(async () => { fail(new Error('Old session')); });
-    expect(tree.root.findByType(PartPickerRow).props.row.description).toBe('');
+    expect(picked(tree)).toEqual([]);
     expect(JSON.stringify(tree.toJSON())).not.toContain('Không tải được linh kiện đã chọn');
   });
   it('settled parts-create does not lock fresh preparation', () => {
@@ -245,10 +243,12 @@ describe('AcceptedPartsScreen (T02a)', () => {
     });
 
     // Enter quantity
-    const qtyInput = root.findByProps({ accessibilityLabel: 'Số lượng' });
+    const qtyInput = root.findByProps({ testID: 'pick-qty-99999999-8888-4777-8666-000000000001' });
     act(() => {
       qtyInput.props.onChangeText('2');
     });
+    act(() => { root.findByProps({ testID: 'pre-parts-add-item' }).props.onPress(); });
+    expect(JSON.stringify(tree.toJSON())).toContain('Van cấp nước');
 
     const submitBtn = root.findByProps({ testID: 'pre-parts-submit' });
     act(() => {
@@ -321,14 +321,39 @@ describe('AcceptedPartsScreen UX', () => {
     mockState = { phase: 'idle', operation: null, targetId: null, error: null, actionSuccess: null, resolvedEntityId: null };
   });
 
-  it('empty submit marks the row inline instead of failing silently', () => {
+  it('empty submit says a part must be added instead of failing silently', () => {
     ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot());
     let tree: any;
     act(() => { tree = create(<AcceptedPartsScreen />); });
     act(() => { tree.root.findByProps({ testID: 'pre-parts-submit' }).props.onPress(); });
     expect(tree.root.findAllByProps({ testID: 'pre-parts-confirm-sheet' })).toHaveLength(0);
-    expect(JSON.stringify(tree.toJSON())).toContain('Chọn một linh kiện trong danh mục FixHome.');
-    expect(JSON.stringify(tree.toJSON())).toContain('cần bổ sung thông tin');
+    expect(JSON.stringify(tree.toJSON())).toContain('Thêm ít nhất một linh kiện');
+  });
+
+  it('add stays disabled until a part is picked and the list shows its empty state', async () => {
+    ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot());
+    let tree: any;
+    act(() => { tree = create(<AcceptedPartsScreen />); });
+    expect(tree.root.findByProps({ testID: 'pre-parts-add-item' }).props.disabled).toBe(true);
+    expect(tree.root.findByProps({ testID: 'pre-parts-empty' })).toBeTruthy();
+  });
+
+  it('adding the same part twice adds up its quantity and a part can be removed', async () => {
+    ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot());
+    let tree: any;
+    act(() => { tree = create(<AcceptedPartsScreen />); });
+    await act(async () => { await new Promise(r => setTimeout(r, 50)); });
+    for (const qty of ['2', '3']) {
+      await act(async () => { tree.root.find((n: any) => /catalog-option-99999999-8888-4777-8666-000000000001/.test(String(n.props.testID ?? ''))).props.onPress(); });
+      await act(async () => { await new Promise(r => setTimeout(r, 50)); });
+      act(() => { tree.root.findByProps({ testID: 'pick-qty-99999999-8888-4777-8666-000000000001' }).props.onChangeText(qty); });
+      act(() => { tree.root.findByProps({ testID: 'pre-parts-add-item' }).props.onPress(); });
+    }
+    expect(tree.root.findAll((n: any) => /^pre-parts-item-/.test(String(n.props.testID ?? ''))).length).toBeGreaterThan(0);
+    expect(JSON.stringify(tree.toJSON())).toContain('750.000');
+    expect(tree.root.findByProps({ testID: 'pre-parts-summary' })).toBeTruthy();
+    act(() => { tree.root.find((n: any) => /^pre-parts-remove-/.test(String(n.props.testID ?? ''))).props.onPress(); });
+    expect(tree.root.findAll((n: any) => /^pre-parts-item-/.test(String(n.props.testID ?? '')))).toHaveLength(0);
   });
 
   it('confirmation lists the chosen part, quantity and receive method before sending', async () => {
@@ -338,7 +363,8 @@ describe('AcceptedPartsScreen UX', () => {
     await act(async () => { await new Promise(r => setTimeout(r, 50)); });
     await act(async () => { tree.root.find((n: any) => /catalog-option-99999999-8888-4777-8666-000000000001/.test(String(n.props.testID ?? ''))).props.onPress(); });
     await act(async () => { await new Promise(r => setTimeout(r, 50)); });
-    act(() => { tree.root.findByProps({ accessibilityLabel: 'Số lượng' }).props.onChangeText('3'); });
+    act(() => { tree.root.findByProps({ testID: 'pick-qty-99999999-8888-4777-8666-000000000001' }).props.onChangeText('3'); });
+    act(() => { tree.root.findByProps({ testID: 'pre-parts-add-item' }).props.onPress(); });
     act(() => { tree.root.findByProps({ testID: 'pre-parts-submit' }).props.onPress(); });
     const out = JSON.stringify(tree.toJSON());
     expect(tree.root.findByProps({ testID: 'pre-parts-confirm-sheet' })).toBeTruthy();

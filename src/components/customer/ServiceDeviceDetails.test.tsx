@@ -68,7 +68,8 @@ it('never turns a failed preview into a price, and retries on demand', async () 
   }));
   await act(async () => { r.root.findAllByType(TouchableOpacity).find((t) => t.props.accessibilityRole === 'button')!.props.onPress(); });
   await flush();
-  expect(texts(r)).toContain('Cần khảo sát để báo giá');
+  expect(texts(r)).not.toContain('Chưa tải được thông tin giá của dịch vụ.');
+  expect(r.root.findAllByProps({ testID: 'service-device-details' })).toHaveLength(0);
 });
 
 it('offers floor-standing AC without a horsepower question, and a dryer answer that skips door/capacity', async () => {

@@ -11,7 +11,6 @@ import OrderInformationScreen from '../shared/OrderInformationScreen';
 import OrderProgressHistoryScreen from '../shared/OrderProgressHistoryScreen';
 import EvidenceGalleryScreen from '../shared/EvidenceGalleryScreen';
 import EvidenceViewerScreen from '../shared/EvidenceViewerScreen';
-import ScopeDetailScreen from '../shared/ScopeDetailScreen';
 import InvoiceDetailScreen from '../shared/InvoiceDetailScreen';
 import ProposalDetailScreen from '../shared/ProposalDetailScreen';
 import PersonalOrderNotesScreen from '../shared/PersonalOrderNotesScreen';
@@ -45,7 +44,6 @@ function Screens({ Stack, role, reduceMotion }: { Stack: { Navigator: React.Comp
     <Stack.Screen name="OrderProgressHistory" component={OrderProgressHistoryScreen} />
     <Stack.Screen name="EvidenceGallery" component={EvidenceGalleryScreen} />
     <Stack.Screen name="EvidenceViewer" component={EvidenceViewerScreen} />
-    <Stack.Screen name="ScopeDetail" component={ScopeDetailScreen} />
     <Stack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />
     <Stack.Screen name="ProposalDetail" component={ProposalDetailScreen} />
     <Stack.Screen name="SupportCases" component={SupportCaseListScreen} />

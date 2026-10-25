@@ -13,6 +13,24 @@ import { formatVnd } from '../../../utils/format';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from './useLoadUnloadedResources';
+import { HubSection, type HubLink } from './TechnicianOrderHub';
+import { Camera, Headset, History, Info, ReceiptText, ShieldCheck, Star, Wrench } from 'lucide-react-native';
+
+const DETAILS: HubLink[] = [
+  { screen: 'OrderInformation', label: 'Thông tin đơn', Icon: Info },
+  { screen: 'InvoiceDetail', label: 'Hóa đơn', Icon: ReceiptText },
+  { screen: 'EvidenceGallery', label: 'Ảnh và bằng chứng', Icon: Camera },
+  { screen: 'OrderProgressHistory', label: 'Tiến độ', Icon: History },
+];
+const AFTER_CUSTOMER: HubLink[] = [
+  { screen: 'CustomerReview', label: 'Đánh giá dịch vụ', Icon: Star },
+  { screen: 'CustomerWarranty', label: 'Bảo hành', Icon: ShieldCheck },
+  { screen: 'SupportCases', label: 'Yêu cầu hỗ trợ', Icon: Headset },
+];
+const AFTER_TECHNICIAN: HubLink[] = [
+  { screen: 'TechnicianWarrantyInbox', label: 'Công việc bảo hành', Icon: Wrench },
+  { screen: 'SupportCases', label: 'Yêu cầu hỗ trợ', Icon: Headset },
+];
 
 /**
  * C12/T16 — actual COMPLETED only. Links to server invoice/scope/gallery;
@@ -35,6 +53,7 @@ export default function CompletedOrderScreen({ role }: { role: 'customer' | 'tec
   const invoice = snapshot?.resources.invoice.status === 'ready' ? snapshot.resources.invoice.data : null;
   const orderCode = order && typeof order.code === 'string' && order.code.trim().length > 0 ? order.code : null;
   const canCopyCode = role === 'customer' && !!orderCode;
+  const open = (screen: string) => navigation.navigate(screen as never);
 
   const copyOrderCode = async () => {
     if (!canCopyCode || !orderCode) return;
@@ -125,35 +144,8 @@ export default function CompletedOrderScreen({ role }: { role: 'customer' | 'tec
       ) : (
         <ReadOnlyNotice>Đơn đã hoàn thành theo xác nhận của máy chủ. Tiền công đã được ghi nhận vào ví của bạn; không còn thao tác nào cần gửi cho đơn này.</ReadOnlyNotice>
       )}
-      <View style={{ gap: 8 }}>
-        {(
-          [
-            ['ScopeDetail', 'Xem phạm vi và báo giá'],
-            ['InvoiceDetail', 'Xem hóa đơn'],
-            ['EvidenceGallery', 'Xem ảnh và bằng chứng'],
-            ['OrderProgressHistory', 'Xem tiến độ'],
-            ...(role === 'customer' ? [['CustomerReview', 'Đánh giá dịch vụ'], ['CustomerWarranty', 'Xem bảo hành'], ['SupportCases', 'Yêu cầu hỗ trợ']] as const : [['TechnicianWarrantyInbox', 'Công việc bảo hành'], ['SupportCases', 'Yêu cầu hỗ trợ']] as const),
-          ] as const
-        ).map(([screen, label]) => (
-          <TouchableOpacity
-            key={screen}
-            testID={`task-link-${screen}`}
-            accessibilityRole="button"
-            onPress={() => navigation.navigate(screen as never)}
-            style={{
-              backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: 12,
-              minHeight: 52,
-              justifyContent: 'center',
-              paddingHorizontal: spacing.md,
-            }}
-          >
-            <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>{label} ›</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <HubSection title="Chi tiết đơn" items={DETAILS} onOpen={open} />
+      <HubSection title={role === 'customer' ? 'Sau dịch vụ' : 'Bảo hành và hỗ trợ'} items={role === 'customer' ? AFTER_CUSTOMER : AFTER_TECHNICIAN} onOpen={open} />
     </TaskScreenShell>
   );
 }

@@ -1340,7 +1340,7 @@ const styles = StyleSheet.create({
   bookingDetailLink: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' },
   bar: { minHeight: 56, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 4, borderBottomWidth: StyleSheet.hairlineWidth },
   barSpacer: { width: 44 },
-  headerCopy: { flex: 1, minWidth: 0, gap: 2 },
+  headerCopy: { flex: 1, minWidth: 0, gap: 2, alignItems: 'center' },
   eyebrow: { fontSize: 12, lineHeight: 18, fontWeight: '600', letterSpacing: 0.5 },
   backBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
   title: { fontSize: 18, lineHeight: 24, fontWeight: '700', textAlign: 'center' },

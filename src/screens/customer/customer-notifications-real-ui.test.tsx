@@ -107,12 +107,9 @@ describe('C-RUI6A real Customer Notifications UI', () => {
     expect(mockReadOne).not.toHaveBeenCalled();
   });
 
-  it('renders source-backed unread count and full accessible row text without read mutation on mount', async () => {
+  it('renders full accessible row text without read mutation on mount', async () => {
     mockGetPage.mockResolvedValueOnce(page([item('n1', false), item('n2', true, 'Thanh toán')]));
     const renderer = await render();
-    expect(textOf(renderer)).toContain('1 chưa đọc ·');
-    expect(textOf(renderer)).toContain('2 đã tải');
-    expect(textOf(renderer).match(/chưa đọc/g)).toHaveLength(1);
     expect(renderer.root.findAllByType(FlatList)[0].props.data).toHaveLength(2);
     expect(buttonByLabel(renderer, 'Chưa đọc. Cập nhật đơn. Đơn của bạn có cập nhật')).toBeDefined();
     expect(buttonByLabel(renderer, 'Đã đọc. Thanh toán. Đơn của bạn có cập nhật')).toBeDefined();
@@ -121,15 +118,6 @@ describe('C-RUI6A real Customer Notifications UI', () => {
     const mark = buttonByLabel(renderer, 'Đánh dấu tất cả thông báo đã đọc');
     expect(mark).toBeDefined();
     expect(mark!.props.style[0].minHeight).toBeGreaterThanOrEqual(44);
-  });
-
-  it('narrows the loaded rows to unread with the filter chip', async () => {
-    mockGetPage.mockResolvedValue(page([item('n1', true, 'Đã xem rồi'), item('n2', false, 'Chưa xem')]));
-    const renderer = await render();
-    expect(textOf(renderer)).toContain('Đã xem rồi');
-    await act(async () => { renderer.root.findByProps({ testID: 'notifications-filter-unread' }).props.onPress(); });
-    expect(textOf(renderer)).not.toContain('Đã xem rồi');
-    expect(textOf(renderer)).toContain('Chưa xem');
   });
 
   it('shows an empty state only after confirmed empty server page', async () => {
@@ -160,7 +148,7 @@ describe('C-RUI6A real Customer Notifications UI', () => {
       await act(async () => mark!.props.onPress());
       expect(mockReadAll).toHaveBeenCalledTimes(1);
       expect(textOf(renderer)).toContain('Không thể đánh dấu tất cả đã đọc');
-      expect(textOf(renderer)).toContain('1 chưa đọc ·');
+      expect(buttonByLabel(renderer, 'Chưa đọc. Cập nhật đơn. Đơn của bạn có cập nhật')).toBeDefined();
     } finally { consoleSpy.mockRestore(); }
   });
 

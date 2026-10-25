@@ -6,6 +6,7 @@ import type { OrderTaskResolution, OrderSessionKey, OrderSessionSnapshot } from 
 import { sameOrderSession } from '../domain/order-session.types';
 import { getRestoredQuotationRecovery } from '../domain/quotation-recovery';
 import { isUnresolvedMarker } from '../customer/payment-facts';
+import { handoverSeenKey, useHandoverSeen } from '../customer/handover-seen';
 import type { OrderCommandJournal } from '../runtime/order-command-journal';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import {
@@ -100,10 +101,10 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
   // the screen there kills the controller so the POST is never sent (confirm bounced back to start).
   // A camera upload writes its pending marker, which resolves to TR; the capture screen owns that
   // command and already renders the pending/verify state, so it must not be unmounted underneath it.
-  // Likewise C09 owns the VNPay link its own submit just created; the marker must not swap the screen away.
+  // Likewise C09 owns the VNPay link its own submit just created, and C10 its cash confirm (its marker flips the task to C11 before the POST is sent); the marker must not swap the screen away.
   const hold = refreshing || (snapshot?.pendingIntent === true && (
     (liveResolution?.taskId === 'TR' && (lastTask?.taskId === 'T02' || lastTask?.taskId === 'T05' || lastTask?.taskId === 'T06'))
-    || ((liveResolution?.taskId === 'C11' || liveResolution?.taskId === 'CX') && lastTask?.taskId === 'C09')));
+    || ((liveResolution?.taskId === 'C11' || liveResolution?.taskId === 'CX') && (lastTask?.taskId === 'C09' || lastTask?.taskId === 'C10'))));
   if (liveResolution && !hold && lastTask?.taskId !== liveResolution.taskId) setLastTask(liveResolution);
   const resolution = hold && lastTask ? lastTask : liveResolution;
   const shownTask = resolution?.taskId, orderState = snapshot?.order.status, accessState = snapshot?.access, pending = snapshot?.pendingIntent;
@@ -112,6 +113,9 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveResolution?.taskId, shownTask, orderState, accessState, pending, refreshing]);
   const resolutionTaskId = resolution?.taskId;
+  const handoverOrder = snapshot?.order.status === 'ready' && !isHistoricalOrder(snapshot.order.data) ? snapshot.order.data : null;
+  // The handover is reviewed before payment: C08 shows first, and its continue button marks it seen.
+  const handoverSeen = useHandoverSeen(handoverOrder ? handoverSeenKey(handoverOrder.id, handoverOrder.completionRequestedAt) : '');
 
   useEffect(() => {
     if (!snapshot || snapshot.key.role !== role) return;
@@ -160,6 +164,7 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
     if (resolution.taskId === 'C06') return <RepairStatusScreen />;
     if (resolution.taskId === 'C07') return <ExtraDecisionScreen />;
     if (resolution.taskId === 'C08') return <HandoverReviewScreen />;
+    if ((resolution.taskId === 'C09' || resolution.taskId === 'C10') && !handoverSeen) return <HandoverReviewScreen />;
     if (resolution.taskId === 'C09') return <PaymentMethodScreen />;
     if (resolution.taskId === 'C10') return <CashConfirmationScreen />;
     if (resolution.taskId === 'C11') return <PaymentResultScreen />;

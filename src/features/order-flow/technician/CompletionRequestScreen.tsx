@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { useTechnicianCompletion } from './useTechnicianCompletion';
-import { getOrderCapabilities } from '../domain/order-capabilities';
+import { getOrderCapabilities, partsBlockers } from '../domain/order-capabilities';
 import { sameOrderSession } from '../domain/order-session.types';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
@@ -54,8 +54,13 @@ export default function CompletionRequestScreen() {
   const knownBlockers: string[] = [];
   if (sentQuotes && sentQuotes.length) knownBlockers.push(`${sentQuotes.length} báo giá đang chờ khách duyệt.`);
   if (pendingExtras && pendingExtras.length) knownBlockers.push(`${pendingExtras.length} chi phí phát sinh đang chờ khách duyệt.`);
-  if (capabilities && !capabilities.canRequestCompletion && !capabilities.canAttemptRequestCompletion) {
-    knownBlockers.push('Linh kiện hoặc ảnh sau sửa chữa chưa đạt điều kiện gửi bàn giao.');
+  const partBlock = snapshot?.resources.parts.status === 'ready' && key ? partsBlockers(snapshot.resources.parts.data, key.userId) : null;
+  const partsBlocked = !!partBlock && partBlock.open + partBlock.unsettled > 0;
+  if (partsBlocked) {
+    if (partBlock.unsettled > 0) knownBlockers.push(`${partBlock.unsettled} linh kiện đã nhận chưa ghi dùng hoặc trả.`);
+    if (partBlock.open > 0) knownBlockers.push(`${partBlock.open} yêu cầu linh kiện chưa nhận (nhận bằng QR hoặc hủy yêu cầu).`);
+  } else if (capabilities && !capabilities.canRequestCompletion && !capabilities.canAttemptRequestCompletion) {
+    knownBlockers.push('Ảnh sau sửa chữa chưa đạt điều kiện gửi bàn giao.');
   }
   const noteTooLong = note.trim().length > 2000;
   const sheetValid = current && confirming && state.confirmation !== null
@@ -127,6 +132,12 @@ export default function CompletionRequestScreen() {
         <ReadOnlyNotice>
           Máy chủ sẽ kiểm tra điều kiện ảnh và linh kiện khi bạn gửi. Ứng dụng không tự kết luận đã đủ ảnh.
         </ReadOnlyNotice>
+      ) : null}
+      {partsBlocked && !unknown ? (
+        <TouchableOpacity testID="completion-open-parts" accessibilityRole="button" onPress={() => navigation.navigate('PartsLifecycle')}
+          style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.primaryStrong, borderRadius: 12 }}>
+          <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Mở quản lý linh kiện để xử lý</Text>
+        </TouchableOpacity>
       ) : null}
       {unknown ? (
         <ReadOnlyNotice>Có thao tác chưa rõ kết quả. Bạn không thể gửi bàn giao mới; hãy kiểm tra lại từ máy chủ trước.</ReadOnlyNotice>

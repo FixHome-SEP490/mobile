@@ -11,7 +11,7 @@ const mockAuthState = {
   user: { id: 'customer-a', role: 'customer' },
   sessionGeneration: 1,
 };
-const mockNavigation = { goBack: jest.fn(), navigate: jest.fn() };
+const mockNavigation = { goBack: jest.fn(), navigate: jest.fn(), replace: jest.fn(), reset: jest.fn(), addListener: jest.fn(() => () => undefined), isFocused: jest.fn(() => true) };
 const mockUsePreventRemove = jest.fn();
 const mockRoute = { params: { prefill: { serviceId: SERVICE_ID } } };
 const mockGetServices = jest.fn();
@@ -269,7 +269,7 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-it('never submits on render and presents two intake stages plus a separate review', async () => {
+it('never submits on render and presents the intake stage titled in the header plus a separate review', async () => {
   let renderer!: TestRenderer;
   await act(async () => {
     renderer = create(React.createElement(CustomerBookingCreateScreen));
@@ -281,12 +281,10 @@ it('never submits on render and presents two intake stages plus a separate revie
 
   const body = textContent(renderer.root);
   for (const label of [
-    'Tình trạng',
-    'Địa chỉ',
-    'Địa chỉ & thời gian',
-    'DỊCH VỤ',
-    'Mô tả sự cố (bắt buộc)',
-    'Ảnh sự cố (không bắt buộc)',
+    'Tình trạng cần sửa',
+    'Dịch vụ',
+    'Mô tả sự cố *',
+    'Ảnh sự cố',
   ]) {
     expect(body).toContain(label);
   }
@@ -295,14 +293,12 @@ it('never submits on render and presents two intake stages plus a separate revie
   expect(body).toContain('Tình trạng cần sửa');
   const descriptionInput = renderer.root.findAll((node) => node.props.accessibilityLabel === 'Mô tả sự cố')[0];
   expect(descriptionInput.props.maxLength).toBe(5000);
-  expect(renderer.root.findByProps({ testID: 'booking-intake-progress' }).props.accessibilityLabel)
-    .toBe('Tiến trình đặt lịch, bước 1 trên 2: Tình trạng');
+  expect(textContent(renderer.root.findByProps({ testID: 'booking-header-title' }))).toBe('Tình trạng cần sửa');
 
   await goToAddress(renderer);
   expect(textContent(renderer.root)).toContain('Địa chỉ sửa chữa');
   expect(textContent(renderer.root)).toContain('Khung giờ');
-  expect(renderer.root.findByProps({ testID: 'booking-intake-progress' }).props.accessibilityLabel)
-    .toBe('Tiến trình đặt lịch, bước 2 trên 2: Địa chỉ & thời gian');
+  expect(textContent(renderer.root.findByProps({ testID: 'booking-header-title' }))).toBe('Địa chỉ & thời gian');
   expect(renderer.root.findAll((node) => node.props.testID === 'session-slot-morning').length).toBeGreaterThan(0);
   expect(renderer.root.findAll((node) => node.props.testID === 'session-slot-afternoon').length).toBeGreaterThan(0);
   expect(bookingAction(renderer, 'Xem lại yêu cầu')).toBeDefined();

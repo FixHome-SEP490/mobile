@@ -143,12 +143,16 @@ export default function ServiceDeviceDetails({
   const confirmed = preview?.status === 'FIXED_PRICE' ? preview.selectedVariant : null;
   const range = preview?.priceRange ?? null;
 
+  // Inspection-only result: the booking price card already says "thợ khảo sát, báo giá", so the box would be a bare title.
+  if (state === 'ready' && !showMounting && !showHp && !showDryer && !showScopes && !confirmed && !range) return null;
+
   return (
-    <View style={[styles.box, { backgroundColor: colors.surface, borderColor: colors.border }]} testID="service-device-details">
-      <View style={styles.head}>
-        <Text style={[styles.title, { color: colors.text }]}>Thông tin thiết bị & phạm vi tiền công</Text>
-        {state === 'loading' ? <ActivityIndicator size="small" color={colors.primary} accessibilityLabel="Đang kiểm tra phạm vi giá" /> : null}
-      </View>
+    <View style={styles.wrap} testID="service-device-details">
+    <View style={styles.head}>
+      <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>Thông tin thiết bị & phạm vi tiền công</Text>
+      {state === 'loading' ? <ActivityIndicator size="small" color={colors.primary} accessibilityLabel="Đang kiểm tra phạm vi giá" /> : null}
+    </View>
+    <View style={[styles.box, { backgroundColor: colors.surface, borderColor: colors.border }]}>
 
       {showMounting || showHp || showStyle || showKg || showDryer ? (
         <Text style={[styles.hint, { color: colors.textSecondary }]}>
@@ -200,11 +204,6 @@ export default function ServiceDeviceDetails({
           <Text style={{ color: colors.tone.warning.text, fontWeight: '600' }}>Giá tham khảo — thợ khảo sát và báo giá, khách duyệt</Text>
           <Text style={{ color: colors.tone.warning.text, fontWeight: '700' }}>{`${formatVnd(range.minLaborVnd)} – ${formatVnd(range.maxLaborVnd)}`}</Text>
         </View>
-      ) : state === 'ready' && preview ? (
-        <View style={[styles.result, { borderColor: colors.border }]} testID="pricing-inspection">
-          <Text style={{ color: colors.text, fontWeight: '600' }}>Cần khảo sát để báo giá</Text>
-          <Text style={[styles.hint, { color: colors.textSecondary }]}>Thợ sẽ kiểm tra tại nhà và gửi báo giá để bạn duyệt trước khi sửa.</Text>
-        </View>
       ) : null}
 
       {state === 'failed' ? (
@@ -216,13 +215,15 @@ export default function ServiceDeviceDetails({
         </View>
       ) : null}
     </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  box: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 12 },
+  wrap: { gap: 8 },
+  box: { borderWidth: 1, borderRadius: 14, padding: 16, gap: 12 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  title: { fontSize: 14, fontWeight: '700', flexShrink: 1 },
+  title: { fontSize: 16, lineHeight: 24, fontWeight: '700', flexShrink: 1 },
   hint: { fontSize: 12, lineHeight: 18 },
   group: { gap: 8 },
   legend: { fontSize: 12, fontWeight: '700' },

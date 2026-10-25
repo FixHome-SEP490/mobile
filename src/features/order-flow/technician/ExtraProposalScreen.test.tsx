@@ -3,7 +3,8 @@ import { act, create } from 'react-test-renderer';
 import type { OrderSessionKey, OrderSessionSnapshot } from '../domain/order-session.types';
 import { createOrderSessionSnapshot, readyResource } from '../domain/order-session.types';
 import ExtraProposalScreen from './ExtraProposalScreen';
-import { CostItemEditor } from '../shared/CostItemEditor';
+import { PartPickerRow } from '../shared/PartPickerRow';
+import { HeldPartCard, LaborCard } from './QuotationItemCards';
 import { fetchStrictPartById } from './parts-catalog-adapter';
 jest.mock('./parts-catalog-adapter', () => ({ fetchStrictCatalog: jest.fn(async () => ({ data: [] })), fetchStrictPartById: jest.fn() }));
 
@@ -85,47 +86,55 @@ function createBaseSnapshot(extrasList: any[] = [], orderOverrides: any = {}) {
 }
 
 describe('ExtraProposalScreen (T10)', () => {
-  it('catalog responses respect latest selection and source switch, including late failures', async () => {
+  const PART_A = '99999999-8888-4777-8666-000000000001';
+  const PART_B = '99999999-8888-4777-8666-000000000002';
+  const part = (id: string, name: string, sellingPrice: number) => ({ id, name, sellingPrice });
+  const picker = (tree: any) => tree.root.findByType(PartPickerRow);
+  /** Picks a stock part in the sheet, moves it into the proposal and drops the empty first labor row. */
+  const addStockPart = async (tree: any, fixture: ReturnType<typeof part>, quantity = '1') => {
+    jest.mocked(fetchStrictPartById).mockResolvedValueOnce(fixture as any);
+    await act(async () => { picker(tree).props.onToggle({ id: fixture.id }); });
+    const picked = picker(tree).props.picked[0];
+    act(() => { picker(tree).props.onQuantity(picked.key, quantity); });
+    act(() => { picker(tree).props.onAdd(); });
+    act(() => { tree.root.findByType(LaborCard).props.onRemove(); });
+  };
+
+  it('a stock part unticked while loading never reaches the proposal, even when it fails late', async () => {
     ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot());
-    let first!: (part: any) => void;
-    let second!: (part: any) => void;
+    let first!: (value: any) => void;
     let fail!: (error: Error) => void;
-    jest.mocked(fetchStrictPartById).mockImplementationOnce(() => new Promise(r => { first = r; })).mockImplementationOnce(() => new Promise(r => { second = r; })).mockImplementationOnce(() => new Promise((_r, reject) => { fail = reject; }));
+    jest.mocked(fetchStrictPartById)
+      .mockImplementationOnce(() => new Promise(r => { first = r; }))
+      .mockImplementationOnce(() => new Promise((_r, reject) => { fail = reject; }));
     let tree: any;
     act(() => { tree = create(<ExtraProposalScreen />); });
-    let editor = tree.root.findByType(CostItemEditor);
-    act(() => { editor.props.onChange({ ...editor.props.row, kind: 'parts_equipment', partSource: 'fixhome' }); });
-    act(() => { tree.root.findByType(CostItemEditor).props.onSelectCatalogPart({ id: '99999999-8888-4777-8666-000000000001' }); });
-    act(() => { tree.root.findByType(CostItemEditor).props.onSelectCatalogPart({ id: '99999999-8888-4777-8666-000000000002' }); });
-    await act(async () => { second({ id: '99999999-8888-4777-8666-000000000002', name: 'Latest', sellingPrice: 200000 }); });
-    await act(async () => { first({ id: '99999999-8888-4777-8666-000000000001', name: 'Old', sellingPrice: 100000 }); });
-    expect(tree.root.findByType(CostItemEditor).props.row.partCatalogId).toBe('99999999-8888-4777-8666-000000000002');
-    act(() => { tree.root.findByType(CostItemEditor).props.onSelectCatalogPart({ id: '99999999-8888-4777-8666-000000000003' }); });
-    editor = tree.root.findByType(CostItemEditor);
-    act(() => { editor.props.onChange({ ...editor.props.row, partSource: 'external', partCatalogId: '', unitPrice: '0' }); });
+    act(() => { picker(tree).props.onToggle({ id: PART_A }); });
+    act(() => { picker(tree).props.onToggle({ id: PART_A }); });
+    act(() => { picker(tree).props.onToggle({ id: PART_B }); });
+    act(() => { picker(tree).props.onToggle({ id: PART_B }); });
+    await act(async () => { first(part(PART_A, 'Cũ', 100000)); });
     await act(async () => { fail(new Error('Late failure')); });
-    expect(tree.root.findByType(CostItemEditor).props.row.partSource).toBe('external');
-    expect(tree.root.findByType(CostItemEditor).props.row.unitPrice).toBe('0');
+    expect(picker(tree).props.picked).toHaveLength(0);
     expect(JSON.stringify(tree.toJSON())).not.toContain('Không tải được linh kiện đã chọn');
   });
 
-  it('catalog failure after a session switch cannot attach an error to the new draft', async () => {
+  it('a part failure after a session switch cannot attach an error to the new draft', async () => {
     ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot());
     let fail!: (error: Error) => void;
     jest.mocked(fetchStrictPartById).mockImplementationOnce(() => new Promise((_r, reject) => { fail = reject; }));
     let tree: any;
     act(() => { tree = create(<ExtraProposalScreen />); });
-    const editor = tree.root.findByType(CostItemEditor);
-    act(() => { editor.props.onChange({ ...editor.props.row, kind: 'parts_equipment', partSource: 'fixhome' }); });
-    act(() => { tree.root.findByType(CostItemEditor).props.onSelectCatalogPart({ id: '99999999-8888-4777-8666-000000000001' }); });
+    act(() => { picker(tree).props.onToggle({ id: PART_A }); });
     mockKey = { ...mockKey, sessionGeneration: 2 };
     mockSnapshot = { ...mockSnapshot, key: mockKey };
     act(() => { tree.update(<ExtraProposalScreen />); });
     await act(async () => { fail(new Error('Old session')); });
-    expect(tree.root.findByType(CostItemEditor).props.row.description).toBe('');
+    expect(tree.root.findByType(LaborCard).props.row.description).toBe('');
     expect(JSON.stringify(tree.toJSON())).not.toContain('Không tải được linh kiện đã chọn');
   });
-  it('FixHome delivery rejects blank shipping and sends numeric fee and only owned private evidence', () => {
+
+  it('FixHome delivery rejects blank shipping and sends numeric fee and only owned private evidence', async () => {
     ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot());
     mockSnapshot.resources.evidence = readyResource([
       { id: 'own', serviceOrderId: 'order-1', uploaderId: 'tech-1', type: 'BEFORE', mediaUrl: 'https://res.cloudinary.com/fixture/image/authenticated/s--signature--/v1/own.jpg', createdAt: '' },
@@ -136,8 +145,7 @@ describe('ExtraProposalScreen (T10)', () => {
     let tree: any;
     act(() => { tree = create(<ExtraProposalScreen />); });
     act(() => { tree.root.findByProps({ testID: 'proposal-reason-input' }).props.onChangeText('Thay linh kiện'); });
-    const editor = tree.root.findByType(CostItemEditor);
-    act(() => { editor.props.onChange({ ...editor.props.row, kind: 'parts_equipment', partSource: 'fixhome', partCatalogId: '99999999-8888-4777-8666-000000000001', description: 'Van', quantity: '2', unitPrice: '100000' }); });
+    await addStockPart(tree, part(PART_A, 'Van', 100000), '2');
     act(() => { tree.root.findByProps({ testID: 'proposal-method-delivery' }).props.onPress(); });
     act(() => { tree.root.findByProps({ testID: 'proposal-submit' }).props.onPress(); });
     expect(tree.root.findAllByProps({ testID: 'proposal-confirm-sheet' })).toHaveLength(0);
@@ -152,20 +160,19 @@ describe('ExtraProposalScreen (T10)', () => {
     expect(mockCreateProposal).toHaveBeenCalledWith(mockKey, expect.objectContaining({ fulfillmentMethod: 'delivery', shippingFee: 25000, evidenceUrls: [mockSnapshot.resources.evidence.status === 'ready' ? mockSnapshot.resources.evidence.data[0].mediaUrl : ''] }));
   });
 
-  it('late catalog response cannot change a captured confirmation payload', async () => {
+  it('a late part response cannot change a captured confirmation payload', async () => {
     ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot());
-    let resolve!: (part: any) => void;
-    jest.mocked(fetchStrictPartById).mockImplementationOnce(() => new Promise(r => { resolve = r; }));
     let tree: any;
     act(() => { tree = create(<ExtraProposalScreen />); });
     act(() => { tree.root.findByProps({ testID: 'proposal-reason-input' }).props.onChangeText('Thay van'); });
-    const editor = tree.root.findByType(CostItemEditor);
-    act(() => { editor.props.onChange({ ...editor.props.row, kind: 'parts_equipment', partSource: 'fixhome', partCatalogId: '99999999-8888-4777-8666-000000000001', description: 'Van gốc', quantity: '1', unitPrice: '100000' }); });
-    act(() => { tree.root.findByType(CostItemEditor).props.onSelectCatalogPart({ id: '99999999-8888-4777-8666-000000000002' }); });
+    await addStockPart(tree, part(PART_A, 'Van gốc', 100000));
+    let resolve!: (value: any) => void;
+    jest.mocked(fetchStrictPartById).mockImplementationOnce(() => new Promise(r => { resolve = r; }));
+    act(() => { picker(tree).props.onToggle({ id: PART_B }); });
     act(() => { tree.root.findByProps({ testID: 'proposal-submit' }).props.onPress(); });
-    await act(async () => { resolve({ id: '99999999-8888-4777-8666-000000000002', name: 'Van mới', sellingPrice: 999000 }); });
+    await act(async () => { resolve(part(PART_B, 'Van mới', 999000)); });
     act(() => { tree.root.findByProps({ testID: 'proposal-confirm-submit' }).props.onPress(); });
-    expect(mockCreateProposal).toHaveBeenCalledWith(mockKey, expect.objectContaining({ items: [expect.objectContaining({ unitPrice: 100000, partCatalogId: '99999999-8888-4777-8666-000000000001' })] }));
+    expect(mockCreateProposal).toHaveBeenCalledWith(mockKey, expect.objectContaining({ items: [expect.objectContaining({ unitPrice: 100000, partCatalogId: PART_A })] }));
   });
 
   it('a confirmed payload cannot be sent into a new session scope', () => {
@@ -173,8 +180,8 @@ describe('ExtraProposalScreen (T10)', () => {
     let tree: any;
     act(() => { tree = create(<ExtraProposalScreen />); });
     act(() => { tree.root.findByProps({ testID: 'proposal-reason-input' }).props.onChangeText('Công phát sinh'); });
-    const editor = tree.root.findByType(CostItemEditor);
-    act(() => { editor.props.onChange({ ...editor.props.row, description: 'Công', quantity: '1', unitPrice: '0' }); });
+    const labor = tree.root.findByType(LaborCard);
+    act(() => { labor.props.onChange({ ...labor.props.row, description: 'Công', quantity: '1', unitPrice: '0' }); });
     act(() => { tree.root.findByProps({ testID: 'proposal-submit' }).props.onPress(); });
     const stale = tree.root.findByProps({ testID: 'proposal-confirm-submit' }).props.onPress;
     mockKey = { ...mockKey, sessionGeneration: 2 };
@@ -193,12 +200,20 @@ describe('ExtraProposalScreen (T10)', () => {
     expect(tree.root.findAllByProps({ testID: 'proposal-verify' })).toHaveLength(0);
   });
 
-  it.each(['', '1.5', '1e3', '1000000000'])('rejects invalid money %p without creating a confirm', price => {
+  it('keeps only digits in the labor price field', () => {
+    ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot());
+    let tree: any;
+    act(() => { tree = create(<ExtraProposalScreen />); });
+    act(() => { tree.root.findByProps({ accessibilityLabel: 'Đơn giá' }).props.onChangeText('1.5e3'); });
+    expect(tree.root.findByProps({ accessibilityLabel: 'Đơn giá' }).props.value).toBe('153');
+  });
+
+  it.each(['', '1000000000'])('rejects invalid money %p without creating a confirm', price => {
     ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot());
     let tree: any;
     act(() => { tree = create(<ExtraProposalScreen />); });
     act(() => { tree.root.findByProps({ testID: 'proposal-reason-input' }).props.onChangeText('Cần thay'); });
-    act(() => { tree.root.findByProps({ accessibilityLabel: 'Mô tả hạng mục' }).props.onChangeText('Tiền công'); });
+    act(() => { tree.root.findByProps({ accessibilityLabel: 'Nội dung công việc' }).props.onChangeText('Tiền công'); });
     act(() => { tree.root.findByProps({ accessibilityLabel: 'Số lượng' }).props.onChangeText('1'); });
     act(() => { tree.root.findByProps({ accessibilityLabel: 'Đơn giá' }).props.onChangeText(price); });
     act(() => { tree.root.findByProps({ testID: 'proposal-submit' }).props.onPress(); });
@@ -212,7 +227,7 @@ describe('ExtraProposalScreen (T10)', () => {
     let tree: any;
     act(() => { tree = create(<ExtraProposalScreen />); });
     expect(tree.root.findByProps({ testID: 'proposal-reason-input' }).props.value).toBe('Lý do gốc');
-    expect(tree.root.findByProps({ accessibilityLabel: 'Mô tả hạng mục' }).props.value).toBe('Tiền công gốc');
+    expect(tree.root.findByProps({ accessibilityLabel: 'Nội dung công việc' }).props.value).toBe('Tiền công gốc');
   });
 
   it('a missing revision target never becomes an editable blank revision', () => {
@@ -293,7 +308,7 @@ describe('ExtraProposalScreen (T10)', () => {
     });
 
     // Row description & price
-    const descInput = root.findByProps({ accessibilityLabel: 'Mô tả hạng mục' });
+    const descInput = root.findByProps({ accessibilityLabel: 'Nội dung công việc' });
     const priceInput = root.findByProps({ accessibilityLabel: 'Đơn giá' });
     const qtyInput = root.findByProps({ accessibilityLabel: 'Số lượng' });
 
@@ -360,7 +375,7 @@ describe('ExtraProposalScreen (T10)', () => {
       reasonInput.props.onChangeText('Sửa lý do và thêm linh kiện');
     });
 
-    const descInput = root.findByProps({ accessibilityLabel: 'Mô tả hạng mục' });
+    const descInput = root.findByProps({ accessibilityLabel: 'Nội dung công việc' });
     const priceInput = root.findByProps({ accessibilityLabel: 'Đơn giá' });
     const qtyInput = root.findByProps({ accessibilityLabel: 'Số lượng' });
     act(() => {
@@ -431,7 +446,7 @@ describe('ExtraProposalScreen (T10)', () => {
       root.findByProps({ testID: 'proposal-reason-input' }).props.onChangeText('Lý do');
     });
     act(() => {
-      root.findByProps({ accessibilityLabel: 'Mô tả hạng mục' }).props.onChangeText('Mô tả');
+      root.findByProps({ accessibilityLabel: 'Nội dung công việc' }).props.onChangeText('Mô tả');
     });
     act(() => {
       root.findByProps({ accessibilityLabel: 'Đơn giá' }).props.onChangeText('100000');
@@ -514,7 +529,7 @@ describe('ExtraProposalScreen UX', () => {
     let tree: any;
     act(() => { tree = create(<ExtraProposalScreen />); });
     act(() => { tree.root.findByProps({ testID: 'proposal-reason-input' }).props.onChangeText('Thay tụ'); });
-    act(() => { tree.root.findByProps({ accessibilityLabel: 'Mô tả hạng mục' }).props.onChangeText('Công thay tụ'); });
+    act(() => { tree.root.findByProps({ accessibilityLabel: 'Nội dung công việc' }).props.onChangeText('Công thay tụ'); });
     act(() => { tree.root.findByProps({ accessibilityLabel: 'Số lượng' }).props.onChangeText('2'); });
     act(() => { tree.root.findByProps({ accessibilityLabel: 'Đơn giá' }).props.onChangeText('150000'); });
     expect(tree.root.findByProps({ testID: 'proposal-estimate-total' }).props.accessibilityLabel).toContain('300.000');
@@ -525,15 +540,57 @@ describe('ExtraProposalScreen UX', () => {
     expect(tree.root.findAllByProps({ testID: 'proposal-reason-input' })).toHaveLength(0);
   });
 
-  it('adds parts and labor rows explicitly', () => {
+  it('lists received FixHome parts that are not used yet, and hides used or returned ones', () => {
+    ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot());
+    mockSnapshot.resources.parts = readyResource([
+      { id: 'pr-1', serviceOrderId: 'order-1', technicianId: 'tech-1', requestType: 'pre_repair', status: 'received', items: [
+        { id: 'i-1', partNameSnapshot: 'Co đồng 90° Φ10', quantity: 2, partSource: 'fixhome', usageStatus: 'pending' },
+        { id: 'i-2', partNameSnapshot: 'Co đồng 90° Φ12', quantity: 2, partSource: 'fixhome', usageStatus: 'used' },
+        { id: 'i-3', partNameSnapshot: 'Ống đồng', quantity: 1, partSource: 'fixhome', usageStatus: 'returned' },
+      ] },
+      { id: 'pr-2', serviceOrderId: 'order-1', technicianId: 'tech-1', requestType: 'quotation', status: 'requested', items: [
+        { id: 'i-4', partNameSnapshot: 'Chưa nhận', quantity: 1, partSource: 'fixhome', usageStatus: 'pending' },
+      ] },
+    ] as any, 1, 1);
+    mockSnapshot.resources.quotations = readyResource([], 1, 1);
+    let tree: any;
+    act(() => { tree = create(<ExtraProposalScreen />); });
+    const rows = tree.root.findAllByProps({ testID: 'held-part-row' }).filter((n: any) => typeof n.type === 'string' || n.props.accessibilityLabel);
+    const labels = JSON.stringify(tree.toJSON());
+    expect(labels).toContain('Co đồng 90° Φ10');
+    expect(labels).not.toContain('Co đồng 90° Φ12');
+    expect(labels).not.toContain('Ống đồng');
+    expect(labels).not.toContain('Chưa nhận');
+    expect(rows.length).toBeGreaterThan(0);
+  });
+
+  it('shows what is left after the approved quotation but does not let it be ticked into the proposal', () => {
+    const PART_A = '99999999-8888-4777-8666-000000000001';
+    ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot());
+    mockSnapshot.resources.parts = readyResource([
+      { id: 'pr-1', serviceOrderId: 'order-1', technicianId: 'tech-1', requestType: 'pre_repair', status: 'received', items: [
+        { id: 'i-1', partCatalogId: PART_A, partNameSnapshot: 'Co đồng 90° Φ10', quantity: 2, partSource: 'fixhome', usageStatus: 'pending' },
+      ] },
+    ] as any, 1, 1);
+    mockSnapshot.resources.quotations = readyResource([
+      { id: 'q-1', serviceOrderId: 'order-1', status: 'APPROVED', items: [{ type: 'PARTS', description: 'x', quantity: 1, unitPrice: 1, partSource: 'fixhome', partCatalogId: PART_A }] },
+    ] as any, 1, 1);
+    let tree: any;
+    act(() => { tree = create(<ExtraProposalScreen />); });
+    expect(tree.root.findByType(HeldPartCard).props.available).toBe(1);
+    expect(tree.root.findByType(HeldPartCard).props.readOnly).toBe(true);
+    expect(tree.root.findAllByProps({ accessibilityRole: 'checkbox' })).toHaveLength(0);
+  });
+
+  it('adds labor rows in the list and opens the stock picker for parts', () => {
     ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot());
     let tree: any;
     act(() => { tree = create(<ExtraProposalScreen />); });
-    act(() => { tree.root.findByProps({ testID: 'proposal-add-parts' }).props.onPress(); });
+    expect(tree.root.findAllByType(LaborCard)).toHaveLength(1);
     act(() => { tree.root.findByProps({ testID: 'proposal-add-labor' }).props.onPress(); });
-    const editors = tree.root.findAllByType(CostItemEditor);
-    expect(editors).toHaveLength(3);
-    expect(editors[1].props.row.kind).toBe('parts_equipment');
-    expect(editors[2].props.row.kind).toBe('labor');
+    expect(tree.root.findAllByType(LaborCard)).toHaveLength(2);
+    expect(tree.root.findAllByType(PartPickerRow)).toHaveLength(1);
+    act(() => { tree.root.findByProps({ testID: 'proposal-add-parts' }).props.onPress(); });
+    expect(tree.root.findAllByType(LaborCard)).toHaveLength(2);
   });
 });

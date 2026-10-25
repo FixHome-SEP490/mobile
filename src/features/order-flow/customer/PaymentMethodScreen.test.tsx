@@ -77,7 +77,7 @@ it('wallet choice is navigation-only; vnpay/cash need an explicit frozen confirm
   mockSnapshot = snapshotWith(null);
   let renderer!: ReturnType<typeof create>;
   await act(async () => { renderer = create(<PaymentMethodScreen />); });
-  expect(JSON.stringify(renderer.toJSON())).toContain('invoice-1');
+  expect(JSON.stringify(renderer.toJSON())).toContain('#INVOICE-');
   await act(async () => { renderer.root.findByProps({ testID: 'payment-method-wallet' }).props.onPress(); });
   expect(mockNavigate).toHaveBeenCalledWith('WalletPayment');
   expect(mockRequestPayment).not.toHaveBeenCalled();

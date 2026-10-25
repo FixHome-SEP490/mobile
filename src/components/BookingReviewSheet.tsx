@@ -205,9 +205,10 @@ const styles = StyleSheet.create({
   prestate: { fontSize: 12, lineHeight: 18 },
   summary: { gap: 12 },
   summaryRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  icon: { width: 22, alignItems: 'center', paddingTop: 2 },
+  // Same height as the label line so the icon sits level with it (e.g. the wrench with "Dịch vụ").
+  icon: { width: 22, height: 18, alignItems: 'center', justifyContent: 'center' },
   summaryText: { flex: 1, gap: 4 },
-  label: { fontSize: 12 },
+  label: { fontSize: 12, lineHeight: 18 },
   value: { fontSize: 14, lineHeight: 20, fontWeight: '500' },
   quantity: { paddingLeft: 30, fontSize: 14, fontWeight: '600' },
   note: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 12 },

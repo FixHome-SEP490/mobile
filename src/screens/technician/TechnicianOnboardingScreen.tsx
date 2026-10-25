@@ -3,7 +3,7 @@
 // Đăng ký kỹ thuật viên 5 bước, khớp `web/src/pages/technician/TechnicianOnboardingPage.vue`:
 // 1 thông tin cá nhân → 2 xác minh danh tính → 3 kỹ năng → 4 địa chỉ và khu vực → 5 gửi duyệt.
 // Bước 2 dùng lại TechnicianKycScreen để không nhân đôi phần chụp/tải ảnh.
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -74,6 +74,12 @@ export default function TechnicianOnboardingScreen() {
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<OnboardingStatusResponse | null>(null);
   const [step, setStep] = useState(1);
+  // The system back (Android button, iOS swipe) steps back like "Quay lại" instead of leaving the wizard.
+  const stepRef = useRef(step);
+  useLayoutEffect(() => { stepRef.current = step; });
+  useEffect(() => navigation.addListener('beforeRemove', (event) => {
+    if (stepRef.current > 1) { event.preventDefault(); setStep(stepRef.current - 1); }
+  }), [navigation]);
   const [editingRejected, setEditingRejected] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

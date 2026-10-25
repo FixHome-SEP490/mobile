@@ -159,19 +159,24 @@ export function createArrivalProofController(deps: ArrivalProofDependencies) {
       || !Number.isFinite(asset.sizeBytes) || asset.sizeBytes <= 0 || asset.sizeBytes > 10 * 1024 * 1024) {
       publish({ phase: 'denied', operation, message: 'Hãy chụp ảnh bằng camera, định dạng JPEG/PNG/WebP và dung lượng không quá 10 MB.' }); return;
     }
+    // Only a validation-class answer from the server proves nothing was stored; a dropped request or 5xx stays unknown.
+    let rejected = false;
     await run(operation, async (key, intentId) => {
       const image = { uri: asset.uri, name: asset.name, type: asset.type };
       let result: unknown;
       try {
         result = await (operation === 'face-upload' ? deps.transport.uploadFace(key.serviceOrderId, image) : deps.transport.uploadBefore(key.serviceOrderId, image, options));
       } catch (error) {
+        const status = (error as { response?: { status?: number } }).response?.status;
+        rejected = !!status && [400, 403, 413, 415, 422].includes(status);
         if (__DEV__) { const e = error as { code?: string; message?: string; response?: { status?: number } }; console.warn('[arrival-proof] POST failed', operation, JSON.stringify({ status: e.response?.status, code: e.code, message: e.message })); }
         throw error;
       }
       if (__DEV__) console.warn('[arrival-proof] POST ok', operation, JSON.stringify({ hasId: typeof responseRecord(result)?.id === 'string' }));
       const id = responseRecord(result)?.id;
       if (typeof id === 'string') await deps.journal.recordEntity(key.userId, intentId, id);
-    }, ['evidence']);
+    }, ['evidence'], undefined, () => rejected, undefined, () => rejected);
+    if (state.phase === 'denied' && !state.message) publish({ phase: 'denied', operation, message: 'Chưa gửi được ảnh. Ảnh chưa được lưu; hãy chụp lại và gửi lại.' });
   }
   return {
     getState: () => state,
