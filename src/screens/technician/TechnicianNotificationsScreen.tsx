@@ -17,13 +17,14 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAppTheme, type ToneName } from '../../constants/theme';
 import { notificationsApi, type NotificationItem } from '../../api/notifications.api';
+import { partRequestsApi } from '../../api/part-requests.api';
 import { useBadgeStore } from '../../store/badge.store';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import {
   formatNotificationTime,
   groupNotificationsByDay,
   mergeNotificationPage,
-  technicianNotificationOrderId,
+  resolveTechnicianNotificationOrderId,
 } from './technician-notifications';
 import BackButton from '../../components/BackButton';
 
@@ -212,8 +213,10 @@ export default function TechnicianNotificationsScreen({ route }: { route?: { nam
           syncUnreadCount();
         });
     }
-    const serviceOrderId = technicianNotificationOrderId(item);
-    if (serviceOrderId) navigation.navigate('TechnicianOrderDetail', { serviceOrderId });
+    void resolveTechnicianNotificationOrderId(item, partRequestsApi.getById).then(
+      (serviceOrderId) => { if (serviceOrderId) navigation.navigate('TechnicianOrderDetail', { serviceOrderId }); },
+      () => setLoadError('Không mở được máy liên quan. Vui lòng tải lại thông báo và thử lại.'),
+    );
   };
 
   const sections = useMemo(() => groupNotificationsByDay(notifications, loadedAt), [notifications, loadedAt]);

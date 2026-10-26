@@ -34,7 +34,7 @@ import { invitationClosedLabel, invitationCountdown, invitationDistanceText, sor
 import { urgencyView, type StatusView } from './technician-status';
 import { bookingsApi, type InvitationItem } from '../../api/bookings.api';
 import { ordersApi } from '../../api/orders.api';
-import { useAppTheme } from '../../constants/theme';
+import { iconSize, iconStroke, useAppTheme } from '../../constants/theme';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useTechnicianAvailability } from '../../hooks/useTechnicianAvailability';
 import { sessionLabel } from '../../utils/booking-session';
@@ -171,11 +171,15 @@ export default function TechnicianInvitationsScreen() {
     void controller.respond(inv.id, action);
   };
 
+  // The service names the device; the stored label ("Máy 1") only repeats the number.
+  const deviceName = (d: NonNullable<InvitationItem['visitDevices']>[number]) => d.booking.serviceName || d.deviceLabel || 'Thiết bị';
+
   const renderItem = ({ item: inv }: { item: InvitationItem }) => {
     const actionable = isActionable(inv);
     const inFlight = actionInFlight[inv.id];
     const b = inv.booking;
-    const serviceName = b?.serviceName ?? 'Chưa xác định dịch vụ';
+    const devices = inv.visitDevices;
+    const serviceName = devices ? `Lượt sửa ${devices.length} thiết bị` : b?.serviceName ?? 'Chưa xác định dịch vụ';
     const countdown = actionable ? invitationCountdown(inv.expiresAt, now) : null;
     // A missing/invalid deadline is not evidence of expiry. Display only;
     // the existing controller still decides whether a response is allowed.
@@ -227,6 +231,14 @@ export default function TechnicianInvitationsScreen() {
           <Text style={[styles.serviceName, reviewing ? styles.detailServiceName : null]} accessibilityRole="header">
             {serviceName}
           </Text>
+          {devices ? (
+            <View testID={`invitation-visit-${inv.id}`} style={{ gap: 4 }}>
+              {reviewing && <Text style={styles.fieldLabel}>Nhận lời mời là nhận cả {devices.length} thiết bị, cùng địa chỉ và buổi hẹn. Mỗi máy báo giá riêng, khách duyệt máy nào thì sửa máy đó.</Text>}
+              {!reviewing && devices.map((d) => (
+                <Text key={d.sequence} style={styles.fieldValue}>{`Máy ${d.sequence}: ${deviceName(d)}`}</Text>
+              ))}
+            </View>
+          ) : null}
 
           {reviewing ? (
             <View style={styles.previewDetails}>
@@ -257,12 +269,14 @@ export default function TechnicianInvitationsScreen() {
                 </View>
               </View>
               <View style={styles.tilePair}>
+                {!devices && (
                 <View style={[styles.infoTile, styles.tileHalf]}>
                   <View style={styles.tileBody}>
                     <Text style={styles.fieldLabel}>Số lượng</Text>
                     <Text style={styles.fieldValue}>{b?.quantity != null ? `SL ${b.quantity}` : 'Chưa xác định'}</Text>
                   </View>
                 </View>
+                )}
                 <View style={[styles.infoTile, styles.tileHalf]}>
                   <View style={styles.tileBody}>
                     <Text style={styles.fieldLabel}>Mức độ khẩn</Text>
@@ -270,25 +284,40 @@ export default function TechnicianInvitationsScreen() {
                   </View>
                 </View>
               </View>
-              {b ? <InvitationJobDetails booking={b} /> : null}
+              {devices
+                ? (
+                  <>
+                    {devices.map((d) => (
+                      <View key={d.sequence} style={styles.deviceSection} testID={`invitation-device-${d.sequence}`}>
+                        <Text style={styles.deviceHeading} accessibilityRole="header">{`Máy ${d.sequence}: ${deviceName(d)}`}</Text>
+                        <InvitationJobDetails booking={d.booking} hidePrivacyNote />
+                      </View>
+                    ))}
+                    <Text style={styles.visitPrivacy} testID="invitation-privacy-note">
+                      Địa chỉ cụ thể, số điện thoại và ghi chú riêng của khách hiện sau khi bạn nhận đơn.
+                    </Text>
+                  </>
+                )
+                : b ? <InvitationJobDetails booking={b} /> : null}
             </View>
           ) : (
             <>
               <View style={styles.metaRow}>
-                <MapPin size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                <MapPin size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
                 <Text style={styles.metaText}>{[location || 'Khu vực chưa xác định', distance].filter(Boolean).join(' · ')}</Text>
               </View>
-              {b?.description ? (
+              {!devices && b?.description ? (
                 <View style={styles.metaRow}>
-                  <FileText size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                  <FileText size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
                   <Text style={styles.metaText} numberOfLines={2} testID="invitation-description">{b.description}</Text>
                 </View>
               ) : null}
               <View style={styles.metaRow}>
-                <Clock size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                <Clock size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
                 <Text style={styles.metaText}>{timeWindow || 'Khung giờ chưa xác định'}</Text>
               </View>
-              {b?.quantity != null ? <Text style={styles.fieldValue}>{`Số lượng: SL ${b.quantity}`}</Text> : null}
+              {!devices && b?.quantity != null ? <Text style={styles.fieldValue}>{`Số lượng: SL ${b.quantity}`}</Text> : null}
+              {!devices && (
               <View style={styles.badgeRow}>
                 {b?.urgency ? <StatusBadge view={urgencyView(b.urgency)} /> : null}
                 {b?.media?.length ? (
@@ -298,6 +327,7 @@ export default function TechnicianInvitationsScreen() {
                   </View>
                 ) : null}
               </View>
+              )}
             </>
           )}
 
@@ -663,6 +693,9 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   tilePair: { flexDirection: 'row', gap: 12 },
   tileHalf: { flex: 1 },
   tileBody: { flex: 1, gap: 4 },
+  deviceSection: { gap: 4 },
+  deviceHeading: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: colors.text },
+  visitPrivacy: { fontSize: 14, lineHeight: 22, color: colors.tone.warning.text, backgroundColor: colors.tone.warning.bg, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
   fieldLabel: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
   fieldValue: { fontSize: 14, lineHeight: 22, color: colors.text },
   reviewSurface: { marginTop: 8, gap: 12 },

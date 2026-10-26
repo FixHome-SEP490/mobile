@@ -33,7 +33,7 @@ import {
 } from '../../api/technician-onboarding.api';
 import { resolveOnboardingView } from './technician-onboarding';
 import { createHomeOrdersReadGuard, pickPriorityJob, weeklyStats } from './technician-home';
-import { serviceOrderStatusView } from './technician-status';
+import { serviceOrderDisplayView } from './technician-status';
 import { techOrderDetailTarget } from './technician-order-detail';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useLiveRefresh } from '../../hooks/useLiveRefresh';
@@ -46,7 +46,7 @@ import { useInvitationCount } from '../../hooks/useInvitationCount';
 import { useBadgeStore } from '../../store/badge.store';
 import { useTechnicianAvailability } from '../../hooks/useTechnicianAvailability';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
-import { useAppTheme } from '../../constants/theme';
+import { iconSize, iconStroke, useAppTheme } from '../../constants/theme';
 import { formatVnd } from '../../utils/format';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import StatusBadge from '../../components/StatusBadge';
@@ -347,18 +347,18 @@ export default function TechnicianHomeScreen() {
                   <Text style={styles.heroEyebrow}>MỘT CÔNG VIỆC ĐANG MỞ</Text>
                   <Text style={styles.heroTitle}>{priority.serviceName || 'Dịch vụ sửa chữa'}</Text>
                   <View style={styles.heroBadgeRow}>
-                    <StatusBadge view={serviceOrderStatusView(priority.status)} />
+                    <StatusBadge view={serviceOrderDisplayView(priority)} />
                     {!!priority.code && <Text style={styles.heroMeta}>#{priority.code}</Text>}
                   </View>
                   {!!priority.scheduledAt && (
                     <View style={styles.iconRow}>
-                      <Clock size={16} color={colors.primaryTint} strokeWidth={1.75} style={styles.rowIcon} />
+                      <Clock size={iconSize.sm} color={colors.primaryTint} strokeWidth={iconStroke} style={styles.rowIcon} />
                       <Text style={styles.heroMeta}>{vnDateTimeString(priority.scheduledAt, VN_DATETIME)}</Text>
                     </View>
                   )}
                   {!!priority.addressSummary && (
                     <View style={styles.iconRow}>
-                      <MapPin size={16} color={colors.primaryTint} strokeWidth={1.75} style={styles.rowIcon} />
+                      <MapPin size={iconSize.sm} color={colors.primaryTint} strokeWidth={iconStroke} style={styles.rowIcon} />
                       <Text style={[styles.heroMeta, styles.flex1]} numberOfLines={2}>{priority.addressSummary}</Text>
                     </View>
                   )}
@@ -469,7 +469,7 @@ export default function TechnicianHomeScreen() {
                       </View>
                       <View style={styles.flex1}>
                         <Text style={styles.rowTitle} numberOfLines={1}>{order.serviceName || 'Dịch vụ sửa chữa'}</Text>
-                        <StatusBadge view={serviceOrderStatusView(order.status)} />
+                        <StatusBadge view={serviceOrderDisplayView(order)} />
                       </View>
                       {canOpen && <ChevronRight size={18} color={colors.muted} strokeWidth={1.75} />}
                     </TouchableOpacity>

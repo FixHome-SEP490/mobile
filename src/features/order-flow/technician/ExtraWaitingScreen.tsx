@@ -10,6 +10,7 @@ import { useTechnicianExtraCost } from './useTechnicianExtraCost';
 import { getRestoredExtraRecovery } from '../domain/extra-and-parts-recovery';
 import { isCostDecisionBlocked } from '../../../screens/customer/customer-additional-cost-decision';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import VisitTechnicianPanel from './VisitTechnicianPanel';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { formatVnd } from '../../../utils/format';
 import { vnDateTimeString } from '../../../utils/vn-time';
@@ -173,6 +174,7 @@ export default function ExtraWaitingScreen() {
           </Text>
         </View>
       )}
+      <VisitTechnicianPanel section="devices" />
     </TaskScreenShell>
   );
 }

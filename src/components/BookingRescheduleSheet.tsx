@@ -11,8 +11,10 @@ import BookingSessionPicker from './BookingSessionPicker';
  * the current appointment, what the change does, the new pick, and a footer that stays in view.
  */
 export default function BookingRescheduleSheet({
-  visible, booking, schedule, busy, error, animated, onChange, onSave, onClose,
+  visible, booking, schedule, busy, error, animated, notice, onChange, onSave, onClose,
 }: {
+  /** Replaces the default "invitations are cancelled" line, e.g. for a whole multi-device visit. */
+  notice?: string;
   visible: boolean;
   booking: BookingItem;
   schedule: BookingSchedule | null;
@@ -55,7 +57,7 @@ export default function BookingRescheduleSheet({
             <View style={styles.notice}>
               <Info size={16} color={colors.textSecondary} />
               <Text style={[styles.noticeText, { color: colors.textSecondary }]}>
-                Lời mời đã gửi sẽ bị huỷ. Sau khi lưu, bạn sẽ chọn lại kỹ thuật viên cho lịch mới.
+                {notice ?? 'Lời mời đã gửi sẽ bị huỷ. Sau khi lưu, bạn sẽ chọn lại kỹ thuật viên cho lịch mới.'}
               </Text>
             </View>
             <Text style={[styles.section, { color: colors.text }]}>Chọn lịch mới</Text>

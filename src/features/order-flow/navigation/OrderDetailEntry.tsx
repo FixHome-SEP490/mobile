@@ -1,12 +1,54 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { Text, TouchableOpacity } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { OrderSessionProvider } from '../runtime/OrderSessionProvider';
 import { useAuthStore } from '../../../store/auth.store';
 import OrderFlowNavigator from './OrderFlowNavigator';
 import type { RootStackParamList } from '../../../types';
+import { lightTheme } from '../../../constants/theme';
+import { VisitDevicesContext, visitDeviceTabName } from './visit-device-tabs';
+
+const DeviceTabs = createBottomTabNavigator();
+type DeviceTabParams = Record<string, { serviceOrderId: string } | undefined>;
+
+// Module-level on purpose (a render callback would be a new component on every render and remount the order).
+const createDeviceScreen = (role: 'customer' | 'technician') => function DeviceScreen() {
+  const serviceOrderId = useRoute<RouteProp<DeviceTabParams, string>>().params?.serviceOrderId ?? '';
+  return <OrderSessionProvider serviceOrderId={serviceOrderId}><OrderFlowNavigator role={role} /></OrderSessionProvider>;
+};
+const DEVICE_SCREEN = { customer: createDeviceScreen('customer'), technician: createDeviceScreen('technician') };
+
+/**
+ * The order screen. Every device of a visit is its own order and its own tab: a switch only shows another tab,
+ * so the order left behind keeps its session, photos and drafts, and nothing reloads. A single order is one tab and looks as before.
+ */
+function OrderDeviceTabs({ role, firstId }: { role: 'customer' | 'technician'; firstId: string }) {
+  const [others, setOthers] = useState<string[]>([]);
+  // Only ever adds: a panel that has not read its visit yet reports no devices, which must not take a tab (and the focus) away.
+  const register = useCallback((ids: string[]) => {
+    setOthers((current) => {
+      const added = ids.filter((id) => id && id !== firstId && !current.includes(id));
+      return added.length ? [...current, ...added] : current;
+    });
+  }, [firstId]);
+  return (
+    <VisitDevicesContext.Provider value={register}>
+      <DeviceTabs.Navigator
+        initialRouteName={visitDeviceTabName(firstId)}
+        backBehavior="none"
+        tabBar={() => null}
+        screenOptions={{ headerShown: false, lazy: true, animation: 'fade', sceneStyle: { backgroundColor: lightTheme.background } }}
+      >
+        {[firstId, ...others].map((id) => (
+          <DeviceTabs.Screen key={id} name={visitDeviceTabName(id)} component={DEVICE_SCREEN[role]} initialParams={{ serviceOrderId: id }} />
+        ))}
+      </DeviceTabs.Navigator>
+    </VisitDevicesContext.Provider>
+  );
+}
 
 type DetailRouteName = 'CustomerOrderDetail' | 'TechnicianOrderDetail';
 
@@ -31,7 +73,7 @@ function createOrderDetailEntry<N extends DetailRouteName>(routeRole: 'customer'
         </TouchableOpacity>
       </SafeAreaView>;
     }
-    return <OrderSessionProvider key={session.serviceOrderId} serviceOrderId={session.serviceOrderId}><OrderFlowNavigator role={session.role} /></OrderSessionProvider>;
+    return <OrderDeviceTabs key={session.serviceOrderId} role={session.role} firstId={session.serviceOrderId} />;
   };
 }
 

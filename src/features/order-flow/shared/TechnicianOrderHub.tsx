@@ -9,6 +9,7 @@ import { isHistoricalOrder } from '../../../api/orders.api';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { useLoadUnloadedResources } from './useLoadUnloadedResources';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+import VisitTechnicianPanel from '../technician/VisitTechnicianPanel';
 
 type HubScreen = 'PartsLifecycle' | 'OrderInformation' | 'PersonalOrderNotes' | 'OrderProgressHistory'
   | 'AfterEvidence' | 'CompletionRequest' | 'CashDeclaration' | 'ExtraProposal';
@@ -88,6 +89,8 @@ export default function TechnicianOrderHub() {
       && ((pr.fulfillmentMethod === 'pickup' && pr.status === 'ready') || (pr.fulfillmentMethod === 'delivery' && pr.status === 'delivering'))).length
     : 0;
   const repairing = order?.status === 'UNDER_REPAIR' && !order.completionRequestedAt;
+  // Cash of a device in a visit is declared once for the whole visit, never on its own.
+  const manage = (items: typeof REPAIR) => (order?.visitGroupId ? items.filter(i => i.screen !== 'CashDeclaration') : items);
   const open = (screen: HubScreen) => { if (!revoked) navigation.navigate(screen as never); };
   const render = (items: typeof MANAGE) => items.map((item, i) => (
     <Row key={item.screen} {...item} disabled={revoked} last={i === items.length - 1} onPress={() => open(item.screen)}
@@ -96,9 +99,10 @@ export default function TechnicianOrderHub() {
 
   return (
     <View style={styles.wrap}>
+      <VisitTechnicianPanel section="devices" />
       {repairing && <>
         <View style={styles.titleRow}><Wrench size={16} strokeWidth={1.75} color={colors.textSecondary} /><Text accessibilityRole="header" style={styles.title}>Bước sửa chữa</Text></View>
-        <View style={styles.card}>{render(REPAIR)}</View>
+        <View style={styles.card}>{render(manage(REPAIR))}</View>
       </>}
       <Text accessibilityRole="header" style={styles.title}>Quản lý đơn</Text>
       <View style={styles.card}>{render(MANAGE)}</View>

@@ -9,6 +9,8 @@ import { useFocusEffect, useIsFocused, useNavigation, useRoute, type RouteProp }
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { bookingsApi, type BookingItem, type TechnicianCandidate } from '../../api/bookings.api';
+import { visitGroupsApi } from '../../api/visit-groups.api';
+
 import { ordersApi, type ServiceOrderItem } from '../../api/orders.api';
 import { useAppTheme } from '../../constants/theme';
 import { CUSTOMER_UI_ARTWORK } from '../../constants/customer-artwork';
@@ -48,6 +50,11 @@ import CustomerMatchingAcceptedScene from './CustomerMatchingAcceptedScene';
 import BackButton from '../../components/BackButton';
 import CustomerMatchingRadar from './CustomerMatchingRadar';
 import { canShowCustomerMatchingRadar } from './customer-matching-radar-state';
+// A multi-device visit lists candidates and takes the shortlist on the visit; its lead booking carries everything else.
+const readCandidates = (bookingId: string, visitGroupId?: string) =>
+  visitGroupId ? visitGroupsApi.getCandidates(visitGroupId) : bookingsApi.getCandidates(bookingId);
+const postShortlist = (bookingId: string, visitGroupId: string | undefined, ids: Parameters<typeof bookingsApi.sendShortlist>[1]) =>
+  visitGroupId ? visitGroupsApi.sendShortlist(visitGroupId, ids) : bookingsApi.sendShortlist(bookingId, ids);
 
 type MatchingRoute = RouteProp<RootStackParamList, 'CustomerMatching'>;
 type CandidateDetailTarget = { bookingId: string; ownerId: string; candidateUserId: string };
@@ -112,6 +119,7 @@ export default function CustomerMatchingScreen() {
   const isFocused = useIsFocused();
   const [isForeground, setIsForeground] = useState(AppState.currentState === 'active');
   const bookingId = route.params.bookingId;
+  const visitGroupId = route.params.visitGroupId;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const role = useAuthStore((state) => state.user?.role);
   const userId = useAuthStore((state) => state.user?.id);
@@ -325,7 +333,7 @@ export default function CustomerMatchingScreen() {
         }
         if (canChooseTechnicians(nextBooking) && !shortlistRequestLockedRef.current) {
           try {
-            const list = await bookingsApi.getCandidates(bookingId);
+            const list = await readCandidates(bookingId, visitGroupId);
             if (!sessionAlive()) return;
             publishCandidates(list);
           } catch (candidateError) {
@@ -424,7 +432,7 @@ export default function CustomerMatchingScreen() {
       if (mayRequestLinkedReplacement(nextBooking, nextOrder, currentUserId)
         && !shortlistRequestLockedRef.current && !uncertainSendRef.current && !rejectedDefinitiveRef.current) {
         try {
-          const list = await bookingsApi.getCandidates(bookingId);
+          const list = await readCandidates(bookingId, visitGroupId);
           if (!sessionAlive()) return;
           publishCandidates(list);
         } catch (candidateError) {
@@ -462,7 +470,7 @@ export default function CustomerMatchingScreen() {
         setRefreshing(false);
       }
     }
-  }, [bookingId, clearCandidateView, isAuthenticated, publishCandidates, role, sessionGeneration, userId]);
+  }, [bookingId, clearCandidateView, isAuthenticated, publishCandidates, role, sessionGeneration, userId, visitGroupId]);
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -622,7 +630,7 @@ export default function CustomerMatchingScreen() {
       if (!isCurrentCustomerSession()) return;
       postDispatched = true;
       try {
-        await bookingsApi.sendShortlist(bookingId, orderedIds);
+        await postShortlist(bookingId, visitGroupId, orderedIds);
       } catch (postError) {
         if (!isCurrentCustomerSession()) return;
         const kind = classifyInitialShortlistPostError(postError);
@@ -865,7 +873,7 @@ export default function CustomerMatchingScreen() {
       if (!isCurrentCustomerSession()) return;
       posted = true;
       try {
-        await bookingsApi.sendShortlist(bookingId, orderedIds);
+        await postShortlist(bookingId, visitGroupId, orderedIds);
         if (!isCurrentCustomerSession()) return;
       } catch (postError) {
         if (!isCurrentCustomerSession()) return;

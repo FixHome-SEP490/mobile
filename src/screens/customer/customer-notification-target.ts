@@ -6,10 +6,13 @@ const UUID =
 
 export type CustomerNotificationTarget =
   | { name: 'CustomerBookingDetail'; params: { bookingId: string; released?: true } }
-  | { name: 'CustomerOrderDetail'; params: { serviceOrderId: string } };
+  | { name: 'CustomerOrderDetail'; params: { serviceOrderId: string } }
+  | { name: 'CustomerVisit'; params: { visitGroupId: string } };
 
 export interface CustomerNotificationTargetDeps {
   getSupportCase: (id: string) => Promise<MySupportCase>;
+  /** PART_REQUEST_READY points at a part request, not an order. */
+  getPartRequest?: (id: string) => Promise<{ serviceOrderId: string }>;
 }
 
 function validId(value: unknown): string | null {
@@ -36,11 +39,20 @@ export async function resolveCustomerNotificationTarget(
     };
   }
 
+  // Multi-device visits, including VISIT_CASH_DECLARED, open the parent visit.
+  if (type === 'VISIT_GROUP') return { name: 'CustomerVisit', params: { visitGroupId: referenceId } };
+
   if (type === 'SERVICE_ORDER') {
     return {
       name: 'CustomerOrderDetail',
       params: { serviceOrderId: referenceId },
     };
+  }
+
+  if (type === 'PART_REQUEST') {
+    if (!deps.getPartRequest) return null;
+    const serviceOrderId = validId((await deps.getPartRequest(referenceId)).serviceOrderId);
+    return serviceOrderId ? { name: 'CustomerOrderDetail', params: { serviceOrderId } } : null;
   }
 
   if (type !== 'SUPPORT_CASE') return null;

@@ -56,7 +56,10 @@ export type RootStackParamList = {
    * `rebooked: 'choose'` after "Đặt lại thợ" when the former technician was not free.
    * `released: true` when the technician stepped off the order because the previous job overran (BE 20/10/2026).
    */
-  CustomerMatching: { bookingId: string; rebooked?: 'choose'; released?: true };
+  CustomerMatching: { bookingId: string; rebooked?: 'choose'; released?: true; visitGroupId?: string };
+  CustomerVisit: { visitGroupId: string };
+  /** Several devices in one visit; `prefill.devices` are the assistant's suggestions, each still checked and saved by the customer. */
+  CustomerVisitCreate: { prefill?: { aiSessionId?: string; devices: { serviceId: string; description: string }[] } } | undefined;
   /**
    * `rebooked: 'invited'` after "Đặt lại thợ" when the former technician was invited.
    * `released: true` when opened from the `TECHNICIAN_RELEASED` notification.

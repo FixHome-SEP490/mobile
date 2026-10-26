@@ -27,6 +27,14 @@ it.each([{}, null, 'no-array'])('malformed items %p are an error rather than emp
 it.each([null, NaN, Infinity, '', '10abc', -1])('invalid lineTotal %p is never paid/zero proof', lineTotal => {
   expect(() => normalizeOrderResource('invoice', { id: 'i', serviceOrderId: 'o', paymentStatus: 'unpaid', grandTotal: 1, items: [{ id: 'l', description: 'Fixture', quantity: 1, lineTotal }] }, 'o', 'customer')).toThrow();
 });
+it('keeps the link of a parts request to its quotation or additional cost, which the handover check needs', () => {
+  const [row] = normalizeOrderResource('parts', [{
+    id: 'p', serviceOrderId: 'o', status: 'received', requestType: 'quotation', technicianId: 't', quotationId: 'q-1', additionalCostId: 'c-1', receivedAt: '2026-10-26T10:00:00Z',
+    items: [{ id: 'i', partNameSnapshot: 'Co đồng', quantity: 2, usageStatus: 'used', partCatalogId: 'cat', partSource: 'fixhome' }],
+  }], 'o', 'technician') as unknown as Record<string, unknown>[];
+  expect(row).toMatchObject({ quotationId: 'q-1', additionalCostId: 'c-1', receivedAt: '2026-10-26T10:00:00Z' });
+});
+
 it('malformed parts items cannot become an empty request or crash readiness', () => {
   expect(() => normalizeOrderResource('parts', [{ id: 'p', serviceOrderId: 'o', status: 'received', items: {} }], 'o', 'technician')).toThrow();
   expect(() => normalizeOrderResource('parts', [{ id: 'p', serviceOrderId: 'o', status: 'received', items: null }], 'o', 'customer')).toThrow();

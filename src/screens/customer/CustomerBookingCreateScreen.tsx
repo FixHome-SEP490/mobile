@@ -21,7 +21,7 @@ import {
 } from '@gorhom/bottom-sheet';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Banknote, CircleAlert, Clock, Image as ImageIcon, MapPin, MessageSquareText, Sparkles, Wrench, type LucideIcon } from 'lucide-react-native';
+import { Banknote, CircleAlert, Clock, Plus, Trash2, Image as ImageIcon, MapPin, Pencil, MessageSquareText, Sparkles, Wrench, type LucideIcon } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import {
   useFocusEffect,
@@ -59,6 +59,11 @@ import {
   serviceDetailTarget,
 } from './service-catalog';
 import { usersApi, type AddressData } from '../../api/users.api';
+import { VISIT_DEVICE_LIMIT, visitGroupsApi } from '../../api/visit-groups.api';
+import { createIdempotencyKey } from '../../api/part-requests.api';
+import { deviceProblem, duplicatePhoto, photoKey, visitProblem, type VisitDeviceDraft } from './customer-visit-draft';
+import { sendVisit } from './customer-visit-send';
+import { pickVisitPhotos } from './customer-visit-photos';
 import { useAuthStore } from '../../store';
 import { UserRole, type RootStackParamList } from '../../types';
 import { extractApiErrorMessage } from '../../utils/input-validation';
@@ -121,6 +126,7 @@ const MAX_BOOKING_PHOTO_BYTES = 10 * 1024 * 1024;
 const BOOKING_PHOTO_TTL_MS = 2 * 60 * 60 * 1000;
 
 interface BookingPhotoDraft extends BookingPhotoPreview {
+  assetId?: string;
   uploadId?: string;
   uploadExpiresAt?: number;
   uploadUncertain?: boolean;
@@ -246,6 +252,25 @@ export default function CustomerBookingCreateScreen() {
   });
 
   const [descriptionTouched, setDescriptionTouched] = useState(false);
+  // Several devices in one visit are offered when the server allows it; the assistant flow has its own entry.
+  const [multiDeviceEnabled, setMultiDeviceEnabled] = useState(false);
+  const [deviceLimit, setDeviceLimit] = useState(VISIT_DEVICE_LIMIT);
+  useEffect(() => {
+    let live = true;
+    visitGroupsApi.contact().then((c) => { if (live) { setMultiDeviceEnabled(c.enabled); setDeviceLimit(c.deviceLimit); } }, () => undefined);
+    return () => { live = false; };
+  }, []);
+  // Máy 1 is the booking form below; Máy 2 and 3 are these drafts, edited through the device tabs. With any extra the request goes as one visit.
+  const [extras, setExtras] = useState<VisitDeviceDraft[]>([]);
+  const [activeTab, setActiveTab] = useState('main');
+  const [pickerTarget, setPickerTarget] = useState('main');
+  const [touchedKeys, setTouchedKeys] = useState<string[]>([]);
+  const [visitBusy, setVisitBusy] = useState(false);
+  const [visitUnknown, setVisitUnknown] = useState(false);
+  const visitKey = useRef(createIdempotencyKey('visit'));
+  // Set once the visit is sent: the beforeRemove guard (one step back inside this screen) must not hold the screen then.
+  const leavingRef = useRef(false);
+  const extraSeq = useRef(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [submittingByOwner, setSubmittingByOwner] = useState<Record<string, boolean>>(() =>
@@ -351,6 +376,8 @@ export default function CustomerBookingCreateScreen() {
     setPhotoUploadError('');
     setUploadingPhotoUri(null);
     setDescriptionTouched(false);
+    setExtras([]);
+    setActiveTab('main');
     const state = customerOwnerId ? runtimeCreateStates[customerOwnerId] : null;
     setBookingStage((customerOwnerId && runtimeCompletedCreates.get(customerOwnerId)?.has(flowId))
       || (state && (state.kind === 'uncertain' || state.flowId === flowId)) ? 1 : 0);
@@ -508,19 +535,6 @@ export default function CustomerBookingCreateScreen() {
   const selectedAddress =
     addresses.find((address) => address.id === addressId) ?? null;
   const selectedAddressReady = addressReadyForBooking(selectedAddress);
-  const selectedPresentation = getServicePresentation(selectedService?.code);
-  const selectedIsOtherService = isOtherService(selectedService);
-  const descriptionSuggestions = getBookingDescriptionSuggestions(
-    selectedService?.code,
-    selectedService?.categoryName?.trim()
-      || pickerCategories.find((category) => category.id === selectedService?.categoryId)?.name,
-  );
-  const descriptionLabel = selectedIsOtherService
-    ? 'Mô tả yêu cầu'
-    : 'Mô tả sự cố';
-  const descriptionPlaceholder = selectedIsOtherService
-    ? 'Ví dụ: Cửa tủ bếp bung bản lề, cần người đến kiểm tra và sửa'
-    : 'Mô tả thiết bị và vấn đề cần sửa';
   const isAiFlow = Boolean(prefill?.aiSessionId);
   const showDeviceDetails = !isAiFlow && !!selectedService && isCatalogV2ServiceCode(selectedService.code);
   const pricingReady = isCatalogV2PreviewReady({
@@ -536,14 +550,7 @@ export default function CustomerBookingCreateScreen() {
     bookingPhotos.find((item) => item.uri === photo.uri)?.uploadUncertain
       || (customerOwnerId && runtimeUncertainPhotoUris.get(customerOwnerId)?.has(photo.uri)),
   ));
-  const descriptionError =
-    descriptionTouched && !description.trim()
-      ? selectedIsOtherService
-        ? 'Vui lòng mô tả công việc bạn cần hỗ trợ để tiếp tục.'
-        : 'Vui lòng mô tả sự cố để tiếp tục.'
-      : '';
-
-  const openPicker = () => {
+  const presentPicker = () => {
     if (pickerCategories.length === 0) {
       void servicesApi
         .getCategories()
@@ -554,16 +561,114 @@ export default function CustomerBookingCreateScreen() {
     }
     pickerSheetRef.current?.present();
   };
+  const openPicker = (target = 'main') => { setPickerTarget(target); presentPicker(); };
 
   const autoOpenedPickerRef = useRef(false);
   useEffect(() => {
     if (autoOpenedPickerRef.current) return;
     if (loading || loadError || selectedService || services.length === 0) return;
     autoOpenedPickerRef.current = true;
-    openPicker();
+    presentPicker();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, loadError, selectedService, services]);
 
+
+  const tabsOn = multiDeviceEnabled && !isAiFlow;
+  const onMain = activeTab === 'main' || !extras.some((d) => d.key === activeTab);
+  const activeExtra = onMain ? null : extras.find((d) => d.key === activeTab) ?? null;
+  const pickerSelectedId = pickerTarget === 'main' ? serviceId : extras.find((d) => d.key === pickerTarget)?.serviceId ?? '';
+  const chooseService = (service: ServiceItem) => {
+    // A new service starts with blank device facts: they were answered for the old one.
+    const picked = { serviceId: service.id, serviceName: service.name, priceSummary: service.priceSummary ?? null, serviceCode: service.code, deviceAttributes: {}, selectedVariantCode: null, preview: null };
+    if (pickerTarget === 'add') {
+      const device: VisitDeviceDraft = { key: `x-${(extraSeq.current += 1)}`, ...picked, description: '', photos: [] };
+      setExtras((list) => (list.length + 1 >= deviceLimit ? list : [...list, device]));
+      setActiveTab(device.key);
+    } else if (pickerTarget !== 'main') {
+      setExtras((list) => list.map((d) => (d.key === pickerTarget ? { ...d, ...picked } : d)));
+    } else setServiceId(service.id);
+    pickerSheetRef.current?.dismiss();
+  };
+  const extraReady = (d: VisitDeviceDraft) => isCatalogV2PreviewReady({
+    service: { id: d.serviceId, code: d.serviceCode }, preview: d.preview ?? null, selectedVariantCode: d.selectedVariantCode ?? null, isAiFlow: false,
+  });
+  const visitCards = [
+    { key: 'main', name: selectedService?.name ?? '', code: selectedService?.code },
+    ...extras.map((d) => ({ key: d.key, name: d.serviceName, code: d.serviceCode ?? services.find((x) => x.id === d.serviceId)?.code })),
+  ];
+  const removeCard = (key: string) => {
+    if (key !== 'main') { removeExtra(key); return; }
+    const first = extras[0];
+    if (!first) return;
+    setServiceId(first.serviceId);
+    setDescription(first.description);
+    setDescriptionTouched(false);
+    setDeviceState({ serviceId: first.serviceId, attrs: first.deviceAttributes ?? {}, code: first.selectedVariantCode ?? null, preview: first.preview ?? null });
+    updateBookingPhotos(first.photos.map((p) => ({ uri: p.uri, name: p.name, type: p.type, assetId: p.assetId, sizeBytes: p.sizeBytes })));
+    setPhotoUploadError('');
+    setExtras((list) => list.slice(1));
+    setActiveTab('main');
+  };
+  const patchExtra = (key: string, change: Partial<VisitDeviceDraft>) =>
+    setExtras((list) => list.map((d) => (d.key === key ? { ...d, ...change } : d)));
+  const removeExtra = (key: string) => { setExtras((list) => list.filter((d) => d.key !== key)); setActiveTab('main'); };
+  const visitDevices = (): VisitDeviceDraft[] => [
+    ...(selectedService ? [{
+      key: 'main', serviceId: selectedService.id, serviceName: selectedService.name, priceSummary: selectedService.priceSummary ?? null, description,
+      photos: bookingPhotos.map((p) => ({ uri: p.uri, name: p.name, type: p.type, assetId: p.assetId, sizeBytes: p.sizeBytes })),
+      ...(showDeviceDetails ? { deviceAttributes: device.attrs, selectedVariantCode: device.code } : {}),
+    }] : []),
+    ...extras,
+  ];
+
+  const curService = onMain ? selectedService : services.find((x) => x.id === activeExtra?.serviceId) ?? null;
+  const curPresentation = getServicePresentation(curService?.code);
+  const curIsOther = isOtherService(curService);
+  const curSuggestions = getBookingDescriptionSuggestions(
+    curService?.code,
+    curService?.categoryName?.trim() || pickerCategories.find((category) => category.id === curService?.categoryId)?.name,
+  );
+  const curDescriptionLabel = curIsOther ? 'Mô tả yêu cầu' : 'Mô tả sự cố';
+  const curDescriptionPlaceholder = curIsOther
+    ? 'Ví dụ: Cửa tủ bếp bung bản lề, cần người đến kiểm tra và sửa'
+    : 'Mô tả thiết bị và vấn đề cần sửa';
+  const curDescription = onMain ? description : activeExtra?.description ?? '';
+  const curPhotos: BookingPhotoDraft[] = onMain ? bookingPhotos : activeExtra?.photos ?? [];
+  const curTouched = onMain ? descriptionTouched : !!activeExtra && touchedKeys.includes(activeExtra.key);
+  const curDescriptionError = curTouched && !curDescription.trim()
+    ? curIsOther ? 'Vui lòng mô tả công việc bạn cần hỗ trợ để tiếp tục.' : 'Vui lòng mô tả sự cố để tiếp tục.'
+    : '';
+  const touchCur = () => {
+    if (onMain) setDescriptionTouched(true);
+    else if (activeExtra) setTouchedKeys((keys) => (keys.includes(activeExtra.key) ? keys : [...keys, activeExtra.key]));
+  };
+  const setCurDescription = (text: string) => { if (onMain) setDescription(text); else if (activeExtra) patchExtra(activeExtra.key, { description: text }); };
+  const patchDeviceOf = (key: string, change: { attrs?: BookingDeviceAttributes; code?: string | null; preview?: CatalogPricingPreview | null }) => {
+    if (key === 'main') patchDevice(change);
+    else patchExtra(key, {
+      ...(change.attrs !== undefined ? { deviceAttributes: change.attrs } : {}),
+      ...(change.code !== undefined ? { selectedVariantCode: change.code } : {}),
+      ...(change.preview !== undefined ? { preview: change.preview } : {}),
+    });
+  };
+  const deviceForms = isAiFlow ? [] : [
+    ...(selectedService && isCatalogV2ServiceCode(selectedService.code)
+      ? [{ key: 'main', serviceId: selectedService.id, attrs: device.attrs, code: device.code }] : []),
+    ...extras.filter((d) => isCatalogV2ServiceCode(d.serviceCode))
+      .map((d) => ({ key: d.key, serviceId: d.serviceId, attrs: d.deviceAttributes ?? ({} as BookingDeviceAttributes), code: d.selectedVariantCode ?? null })),
+  ];
+  const removeCurPhoto = (uri: string) => {
+    if (onMain) removeBookingPhoto(uri);
+    else if (activeExtra) patchExtra(activeExtra.key, { photos: activeExtra.photos.filter((p) => p.uri !== uri) });
+  };
+  const pickCurPhotos = async () => {
+    if (onMain) { await pickBookingPhotos(); return; }
+    if (!activeExtra) return;
+    const others = [...bookingPhotos.map(photoKey), ...extras.filter((d) => d.key !== activeExtra.key).flatMap((d) => d.photos.map(photoKey))];
+    const { photos, error } = await pickVisitPhotos(activeExtra.photos, others);
+    patchExtra(activeExtra.key, { photos });
+    setPhotoUploadError(error);
+  };
 
   const pickerServices = services.filter((service) => {
     if (pickerCategoryId && service.categoryId !== pickerCategoryId) return false;
@@ -623,9 +728,15 @@ export default function CustomerBookingCreateScreen() {
       const next = [...bookingPhotosRef.current];
       const knownUris = new Set(next.map((photo) => photo.uri));
       const issues: string[] = [];
+      // One photo belongs to one device only: the photos of Máy 2-3 are off limits here.
+      const usedByExtras = new Set(extras.flatMap((d) => d.photos.map(photoKey)));
       for (const asset of result.assets) {
         if (next.length >= MAX_BOOKING_PHOTOS) break;
         if (!asset.uri || knownUris.has(asset.uri)) continue;
+        if (usedByExtras.has(photoKey({ uri: asset.uri, name: asset.fileName?.trim(), assetId: asset.assetId, sizeBytes: asset.fileSize }))) {
+          issues.push('Ảnh của mỗi thiết bị phải riêng biệt. Ảnh này đã dùng cho máy khác.');
+          continue;
+        }
         if (uncertainPhotoUrisForOwner(ownerUserId).has(asset.uri)) {
           issues.push('Ảnh có lần tải chưa xác định. Hãy bỏ ảnh đó và chọn ảnh khác.');
           continue;
@@ -648,6 +759,7 @@ export default function CustomerBookingCreateScreen() {
           name: bookingPhotoName(asset.fileName, type),
           type,
           ...(asset.fileSize !== undefined ? { sizeBytes: asset.fileSize } : {}),
+          ...(asset.assetId ? { assetId: asset.assetId } : {}),
         });
         knownUris.add(asset.uri);
       }
@@ -983,7 +1095,19 @@ export default function CustomerBookingCreateScreen() {
     }
     setDescriptionTouched(true);
     if (!description.trim()) {
+      setActiveTab('main');
       descriptionInputRef.current?.focus();
+      return;
+    }
+    const badExtra = extras.findIndex((d) => deviceProblem(d) || !extraReady(d));
+    if (badExtra >= 0) {
+      setActiveTab(extras[badExtra].key);
+      setTouchedKeys((keys) => [...keys, extras[badExtra].key]);
+      Alert.alert(`Máy ${badExtra + 2} chưa đủ thông tin`, deviceProblem(extras[badExtra]) ?? 'Vui lòng chọn thông tin thiết bị và chờ hệ thống xác nhận giá.');
+      return;
+    }
+    if (extras.length > 0 && duplicatePhoto(visitDevices())) {
+      Alert.alert('Ảnh bị trùng giữa các máy', 'Ảnh của mỗi thiết bị phải riêng biệt. Hãy bỏ ảnh trùng ở một trong các máy.');
       return;
     }
     void Haptics.selectionAsync();
@@ -1007,6 +1131,46 @@ export default function CustomerBookingCreateScreen() {
     requestReview();
   };
 
+  const sendVisitNow = async () => {
+    if (visitBusy || !schedule || !selectedAddress) return;
+    setVisitBusy(true); setReviewError('');
+    try {
+      const visit = await sendVisit({
+        devices: visitDevices(), addressId: selectedAddress.id, schedule, note: customerNote, idempotencyKey: visitKey.current,
+        onUploaded: (uploaded) => setExtras(uploaded.filter((d) => d.key !== 'main')),
+      });
+      // Like a single booking: Home underneath, then the technician list for the whole visit.
+      leavingRef.current = true;
+      navigation.reset({
+        index: 1,
+        routes: [
+          { name: 'CustomerMain' },
+          visit.leadBookingId
+            ? { name: 'CustomerMatching', params: { bookingId: visit.leadBookingId, visitGroupId: visit.id } }
+            : { name: 'CustomerVisit', params: { visitGroupId: visit.id } },
+        ],
+      });
+    } catch (e) {
+      // A send with no answer may have been saved: the same key makes a retry safe, but the customer checks first.
+      if (!(e as { response?: unknown })?.response) {
+        setVisitUnknown(true);
+        setReviewError('Chưa xác nhận được kết quả gửi yêu cầu. Vui lòng kiểm tra Hoạt động của bạn trước khi gửi lại.');
+      } else setReviewError(extractApiErrorMessage(e, 'Chưa gửi được lượt sửa. Vui lòng kiểm tra thông tin rồi thử lại.'));
+    } finally { setVisitBusy(false); }
+  };
+
+  const confirmVisit = () => {
+    if (reviewDisabled || visitBusy || visitUnknown) return;
+    if (bookingPhotos.some((p) => p.uploadUncertain)) {
+      setReviewError('Có ảnh chưa xác nhận được lượt tải. Hãy quay lại bước trước để chọn lại ảnh.');
+      return;
+    }
+    const problem = visitProblem(visitDevices(), selectedAddressReady, schedule);
+    if (problem) { setReviewError(problem); return; }
+    setReviewError('');
+    void sendVisitNow();
+  };
+
   const action = (label: string, onPress: () => void, disabled = false, accessibilityLabel = label) => (
     <TouchableOpacity
       accessibilityRole="button"
@@ -1021,6 +1185,7 @@ export default function CustomerBookingCreateScreen() {
 
   /** One step back inside this screen (address editor → review → previous stage), or false when none is left. */
   const stepBack = (): boolean => {
+    if (leavingRef.current) return false;
     if (addressEditorOpen) { setAddressEditorOpen(false); return true; }
     if (visibleReviewSnapshot && !visibleCreatedBookingId) { dismissReview(); return true; }
     if (bookingStage > 0 && !visibleCreatedBookingId) { showBookingStage((bookingStage - 1) as 0 | 1); return true; }
@@ -1187,6 +1352,18 @@ export default function CustomerBookingCreateScreen() {
             {bookingStage === 0 && (
               <>
 
+            {tabsOn && extras.length === 0 && (
+              <TouchableOpacity
+                testID="booking-multi-device"
+                accessibilityRole="button"
+                disabled={reviewDisabled}
+                onPress={() => openPicker(selectedService ? 'add' : 'main')}
+                style={[styles.option, { borderColor: colors.border, backgroundColor: colors.surface }]}
+              >
+                <Text style={{ color: colors.text, fontWeight: '700' }}>Có nhiều thiết bị cần sửa?</Text>
+                <Text style={{ color: colors.primary }}>Đặt nhiều thiết bị</Text>
+              </TouchableOpacity>
+            )}
             <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}>Dịch vụ</Text>
             {services.length === 0 && (
               <Text style={{ color: colors.textSecondary }}>
@@ -1194,17 +1371,79 @@ export default function CustomerBookingCreateScreen() {
               </Text>
             )}
 
-            {!!selectedService ? (
+            {tabsOn && extras.length > 0 ? (
+              <View style={{ gap: 8 }} testID="visit-services">
+                {visitCards.map((card, index) => {
+                  const selected = card.key === (onMain ? 'main' : activeTab);
+                  const art = getServicePresentation(card.code);
+                  return (
+                    <TouchableOpacity
+                      key={card.key}
+                      testID={`visit-service-box-${index + 1}`}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={`Dịch vụ đã chọn: ${card.name}. Chạm để nhập thông tin.`}
+                      style={[styles.option, { borderColor: selected ? colors.primary : colors.border, backgroundColor: colors.surface }]}
+                      onPress={() => setActiveTab(card.key)}
+                    >
+                      <View style={styles.serviceRow}>
+                        {art ? (
+                          <Image source={art.imageSource} style={styles.serviceArt} resizeMode="contain" accessible={false} />
+                        ) : (
+                          <View style={[styles.serviceArt, styles.serviceArtFallback, { backgroundColor: colors.divider }]} accessible={false}>
+                            <Ionicons name="construct-outline" size={24} color={colors.textSecondary} />
+                          </View>
+                        )}
+                        <View style={styles.serviceCopy}>
+                          <Text style={{ color: colors.text, fontWeight: '700' }}>{card.name}</Text>
+                        </View>
+                        <TouchableOpacity
+                          accessibilityRole="button"
+                          accessibilityLabel={`Đổi dịch vụ ${card.name}`}
+                          disabled={reviewDisabled}
+                          onPress={() => { setActiveTab(card.key); openPicker(card.key); }}
+                          style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          <Pencil size={20} color={colors.primary} strokeWidth={1.75} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          testID={`visit-service-remove-${index + 1}`}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Xóa dịch vụ ${card.name}`}
+                          disabled={reviewDisabled}
+                          onPress={() => removeCard(card.key)}
+                          style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          <Trash2 size={20} color={colors.error} strokeWidth={1.75} />
+                        </TouchableOpacity>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+                {selectedService && extras.length + 1 < deviceLimit && !reviewDisabled && (
+                  <TouchableOpacity
+                    testID="visit-add-device"
+                    accessibilityRole="button"
+                    accessibilityLabel="Thêm dịch vụ"
+                    onPress={() => openPicker('add')}
+                    style={[styles.option, { borderColor: colors.primary, borderStyle: 'dashed', backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }]}
+                  >
+                    <Plus size={20} color={colors.primary} strokeWidth={1.75} />
+                    <Text style={{ color: colors.primary, fontWeight: '600' }}>Thêm dịch vụ</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : !!curService ? (
               <TouchableOpacity
                 accessibilityRole="button"
-                accessibilityLabel={`Dịch vụ đã chọn: ${selectedService.name}. Chạm để đổi dịch vụ.`}
+                accessibilityLabel={`Dịch vụ đã chọn: ${curService.name}. Chạm để đổi dịch vụ.`}
                 style={[styles.option, { borderColor: colors.primary, backgroundColor: colors.surface }]}
-                onPress={openPicker}
+                onPress={() => openPicker(onMain ? 'main' : activeExtra?.key)}
               >
                 <View style={styles.serviceRow}>
-                  {selectedPresentation ? (
+                  {curPresentation ? (
                     <Image
-                      source={selectedPresentation.imageSource}
+                      source={curPresentation.imageSource}
                       style={styles.serviceArt}
                       resizeMode="contain"
                       accessible={false}
@@ -1220,8 +1459,10 @@ export default function CustomerBookingCreateScreen() {
                     </View>
                   )}
                   <View style={styles.serviceCopy}>
-                    <Text style={{ color: colors.text, fontWeight: '700' }}>{selectedService.name}</Text>
-                    <Text style={{ color: colors.primary }}>Đổi dịch vụ</Text>
+                    <Text style={{ color: colors.text, fontWeight: '700' }}>{curService.name}</Text>
+                  </View>
+                  <View style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }} accessible={false}>
+                    <Pencil size={20} color={colors.primary} strokeWidth={1.75} />
                   </View>
                 </View>
               </TouchableOpacity>
@@ -1229,38 +1470,38 @@ export default function CustomerBookingCreateScreen() {
               <TouchableOpacity
                 accessibilityRole="button"
                 style={[styles.option, { borderColor: colors.border, backgroundColor: colors.surface }]}
-                onPress={openPicker}
+                onPress={() => openPicker(onMain ? 'main' : activeExtra?.key)}
               >
                 <Text style={{ color: colors.textSecondary }}>Chọn dịch vụ...</Text>
               </TouchableOpacity>
             ) : null}
 
-            {!!selectedService && (
+            {!!curService && (
               <View style={{ gap: 8 }}>
               <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}>
                 Chi phí ước tính
               </Text>
               <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border, gap: 4 }]}>
-                {selectedIsOtherService ? (
+                {curIsOther ? (
                   <Text style={{ color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '600' }}>
                     Yêu cầu ngoài danh sách — kỹ thuật viên sẽ khảo sát và báo giá
                   </Text>
                 ) : (
                   <>
                     <Text style={{ color: colors.primaryStrong, fontSize: 20, lineHeight: 28, fontWeight: '700' }}>
-                      {resolveServicePrice(selectedService).caption
-                        ? resolveServicePrice(selectedService).text.replace(/^Tham khảo\s+/i, '')
-                        : servicePricingLabel(selectedService)}
+                      {resolveServicePrice(curService).caption
+                        ? resolveServicePrice(curService).text.replace(/^Tham khảo\s+/i, '')
+                        : servicePricingLabel(curService)}
                     </Text>
-                    {!!resolveServicePrice(selectedService).caption && (
+                    {!!resolveServicePrice(curService).caption && (
                       <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }}>
-                        {resolveServicePrice(selectedService).caption}
+                        {resolveServicePrice(curService).caption}
                       </Text>
                     )}
                   </>
                 )}
                 <Text style={[styles.note, { color: colors.textSecondary, marginTop: 4 }]}>
-                  {selectedIsOtherService
+                  {curIsOther
                     ? 'Mô tả thiết bị và công việc cần hỗ trợ.'
                     : 'Mỗi yêu cầu đặt 1 đơn vị dịch vụ.'}
                 </Text>
@@ -1268,18 +1509,19 @@ export default function CustomerBookingCreateScreen() {
               </View>
             )}
 
-            {showDeviceDetails && selectedService ? (
-              <ServiceDeviceDetails
-                key={selectedService.id}
-                serviceId={selectedService.id}
-                deviceAttributes={device.attrs}
-                selectedVariantCode={device.code}
-                disabled={reviewDisabled}
-                onChangeAttributes={(attrs) => patchDevice({ attrs })}
-                onChangeVariantCode={(code) => patchDevice({ code })}
-                onPreview={(preview) => patchDevice({ preview })}
-              />
-            ) : null}
+            {deviceForms.map((d) => (
+              <View key={`${d.key}:${d.serviceId}`} style={d.key === (onMain ? 'main' : activeTab) ? undefined : styles.hiddenForm}>
+                <ServiceDeviceDetails
+                  serviceId={d.serviceId}
+                  deviceAttributes={d.attrs}
+                  selectedVariantCode={d.code}
+                  disabled={reviewDisabled}
+                  onChangeAttributes={(attrs) => patchDeviceOf(d.key, { attrs })}
+                  onChangeVariantCode={(code) => patchDeviceOf(d.key, { code })}
+                  onPreview={(preview) => patchDeviceOf(d.key, { preview })}
+                />
+              </View>
+            ))}
 
             <View
               onLayout={(event) => {
@@ -1289,28 +1531,28 @@ export default function CustomerBookingCreateScreen() {
 
               <Text
                 accessibilityRole="header"
-                accessibilityLabel={`${descriptionLabel}, bắt buộc`}
+                accessibilityLabel={`${curDescriptionLabel}, bắt buộc`}
                 style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}
               >
-                {descriptionLabel}
+                {curDescriptionLabel}
                 <Text style={{ color: colors.error }}> *</Text>
               </Text>
               <TextInput
                 ref={descriptionInputRef}
-                accessibilityLabel={selectedIsOtherService ? 'Mô tả yêu cầu' : 'Mô tả sự cố'}
-                accessibilityHint={descriptionPlaceholder}
-                value={description}
-                onChangeText={setDescription}
-                onBlur={() => setDescriptionTouched(true)}
+                accessibilityLabel={curIsOther ? 'Mô tả yêu cầu' : 'Mô tả sự cố'}
+                accessibilityHint={curDescriptionPlaceholder}
+                value={curDescription}
+                onChangeText={setCurDescription}
+                onBlur={touchCur}
                 multiline
                 maxLength={5000}
-                placeholder={descriptionPlaceholder}
+                placeholder={curDescriptionPlaceholder}
                 placeholderTextColor={colors.textSecondary}
                 style={[
                   styles.input,
                   {
                     color: colors.text,
-                    borderColor: descriptionError ? colors.error : colors.border,
+                    borderColor: curDescriptionError ? colors.error : colors.border,
                     backgroundColor: colors.surface,
                   },
                 ]}
@@ -1318,9 +1560,9 @@ export default function CustomerBookingCreateScreen() {
               <View style={styles.descriptionSuggestions}>
                 <Text style={[styles.suggestionHint, { color: colors.textSecondary }]}>Chạm để thêm hoặc bỏ gợi ý. Bạn vẫn có thể chỉnh sửa mô tả.</Text>
                 <View style={styles.suggestionChips}>
-                  {descriptionSuggestions.map((suggestion) => {
-                    const selected = hasBookingDescriptionSuggestion(description, suggestion);
-                    const disabled = !selected && appendBookingDescriptionSuggestion(description, suggestion) === description;
+                  {curSuggestions.map((suggestion) => {
+                    const selected = hasBookingDescriptionSuggestion(curDescription, suggestion);
+                    const disabled = !selected && appendBookingDescriptionSuggestion(curDescription, suggestion) === curDescription;
                     return (
                       <TouchableOpacity
                         key={suggestion}
@@ -1328,8 +1570,7 @@ export default function CustomerBookingCreateScreen() {
                         accessibilityLabel={`Gợi ý: ${suggestion}`}
                         accessibilityState={{ selected, disabled }}
                         disabled={disabled}
-                        onPress={() => setDescription((current) =>
-                          toggleBookingDescriptionSuggestion(current, suggestion))}
+                        onPress={() => setCurDescription(toggleBookingDescriptionSuggestion(curDescription, suggestion))}
                         style={[styles.suggestionChip, {
                           backgroundColor: selected ? colors.primarySoft : colors.surface,
                           borderColor: selected ? colors.primary : colors.border,
@@ -1343,14 +1584,14 @@ export default function CustomerBookingCreateScreen() {
                   })}
                 </View>
               </View>
-              {!!descriptionError && (
+              {!!curDescriptionError && (
                 <View style={styles.fieldError}>
                   <CircleAlert color={colors.error} size={16} />
                   <Text
                     accessibilityLiveRegion="polite"
                     style={[styles.fieldErrorText, { color: colors.error }]}
                   >
-                    {descriptionError}
+                    {curDescriptionError}
                   </Text>
                 </View>
               )}
@@ -1365,7 +1606,7 @@ export default function CustomerBookingCreateScreen() {
                 Tối đa 5 ảnh JPEG, PNG hoặc WebP. Chọn lại ảnh từ AI nếu cần đính kèm.
               </Text>
               <View style={styles.photoList}>
-                {bookingPhotos.map((photo, index) => (
+                {curPhotos.map((photo, index) => (
                   <View key={photo.uri} style={styles.photoItem}>
                     <Image
                       source={{ uri: photo.uri }}
@@ -1380,7 +1621,7 @@ export default function CustomerBookingCreateScreen() {
                       accessibilityHint="Gỡ ảnh khỏi yêu cầu hiện tại"
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       disabled={reviewDisabled}
-                      onPress={() => removeBookingPhoto(photo.uri)}
+                      onPress={() => removeCurPhoto(photo.uri)}
                       style={[styles.removePhotoButton, { backgroundColor: colors.surface }]}
                     >
                       <Ionicons name="close-circle" size={24} color={colors.error} />
@@ -1405,21 +1646,21 @@ export default function CustomerBookingCreateScreen() {
                 <TouchableOpacity
                   accessibilityRole="button"
                   accessibilityLabel="Thêm ảnh sự cố"
-                  accessibilityHint={`Đã chọn ${bookingPhotos.length} trên ${MAX_BOOKING_PHOTOS} ảnh`}
-                  disabled={reviewDisabled || bookingPhotos.length >= MAX_BOOKING_PHOTOS}
-                  onPress={() => { void pickBookingPhotos(); }}
+                  accessibilityHint={`Đã chọn ${curPhotos.length} trên ${MAX_BOOKING_PHOTOS} ảnh`}
+                  disabled={reviewDisabled || curPhotos.length >= MAX_BOOKING_PHOTOS}
+                  onPress={() => { void pickCurPhotos(); }}
                   style={[
                     styles.addPhotoButton,
                     {
                       borderColor: colors.border,
                       backgroundColor: colors.background,
-                      opacity: reviewDisabled || bookingPhotos.length >= MAX_BOOKING_PHOTOS ? 0.55 : 1,
+                      opacity: reviewDisabled || curPhotos.length >= MAX_BOOKING_PHOTOS ? 0.55 : 1,
                     },
                   ]}
                 >
                   <Ionicons name="add" size={24} color={colors.primary} />
                   <Text style={{ color: colors.primary, fontWeight: '600' }}>
-                    Thêm ảnh ({bookingPhotos.length}/{MAX_BOOKING_PHOTOS})
+                    Thêm ảnh ({curPhotos.length}/{MAX_BOOKING_PHOTOS})
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1428,7 +1669,7 @@ export default function CustomerBookingCreateScreen() {
                   {photoUploadError}
                 </Text>
               )}
-              {chatAttachments.length > 0 && (
+              {onMain && chatAttachments.length > 0 && (
                 <View testID="booking-chat-attachments" style={[styles.chatAttachments, { backgroundColor: colors.tone.warning.bg }]}>
                   <Text style={{ flex: 1, color: colors.tone.warning.text, fontSize: 13, lineHeight: 19 }}>
                     {`Gửi kèm từ trò chuyện với trợ lý: ${chatAttachmentSummary(chatAttachments)}. Kỹ thuật viên xem được trước khi nhận đơn.`}
@@ -1662,9 +1903,12 @@ export default function CustomerBookingCreateScreen() {
           {!visibleReviewSnapshot && !visibleCreatedBookingId && (
             bookingStage === 0
               ? <BookingPrimaryAction label="Tiếp tục: Chọn địa chỉ" onPress={continueToAddress} disabled={reviewDisabled || !pricingReady} colors={colors} />
-              : !addressEditorOpen && <BookingPrimaryAction label={isSubmitting ? 'Đang gửi yêu cầu...'
-                : visibleUncertainAttempt ? 'Chờ xác minh yêu cầu' : 'Xem lại yêu cầu'}
-                onPress={continueToReview} disabled={reviewDisabled} colors={colors} />
+              : !addressEditorOpen && (extras.length > 0
+                ? <BookingPrimaryAction label={visitBusy ? 'Đang gửi yêu cầu...' : `Gửi yêu cầu ${extras.length + 1} thiết bị`}
+                  onPress={confirmVisit} disabled={reviewDisabled || visitBusy || visitUnknown} colors={colors} />
+                : <BookingPrimaryAction label={isSubmitting ? 'Đang gửi yêu cầu...'
+                  : visibleUncertainAttempt ? 'Chờ xác minh yêu cầu' : 'Xem lại yêu cầu'}
+                  onPress={continueToReview} disabled={reviewDisabled} colors={colors} />)
           )}
           {visibleReviewSnapshot && !visibleCreatedBookingId && (
             <>
@@ -1728,23 +1972,22 @@ export default function CustomerBookingCreateScreen() {
           renderItem={({ item: service }) => (
             <TouchableOpacity
               accessibilityRole="radio"
-              accessibilityState={{ checked: serviceId === service.id }}
+              accessibilityState={{ checked: pickerSelectedId === service.id }}
               style={[
                 styles.option,
                 {
-                  borderColor: serviceId === service.id ? colors.primary : colors.border,
+                  borderColor: pickerSelectedId === service.id ? colors.primary : colors.border,
                   backgroundColor: colors.surface,
                 },
               ]}
               onPress={() => {
                 Haptics.selectionAsync();
-                setServiceId(service.id);
-                pickerSheetRef.current?.dismiss();
+                chooseService(service);
               }}
             >
               <Text style={{ color: colors.text }}>
                 {service.name}
-                {serviceId === service.id ? ' ✓' : ''}
+                {pickerSelectedId === service.id ? ' ✓' : ''}
               </Text>
               {servicePriceSummaryText(service.priceSummary) ? (
                 <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
@@ -1841,6 +2084,7 @@ const styles = StyleSheet.create({
   serviceArtFallback: { alignItems: 'center', justifyContent: 'center' },
   serviceCopy: { flex: 1, gap: 2 },
   input: { minHeight: 94, padding: 12, borderWidth: 1, borderRadius: 14, textAlignVertical: 'top', fontSize: 16, lineHeight: 24 },
+  hiddenForm: { display: 'none' },
   descriptionSuggestions: { gap: 8, marginTop: 10 },
   suggestionHint: { fontSize: 12, lineHeight: 16 },
   suggestionChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

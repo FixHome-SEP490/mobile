@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useReduceMotion } from '../../../hooks/useReduceMotion';
 import { useLiveRefresh } from '../../../hooks/useLiveRefresh';
@@ -80,6 +81,13 @@ function LiveOrderRefresh() {
   const pending = snapshot?.pendingIntent === true;
   const pendingRef = useRef(pending);
   const missed = useRef(false);
+  const refreshRef = useRef(refresh);
+  useEffect(() => { refreshRef.current = refresh; });
+  const firstFocus = useRef(true);
+  useFocusEffect(useCallback(() => {
+    if (firstFocus.current) { firstFocus.current = false; return; }
+    if (pendingRef.current) missed.current = true; else void refreshRef.current('focus');
+  }, []));
   useEffect(() => {
     pendingRef.current = pending;
     if (!pending && missed.current) { missed.current = false; void refresh('live'); }

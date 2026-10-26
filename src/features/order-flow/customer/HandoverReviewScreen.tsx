@@ -6,6 +6,8 @@ import { hasCompletionRequest } from './payment-facts';
 import { handoverSeenKey, markHandoverSeen } from './handover-seen';
 import { DetailRow, ReadOnlyNotice, Section, TaskScreenShell } from '../shared/TaskScreenShell';
 import { M6InvoiceSummary } from '../shared/M6InvoiceSummary';
+import VisitDevicesSummary from '../shared/VisitDevicesSummary';
+import { VISIT_DEVICE_STATE_LABEL } from '../../../screens/customer/customer-visit';
 import { HubSection, type HubLink } from '../shared/TechnicianOrderHub';
 import { Camera, Info, ReceiptText } from 'lucide-react-native';
 import { vnDateTimeString } from '../../../utils/vn-time';
@@ -39,6 +41,8 @@ export default function HandoverReviewScreen() {
   const invoice = snapshot?.resources.invoice.status === 'ready' ? snapshot.resources.invoice.data : null;
   const invoiceReady = !!invoice;
   const revoked = !current;
+  // A device of a multi-device visit is paid together with the others, from the visit.
+  const visitGroupId = order?.visitGroupId ?? null;
 
   if (!current || !order) {
     return (
@@ -63,17 +67,25 @@ export default function HandoverReviewScreen() {
         disabled: !canRefresh,
         onPress: () => { if (canRefresh) void refresh('manual'); },
       }}
-      primary={{
-        label: 'Tiếp tục thanh toán',
-        testID: 'handover-continue-payment',
-        disabled: revoked,
-        accessibilityHint: 'Trở về bước thanh toán hiện tại theo trạng thái máy chủ',
-        onPress: () => {
-          if (revoked) return;
-          markHandoverSeen(handoverSeenKey(order.id, order.completionRequestedAt));
-          navigation.navigate('OrderTask');
-        },
-      }}
+      primary={visitGroupId
+        ? {
+          label: 'Thanh toán cả lượt',
+          testID: 'visit-payment-open',
+          disabled: revoked,
+          accessibilityHint: 'Mở lượt sửa nhiều thiết bị để thanh toán một lần cho cả lượt',
+          onPress: () => { if (!revoked) navigation.navigate('CustomerVisit', { visitGroupId }); },
+        }
+        : {
+          label: 'Tiếp tục thanh toán',
+          testID: 'handover-continue-payment',
+          disabled: revoked,
+          accessibilityHint: 'Trở về bước thanh toán hiện tại theo trạng thái máy chủ',
+          onPress: () => {
+            if (revoked) return;
+            markHandoverSeen(handoverSeenKey(order.id, order.completionRequestedAt));
+            navigation.navigate('OrderTask');
+          },
+        }}
     >
       <Section title="Thông tin bàn giao">
         <DetailRow label="Mã đơn" value={order.code} />
@@ -89,6 +101,10 @@ export default function HandoverReviewScreen() {
       ) : invoice ? (
         <M6InvoiceSummary invoice={invoice} />
       ) : null}
+      {visitGroupId ? (
+        <ReadOnlyNotice>Thiết bị này thuộc một lượt sửa nhiều máy: bạn thanh toán một lần cho cả lượt, sau khi mọi thiết bị đã có kết quả, và chỉ trả cho máy đã sửa xong.</ReadOnlyNotice>
+      ) : null}
+      {visitGroupId ? <VisitDevicesSummary groupId={visitGroupId} stateLabel={(state) => VISIT_DEVICE_STATE_LABEL[state]} /> : null}
       <ReadOnlyNotice>Bạn không cần xác nhận đồng ý mới được thanh toán. Cần báo vấn đề, hãy dùng kênh hỗ trợ riêng.</ReadOnlyNotice>
       <HubSection title="Xem thêm" items={LINKS.map(link => ({ ...link, disabled: revoked }))} onOpen={screen => { if (!revoked) navigation.navigate(screen as never); }} />
     </TaskScreenShell>

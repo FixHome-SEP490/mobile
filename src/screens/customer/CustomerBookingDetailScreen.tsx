@@ -81,6 +81,11 @@ export default function CustomerBookingDetailScreen() {
   }, [bookingId, loader]));
 
   const { booking, loading, refreshing, error } = state;
+  // A device of a multi-device visit is moved, cancelled and paid with the whole visit, so its page is the visit page.
+  const visitGroupId = booking?.visitGroupId;
+  useEffect(() => {
+    if (visitGroupId) navigation.replace('CustomerVisit', { visitGroupId });
+  }, [visitGroupId, navigation]);
 
   // Like the web page: while waiting for a technician, look again every 5 s so the
   // order appears without a manual pull. Quiet: no spinner, errors keep the last data.

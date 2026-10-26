@@ -164,7 +164,9 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
     if (resolution.taskId === 'C06') return <RepairStatusScreen />;
     if (resolution.taskId === 'C07') return <ExtraDecisionScreen />;
     if (resolution.taskId === 'C08') return <HandoverReviewScreen />;
-    if ((resolution.taskId === 'C09' || resolution.taskId === 'C10') && !handoverSeen) return <HandoverReviewScreen />;
+    // A device of a multi-device visit is paid with the whole visit, once every device has its result: its payment step is the handover
+    // review itself (details of the device and of every device), whose button opens the visit's payment.
+    if ((resolution.taskId === 'C09' || resolution.taskId === 'C10') && (!handoverSeen || handoverOrder?.visitGroupId)) return <HandoverReviewScreen />;
     if (resolution.taskId === 'C09') return <PaymentMethodScreen />;
     if (resolution.taskId === 'C10') return <CashConfirmationScreen />;
     if (resolution.taskId === 'C11') return <PaymentResultScreen />;

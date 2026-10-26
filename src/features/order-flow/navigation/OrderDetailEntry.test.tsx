@@ -16,6 +16,16 @@ jest.mock('./OrderFlowNavigator', () => {
   const ReactRuntime = jest.requireActual('react');
   return { __esModule: true, default: ({ role }: { role: string }) => ReactRuntime.createElement(Native.Text, { testID: 'role' }, role) };
 });
+jest.mock('@react-navigation/bottom-tabs', () => {
+  const ReactRuntime = jest.requireActual('react');
+  const Native = jest.requireActual('react-native');
+  return {
+    createBottomTabNavigator: () => ({
+      Navigator: ({ children }: { children: React.ReactNode }) => ReactRuntime.createElement(Native.View, null, ReactRuntime.Children.toArray(children)[0]),
+      Screen: ({ component: Component }: { component: React.ComponentType }) => ReactRuntime.createElement(Component),
+    }),
+  };
+});
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: jest.requireActual('react-native').View }));
 
 const render = async (Entry: React.ComponentType) => {
@@ -44,6 +54,13 @@ describe('production order detail entry', () => {
       const r = await render(Entry);
       expect(r.root.findAllByProps({ testID: 'session' })).toHaveLength(0);
     }
+  });
+
+  it('puts the technician order in its own device tab', async () => {
+    mockAuth = { isAuthenticated: true, user: { role: 'technician' } };
+    const r = await render(TechnicianOrderDetailEntry);
+    expect(r.root.findByProps({ testID: 'session' }).props.serviceOrderId).toBe('order-1');
+    expect(r.root.findByProps({ testID: 'role' }).props.children).toBe('technician');
   });
 
   it('orderDetailSession trims the id', () => {

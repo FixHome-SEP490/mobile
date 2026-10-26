@@ -23,6 +23,7 @@ import {
 } from '../shared/CostItemEditor';
 import { PartPickerRow } from '../shared/PartPickerRow';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import VisitTechnicianPanel from './VisitTechnicianPanel';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { AddRow, EarlierPartCard, GroupLabel, LaborCard, LinkRow, PartLineCard, Section, type EarlierPartLine } from './QuotationItemCards';
 import { formatVnd } from '../../../utils/format';
@@ -36,6 +37,11 @@ const EARLIER_STATUS: Record<string, { label: string; tone: ToneName }> = {
 };
 const EARLIER_KEY = 'req-';
 const newLabor = (): CostItemRow => ({ ...createCostItemRow('labor'), quantity: '1' });
+/** A listed-price device of a multi-device visit starts from its listed labor (the technician can still change it). */
+const listedLabor = (order: { serviceName?: string; fixedUnitPrice?: number; quantity?: number; visitGroupId?: string | null } | null): CostItemRow | null =>
+  order?.visitGroupId && typeof order.fixedUnitPrice === 'number' && Number.isFinite(order.fixedUnitPrice) && order.fixedUnitPrice > 0
+    ? { ...newLabor(), description: order.serviceName || 'Tiền công theo giá niêm yết', unitPrice: String(Math.round(order.fixedUnitPrice * (order.quantity && order.quantity > 0 ? order.quantity : 1))) }
+    : null;
 const newPart = (): CostItemRow => ({ ...createCostItemRow('parts_equipment'), partSource: 'fixhome', quantity: '1' });
 const isPart = (row: CostItemRow) => row.kind === 'parts_equipment';
 const hasPrice = (row: CostItemRow) => /^\d+$/.test(row.unitPrice.trim());
@@ -89,6 +95,12 @@ export default function QuotationFormScreen() {
   }, [current, key, snapshot]);
 
   const [draftOwner, setDraftOwner] = useState<string | null>(() => ownerKey);
+  const [seededFor, setSeededFor] = useState<string | null>(null);
+  const seed = listedLabor(order);
+  if (seed && seededFor !== ownerKey && rows.length === 1 && !rows[0].description && !rows[0].unitPrice) {
+    setSeededFor(ownerKey);
+    setRows([seed]);
+  }
 
   // Ownership/assignment change clears the memory-bound draft and sheet via a render-phase
   // guard (no reset effect): the draft belongs to one owner.
@@ -533,6 +545,7 @@ export default function QuotationFormScreen() {
           />
         </BottomSheetModal>
       )}
+      <VisitTechnicianPanel section="devices" />
     </TaskScreenShell>
   );
 }

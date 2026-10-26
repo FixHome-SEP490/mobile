@@ -25,6 +25,7 @@ import {
   repairHistoryTotal,
 } from './customer-repair-history';
 import BackButton from '../../components/BackButton';
+import VisitGroupsPanel from '../../components/customer/VisitGroupsPanel';
 
 const PAGE_SIZE = 20;
 
@@ -37,6 +38,8 @@ export default function CustomerRepairHistoryScreen() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [query, setQuery] = useState('');
+  // Visits of several devices are listed apart; the order history leaves their devices out.
+  const [mode, setMode] = useState<'orders' | 'visits'>('orders');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -49,7 +52,7 @@ export default function CustomerRepairHistoryScreen() {
     else setLoading(true);
     setError(null);
     try {
-      const result = await ordersApi.getRepairHistory(1, PAGE_SIZE, 'completed');
+      const result = await ordersApi.getRepairHistory(1, PAGE_SIZE, 'completed', { excludeVisitGroups: true });
       if (generation !== generationRef.current) return;
       setRows(filterCompletedRepairHistory(result.data, ''));
       setTotal(result.total);
@@ -77,7 +80,7 @@ export default function CustomerRepairHistoryScreen() {
     setLoadingMore(true);
     setError(null);
     try {
-      const result = await ordersApi.getRepairHistory(nextPage, PAGE_SIZE, 'completed');
+      const result = await ordersApi.getRepairHistory(nextPage, PAGE_SIZE, 'completed', { excludeVisitGroups: true });
       if (generation !== generationRef.current) return;
       const incoming = filterCompletedRepairHistory(result.data, '');
       setRows((current) => {
@@ -149,13 +152,34 @@ export default function CustomerRepairHistoryScreen() {
         </View>
       </View>
 
-      {!!query.trim() && !loading && rows.length < total && (
+      {mode === 'orders' && !!query.trim() && !loading && rows.length < total && (
         <Text style={styles.searchScopeNote}>
           Tìm kiếm chỉ áp dụng cho các đơn đã tải. Bạn có thể tải thêm để tìm tiếp.
         </Text>
       )}
 
-      {loading ? (
+      <View style={styles.modeRow} accessibilityRole="tablist">
+        {([['orders', 'Đơn sửa chữa'], ['visits', 'Nhiều thiết bị']] as const).map(([id, label]) => (
+          <TouchableOpacity
+            key={id}
+            testID={`repair-history-mode-${id}`}
+            style={[styles.modeChip, mode === id && styles.modeChipActive]}
+            onPress={() => setMode(id)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: mode === id }}
+          >
+            <Text style={mode === id ? styles.modeTextActive : styles.modeText}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {mode === 'visits' ? (
+        <VisitGroupsPanel
+          terminalOnly
+          search={query}
+          onOpen={(visit) => navigation.navigate('CustomerVisit', { visitGroupId: visit.id })}
+        />
+      ) : loading ? (
         <View style={styles.centerState}>
           <Text style={styles.stateText}>Đang tải lịch sử sửa chữa...</Text>
           <CustomerSkeleton variant="booking" rows={3} />
@@ -330,6 +354,11 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 14, color: colors.text, paddingVertical: 0 },
   searchResetButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  modeRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
+  modeChip: { minHeight: 44, paddingHorizontal: 16, borderRadius: 22, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  modeChipActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  modeText: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
+  modeTextActive: { fontSize: 14, fontWeight: '600', color: colors.primaryStrong },
   searchScopeNote: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
   scrollContent: { padding: 16, paddingBottom: 56, flexGrow: 1 },
   centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 32 },

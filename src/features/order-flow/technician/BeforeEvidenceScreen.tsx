@@ -9,7 +9,8 @@ import type { CameraOrderAsset } from './arrival-proof-controller';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import TechnicianOrderHub from '../shared/TechnicianOrderHub';
 import PhotoDraftGallery from '../../../components/technician/PhotoDraftGallery';
-import { vnDateTimeString } from '../../../utils/vn-time';
+import SentEvidenceGallery from './SentEvidenceGallery';
+import { Section } from './QuotationItemCards';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 
 /** Photos taken and not yet sent in one go; every photo but the last tells the Backend not to start the repair yet. */
@@ -37,6 +38,7 @@ export default function BeforeEvidenceScreen() {
   // reassignment hides them without an effect-driven reset. Memory only.
   const [draft, setDraft] = useState<BeforeDraft>({ owner: null, assets: [], index: 0, error: null, confirmDeleteId: null });
   const [capturing, setCapturing] = useState(false);
+  const [sentIndex, setSentIndex] = useState(0);
 
   const orderValue = snapshot?.order.status === 'ready' ? snapshot.order.data : null;
   const order = orderValue && !isHistoricalOrder(orderValue) ? orderValue : null;
@@ -241,54 +243,23 @@ export default function BeforeEvidenceScreen() {
           </View>
         </View>
       ) : null}
-      {ownBefore.map(item => (
-        <View key={item.id} style={{ backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md, gap: 8 }}>
-          <DetailRow label="Ảnh đã gửi" value={item.createdAt ? vnDateTimeString(item.createdAt) : item.id} />
-          {confirmDeleteId === item.id ? (
-            <View style={{ gap: 8 }}>
-              <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }}>Xóa ảnh này khỏi đơn? Thao tác cần máy chủ xác nhận.</Text>
-              <TouchableOpacity
-                testID={`before-delete-confirm-${item.id}`}
-                accessibilityRole="button"
-                accessibilityLabel="Xác nhận xóa ảnh"
-                disabled={busy}
-                onPress={() => confirmDelete(item.id)}
-                style={{
-                  minHeight: 52,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: colors.error,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: busy ? 0.5 : 1,
-                }}
-              >
-                <Text style={{ color: colors.error, fontWeight: '700', fontSize: 14, lineHeight: 20 }}>Xác nhận xóa</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                testID={`before-delete-cancel-${item.id}`}
-                accessibilityRole="button"
-                accessibilityLabel="Giữ lại ảnh"
-                onPress={() => setDraft((d) => ({ ...current(d), error: null, confirmDeleteId: null }))}
-                style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
-              >
-                <Text style={{ color: colors.primaryStrong, fontWeight: '600', fontSize: 14, lineHeight: 20 }}>Giữ lại ảnh</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity
-              testID={`before-delete-${item.id}`}
-              accessibilityRole="button"
-              accessibilityLabel="Xóa ảnh này"
-              disabled={!canCapture}
-              onPress={() => askDelete(item.id)}
-              style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center', opacity: !canCapture ? 0.5 : 1 }}
-            >
-              <Text style={{ color: colors.error, fontWeight: '600', fontSize: 14, lineHeight: 20 }}>Xóa ảnh này</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      ))}
+      {ownBefore.length > 0 ? (
+        <Section title={`Ảnh đã gửi (${ownBefore.length})`}>
+          <SentEvidenceGallery
+            photos={ownBefore}
+            index={sentIndex}
+            onSelect={setSentIndex}
+            label="Ảnh trước sửa chữa đã gửi"
+            testPrefix="before"
+            canDelete={canCapture}
+            busy={busy}
+            confirmDeleteId={confirmDeleteId}
+            onAskDelete={askDelete}
+            onCancelDelete={() => setDraft((d) => ({ ...current(d), error: null, confirmDeleteId: null }))}
+            onConfirmDelete={confirmDelete}
+          />
+        </Section>
+      ) : null}
       {captureError ? <ReadOnlyNotice>{captureError}</ReadOnlyNotice> : null}
       {state.phase === 'denied' && state.message ? <ReadOnlyNotice>{state.message}</ReadOnlyNotice> : null}
       {isUnresolved ? (

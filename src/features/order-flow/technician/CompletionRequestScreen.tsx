@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
+import { partReturnsApi } from '../../../api/part-requests.api';
+import { PARTS_MISMATCH, partsCompletionBlockers, partsMismatchDetails } from './parts-completion';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { useTechnicianCompletion } from './useTechnicianCompletion';
 import { getOrderCapabilities, partsBlockers } from '../domain/order-capabilities';
@@ -21,6 +23,8 @@ export default function CompletionRequestScreen() {
   const navigation = useNavigation<any>();
   useLoadUnloadedResources(snapshot, ['evidence', 'quotations', 'extras', 'parts', 'invoice'], loadResource);
 
+  // Used quantities from the custody ledger; unknown (null) when the ledger is off, then only the Backend checks quantities.
+  const [usedByItem, setUsedByItem] = useState<Map<string, number> | null>(null);
   const [note, setNote] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [draftOwner, setDraftOwner] = useState(key);
@@ -54,12 +58,34 @@ export default function CompletionRequestScreen() {
   const knownBlockers: string[] = [];
   if (sentQuotes && sentQuotes.length) knownBlockers.push(`${sentQuotes.length} báo giá đang chờ khách duyệt.`);
   if (pendingExtras && pendingExtras.length) knownBlockers.push(`${pendingExtras.length} chi phí phát sinh đang chờ khách duyệt.`);
+  const orderId = key?.serviceOrderId;
+  useEffect(() => {
+    if (!orderId) return undefined;
+    let live = true;
+    partReturnsApi.getByOrderId(orderId).then(
+      (rows) => { if (live) setUsedByItem(new Map(rows.filter((r) => r.usageRecorded !== false).map((r) => [r.partRequestItemId, r.usedQty]))); },
+      () => { if (live) setUsedByItem(null); },
+    );
+    return () => { live = false; };
+  }, [orderId, snapshot?.resources.parts]);
   const partBlock = snapshot?.resources.parts.status === 'ready' && key ? partsBlockers(snapshot.resources.parts.data, key.userId) : null;
   const partsBlocked = !!partBlock && partBlock.open + partBlock.unsettled > 0;
   if (partsBlocked) {
     if (partBlock.unsettled > 0) knownBlockers.push(`${partBlock.unsettled} linh kiện đã nhận chưa ghi dùng hoặc trả.`);
     if (partBlock.open > 0) knownBlockers.push(`${partBlock.open} yêu cầu linh kiện chưa nhận (nhận bằng QR hoặc hủy yêu cầu).`);
-  } else if (capabilities && !capabilities.canRequestCompletion && !capabilities.canAttemptRequestCompletion) {
+  } else if (usedByItem && snapshot?.resources.parts.status === 'ready' && snapshot.resources.quotations.status === 'ready' && snapshot.resources.extras.status === 'ready') {
+    // Same check the Backend makes at invoice time, so a mismatch is explained here instead of after sending.
+    const quote = snapshot.resources.quotations.data.find(q => q.serviceOrderId === orderId && q.technicianId === key?.userId && String(q.status).toUpperCase() === 'APPROVED') ?? null;
+    const approvedCosts = snapshot.resources.extras.data.filter(e => e.serviceOrderId === orderId && String(e.status).toUpperCase() === 'APPROVED');
+    const ownParts = snapshot.resources.parts.data.filter(p => p.serviceOrderId === orderId && p.technicianId === key?.userId);
+    // The general mismatch sentence is replaced by the parts that are off, when they are known.
+    const details = partsMismatchDetails(quote, approvedCosts, ownParts, usedByItem);
+    knownBlockers.push(
+      ...partsCompletionBlockers(quote, approvedCosts, ownParts, usedByItem).filter((b) => !(details.length && b === PARTS_MISMATCH)),
+      ...(details.length ? [`Linh kiện chưa khớp báo giá:\n   – ${details.join('\n   – ')}`] : []),
+    );
+  }
+  if (!partsBlocked && capabilities && !capabilities.canRequestCompletion && !capabilities.canAttemptRequestCompletion) {
     knownBlockers.push('Ảnh sau sửa chữa chưa đạt điều kiện gửi bàn giao.');
   }
   const noteTooLong = note.trim().length > 2000;
@@ -126,7 +152,7 @@ export default function CompletionRequestScreen() {
       </View>
       {knownBlockers.length ? (
         <ReadOnlyNotice>
-          Chưa thể gửi bàn giao vì: {knownBlockers.join(' ')} Hãy xử lý xong rồi quay lại.
+          {`Chưa thể bàn giao:\n${knownBlockers.map((b) => `• ${b}`).join('\n')}`}
         </ReadOnlyNotice>
       ) : capabilities && !capabilities.canRequestCompletion && capabilities.canAttemptRequestCompletion ? (
         <ReadOnlyNotice>

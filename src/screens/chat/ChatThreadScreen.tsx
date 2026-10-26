@@ -677,9 +677,10 @@ export default function ChatThreadScreen() {
               <TouchableOpacity
                 accessibilityRole="button"
                 accessibilityLabel="Gửi yêu cầu bảo hành"
+                style={styles.warrantyBtn}
                 onPress={() => navigation.navigate('CustomerOrderDetail', { serviceOrderId: conversation.serviceOrderId!, screen: 'CustomerWarranty' })}
               >
-                <Text style={styles.uploadBtnText}>Gửi yêu cầu bảo hành</Text>
+                <Text style={styles.warrantyBtnText}>Gửi yêu cầu bảo hành</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -841,13 +842,24 @@ const getStyles = (colors: any) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    flexWrap: 'wrap',
     gap: 8,
     paddingVertical: 16,
+    paddingHorizontal: 16,
     backgroundColor: colors.divider,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  readOnlyText: { fontSize: 13, color: colors.textSecondary, flexShrink: 1 },
+  readOnlyText: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, flexShrink: 1 },
+  warrantyBtn: {
+    width: '100%',
+    minHeight: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primarySoft,
+  },
+  warrantyBtnText: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong },
   uploadRow: { gap: 4, marginBottom: 4 },
   uploadActions: { flexDirection: 'row', gap: 12 },
   uploadBtn: { minHeight: 44, justifyContent: 'center' },

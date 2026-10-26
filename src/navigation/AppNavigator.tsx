@@ -16,6 +16,8 @@ import CustomerBookingCreateScreen from '../screens/customer/CustomerBookingCrea
 import CustomerAIChatScreen from '../screens/customer/CustomerAIChatScreen';
 import CustomerMatchingScreen from '../screens/customer/CustomerMatchingScreen';
 import CustomerBookingDetailScreen from '../screens/customer/CustomerBookingDetailScreen';
+import CustomerVisitScreen from '../screens/customer/CustomerVisitScreen';
+import CustomerVisitCreateScreen from '../screens/customer/CustomerVisitCreateScreen';
 import CustomerRepairHistoryScreen from '../screens/customer/CustomerRepairHistoryScreen';
 import CustomerWarrantiesScreen from '../screens/customer/CustomerWarrantiesScreen';
 import CustomerSecurityScreen from '../screens/customer/CustomerSecurityScreen';
@@ -106,6 +108,8 @@ export default function AppNavigator({ firstRunSeen = false }: { firstRunSeen?: 
             <Stack.Screen name="CustomerAIChat" component={CustomerAIChatScreen} />
             <Stack.Screen name="CustomerMatching" component={CustomerMatchingScreen} />
             <Stack.Screen name="CustomerBookingDetail" component={CustomerBookingDetailScreen} />
+            <Stack.Screen name="CustomerVisit" component={CustomerVisitScreen} />
+            <Stack.Screen name="CustomerVisitCreate" component={CustomerVisitCreateScreen} />
             <Stack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailEntry} />
             <Stack.Screen name="CustomerRepairHistory" component={CustomerRepairHistoryScreen} />
             <Stack.Screen name="CustomerWarranties" component={CustomerWarrantiesScreen} />
@@ -147,6 +151,8 @@ export default function AppNavigator({ firstRunSeen = false }: { firstRunSeen?: 
             <Stack.Screen name="CustomerAIChat" component={CustomerAIChatScreen} />
             <Stack.Screen name="CustomerMatching" component={CustomerMatchingScreen} />
             <Stack.Screen name="CustomerBookingDetail" component={CustomerBookingDetailScreen} />
+            <Stack.Screen name="CustomerVisit" component={CustomerVisitScreen} />
+            <Stack.Screen name="CustomerVisitCreate" component={CustomerVisitCreateScreen} />
             <Stack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailEntry} />
             <Stack.Screen name="CustomerRepairHistory" component={CustomerRepairHistoryScreen} />
             <Stack.Screen name="CustomerWarranties" component={CustomerWarrantiesScreen} />
