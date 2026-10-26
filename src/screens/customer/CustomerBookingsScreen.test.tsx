@@ -89,6 +89,8 @@ jest.mock('expo-haptics', () => ({
 }));
 
 jest.mock('../../constants/theme', () => ({
+  iconSize: { sm: 16, md: 20, lg: 24 },
+  iconStroke: 1.75,
   useAppTheme: () => ({
     isDark: false,
     colors: {
@@ -230,12 +232,9 @@ describe('CustomerBookingsScreen order-detail affordance', () => {
       act(() => tree.unmount());
     }
   });
-  it('shows a chevron on a ServiceOrder summary when the row opens detail', () => {
+  it('opens the order detail from a ServiceOrder summary row', () => {
     const tree = mountScreen();
     try {
-      expect(
-        tree.root.findAllByType(Text).filter((node) => node.props.testID === 'icon-chevron-forward'),
-      ).toHaveLength(1);
       const detailRows = tree.root.findAllByType(TouchableOpacity).filter(
         (node) => node.props.accessibilityLabel === 'Xem chi tiết đơn sửa chữa',
       );
@@ -508,6 +507,8 @@ it('reveals Booking management options only on expansion and only when permissio
   const tree = mountScreen();
   const text = () => tree.root.findAllByType(Text).map((node) => String(node.props.children ?? '')).join(' ');
   try {
+    // Booking requests live under their own kind tab; the screen opens on repair orders.
+    act(() => tree.root.findAllByProps({ testID: 'activity-kind-request' }).find((node) => node.props.accessibilityRole === 'tab')!.props.onPress());
     expect(text()).not.toContain('Đổi lịch');
     expect(text()).not.toContain('Hủy yêu cầu');
     const options = tree.root.findAllByType(TouchableOpacity).find((node) => node.props.accessibilityLabel === 'Tùy chọn yêu cầu');

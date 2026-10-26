@@ -14,6 +14,7 @@ const mockLoadResource: jest.Mock = jest.fn(async () => {});
 const mockNavigate: jest.Mock = jest.fn();
 
 jest.mock('../runtime/OrderSessionProvider', () => ({
+  useOptionalOrderSession: () => null,
   useOrderSession: () => ({
     key: mockKey,
     snapshot: mockSnapshot,

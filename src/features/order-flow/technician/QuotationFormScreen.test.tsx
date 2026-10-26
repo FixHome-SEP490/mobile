@@ -19,6 +19,7 @@ const mockFetchCatalog: jest.Mock = jest.fn();
 const mockFetchPartById: jest.Mock = jest.fn();
 
 jest.mock('../runtime/OrderSessionProvider', () => ({
+  useOptionalOrderSession: () => null,
   useOrderSession: () => ({
     key: mockKey,
     snapshot: mockSnapshot,

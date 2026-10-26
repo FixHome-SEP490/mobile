@@ -19,6 +19,7 @@ const mockSetParams = jest.fn();
 const mockRefresh = jest.fn(async () => {});
 
 jest.mock('../runtime/OrderSessionProvider', () => ({
+  useOptionalOrderSession: () => null,
   useOrderSession: () => ({
     key: mockSnapshot?.key ?? null,
     snapshot: mockSnapshot,

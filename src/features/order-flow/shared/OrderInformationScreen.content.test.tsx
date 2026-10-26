@@ -8,7 +8,7 @@ import OrderInformationScreen from './OrderInformationScreen';
 
 let mockSnapshot: OrderSessionSnapshot;
 const mockSetClipboard = Clipboard.setStringAsync as jest.Mock;
-jest.mock('../runtime/OrderSessionProvider', () => ({ useOrderSession: () => ({ key: mockSnapshot.key, snapshot: mockSnapshot, refresh: jest.fn(), loadResource: jest.fn(async () => {}) }) }));
+jest.mock('../runtime/OrderSessionProvider', () => ({ useOptionalOrderSession: () => null, useOrderSession: () => ({ key: mockSnapshot.key, snapshot: mockSnapshot, refresh: jest.fn(), loadResource: jest.fn(async () => {}) }) }));
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn() }) }));
 jest.mock('react-native-safe-area-context', () => {
   const Native = jest.requireActual('react-native');

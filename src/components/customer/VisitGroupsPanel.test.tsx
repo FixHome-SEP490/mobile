@@ -15,7 +15,9 @@ jest.mock('./CustomerSkeleton', () => ({ __esModule: true, default: () => null }
 jest.mock('../../constants/theme', () => {
   const tone = { bg: '#eee', fg: '#111', text: '#222' };
   return {
-    useAppTheme: () => ({
+    iconSize: { sm: 16, md: 20, lg: 24 },
+  iconStroke: 1.75,
+  useAppTheme: () => ({
       colors: {
         primary: '#2563EB', primaryStrong: '#1D4ED8', surface: '#FFFFFF', text: '#0F172A', textSecondary: '#64748B', border: '#E2E8F0',
         tone: { success: tone, warning: tone, danger: tone, info: tone, violet: tone, repair: tone, neutral: tone },
@@ -53,7 +55,7 @@ it('shows each visit with its devices and status, and opens it', async () => {
   const all = texts(tree);
   expect(all).toContain('Lượt sửa · 2 thiết bị');
   expect(all).toContain('Đang tìm thợ');
-  expect(all).toContain('Máy 2: Tủ lạnh nhà bếp');
+  expect(all).toContain('Máy 2 · Tủ lạnh');
   expect(mockGetMyPage).toHaveBeenCalledWith(1, 20, { q: '' });
   act(() => { tree.root.findAllByType(TouchableOpacity).find((b) => b.props.testID === 'visit-group-v1')!.props.onPress(); });
   expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'v1' }));

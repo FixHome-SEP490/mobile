@@ -14,6 +14,7 @@ let mockCapture: jest.Mock;
 const mockNavigate = jest.fn();
 
 jest.mock('../runtime/OrderSessionProvider', () => ({
+  useOptionalOrderSession: () => null,
   useOrderSession: () => ({
     key: mockSnapshot.key,
     snapshot: mockSnapshot,

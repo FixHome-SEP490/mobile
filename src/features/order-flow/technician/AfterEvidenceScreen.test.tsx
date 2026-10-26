@@ -20,6 +20,7 @@ const mockCaptureCameraPhoto: jest.Mock = jest.fn();
 const mockConfirmCameraPermission: jest.Mock = jest.fn(async () => true);
 
 jest.mock('../runtime/OrderSessionProvider', () => ({
+  useOptionalOrderSession: () => null,
   useOrderSession: () => ({
     key: mockSnapshot.key,
     snapshot: mockSnapshot,
@@ -131,10 +132,11 @@ it('confirmed upload clears the local asset so the same photo cannot resubmit', 
   await act(async () => { renderer.root.findByProps({ testID: 'after-capture' }).props.onPress(); });
   await act(async () => {});
   expect(renderer.root.findByProps({ testID: 'after-preview' })).toBeTruthy();
+  // The queue drops a photo only once the server-confirmed state is "resolved" after its upload.
+  mockUploadAfter.mockImplementationOnce(async () => { mockCompletionState = { ...idleState, phase: 'resolved', confirmedUpload: { ...afterRow } }; });
   await act(async () => { renderer.root.findByProps({ testID: 'after-send' }).props.onPress(); });
   await act(async () => {});
   expect(mockUploadAfter).toHaveBeenCalledTimes(1);
-  mockCompletionState = { ...idleState, phase: 'resolved', confirmedUpload: { ...afterRow } };
   await act(async () => { renderer.update(<AfterEvidenceScreen />); });
   expect(renderer.root.findAllByProps({ testID: 'after-preview' }).length).toBe(0);
   expect(renderer.root.findAllByProps({ testID: 'after-send' }).length).toBe(0);

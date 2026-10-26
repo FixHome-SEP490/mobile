@@ -13,6 +13,7 @@ const mockGoBack: jest.Mock = jest.fn();
 const mockRefresh: jest.Mock = jest.fn(async () => {});
 
 jest.mock('../runtime/OrderSessionProvider', () => ({
+  useOptionalOrderSession: () => null,
   useOrderSession: () => ({
     key: mockSnapshot.key,
     snapshot: mockSnapshot,

@@ -16,6 +16,7 @@ let mockJournal: { list: (userId: string) => unknown[] } | null = null;
 const mockSetParams = jest.fn();
 
 jest.mock('../runtime/OrderSessionProvider', () => ({
+  useOptionalOrderSession: () => null,
   useOrderSession: () => ({
     key: mockSnapshot?.key ?? null,
     snapshot: mockSnapshot,

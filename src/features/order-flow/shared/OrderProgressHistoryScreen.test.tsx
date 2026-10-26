@@ -7,7 +7,7 @@ import OrderProgressHistoryScreen from './OrderProgressHistoryScreen';
 
 let mockSnapshot: OrderSessionSnapshot;
 const mockLoadResource = jest.fn();
-jest.mock('../runtime/OrderSessionProvider', () => ({ useOrderSession: () => ({ key: mockSnapshot.key, snapshot: mockSnapshot, loadResource: mockLoadResource }) }));
+jest.mock('../runtime/OrderSessionProvider', () => ({ useOptionalOrderSession: () => null, useOrderSession: () => ({ key: mockSnapshot.key, snapshot: mockSnapshot, loadResource: mockLoadResource }) }));
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn() }) }));
 jest.mock('react-native-safe-area-context', () => {
   const Native = jest.requireActual('react-native');
