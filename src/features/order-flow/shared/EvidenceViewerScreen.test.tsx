@@ -7,7 +7,7 @@ import EvidenceViewerScreen from './EvidenceViewerScreen';
 
 let mockSnapshot: OrderSessionSnapshot;
 let mockRouteParams = { evidenceId: 'face' };
-jest.mock('../runtime/OrderSessionProvider', () => ({ useOrderSession: () => ({ key: mockSnapshot.key, snapshot: mockSnapshot }) }));
+jest.mock('../runtime/OrderSessionProvider', () => ({ useOptionalOrderSession: () => null, useOrderSession: () => ({ key: mockSnapshot.key, snapshot: mockSnapshot }) }));
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn() }), useRoute: () => ({ params: mockRouteParams }) }));
 jest.mock('react-native-safe-area-context', () => {
   const Native = jest.requireActual('react-native');

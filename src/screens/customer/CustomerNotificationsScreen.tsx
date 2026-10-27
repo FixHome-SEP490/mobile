@@ -29,6 +29,7 @@ import {
   mergeNotificationRows,
   nextNotificationPage,
 } from './customer-notification-pagination';
+import { partRequestsApi } from '../../api/part-requests.api';
 import { prepareCustomerNotificationAction } from './customer-notification-action';
 
 export default function CustomerNotificationsScreen() {
@@ -122,7 +123,7 @@ export default function CustomerNotificationsScreen() {
   const onNotificationPress = async (item: CustomerNotificationItem) => {
     if (resolvingReferenceId === item.id) return;
 
-    const mayNeedAsyncResolution = item.referenceType?.trim().toUpperCase() === 'SUPPORT_CASE';
+    const mayNeedAsyncResolution = ['SUPPORT_CASE', 'PART_REQUEST'].includes(item.referenceType?.trim().toUpperCase() ?? '');
     if (mayNeedAsyncResolution) setResolvingReferenceId(item.id);
 
     try {
@@ -148,11 +149,14 @@ export default function CustomerNotificationsScreen() {
           setMarkAllError('Không thể đánh dấu thông báo đã đọc. Vui lòng thử lại.');
         },
         getSupportCase: supportCasesApi.getMine,
+        getPartRequest: partRequestsApi.getById,
       });
       if (!target) return;
 
       if (target.name === 'CustomerBookingDetail') {
         navigation.navigate('CustomerBookingDetail', target.params);
+      } else if (target.name === 'CustomerVisit') {
+        navigation.navigate('CustomerVisit', target.params);
       } else {
         navigation.navigate('CustomerOrderDetail', target.params);
       }

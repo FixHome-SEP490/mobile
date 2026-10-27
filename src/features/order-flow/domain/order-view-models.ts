@@ -116,7 +116,11 @@ export function normalizeOrderResource<K extends OrderResourceKind>(kind: K, pay
           ...(typeof i.partCatalogId === 'string' ? { partCatalogId: i.partCatalogId } : {}), ...(typeof i.partSource === 'string' ? { partSource: i.partSource } : {}) };
       });
       return { id: row.id, serviceOrderId: row.serviceOrderId, status: row.status, requestType: row.requestType,
-        fulfillmentMethod: row.fulfillmentMethod, ...(role === 'technician' ? { technicianId: row.technicianId } : {}), items };
+        fulfillmentMethod: row.fulfillmentMethod, ...(role === 'technician' ? { technicianId: row.technicianId } : {}),
+        // What ties a request to the quotation or additional cost it serves, and when it was received: the handover check reads them.
+        ...(typeof row.quotationId === 'string' ? { quotationId: row.quotationId } : {}),
+        ...(typeof row.additionalCostId === 'string' ? { additionalCostId: row.additionalCostId } : {}),
+        ...(typeof row.receivedAt === 'string' ? { receivedAt: row.receivedAt } : {}), items };
     }) as unknown as OrderResourceData[K];
   }
 function isSafeIntegerMoney(value: unknown): boolean {

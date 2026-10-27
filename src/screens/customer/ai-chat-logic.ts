@@ -3,7 +3,7 @@
 // The rules the web assistant follows (PO 18/10/2026: the app's assistant works
 // the same way), kept apart from the screen so they are tested on their own.
 
-import type { RecommendedService } from '../../api/ai.api';
+import type { AiDeviceSuggestion, RecommendedService } from '../../api/ai.api';
 
 /**
  * One-tap answers to the question the assistant just asked, or none when it is
@@ -45,6 +45,24 @@ export function nextPinnedService(
   if (!offered) return current;
   const keepsSpecific = !!current && !FALLBACK_SERVICE_CODES.has(current.serviceCode) && FALLBACK_SERVICE_CODES.has(offered.serviceCode);
   return keepsSpecific ? current : offered;
+}
+
+/** The most appliances one visit takes; the chat offers them only from two. */
+export const AI_VISIT_DEVICE_LIMIT = 3;
+
+/** The appliances of a reply that can be booked now, in the order the assistant gave them. */
+export function bookableDevices(reply: { devices?: AiDeviceSuggestion[] } | null | undefined): AiDeviceSuggestion[] {
+  return (reply?.devices ?? []).filter((device) => !!device.service?.serviceId).slice(0, AI_VISIT_DEVICE_LIMIT);
+}
+
+/**
+ * The devices to keep pinned after a reply: two or more bookable ones replace the list, a reply with a list but
+ * fewer than two empties it, and a reply without the list keeps what was there.
+ */
+export function nextPinnedDevices(current: AiDeviceSuggestion[], reply: { devices?: AiDeviceSuggestion[] } | null | undefined): AiDeviceSuggestion[] {
+  if (!Array.isArray(reply?.devices)) return current;
+  const devices = bookableDevices(reply);
+  return devices.length >= 2 ? devices : [];
 }
 
 /** Videos in the chat: never sent to the AI, kept for the technician (PO 18/10/2026). */

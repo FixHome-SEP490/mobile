@@ -42,7 +42,7 @@ import { useLiveRefresh } from '../../hooks/useLiveRefresh';
 import { orderPartsFor } from '../../services/live-kinds';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
-import { useAppTheme } from '../../constants/theme';
+import { iconSize, iconStroke, useAppTheme } from '../../constants/theme';
 import { useAuthStore } from '../../store/auth.store';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
@@ -1899,7 +1899,7 @@ export default function TechnicianOrderDetailScreen() {
                   {!!order.customerName && (
                     <View testID="accepted-order-row-customer" style={styles.acceptedInfoRow}>
                       <View style={styles.acceptedInfoLabelRow}>
-                        <User size={16} color={colors.textSecondary} strokeWidth={1.75} accessible={false} />
+                        <User size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} accessible={false} />
                         <Text style={styles.acceptedInfoLabel}>Khách hàng</Text>
                       </View>
                       <Text style={styles.acceptedInfoValue}>{order.customerName}</Text>
@@ -1909,7 +1909,7 @@ export default function TechnicianOrderDetailScreen() {
             {!!order.addressSummary && (
                     <View testID="accepted-order-row-address" style={styles.acceptedInfoRow}>
                       <View style={styles.acceptedInfoLabelRow}>
-                        <MapPin size={16} color={colors.textSecondary} strokeWidth={1.75} accessible={false} />
+                        <MapPin size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} accessible={false} />
                         <Text style={styles.acceptedInfoLabel}>Địa chỉ thực hiện</Text>
                       </View>
                       <Text style={styles.acceptedInfoValue}>{order.addressSummary}</Text>
@@ -1919,7 +1919,7 @@ export default function TechnicianOrderDetailScreen() {
                   {!!order.scheduledAt && (
                     <View testID="accepted-order-row-schedule" style={styles.acceptedInfoRow}>
                       <View style={styles.acceptedInfoLabelRow}>
-                        <Clock size={16} color={colors.textSecondary} strokeWidth={1.75} accessible={false} />
+                        <Clock size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} accessible={false} />
                         <Text style={styles.acceptedInfoLabel}>Lịch hẹn</Text>
                       </View>
                       <Text style={styles.acceptedInfoValue}>{(order.bookingMode || order.slot ? sessionLabel({ ...order, start: order.scheduledAt }) : vnDateTimeString(order.scheduledAt, VN_DATETIME))}</Text>
@@ -1949,20 +1949,20 @@ export default function TechnicianOrderDetailScreen() {
             <Text style={styles.jobTitle}>{order.serviceName || 'Dịch vụ sửa chữa'}</Text>
             {!!order.scheduledAt && (
               <View style={styles.iconRow}>
-                <Clock size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                <Clock size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
                 <Text style={styles.iconRowText}>Lịch hẹn: {(order.bookingMode || order.slot ? sessionLabel({ ...order, start: order.scheduledAt }) : vnDateTimeString(order.scheduledAt, VN_DATETIME))}</Text>
               </View>
             )}
             {!!order.customerNote && <Text style={styles.jobMeta}>Ghi chú khách: {order.customerNote}</Text>}
             {!!order.addressSummary && (
               <View style={styles.iconRow}>
-                <MapPin size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                <MapPin size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
                 <Text style={styles.iconRowText}>{order.addressSummary}</Text>
               </View>
             )}
             {!!order.customerName && (
               <View style={styles.iconRow}>
-                <User size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                <User size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
                 <Text style={styles.iconRowText}>
                   Khách: {order.customerName}{order.customerPhone ? ` · ${order.customerPhone}` : ''}
                 </Text>

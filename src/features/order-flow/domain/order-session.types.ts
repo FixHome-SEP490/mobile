@@ -86,6 +86,10 @@ export interface OrderPartReadModel {
   technicianId?: string;
   requestType?: PartRequest['requestType'];
   fulfillmentMethod?: PartRequest['fulfillmentMethod'];
+  /** Present on the technician's own read; they tie a request to the quotation or additional cost it serves. */
+  quotationId?: string | null;
+  additionalCostId?: string | null;
+  receivedAt?: string | null;
   items: (Pick<PartRequestItem, 'id' | 'partNameSnapshot' | 'quantity' | 'usageStatus'> & Partial<Pick<PartRequestItem, 'partCatalogId' | 'partSource'>>)[];
 }
 export interface OrderResourceData {

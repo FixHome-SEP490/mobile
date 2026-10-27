@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View, type StyleProp, t
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardInset } from '../../../hooks/useKeyboardInset';
 import BackButton, { HomeButton } from '../../../components/BackButton';
+import VisitCustomerPanel from '../customer/VisitCustomerPanel';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 
 export interface TaskAction {
@@ -67,6 +68,7 @@ export function TaskScreenShell({ title, stage, children, primary, secondary, su
     {stage !== undefined && <StageHeader stage={stage} />}
     <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, contentStyle]} keyboardShouldPersistTaps="handled">
       {children}
+      <VisitCustomerPanel />
     </ScrollView>
     {keyboardInset > 0 && <View testID="order-flow-keyboard-spacer" style={{ height: keyboardInset }} />}
     {(primary || secondary) && <FixedActionFooter primary={primary} secondary={secondary} summary={summary} bottomInset={insets.bottom} keyboardInset={keyboardInset} />}

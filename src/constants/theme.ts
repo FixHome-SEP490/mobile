@@ -81,6 +81,10 @@ export const fontSize = {
   xxxl: 32,
 };
 
+/** Functional icon scale (DS §9): 16/20/24, stroke 1.75. */
+export const iconSize = { sm: 16, md: 20, lg: 24 } as const;
+export const iconStroke = 1.75;
+
 export const useAppTheme = () => ({
   colors: lightTheme,
   spacing,

@@ -43,6 +43,23 @@ export interface RecommendedService {
   serviceId?: string | null;
 }
 
+/**
+ * One appliance of a conversation about several: what the customer said about it and the service to book it under.
+ */
+export interface AiDeviceSuggestion {
+  deviceType: string;
+  nameVi: string;
+  imageIndex?: number | null;
+  isPrimary?: boolean;
+  service?: RecommendedService | null;
+  variantCode?: string | null;
+  questionsVi?: string[];
+  priceEstimate?: PriceEstimate | null;
+  descriptionVi?: string | null;
+  /** Why there is no service, e.g. FixHome does not repair it yet. */
+  noteVi?: string | null;
+}
+
 export interface PriceEstimate {
   min: number;
   /** Null means the technician has to look first: render it as "from min". */
@@ -103,6 +120,8 @@ export interface AiReply {
   disclaimerVi?: string;
   /** What the conversation established (tried, ruled out, suspected), for the technician. */
   notesVi?: string[];
+  /** Every appliance of the conversation when there is more than one; empty otherwise. */
+  devices?: AiDeviceSuggestion[];
 }
 
 /** The customer sent faster than the backend allows (429), as on the web. */

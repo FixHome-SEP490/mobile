@@ -48,6 +48,7 @@ import {
   looksLikeAQuestion,
   AI_MAX_IMAGES,
   type AiReply,
+  type AiDeviceSuggestion,
   type RecommendedService,
 } from '../../api/ai.api';
 import { appendCustomerWords } from './ai-chat-words';
@@ -57,6 +58,7 @@ import {
   REVEAL_MS,
   VIDEO_SOURCE_MAX_BYTES,
   VIDEO_NOT_ANALYSED,
+  nextPinnedDevices,
   nextPinnedService,
   quickReplies,
   revealSteps,
@@ -227,6 +229,8 @@ export default function CustomerAIChatScreen() {
    * books rather than leaving two contradictory buttons in the thread.
    */
   const [pinnedService, setPinnedService] = useState<RecommendedService | null>(null);
+  // Two or three appliances the assistant found, offered as one visit.
+  const [pinnedDevices, setPinnedDevices] = useState<AiDeviceSuggestion[]>([]);
   const [turnCount, setTurnCount] = useState(0);
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const [holdingLines, setHoldingLines] = useState<Record<string, string[]>>({});
@@ -315,6 +319,7 @@ export default function CustomerAIChatScreen() {
 
       // A catch-all service never replaces a specific one the conversation already found (as on the web).
       setPinnedService((current) => nextPinnedService(current, reply.recommendedServices?.[0]));
+      setPinnedDevices((current) => nextPinnedDevices(current, reply));
 
       const pace = revealPace.current;
       const steps = pace > 0 ? revealSteps(prose) : [prose];
@@ -489,6 +494,7 @@ export default function CustomerAIChatScreen() {
             sessionId.current = null;
             lastCustomerWords.current = '';
             setPinnedService(null);
+            setPinnedDevices([]);
             setTurnCount(0);
             setPendingImages([]);
             queue.reset();
@@ -527,6 +533,16 @@ export default function CustomerAIChatScreen() {
     },
     [navigation, queue],
   );
+
+  /** "Đặt N thiết bị": the suggested appliances go to the visit form, where the customer checks and saves each. */
+  const openVisitBooking = useCallback(() => {
+    navigation.navigate('CustomerVisitCreate', {
+      prefill: {
+        aiSessionId: sessionId.current ?? undefined,
+        devices: pinnedDevices.map((d) => ({ serviceId: d.service!.serviceId!, description: d.descriptionVi?.trim() || lastCustomerWords.current })),
+      },
+    });
+  }, [navigation, pinnedDevices]);
 
   const goToBooking = useCallback(
     (service: RecommendedService) => {
@@ -776,7 +792,32 @@ export default function CustomerAIChatScreen() {
         />
 
         {/* "Đặt thợ" only once the assistant has finished answering (as on the web). */}
-        {pinnedService && !isThinking && (
+        {pinnedDevices.length >= 2 && !isThinking && (
+          <View style={styles.pinnedBar} testID="ai-visit-bar">
+            <View style={styles.pinnedText}>
+              <Text style={styles.pinnedLabel}>{pinnedDevices.length} thiết bị một lượt</Text>
+              <Text style={styles.pinnedValue} numberOfLines={2}>{pinnedDevices.map((d) => d.nameVi).join(', ')}</Text>
+              {pinnedService && (
+                <TouchableOpacity accessibilityRole="button" onPress={() => goToBooking(pinnedService)} testID="ai-book-single">
+                  <Text style={styles.pinnedHint}>{`Chỉ đặt ${pinnedService.nameVi}`}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <TouchableOpacity
+              style={styles.pinnedBtn}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Đặt ${pinnedDevices.length} thiết bị trong một lượt`}
+              testID="ai-book-visit"
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); openVisitBooking(); }}
+            >
+              <Ionicons name="calendar-outline" size={15} color={colors.surface} />
+              <Text style={styles.pinnedBtnText}>{`Đặt ${pinnedDevices.length} thiết bị`}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {pinnedService && pinnedDevices.length < 2 && !isThinking && (
           <View style={styles.pinnedBar}>
             <View style={styles.pinnedText}>
               <Text style={styles.pinnedLabel}>Dịch vụ đang chọn</Text>

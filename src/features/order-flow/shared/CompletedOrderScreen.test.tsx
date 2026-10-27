@@ -14,6 +14,7 @@ const mockClipboardSetString: jest.Mock = jest.fn(async () => {});
 jest.mock('expo-clipboard', () => ({ setStringAsync: (value: string) => mockClipboardSetString(value) }));
 
 jest.mock('../runtime/OrderSessionProvider', () => ({
+  useOptionalOrderSession: () => null,
   useOrderSession: () => ({
     key: mockSnapshot.key,
     snapshot: mockSnapshot,

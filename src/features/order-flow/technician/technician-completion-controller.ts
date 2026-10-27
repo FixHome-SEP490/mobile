@@ -144,7 +144,14 @@ export function createTechnicianCompletionController(deps: TechnicianCompletionD
         await refresh(key, ['evidence']); if (!same(key) || generation !== epoch) return;
         if (!allowed(key, 'after-upload')) { publish({ phase: 'denied', message: 'Đơn hiện tại chưa cho phép chụp ảnh sau sửa chữa.' }); return; }
         await dispatch(key, 'after-upload', key.serviceOrderId, () => generation === epoch, async intentId => {
-          const id = financialRecord(await deps.transport.uploadAfter(key.serviceOrderId, image))?.id;
+          let uploaded: unknown;
+          try { uploaded = await deps.transport.uploadAfter(key.serviceOrderId, image); }
+          catch (error) {
+            // The journal treats a failed POST as unknown (it may have landed); this only makes the cause visible while developing.
+            if (__DEV__) { const response = (error as { response?: { status?: number; data?: unknown } } | null)?.response; console.warn('[after-upload] POST failed', response?.status, JSON.stringify(response?.data)); }
+            throw error;
+          }
+          const id = financialRecord(uploaded)?.id;
           if (typeof id === 'string') await deps.journal.recordEntity(key.userId, intentId, id);
         });
       } catch { if (same(key)) publish({ phase: 'unknown', message: FINANCIAL_UNKNOWN }); }

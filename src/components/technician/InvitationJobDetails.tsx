@@ -23,7 +23,8 @@ function Lines({ label, items }: { label: string; items?: string[] }) {
   );
 }
 
-export default function InvitationJobDetails({ booking }: { booking: TechnicianBookingPreview }) {
+/** `hidePrivacyNote`: a visit of several devices says it once for the whole visit, not under every device. */
+export default function InvitationJobDetails({ booking, hidePrivacyNote = false }: { booking: TechnicianBookingPreview; hidePrivacyNote?: boolean }) {
   const { colors } = useAppTheme();
   const [aiOpen, setAiOpen] = useState(false);
   const ai = booking.aiSummary;
@@ -76,9 +77,11 @@ export default function InvitationJobDetails({ booking }: { booking: TechnicianB
           <BookingMediaViewer bookingId={booking.id} media={booking.media} />
         </View>
       ) : null}
-      <Text style={noteStyle} testID="invitation-privacy-note">
-        Địa chỉ cụ thể, số điện thoại và ghi chú riêng của khách hiện sau khi bạn nhận đơn.
-      </Text>
+      {!hidePrivacyNote && (
+        <Text style={noteStyle} testID="invitation-privacy-note">
+          Địa chỉ cụ thể, số điện thoại và ghi chú riêng của khách hiện sau khi bạn nhận đơn.
+        </Text>
+      )}
     </View>
   );
 }

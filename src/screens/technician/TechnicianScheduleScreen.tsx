@@ -16,7 +16,7 @@ import { AlertTriangle, CalendarOff, CalendarX2, ChevronLeft, ChevronRight, Cloc
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
-import { useAppTheme } from '../../constants/theme';
+import { iconSize, iconStroke, useAppTheme } from '../../constants/theme';
 import { ordersApi, type ServiceOrderItem } from '../../api/orders.api';
 import { technicianProfileApi, type TechnicianTimeOff } from '../../api/technician-profile.api';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
@@ -241,12 +241,12 @@ export default function TechnicianScheduleScreen() {
                 </View>
                 <Text style={styles.cardTitle}>{order.serviceName || 'Dịch vụ sửa chữa'}</Text>
                 <View style={styles.iconRow}>
-                  <Clock size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                  <Clock size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
                   <Text style={styles.body}>{vnTimeString(order.scheduledAt, VN_TIME)}</Text>
                 </View>
                 {!!order.addressSummary && (
                   <View style={styles.iconRow}>
-                    <MapPin size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                    <MapPin size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
                     <Text style={styles.body} numberOfLines={2}>{order.addressSummary}</Text>
                   </View>
                 )}

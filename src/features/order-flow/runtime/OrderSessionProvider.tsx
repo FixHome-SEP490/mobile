@@ -90,6 +90,10 @@ export function OrderSessionProvider({ serviceOrderId, coordinator: supplied, jo
   }), [key, snapshot, coordinator, journal]);
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
+/** The session when there is one; the shared screen shell is also rendered without any. */
+export function useOptionalOrderSession(): OrderSessionContextValue | null {
+  return useContext(Context);
+}
 export function useOrderSession(): OrderSessionContextValue {
   const context = useContext(Context);
   if (!context) throw new Error('OrderSessionProvider required');

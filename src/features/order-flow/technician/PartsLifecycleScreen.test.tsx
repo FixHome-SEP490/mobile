@@ -37,6 +37,7 @@ jest.mock('../../../api/part-requests.api', () => {
 });
 
 jest.mock('../runtime/OrderSessionProvider', () => ({
+  useOptionalOrderSession: () => null,
   useOrderSession: () => ({
     key: mockKey,
     snapshot: mockSnapshot,

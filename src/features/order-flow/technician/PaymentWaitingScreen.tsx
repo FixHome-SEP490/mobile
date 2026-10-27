@@ -10,6 +10,9 @@ import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreen
 import { quoteMoneyText } from '../shared/DecisionSummary';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
+import VisitTechnicianPanel from './VisitTechnicianPanel';
+import VisitDevicesSummary from '../shared/VisitDevicesSummary';
+import { visitDeviceTechnicianStatus } from './technician-visit';
 
 /**
  * T15 — payment waiting. Who is awaited and the actual invoice/payment
@@ -45,6 +48,16 @@ export default function PaymentWaitingScreen() {
     return (
       <TaskScreenShell title="Chờ thanh toán" onBack={() => navigation.goBack()}>
         <ReadOnlyNotice>Chờ thanh toán chỉ hiển thị trên đơn đã bàn giao thuộc về bạn.</ReadOnlyNotice>
+      </TaskScreenShell>
+    );
+  }
+
+  if (order.visitGroupId) {
+    return (
+      <TaskScreenShell title="Chờ thanh toán cả lượt" stage={4} onBack={() => navigation.goBack()}>
+        <VisitDevicesSummary groupId={order.visitGroupId} stateLabel={visitDeviceTechnicianStatus} />
+        <VisitTechnicianPanel section="devices" />
+        <VisitTechnicianPanel section="cash" />
       </TaskScreenShell>
     );
   }

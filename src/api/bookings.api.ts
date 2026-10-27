@@ -3,7 +3,7 @@ import apiClient from './client';
 import type { BookingDeviceAttributes } from './catalog-pricing.api';
 import type { BookingSchedule } from '../utils/booking-session';
 
-const USER_UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const USER_UUID_REGEX =/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function unwrap<T>(payload: { data: T } | T): T {
   if (payload && typeof payload === 'object' && 'data' in payload) {
@@ -25,6 +25,10 @@ export interface BookingItem {
   id: string;
   customerId: string;
   serviceOrderId?: string | null;
+  /** Set when this booking is one device of a multi-device visit. */
+  visitGroupId?: string | null;
+  /** A visit can be moved once; the server counts it on each device. */
+  rescheduleCount?: number;
   invitations?: CustomerBookingInvitation[] | null;
   serviceId: string;
   serviceName?: string;
@@ -187,10 +191,31 @@ function previewMedia(v: unknown): BookingMedia[] {
   });
 }
 
+const normalizePreview = (booking: TechnicianBookingPreview): TechnicianBookingPreview => ({
+  id: booking.id,
+  province: booking.province,
+  district: booking.district,
+  serviceName: booking.serviceName,
+  quantity: booking.quantity,
+  urgency: booking.urgency,
+  preferredStartAt: booking.preferredStartAt,
+  preferredEndAt: booking.preferredEndAt,
+  bookingMode: booking.bookingMode,
+  slot: booking.slot,
+  description: typeof booking.description === 'string' && booking.description.trim() ? booking.description : null,
+  aiSummary: booking.aiSummary && typeof booking.aiSummary === 'object' ? booking.aiSummary : null,
+  media: previewMedia(booking.media),
+  pricingMode: typeof booking.pricingMode === 'string' ? booking.pricingMode : null,
+  fixedUnitPrice: finiteOrNull(booking.fixedUnitPrice),
+  distanceBand: previewBand(booking.distanceBand),
+});
+
 export interface InvitationItem {
   id: string;
   bookingId: string;
   booking?: TechnicianBookingPreview;
+  /** Every device of a multi-device visit (more than one); accepting takes them all. */
+  visitDevices?: { sequence: number; deviceLabel: string | null; booking: TechnicianBookingPreview }[];
   priorityOrder: number;
   status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED';
   invitedAt: string;
@@ -204,7 +229,7 @@ type RawBooking = BookingItem & {
   media?: { url: string }[];
 };
 
-const normalizeBooking = (booking: RawBooking): BookingItem => ({
+export const normalizeBooking = (booking: RawBooking): BookingItem => ({
   ...booking,
   serviceName: booking.serviceNameSnapshot || booking.service?.name,
   addressSummary: booking.addressTextSnapshot,
@@ -279,10 +304,13 @@ export const bookingsApi = {
     };
   },
 
-  async getMyBookingsPage(page = 1, pageSize = 20): Promise<BookingsPage> {
+  /** `excludeVisitGroups` leaves out devices of a multi-device visit; those are listed by `visitGroupsApi`. */
+  async getMyBookingsPage(page = 1, pageSize = 20, options: { excludeVisitGroups?: boolean } = {}): Promise<BookingsPage> {
     const safePage = toPositiveInt(page, 1);
     const safePageSize = Math.min(toPositiveInt(pageSize, 20), 100);
-    const res = await apiClient.get('/bookings/my', { params: { page: safePage, pageSize: safePageSize } });
+    const res = await apiClient.get('/bookings/my', {
+      params: { page: safePage, pageSize: safePageSize, ...(options.excludeVisitGroups ? { excludeVisitGroups: 'true' } : {}) },
+    });
     const body: unknown = res.data;
     const envelope = !Array.isArray(body) && body !== null && typeof body === 'object'
       ? body as { data?: unknown; meta?: { total?: unknown } }
@@ -343,7 +371,12 @@ export const bookingsApi = {
   async getMyInvitations(): Promise<InvitationItem[]> {
     const res = await apiClient.get('/invitations/my');
     const invitations = unwrap<InvitationItem[]>(res.data);
-    return invitations.map((inv) => ({
+    return invitations.map((inv) => {
+      // A visit of several devices lists every device; they are taken together on Accept.
+      const visitDevices = (Array.isArray(inv.visitDevices) ? inv.visitDevices : [])
+        .filter((d) => d && d.booking && typeof d.sequence === 'number')
+        .map((d) => ({ sequence: d.sequence, deviceLabel: d.deviceLabel ?? null, booking: normalizePreview(d.booking) }));
+      return {
       id: inv.id,
       bookingId: inv.bookingId,
       priorityOrder: inv.priorityOrder,
@@ -351,25 +384,10 @@ export const bookingsApi = {
       invitedAt: inv.invitedAt,
       expiresAt: inv.expiresAt ?? null,
       // Allowlist: a live invitation never exposes a full Booking or private customer media.
-      booking: inv.booking ? {
-        id: inv.booking.id,
-        province: inv.booking.province,
-        district: inv.booking.district,
-        serviceName: inv.booking.serviceName,
-        quantity: inv.booking.quantity,
-        urgency: inv.booking.urgency,
-        preferredStartAt: inv.booking.preferredStartAt,
-        preferredEndAt: inv.booking.preferredEndAt,
-        bookingMode: inv.booking.bookingMode,
-        slot: inv.booking.slot,
-        description: typeof inv.booking.description === 'string' && inv.booking.description.trim() ? inv.booking.description : null,
-        aiSummary: inv.booking.aiSummary && typeof inv.booking.aiSummary === 'object' ? inv.booking.aiSummary : null,
-        media: previewMedia(inv.booking.media),
-        pricingMode: typeof inv.booking.pricingMode === 'string' ? inv.booking.pricingMode : null,
-        fixedUnitPrice: finiteOrNull(inv.booking.fixedUnitPrice),
-        distanceBand: previewBand(inv.booking.distanceBand),
-      } : undefined,
-    }));
+      booking: inv.booking ? normalizePreview(inv.booking) : undefined,
+      ...(visitDevices.length > 1 ? { visitDevices } : {}),
+      };
+    });
   },
   async respondInvitation(
     id: string,

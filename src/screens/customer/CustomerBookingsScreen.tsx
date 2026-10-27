@@ -20,18 +20,22 @@ import {
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { ChevronDown, ChevronUp, Clock, MapPin, User } from 'lucide-react-native';
+import StatusBadge from '../../components/StatusBadge';
+import { bookingStatusView, serviceOrderDisplayView } from '../technician/technician-status';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useLiveRefresh } from '../../hooks/useLiveRefresh';
+import VisitGroupsPanel from '../../components/customer/VisitGroupsPanel';
 import { listsNeedRead } from '../../services/live-kinds';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
-import { useAppTheme } from '../../constants/theme';
+import { iconSize, iconStroke, useAppTheme } from '../../constants/theme';
 import { CUSTOMER_UI_ARTWORK } from '../../constants/customer-artwork';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import { useAuthStore } from '../../store/auth.store';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import { bookingsApi, type ActivityCounts, type BookingItem } from '../../api/bookings.api';
-import { ordersApi, type ServiceOrderItem, type CanonicalOrderStatus } from '../../api/orders.api';
+import { ordersApi, type ServiceOrderItem } from '../../api/orders.api';
 import {
   createBookingsHistoryLoader,
   customerBookingsUserId,
@@ -54,6 +58,7 @@ import {
   cancelBookingConservative,
   rescheduleBookingConservative,
 } from './customer-booking-manage';
+import { formatVnd } from '../../utils/format';
 import { vnDateString, vnTimeString } from '../../utils/vn-time';
 
 export default function CustomerBookingsScreen() {
@@ -69,6 +74,9 @@ export default function CustomerBookingsScreen() {
   const [activityTab, setActivityTab] = useState<BookingsTab>('in_progress');
   // Repairs and booking requests are two lists, one shown at a time (as on the web), so nobody scrolls past one to reach the other.
   const [kindTab, setKindTab] = useState<'repair' | 'request' | null>(null);
+  // Third tab: visits of several devices, listed by the server on their own (the other two lists leave those devices out).
+  const [visitTab, setVisitTab] = useState(false);
+  const [visitSeen, setVisitSeen] = useState(false);
   // Requests have their own stages (no technician yet, sent, cancelled) instead of the repair statuses.
   const [requestFilter, setRequestFilter] = useState<'all' | RequestStage>('all');
   const tabBarClearance = useTabBarClearance();
@@ -93,14 +101,14 @@ export default function CustomerBookingsScreen() {
   const [historyState, setHistoryState] = useState(getCachedHistoryState);
   const { loading, refreshing, loadingMore, loadingMoreOrders, error, ordersError } = historyState;
   const [loader] = useState(() => createBookingsHistoryLoader(
-    (page, pageSize) => bookingsApi.getMyBookingsPage(page, pageSize),
-    ordersApi.getMyOrders,
+    (page, pageSize) => bookingsApi.getMyBookingsPage(page, pageSize, { excludeVisitGroups: true }),
+    () => ordersApi.getMyOrders({ excludeVisitGroups: true }),
     setHistoryState,
     {
       getUserId: () => customerBookingsUserId(useAuthStore.getState()),
       subscribe: (listener) => useAuthStore.subscribe(listener),
     },
-    { getOrdersPage: (page, pageSize) => ordersApi.getMyOrdersPage(page, pageSize) },
+    { getOrdersPage: (page, pageSize) => ordersApi.getMyOrdersPage(page, pageSize, { excludeVisitGroups: true }) },
   ));
   // Exact totals come from the server, so they do not move while the lists page in; read again after every list refresh.
   const [counts, setCounts] = useState<ActivityCounts | null>(null);
@@ -239,45 +247,6 @@ export default function CustomerBookingsScreen() {
     }
   };
 
-  const getStatusBadge = (status: CanonicalOrderStatus) => {
-    const s = String(status).toUpperCase();
-    switch (s) {
-      case 'EN_ROUTE':
-        return { label: 'Đang di chuyển', bg: colors.tone.warning.bg, color: colors.tone.warning.text };
-      case 'UNDER_REPAIR':
-      case 'IN_PROGRESS':
-        return { label: 'Đang sửa chữa', bg: colors.tone.repair.bg, color: colors.tone.repair.text };
-      case 'ACCEPTED':
-        return { label: 'Đã nhận đơn', bg: colors.tone.info.bg, color: colors.tone.info.text };
-      case 'COMPLETED':
-        return { label: 'Hoàn thành', bg: colors.tone.success.bg, color: colors.tone.success.text };
-      case 'CANCELLED':
-        return { label: 'Đã hủy', bg: colors.tone.neutral.bg, color: colors.tone.neutral.text };
-      default:
-        return { label: 'Trạng thái chưa xác định', bg: colors.tone.neutral.bg, color: colors.tone.neutral.text };
-    }
-  };
-
-  const getBookingBadge = (status: BookingItem['status']) => {
-    const s = String(status).toUpperCase();
-    switch (s) {
-      case 'SUBMITTED':
-        return { label: 'Đã gửi yêu cầu', bg: colors.tone.info.bg, color: colors.tone.info.text };
-      case 'MATCHING':
-        return { label: 'Đang tìm kỹ thuật viên', bg: colors.tone.warning.bg, color: colors.tone.warning.text };
-      case 'MATCHED':
-        return { label: 'Đã ghép kỹ thuật viên', bg: colors.tone.success.bg, color: colors.tone.success.text };
-      case 'CONFIRMED':
-        return { label: 'Đã xác nhận', bg: colors.tone.info.bg, color: colors.tone.info.text };
-      case 'CLOSED':
-        return { label: 'Chưa có thợ nhận', bg: colors.divider, color: colors.textSecondary };
-      case 'CANCELLED':
-        return { label: 'Đã hủy', bg: colors.tone.neutral.bg, color: colors.tone.neutral.text };
-      default:
-        return { label: 'Trạng thái chưa xác định', bg: colors.tone.neutral.bg, color: colors.tone.neutral.text };
-    }
-  };
-
   const requestView = resolveBookingsView(historyState, activitySearch, 'all');
   const repairView = resolveBookingsView(historyState, activitySearch, activityTab);
   const repairCards = repairView.filtered.filter(isRepairCard);
@@ -285,8 +254,8 @@ export default function CustomerBookingsScreen() {
   const urgentCount = requestCards.filter((card) =>
     card.kind === 'booking' && !card.order && resumeTargetFor(card.booking, !requestView.ordersCoverageComplete) !== null,
   ).length;
-  // Opens on the repairs (the requests when there are none); what needs the customer stays flagged on the requests tab, never by switching tab for them.
-  const activeKind = kindTab ?? (repairCards.length > 0 || requestCards.length === 0 ? 'repair' : 'request');
+  // Always opens on the repairs (no jump to the requests tab); what needs the customer stays flagged on the requests tab, never by switching tab for them.
+  const activeKind = kindTab ?? 'repair';
   const view = activeKind === 'request' ? requestView : repairView;
   const shownRequests = requestCards.filter((card) => requestFilter === 'all' || requestStage(card) === requestFilter);
   const { filtered: filteredCards, showList, emptyNote, showLoadMore, showLoadMoreOrders } = view;
@@ -326,45 +295,49 @@ export default function CustomerBookingsScreen() {
   const renderOrderSummary = (
     order: ServiceOrderItem,
     bookingId: string | null,
-    showDetailAffordance = false,
   ) => {
-    const badge = getStatusBadge(order.status);
     const dateStr = order.createdAt
       ? vnDateString(order.createdAt)
       : 'Gần đây';
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <View style={styles.iconContainer}>
-            <Ionicons name="construct-outline" size={24} color={colors.primary} />
-          </View>
           <View style={styles.cardInfo}>
-            <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-              <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
+            <View style={styles.badgeRow}>
+              <StatusBadge view={serviceOrderDisplayView(order)} />
+              {!!order.code && <Text style={styles.cardCode}>#{order.code}</Text>}
             </View>
             <Text style={styles.title} numberOfLines={1}>
               {order.serviceName || `Đơn #${order.code}`}
             </Text>
-            <Text style={styles.meta}>
-              {dateStr}
-            </Text>
+            <View style={styles.metaSplitRow}>
+              <View style={styles.metaRowFit}>
+                <Clock size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
+                <Text style={[styles.metaRowText, { flex: 0 }]}>{dateStr}</Text>
+              </View>
+              {typeof order.grandTotal === "number" && order.status !== "CANCELLED" && (
+                <Text style={styles.amount}>Tổng thanh toán: {formatVnd(order.grandTotal)}</Text>
+              )}
+            </View>
+            {!!order.technician?.fullName && (
+              <View style={styles.metaRow}>
+                <User size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
+                <Text style={styles.metaRowText} numberOfLines={2}>Kỹ thuật viên: {order.technician.fullName}</Text>
+              </View>
+            )}
+            {!!order.addressSummary && (
+              <View style={styles.metaRow}>
+                <MapPin size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
+                <Text style={styles.metaRowText} numberOfLines={2}>{order.addressSummary}</Text>
+              </View>
+            )}
           </View>
-          {showDetailAffordance && (
-            <Ionicons
-              name="chevron-forward"
-              size={18}
-              color={colors.textSecondary}
-              accessibilityElementsHidden
-              importantForAccessibility="no"
-            />
-          )}
         </View>
       </View>
     );
   };
 
   const renderBookingCard = (booking: BookingItem) => {
-    const badge = getBookingBadge(booking.status);
     const resumeId = resumeTargetFor(booking, !view.ordersCoverageComplete);
     const schedule = booking.preferredStartAt && Number.isFinite(Date.parse(booking.preferredStartAt))
       ? booking.preferredStartAt : null;
@@ -381,26 +354,24 @@ export default function CustomerBookingsScreen() {
           accessibilityLabel="Xem chi tiết yêu cầu đặt lịch"
           activeOpacity={0.8}
         >
-          <View style={styles.iconContainer}>
-            <Ionicons name="calendar-outline" size={24} color={colors.primary} />
-          </View>
           <View style={styles.cardInfo}>
-            <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-              <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
+            <View style={styles.badgeRow}>
+              <StatusBadge view={bookingStatusView(booking.status)} />
+              <Text style={styles.cardCode}>#{booking.id.slice(0, 8)}</Text>
             </View>
             <Text style={styles.title} numberOfLines={1}>
               {booking.serviceName || `Yêu cầu #${booking.id.slice(0, 8)}`}
             </Text>
-            {expandedRequests[booking.id] && !!booking.addressSummary && (
-              <View style={styles.metaRow}>
-                <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
-                <Text style={styles.metaRowText} numberOfLines={1}>{booking.addressSummary}</Text>
-              </View>
-            )}
             <View style={styles.metaRow}>
-              <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
+              <Clock size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
               <Text style={styles.metaRowText}>{dateStr}</Text>
             </View>
+            {!!booking.addressSummary && (
+              <View style={styles.metaRow}>
+                <MapPin size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
+                <Text style={styles.metaRowText} numberOfLines={2}>{booking.addressSummary}</Text>
+              </View>
+            )}
             {waiting && expandedRequests[booking.id] && (
               <View style={styles.waitingNote}>
                 <Text style={styles.waitingNoteText}>
@@ -409,11 +380,8 @@ export default function CustomerBookingsScreen() {
               </View>
             )}
           </View>
-          {!(canCancelBookingConservative(booking) || canRescheduleBookingConservative(booking) || waiting || booking.addressSummary) && (
-            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-          )}
         </TouchableOpacity>
-        {(canCancelBookingConservative(booking) || canRescheduleBookingConservative(booking) || waiting || booking.addressSummary) && (
+        {(canCancelBookingConservative(booking) || canRescheduleBookingConservative(booking) || waiting) && (
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Tùy chọn yêu cầu"
@@ -422,7 +390,9 @@ export default function CustomerBookingsScreen() {
             onPress={() => setExpandedRequests((current) => ({ ...current, [booking.id]: !current[booking.id] }))}
           >
             <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Tùy chọn yêu cầu</Text>
-            <Ionicons name={expandedRequests[booking.id] ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textSecondary} />
+            {expandedRequests[booking.id]
+              ? <ChevronUp size={iconSize.sm} strokeWidth={iconStroke} color={colors.textSecondary} />
+              : <ChevronDown size={iconSize.sm} strokeWidth={iconStroke} color={colors.textSecondary} />}
           </TouchableOpacity>
         )}
         {/* K09_B_BOOKING_MANAGE */}
@@ -557,7 +527,6 @@ export default function CustomerBookingsScreen() {
     order: ServiceOrderItem,
     replacement: 'waiting' | 'support',
   ) => {
-    const badge = getBookingBadge(booking.status);
     const detailId = orderDetailTarget(order.id);
     const schedule = booking.preferredStartAt && Number.isFinite(Date.parse(booking.preferredStartAt))
       ? booking.preferredStartAt : null;
@@ -576,26 +545,24 @@ export default function CustomerBookingsScreen() {
           accessibilityLabel="Xem chi tiết yêu cầu đặt lịch"
           activeOpacity={0.8}
         >
-          <View style={styles.iconContainer}>
-            <Ionicons name="calendar-outline" size={24} color={colors.primary} />
-          </View>
           <View style={styles.cardInfo}>
-            <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-              <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
+            <View style={styles.badgeRow}>
+              <StatusBadge view={bookingStatusView(booking.status)} />
+              <Text style={styles.cardCode}>#{booking.id.slice(0, 8)}</Text>
             </View>
             <Text style={styles.title} numberOfLines={1}>
               {booking.serviceName || order.serviceName || `Yêu cầu #${booking.id.slice(0, 8)}`}
             </Text>
-            {expandedRequests[booking.id] && !!booking.addressSummary && (
-              <View style={styles.metaRow}>
-                <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
-                <Text style={styles.metaRowText} numberOfLines={1}>{booking.addressSummary}</Text>
-              </View>
-            )}
             <View style={styles.metaRow}>
-              <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
+              <Clock size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
               <Text style={styles.metaRowText}>{dateStr}</Text>
             </View>
+            {!!booking.addressSummary && (
+              <View style={styles.metaRow}>
+                <MapPin size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
+                <Text style={styles.metaRowText} numberOfLines={2}>{booking.addressSummary}</Text>
+              </View>
+            )}
             {expandedRequests[booking.id] && (
               <View style={styles.waitingNote}>
                 <Text style={styles.waitingNoteText}>{message}</Text>
@@ -607,7 +574,9 @@ export default function CustomerBookingsScreen() {
           accessibilityState={{ expanded: !!expandedRequests[booking.id] }} style={styles.requestOptions}
           onPress={() => setExpandedRequests((current) => ({ ...current, [booking.id]: !current[booking.id] }))}>
           <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Thông tin lời mời</Text>
-          <Ionicons name={expandedRequests[booking.id] ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textSecondary} />
+          {expandedRequests[booking.id]
+              ? <ChevronUp size={iconSize.sm} strokeWidth={iconStroke} color={colors.textSecondary} />
+              : <ChevronDown size={iconSize.sm} strokeWidth={iconStroke} color={colors.textSecondary} />}
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.resumeBtn, { backgroundColor: colors.primary }]}
@@ -654,7 +623,7 @@ export default function CustomerBookingsScreen() {
           accessibilityLabel="Xem chi tiết đơn sửa chữa"
           activeOpacity={0.8}
         >
-          {renderOrderSummary(order, bookingId, true)}
+          {renderOrderSummary(order, bookingId)}
         </TouchableOpacity>
       </View>
     );
@@ -680,6 +649,7 @@ export default function CustomerBookingsScreen() {
   const kindTabs = [
     { id: 'repair', label: 'Đơn sửa chữa', count: counts?.repair.all ?? null, urgent: 0 },
     { id: 'request', label: 'Yêu cầu đặt lịch', count: counts?.request.all ?? null, urgent: urgentCount },
+    { id: 'visit', label: 'Nhiều thiết bị', count: null, urgent: 0 },
   ] as const;
 
   return (
@@ -706,15 +676,15 @@ export default function CustomerBookingsScreen() {
             style={styles.searchInput}
           />
         </View>
-        <View style={styles.kindTabs} accessibilityRole="tablist" testID="activity-kind-tabs">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.kindTabsScroll} contentContainerStyle={styles.kindTabs} accessibilityRole="tablist" testID="activity-kind-tabs">
           {kindTabs.map((tab) => {
-            const selected = activeKind === tab.id;
+            const selected = tab.id === 'visit' ? visitTab : !visitTab && activeKind === tab.id;
             return (
               <TouchableOpacity
                 key={tab.id}
                 testID={`activity-kind-${tab.id}`}
                 style={[styles.kindTab, selected && styles.kindTabActive]}
-                onPress={() => setKindTab(tab.id)}
+                onPress={() => { setVisitTab(tab.id === 'visit'); if (tab.id === 'visit') setVisitSeen(true); else setKindTab(tab.id); }}
                 accessibilityRole="tab"
                 accessibilityLabel={`${tab.label}${tab.count === null ? '' : `, ${tab.count}`}${tab.urgent > 0 ? `, ${tab.urgent} cần bạn xử lý` : ''}`}
                 accessibilityState={{ selected }}
@@ -728,8 +698,8 @@ export default function CustomerBookingsScreen() {
               </TouchableOpacity>
             );
           })}
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow} accessibilityRole="tablist">
+        </ScrollView>
+        {!visitTab && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow} accessibilityRole="tablist">
           {filterChips.map((tab) => (
             <TouchableOpacity
               key={tab.id}
@@ -743,10 +713,20 @@ export default function CustomerBookingsScreen() {
               <Text style={tab.selected ? styles.filterChipTextActive : styles.filterChipText} numberOfLines={1}>{tab.label}</Text>
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </ScrollView>}
       </View>
 
       {/* Content List */}
+      {visitSeen && (
+        <View style={[styles.keepAlive, !visitTab && styles.hidden]}>
+          <VisitGroupsPanel
+            search={activitySearch}
+            bottomInset={tabBarClearance}
+            onOpen={(visit) => navigation.navigate('CustomerVisit', { visitGroupId: visit.id })}
+          />
+        </View>
+      )}
+      <View style={[styles.keepAlive, visitTab && styles.hidden]}>
       {loading ? (
         <View style={styles.loadingState}>
           <CustomerSkeleton variant="booking" rows={3} />
@@ -841,6 +821,7 @@ export default function CustomerBookingsScreen() {
           </TouchableOpacity>
         </View>
       )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -850,6 +831,8 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     flex: 1,
     backgroundColor: colors.background,
   },
+  keepAlive: { flex: 1 },
+  hidden: { display: 'none' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -920,8 +903,10 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     color: colors.text,
   },
   // Two lists as tabs with an underline (the page's main choice); the status filter is a row of chips like Thông báo.
-  kindTabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border },
-  kindTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48, borderBottomWidth: 2, borderBottomColor: 'transparent', marginBottom: -1 },
+  // Two lists as tabs with an underline (the page's main choice); the status filter is a row of chips like Thông báo.
+  kindTabsScroll: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: colors.border },
+  kindTabs: { flexDirection: 'row' },
+  kindTab: { paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48, borderBottomWidth: 2, borderBottomColor: 'transparent', marginBottom: -1 },
   kindTabActive: { borderBottomColor: colors.primary },
   kindTabText: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
   kindTabTextActive: { fontSize: 14, fontWeight: '700', color: colors.primaryStrong ?? colors.primary },
@@ -1101,45 +1086,25 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 14,
-    marginBottom: 10,
+    padding: 16,
+    marginBottom: 12,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: colors.primarySoft,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
   cardInfo: {
     flex: 1,
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 999,
-    marginBottom: 6,
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: '700',
+    gap: 6,
   },
   title: {
     fontSize: 16,
-    lineHeight: 22,
+    lineHeight: 24,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: 4,
   },
   meta: {
     fontSize: 13,
@@ -1148,13 +1113,19 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   metaRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 2,
+    alignItems: 'flex-start',
+    gap: 8,
   },
+  rowIcon: { marginTop: 2 },
+  metaSplitRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 },
+  metaRowFit: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, flexShrink: 1 },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  cardCode: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.textSecondary },
+  amount: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong },
   metaRowText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 14,
+    lineHeight: 20,
     color: colors.textSecondary,
   },
   noteText: {

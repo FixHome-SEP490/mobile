@@ -69,6 +69,8 @@ export interface ServiceOrderItem {
   id: string;
   code: string;
   bookingId: string;
+  /** Set when this order is one device of a multi-device visit (paid, rescheduled and cancelled as a whole). */
+  visitGroupId?: string | null;
   serviceName: string;
   /** Backend sanitized history marker: never a full detail payload. */
   historical?: boolean;
@@ -263,6 +265,7 @@ export interface CostRequest {
     id: string;
     lineTotal: number;
     partSource?: string | null;
+    partCatalogId?: string | null;
     partWarrantyOption?: string | null;
     warrantyFee?: number | null;
     warrantyTermDays?: number | null;
@@ -348,6 +351,8 @@ const toMoney = (value: unknown): number => {
 
 const normalizeOrder = (order: ServiceOrderItem): ServiceOrderItem => ({
   ...order,
+  // A listed-price device inside a multi-device visit is still quoted on site (PO 21/10/2026), so every flow treats it as an inspection order; `fixedUnitPrice` stays for the quote's first line.
+  pricingMode: order.visitGroupId && String(order.pricingMode).toUpperCase() === 'FIXED_PRICE' ? 'INSPECTION_REQUIRED' : order.pricingMode,
   laborTotal: toMoney(order.laborTotal),
   partsTotal: toMoney(order.partsTotal),
   grandTotal: toMoney(order.grandTotal),
@@ -393,14 +398,19 @@ const del = async (url: string): Promise<void> => {
 };
 
 export const ordersApi = {
-  async getTechnicianJobs(): Promise<TechnicianOrderItem[]> {
-    return (await get<TechnicianOrderItem[]>('/service-orders/my')).map(normalizeTechnicianOrder);
+  async getTechnicianJobs(options: { excludeVisitGroups?: boolean } = {}): Promise<TechnicianOrderItem[]> {
+    const rows = options.excludeVisitGroups
+      ? unwrap<TechnicianOrderItem[]>((await apiClient.get('/service-orders/my', { params: { excludeVisitGroups: 'true' } })).data)
+      : await get<TechnicianOrderItem[]>('/service-orders/my');
+    return rows.map(normalizeTechnicianOrder);
   },
 
-  async getTechnicianJobsPage(page = 1, pageSize = 20): Promise<TechnicianOrdersPage> {
+  async getTechnicianJobsPage(page = 1, pageSize = 20, options: { excludeVisitGroups?: boolean } = {}): Promise<TechnicianOrdersPage> {
     const safePage = toPositiveInt(page, 1);
     const safePageSize = Math.min(toPositiveInt(pageSize, 20), 100);
-    const res = await apiClient.get('/service-orders/my', { params: { page: safePage, pageSize: safePageSize } });
+    const res = await apiClient.get('/service-orders/my', {
+      params: { page: safePage, pageSize: safePageSize, ...(options.excludeVisitGroups ? { excludeVisitGroups: 'true' } : {}) },
+    });
     const body = res.data as { data?: TechnicianOrderItem[]; meta?: { total?: number } } | TechnicianOrderItem[];
     const rows = Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : null;
     if (rows === null) {
@@ -417,16 +427,19 @@ export const ordersApi = {
   },
 
 
-  async getMyOrders(): Promise<ServiceOrderItem[]> {
-    return (await get<ServiceOrderItem[]>('/service-orders/my')).map(
-      normalizeOrder,
-    );
+  async getMyOrders(options: { excludeVisitGroups?: boolean } = {}): Promise<ServiceOrderItem[]> {
+    const rows = options.excludeVisitGroups
+      ? unwrap<ServiceOrderItem[]>((await apiClient.get('/service-orders/my', { params: { excludeVisitGroups: 'true' } })).data)
+      : await get<ServiceOrderItem[]>('/service-orders/my');
+    return rows.map(normalizeOrder);
   },
 
-  async getMyOrdersPage(page = 1, pageSize = 20): Promise<OrdersPage> {
+  async getMyOrdersPage(page = 1, pageSize = 20, options: { excludeVisitGroups?: boolean } = {}): Promise<OrdersPage> {
     const safePage = toPositiveInt(page, 1);
     const safePageSize = Math.min(toPositiveInt(pageSize, 20), 100);
-    const res = await apiClient.get('/service-orders/my', { params: { page: safePage, pageSize: safePageSize } });
+    const res = await apiClient.get('/service-orders/my', {
+      params: { page: safePage, pageSize: safePageSize, ...(options.excludeVisitGroups ? { excludeVisitGroups: 'true' } : {}) },
+    });
     const body = res.data as { data?: ServiceOrderItem[]; meta?: { total?: number } } | ServiceOrderItem[] | null | undefined;
     const rows = Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : undefined;
     if (!rows) throw new Error('Invalid orders page response');
@@ -630,6 +643,14 @@ export const ordersApi = {
     });
   },
 
+  /** "Không sửa được" on a device of a multi-device visit: 0 đồng, no points taken. */
+  async reportRepairFailed(
+    id: string,
+    body: { reason: string; note?: string; parts?: { partRequestId: string; outcome: 'installed' | 'returned' }[] },
+  ): Promise<void> {
+    await apiClient.post(`/service-orders/${id}/repair-failed`, body);
+  },
+
   async submitReview(id: string, body: { rating: number; comment?: string }) {
     return post(`/service-orders/${id}/reviews`, body);
   },
@@ -642,9 +663,10 @@ export const ordersApi = {
     page = 1,
     pageSize = 20,
     status?: 'completed' | 'cancelled',
+    options: { excludeVisitGroups?: boolean } = {},
   ): Promise<{ data: RepairHistoryItem[]; total: number }> {
     const res = await apiClient.get('/repair-history', {
-      params: { page, pageSize, status },
+      params: { page, pageSize, status, ...(options.excludeVisitGroups ? { excludeVisitGroups: 'true' } : {}) },
     });
     return { data: unwrap(res.data), total: res.data.meta?.total ?? 0 };
   },

@@ -7,14 +7,14 @@ import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { DetailRow, ReadOnlyNotice, Section, TaskScreenShell } from './TaskScreenShell';
 import { HubSection, type HubLink } from './TechnicianOrderHub';
-import { CalendarClock, Headset, MessageCircle, Repeat, XCircle } from 'lucide-react-native';
+import { CalendarClock, Headset, Layers, MessageCircle, Repeat, XCircle } from 'lucide-react-native';
 import OrderCostHistory from './OrderCostHistory';
 import { formatVnd } from '../../../utils/format';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import RebookSheet from '../../../components/RebookSheet';
 import AcceptedRescheduleSheet from '../../../components/AcceptedRescheduleSheet';
-import { serviceOrderStatusView } from '../../../screens/technician/technician-status';
+import { serviceOrderDisplayView, serviceOrderStatusView } from '../../../screens/technician/technician-status';
 import { sessionLabel } from '../../../utils/booking-session';
 import { findChatForBooking } from '../../../screens/technician/technician-chat-shortcut';
 
@@ -37,7 +37,9 @@ export default function OrderInformationScreen() {
   const [copyMessage, setCopyMessage] = useState('');
   const canRebook = snapshot?.key.role === 'customer' && !!order?.bookingId && ['COMPLETED', 'CANCELLED'].includes(String(order.status).toUpperCase());
   // Same rule as the web: the technician accepted but has not set out yet.
-  const canReschedule = snapshot?.key.role === 'customer' && !!order?.bookingId && String(order.status).toUpperCase() === 'ACCEPTED';
+  // A device of a multi-device visit is moved, cancelled and paid with the whole visit, never on its own.
+  const visitGroupId = snapshot?.key.role === 'customer' ? order?.visitGroupId ?? null : null;
+  const canReschedule = snapshot?.key.role === 'customer' && !!order?.bookingId && !visitGroupId && String(order.status).toUpperCase() === 'ACCEPTED';
   const openChat = async (bookingId: string) => {
     if (openingChat) return;
     setOpeningChat(true);
@@ -64,8 +66,9 @@ export default function OrderInformationScreen() {
     ...(order?.bookingId ? [{ screen: 'chat', testID: 'order-chat-entry', label: openingChat ? 'Đang mở…' : 'Nhắn tin', Icon: MessageCircle, disabled: openingChat, onPress: () => void openChat(order.bookingId) }] : []),
     ...(canReschedule ? [{ screen: 'reschedule', testID: 'order-reschedule-entry', label: 'Đổi lịch hẹn', Icon: CalendarClock, onPress: () => setRescheduleOpen(true) }] : []),
     ...(canRebook ? [{ screen: 'rebook', testID: 'order-rebook-entry', label: 'Đặt lại thợ', Icon: Repeat, onPress: () => setRebookOpen(true) }] : []),
+    ...(visitGroupId ? [{ screen: 'CustomerVisit', testID: 'order-visit-entry', label: 'Xem lượt sửa nhiều thiết bị', Icon: Layers, onPress: () => navigation.navigate('CustomerVisit', { visitGroupId }) }] : []),
     { screen: 'SupportCases', testID: 'order-support-entry', label: 'Yêu cầu hỗ trợ', Icon: Headset },
-    ...(['COMPLETED', 'CANCELLED'].includes(String(order?.status).toUpperCase()) ? [] : [{ screen: 'OrderException', testID: 'order-cancel-entry', label: 'Hủy đơn hoặc kiểm tra điều kiện', Icon: XCircle }]),
+    ...(visitGroupId || ['COMPLETED', 'CANCELLED'].includes(String(order?.status).toUpperCase()) ? [] : [{ screen: 'OrderException', testID: 'order-cancel-entry', label: 'Hủy đơn hoặc kiểm tra điều kiện', Icon: XCircle }]),
   ];
   const historicalOrder = history && orderValue && isHistoricalOrder(orderValue) ? orderValue : null;
   return <TaskScreenShell title="Thông tin đơn" onBack={() => navigation.goBack()}
@@ -98,7 +101,7 @@ export default function OrderInformationScreen() {
         </View>
       ) : <DetailRow label="Mã đơn" value={order.code} />}
       <DetailRow label="Dịch vụ" value={order.serviceName} />
-      <DetailRow label="Trạng thái" value={serviceOrderStatusView(order.status).label} />
+      <DetailRow label="Trạng thái" value={serviceOrderDisplayView(order).label} />
       <DetailRow label="Lịch hẹn" value={order.bookingMode || order.slot ? sessionLabel({ bookingMode: order.bookingMode, slot: order.slot, start: order.scheduledAt }) : vnDateTimeString(order.scheduledAt)} />
       <DetailRow label="Địa chỉ" value={order.addressSummary} />
       </Section>

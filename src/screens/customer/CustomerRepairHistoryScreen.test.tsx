@@ -90,7 +90,7 @@ describe('CustomerRepairHistoryScreen real UI', () => {
     mockHistory.mockRejectedValueOnce(new Error('network unavailable'));
     const tree = await mount();
     try {
-      expect(mockHistory).toHaveBeenCalledWith(1, 20, 'completed');
+      expect(mockHistory).toHaveBeenCalledWith(1, 20, 'completed', { excludeVisitGroups: true });
       expect(texts(tree)).toContain('Không thể tải lịch sử sửa chữa. Vui lòng thử lại.');
       expect(texts(tree)).not.toContain('Không tìm thấy kết quả');
       expect(texts(tree)).not.toContain('Chưa có lịch sử sửa chữa');

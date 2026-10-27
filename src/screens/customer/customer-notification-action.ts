@@ -10,6 +10,7 @@ export interface CustomerNotificationActionDeps {
   markReadRemote: (id: string) => Promise<void>;
   onMarkReadError: (error: unknown) => void;
   getSupportCase: (id: string) => Promise<MySupportCase>;
+  getPartRequest?: (id: string) => Promise<{ serviceOrderId: string }>;
 }
 
 export async function prepareCustomerNotificationAction(
@@ -25,5 +26,6 @@ export async function prepareCustomerNotificationAction(
 
   return resolveCustomerNotificationTarget(item, {
     getSupportCase: deps.getSupportCase,
+    getPartRequest: deps.getPartRequest,
   });
 }

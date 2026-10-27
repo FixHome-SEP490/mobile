@@ -35,6 +35,18 @@ export function mergeNotificationPage(current: NotificationItem[], page: Notific
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** PART_REQUEST_READY references a part request; its order comes from the request. */
+export async function resolveTechnicianNotificationOrderId(
+  item: Pick<NotificationItem, 'referenceId' | 'referenceType'>,
+  getPartRequest: (id: string) => Promise<{ serviceOrderId: string }>,
+): Promise<string | null> {
+  if (item.referenceType?.trim().toUpperCase() !== 'PART_REQUEST') return technicianNotificationOrderId(item);
+  const id = item.referenceId?.trim() ?? '';
+  if (!UUID.test(id)) return null;
+  const orderId = (await getPartRequest(id)).serviceOrderId?.trim() ?? '';
+  return UUID.test(orderId) ? orderId : null;
+}
+
 /**
  * The order a notification points at (e.g. ORDER_DEPARTURE_WARNING), or null.
  * Only a real SERVICE_ORDER reference opens a screen; nothing is guessed.

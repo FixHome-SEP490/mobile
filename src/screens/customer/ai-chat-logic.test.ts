@@ -116,3 +116,18 @@ describe('handing the chat over to the booking', () => {
     expect(chatAttachmentSummary([])).toBe('');
   });
 });
+
+describe('several appliances in one chat', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { bookableDevices, nextPinnedDevices } = require('./ai-chat-logic');
+  const dev = (name: string, serviceId: string | null) => ({ deviceType: name, nameVi: name, service: serviceId ? { serviceCode: name, nameVi: name, serviceId } : null });
+  it('keeps only devices with a service, at most three', () => {
+    expect(bookableDevices({ devices: [dev('a', 's1'), dev('b', null), dev('c', 's3'), dev('d', 's4'), dev('e', 's5')] }).map((d: { nameVi: string }) => d.nameVi)).toEqual(['a', 'c', 'd']);
+  });
+  it('pins from two bookable devices, empties on fewer, and keeps the list when a reply has none', () => {
+    const two = [dev('a', 's1'), dev('b', 's2')];
+    expect(nextPinnedDevices([], { devices: two })).toHaveLength(2);
+    expect(nextPinnedDevices(two, { devices: [dev('a', 's1')] })).toEqual([]);
+    expect(nextPinnedDevices(two, {})).toBe(two);
+  });
+});

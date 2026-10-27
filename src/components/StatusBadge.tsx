@@ -12,7 +12,7 @@ import {
   Wrench,
   XCircle,
 } from 'lucide-react-native';
-import { useAppTheme } from '../constants/theme';
+import { iconSize, iconStroke, useAppTheme } from '../constants/theme';
 import type { StatusIcon, StatusView } from '../screens/technician/technician-status';
 
 const ICONS = {
@@ -35,7 +35,7 @@ export default function StatusBadge({ view }: { view: StatusView }) {
   const Icon = ICONS[view.icon];
   return (
     <View style={[styles.badge, { backgroundColor: tone.bg }]}>
-      <Icon size={14} color={tone.fg} strokeWidth={2} />
+      <Icon size={iconSize.sm} color={tone.fg} strokeWidth={iconStroke} />
       <Text style={[styles.text, { color: tone.text }]}>{view.label}</Text>
     </View>
   );

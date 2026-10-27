@@ -10,6 +10,7 @@ const mockLoadResource = jest.fn();
 const mockNavigate = jest.fn();
 
 jest.mock('../runtime/OrderSessionProvider', () => ({
+  useOptionalOrderSession: () => null,
   useOrderSession: () => ({
     key: mockSnapshot.key,
     snapshot: mockSnapshot,
@@ -85,9 +86,28 @@ it('shows the current repair scope with detail links and no premature completion
     renderer.root.findByProps({ testID: 'task-link-OrderInformation' }).props.onPress();
     renderer.root.findByProps({ testID: 'task-link-PersonalOrderNotes' }).props.onPress();
   });
-  expect(mockNavigate).toHaveBeenNthCalledWith(1, 'EvidenceGallery');
+  expect(mockNavigate).toHaveBeenNthCalledWith(1, 'AfterEvidence');
   expect(mockNavigate).toHaveBeenNthCalledWith(2, 'OrderInformation');
   expect(mockNavigate).toHaveBeenNthCalledWith(3, 'PersonalOrderNotes');
+  await act(async () => renderer.unmount());
+});
+
+it('offers the handover on the screen once the after photos are sent', async () => {
+  mockSnapshot = workspaceSnapshot();
+  mockSnapshot.resources.evidence = readyResource([
+    { id: 'e1', serviceOrderId: 'order-1', uploaderId: 'tech-1', type: 'AFTER', mediaUrl: 'https://res.cloudinary.com/demo/image/authenticated/s--sig--/v1/a.jpg' },
+  ] as never, 1, 1);
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => {
+    renderer = create(<RepairWorkspaceScreen />);
+  });
+  await act(async () => {
+    renderer.root.findByProps({ testID: 'task-handover-primary' }).props.onPress();
+    renderer.root.findByProps({ testID: 'task-evidence-link' }).props.onPress();
+  });
+  expect(mockNavigate).toHaveBeenNthCalledWith(1, 'CompletionRequest');
+  expect(mockNavigate).toHaveBeenNthCalledWith(2, 'EvidenceGallery');
+  expect(renderer.root.findAllByProps({ testID: 'task-gallery-link' })).toHaveLength(0);
   await act(async () => renderer.unmount());
 });
 

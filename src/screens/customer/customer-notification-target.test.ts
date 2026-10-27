@@ -149,4 +149,11 @@ describe('resolveCustomerNotificationTarget', () => {
       referenceId: CASE_ID,
     }, { getSupportCase })).rejects.toThrow('forbidden');
   });
+
+  it('opens the parent visit for a VISIT_GROUP reference', async () => {
+    await expect(resolveCustomerNotificationTarget(
+      { type: 'VISIT_CASH_DECLARED', referenceType: 'VISIT_GROUP', referenceId: BOOKING_ID },
+      { getSupportCase: jest.fn() },
+    )).resolves.toEqual({ name: 'CustomerVisit', params: { visitGroupId: BOOKING_ID } });
+  });
 });

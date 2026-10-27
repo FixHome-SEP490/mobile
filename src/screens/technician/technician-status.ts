@@ -32,6 +32,30 @@ export function serviceOrderStatusView(status: unknown): StatusView {
   return SERVICE_ORDER[String(status ?? '').toUpperCase()] ?? UNKNOWN;
 }
 
+/**
+ * What to show for an order: the server keeps UNDER_REPAIR until the visit is paid, but once the technician has handed over
+ * (`completionRequestedAt`) the work is done and only the payment is awaited.
+ */
+export function serviceOrderDisplayView(order: { status?: unknown; completionRequestedAt?: string | null }): StatusView {
+  return String(order.status ?? '').toUpperCase() === 'UNDER_REPAIR' && order.completionRequestedAt
+    ? { label: 'Chờ thanh toán', tone: 'warning', icon: 'Clock' }
+    : serviceOrderStatusView(order.status);
+}
+
+// Booking domain (DS §8.3). Labels kept as the customer list already shows them.
+const BOOKING: Record<string, StatusView> = {
+  SUBMITTED: { label: 'Đã gửi yêu cầu', tone: 'info', icon: 'ClipboardCheck' },
+  MATCHING: { label: 'Đang tìm kỹ thuật viên', tone: 'warning', icon: 'Clock' },
+  MATCHED: { label: 'Đã ghép kỹ thuật viên', tone: 'success', icon: 'CheckCircle2' },
+  CONFIRMED: { label: 'Đã xác nhận', tone: 'info', icon: 'ClipboardCheck' },
+  CLOSED: { label: 'Chưa có thợ nhận', tone: 'neutral', icon: 'Minus' },
+  CANCELLED: { label: 'Đã hủy', tone: 'neutral', icon: 'XCircle' },
+};
+
+export function bookingStatusView(status: unknown): StatusView {
+  return BOOKING[String(status ?? '').toUpperCase()] ?? UNKNOWN;
+}
+
 const URGENCY: Record<string, StatusView> = {
   EMERGENCY: { label: 'Khẩn cấp', tone: 'danger', icon: 'AlertTriangle' },
   HIGH: { label: 'Cao', tone: 'warning', icon: 'AlertTriangle' },

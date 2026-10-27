@@ -26,6 +26,8 @@ jest.mock('lucide-react-native', () => {
   return new Proxy({}, { get: () => Icon });
 });
 jest.mock('../../constants/theme', () => ({
+  iconSize: { sm: 16, md: 20, lg: 24 },
+  iconStroke: 1.75,
   useAppTheme: () => ({
     isDark: false,
     colors: {

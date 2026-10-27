@@ -7,6 +7,7 @@ import { getOrderCapabilities } from '../domain/order-capabilities';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { useTechnicianArrivalProof } from './useTechnicianArrivalProof';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import VisitTechnicianPanel from './VisitTechnicianPanel';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 
 /**
@@ -135,6 +136,7 @@ export default function RepairRecoveryScreen() {
           <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Chụp thêm ảnh trước sửa chữa ›</Text>
         </TouchableOpacity>
       ) : null}
+      <VisitTechnicianPanel section="devices" />
     </TaskScreenShell>
   );
 }

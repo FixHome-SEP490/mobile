@@ -27,7 +27,7 @@ import {
   Navigation,
   RefreshCw,
 } from 'lucide-react-native';
-import { useAppTheme } from '../../constants/theme';
+import { iconSize, iconStroke, useAppTheme } from '../../constants/theme';
 import { ordersApi } from '../../api/orders.api';
 import { createJobsLoader, getCachedJobsState, technicianJobsUserId } from './technician-jobs-loader';
 import { historicalSummaryDates, isHistoricalOrder, resolveJobsView, techOrderDetailTarget } from './technician-order-detail';
@@ -49,7 +49,7 @@ import {
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import StatusBadge from '../../components/StatusBadge';
 import ContactActions from '../../components/ContactActions';
-import { serviceOrderStatusView } from './technician-status';
+import { serviceOrderDisplayView } from './technician-status';
 import {
   loadReleasable,
   releaseConfirmText,
@@ -57,6 +57,7 @@ import {
   type ReleasableJob,
 } from './technician-overrun-release';
 import { formatVnd } from '../../utils/format';
+import VisitGroupsPanel from '../../components/customer/VisitGroupsPanel';
 
 import { vnDateTimeString } from '../../utils/vn-time';
 
@@ -72,6 +73,9 @@ export default function TechnicianJobsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [activeTab, setActiveTab] = useState<JobTab>('all');
+  // Visits of several devices are listed apart (the single-order list leaves their devices out).
+  const [visitMode, setVisitMode] = useState(false);
+  const [visitSeen, setVisitSeen] = useState(false);
   // Codex T09 local code search: read-only UI state, no server query.
   const [codeQuery, setCodeQuery] = useState('');
   const [jobsState, setJobsState] = useState(getCachedJobsState);
@@ -86,11 +90,11 @@ export default function TechnicianJobsScreen() {
   useEffect(() => {
     jobsRef.current = jobsState.jobs;
   }, [jobsState.jobs]);
-  const [loader] = useState(() => createJobsLoader(ordersApi.getTechnicianJobs, setJobsState, ordersApi.enRoute, {
+  const [loader] = useState(() => createJobsLoader(() => ordersApi.getTechnicianJobs({ excludeVisitGroups: true }), setJobsState, ordersApi.enRoute, {
     getUserId: () => technicianJobsUserId(useAuthStore.getState()),
     subscribe: (listener) => useAuthStore.subscribe(listener),
   }, (title, message) => Alert.alert(title, message),
-  { getOrdersPage: (page, pageSize) => ordersApi.getTechnicianJobsPage(page, pageSize) }));
+  { getOrdersPage: (page, pageSize) => ordersApi.getTechnicianJobsPage(page, pageSize, { excludeVisitGroups: true }) }));
   // P3B4 real user-tapped foreground check-in: permission + one-shot position
   // happen only inside the tap handler below, never on focus. All guards live
   // in the production controller; this only adapts Expo APIs and job state.
@@ -293,29 +297,60 @@ export default function TechnicianJobsScreen() {
         </Text>
       </View>
 
-      <View style={styles.container}>
-        <View style={styles.searchWrap}>
-          <View
-            style={[
-              styles.searchBox,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
-            <Search size={18} color={colors.textSecondary} strokeWidth={1.75} />
-            <TextInput
-              style={styles.searchInput}
-              value={codeQuery}
-              onChangeText={setCodeQuery}
-              placeholder="Tìm theo mã"
-              placeholderTextColor={colors.muted}
-              accessibilityLabel="Tìm theo mã"
-              accessibilityHint="Lọc theo mã trong các công việc đã tải"
-              returnKeyType="search"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
+      <View style={styles.searchWrap}>
+        <View
+          style={[
+            styles.searchBox,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
+          <Search size={18} color={colors.textSecondary} strokeWidth={1.75} />
+          <TextInput
+            style={styles.searchInput}
+            value={codeQuery}
+            onChangeText={setCodeQuery}
+            placeholder="Tìm theo mã"
+            placeholderTextColor={colors.muted}
+            accessibilityLabel="Tìm theo mã"
+            accessibilityHint="Lọc theo mã trong các công việc đã tải"
+            returnKeyType="search"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
         </View>
+      </View>
+
+      <View style={styles.modeRow} accessibilityRole="tablist">
+        {([[false, 'Công việc đơn'], [true, 'Nhiều thiết bị']] as const).map(([visits, label]) => (
+          <TouchableOpacity
+            key={label}
+            testID={visits ? 'jobs-mode-visits' : 'jobs-mode-orders'}
+            style={[styles.segment, visitMode === visits && styles.segmentActive]}
+            onPress={() => { setVisitMode(visits); if (visits) setVisitSeen(true); }}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: visitMode === visits }}
+          >
+            <Text style={visitMode === visits ? styles.segmentTextActive : styles.segmentText}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {visitSeen && (
+        <View style={[styles.container, !visitMode && styles.hidden]}>
+          <VisitGroupsPanel
+            assigned
+            search={codeQuery}
+            emptyTitle="Chưa có lượt sửa nhiều thiết bị được phân công"
+            onOpen={(visit) => {
+              // The device still to do first; when every device has its result, the first one.
+              const orderId = (visit.items.find((d) => d.orderId && !d.outcome) ?? visit.items.find((d) => d.orderId))?.orderId;
+              if (orderId) navigation.navigate('TechnicianOrderDetail', { serviceOrderId: orderId });
+            }}
+          />
+        </View>
+      )}
+      {(
+      <View style={[styles.container, visitMode && styles.hidden]}>
         {/* Bộ lọc công việc — chỉ lọc trên phần đã tải, không bịa số lượng */}
         <ScrollView
           horizontal
@@ -442,19 +477,19 @@ export default function TechnicianJobsScreen() {
                     <View key={job.id} style={styles.jobCard}>
                       <View style={styles.info}>
                         <View style={styles.badgeRow}>
-                          <StatusBadge view={serviceOrderStatusView(job.status)} />
+                          <StatusBadge view={serviceOrderDisplayView(job)} />
                           <Text style={styles.jobCode}>#{code}</Text>
                         </View>
                         <Text style={styles.jobTitle}>{job.serviceName || 'Dịch vụ sửa chữa'}</Text>
                         {!!job.scheduledAt && (
                           <View style={styles.iconRow}>
-                            <Clock size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                            <Clock size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
                             <Text style={styles.jobMeta}>{vnDateTimeString(job.scheduledAt, VN_DATETIME)}</Text>
                           </View>
                         )}
                         {!!job.addressSummary && (
                           <View style={styles.iconRow}>
-                            <MapPin size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                            <MapPin size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
                             <Text style={styles.jobAddress} numberOfLines={2}>{job.addressSummary}</Text>
                           </View>
                         )}
@@ -489,7 +524,7 @@ export default function TechnicianJobsScreen() {
             )}
             <View style={styles.list}>
               {visibleJobs.map((job) => {
-                const statusView = serviceOrderStatusView(job.status);
+                const statusView = serviceOrderDisplayView(job);
                 if (isHistoricalOrder(job)) {
                   const dates = historicalSummaryDates(job);
                   return (
@@ -524,17 +559,17 @@ export default function TechnicianJobsScreen() {
                     <View style={styles.jobMetaRow}>
                       {!!job.scheduledAt && (
                         <View style={styles.iconRow}>
-                          <Clock size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                          <Clock size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
                           <Text style={styles.jobMeta}>{vnDateTimeString(job.scheduledAt, VN_DATETIME)}</Text>
                         </View>
                       )}
-                      {typeof job.grandTotal === 'number' && (
-                        <Text style={styles.jobAmount}>Dự kiến thu: {formatVnd(job.grandTotal)}</Text>
+                      {typeof job.grandTotal === 'number' && s !== 'CANCELLED' && (
+                        <Text style={styles.jobAmount}>{s === 'COMPLETED' ? 'Tổng thu' : 'Dự kiến thu'}: {formatVnd(job.grandTotal)}</Text>
                       )}
                     </View>
                     {!!job.customerName && (
                       <View style={styles.iconRow}>
-                        <User size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                        <User size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
                         <Text style={styles.jobMeta}>
                           Khách: {job.customerName}
                           {job.customerPhone ? ` · ${job.customerPhone}` : ''}
@@ -543,7 +578,7 @@ export default function TechnicianJobsScreen() {
                     )}
                     {!!job.addressSummary && (
                       <View style={styles.iconRow}>
-                        <MapPin size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.rowIcon} />
+                        <MapPin size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
                         <Text style={styles.jobAddress} numberOfLines={2}>{job.addressSummary}</Text>
                       </View>
                     )}
@@ -729,6 +764,7 @@ export default function TechnicianJobsScreen() {
           </ScrollView>
         )}
       </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -747,6 +783,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   },
   headerTitle: { fontSize: 20, lineHeight: 24, fontWeight: '700', color: colors.text },
   headerSubtitle: { fontSize: 12, lineHeight: 16, color: colors.textSecondary },
+  hidden: { display: 'none' },
   searchWrap: { paddingHorizontal: 16, paddingTop: 12 },
   searchBox: {
     flexDirection: 'row',
@@ -765,19 +802,24 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
     color: colors.text,
   },
   chipScroll: { flexGrow: 0, flexShrink: 0, minHeight: 68 },
+  modeRow: { flexDirection: 'row', marginHorizontal: 16, marginTop: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
+  segment: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent', marginBottom: -1 },
+  segmentActive: { borderBottomColor: colors.primary },
+  segmentText: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.textSecondary },
+  segmentTextActive: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong },
   chipRow: { paddingHorizontal: 16, paddingVertical: 12, gap: 8, alignItems: 'center' },
   chip: {
     minHeight: 44,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     justifyContent: 'center',
     borderRadius: 22,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  chipActive: { backgroundColor: colors.primaryStrong, borderColor: colors.primaryStrong },
-  chipText: { fontSize: 14, lineHeight: 20, fontWeight: '500', color: colors.textSecondary },
-  chipTextActive: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.surface },
+  chipActive: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
+  chipText: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: colors.textSecondary },
+  chipTextActive: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: colors.primaryStrong },
   skeletonWrap: { flex: 1, paddingHorizontal: 16 },
   loadingText: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, marginBottom: 8 },
   listScroll: { flex: 1, minHeight: 0 },

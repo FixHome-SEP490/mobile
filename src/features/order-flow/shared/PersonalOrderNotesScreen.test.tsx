@@ -10,7 +10,7 @@ let mockLoadNote: jest.Mock<Promise<string>, [string, string]>;
 let mockSaveNote: jest.Mock<Promise<boolean>, [string, string, string]>;
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
 
-jest.mock('../runtime/OrderSessionProvider', () => ({ useOrderSession: () => ({ key: mockSnapshot.key, snapshot: mockSnapshot }) }));
+jest.mock('../runtime/OrderSessionProvider', () => ({ useOptionalOrderSession: () => null, useOrderSession: () => ({ key: mockSnapshot.key, snapshot: mockSnapshot }) }));
 jest.mock('../../../screens/technician/technician-notes', () => ({
   NOTE_MAX_LENGTH: 2000,
   loadNote: (...args: [string, string]) => mockLoadNote(...args),
