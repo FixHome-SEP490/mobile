@@ -131,3 +131,34 @@ describe('several appliances in one chat', () => {
     expect(nextPinnedDevices(two, {})).toBe(two);
   });
 });
+
+describe('photo labels, price breakdown and disagreement', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { photoLabel, priceBreakdown, wordsForDescription } = require('./ai-chat-logic');
+  const sent = { sender: 'user', images: ['a', 'b'] };
+  const reply = (photos: unknown[]) => ({ sender: 'bot', reply: { photos } });
+
+  it('labels each photo from the first reply that reports its photos', () => {
+    const messages = [sent, { sender: 'bot' }, reply([{ index: 0, nameVi: 'Tủ lạnh' }, { index: 1, nameVi: 'Máy giặt', uncertain: true }])];
+    expect(photoLabel(messages, 0, 0)).toEqual({ text: 'Tủ lạnh', uncertain: false, correction: 'Ảnh 1 là ' });
+    expect(photoLabel(messages, 0, 1)).toEqual({ text: 'Máy giặt?', uncertain: true, correction: 'Ảnh 2 là ' });
+  });
+  it('says "Chưa nhận ra" for an unread photo and nothing before a reply or past the next customer turn', () => {
+    expect(photoLabel([sent, reply([{ index: 0, nameVi: null }])], 0, 0)?.text).toBe('Chưa nhận ra');
+    expect(photoLabel([sent], 0, 0)).toBeNull();
+    expect(photoLabel([sent, { sender: 'user' }, reply([{ index: 0, nameVi: 'X' }])], 0, 0)).toBeNull();
+    expect(photoLabel([{ sender: 'user', images: ['a'] }, reply([])], 0, 0)).toBeNull();
+    expect(photoLabel([{ sender: 'user', images: ['a'] }, reply([{ index: 0, nameVi: null }])], 0, 0)?.correction).toBe('Ảnh này là ');
+  });
+  it('explains a price made of labour and parts, and stays silent without parts', () => {
+    expect(priceBreakdown({ priceEstimate: { min: 1, currency: 'VND', requiresAssessment: false, labourMin: 150000, labourMax: 250000, partsMax: 400000 } }))
+      .toBe('Gồm tiền công dịch vụ 150.000đ – 250.000đ, cộng linh kiện nếu phải thay (tới 400.000đ).');
+    expect(priceBreakdown({ priceEstimate: { min: 1, currency: 'VND', requiresAssessment: false, labourMin: 150000, partsMax: 0 } })).toBeNull();
+    expect(priceBreakdown({})).toBeNull();
+  });
+  it('drops "sai rồi" from the description, and the whole turn when nothing else was said', () => {
+    expect(wordsForDescription('sai rồi, tủ vẫn kêu', { customerDisagreed: { restVi: 'tủ vẫn kêu' } })).toBe('tủ vẫn kêu');
+    expect(wordsForDescription('sai rồi', { customerDisagreed: { restVi: '' } })).toBe('');
+    expect(wordsForDescription('tủ kêu', undefined)).toBe('tủ kêu');
+  });
+});

@@ -43,6 +43,11 @@ jest.mock('react-native-safe-area-context', () => {
   return { SafeAreaView: Native.View, useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) };
 });
 jest.mock('../../../hooks/useKeyboardInset', () => ({ useKeyboardInset: () => 0 }));
+const mockCustodyRows: jest.Mock = jest.fn(async () => []);
+jest.mock('../../../api/part-requests.api', () => ({
+  ...jest.requireActual('../../../api/part-requests.api'),
+  partReturnsApi: { getByOrderId: (...args: unknown[]) => mockCustodyRows(...args) },
+}));
 
 const idleState = { phase: 'idle', operation: null, confirmation: null, confirmedUpload: null, message: null };
 
@@ -101,6 +106,16 @@ it('names the parts that block the handover and links to parts management', asyn
   expect(text).toContain('1 yêu cầu linh kiện chưa nhận');
   await act(async () => { renderer.root.findByProps({ testID: 'completion-open-parts' }).props.onPress(); });
   expect(mockNavigate).toHaveBeenCalledWith('PartsLifecycle');
+  await act(async () => renderer.unmount());
+});
+
+it('units still owed back to FixHome are a note, not a handover blocker', async () => {
+  mockCustodyRows.mockResolvedValueOnce([{ partRequestId: 'pr-1', partRequestItemId: 'i1', partNameSnapshot: 'Tụ', issuedQty: 3, usedQty: 1, declaredQty: 0, managerAcceptedQty: 0, outstandingQty: 2, version: 1 }]);
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<CompletionRequestScreen />); });
+  await act(async () => {});
+  expect(JSON.stringify(renderer.toJSON())).toContain('Còn 2 linh kiện cần khai trả kho. Có thể khai trả sau khi hoàn tất sửa.');
+  expect(renderer.root.findByProps({ testID: 'completion-open-sheet' }).props.disabled).toBe(false);
   await act(async () => renderer.unmount());
 });
 

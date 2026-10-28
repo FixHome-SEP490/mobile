@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,9 @@ import { formatVnd } from '../../../utils/format';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import RebookSheet from '../../../components/RebookSheet';
+import { useRebookAction } from '../../../hooks/useRebookAction';
+import StopReplaceSheet from '../../../components/StopReplaceSheet';
+import { canRequestStopReplace } from '../../../screens/customer/stop-replace';
 import AcceptedRescheduleSheet from '../../../components/AcceptedRescheduleSheet';
 import { serviceOrderDisplayView, serviceOrderStatusView } from '../../../screens/technician/technician-status';
 import { sessionLabel } from '../../../utils/booking-session';
@@ -33,9 +36,12 @@ export default function OrderInformationScreen() {
   const order = orderValue && !isHistoricalOrder(orderValue) ? orderValue : null;
   const [openingChat, setOpeningChat] = useState(false);
   const [rebookOpen, setRebookOpen] = useState(false);
+  const [stopOpen, setStopOpen] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [copyMessage, setCopyMessage] = useState('');
   const canRebook = snapshot?.key.role === 'customer' && !!order?.bookingId && ['COMPLETED', 'CANCELLED'].includes(String(order.status).toUpperCase());
+  const openRebookSheet = useCallback(() => setRebookOpen(true), []);
+  const rebook = useRebookAction({ bookingId: canRebook ? order?.bookingId : null, orderId: order?.id, status: order?.status, openSheet: openRebookSheet });
   // Same rule as the web: the technician accepted but has not set out yet.
   // A device of a multi-device visit is moved, cancelled and paid with the whole visit, never on its own.
   const visitGroupId = snapshot?.key.role === 'customer' ? order?.visitGroupId ?? null : null;
@@ -65,7 +71,8 @@ export default function OrderInformationScreen() {
   const actions: HubLink[] = [
     ...(order?.bookingId ? [{ screen: 'chat', testID: 'order-chat-entry', label: openingChat ? 'Đang mở…' : 'Nhắn tin', Icon: MessageCircle, disabled: openingChat, onPress: () => void openChat(order.bookingId) }] : []),
     ...(canReschedule ? [{ screen: 'reschedule', testID: 'order-reschedule-entry', label: 'Đổi lịch hẹn', Icon: CalendarClock, onPress: () => setRescheduleOpen(true) }] : []),
-    ...(canRebook ? [{ screen: 'rebook', testID: 'order-rebook-entry', label: 'Đặt lại thợ', Icon: Repeat, onPress: () => setRebookOpen(true) }] : []),
+    ...(snapshot?.key.role === 'customer' && order?.bookingId && canRequestStopReplace(order) ? [{ screen: 'stop-replace', testID: 'order-stop-replace-entry', label: 'Yêu cầu dừng sửa / đổi thợ', Icon: Headset, onPress: () => setStopOpen(true) }] : []),
+    ...(canRebook ? [{ screen: 'rebook', testID: 'order-rebook-entry', label: rebook.label, Icon: Repeat, disabled: rebook.disabled, onPress: rebook.press }] : []),
     ...(visitGroupId ? [{ screen: 'CustomerVisit', testID: 'order-visit-entry', label: 'Xem lượt sửa nhiều thiết bị', Icon: Layers, onPress: () => navigation.navigate('CustomerVisit', { visitGroupId }) }] : []),
     { screen: 'SupportCases', testID: 'order-support-entry', label: 'Yêu cầu hỗ trợ', Icon: Headset },
     ...(visitGroupId || ['COMPLETED', 'CANCELLED'].includes(String(order?.status).toUpperCase()) ? [] : [{ screen: 'OrderException', testID: 'order-cancel-entry', label: 'Hủy đơn hoặc kiểm tra điều kiện', Icon: XCircle }]),
@@ -116,6 +123,7 @@ export default function OrderInformationScreen() {
       {String(order.pricingMode ?? '').toUpperCase() === 'FIXED_PRICE' ? <>
         <DetailRow label="Giá đã chốt" value={formatVnd(order.fixedUnitPrice)} />
         <DetailRow label="Số lượng" value={order.quantity ?? 'Chưa có dữ liệu'} />
+        {snapshot?.key.role === 'customer' ? <Text style={{ color: colors.textSecondary, fontSize: 13, paddingVertical: 8 }}>Tiền công chưa gồm linh kiện FixHome hoặc tiền công phát sinh ngoài phạm vi. Kỹ thuật viên cần gửi báo giá; bạn duyệt trước khi thực hiện.</Text> : null}
       </> : null}
       {order.laborWarrantyDays ?<DetailRow label="Bảo hành tiền công" value={`${order.laborWarrantyDays} ngày`} /> : null}
       <DetailRow label="Tổng tiền" value={formatVnd(typeof order.grandTotal === 'number' ? order.grandTotal : Number.isFinite(Number(order.grandTotal)) ? Number(order.grandTotal) : undefined)} />
@@ -125,6 +133,7 @@ export default function OrderInformationScreen() {
     {order && !history ? <OrderCostHistory /> : null}
     {order && !history ? <HubSection title="Thao tác" items={actions} onOpen={screen => navigation.navigate(screen as never)} /> : null}
     {canReschedule ? <AcceptedRescheduleSheet bookingId={order!.bookingId} current={{ bookingMode: order!.bookingMode, slot: order!.slot, start: order!.scheduledAt }} visible={rescheduleOpen} onClose={() => setRescheduleOpen(false)} onDone={() => void refresh('manual')} /> : null}
+    {order && snapshot?.key.role === 'customer' ? <StopReplaceSheet orderId={order.id} visible={stopOpen} onClose={() => setStopOpen(false)} /> : null}
     {canRebook ? <RebookSheet bookingId={order!.bookingId} visible={rebookOpen} onClose={() => setRebookOpen(false)} /> : null}
   </TaskScreenShell>;
 }

@@ -1060,6 +1060,22 @@ export default function CustomerProfileScreen() {
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.muted} />
             </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => navigation.navigate('CustomerVouchers')}
+              accessibilityRole="button"
+              accessibilityLabel="Mở ưu đãi của tôi"
+            >
+              <View style={styles.menuIconTile}><Ionicons name="pricetag-outline" size={20} color={colors.primaryStrong} /></View>
+              <View style={styles.menuContent}>
+                <Text style={[styles.menuTitle, isDarkMode && styles.textDark]}>Ưu đãi của tôi</Text>
+                <Text style={styles.menuDesc}>Lưu mã và xem voucher trong ví</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+            </TouchableOpacity>
           </View>
 
 

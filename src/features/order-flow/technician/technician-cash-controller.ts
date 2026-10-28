@@ -3,17 +3,27 @@ import { sameOrderSession, type OrderSessionKey } from '../domain/order-session.
 import type { OrderCommandJournal, OrderCommandMarker } from '../runtime/order-command-journal';
 import { createOrderCommandAdapter, type CommandReadbackVerdict } from '../runtime/order-controller-adapters';
 import type { OrderReadCoordinator } from '../runtime/order-read-coordinator';
+import { NoFundedCashReservationError, type FundedCashReservation } from '../../../api/funded-checkout.api';
 import { cashFact, financialResult, hasCompletionRequest, invoiceFact, isUnresolvedMarker, m6Order, validateCashDeclaration,
   FINANCIAL_UNKNOWN, type CashDeclarationDto, type FinancialResult, type M6Phase } from '../customer/payment-facts';
 export interface TechnicianCashDependencies {
   coordinator: OrderReadCoordinator; journal: OrderCommandJournal; getKey: () => OrderSessionKey | null; isActive: () => boolean; newIntentId: () => string;
-  transport: { declareCash: (id: string, dto: CashDeclarationDto) => Promise<unknown> };
+  transport: {
+    declareCash: (id: string, dto: CashDeclarationDto) => Promise<unknown>;
+    /** Funded cash (backend T2.1): the held voucher of this order, or throws NoFundedCashReservationError when the server says there is none. */
+    cashReservation?: (orderId: string) => Promise<FundedCashReservation>;
+    declareFundedCash?: (orderId: string, reservationId: string, dto: CashDeclarationDto) => Promise<unknown>;
+  };
 }
-export interface CashDeclarationConfirmation { key: OrderSessionKey; invoiceId: string; invoiceAmount: number; dto: CashDeclarationDto }
-export interface TechnicianCashState { phase: M6Phase; confirmation: CashDeclarationConfirmation | null; result: FinancialResult; message: string | null }
+export interface CashDeclarationConfirmation { key: OrderSessionKey; invoiceId: string; invoiceAmount: number; dto: CashDeclarationDto; voucher?: { reservationId: string; dueVnd: number } }
+/** What the server says about a voucher on this order. Only `none` lets the full invoice amount be collected; `error` collects nothing. */
+export type CashVoucherLookup = { status: 'unchecked' | 'checking' | 'none' | 'error' } | { status: 'held'; reservationId: string; dueVnd: number };
+export interface TechnicianCashState { phase: M6Phase; confirmation: CashDeclarationConfirmation | null; result: FinancialResult; message: string | null; voucher: CashVoucherLookup }
+export const CASH_VOUCHER_UNCHECKED = 'Chưa kiểm tra được voucher của khách. Chưa thể khai báo tiền mặt; hãy thử lại.';
+const cashDueMessage = (due: number) => `Khách đang dùng voucher. Số tiền mặt cần thu là ${due.toLocaleString('vi-VN')} ₫; hãy khai báo đúng số này.`;
 /** First declaration only; existing declarations are read/support, never silently overwritten. */
 export function createTechnicianCashController(deps: TechnicianCashDependencies) {
-  let state: TechnicianCashState = { phase: 'idle', confirmation: null, result: 'unverified', message: null }, busy = false, epoch = 0;
+  let state: TechnicianCashState = { phase: 'idle', confirmation: null, result: 'unverified', message: null, voucher: { status: 'unchecked' } }, busy = false, epoch = 0;
   const listeners = new Set<() => void>();
   const publish = (patch: Partial<TechnicianCashState>) => { state = { ...state, ...patch }; listeners.forEach(f => f()); };
   const same = (key: OrderSessionKey) => key.role === 'technician' && deps.isActive() && sameOrderSession(deps.getKey(), key)
@@ -30,6 +40,17 @@ export function createTechnicianCashController(deps: TechnicianCashDependencies)
       && invoice?.status === 'unpaid' && cashFact(s, key) === null ? invoice : null;
   }
   const matches = (t: CashDeclarationConfirmation) => { const invoice = eligible(t.key); return !!invoice && invoice.id === t.invoiceId && invoice.amount === t.invoiceAmount; };
+  /** One server read of the voucher on this order; any answer but an explicit "none" is not a licence to collect the full amount. */
+  async function lookupVoucher(key: OrderSessionKey): Promise<CashVoucherLookup> {
+    const read = deps.transport.cashReservation;
+    if (!read) return { status: 'none' };
+    try {
+      const held = await read(key.serviceOrderId);
+      return { status: 'held', reservationId: held.voucherReservationId, dueVnd: held.customerDueVnd };
+    } catch (error) {
+      return error instanceof NoFundedCashReservationError ? { status: 'none' } : { status: 'error' };
+    }
+  }
   function verdict(key: OrderSessionKey, m: OrderCommandMarker): CommandReadbackVerdict {
     if (!order(key)) return 'unresolved';
     const s = deps.coordinator.getSnapshot(), cash = cashFact(s, key), invoice = invoiceFact(s, key);
@@ -43,6 +64,13 @@ export function createTechnicianCashController(deps: TechnicianCashDependencies)
   }
   return {
     getState: () => state, subscribe(fn: () => void) { listeners.add(fn); return () => { listeners.delete(fn); }; },
+    /** Reads the voucher for the screen to show the amount to collect; the declaration reads it again just before it is sent. */
+    async checkVoucher() {
+      const key = deps.getKey(); if (!key || !same(key)) return;
+      publish({ voucher: { status: 'checking' } });
+      const found = await lookupVoucher(key);
+      if (same(key)) publish({ voucher: found });
+    },
     async requestDeclaration(input: CashDeclarationDto) {
       const key = deps.getKey(); if (!key || !same(key) || busy) return;
       let dto: CashDeclarationDto;
@@ -55,13 +83,18 @@ export function createTechnicianCashController(deps: TechnicianCashDependencies)
         await refresh(key); if (!same(key) || generation !== epoch) return;
         const invoice = eligible(key);
         if (!invoice) { publish({ phase: 'denied', message: 'Hóa đơn hoặc đối soát tiền mặt chưa cho phép khai báo.' }); return; }
-        publish({ phase: 'confirming', message: null, confirmation: Object.freeze({ key: Object.freeze({ ...key }), invoiceId: invoice.id, invoiceAmount: invoice.amount, dto }) });
+        const found = await lookupVoucher(key); if (!same(key) || generation !== epoch) return;
+        publish({ voucher: found });
+        if (found.status === 'error') { publish({ phase: 'denied', message: CASH_VOUCHER_UNCHECKED }); return; }
+        if (found.status === 'held' && dto.declaredAmount !== found.dueVnd) { publish({ phase: 'denied', message: cashDueMessage(found.dueVnd) }); return; }
+        publish({ phase: 'confirming', message: null, confirmation: Object.freeze({ key: Object.freeze({ ...key }), invoiceId: invoice.id, invoiceAmount: invoice.amount, dto,
+          ...(found.status === 'held' ? { voucher: Object.freeze({ reservationId: found.reservationId, dueVnd: found.dueVnd }) } : {}) }) });
       } catch { if (same(key)) publish({ phase: 'unknown', message: FINANCIAL_UNKNOWN }); }
       finally { busy = false; }
     },
     cancelConfirmation() { epoch++; publish({ confirmation: null, ...(busy ? {} : { phase: 'idle' as const }) }); },
     revalidateConfirmation() { if (state.confirmation && !matches(state.confirmation)) { epoch++; publish({ confirmation: null, ...(busy ? {} : { phase: 'idle' as const }) }); } },
-    invalidatePresentation() { epoch++; publish({ phase: 'idle', confirmation: null, result: 'unverified', message: null }); },
+    invalidatePresentation() { epoch++; publish({ phase: 'idle', confirmation: null, result: 'unverified', message: null, voucher: { status: 'unchecked' } }); },
     async submitConfirmation() {
       const target = state.confirmation; if (!target || busy || state.phase !== 'confirming' || !matches(target)) return;
       busy = true; let sent = false; const key = target.key, intentId = deps.newIntentId(); publish({ phase: 'submitting' });
@@ -70,7 +103,9 @@ export function createTechnicianCashController(deps: TechnicianCashDependencies)
         await adapter.dispatch(key, { operation: 'cash-declare', intentId, entityId: target.invoiceId }, async () => {
           if (state.confirmation !== target || !matches(target)) return;
           sent = true; publish({ confirmation: null });
-          const row = financialRecord(await deps.transport.declareCash(key.serviceOrderId, target.dto));
+          const row = financialRecord(target.voucher
+            ? await deps.transport.declareFundedCash!(key.serviceOrderId, target.voucher.reservationId, target.dto)
+            : await deps.transport.declareCash(key.serviceOrderId, target.dto));
           if (typeof row?.id === 'string' && row.serviceOrderId === key.serviceOrderId && row.declaredByTechnicianId === key.userId
             && wholeVnd(row.declaredAmount) === target.dto.declaredAmount) await deps.journal.recordEntity(key.userId, intentId, row.id);
         }, () => sent ? verdict(key, deps.journal.list(key.userId).find(m => m.intentId === intentId)!) : 'failed-known');

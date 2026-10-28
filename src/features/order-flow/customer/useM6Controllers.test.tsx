@@ -14,6 +14,11 @@ let mockFocused = true;
 jest.mock('@react-navigation/native', () => ({ useIsFocused: () => mockFocused }));
 jest.mock('../runtime/OrderSessionProvider', () => ({ useOrderSession: () => ({ ...mockFixture.runtime, key: mockFixture.key, snapshot: mockFixture.coordinator.getSnapshot() }) }));
 jest.mock('../../../api/client', () => ({ __esModule: true, default: {} }));
+// The technician's voucher lookup answers "no voucher", so the plain cash declaration under test is the one that runs.
+jest.mock('../../../api/funded-checkout.api', () => {
+  const actual = jest.requireActual('../../../api/funded-checkout.api');
+  return { ...actual, fundedCheckoutApi: { ...actual.fundedCheckoutApi, cashReservation: jest.fn(async () => { throw new actual.NoFundedCashReservationError(); }) } };
+});
 jest.mock('@react-native-async-storage/async-storage', () => ({ __esModule: true, default: { getItem: async () => null, setItem: async () => {} } }));
 jest.mock('expo-web-browser', () => ({ openBrowserAsync: jest.fn(async () => ({})) }));
 const { act, create } = jest.requireActual('react-test-renderer');

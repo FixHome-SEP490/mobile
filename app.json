@@ -50,7 +50,8 @@
           "microphonePermission": "FixHome cần micro để bạn gọi thoại với kỹ thuật viên hoặc khách hàng ngay trong ứng dụng."
         }
       ],
-      "expo-video"
+      "expo-video",
+      "expo-status-bar"
     ]
   }
 }

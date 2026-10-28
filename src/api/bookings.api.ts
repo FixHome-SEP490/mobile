@@ -191,25 +191,44 @@ function previewMedia(v: unknown): BookingMedia[] {
   });
 }
 
-const normalizePreview = (booking: TechnicianBookingPreview): TechnicianBookingPreview => ({
-  id: booking.id,
-  province: booking.province,
-  district: booking.district,
-  serviceName: booking.serviceName,
-  quantity: booking.quantity,
-  urgency: booking.urgency,
-  preferredStartAt: booking.preferredStartAt,
-  preferredEndAt: booking.preferredEndAt,
-  bookingMode: booking.bookingMode,
-  slot: booking.slot,
-  description: typeof booking.description === 'string' && booking.description.trim() ? booking.description : null,
-  aiSummary: booking.aiSummary && typeof booking.aiSummary === 'object' ? booking.aiSummary : null,
-  media: previewMedia(booking.media),
-  pricingMode: typeof booking.pricingMode === 'string' ? booking.pricingMode : null,
-  fixedUnitPrice: finiteOrNull(booking.fixedUnitPrice),
-  distanceBand: previewBand(booking.distanceBand),
-});
-
+const normalizePreview = (booking: TechnicianBookingPreview): TechnicianBookingPreview => ({
+
+  id: booking.id,
+
+  province: booking.province,
+
+  district: booking.district,
+
+  serviceName: booking.serviceName,
+
+  quantity: booking.quantity,
+
+  urgency: booking.urgency,
+
+  preferredStartAt: booking.preferredStartAt,
+
+  preferredEndAt: booking.preferredEndAt,
+
+  bookingMode: booking.bookingMode,
+
+  slot: booking.slot,
+
+  description: typeof booking.description === 'string' && booking.description.trim() ? booking.description : null,
+
+  aiSummary: booking.aiSummary && typeof booking.aiSummary === 'object' ? booking.aiSummary : null,
+
+  media: previewMedia(booking.media),
+
+  pricingMode: typeof booking.pricingMode === 'string' ? booking.pricingMode : null,
+
+  fixedUnitPrice: finiteOrNull(booking.fixedUnitPrice),
+
+  distanceBand: previewBand(booking.distanceBand),
+
+});
+
+
+
 export interface InvitationItem {
   id: string;
   bookingId: string;
@@ -255,6 +274,16 @@ export interface SessionOption {
   reason: string | null;
 }
 
+export interface RepairFailureRebookDto {
+  idempotencyKey: string;
+  addressId: string;
+  date: string;
+  slot: BookingSlot;
+  customerNote?: string;
+  /** A failed repair names its source by `sourceIncidentId`, an interruption by `sourceCaseId`. */
+  items: { sourceBookingId: string; sourceIncidentId?: string; sourceCaseId?: string; selectedVariantCode?: string; description?: string }[];
+}
+
 export const bookingsApi = {
   /** Next 14 days of sessions; with `previous` it tells whether the former technician is free in each. */
   async availableSessions(bookingId: string, previous = false): Promise<{ technicianId: string | null; sessions: SessionOption[] }> {
@@ -273,6 +302,30 @@ export const bookingsApi = {
     const res = await apiClient.post(`/bookings/${bookingId}/rebook`, { mode: 'scheduled', ...dto });
     const { previousTechnicianInvited, ...booking } = unwrap<RawBooking & { previousTechnicianInvited?: boolean }>(res.data);
     return { booking: normalizeBooking(booking), previousTechnicianInvited: previousTechnicianInvited === true };
+  },
+
+  /** The failed devices of a visit, read back as a draft for a fresh booking (customer only). */
+  async getRepairFailureDraft(anchorBookingId: string): Promise<unknown> {
+    const res = await apiClient.get(`/bookings/${encodeURIComponent(anchorBookingId)}/repair-failure-draft`);
+    return unwrap<unknown>(res.data);
+  },
+
+  /** The interrupted devices a manager closed, read back as a draft for a fresh booking (customer only). */
+  async getInterruptionDraft(anchorBookingId: string): Promise<unknown> {
+    const res = await apiClient.get(`/bookings/${encodeURIComponent(anchorBookingId)}/interruption-draft`);
+    return unwrap<unknown>(res.data);
+  },
+
+  /** A fresh booking or visit from interrupted devices; the previous technician is left out of the new matching. */
+  async confirmInterruptionRebook(anchorBookingId: string, dto: RepairFailureRebookDto): Promise<unknown> {
+    const res = await apiClient.post(`/bookings/${encodeURIComponent(anchorBookingId)}/interruption-rebook`, dto);
+    return unwrap<unknown>(res.data);
+  },
+
+  /** One fresh booking (one device) or visit (two or three) from verified failed repairs; the key makes a retry safe. */
+  async confirmRepairFailureRebook(anchorBookingId: string, dto: RepairFailureRebookDto): Promise<unknown> {
+    const res = await apiClient.post(`/bookings/${encodeURIComponent(anchorBookingId)}/repair-failure-rebook`, dto);
+    return unwrap<unknown>(res.data);
   },
 
   async createBooking(dto: CreateBookingDto): Promise<BookingItem> {

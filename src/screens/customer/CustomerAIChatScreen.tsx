@@ -60,11 +60,14 @@ import {
   VIDEO_NOT_ANALYSED,
   nextPinnedDevices,
   nextPinnedService,
+  photoLabel,
+  priceBreakdown,
   quickReplies,
   revealSteps,
   videoDuration,
   videoMimeType,
   videoProblem,
+  wordsForDescription,
   type AttachedVideo,
 } from './ai-chat-logic';
 import { AI_CHAT_MAX_IMAGES, ATTACHMENT_LIMIT_TEXT, ChatUploadQueue, type ChatUpload } from './chat-upload-queue';
@@ -197,9 +200,6 @@ export default function CustomerAIChatScreen() {
     (message: ChatMessage) => attachmentsOf(message).filter((upload) => upload.kind === 'video'),
     [attachmentsOf],
   );
-  /** "Đúng ý / Chưa đúng" under the newest answer, per message. */
-  const [verdicts, setVerdicts] = useState<Record<string, 'note' | 'done'>>({});
-  const [feedbackNote, setFeedbackNote] = useState('');
   /** Replies are written out piece by piece, except where motion is reduced or under tests. */
   const revealPace = useRef(process.env.JEST_WORKER_ID ? 0 : REVEAL_MS);
   useEffect(() => {
@@ -273,7 +273,8 @@ export default function CustomerAIChatScreen() {
     async (text: string, images: PickedImage[], isQuestion: boolean) => {
       // The acknowledgement is already on screen; the answer waits for both the
       // model and a beat of reading time, so the two do not arrive together.
-      lastCustomerWords.current = appendCustomerWords(lastCustomerWords.current, text);
+      const wordsBefore = lastCustomerWords.current;
+      lastCustomerWords.current = appendCustomerWords(wordsBefore, text);
 
       const ask = (payload: string[]) =>
         isQuestion
@@ -307,6 +308,9 @@ export default function CustomerAIChatScreen() {
           reply = await ask(smaller);
         }
       }
+
+      // A turn that only told the assistant it was wrong keeps its "sai rồi" out of the booking description.
+      if (reply.customerDisagreed) lastCustomerWords.current = appendCustomerWords(wordsBefore, wordsForDescription(text, reply));
 
       // Always the server's id, never one of ours.
       if (reply.sessionId) {
@@ -498,7 +502,6 @@ export default function CustomerAIChatScreen() {
             setTurnCount(0);
             setPendingImages([]);
             queue.reset();
-            setVerdicts({});
             setInput('');
             setMessages([{ id: `greeting-${Date.now()}`, sender: 'bot', text: GREETING }]);
           },
@@ -574,14 +577,6 @@ export default function CustomerAIChatScreen() {
     [openBooking, queue],
   );
 
-  /** "Đúng ý" / "Chưa đúng" under the newest answer (as on the web); a failure still thanks. */
-  const rate = useCallback((message: ChatMessage, verdict: 'right' | 'wrong', note?: string) => {
-    const id = sessionId.current;
-    setVerdicts((prev) => ({ ...prev, [message.id]: 'done' }));
-    setFeedbackNote('');
-    if (id) void aiApi.feedback({ sessionId: id, verdict, note, reply: message.text });
-  }, []);
-
   // -------------------------------------------------------------- render
 
   /** The newest real answer: the only one whose question can be answered or rated. */
@@ -598,9 +593,24 @@ export default function CustomerAIChatScreen() {
             <View style={[styles.bubble, styles.userBubble]}>
               {item.images && item.images.length > 0 && (
                 <View style={styles.bubbleImages}>
-                  {item.images.map((uri, index) => (
-                    <Image key={index} source={{ uri }} style={styles.bubbleThumb} />
-                  ))}
+                  {item.images.map((uri, index) => {
+                    const label = photoLabel(messages, messages.findIndex((m) => m.id === item.id), index);
+                    return (
+                      <View key={index} style={styles.thumbColumn}>
+                        <Image source={{ uri }} style={styles.bubbleThumb} />
+                        {!!label && (
+                          <TouchableOpacity
+                            onPress={() => setInput(label.correction)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Ảnh ${index + 1}: ${label.text}. Bấm để sửa`}
+                            testID="ai-photo-label"
+                          >
+                            <Text style={[styles.photoLabel, label.uncertain && styles.photoLabelUncertain]} numberOfLines={2}>{label.text}</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    );
+                  })}
                 </View>
               )}
               {sentVideosOf(item).length > 0 && (
@@ -650,7 +660,6 @@ export default function CustomerAIChatScreen() {
       const isLatest = item.id === latestReplyId && !isThinking;
       const lastQuestion = item.reply?.clarification?.questionsVi?.slice(-1)[0];
       const choices = isLatest ? quickReplies(lastQuestion) : [];
-      const verdict = verdicts[item.id];
 
       return (
         <View style={styles.botRow}>
@@ -695,44 +704,11 @@ export default function CustomerAIChatScreen() {
                 ))}
               </View>
             )}
-            {isLatest && !!sessionId.current && (
-              <View style={styles.feedbackBox} testID="ai-feedback">
-                {verdict === 'done' ? (
-                  <Text style={styles.feedbackText}>Em cảm ơn anh/chị, em ghi nhận để học thêm ạ.</Text>
-                ) : verdict === 'note' ? (
-                  <View style={styles.feedbackNoteRow}>
-                    <TextInput
-                      style={styles.feedbackInput}
-                      value={feedbackNote}
-                      onChangeText={setFeedbackNote}
-                      maxLength={300}
-                      placeholder="Anh/chị góp ý thêm cho em (không bắt buộc)"
-                      placeholderTextColor={colors.muted}
-                      accessibilityLabel="Góp ý cho trợ lý"
-                      multiline
-                    />
-                    <TouchableOpacity style={styles.feedbackSend} onPress={() => rate(item, 'wrong', feedbackNote)} accessibilityRole="button" accessibilityLabel="Gửi góp ý">
-                      <Text style={styles.feedbackSendText}>Gửi góp ý</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={styles.feedbackRow}>
-                    <Text style={styles.feedbackText}>Câu trả lời này có đúng ý anh/chị không?</Text>
-                    <TouchableOpacity onPress={() => rate(item, 'right')} accessibilityRole="button" accessibilityLabel="Đúng ý" hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
-                      <Text style={styles.feedbackAction}>Đúng ý</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setVerdicts((prev) => ({ ...prev, [item.id]: 'note' }))} accessibilityRole="button" accessibilityLabel="Chưa đúng" hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
-                      <Text style={styles.feedbackAction}>Chưa đúng</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            )}
           </View>
         </View>
       );
     },
-    [colors, styles, latestReplyId, isThinking, verdicts, feedbackNote, rate, send, attachmentsOf, sentVideosOf, queue],
+    [colors, styles, messages, latestReplyId, isThinking, send, attachmentsOf, sentVideosOf, queue],
   );
 
   const canSend = canSendToAssistant({
@@ -1091,6 +1067,7 @@ function DiagnosisCard({ reply }: { reply: AiReply }) {
           <Text style={styles.priceValue}>{priceLabel}</Text>
         </View>
       )}
+      {!!priceBreakdown(reply) && <Text style={styles.priceNote} testID="ai-price-breakdown">{priceBreakdown(reply)}</Text>}
       {price?.requiresAssessment && (
         <Text style={styles.priceNote}>Thợ xem tận nơi rồi mới báo giá chính xác ạ.</Text>
       )}
@@ -1184,6 +1161,9 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   userText: { color: colors.surface, fontSize: 15, lineHeight: 22 },
   bubbleImages: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 6 },
+  thumbColumn: { width: 92, alignItems: 'center', gap: 4 },
+  photoLabel: { fontSize: 11, lineHeight: 15, textAlign: 'center', color: colors.surface },
+  photoLabelUncertain: { textDecorationLine: 'underline' },
   bubbleThumb: { width: 92, height: 92, borderRadius: 10, backgroundColor: colors.primaryDark },
 
   botRow: {
@@ -1433,32 +1413,6 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   },
   quickChipText: { fontSize: 14, fontWeight: '600', color: colors.primary },
 
-  feedbackBox: { marginTop: 8 },
-  feedbackRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
-  feedbackText: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
-  feedbackAction: { fontSize: 13, fontWeight: '700', color: colors.primary },
-  feedbackNoteRow: { gap: 8 },
-  feedbackInput: {
-    minHeight: 44,
-    maxHeight: 96,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 13,
-    color: colors.text,
-    backgroundColor: colors.surface,
-  },
-  feedbackSend: {
-    alignSelf: 'flex-start',
-    minHeight: 40,
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: colors.primary,
-  },
-  feedbackSendText: { color: colors.surface, fontWeight: '700', fontSize: 13 },
 });
 
 

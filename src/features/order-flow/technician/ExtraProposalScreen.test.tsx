@@ -231,6 +231,19 @@ describe('ExtraProposalScreen (T10)', () => {
     expect(tree.root.findByProps({ accessibilityLabel: 'Nội dung công việc' }).props.value).toBe('Tiền công gốc');
   });
 
+  it('keeps non-FixHome parts of an older proposal read-only and out of the form', () => {
+    mockRouteParams = { proposalId: 'cost-legacy' };
+    ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot([{ id: 'cost-legacy', serviceOrderId: 'order-1', technicianId: 'tech-1', status: 'PENDING_APPROVAL', expiresAt: '2099-01-01', reason: 'Lý do gốc', items: [
+      { id: 'l1', type: 'labor', description: 'Tiền công gốc', quantity: 1, unitPrice: 100000, lineTotal: 100000 },
+      { id: 'p1', type: 'PARTS', description: 'Tụ thợ mang', quantity: 2, unitPrice: 50000, lineTotal: 100000, partSource: 'technician' },
+    ] }]));
+    let tree: any;
+    act(() => { tree = create(<ExtraProposalScreen />); });
+    expect(tree.root.findByProps({ accessibilityLabel: 'Nội dung công việc' }).props.value).toBe('Tiền công gốc');
+    expect(tree.root.findAllByType(LaborCard)).toHaveLength(1);
+    expect(JSON.stringify(tree.toJSON())).toContain('Tụ thợ mang × 2');
+  });
+
   it('a missing revision target never becomes an editable blank revision', () => {
     mockRouteParams = { proposalId: 'missing' };
     ({ key: mockKey, snapshot: mockSnapshot } = createBaseSnapshot());

@@ -75,6 +75,7 @@ describe('visitDeviceStatusText', () => {
   it('describes matching before an order exists', () => {
     expect(visitDeviceStatusText({ ...base, deviceState: 'open', leadStatus: 'MATCHING' })).toBe('Đang chờ thợ nhận');
     expect(visitDeviceStatusText({ ...base, deviceState: 'open', leadStatus: 'CLOSED' })).toBe('Chưa có thợ nhận');
+    expect(visitDeviceStatusText({ ...base, deviceState: 'open', leadStatus: 'MATCHED' })).toBe('Đã ghép kỹ thuật viên cho lượt');
     expect(visitDeviceStatusText({ ...base, deviceState: 'open' })).toBe('Chưa chọn thợ');
     expect(visitDeviceStatusText({ ...base, deviceState: 'open', hasOrder: true })).toBe('Đang xử lý');
     expect(visitDeviceStatusText({ ...base, deviceState: undefined, visit: visit({ status: 'cancelled' }) })).toBe('Đã hủy');

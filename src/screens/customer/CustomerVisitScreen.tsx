@@ -17,6 +17,10 @@ import type { RootStackParamList } from '../../types';
 import { sessionLabel, type BookingSchedule } from '../../utils/booking-session';
 import { formatVnd } from '../../utils/format';
 import { extractApiErrorMessage } from '../../utils/input-validation';
+import { failedBookingIds } from './failed-repair-rebook';
+import { fundedCheckoutApi } from '../../api/funded-checkout.api';
+import VoucherCheckoutSection from '../../features/order-flow/customer/VoucherCheckoutSection';
+import { secondsLeft, type AppliedVoucher } from '../../features/order-flow/customer/voucher-checkout';
 import {
   canStartVisitPayment,
   needsQuoteDecision,
@@ -59,6 +63,8 @@ export default function CustomerVisitScreen() {
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   // Set after the VNPay page was opened; only a fresh read of the visit can say whether it was paid.
   const [vnpayOpened, setVnpayOpened] = useState(false);
+  // A voucher held for the whole visit; the amounts are the server's.
+  const [voucher, setVoucher] = useState<AppliedVoucher | null>(null);
   const generation = useRef(0);
 
   const load = useCallback(async (mode: 'first' | 'refresh' = 'refresh') => {
@@ -120,11 +126,20 @@ export default function CustomerVisitScreen() {
   const lead = visit?.items.find((item) => item.booking?.id === visit.leadBookingId)?.booking ?? null;
   const devices = visit?.items ?? [];
   const resolved = checkout ? checkout.devices.filter((d) => d.state !== 'open').length : 0;
-  const methods = visitPayMethods(checkout?.total ?? 0);
+  // With a held voucher the visit is paid at the server-calculated due; a cash declaration made against it keeps the hold past the 15 minutes.
+  const held = voucher && voucher.scopeId === visitGroupId && !checkout?.paid && (!!checkout?.pendingCash || secondsLeft(voucher) > 0) ? voucher : null;
+  const payable = held ? held.customerDueVnd : checkout?.total ?? 0;
+  const methods = visitPayMethods(payable);
   const method = methods.includes(payMethod) ? payMethod : 'wallet';
-  const payState = resolveVisitCheckoutState(checkout, method, walletBalance);
+  const baseState = resolveVisitCheckoutState(checkout, method, walletBalance);
+  const payState = held && checkout && ['ready', 'vnpay', 'wallet_short'].includes(baseState)
+    ? (payable <= 0 ? 'ready' : resolveVisitCheckoutState({ ...checkout, total: payable }, method, walletBalance))
+    : baseState;
+  const fullyFunded = !!held && payable === 0;
+  const scope = { kind: 'VISIT_GROUP' as const, id: visitGroupId };
   const priorityQuote = devices.map((item) => ({ item, orderId: quoteOrderBySequence[item.sequence] })).find((entry) => entry.orderId);
 
+  const failedIds = failedBookingIds(devices, checkout?.devices);
   const deviceOf = (bookingId: string | undefined) => checkout?.devices.find((d) => d.bookingId === bookingId) ?? null;
   const statusOf = (item: Visit['items'][number]) => {
     const device = deviceOf(item.booking?.id);
@@ -176,15 +191,22 @@ export default function CustomerVisitScreen() {
 
   const pay = () => {
     if (!checkout || !canStartVisitPayment(payState)) return;
-    if (method === 'wallet') {
-      if (payState === 'wallet_short' || walletBalance === null || walletBalance < checkout.total) return;
+    if (held && fullyFunded) {
       void run(async () => {
-        const result = await visitGroupsApi.payWithWallet(visitGroupId);
+        await fundedCheckoutApi.zero(scope, held.reservationId);
+        setVoucher(null);
+        return 'Voucher đã trả đủ cho cả lượt, bạn không phải trả thêm.';
+      }, 'Chưa xác nhận được thanh toán 0 ₫. Voucher vẫn được giữ đến khi hết hạn; chưa ghi nhận thanh toán.');
+    } else if (method === 'wallet') {
+      if (payState === 'wallet_short' || walletBalance === null || walletBalance < payable) return;
+      void run(async () => {
+        const result = held ? await fundedCheckoutApi.wallet(scope, held.reservationId) : await visitGroupsApi.payWithWallet(visitGroupId);
+        if (held) setVoucher(null);
         return `Đã thanh toán ${formatVnd(result.amount)} bằng ví cho cả lượt.`;
       }, 'Chưa thanh toán được bằng ví.');
     } else if (method === 'vnpay') {
       void run(async () => {
-        const url = await visitGroupsApi.createVnpayUrl(visitGroupId);
+        const url = held ? await fundedCheckoutApi.vnpay(scope, held.reservationId) : await visitGroupsApi.createVnpayUrl(visitGroupId);
         setVnpayOpened(true);
         await WebBrowser.openAuthSessionAsync(url, 'fixhome://');
         // Coming back from VNPay is not a payment: the read after this step decides.
@@ -194,7 +216,12 @@ export default function CustomerVisitScreen() {
   };
 
   const answerCash = (agreed: boolean) => void run(async () => {
-    await visitGroupsApi.confirmCash(visitGroupId, agreed, agreed ? undefined : 'Số tiền mặt chưa đúng');
+    if (held) {
+      await fundedCheckoutApi.confirmCash(scope, held.reservationId, agreed ? { agreed: true } : { agreed: false, disputeReason: 'Số tiền mặt chưa đúng' });
+      if (agreed) setVoucher(null);
+    } else {
+      await visitGroupsApi.confirmCash(visitGroupId, agreed, agreed ? undefined : 'Số tiền mặt chưa đúng');
+    }
     return agreed ? 'Đã xác nhận trả tiền mặt cho cả lượt.' : 'Đã báo FixHome kiểm tra lại số tiền mặt.';
   }, agreed ? 'Chưa xác nhận được.' : 'Chưa gửi được yêu cầu kiểm tra tiền mặt. Vui lòng thử lại.');
 
@@ -268,6 +295,16 @@ export default function CustomerVisitScreen() {
                     <Text style={[styles.link, { color: colors.primaryStrong }]}>{open ? 'Thu gọn' : 'Xem mô tả'}</Text>
                   </TouchableOpacity>
                 )}
+                {device?.state === 'failed' && !!item.booking?.id && (
+                  <TouchableOpacity
+                    style={styles.primaryBtn}
+                    onPress={() => navigation.navigate('CustomerFailedRepairRebook', { sourceBookingIds: [item.booking!.id] })}
+                    accessibilityRole="button"
+                    testID={`visit-rebook-${item.sequence}`}
+                  >
+                    <Text style={styles.primaryText}>Đặt lại máy này</Text>
+                  </TouchableOpacity>
+                )}
                 {!!device?.serviceOrderId && (
                   <TouchableOpacity
                     style={styles.secondaryBtn}
@@ -282,6 +319,17 @@ export default function CustomerVisitScreen() {
             );
           })}
 
+          {failedIds.length > 1 && (
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={() => navigation.navigate('CustomerFailedRepairRebook', { sourceBookingIds: failedIds })}
+              accessibilityRole="button"
+              testID="visit-rebook-all"
+            >
+              <Text style={styles.primaryText}>Đặt lại {failedIds.length} máy không sửa được</Text>
+            </TouchableOpacity>
+          )}
+
           {actions?.canChooseTechnician && lead && (
             <TouchableOpacity
               style={styles.primaryBtn}
@@ -289,7 +337,7 @@ export default function CustomerVisitScreen() {
               accessibilityRole="button"
               testID="visit-choose-technician"
             >
-              <Text style={styles.primaryText}>Chọn kỹ thuật viên</Text>
+              <Text style={styles.primaryText}>{lead.status === 'CLOSED' ? 'Chọn kỹ thuật viên khác cho cả lượt' : `Chọn 1 kỹ thuật viên sửa cả ${visit.items.length} thiết bị`}</Text>
             </TouchableOpacity>
           )}
 
@@ -305,9 +353,15 @@ export default function CustomerVisitScreen() {
                   </View>
                 ))}
                 <View style={styles.row}>
-                  <Text style={styles.cardTitle}>Tổng cộng</Text>
+                  <Text style={styles.cardTitle}>{held ? 'Tổng gốc' : 'Tổng cộng'}</Text>
                   <Text style={styles.cardTitle} testID="visit-total">{payState === 'waiting' ? '—' : formatVnd(checkout.total)}</Text>
                 </View>
+                {held ? (
+                  <>
+                    <View style={styles.row}><Text style={styles.hint}>Voucher giảm</Text><Text style={styles.value}>{`- ${formatVnd(held.discountVnd)}`}</Text></View>
+                    <View style={styles.row}><Text style={styles.cardTitle}>Bạn trả</Text><Text style={styles.cardTitle} testID="visit-due">{formatVnd(held.customerDueVnd)}</Text></View>
+                  </>
+                ) : null}
               </View>
 
               {payState === 'waiting' && <Text style={styles.hint}>Chờ kết quả các thiết bị. Bạn chỉ trả tiền một lần, sau khi mọi thiết bị đã có kết quả, và chỉ trả cho máy đã sửa xong.</Text>}
@@ -326,9 +380,19 @@ export default function CustomerVisitScreen() {
                   </View>
                 </View>
               )}
+              {(payState === 'pending_cash' || payState === 'ready' || payState === 'vnpay' || payState === 'wallet_short') && !!checkout.total && (
+                <VoucherCheckoutSection
+                  scopeId={visitGroupId}
+                  applied={held}
+                  disabled={busy}
+                  keepWhenExpired={payState === 'pending_cash'}
+                  onApplied={setVoucher}
+                  onReleased={(reason) => { setVoucher(null); if (reason) setMessage({ type: 'error', text: reason }); }}
+                />
+              )}
               {(payState === 'ready' || payState === 'vnpay' || payState === 'wallet_short') && (
                 <View style={{ gap: 8 }}>
-                  {methods.map((m) => (
+                  {(fullyFunded ? [] : methods).map((m) => (
                     <TouchableOpacity
                       key={m}
                       style={[styles.method, method === m && { borderColor: colors.primary, backgroundColor: colors.primarySoft }]}
@@ -341,11 +405,11 @@ export default function CustomerVisitScreen() {
                       {m === 'wallet' && <Text style={styles.hint}>{walletBalance === null ? 'Chưa tải được số dư' : `Số dư ${formatVnd(walletBalance)}`}</Text>}
                     </TouchableOpacity>
                   ))}
-                  {method === 'cash' && <Text style={styles.hint}>Trả tiền mặt cho kỹ thuật viên. Kỹ thuật viên khai báo số tiền đã thu, bạn xác nhận ở đây.</Text>}
+                  {!fullyFunded && method === 'cash' && <Text style={styles.hint}>{`Trả tiền trực tiếp cho kỹ thuật viên số tiền của cả lượt: ${formatVnd(payable)}. Đây chỉ là hướng dẫn, chưa ghi nhận đã thanh toán. Kỹ thuật viên khai báo số tiền đã nhận, sau đó bạn xác nhận đúng số tiền hoặc báo chưa đúng.`}</Text>}
                   {payState === 'wallet_short' && (
                     <Text style={[styles.hint, { color: tone('danger').text }]} accessibilityRole="alert">Ví chưa đủ. Nạp thêm vào ví hoặc chọn cách thanh toán khác.</Text>
                   )}
-                  {method !== 'cash' && (
+                  {(fullyFunded || method !== 'cash') && (
                     <TouchableOpacity
                       style={[styles.primaryBtn, (busy || payState === 'wallet_short') && styles.disabled]}
                       disabled={busy || payState === 'wallet_short'}
@@ -354,7 +418,7 @@ export default function CustomerVisitScreen() {
                       accessibilityState={{ disabled: busy || payState === 'wallet_short', busy }}
                       testID="visit-pay-submit"
                     >
-                      {busy ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.primaryText}>{method === 'vnpay' ? 'Thanh toán qua VNPay' : `Thanh toán ${formatVnd(checkout.total)}`}</Text>}
+                      {busy ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.primaryText}>{fullyFunded ? 'Xác nhận thanh toán 0 ₫' : method === 'vnpay' ? 'Thanh toán qua VNPay' : `Thanh toán ${formatVnd(payable)}`}</Text>}
                     </TouchableOpacity>
                   )}
                   {vnpayOpened && (

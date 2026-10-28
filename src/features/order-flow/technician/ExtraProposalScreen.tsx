@@ -80,10 +80,12 @@ export default function ExtraProposalScreen() {
   // Prefill exactly once per owned revision. Never infer the latest root.
   if (!(draftScope.key === key || !!key && sameOrderSession(draftScope.key, key)) || draftScope.current !== current || draftScope.revision !== revisingCostId || (!draftScope.hydrated && current && canRevise && !!revisingTarget)) {
     const target = current && canRevise ? revisingTarget : null;
-    const next = target?.items.length ? target.items.map(rawItem => { const item = rawItem as unknown as CreateAdditionalCostItem; return ({
+    // Only labor and FixHome parts go back into the form; other parts of an older proposal stay read-only (legacyParts).
+    const kept = target?.items.filter(i => String(i.type).toLowerCase() === 'labor' || i.partSource === 'fixhome') ?? [];
+    const next = kept.length ? kept.map(rawItem => { const item = rawItem as unknown as CreateAdditionalCostItem; return ({
       ...createCostItemRow(String(item.type).toLowerCase() === 'labor' ? 'labor' : 'parts_equipment'),
       description: item.description, quantity: String(item.quantity), unitPrice: String(item.unitPrice),
-      partSource: item.partSource === 'fixhome' || item.partSource === 'external' ? item.partSource : 'technician',
+      partSource: 'fixhome',
       partCatalogId: item.partCatalogId ?? '', partNameSnapshot: item.partNameSnapshot ?? '', partSku: item.partSku ?? '', warrantyPolicy: item.warrantyPolicy ?? '',
       partWarrantyOption: item.partWarrantyOption === 'paid_warranty' ? 'paid_warranty' : 'no_warranty',
       warrantyTermDays: item.warrantyTermDays == null ? '' : String(item.warrantyTermDays), warrantyFee: item.warrantyFee == null ? '' : String(item.warrantyFee),
@@ -113,6 +115,7 @@ export default function ExtraProposalScreen() {
     ? computeHeldParts(partsResource.data, quotationsResource.data, key.serviceOrderId, key.userId)
     : [];
   const heldReady = partsResource?.status === 'ready' && quotationsResource?.status === 'ready';
+  const legacyParts = (revisingTarget?.items ?? []).filter(i => String(i.type).toLowerCase() !== 'labor' && i.partSource !== 'fixhome');
   const hasFixHome = rows.some(r => r.kind === 'parts_equipment' && r.partSource === 'fixhome');
   const buildPayload = (): CreateAdditionalCostPayload => {
     const trimmedReason = reason.trim();
@@ -454,6 +457,12 @@ export default function ExtraProposalScreen() {
                 {heldParts.length
                   ? heldParts.map(part => <HeldPartCard key={part.key} name={part.name} available={part.quantity} disabled readOnly onToggle={() => undefined} onQuantity={() => undefined} />)
                   : <Text style={styles.heldEmpty}>{heldReady ? 'Không còn linh kiện sau báo giá.' : 'Đang tải…'}</Text>}
+                {legacyParts.length ? (
+                  <View testID="proposal-legacy-parts">
+                    <GroupLabel title="Linh kiện trong đề xuất cũ · chỉ xem" hint="Không gửi lại. Chỉ linh kiện FixHome được đề xuất mới." />
+                    {legacyParts.map(part => <Text key={part.id} style={styles.heldEmpty}>{`${part.description} × ${part.quantity} · ${formatVnd(part.lineTotal)}`}</Text>)}
+                  </View>
+                ) : null}
                 <GroupLabel title="Cần thêm từ kho" hint="Kho cấp sau khi khách duyệt." />
                 {rows.filter(isPart).map(row => (
                   <PartLineCard key={row.key} row={row} maxQuantity={PART_QUANTITY_MAX} disabled={!canEdit}

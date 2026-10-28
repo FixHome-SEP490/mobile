@@ -29,6 +29,7 @@ import {
 import { vnDateTimeString, vnTimeString } from '../../utils/vn-time';
 import BackButton from '../../components/BackButton';
 import RebookSheet from '../../components/RebookSheet';
+import { useRebookAction } from '../../hooks/useRebookAction';
 import { sessionLabel } from '../../utils/booking-session';
 
 const MATCH_POLL_MS = 5000;
@@ -96,6 +97,8 @@ export default function CustomerBookingDetailScreen() {
     return () => clearInterval(timer);
   }, [waiting, loader]);
   const [rebookOpen, setRebookOpen] = useState(false);
+  const openRebookSheet = useCallback(() => setRebookOpen(true), []);
+  const rebook = useRebookAction({ bookingId: booking?.id, orderId: booking?.serviceOrderId, status: booking?.status, openSheet: openRebookSheet });
   const nextAction = booking ? bookingNextAction(booking) : null;
   const [extending, setExtending] = useState(false);
   const [extensionNotice, setExtensionNotice] = useState('');
@@ -259,12 +262,14 @@ export default function CustomerBookingDetailScreen() {
           {booking.status === 'CANCELLED' && (
             <TouchableOpacity
               testID="booking-rebook"
-              onPress={() => setRebookOpen(true)}
+              onPress={rebook.press}
+              disabled={rebook.disabled}
               accessibilityRole="button"
-              accessibilityLabel="Đặt lại thợ"
-              style={styles.primaryButton}
+              accessibilityLabel={rebook.label}
+              accessibilityState={{ disabled: rebook.disabled }}
+              style={[styles.primaryButton, rebook.disabled && { opacity: 0.5 }]}
             >
-              <Text style={styles.primaryButtonText}>Đặt lại thợ</Text>
+              <Text style={styles.primaryButtonText}>{rebook.label}</Text>
             </TouchableOpacity>
           )}
           {booking.status === 'CANCELLED' && (

@@ -66,6 +66,31 @@ export interface PriceEstimate {
   max?: number | null;
   currency: string;
   requiresAssessment: boolean;
+  /** The service's own price, as the booking form shows it: `min` is this. */
+  labourMin?: number | null;
+  /** Its top while the fixed-price variant is not known yet. */
+  labourMax?: number | null;
+  /** The parts the suspected fault usually needs, at FixHome's selling price; `max` adds them. */
+  partsMax?: number | null;
+}
+
+/** What one photograph of the message was read as. */
+export interface PhotoReading {
+  /** Its place among the message's photos, from 0. */
+  index: number;
+  /** Null when nothing was recognised in it. */
+  deviceType?: string | null;
+  nameVi?: string | null;
+  /** The appliance of this photograph is a guess. */
+  uncertain?: boolean;
+}
+
+/** The customer said the last answer was wrong. */
+export interface AiDisagreement {
+  kind?: string | null;
+  rejectedVi?: string[];
+  /** This turn's words without the opening "sai rồi", for the booking description. */
+  restVi?: string | null;
 }
 
 export interface Clarification {
@@ -122,6 +147,9 @@ export interface AiReply {
   notesVi?: string[];
   /** Every appliance of the conversation when there is more than one; empty otherwise. */
   devices?: AiDeviceSuggestion[];
+  /** One per photo of the message this replies to: what each was read as. */
+  photos?: PhotoReading[];
+  customerDisagreed?: AiDisagreement | null;
 }
 
 /** The customer sent faster than the backend allows (429), as on the web. */
@@ -225,23 +253,6 @@ export const aiApi = {
       return unwrap(res.data);
     } catch (error) {
       return isTooFast(error) ? tooFast(payload.sessionId) : offline(payload.sessionId);
-    }
-  },
-
-  /**
-   * Whether an answer was right, for the team to learn from (PO 16/10/2026, as on the web).
-   * Best effort: a failure is swallowed, the customer is thanked either way.
-   */
-  async feedback(payload: { sessionId: string; verdict: 'right' | 'wrong'; note?: string; reply?: string }): Promise<void> {
-    try {
-      await apiClient.post('/ai/feedback', {
-        sessionId: payload.sessionId,
-        verdict: payload.verdict,
-        ...(payload.note?.trim() ? { note: payload.note.trim().slice(0, 300) } : {}),
-        ...(payload.reply?.trim() ? { reply: payload.reply.trim().slice(0, 1000) } : {}),
-      });
-    } catch {
-      // Nothing to tell the customer.
     }
   },
 

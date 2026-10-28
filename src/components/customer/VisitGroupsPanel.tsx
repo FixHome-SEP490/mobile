@@ -185,11 +185,13 @@ export default function VisitGroupsPanel({ search, onOpen, bottomInset = 0, term
         <View style={styles.more} accessibilityLiveRegion="polite"><ActivityIndicator size="small" color={colors.primary} /><Text style={styles.hint}>Đang tải thêm…</Text></View>
       ) : null}
       renderItem={({ item }) => {
-        const status = visitStatusView(item.status);
         const when = sessionLabel({ bookingMode: item.bookingMode, slot: item.slot, start: item.scheduledAt });
         const deviceOrders = item.items.map((d) => (d.orderId ? orders[d.orderId] : undefined));
         const lead = deviceOrders.find(Boolean);
         const live = deviceOrders.filter((o): o is ServiceOrderItem => !!o && o.status !== 'CANCELLED');
+        // Same rule as the device rows (stepLabel): the visit stays en_route after the check-in, but it is "arrived", not "on the way".
+        const arrived = item.status === 'en_route' && live.some((o) => o.status === 'EN_ROUTE' && o.arrivalVerified);
+        const status = arrived ? { label: 'Đã đến nơi', tone: 'warning' as const } : visitStatusView(item.status);
         const money = live.reduce((sum, o) => sum + (o.grandTotal || 0), 0);
         const code = lead?.code ?? item.items.find((d) => d.orderCode)?.orderCode;
         const moneyLabel = assigned ? (live.every((o) => o.status === 'COMPLETED') ? 'Tổng thu' : 'Dự kiến thu') : 'Tổng thanh toán';

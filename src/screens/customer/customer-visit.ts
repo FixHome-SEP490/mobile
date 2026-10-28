@@ -88,6 +88,7 @@ export function visitDeviceStatusText(args: {
   if (hasOrder) return VISIT_DEVICE_STATE_LABEL.open;
   const state = String(leadStatus ?? 'SUBMITTED').toUpperCase();
   if (state === 'MATCHING') return 'Đang chờ thợ nhận';
+  if (state === 'MATCHED') return 'Đã ghép kỹ thuật viên cho lượt';
   if (state === 'CLOSED') return 'Chưa có thợ nhận';
   return 'Chưa chọn thợ';
 }

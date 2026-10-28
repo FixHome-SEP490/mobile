@@ -646,7 +646,7 @@ export const ordersApi = {
   /** "Không sửa được" on a device of a multi-device visit: 0 đồng, no points taken. */
   async reportRepairFailed(
     id: string,
-    body: { reason: string; note?: string; parts?: { partRequestId: string; outcome: 'installed' | 'returned' }[] },
+    body: { reason: string; note?: string; parts?: { partRequestId: string; outcome: 'installed' | 'returned' }[]; photoEvidenceIds?: string[] },
   ): Promise<void> {
     await apiClient.post(`/service-orders/${id}/repair-failed`, body);
   },

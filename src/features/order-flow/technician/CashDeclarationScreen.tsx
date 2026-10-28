@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
@@ -11,6 +11,8 @@ import { quoteMoneyText } from '../shared/DecisionSummary';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { parseWholeVndInput } from '../shared/m6-amount-input';
+import { formatVnd } from '../../../utils/format';
+import { CASH_VOUCHER_UNCHECKED } from './technician-cash-controller';
 
 function parseAmount(text: string): number | null {
   return parseWholeVndInput(text, { min: 0, max: 999999999999 });
@@ -59,7 +61,12 @@ export default function CashDeclarationScreen() {
   const parsed = parseAmount(amountText);
   const notesTooLong = notes.trim().length > 2000;
   const sheetValid = current && confirming && state.confirmation !== null && !frozen && eligible;
-  const canSend = current && !frozen && eligible && parsed !== null && !notesTooLong;
+  // The voucher lookup decides what may be collected: only an explicit "none" allows the invoice amount, and nothing is collected on an error.
+  const voucher = state.voucher;
+  const voucherReady = voucher.status === 'none' || voucher.status === 'held';
+  const canSend = current && !frozen && eligible && voucherReady && parsed !== null && !notesTooLong;
+  const checkVoucher = controller.checkVoucher;
+  useEffect(() => { if (current && eligible && !frozen) void checkVoucher(); }, [current, eligible, frozen, checkVoucher]);
 
   const openConfirm = () => {
     if (!current || frozen || !eligible) return;
@@ -135,6 +142,11 @@ export default function CashDeclarationScreen() {
       ) : (
         <ReadOnlyNotice>Hãy nhập đúng số tiền mặt bạn đã nhận từ khách hàng. Tổng hóa đơn phía trên chỉ để tham khảo, không phải số tiền đã nhận.</ReadOnlyNotice>
       )}
+      {eligible && voucher.status === 'held' ? (
+        <ReadOnlyNotice>Khách đang dùng voucher. Số tiền mặt cần thu là {formatVnd(voucher.dueVnd)}; hãy nhập đúng số này. Phần voucher giảm không thu từ khách.</ReadOnlyNotice>
+      ) : null}
+      {eligible && voucher.status === 'checking' ? <ReadOnlyNotice>Đang kiểm tra voucher của khách…</ReadOnlyNotice> : null}
+      {eligible && voucher.status === 'error' ? <ReadOnlyNotice>{CASH_VOUCHER_UNCHECKED}</ReadOnlyNotice> : null}
       {unknown ? (
         <ReadOnlyNotice>Có thao tác chưa rõ kết quả. Bạn không thể gửi khai báo mới; hãy kiểm tra lại từ máy chủ trước.</ReadOnlyNotice>
       ) : null}

@@ -1,9 +1,3 @@
-import React from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { CatalogPicker } from './CatalogPicker';
-import { lightTheme as colors, spacing } from '../../../constants/theme';
-import { formatVnd } from '../../../utils/format';
-
 /**
  * M4 shared quotation row draft. Presentation-only: the frozen controller
  * validator (`validateQuotationPayload`) owns every DTO rule, so this module
@@ -11,7 +5,8 @@ import { formatVnd } from '../../../utils/format';
  * The same row shape is reused by M5 additional-cost drafting.
  */
 export type CostItemKind = 'labor' | 'parts_equipment';
-export type CostItemPartSource = 'fixhome' | 'external' | 'technician';
+/** Backend 26/10/2026: new quotations and additional costs only take FixHome catalog parts. */
+export type CostItemPartSource = 'fixhome';
 export type CostItemWarrantyOption = 'no_warranty' | 'paid_warranty';
 
 export interface CostItemRow {
@@ -66,7 +61,7 @@ export function createCostItemRow(kind: CostItemKind = 'labor'): CostItemRow {
     description: '',
     quantity: '',
     unitPrice: '',
-    partSource: 'technician',
+    partSource: 'fixhome',
     partCatalogId: '',
     partNameSnapshot: '',
     partSku: '',
@@ -96,8 +91,7 @@ export function validateCostItemRows(rows: CostItemRow[]): Record<string, CostIt
     if (!row.description.trim()) e.description = 'Nhập mô tả hạng mục.';
     if (!DIGITS.test(row.quantity.trim()) || Number(row.quantity) < 1) e.quantity = 'Nhập số lượng từ 1 trở lên.';
     if (!DIGITS.test(row.unitPrice.trim())) e.unitPrice = 'Nhập đơn giá bằng số nguyên (đ).';
-    if (row.kind === 'parts_equipment' && row.partSource === 'fixhome' && !row.partCatalogId) e.partCatalogId = 'Chọn một linh kiện trong danh mục FixHome.';
-    if (row.kind === 'parts_equipment' && row.partSource === 'technician' && row.partWarrantyOption === 'paid_warranty' && !DIGITS.test(row.warrantyTermDays.trim())) e.warrantyTermDays = 'Nhập thời hạn bảo hành (ngày).';
+    if (row.kind === 'parts_equipment' && !row.partCatalogId) e.partCatalogId = 'Chọn một linh kiện trong danh mục FixHome.';
     if (Object.keys(e).length) out[row.key] = e;
   }
   return out;
@@ -109,7 +103,7 @@ export function switchCostItemKind(row: CostItemRow, kind: CostItemKind): CostIt
     return {
       ...row,
       kind,
-      partSource: 'technician',
+      partSource: 'fixhome',
       partCatalogId: '',
       partNameSnapshot: '',
       partSku: '',
@@ -120,22 +114,6 @@ export function switchCostItemKind(row: CostItemRow, kind: CostItemKind): CostIt
     };
   }
   return { ...row, kind, laborWarrantyDays: '' };
-}
-
-export function switchCostItemSource(row: CostItemRow, partSource: CostItemPartSource): CostItemRow {
-  // Every source switch drops catalog snapshots and warranty choices: only the
-  // current source's fields may reach the payload.
-  return {
-    ...row,
-    partSource,
-    partCatalogId: '',
-    partNameSnapshot: '',
-    partSku: '',
-    warrantyPolicy: '',
-    partWarrantyOption: 'no_warranty',
-    warrantyTermDays: '',
-    warrantyFee: '',
-  };
 }
 
 /**
@@ -151,340 +129,13 @@ export function costItemRowToPayloadItem(row: CostItemRow): Record<string, unkno
       ...(row.laborWarrantyDays.trim() ? { warrantyDays: row.laborWarrantyDays } : {}),
     };
   }
-  if (row.partSource === 'fixhome') {
-    return {
-      type: 'parts_equipment',
-      ...base,
-      partSource: 'fixhome',
-      partCatalogId: row.partCatalogId,
-      ...(row.partNameSnapshot.trim() ? { partNameSnapshot: row.partNameSnapshot.trim() } : {}),
-      ...(row.partSku.trim() ? { partSku: row.partSku.trim() } : {}),
-      ...(row.warrantyPolicy.trim() ? { warrantyPolicy: row.warrantyPolicy.trim() } : {}),
-    };
-  }
-  if (row.partSource === 'external') {
-    return { type: 'parts_equipment', ...base, partSource: 'external' };
-  }
-  if (row.partWarrantyOption === 'paid_warranty') {
-    return {
-      type: 'parts_equipment',
-      ...base,
-      partSource: 'technician',
-      partWarrantyOption: 'paid_warranty',
-      ...(row.warrantyTermDays.trim() ? { warrantyTermDays: row.warrantyTermDays } : {}),
-      ...(row.warrantyFee.trim() ? { warrantyFee: row.warrantyFee } : {}),
-    };
-  }
-  return { type: 'parts_equipment', ...base, partSource: 'technician', partWarrantyOption: 'no_warranty' };
+  return {
+    type: 'parts_equipment',
+    ...base,
+    partSource: 'fixhome',
+    partCatalogId: row.partCatalogId,
+    ...(row.partNameSnapshot.trim() ? { partNameSnapshot: row.partNameSnapshot.trim() } : {}),
+    ...(row.partSku.trim() ? { partSku: row.partSku.trim() } : {}),
+    ...(row.warrantyPolicy.trim() ? { warrantyPolicy: row.warrantyPolicy.trim() } : {}),
+  };
 }
-
-export interface CostItemEditorProps {
-  row: CostItemRow;
-  errors?: CostItemFieldErrors;
-  catalog?: CostItemCatalogPanel;
-  catalogHint?: string | null;
-  expanded: boolean;
-  canRemove: boolean;
-  onToggle: () => void;
-  onChange: (next: CostItemRow) => void;
-  onRemove: () => void;
-  onLoadCatalog?: (search?: string) => void;
-  onSelectCatalogPart?: (part: CostItemCatalogOption) => void;
-}
-
-function FieldError({ testID, message }: { testID: string; message?: string }) {
-  if (!message) return null;
-  return (
-    <Text testID={testID} accessibilityRole="alert" style={styles.errorText}>
-      {message}
-    </Text>
-  );
-}
-
-/**
- * One expandable quotation row. Only one row is expanded at a time (the parent
- * owns `expanded`); a 100-row quote never mounts 100 full forms at once.
- */
-export function CostItemEditor({
-  row,
-  errors,
-  catalog,
-  catalogHint,
-  expanded,
-  canRemove,
-  onToggle,
-  onChange,
-  onRemove,
-  onLoadCatalog,
-  onSelectCatalogPart,
-}: CostItemEditorProps) {
-  const id = (suffix: string) => `cost-item-${row.key}-${suffix}`;
-  const title = row.description.trim() || 'Hạng mục mới';
-  const kindLabel = row.kind === 'labor' ? 'Tiền công' : 'Linh kiện';
-  const subtotal = costItemRowSubtotal(row);
-  const summary = subtotal === null ? kindLabel : `${kindLabel} · ${row.quantity.trim()} × ${formatVnd(Number(row.unitPrice))} = ${formatVnd(subtotal)}`;
-  const hasErrors = !!errors && Object.keys(errors).length > 0;
-
-  return (
-    <View style={styles.card}>
-      <TouchableOpacity
-        testID={id('header')}
-        accessibilityRole="button"
-        accessibilityState={{ expanded }}
-        accessibilityLabel={`${title}. ${summary}${hasErrors ? '. Cần bổ sung thông tin' : ''}`}
-        accessibilityHint="Mở hoặc thu gọn hạng mục này"
-        onPress={onToggle}
-        style={styles.header}
-      >
-        <View style={styles.headerText}>
-          <Text style={styles.headerTitle} numberOfLines={1}>{title}</Text>
-          <Text style={[styles.headerMeta, hasErrors && styles.headerMetaError]} numberOfLines={1}>{hasErrors ? 'Cần bổ sung thông tin' : summary}</Text>
-        </View>
-        <View style={[styles.chevron, expanded && styles.chevronUp]} />
-      </TouchableOpacity>
-
-      {expanded && (
-        <View style={styles.body}>
-          <View style={styles.optionRow}>
-            <TouchableOpacity
-              testID={id('kind-labor')}
-              accessibilityRole="button"
-              accessibilityState={{ selected: row.kind === 'labor' }}
-              onPress={() => onChange(switchCostItemKind(row, 'labor'))}
-              style={[styles.option, row.kind === 'labor' && styles.optionSelected]}
-            >
-              <Text style={row.kind === 'labor' ? styles.optionTextSelected : styles.optionText}>Tiền công</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              testID={id('kind-parts')}
-              accessibilityRole="button"
-              accessibilityState={{ selected: row.kind === 'parts_equipment' }}
-              onPress={() => onChange(switchCostItemKind(row, 'parts_equipment'))}
-              style={[styles.option, row.kind === 'parts_equipment' && styles.optionSelected]}
-            >
-              <Text style={row.kind === 'parts_equipment' ? styles.optionTextSelected : styles.optionText}>Linh kiện</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.label}>Mô tả</Text>
-          <TextInput
-            testID={id('description')}
-            accessibilityLabel="Mô tả hạng mục"
-            value={row.description}
-            onChangeText={description => onChange({ ...row, description })}
-            placeholder="Ví dụ: Vệ sinh dàn lạnh"
-            placeholderTextColor={colors.textSecondary}
-            style={styles.input}
-            maxLength={2000}
-          />
-          <FieldError testID={id('error-description')} message={errors?.description} />
-
-          <View style={styles.twoColumns}>
-            <View style={styles.column}>
-              <Text style={styles.label}>Số lượng</Text>
-              <TextInput
-                testID={id('quantity')}
-                accessibilityLabel="Số lượng"
-                value={row.quantity}
-                onChangeText={quantity => onChange({ ...row, quantity })}
-                keyboardType="number-pad"
-                placeholder="1"
-                placeholderTextColor={colors.textSecondary}
-                style={styles.input}
-              />
-              <FieldError testID={id('error-quantity')} message={errors?.quantity} />
-            </View>
-            <View style={styles.column}>
-              <Text style={styles.label}>Đơn giá (đ)</Text>
-              <TextInput
-                testID={id('unitprice')}
-                accessibilityLabel="Đơn giá"
-                value={row.unitPrice}
-                onChangeText={unitPrice => onChange({ ...row, unitPrice })}
-                keyboardType="number-pad"
-                placeholder="150000"
-                placeholderTextColor={colors.textSecondary}
-                style={styles.input}
-              />
-              <FieldError testID={id('error-unitprice')} message={errors?.unitPrice} />
-            </View>
-          </View>
-
-          {row.kind === 'labor' ? (
-            <View>
-              <Text style={styles.label}>Bảo hành công (ngày, tùy chọn)</Text>
-              <TextInput
-                testID={id('labor-warranty')}
-                accessibilityLabel="Số ngày bảo hành tiền công"
-                value={row.laborWarrantyDays}
-                onChangeText={laborWarrantyDays => onChange({ ...row, laborWarrantyDays })}
-                keyboardType="number-pad"
-                placeholder="365"
-                placeholderTextColor={colors.textSecondary}
-                style={styles.input}
-              />
-              <FieldError testID={id('error-labor-warranty')} message={errors?.laborWarrantyDays} />
-            </View>
-          ) : (
-            <View style={styles.section}>
-              <Text style={styles.label}>Nguồn linh kiện</Text>
-              <View style={styles.optionRow}>
-                {(
-                  [
-                    ['fixhome', 'FixHome'],
-                    ['external', 'Mua ngoài'],
-                    ['technician', 'Thợ tự mang'],
-                  ] as [CostItemPartSource, string][]
-                ).map(([source, label]) => (
-                  <TouchableOpacity
-                    key={source}
-                    testID={id(`source-${source}`)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: row.partSource === source }}
-                    onPress={() => onChange(switchCostItemSource(row, source))}
-                    style={[styles.option, row.partSource === source && styles.optionSelected]}
-                  >
-                    <Text style={row.partSource === source ? styles.optionTextSelected : styles.optionText}>{label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {row.partSource === 'fixhome' && (
-                <CatalogPicker
-                  idPrefix={`cost-item-${row.key}-`}
-                  selectedId={row.partCatalogId}
-                  catalog={catalog}
-                  hint={[ 'Chọn đúng mã sản phẩm FixHome. Giá và bảo hành do máy chủ đối chiếu lại.', catalogHint ].filter(Boolean).join(' ')}
-                  error={errors?.partCatalogId}
-                  onLoad={onLoadCatalog}
-                  onSelect={onSelectCatalogPart}
-                />
-              )}
-
-              {row.partSource === 'external' && (
-                <Text style={styles.hint}>Linh kiện ngoài luôn không bảo hành.</Text>
-              )}
-
-              {row.partSource === 'technician' && (
-                <View>
-                  <View style={styles.optionRow}>
-                    <TouchableOpacity
-                      testID={id('warranty-no')}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: row.partWarrantyOption === 'no_warranty' }}
-                      onPress={() => onChange({ ...row, partWarrantyOption: 'no_warranty', warrantyTermDays: '', warrantyFee: '' })}
-                      style={[styles.option, row.partWarrantyOption === 'no_warranty' && styles.optionSelected]}
-                    >
-                      <Text style={row.partWarrantyOption === 'no_warranty' ? styles.optionTextSelected : styles.optionText}>
-                        Không bảo hành
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      testID={id('warranty-paid')}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: row.partWarrantyOption === 'paid_warranty' }}
-                      onPress={() => onChange({ ...row, partWarrantyOption: 'paid_warranty' })}
-                      style={[styles.option, row.partWarrantyOption === 'paid_warranty' && styles.optionSelected]}
-                    >
-                      <Text style={row.partWarrantyOption === 'paid_warranty' ? styles.optionTextSelected : styles.optionText}>
-                        Bảo hành có phí
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                  {row.partWarrantyOption === 'paid_warranty' && (
-                    <View style={styles.twoColumns}>
-                      <View style={styles.column}>
-                        <Text style={styles.label}>Thời hạn (ngày)</Text>
-                        <TextInput
-                          testID={id('warranty-term')}
-                          accessibilityLabel="Thời hạn bảo hành"
-                          value={row.warrantyTermDays}
-                          onChangeText={warrantyTermDays => onChange({ ...row, warrantyTermDays })}
-                          keyboardType="number-pad"
-                          placeholder="90"
-                          placeholderTextColor={colors.textSecondary}
-                          style={styles.input}
-                        />
-                        <FieldError testID={id('error-term')} message={errors?.warrantyTermDays} />
-                      </View>
-                      <View style={styles.column}>
-                        <Text style={styles.label}>Phí (đ, tùy chọn)</Text>
-                        <TextInput
-                          testID={id('warranty-fee')}
-                          accessibilityLabel="Phí bảo hành"
-                          value={row.warrantyFee}
-                          onChangeText={warrantyFee => onChange({ ...row, warrantyFee })}
-                          keyboardType="number-pad"
-                          placeholder="30000"
-                          placeholderTextColor={colors.textSecondary}
-                          style={styles.input}
-                        />
-                        <FieldError testID={id('error-fee')} message={errors?.warrantyFee} />
-                      </View>
-                    </View>
-                  )}
-                </View>
-              )}
-            </View>
-          )}
-
-          {canRemove && (
-            <TouchableOpacity
-              testID={id('remove')}
-              accessibilityRole="button"
-              accessibilityHint="Xóa hạng mục này khỏi danh sách"
-              onPress={onRemove}
-              style={styles.removeAction}
-            >
-              <Text style={styles.removeText}>Xóa hạng mục</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  card: { backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
-  header: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: 8, gap: 8 },
-  headerText: { flex: 1, minWidth: 0, gap: 2 },
-  headerTitle: { color: colors.text, fontSize: 16, fontWeight: '600' },
-  headerMeta: { color: colors.textSecondary, fontSize: 13 },
-  headerMetaError: { color: colors.error, fontWeight: '600' },
-  chevron: { width: 9, height: 9, borderRightWidth: 2, borderBottomWidth: 2, borderColor: colors.textSecondary, transform: [{ rotate: '45deg' }], marginBottom: 4 },
-  chevronUp: { transform: [{ rotate: '225deg' }], marginBottom: 0, marginTop: 4 },
-  body: { paddingHorizontal: spacing.md, paddingBottom: spacing.md, gap: 8 },
-  section: { gap: 8 },
-  label: { color: colors.textSecondary, fontSize: 13, marginTop: 4 },
-  hint: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
-  input: {
-    minHeight: 48,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    color: colors.text,
-    fontSize: 16,
-    backgroundColor: colors.surface,
-  },
-  twoColumns: { flexDirection: 'row', gap: 8 },
-  column: { flex: 1, gap: 8 },
-  optionRow: { flexDirection: 'row', gap: 8 },
-  option: {
-    flex: 1,
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 8,
-  },
-  optionSelected: { borderColor: colors.primaryStrong, backgroundColor: colors.primarySoft },
-  optionText: { color: colors.text, fontSize: 14, fontWeight: '600' },
-  optionTextSelected: { color: colors.primaryStrong, fontSize: 14, fontWeight: '700' },
-  errorText: { color: colors.error, fontSize: 13, lineHeight: 19 },
-  removeAction: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  removeText: { color: colors.error, fontSize: 15, fontWeight: '600' },
-});

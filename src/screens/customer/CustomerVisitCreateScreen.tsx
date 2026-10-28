@@ -329,7 +329,7 @@ export default function CustomerVisitCreateScreen() {
                 <View style={styles.card} testID="visit-summary">
                   <Text style={styles.title}>Thiết bị trong lượt {devices.length}/{limit}</Text>
                   <Text style={styles.hint}>Giá công tạm tính: {visitPriceText(total, formatVnd) || 'Thợ báo giá tại nhà'}</Text>
-                  <Text style={styles.hint}>Đây là giá tham khảo. Thợ báo giá từng máy, bạn duyệt máy nào thì sửa máy đó.</Text>
+                  <Text style={styles.hint}>{total.kind === 'firm' ? 'Tiền công theo phạm vi đã xác nhận; chưa gồm linh kiện FixHome hoặc tiền công phát sinh ngoài phạm vi. Kỹ thuật viên cần gửi báo giá, bạn duyệt trước khi thực hiện.' : 'Đây là giá tham khảo. Thợ báo giá từng máy, bạn duyệt máy nào thì sửa máy đó.'}</Text>
                 </View>
                 {devices.length < 2 && <Text style={styles.hint}>Hiện có 1 thiết bị. Thêm ít nhất 1 thiết bị nữa, hoặc đặt lịch thông thường cho 1 máy.</Text>}
                 {devices.length >= 2 && !!problem && !error && <Text style={styles.hint} testID="visit-problem">{problem}</Text>}

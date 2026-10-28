@@ -3,7 +3,7 @@ import { isHistoricalOrder } from '../../../api/orders.api';
 import { sameOrderSession, type OrderSessionKey, type OrderSessionSnapshot } from '../domain/order-session.types';
 import type { OrderCommandMarker } from '../runtime/order-command-journal';
 
-export type PaymentMethod = 'wallet' | 'vnpay' | 'cash' | 'no_charge';
+export type PaymentMethod = 'wallet' | 'vnpay' | 'cash' | 'no_charge' | 'voucher_zero';
 export type FinancialResult = 'unverified' | 'unpaid' | 'refunded' | 'paid-awaiting-order' | 'completed' | 'cash-pending' | 'cash-disputed';
 export type M6Phase = 'idle' | 'confirming' | 'submitting' | 'verifying' | 'pending' | 'unknown' | 'failed-known' | 'resolved' | 'denied';
 export const FINANCIAL_UNKNOWN = 'Chưa xác nhận được kết quả. Vui lòng kiểm tra trạng thái hoặc liên hệ hỗ trợ.';

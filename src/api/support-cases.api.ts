@@ -22,6 +22,10 @@ export interface MySupportCase {
   id: string;
   caseType: SupportCaseType;
   status: SupportCaseStatus;
+  /** `stop_or_replace` for the customer's request to stop the repair or change the technician (backend P0/P1, 28/10/2026). */
+  requestIntent?: 'stop_or_replace' | null;
+  /** `interrupted_for_rebook` when the manager closed the job so the customer can book again. */
+  resolutionCode?: string | null;
   bookingId: string | null;
   serviceOrderId: string | null;
   reason: string;
@@ -128,6 +132,8 @@ function normalizeMine(value: unknown): MySupportCase {
     id: asString(raw.id, 'id'),
     caseType: caseType as SupportCaseType,
     status: status as SupportCaseStatus,
+    requestIntent: raw.requestIntent === 'stop_or_replace' ? 'stop_or_replace' : null,
+    resolutionCode: typeof raw.resolutionCode === 'string' ? raw.resolutionCode : null,
     bookingId: asNullableString(raw.bookingId),
     serviceOrderId: asNullableString(raw.serviceOrderId),
     reason: asString(raw.reason, 'reason'),
@@ -191,6 +197,14 @@ export const supportCasesApi = {
       `/support/cases/mine/${encodeURIComponent(id)}`,
     );
     return normalizeMine(response.data);
+  },
+
+  /**
+   * The customer asks the manager to stop the repair or change the technician (one order under repair). The server holds
+   * completion; this is a request, not a cancellation. The same open request comes back if it is sent twice.
+   */
+  async requestStopReplace(serviceOrderId: string, reason: string): Promise<void> {
+    await apiClient.post(`/service-orders/${encodeURIComponent(serviceOrderId)}/stop-replace-request`, { reason: reason.trim() });
   },
 
   async createCase(payload: CreateSupportCasePayload): Promise<MySupportCase> {

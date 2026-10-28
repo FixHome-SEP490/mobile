@@ -13,6 +13,7 @@ const mockVerify: jest.Mock = jest.fn(async () => {});
 const mockNavigate: jest.Mock = jest.fn();
 const mockGoBack: jest.Mock = jest.fn();
 const mockRefresh: jest.Mock = jest.fn(async () => {});
+const mockCheckVoucher: jest.Mock = jest.fn(async () => {});
 
 jest.mock('../runtime/OrderSessionProvider', () => ({
   useOptionalOrderSession: () => null,
@@ -30,6 +31,7 @@ jest.mock('./useTechnicianCashDeclaration', () => ({
       submitConfirmation: (...args: unknown[]) => mockSubmitConfirmation(...args),
       cancelConfirmation: (...args: unknown[]) => mockCancelConfirmation(...args),
       verify: (...args: unknown[]) => mockVerify(...args),
+      checkVoucher: (...args: unknown[]) => mockCheckVoucher(...args),
     },
     state: mockCashState,
   }),
@@ -43,7 +45,7 @@ jest.mock('react-native-safe-area-context', () => {
 });
 jest.mock('../../../hooks/useKeyboardInset', () => ({ useKeyboardInset: () => 0 }));
 
-const idleState = { phase: 'idle', confirmation: null, result: 'unpaid', message: null };
+const idleState = { phase: 'idle', confirmation: null, result: 'unpaid', message: null, voucher: { status: 'none' } };
 
 function snapshotWith(cash: unknown): OrderSessionSnapshot {
   const key = { userId: 'tech-1', role: 'technician' as const, sessionGeneration: 1, serviceOrderId: 'order-1' };
@@ -115,4 +117,31 @@ it('existing declaration is read-only; no overwrite path is offered', async () =
   expect(renderer.root.findAllByProps({ testID: 'cash-declare-amount' }).length).toBe(0);
   expect(mockRequestDeclaration).not.toHaveBeenCalled();
   await act(async () => renderer.unmount());
+});
+
+it('asks the server about the customer voucher when the order can take a declaration', async () => {
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<CashDeclarationScreen />); });
+  expect(mockCheckVoucher).toHaveBeenCalled();
+  await act(async () => renderer.unmount());
+});
+
+it('shows the amount to collect when the customer holds a voucher', async () => {
+  mockCashState = { ...idleState, voucher: { status: 'held', reservationId: 'hold-1', dueVnd: 70000 } };
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<CashDeclarationScreen />); });
+  expect(JSON.stringify(renderer.toJSON())).toContain('Khách đang dùng voucher');
+  expect(JSON.stringify(renderer.toJSON())).toContain('70.000');
+  await act(async () => renderer.unmount());
+});
+
+it('collects nothing while the voucher is unknown or could not be read', async () => {
+  for (const status of ['error', 'checking', 'unchecked']) {
+    mockCashState = { ...idleState, voucher: { status } };
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => { renderer = create(<CashDeclarationScreen />); });
+    await act(async () => { renderer.root.findByProps({ testID: 'cash-declare-amount' }).props.onChangeText('120000'); });
+    expect(renderer.root.findByProps({ testID: 'cash-declare-open-sheet' }).props.disabled).toBe(true);
+    await act(async () => renderer.unmount());
+  }
 });
