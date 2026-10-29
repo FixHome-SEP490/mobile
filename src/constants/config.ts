@@ -23,3 +23,6 @@ export const APP_CONFIG = {
   APP_NAME: process.env.EXPO_PUBLIC_APP_NAME || 'FixHome',
   REQUEST_TIMEOUT: 15000,
 };
+
+// ponytail: the Backend ranks and checks every skilled technician (24-32 s seen for a two-device visit); lower this once that is fast.
+export const CANDIDATES_TIMEOUT_MS = 60000;

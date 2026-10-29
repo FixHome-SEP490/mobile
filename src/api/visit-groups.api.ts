@@ -2,6 +2,7 @@
 // Up to three devices in one visit (PO 21/10/2026): one technician with every
 // skill takes them all and the customer pays once for the devices repaired.
 import apiClient from './client';
+import { CANDIDATES_TIMEOUT_MS } from '../constants/config';
 import type { BookingDeviceAttributes } from './catalog-pricing.api';
 import { normalizeBooking, USER_UUID_REGEX } from './bookings.api';
 import type { BookingItem, BookingSlot, SessionOption, TechnicianCandidate } from './bookings.api';
@@ -89,6 +90,8 @@ export interface VisitGroupPageItem {
   slot: BookingSlot | null;
   scheduledAt: string | null;
   scheduledEndAt: string | null;
+  /** Shared address of the devices; the orders carry it only once a technician has taken the visit. */
+  addressSummary?: string | null;
   status: VisitGroupReadStatus;
   items: VisitGroupPageDevice[];
 }
@@ -188,7 +191,7 @@ export const visitGroupsApi = {
   },
 
   async getCandidates(id: string): Promise<TechnicianCandidate[]> {
-    const candidates = unwrap<TechnicianCandidate[]>((await apiClient.get(`/visit-groups/${id}/technician-candidates`)).data);
+    const candidates = unwrap<TechnicianCandidate[]>((await apiClient.get(`/visit-groups/${id}/technician-candidates`, { timeout: CANDIDATES_TIMEOUT_MS })).data);
     return candidates.map((candidate) => {
       // Only the technician User ID is valid in a shortlist.
       if (!candidate.userId || !USER_UUID_REGEX.test(candidate.userId)) throw new Error('Candidate is missing a valid technician User ID');

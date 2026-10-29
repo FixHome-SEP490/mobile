@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-28 18:00 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/web-be-sync-20261026
+> Cập nhật lần cuối: 2026-10-29 10:25 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/web-be-sync-20261026
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -404,6 +404,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-29 10:25 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Tìm thợ chờ tối đa 60 giây (backend mất 20-30 giây), mô tả máy chỉ hiện "Xem mô tả" khi bị cắt, viền thẻ Thiết bị trong lượt rõ hơn, màn Đơn hoàn thành của thợ có đổi máy và Linh kiện và khai trả; chưa kiểm chứng trên thiết bị.
 - 2026-10-28 18:00 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Đồng bộ web #183 và BE #168: khách yêu cầu dừng sửa hoặc đổi thợ, nút đặt lại của đơn đã hủy phân loại máy không sửa được, gián đoạn và hủy thường; chưa kiểm chứng với backend thật.
 - 2026-10-28 08:55 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Đồng bộ web #180 và #182, BE #164-#167: thanh toán bằng voucher cho đơn lẻ và lượt (ví, VNPay, 0 ₫, tiền mặt, phía thợ lẫn khách); chưa kiểm chứng với backend thật.
 - 2026-10-27 20:18 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Đồng bộ web #172/#175/#176/#178: trợ lý AI bỏ Đúng ý/Chưa đúng và có nhãn ảnh, giải thích giá; đặt lại máy không sửa được; ví ưu đãi của khách; thanh toán bằng voucher (BE #164) chưa làm.
@@ -443,12 +444,12 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-19 21:10 (UTC+7) | Hgnv11 | feat/realtime-full | Realtime đầy đủ: đọc lại đúng phần bị đổi theo kinds, thông báo, ví, thu nhập, màn chính, poll dự phòng khi socket rớt
 - 2026-10-19 21:02 (UTC+7) | Hgnv11 | feat/chat-parity-n4-n3 | Chat gửi ảnh/video, khoá khi đơn hoàn tất, mã đơn; realtime nhẹ cho lời mời, đơn và danh sách việc như web
 - 2026-10-19 20:52 (UTC+7) | Hgnv11 | feat/technician-part-returns | Thợ khai trả linh kiện FixHome như web (P1), ẩn khi backend chưa bật custody
-- 2026-10-19 20:39 (UTC+7) | Hgnv11 | feat/booking-device-pricing | Đặt lịch hỏi thông tin thiết bị và hiện phạm vi tiền công do server xác nhận như web (P012)
 
 ### Lịch sử giữ lại khi tích hợp
 
 40 mục mới nhất ở trên; các mục cũ dưới đây được giữ nguyên từ hai nhánh để không mất lịch sử.
 
+> - 2026-10-19 20:39 (UTC+7) | Hgnv11 | feat/booking-device-pricing | Đặt lịch hỏi thông tin thiết bị và hiện phạm vi tiền công do server xác nhận như web (P012)
 > - 2026-10-13 17:50 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 sửa số tiền dạng chuỗi, tuần tự hóa ghi chú và thêm làm mới chi tiết; runtime và cutover chưa kiểm chứng.
 > - 2026-10-13 17:30 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 bổ sung preview native chỉ đọc theo role, chi tiết tải một lần và ghi chú bảo vệ phiên; UI production và runtime còn chưa cutover/kiểm chứng.
 > - 2026-10-13 13:32 (UTC+7) | foxonworld | foxonworld/sep139-order-flow-redesign | SEP-139 thêm nền session/resolver/readback và journal, cập nhật contract Backend dev/privacy owner; UI cutover và runtime còn chưa kiểm chứng.

@@ -56,6 +56,7 @@ export default function CustomerVisitScreen() {
   const [message, setMessage] = useState<Message | null>(null);
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [truncated, setTruncated] = useState<Record<string, boolean>>({});
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [schedule, setSchedule] = useState<BookingSchedule | null>(null);
   const [rescheduleError, setRescheduleError] = useState<string | null>(null);
@@ -291,8 +292,12 @@ export default function CustomerVisitScreen() {
                 </View>
                 {!!description && (
                   <TouchableOpacity onPress={() => setExpanded((cur) => ({ ...cur, [item.id]: !open }))} accessibilityRole="button" accessibilityState={{ expanded: open }}>
-                    <Text style={styles.hint} numberOfLines={open ? undefined : 2}>{description}</Text>
-                    <Text style={[styles.link, { color: colors.primaryStrong }]}>{open ? 'Thu gọn' : 'Xem mô tả'}</Text>
+                    <Text
+                      style={styles.hint}
+                      numberOfLines={open ? undefined : 2}
+                      onTextLayout={(e) => { if (e.nativeEvent.lines.length > 2 && !truncated[item.id]) setTruncated((cur) => ({ ...cur, [item.id]: true })); }}
+                    >{description}</Text>
+                    {truncated[item.id] && <Text style={[styles.link, { color: colors.primaryStrong }]}>{open ? 'Thu gọn' : 'Xem mô tả'}</Text>}
                   </TouchableOpacity>
                 )}
                 {device?.state === 'failed' && !!item.booking?.id && (

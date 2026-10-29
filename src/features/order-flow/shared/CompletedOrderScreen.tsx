@@ -14,7 +14,8 @@ import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from './useLoadUnloadedResources';
 import { HubSection, type HubLink } from './TechnicianOrderHub';
-import { Camera, Headset, History, Info, ReceiptText, ShieldCheck, Star, Wrench } from 'lucide-react-native';
+import { Camera, Headset, History, Info, Package, ReceiptText, ShieldCheck, Star, Wrench } from 'lucide-react-native';
+import VisitTechnicianPanel from '../technician/VisitTechnicianPanel';
 
 const DETAILS: HubLink[] = [
   { screen: 'OrderInformation', label: 'Thông tin đơn', Icon: Info },
@@ -28,6 +29,7 @@ const AFTER_CUSTOMER: HubLink[] = [
   { screen: 'SupportCases', label: 'Yêu cầu hỗ trợ', Icon: Headset },
 ];
 const AFTER_TECHNICIAN: HubLink[] = [
+  { screen: 'PartsLifecycle', label: 'Linh kiện và khai trả', Icon: Package },
   { screen: 'TechnicianWarrantyInbox', label: 'Công việc bảo hành', Icon: Wrench },
   { screen: 'SupportCases', label: 'Yêu cầu hỗ trợ', Icon: Headset },
 ];
@@ -144,6 +146,7 @@ export default function CompletedOrderScreen({ role }: { role: 'customer' | 'tec
       ) : (
         <ReadOnlyNotice>Đơn đã hoàn thành theo xác nhận của máy chủ. Tiền công đã được ghi nhận vào ví của bạn; không còn thao tác nào cần gửi cho đơn này.</ReadOnlyNotice>
       )}
+      {role === 'technician' && <VisitTechnicianPanel section="devices" />}
       <HubSection title="Chi tiết đơn" items={DETAILS} onOpen={open} />
       <HubSection title={role === 'customer' ? 'Sau dịch vụ' : 'Bảo hành và hỗ trợ'} items={role === 'customer' ? AFTER_CUSTOMER : AFTER_TECHNICIAN} onOpen={open} />
     </TaskScreenShell>

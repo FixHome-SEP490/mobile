@@ -1,5 +1,6 @@
 // src/api/bookings.api.ts
 import apiClient from './client';
+import { CANDIDATES_TIMEOUT_MS } from '../constants/config';
 import type { BookingDeviceAttributes } from './catalog-pricing.api';
 import type { BookingSchedule } from '../utils/booking-session';
 
@@ -396,6 +397,7 @@ export const bookingsApi = {
   async getCandidates(bookingId: string): Promise<TechnicianCandidate[]> {
     const res = await apiClient.get(
       `/bookings/${bookingId}/technician-candidates`,
+      { timeout: CANDIDATES_TIMEOUT_MS },
     );
     const candidates = unwrap<TechnicianCandidate[]>(res.data);
     return candidates.map((candidate) => {

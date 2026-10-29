@@ -39,7 +39,7 @@ export const visitPanelStyles = StyleSheet.create({
   wrap: { gap: spacing.sm },
   divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   note: { color: colors.textSecondary, fontSize: 14, lineHeight: 20, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  card: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, overflow: 'hidden' },
+  card: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
 });
 
 const styles = StyleSheet.create({
