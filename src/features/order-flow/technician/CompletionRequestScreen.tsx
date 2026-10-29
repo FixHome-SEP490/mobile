@@ -11,6 +11,7 @@ import { sameOrderSession } from '../domain/order-session.types';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
+import { backFromFlow } from '../navigation/resume-order';
 
 /**
  * T14 — completion request. Scope, explicit note (<=2000), known blockers
@@ -118,7 +119,7 @@ export default function CompletionRequestScreen() {
 
   if (!current || !order) {
     return (
-      <TaskScreenShell title="Bàn giao và yêu cầu thanh toán" onBack={() => navigation.goBack()}>
+      <TaskScreenShell title="Bàn giao và yêu cầu thanh toán" onBack={() => backFromFlow(navigation)}>
         <ReadOnlyNotice>Bàn giao chỉ thực hiện trên đơn đang sửa chữa thuộc về bạn và chưa có yêu cầu bàn giao.</ReadOnlyNotice>
       </TaskScreenShell>
     );
@@ -130,7 +131,7 @@ export default function CompletionRequestScreen() {
       stage={3}
       onBack={() => {
         if (sheetValid) cancelConfirm();
-        else navigation.goBack();
+        else backFromFlow(navigation);
       }}
       secondary={{
         label: 'Làm mới dữ liệu',

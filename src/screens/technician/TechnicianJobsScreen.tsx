@@ -58,6 +58,8 @@ import {
 } from './technician-overrun-release';
 import { formatVnd } from '../../utils/format';
 import VisitGroupsPanel from '../../components/customer/VisitGroupsPanel';
+import { openOrResume } from '../../features/order-flow/navigation/resume-order';
+import { rememberedVisitDevice } from '../../features/order-flow/navigation/visit-device-tabs';
 
 import { vnDateTimeString } from '../../utils/vn-time';
 
@@ -343,8 +345,9 @@ export default function TechnicianJobsScreen() {
             emptyTitle="Chưa có lượt sửa nhiều thiết bị được phân công"
             onOpen={(visit) => {
               // The device still to do first; when every device has its result, the first one.
-              const orderId = (visit.items.find((d) => d.orderId && !d.outcome) ?? visit.items.find((d) => d.orderId))?.orderId;
-              if (orderId) navigation.navigate('TechnicianOrderDetail', { serviceOrderId: orderId });
+              const remembered = rememberedVisitDevice(visit.id);
+              const orderId = (visit.items.find((d) => d.orderId === remembered && !d.outcome) ?? visit.items.find((d) => d.orderId && !d.outcome) ?? visit.items.find((d) => d.orderId))?.orderId;
+              if (orderId) openOrResume(visit.items.flatMap((d) => (d.orderId ? [d.orderId] : [])), () => navigation.navigate('TechnicianOrderDetail', { serviceOrderId: orderId }));
             }}
           />
         </View>
@@ -591,7 +594,7 @@ export default function TechnicianJobsScreen() {
                       <TouchableOpacity
                         style={styles.detailTarget}
                         activeOpacity={0.7}
-                        onPress={() => navigation.navigate('TechnicianOrderDetail', { serviceOrderId: detailId })}
+                        onPress={() => openOrResume([detailId], () => navigation.navigate('TechnicianOrderDetail', { serviceOrderId: detailId }))}
                         hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
                         accessibilityRole="button"
                         accessibilityLabel={`Xem chi tiết công việc ${code}`}
@@ -640,11 +643,7 @@ export default function TechnicianJobsScreen() {
                               </View>
                               <TouchableOpacity
                                 style={[styles.actionBtn, { backgroundColor: colors.success }]}
-                                onPress={() =>
-                                  navigation.navigate('TechnicianOrderDetail', {
-                                    serviceOrderId: job.id,
-                                  })
-                                }
+                                onPress={() => openOrResume([job.id], () => navigation.navigate('TechnicianOrderDetail', { serviceOrderId: job.id }))}
                                 activeOpacity={0.85}
                                 hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
                                 accessibilityRole="button"

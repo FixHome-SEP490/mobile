@@ -16,6 +16,7 @@ import { PartItemRow } from './PartItemRow';
 import { approvedQuoteQty, approvedUsageCap } from './held-parts';
 import { usePartReturns } from './usePartReturns';
 import { lightTheme as colors, spacing, type ToneName } from '../../../constants/theme';
+import { backFromFlow } from '../navigation/resume-order';
 
 interface QrReceiveModalState {
   requestId: string;
@@ -143,7 +144,7 @@ export default function PartsLifecycleScreen() {
 
   if (!current || !order) {
     return (
-      <TaskScreenShell title="Quản lý linh kiện" onBack={() => navigation.goBack()}>
+      <TaskScreenShell title="Quản lý linh kiện" onBack={() => backFromFlow(navigation)}>
         <ReadOnlyNotice>
           {snapshot?.access === 'historical'
             ? 'Không quản lý linh kiện cho đơn lịch sử.'
@@ -252,7 +253,7 @@ export default function PartsLifecycleScreen() {
     <TaskScreenShell
       title="Quản lý linh kiện"
       stage={3}
-      onBack={() => navigation.goBack()}
+      onBack={() => backFromFlow(navigation)}
       secondary={{
         label: focusedRequestId && !frozen ? 'Quay lại' : 'Làm mới dữ liệu',
         testID: focusedRequestId && !frozen ? 'parts-draft-cancel' : 'task-refresh', disabled: busy || refreshing,

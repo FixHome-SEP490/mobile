@@ -14,6 +14,7 @@ import PhotoDraftGallery from '../../../components/technician/PhotoDraftGallery'
 import SentEvidenceGallery from './SentEvidenceGallery';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
+import { backFromFlow } from '../navigation/resume-order';
 
 /** Photos taken and not yet sent in one go. */
 const MAX_AFTER_DRAFTS = 5;
@@ -200,7 +201,7 @@ export default function AfterEvidenceScreen() {
     <TaskScreenShell
       title="Ảnh sau sửa chữa"
       stage={3}
-      onBack={() => navigation.goBack()}
+      onBack={() => backFromFlow(navigation)}
       secondary={
         footerNext
           ? { label: 'Bàn giao', testID: 'task-handover-next', disabled: !handoverAllowed,

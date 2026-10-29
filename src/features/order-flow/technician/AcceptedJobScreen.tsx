@@ -8,6 +8,7 @@ import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreen
 import TechnicianOrderHub from '../shared/TechnicianOrderHub';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+import { backFromFlow } from '../navigation/resume-order';
 
 /** T02 — ACCEPTED. Explicit two-step departure through the frozen controller. No location tracking here. */
 export default function AcceptedJobScreen() {
@@ -64,7 +65,7 @@ export default function AcceptedJobScreen() {
     <TaskScreenShell
       title="Chuẩn bị di chuyển"
       stage={1}
-      onBack={() => navigation.goBack()}
+      onBack={() => backFromFlow(navigation)}
       secondary={{
         label: confirming ? 'Hủy xác nhận' : 'Làm mới dữ liệu',
         testID: confirming ? 'depart-cancel' : 'task-refresh',

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { openOrResume } from '../../features/order-flow/navigation/resume-order';
 import {
   View,
   Text,
@@ -214,7 +215,7 @@ export default function TechnicianNotificationsScreen({ route }: { route?: { nam
         });
     }
     void resolveTechnicianNotificationOrderId(item, partRequestsApi.getById).then(
-      (serviceOrderId) => { if (serviceOrderId) navigation.navigate('TechnicianOrderDetail', { serviceOrderId }); },
+      (serviceOrderId) => { if (serviceOrderId) openOrResume([serviceOrderId], () => navigation.navigate('TechnicianOrderDetail', { serviceOrderId })); },
       () => setLoadError('Không mở được máy liên quan. Vui lòng tải lại thông báo và thử lại.'),
     );
   };

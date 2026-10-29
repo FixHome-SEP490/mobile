@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { openOrResume } from '../../features/order-flow/navigation/resume-order';
 import { RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AlertTriangle, ChevronRight, Info, WalletCards } from 'lucide-react-native';
@@ -214,7 +215,7 @@ export default function TechnicianEarningsScreen({ embedded = false }: { embedde
               {!!summary.best && (
                 <TouchableOpacity
                   style={styles.linkBtn}
-                  onPress={() => rootNavigation.navigate('TechnicianOrderDetail', { serviceOrderId: summary.best!.id })}
+                  onPress={() => openOrResume([summary.best!.id], () => rootNavigation.navigate('TechnicianOrderDetail', { serviceOrderId: summary.best!.id }))}
                   accessibilityRole="button"
                   accessibilityLabel={`Xem đơn ${summary.best.code}`}
                 >

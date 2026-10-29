@@ -3,6 +3,8 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View, type StyleProp, t
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardInset } from '../../../hooks/useKeyboardInset';
 import BackButton, { HomeButton } from '../../../components/BackButton';
+import { backOrJobs } from './double-back';
+import { leaveFlowToHome } from '../navigation/resume-order';
 import VisitCustomerPanel from '../customer/VisitCustomerPanel';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { OrderContextSlot, SheetCloseContext } from './order-context-slot';
@@ -64,9 +66,9 @@ export function TaskScreenShell({ title, stage, children, primary, secondary, su
   if (secondary?.testID === 'task-refresh' || secondary?.testID === 'readonly-detail-refresh') secondary = undefined;
   return <SafeAreaView edges={['top', 'left', 'right']} style={styles.page}>
     <View style={styles.header}>
-      <BackButton onPress={closeSheet ?? onBack ?? (() => {})} />
+      <BackButton onPress={closeSheet ?? (() => backOrJobs(onBack ?? (() => {})))} />
       <Text accessibilityRole="header" style={styles.headerTitle}>{title}</Text>
-      {closeSheet ? <View style={{ width: 44 }} /> : <HomeButton />}
+      {closeSheet ? <View style={{ width: 44 }} /> : <HomeButton onPress={leaveFlowToHome} />}
     </View>
     {stage !== undefined && !closeSheet && (slot ? <slot.Stepper /> : <StageHeader stage={stage} />)}
     <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, contentStyle]} keyboardShouldPersistTaps="handled">

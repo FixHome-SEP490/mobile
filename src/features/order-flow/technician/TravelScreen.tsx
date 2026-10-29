@@ -8,6 +8,7 @@ import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreen
 import TechnicianOrderHub from '../shared/TechnicianOrderHub';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+import { backFromFlow } from '../navigation/resume-order';
 
 /**
  * T03 — EN_ROUTE before arrival verification.
@@ -31,7 +32,7 @@ export default function TravelScreen() {
     <TaskScreenShell
       title="Đang di chuyển"
       stage={1}
-      onBack={() => navigation.goBack()}
+      onBack={() => backFromFlow(navigation)}
       secondary={{
         label: 'Làm mới dữ liệu',
         testID: 'task-refresh',

@@ -20,6 +20,7 @@ import AcceptedRescheduleSheet from '../../../components/AcceptedRescheduleSheet
 import { serviceOrderDisplayView, serviceOrderStatusView } from '../../../screens/technician/technician-status';
 import { sessionLabel } from '../../../utils/booking-session';
 import { findChatForBooking } from '../../../screens/technician/technician-chat-shortcut';
+import { backFromFlow } from '../navigation/resume-order';
 
 const PRICING_LABELS: Record<string, string> = {
   FIXED_PRICE: 'Giá cố định',
@@ -78,7 +79,7 @@ export default function OrderInformationScreen() {
     ...(visitGroupId || ['COMPLETED', 'CANCELLED'].includes(String(order?.status).toUpperCase()) ? [] : [{ screen: 'OrderException', testID: 'order-cancel-entry', label: 'Hủy đơn hoặc kiểm tra điều kiện', Icon: XCircle }]),
   ];
   const historicalOrder = history && orderValue && isHistoricalOrder(orderValue) ? orderValue : null;
-  return <TaskScreenShell title="Thông tin đơn" onBack={() => navigation.goBack()}
+  return <TaskScreenShell title="Thông tin đơn" onBack={() => backFromFlow(navigation)}
     secondary={{ label: 'Làm mới dữ liệu', testID: 'readonly-detail-refresh', disabled: !canRefresh || refreshing,
       onPress: () => { if (canRefresh && !refreshing) void refresh('manual'); } }}>
     {!order && <ReadOnlyNotice>{snapshot?.access === 'revoked' ? 'Quyền truy cập đã thay đổi; dữ liệu đơn đã được xóa.' : 'Đang tải hoặc chưa có quyền xem dữ liệu đơn.'}</ReadOnlyNotice>}

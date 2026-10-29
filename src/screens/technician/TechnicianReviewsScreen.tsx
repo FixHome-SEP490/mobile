@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { openOrResume } from '../../features/order-flow/navigation/resume-order';
 import {
   ActivityIndicator,
   FlatList,
@@ -177,7 +178,7 @@ export default function TechnicianReviewsScreen() {
         {!!orderLine && (
           <TouchableOpacity
             style={styles2.orderLink}
-            onPress={() => navigation.navigate('TechnicianOrderDetail', { serviceOrderId: item.serviceOrderId })}
+            onPress={() => openOrResume([item.serviceOrderId], () => navigation.navigate('TechnicianOrderDetail', { serviceOrderId: item.serviceOrderId }))}
             accessibilityRole="button"
             accessibilityLabel={`Xem chi tiết công việc. ${orderLine}`}
           >

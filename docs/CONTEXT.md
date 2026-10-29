@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-29 20:02 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/web-be-sync-20261026
+> Cập nhật lần cuối: 2026-10-29 21:45 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/web-be-sync-20261026
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -259,6 +259,8 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 - `CustomerAnimatedBottomBar`: tab đang chọn từng là một vòng tròn xanh đặc cạnh nút "Đặt lịch" cũng xanh đặc và nhô lên, hai thứ giống nhau tranh nhau và nhìn lệch. Nay tab đang chọn là viên nền xanh nhạt (`primaryTint`) với biểu tượng xanh đậm (`primaryStrong`), chỉ nút "Đặt lịch" là xanh đặc; nút có viền ngoài màu nền (3 điểm, vẫn 56 điểm tổng) để trông gắn liền với thanh. Vị trí, vùng chạm và cách chuyển tab giữ nguyên. Thanh của kỹ thuật viên (`GlassTabBar`) chưa đổi. CHƯA xem trên máy thật.
 - Màn đơn của khách có một khung chung ở mọi bước (`CustomerOrderContext.tsx`, cắm vào `TaskScreenShell` qua `order-context-slot.ts`, chỉ bật cho khách): thanh 5 bước Đặt lịch, Chọn kỹ thuật viên, Kỹ thuật viên đến, Sửa chữa, Thanh toán lấy từ `customerActivityStage`; dải tóm tắt có dịch vụ, kỹ thuật viên (nút Gọi), lịch hẹn, địa chỉ, thẻ báo giá (tổng và trạng thái) và bốn lối tắt Chi tiết đơn, Tiến độ, Nhắn tin, Hỗ trợ. Chi tiết đơn và Tiến độ mở thành cửa sổ trượt (`Modal`) chứa lại `OrderInformationScreen` và `OrderProgressHistoryScreen`; nút quay lại trong cửa sổ chỉ đóng cửa sổ (`SheetCloseContext`) và cửa sổ tự đóng khi màn đơn mất focus. Ba bước chờ C03, C04, C06 dùng chung `StatusStepScreen` (chỉ một câu nói đang diễn ra, nút chân trang là Gọi kỹ thuật viên); bỏ năm dòng tóm tắt lặp và hai đường dẫn sang màn riêng. Bước báo giá C05 đưa phần xác nhận lên chân trang ngay trên hai nút xác nhận, bỏ khối xác nhận trong vùng cuộn, nút Chi tiết đơn và nút Xem chi tiết báo giá (không còn hiện mã báo giá). Đơn đã hủy (kể cả do từ chối báo giá) hiện màn "Đơn đã hủy" với Về trang chủ và Yêu cầu hỗ trợ thay cho dòng "đang hoàn thiện". Thiết bị CHƯA KIỂM CHỨNG; chưa xem cửa sổ trượt trên iOS và Android thật.
 - Trang lượt nhiều thiết bị (`CustomerVisitScreen`, mở từ thẻ ở tab Nhiều thiết bị) theo cùng khung: thanh 5 bước chung (`OrderStepBar`, bước của lượt do `visitStep` tính), thẻ tóm tắt có kỹ thuật viên lấy từ các đơn của lượt, lịch hẹn, địa chỉ và icon Gọi, Nhắn tin; nút chính duy nhất cố định ở chân trang theo thứ tự duyệt báo giá, chọn kỹ thuật viên, thanh toán cả lượt (không còn nằm cuối vùng cuộn); máy đang chờ báo giá có nút "Xem và duyệt báo giá" riêng trên thẻ máy; thêm nút Home ở đầu trang, nút Xem mô tả đủ 44 điểm. Thiết bị CHƯA KIỂM CHỨNG.
+- Thợ rời màn đơn mà không mất nháp (`features/order-flow/navigation/resume-order.ts`, `shared/double-back.ts`): nút Home của `TaskScreenShell` và Back ở màn gốc của luồng (qua `backFromFlow`, áp cho các màn thợ và dùng chung) chỉ đẩy thêm tab chính của thợ lên trên màn đơn (không đảo thứ tự màn, vì đảo thứ tự màn của native stack làm app treo); các màn khác của luồng vẫn `goBack` thường. Back ở màn gốc và Back hai lần trong 1,5 giây đều về tab Công việc giữ màn đơn bên dưới; nút Back cứng của Android ở màn gốc làm như nút Back trên đầu. Mở lại đơn hoặc lượt từ Công việc, Trang chủ, Thông báo, Lịch, Thu nhập, Đánh giá qua `openOrResume` thì `popTo` về đúng màn đơn đang giữ (cùng đơn hoặc cùng lượt), nếu không có thì mở mới. `VisitTechnicianPanel` nhớ máy thợ đang làm của từng lượt trong bộ nhớ để mở lại đúng máy. Nháp chỉ sống trong bộ nhớ nên tắt app là mất. Vai khách giữ hành vi cũ. Thiết bị CHƯA KIỂM CHỨNG.
+- Chọn voucher khi thanh toán (`VoucherCheckoutSection`) mở bảng trượt cùng kiểu trang Ưu đãi của tôi: tab Của tôi và Ưu đãi chung (có Lưu và chọn), ô nhập mã (`POST /vouchers/claim` rồi xem trước giá), giá do máy chủ tính, rồi giữ voucher như trước. `api/cash-intents.api.ts` là client của luồng tiền mặt trước (web #184, `/finance/cash-intents`), chưa có màn nào dùng; ba luồng màn còn thiếu: khách yêu cầu và hủy, thợ xác nhận đã nhận, cho cả đơn lẻ và lượt, khi backend bật `cashFirstEnabled`.
 
 ### Lượt sửa nhiều thiết bị (25/10/2026, nhánh `feat/web-visit-groups`, mốc web `c0b043c`, backend `9f1370f`)
 
@@ -406,6 +408,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-29 21:45 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Thợ: nút Home và Back giữ màn đơn, Back hai lần về Công việc, mở lại đơn hoặc lượt thì về đúng màn đang giữ; khách: bảng chọn voucher có tab Của tôi, Ưu đãi chung và nhập mã; thêm client API cash-intents (web #184), chưa nối vào màn.
 - 2026-10-29 20:02 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Trang lượt nhiều thiết bị có thanh 5 bước, thẻ tóm tắt kèm Gọi và Nhắn tin, nút chính cố định ở chân trang và nút duyệt báo giá trên từng máy.
 - 2026-10-29 19:17 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Màn đơn của khách có khung chung thanh 5 bước và dải tóm tắt, Chi tiết đơn và Tiến độ mở thành cửa sổ trượt; bước báo giá xác nhận ở chân trang; đơn đã hủy có lối thoát.
 - 2026-10-29 10:25 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Tìm thợ chờ tối đa 60 giây (backend mất 20-30 giây), mô tả máy chỉ hiện "Xem mô tả" khi bị cắt, viền thẻ Thiết bị trong lượt rõ hơn, màn Đơn hoàn thành của thợ có đổi máy và Linh kiện và khai trả; chưa kiểm chứng trên thiết bị.
@@ -445,7 +448,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-19 23:36 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Hoạt động có hai tab Đơn sửa chữa và Yêu cầu đặt lịch như web, mỗi tab một danh sách và số đếm
 - 2026-10-19 23:12 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Làm lại màn Khám phá dịch vụ: thẻ dịch vụ có giá công, dải chip danh mục, danh mục chọn từ Home chỉ hiện dịch vụ con
 - 2026-10-19 23:05 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Home gọn lại: danh mục lớn vuốt ngang hai hàng mỗi trang kèm chấm trang
-- 2026-10-19 21:10 (UTC+7) | Hgnv11 | feat/realtime-full | Realtime đầy đủ: đọc lại đúng phần bị đổi theo kinds, thông báo, ví, thu nhập, màn chính, poll dự phòng khi socket rớt
 
 ### Lịch sử giữ lại khi tích hợp
 

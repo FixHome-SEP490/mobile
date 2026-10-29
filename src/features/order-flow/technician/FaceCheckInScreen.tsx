@@ -9,6 +9,7 @@ import type { CameraOrderAsset } from './arrival-proof-controller';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import TechnicianOrderHub from '../shared/TechnicianOrderHub';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+import { backFromFlow } from '../navigation/resume-order';
 
 /** T05 — EN_ROUTE with own arrival, no own confirmed face. Camera-only private capture. */
 export default function FaceCheckInScreen() {
@@ -87,7 +88,7 @@ export default function FaceCheckInScreen() {
     <TaskScreenShell
       title="Chụp ảnh xác minh"
       stage={2}
-      onBack={() => navigation.goBack()}
+      onBack={() => backFromFlow(navigation)}
       secondary={{
         label: 'Làm mới dữ liệu',
         testID: 'task-refresh',

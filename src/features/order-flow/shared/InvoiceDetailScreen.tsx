@@ -8,6 +8,7 @@ import { DetailRow, LineRow, ReadOnlyNotice, Section, TaskScreenShell } from './
 import { formatVnd } from '../../../utils/format';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from './useLoadUnloadedResources';
+import { backFromFlow } from '../navigation/resume-order';
 
 function money(value: number | string) {
   return typeof value === 'number' ? formatVnd(value) : /^\d+(?:\.\d+)?$/.test(value) ? `${value} ₫` : 'Chưa có dữ liệu';
@@ -24,7 +25,7 @@ export default function InvoiceDetailScreen() {
   const state = current && snapshot ? invoiceDisplayState(snapshot.resources.invoice) : null;
   const quotations = snapshot?.resources.quotations.status === 'ready' ? snapshot.resources.quotations.data : null;
   const vs = state?.kind === 'invoice' ? invoiceVsQuotation(state.invoice, quotations) : null;
-  return <TaskScreenShell title="Hóa đơn" onBack={() => navigation.goBack()}
+  return <TaskScreenShell title="Hóa đơn" onBack={() => backFromFlow(navigation)}
     secondary={{ label: 'Làm mới dữ liệu', testID: 'readonly-detail-refresh', disabled: !canRefresh || refreshing,
       onPress: () => { if (canRefresh && !refreshing) void refresh('manual'); } }}>
     {history && <ReadOnlyNotice>Hóa đơn không được tải cho đơn lịch sử.</ReadOnlyNotice>}

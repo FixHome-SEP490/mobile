@@ -7,6 +7,7 @@ import OrderCostHistory from './OrderCostHistory';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from './useLoadUnloadedResources';
 import { resolveProposalReadModel } from './order-detail-view-models';
+import { backFromFlow } from '../navigation/resume-order';
 
 export default function ProposalDetailScreen() {
   const { key, snapshot, loadResource } = useOrderSession();
@@ -19,7 +20,7 @@ export default function ProposalDetailScreen() {
   const proposals = lookup?.kind === 'found' ? lookup.items : [];
   const only = proposalId && proposals.length === 1 ? proposals[0] : null;
   const title = only ? (only.kind === 'quotation' ? 'Chi tiết báo giá' : 'Chi tiết chi phí phát sinh') : 'Báo giá và chi phí phát sinh';
-  return <TaskScreenShell title={title} onBack={() => navigation.goBack()}>
+  return <TaskScreenShell title={title} onBack={() => backFromFlow(navigation)}>
     {!current && <ReadOnlyNotice>{snapshot?.access === 'historical' ? 'Báo giá và chi phí phát sinh không được tải cho đơn lịch sử.' : 'Chỉ xem được sau khi hệ thống xác minh quyền xem đơn hiện tại.'}</ReadOnlyNotice>}
     {current && lookup?.kind === 'loading' && <ReadOnlyNotice>Đang tải…</ReadOnlyNotice>}
     {current && lookup?.kind === 'unavailable' && <ReadOnlyNotice>Chưa tải được đầy đủ dữ liệu. Vui lòng thử lại; đây không có nghĩa là chưa có báo giá hay chi phí phát sinh.</ReadOnlyNotice>}

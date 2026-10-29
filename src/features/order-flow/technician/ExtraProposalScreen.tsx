@@ -32,6 +32,7 @@ import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreen
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { formatVnd } from '../../../utils/format';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+import { backFromFlow } from '../navigation/resume-order';
 
 export const EXTRA_REASON_MAX = 2000;
 // Compare the same private server asset across renewed short-lived signatures.
@@ -291,12 +292,12 @@ export default function ExtraProposalScreen() {
       onCancelConfirm();
       return;
     }
-    navigation.goBack();
+    backFromFlow(navigation);
   };
 
   if (!current || !order) {
     return (
-      <TaskScreenShell title={revisingCostId ? 'Sửa đề xuất phát sinh' : 'Đề xuất chi phí phát sinh'} onBack={() => navigation.goBack()}>
+      <TaskScreenShell title={revisingCostId ? 'Sửa đề xuất phát sinh' : 'Đề xuất chi phí phát sinh'} onBack={() => backFromFlow(navigation)}>
         <ReadOnlyNotice>
           {snapshot?.access === 'historical'
             ? 'Không thể tạo đề xuất chi phí cho đơn lịch sử.'
@@ -308,7 +309,7 @@ export default function ExtraProposalScreen() {
 
   if (!isUnderRepair && !showRecovery && !isUnknown && state.phase !== 'resolved') {
     return (
-      <TaskScreenShell title="Đề xuất chi phí phát sinh" stage={3} onBack={() => navigation.goBack()}>
+      <TaskScreenShell title="Đề xuất chi phí phát sinh" stage={3} onBack={() => backFromFlow(navigation)}>
         <ReadOnlyNotice>
           Chỉ có thể đề xuất chi phí phát sinh khi đơn đang sửa chữa và chưa yêu cầu hoàn tất.
         </ReadOnlyNotice>
@@ -318,7 +319,7 @@ export default function ExtraProposalScreen() {
 
   if (revisingCostId && !canRevise && !showRecovery && !isUnknown && state.phase !== 'resolved') {
     return (
-      <TaskScreenShell title="Sửa đề xuất phát sinh" stage={3} onBack={() => navigation.goBack()}>
+      <TaskScreenShell title="Sửa đề xuất phát sinh" stage={3} onBack={() => backFromFlow(navigation)}>
         <ReadOnlyNotice>
           Đề xuất này không còn ở trạng thái chờ duyệt hoặc đã hết hạn, không thể sửa đổi. Hãy tạo đề xuất mới nếu cần.
         </ReadOnlyNotice>

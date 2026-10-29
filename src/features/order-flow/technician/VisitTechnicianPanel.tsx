@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { visitGrandTotal } from '../../../screens/customer/customer-visit';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ChevronUp, Clock, HandCoins, Layers, LogOut, Wallet, Wrench } from 'lucide-react-native';
@@ -10,7 +11,7 @@ import { useLiveRefresh } from '../../../hooks/useLiveRefresh';
 import { formatVnd } from '../../../utils/format';
 import { extractApiErrorMessage } from '../../../utils/input-validation';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
-import { useRegisterVisitDevices, visitDeviceTabName } from '../navigation/visit-device-tabs';
+import { rememberVisitDevice, useRegisterVisitDevices, visitDeviceTabName } from '../navigation/visit-device-tabs';
 import { PanelRow } from '../shared/VisitPanelRow';
 import { CASH_VOUCHER_UNCHECKED } from './technician-cash-controller';
 import {
@@ -72,6 +73,8 @@ function VisitPanelBody({ section }: { section: 'devices' | 'cash' }) {
     if (firstFocus.current) { firstFocus.current = false; return; }
     void load();
   }, [load]));
+  const orderId = order?.id;
+  useFocusEffect(useCallback(() => { if (groupId && orderId) rememberVisitDevice(groupId, orderId); }, [groupId, orderId]));
 
   const devices = useMemo(() => [...(checkout?.devices ?? [])].sort((a, b) => a.sequence - b.sequence).slice(0, 3), [checkout]);
   // Each device order gets its own tab in the order screen once the visit is known.
@@ -167,7 +170,7 @@ function VisitPanelBody({ section }: { section: 'devices' | 'cash' }) {
         <View style={styles.card}>
           {checkout && (
             <PanelRow testID="visit-cash-total" Icon={Wallet} readOnly label="Tổng cả lượt"
-              sub={state === 'waiting' ? 'Chờ kết quả các máy' : formatVnd(checkout.total)} />
+              sub={state === 'waiting' ? 'Chờ kết quả các máy' : formatVnd(visitGrandTotal(checkout))} />
           )}
           <View style={checkout ? styles.divider : undefined}>
             <PanelRow testID="visit-cash-status" Icon={status.Icon} readOnly label={status.label} sub={status.sub} />

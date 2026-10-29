@@ -5,6 +5,7 @@ import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { DetailRow, ReadOnlyNotice, Section, TaskScreenShell } from './TaskScreenShell';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { useLoadUnloadedResources } from './useLoadUnloadedResources';
+import { backFromFlow } from '../navigation/resume-order';
 
 const ACTOR_LABELS: Record<string, string> = {
   customer: 'Khách hàng',
@@ -23,7 +24,7 @@ export default function OrderProgressHistoryScreen() {
   const historicalTech = snapshot?.access === 'historical' && key?.role === 'technician';
   useLoadUnloadedResources(snapshot, ['history'], loadResource);
   const resource = snapshot?.resources.history;
-  return <TaskScreenShell title="Lịch sử tiến độ" onBack={() => navigation.goBack()}
+  return <TaskScreenShell title="Lịch sử tiến độ" onBack={() => backFromFlow(navigation)}
     secondary={{ label: 'Làm mới dữ liệu', testID: 'readonly-detail-refresh', disabled: !canRefresh || refreshing,
       onPress: () => { if (canRefresh && !refreshing) void refresh('manual'); } }}>
     {historicalTech && <ReadOnlyNotice>Đơn lịch sử chỉ có bản tóm tắt bảy trường do máy chủ cấp. Không tải lịch sử, hồ sơ đặt chỗ hoặc tài nguyên chi tiết.</ReadOnlyNotice>}

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { visitGrandTotal } from '../../../screens/customer/customer-visit';
 import { Text, View } from 'react-native';
 import { Wallet, Wrench } from 'lucide-react-native';
 import { visitGroupsApi, type VisitCheckout, type VisitDeviceState } from '../../../api/visit-groups.api';
@@ -58,7 +59,7 @@ export default function VisitDevicesSummary({ groupId, stateLabel }: { groupId: 
               readOnly
               label="Tổng cả lượt"
               sub={waiting ? 'Tính khi mọi máy đã có kết quả' : checkout.paid ? 'Đã thanh toán' : 'Khách trả một lần'}
-              value={waiting ? '—' : formatVnd(checkout.total)}
+              value={waiting ? '—' : formatVnd(visitGrandTotal(checkout))}
             />
           </View>
         )}

@@ -34,6 +34,19 @@ export function bookingDetailTarget(bookingId: unknown): string | null {
   return typeof bookingId === 'string' && BOOKING_UUID.test(bookingId) ? bookingId : null;
 }
 
+export function urgencyLabel(urgency: string): string {
+  switch (String(urgency).toUpperCase()) {
+    case 'LOW':
+      return 'Không gấp';
+    case 'HIGH':
+      return 'Ưu tiên cao';
+    case 'EMERGENCY':
+      return 'Khẩn cấp';
+    default:
+      return 'Bình thường';
+  }
+}
+
 export function bookingStatusLabel(status: unknown): string {
   switch (String(status).toUpperCase()) {
     case 'SUBMITTED':

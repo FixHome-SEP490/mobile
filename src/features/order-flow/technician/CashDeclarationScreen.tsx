@@ -13,6 +13,7 @@ import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { parseWholeVndInput } from '../shared/m6-amount-input';
 import { formatVnd } from '../../../utils/format';
 import { CASH_VOUCHER_UNCHECKED } from './technician-cash-controller';
+import { backFromFlow } from '../navigation/resume-order';
 
 function parseAmount(text: string): number | null {
   return parseWholeVndInput(text, { min: 0, max: 999999999999 });
@@ -96,7 +97,7 @@ export default function CashDeclarationScreen() {
 
   if (!current || !order) {
     return (
-      <TaskScreenShell title="Khai báo tiền mặt" onBack={() => navigation.goBack()}>
+      <TaskScreenShell title="Khai báo tiền mặt" onBack={() => backFromFlow(navigation)}>
         <ReadOnlyNotice>Khai báo tiền mặt chỉ thực hiện trên đơn đã bàn giao thuộc về bạn.</ReadOnlyNotice>
       </TaskScreenShell>
     );
@@ -108,7 +109,7 @@ export default function CashDeclarationScreen() {
       stage={4}
       onBack={() => {
         if (sheetValid) cancelConfirm();
-        else navigation.goBack();
+        else backFromFlow(navigation);
       }}
       secondary={{
         label: 'Làm mới dữ liệu',

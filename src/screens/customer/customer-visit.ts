@@ -93,6 +93,10 @@ export function visitDeviceStatusText(args: {
   return 'Chưa chọn thợ';
 }
 
+/** What the visit costs. The server's `total` is what is still due, so it is 0 once paid; then the repaired devices' amounts are the total. */
+export const visitGrandTotal = (checkout: Pick<VisitCheckout, 'paid' | 'total' | 'devices'>): number =>
+  checkout.paid ? checkout.devices.filter((d) => d.state === 'succeeded').reduce((sum, d) => sum + d.amount, 0) : checkout.total;
+
 export type VisitPayMethod = 'wallet' | 'vnpay' | 'cash';
 export type VisitCheckoutState = 'waiting' | 'paid' | 'pending_cash' | 'zero_due' | 'wallet_short' | 'vnpay' | 'ready';
 

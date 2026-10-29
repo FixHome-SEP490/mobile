@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { BackHandler } from 'react-native';
+import { backFromFlow } from '../navigation/resume-order';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { resolveCustomerTask, resolveTechnicianTask } from '../domain/order-task-resolver';
 import type { OrderTaskResolution, OrderSessionKey, OrderSessionSnapshot } from '../domain/order-session.types';
@@ -85,6 +87,15 @@ function getRestoredM6Recovery(
 export default function OrderTaskScreen({ role }: { role: 'customer' | 'technician' }) {
   const { key, snapshot, loadResource, journal, refresh } = useOrderSession();
   const navigation = useNavigation<any>();
+  // Hardware back on the root screen of the flow: same as the header back (a technician keeps the order screen).
+  React.useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (navigation.isFocused?.() === false) return false;
+      backFromFlow(navigation);
+      return true;
+    });
+    return () => sub.remove();
+  }, [navigation]);
   const route = useRoute<any>();
   const liveResolution: OrderTaskResolution | null = snapshot
     ? role === 'customer'
@@ -142,7 +153,7 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
         <TaskScreenShell
           title="Đơn sửa chữa"
           stage={null}
-          onBack={() => navigation.goBack()}
+          onBack={() => backFromFlow(navigation)}
           primary={{ label: 'Thử lại', onPress: () => void refresh('manual') }}
         >
           <ReadOnlyNotice>Chưa tải được thông tin đơn. Vui lòng kiểm tra kết nối rồi thử lại.</ReadOnlyNotice>
@@ -150,7 +161,7 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
       );
     }
     return (
-      <TaskScreenShell title="Đơn sửa chữa" stage={null} onBack={() => navigation.goBack()}>
+      <TaskScreenShell title="Đơn sửa chữa" stage={null} onBack={() => backFromFlow(navigation)}>
         <ReadOnlyNotice>
           Đang xác minh quyền truy cập và tải thông tin đơn. Các thao tác vẫn bị khóa trong lúc chờ dữ liệu chuẩn.
         </ReadOnlyNotice>
@@ -229,7 +240,7 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
     <TaskScreenShell
       title={cancelled ? 'Đơn đã hủy' : 'Đơn sửa chữa'}
       stage={resolution.stage}
-      onBack={() => navigation.goBack()}
+      onBack={() => backFromFlow(navigation)}
       primary={role === 'customer' ? { label: 'Về trang chủ', testID: 'task-go-home', onPress: goHome } : undefined}
       secondary={role === 'customer' ? { label: 'Yêu cầu hỗ trợ', testID: 'task-support', onPress: () => navigation.navigate('SupportCases') } : undefined}
     >

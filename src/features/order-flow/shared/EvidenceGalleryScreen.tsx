@@ -7,6 +7,7 @@ import { ReadOnlyNotice, Section, TaskScreenShell } from './TaskScreenShell';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from './useLoadUnloadedResources';
 import { vnDateTimeString } from '../../../utils/vn-time';
+import { backFromFlow } from '../navigation/resume-order';
 
 const typeLabel: Record<string, string> = { BEFORE: 'Trước sửa chữa', AFTER: 'Sau sửa chữa', CHECKIN_FACE: 'Ảnh khuôn mặt' };
 
@@ -19,7 +20,7 @@ export default function EvidenceGalleryScreen() {
   useLoadUnloadedResources(snapshot, ['evidence'], loadResource);
   const resource = snapshot?.resources.evidence;
   const photos = current && resource?.status === 'ready' ? visibleEvidence(key!.role, resource.data) : [];
-  return <TaskScreenShell title="Ảnh và bằng chứng" onBack={() => navigation.goBack()}
+  return <TaskScreenShell title="Ảnh và bằng chứng" onBack={() => backFromFlow(navigation)}
     secondary={{ label: 'Làm mới dữ liệu', testID: 'readonly-detail-refresh', disabled: !canRefresh || refreshing,
       onPress: () => { if (canRefresh && !refreshing) void refresh('manual'); } }}>
     {!current && <ReadOnlyNotice>{snapshot?.access === 'revoked' ? 'Quyền truy cập đã thay đổi; ảnh riêng của đơn không còn khả dụng.' : 'Ảnh chỉ tải sau khi quyền xem đơn hiện tại được xác minh.'}</ReadOnlyNotice>}

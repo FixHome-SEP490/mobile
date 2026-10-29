@@ -16,6 +16,7 @@ import { useLoadUnloadedResources } from './useLoadUnloadedResources';
 import { HubSection, type HubLink } from './TechnicianOrderHub';
 import { Camera, Headset, History, Info, Package, ReceiptText, ShieldCheck, Star, Wrench } from 'lucide-react-native';
 import VisitTechnicianPanel from '../technician/VisitTechnicianPanel';
+import { backFromFlow } from '../navigation/resume-order';
 
 const DETAILS: HubLink[] = [
   { screen: 'OrderInformation', label: 'Thông tin đơn', Icon: Info },
@@ -69,7 +70,7 @@ export default function CompletedOrderScreen({ role }: { role: 'customer' | 'tec
 
   if (!current || !order) {
     return (
-      <TaskScreenShell title="Đơn hoàn thành" onBack={() => navigation.goBack()}>
+      <TaskScreenShell title="Đơn hoàn thành" onBack={() => backFromFlow(navigation)}>
         <ReadOnlyNotice>
           {historical
             ? 'Đơn lịch sử chỉ xem được thông tin cho phép; trạng thái hoàn thành do máy chủ xác nhận.'
@@ -83,7 +84,7 @@ export default function CompletedOrderScreen({ role }: { role: 'customer' | 'tec
     <TaskScreenShell
       title="Đơn hoàn thành"
       stage={4}
-      onBack={() => navigation.goBack()}
+      onBack={() => backFromFlow(navigation)}
       secondary={{
         label: 'Làm mới dữ liệu',
         testID: 'task-refresh',
