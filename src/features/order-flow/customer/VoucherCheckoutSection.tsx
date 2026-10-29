@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { fundedCheckoutApi, type VoucherCheckoutPreview } from '../../../api/funded-checkout.api';
-import { vouchersApi, type VoucherClaim } from '../../../api/vouchers.api';
-import { lightTheme as colors, spacing } from '../../../constants/theme';
-import { discountLabel, voucherDate } from '../../../screens/customer/voucher-view';
+import { vouchersApi, type GeneralVoucher, type VoucherClaim } from '../../../api/vouchers.api';
+import { spacing, useAppTheme } from '../../../constants/theme';
+import { claimState, conditionLabel, discountLabel, isVoucherCode, unsavedGeneral, voucherDate } from '../../../screens/customer/voucher-view';
 import { extractApiErrorMessage } from '../../../utils/input-validation';
 import { formatVnd } from '../../../utils/format';
 import { DetailRow } from '../shared/TaskScreenShell';
@@ -30,8 +31,14 @@ export default function VoucherCheckoutSection({
   onApplied: (voucher: AppliedVoucher) => void;
   onReleased: (reason?: string) => void;
 }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const [phase, setPhase] = useState<Phase>('closed');
   const [claims, setClaims] = useState<VoucherClaim[]>([]);
+  const [general, setGeneral] = useState<GeneralVoucher[]>([]);
+  const [tab, setTab] = useState<'mine' | 'general'>('mine');
+  const [code, setCode] = useState('');
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
   const [preview, setPreview] = useState<VoucherCheckoutPreview | null>(null);
@@ -60,9 +67,14 @@ export default function VoucherCheckoutSection({
     setPhase('loading');
     setError('');
     try {
-      const wallet = await vouchersApi.wallet();
+      // The general offers are a bonus: without them the wallet and the code entry still work.
+      const [wallet, offers] = await Promise.all([vouchersApi.wallet(), vouchersApi.general().catch(() => [] as GeneralVoucher[])]);
       if (!live.current) return;
-      setClaims(usableClaims(wallet));
+      const usable = usableClaims(wallet);
+      const unsaved = unsavedGeneral(offers, wallet);
+      setClaims(usable);
+      setGeneral(unsaved);
+      setTab(usable.length === 0 && unsaved.length > 0 ? 'general' : 'mine');
       setPhase('ready');
     } catch (err) {
       if (!live.current) return;
@@ -90,6 +102,27 @@ export default function VoucherCheckoutSection({
       if (live.current) setError(extractApiErrorMessage(err, 'Voucher không đủ điều kiện cho hóa đơn này hoặc máy chủ chưa xác nhận được.'));
     } finally {
       if (live.current) setPreviewing(false);
+    }
+  };
+
+  // Saves a code (typed, or a general offer) in the wallet, then previews it for this invoice. Saving does not discount anything.
+  const saveCode = async (value: string) => {
+    if (!isVoucherCode(value) || saving || holding || previewing || disabled) return;
+    setSaving(true);
+    setError('');
+    try {
+      const claim = await vouchersApi.claim(value);
+      const wallet = await vouchersApi.wallet();
+      if (!live.current) return;
+      setClaims(usableClaims(wallet));
+      setGeneral((current) => unsavedGeneral(current, wallet));
+      setCode('');
+      setTab('mine');
+      void choose(claim);
+    } catch (err) {
+      if (live.current) setError(extractApiErrorMessage(err, 'Chưa lưu được mã ưu đãi. Hãy kiểm tra mã rồi thử lại.'));
+    } finally {
+      if (live.current) setSaving(false);
     }
   };
 
@@ -169,54 +202,170 @@ export default function VoucherCheckoutSection({
         </View>
       ) : null}
 
-      {open && !applied ? (
-        <View style={{ gap: 8 }}>
-          {phase === 'loading' ? <ActivityIndicator color={colors.primary} /> : null}
-          {phase === 'error' ? (
-            <TouchableOpacity onPress={() => void load()} accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center' }}>
-              <Text style={{ color: colors.primaryStrong, fontWeight: '600' }}>Thử lại</Text>
+      <Modal visible={open && !applied} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { if (!holding) setPhase('closed'); }}>
+        <SafeAreaView style={styles.sheet} edges={['top', 'bottom']}>
+          <View style={styles.sheetHeader}>
+            <Text accessibilityRole="header" style={styles.sheetTitle}>Chọn voucher</Text>
+            <TouchableOpacity onPress={() => setPhase('closed')} disabled={holding} accessibilityRole="button" accessibilityLabel="Đóng bảng chọn voucher" testID="voucher-sheet-close" style={styles.closeBtn}>
+              <Text style={styles.closeText}>Đóng</Text>
             </TouchableOpacity>
-          ) : null}
-          {phase === 'ready' && claims.length === 0 ? (
-            <Text style={{ fontSize: 14, color: colors.textSecondary }} testID="voucher-checkout-empty">Chưa có voucher đã lưu để dùng.</Text>
-          ) : null}
-          {phase === 'ready' ? claims.map((claim) => (
-            <TouchableOpacity
-              key={claim.id}
-              onPress={() => void choose(claim)}
-              disabled={holding || previewing}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: selected === claim.id }}
-              testID={`voucher-option-${claim.id}`}
-              style={{ minHeight: 56, borderRadius: 12, borderWidth: 1, borderColor: selected === claim.id ? colors.primaryStrong : colors.border, padding: spacing.sm, justifyContent: 'center' }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{claim.campaign.name}</Text>
-              <Text style={{ fontSize: 13, color: colors.textSecondary }}>{discountLabel(claim.policy)} · Hạn {voucherDate(claim.campaign.endsAt)}</Text>
-            </TouchableOpacity>
-          )) : null}
-          {previewing ? <Text style={{ fontSize: 13, color: colors.textSecondary }}>Đang tải bản xem trước từ máy chủ…</Text> : null}
-          {preview ? (
-            <View style={{ gap: 4 }} testID="voucher-preview">
-              <DetailRow label="Tổng gốc" value={formatVnd(preview.originalGrossVnd)} />
-              <DetailRow label="Voucher giảm" value={`- ${formatVnd(preview.originalGrossVnd - preview.customerDueVnd)}`} />
-              <DetailRow label="Bạn trả" value={formatVnd(preview.customerDueVnd)} />
-              {block ? <Text style={{ fontSize: 13, color: colors.tone.danger.text }} accessibilityRole="alert">{block}</Text> : null}
-              <TouchableOpacity
-                onPress={() => void hold()}
-                disabled={!!block || holding || disabled}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: !!block || holding || !!disabled }}
-                testID="voucher-hold"
-                style={{ minHeight: 48, borderRadius: 14, backgroundColor: colors.primaryStrong, alignItems: 'center', justifyContent: 'center', opacity: block || holding ? 0.5 : 1 }}
-              >
-                <Text style={{ color: colors.surface, fontWeight: '600', fontSize: 14 }}>{holding ? 'Đang giữ voucher…' : 'Giữ voucher và thanh toán'}</Text>
-              </TouchableOpacity>
-              <Text style={{ fontSize: 12, color: colors.textSecondary }}>Voucher được giữ tối đa 15 phút. Hóa đơn chưa đổi cho đến khi máy chủ xác nhận thanh toán.</Text>
-            </View>
-          ) : null}
-          {error ? <Text style={{ fontSize: 13, color: colors.tone.danger.text }} accessibilityRole="alert">{error}</Text> : null}
-        </View>
-      ) : null}
+          </View>
+          <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+              {phase === 'loading' ? <View style={styles.center}><ActivityIndicator color={colors.primary} /></View> : null}
+              {phase === 'error' ? (
+                <View style={styles.center}>
+                  <Text style={styles.error} accessibilityRole="alert">{error}</Text>
+                  <TouchableOpacity style={styles.primaryBtn} onPress={() => void load()} accessibilityRole="button">
+                    <Text style={styles.primaryText}>Thử lại</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+              {phase === 'ready' ? (
+                <>
+                  <View style={styles.card}>
+                    <Text style={styles.cardTitle}>Bạn có mã ưu đãi?</Text>
+                    <Text style={styles.hint}>Nhập mã để lưu vào ví và xem giá với hóa đơn này. Lưu mã không tự giảm giá.</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={code}
+                      onChangeText={setCode}
+                      onSubmitEditing={() => void saveCode(code)}
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                      maxLength={40}
+                      placeholder="Nhập mã ưu đãi"
+                      placeholderTextColor={colors.muted}
+                      accessibilityLabel="Mã ưu đãi"
+                      editable={!saving && !holding}
+                      returnKeyType="done"
+                      testID="voucher-code-input"
+                    />
+                    <TouchableOpacity
+                      style={[styles.primaryBtn, (!isVoucherCode(code) || saving || holding || previewing) && styles.disabled]}
+                      disabled={!isVoucherCode(code) || saving || holding || previewing}
+                      onPress={() => void saveCode(code)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Lưu mã và chọn"
+                      accessibilityState={{ disabled: !isVoucherCode(code) || saving }}
+                      testID="voucher-code-submit"
+                    >
+                      <Text style={styles.primaryText}>{saving ? 'Đang lưu…' : 'Lưu và chọn'}</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.tabs} accessibilityRole="tablist">
+                    {([['mine', `Của tôi (${claims.length})`], ['general', `Ưu đãi chung (${general.length})`]] as const).map(([key, label]) => (
+                      <TouchableOpacity key={key} style={[styles.tab, tab === key && styles.tabActive]} onPress={() => setTab(key)} accessibilityRole="tab"
+                        accessibilityState={{ selected: tab === key }} testID={`voucher-tab-${key}`}>
+                        <Text style={[styles.tabText, tab === key && styles.tabTextActive]} numberOfLines={1}>{label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {tab === 'mine' && claims.length === 0 ? (
+                    <View style={styles.center} testID="voucher-checkout-empty">
+                      <Text style={styles.cardTitle}>Chưa có voucher dùng được</Text>
+                      <Text style={styles.hint}>Xem tab Ưu đãi chung hoặc nhập mã ở trên.</Text>
+                    </View>
+                  ) : null}
+                  {tab === 'general' && general.length === 0 ? (
+                    <View style={styles.center}>
+                      <Text style={styles.cardTitle}>Chưa có ưu đãi chung mới</Text>
+                      <Text style={styles.hint}>Khi có chương trình mới, ưu đãi sẽ hiện ở đây.</Text>
+                    </View>
+                  ) : null}
+
+                  {tab === 'mine' ? claims.map((claim) => (
+                    <TouchableOpacity
+                      key={claim.id}
+                      style={[styles.card, selected === claim.id && styles.cardSelected]}
+                      onPress={() => void choose(claim)}
+                      disabled={holding || previewing || saving}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: selected === claim.id }}
+                      testID={`voucher-option-${claim.id}`}
+                    >
+                      <View style={styles.row}>
+                        <Text style={[styles.cardTitle, styles.flex]} numberOfLines={2}>{claim.campaign.name}</Text>
+                        <Text style={styles.badge}>{selected === claim.id ? 'Đang chọn' : claimState(claim).label}</Text>
+                      </View>
+                      <Text style={styles.discount}>{discountLabel(claim.policy)}</Text>
+                      <Text style={styles.hint}>{conditionLabel(claim.policy)}</Text>
+                      <Text style={styles.hint}>Hạn dùng: {voucherDate(claim.campaign.endsAt)}</Text>
+                    </TouchableOpacity>
+                  )) : general.map((voucher) => (
+                    <View key={voucher.id} style={styles.card} testID={`voucher-general-${voucher.id}`}>
+                      <Text style={styles.cardTitle} numberOfLines={2}>{voucher.name}</Text>
+                      <Text style={styles.discount}>{discountLabel(voucher.policy)}</Text>
+                      <Text style={styles.hint}>{conditionLabel(voucher.policy)}</Text>
+                      <Text style={styles.hint}>Hạn dùng: {voucherDate(voucher.endsAt)}</Text>
+                      <TouchableOpacity style={[styles.secondaryBtn, (saving || holding || previewing) && styles.disabled]} onPress={() => void saveCode(voucher.code)}
+                        disabled={saving || holding || previewing} accessibilityRole="button" accessibilityLabel={`Lưu và chọn ưu đãi ${voucher.name}`}>
+                        <Text style={styles.secondaryText}>{saving ? 'Đang lưu…' : 'Lưu và chọn'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </>
+              ) : null}
+
+              {previewing ? <Text style={styles.hint} accessibilityLiveRegion="polite">Đang tải bản xem trước từ máy chủ…</Text> : null}
+              {preview ? (
+                <View style={styles.card} testID="voucher-preview">
+                  <Text style={styles.cardTitle}>Giá với voucher này</Text>
+                  <DetailRow label="Tổng gốc" value={formatVnd(preview.originalGrossVnd)} />
+                  <DetailRow label="Voucher giảm" value={`- ${formatVnd(preview.originalGrossVnd - preview.customerDueVnd)}`} />
+                  <DetailRow label="Bạn trả" value={formatVnd(preview.customerDueVnd)} />
+                  {block ? <Text style={styles.error} accessibilityRole="alert">{block}</Text> : null}
+                  <TouchableOpacity
+                    style={[styles.primaryBtn, (!!block || holding || disabled) && styles.disabled]}
+                    onPress={() => void hold()}
+                    disabled={!!block || holding || disabled}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !!block || holding || !!disabled }}
+                    testID="voucher-hold"
+                  >
+                    <Text style={styles.primaryText}>{holding ? 'Đang giữ voucher…' : 'Giữ voucher và thanh toán'}</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.hint}>Voucher được giữ tối đa 15 phút. Hóa đơn chưa đổi cho đến khi máy chủ xác nhận thanh toán.</Text>
+                </View>
+              ) : null}
+              {error && phase !== 'error' ? <Text style={styles.error} accessibilityRole="alert">{error}</Text> : null}
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
     </View>
   );
 }
+
+// The same look as the saved-voucher page (CustomerVouchersScreen): cards, tint tabs, one primary button.
+const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
+  sheet: { flex: 1, backgroundColor: colors.background },
+  flex: { flex: 1 },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16, paddingRight: 8 },
+  sheetTitle: { flex: 1, fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.text },
+  closeBtn: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  closeText: { fontSize: 14, fontWeight: '600', color: colors.primaryStrong },
+  body: { padding: 16, gap: 12, paddingBottom: 48 },
+  center: { alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
+  card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 16, padding: 16, gap: 8 },
+  cardSelected: { borderColor: colors.primaryStrong, backgroundColor: colors.primarySoft },
+  cardTitle: { fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.text },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  discount: { fontSize: 20, lineHeight: 28, fontWeight: '700', color: colors.primaryStrong },
+  badge: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.textSecondary },
+  hint: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
+  error: { fontSize: 14, lineHeight: 20, color: colors.tone.danger.text },
+  input: { minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, fontSize: 16, color: colors.text, backgroundColor: colors.surface },
+  tabs: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  tab: { minHeight: 44, paddingHorizontal: 12, borderRadius: 12, justifyContent: 'center' },
+  tabActive: { backgroundColor: colors.primaryTint },
+  tabText: { fontSize: 14, lineHeight: 20, fontWeight: '500', color: colors.textSecondary },
+  tabTextActive: { color: colors.primaryStrong, fontWeight: '700' },
+  primaryBtn: { minHeight: 48, borderRadius: 14, backgroundColor: colors.primaryStrong, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+  primaryText: { color: colors.surface, fontSize: 14, fontWeight: '600' },
+  secondaryBtn: { minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+  secondaryText: { color: colors.text, fontSize: 14, fontWeight: '600' },
+  disabled: { opacity: 0.5 },
+});

@@ -1,10 +1,13 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert, Linking, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CheckCircle2, Clock, MapPin, MessageCircle, Phone, User } from 'lucide-react-native';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as WebBrowser from 'expo-web-browser';
-import BackButton from '../../components/BackButton';
+import BackButton, { HomeButton } from '../../components/BackButton';
+import OrderStepBar from '../../features/order-flow/customer/OrderStepBar';
+import { findChatForBooking } from '../technician/technician-chat-shortcut';
 import BookingRescheduleSheet from '../../components/BookingRescheduleSheet';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import { customerWalletApi, wholeVnd } from '../../api/customer-wallet.api';
@@ -26,6 +29,7 @@ import {
   needsQuoteDecision,
   resolveVisitCheckoutState,
   visitActions,
+  visitStep,
   visitDeviceStatusText,
   visitPayMethods,
   type VisitPayMethod,
@@ -43,11 +47,14 @@ export default function CustomerVisitScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { visitGroupId } = useRoute<VisitRoute>().params;
   const reduceMotion = useReduceMotion();
+  const insets = useSafeAreaInsets();
 
   const [visit, setVisit] = useState<Visit | null>(null);
   const [checkout, setCheckout] = useState<VisitCheckout | null>(null);
   const [orderStatuses, setOrderStatuses] = useState<Record<string, string> | null>(null);
   const [orderReadIncomplete, setOrderReadIncomplete] = useState(false);
+  const [technician, setTechnician] = useState<{ fullName: string; phoneNumber?: string } | null>(null);
+  const [openingChat, setOpeningChat] = useState(false);
   const [quoteOrderBySequence, setQuoteOrderBySequence] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -88,7 +95,7 @@ export default function CustomerVisitScreen() {
       // Each device order tells whether repair has started and whether a quotation waits for the customer.
       const orderIds = [...new Set((nextCheckout?.devices ?? []).flatMap((d) => (d.serviceOrderId?.trim() ? [d.serviceOrderId.trim()] : [])))].slice(0, 3);
       if (orderIds.length === 0) {
-        setOrderStatuses({}); setQuoteOrderBySequence({}); setOrderReadIncomplete(false);
+        setOrderStatuses({}); setQuoteOrderBySequence({}); setOrderReadIncomplete(false); setTechnician(null);
         return;
       }
       const results = await Promise.allSettled(orderIds.map((id) => ordersApi.getOrder(id)));
@@ -96,13 +103,15 @@ export default function CustomerVisitScreen() {
       const statuses: Record<string, string> = {};
       const quotes: Record<number, string> = {};
       let incomplete = false;
+      let tech: { fullName: string; phoneNumber?: string } | null = null;
       results.forEach((result, index) => {
         const device = nextCheckout!.devices.find((d) => d.serviceOrderId?.trim() === orderIds[index]);
         if (result.status !== 'fulfilled' || result.value?.id !== orderIds[index]) { incomplete = true; return; }
         statuses[orderIds[index]] = result.value.status;
+        if (!tech && result.value.technician?.fullName) tech = { fullName: result.value.technician.fullName, phoneNumber: result.value.technician.phoneNumber };
         if (device && needsQuoteDecision(result.value)) quotes[device.sequence] = orderIds[index];
       });
-      setOrderStatuses(statuses); setQuoteOrderBySequence(quotes); setOrderReadIncomplete(incomplete);
+      setOrderStatuses(statuses); setQuoteOrderBySequence(quotes); setOrderReadIncomplete(incomplete); setTechnician(tech);
     } catch (error) {
       if (mine === generation.current) setLoadError(extractApiErrorMessage(error, 'Không tải được lượt sửa. Vui lòng thử lại.'));
     } finally {
@@ -228,12 +237,45 @@ export default function CustomerVisitScreen() {
 
   const tone = (name: ToneName) => colors.tone[name];
 
+  const openChat = async () => {
+    if (openingChat || !lead) return;
+    setOpeningChat(true);
+    try {
+      const target = await findChatForBooking(lead.id);
+      if (!target) { Alert.alert('Chưa có cuộc trò chuyện', 'Chưa có cuộc trò chuyện nào cho lượt sửa này.'); return; }
+      navigation.navigate('ChatThread', { conversationId: target.conversationId, counterpartName: target.counterpartName, serviceName: target.serviceName });
+    } catch {
+      Alert.alert('Không mở được', 'Không thể mở cuộc trò chuyện. Vui lòng thử lại.');
+    } finally {
+      setOpeningChat(false);
+    }
+  };
+
+  // The one thing to do now stays at the bottom, so it is never found by scrolling past every device.
+  const canPay = (payState === 'ready' || payState === 'vnpay' || payState === 'wallet_short') && (fullyFunded || method !== 'cash');
+  const footerPrimary = !visit || visit.status === 'cancelled' ? undefined
+    : priorityQuote ? {
+      label: 'Xem và duyệt báo giá', testID: 'visit-quote-shortcut',
+      onPress: () => navigation.navigate('CustomerOrderDetail', { serviceOrderId: priorityQuote.orderId }),
+    }
+      : actions?.canChooseTechnician && lead ? {
+        label: lead.status === 'CLOSED' ? 'Chọn kỹ thuật viên khác cho cả lượt' : `Chọn 1 kỹ thuật viên sửa cả ${visit.items.length} thiết bị`,
+        testID: 'visit-choose-technician',
+        onPress: () => navigation.navigate('CustomerMatching', { bookingId: lead.id, visitGroupId }),
+      }
+        : checkout && canPay ? {
+          label: busy ? 'Đang xử lý…' : fullyFunded ? 'Xác nhận thanh toán 0 ₫' : method === 'vnpay' ? 'Thanh toán qua VNPay' : `Thanh toán ${formatVnd(payable)}`,
+          testID: 'visit-pay-submit', disabled: busy || payState === 'wallet_short', onPress: pay,
+        }
+          : undefined;
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
         <BackButton />
         <Text accessibilityRole="header" style={styles.headerTitle}>Lượt sửa nhiều thiết bị</Text>
+        <HomeButton />
       </View>
 
       {loading ? (
@@ -246,7 +288,8 @@ export default function CustomerVisitScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.body} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} />}>
+        <>
+        <ScrollView style={styles.flex} contentContainerStyle={styles.body} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} />}>
           {!!loadError && <Text style={styles.errorText} accessibilityRole="alert">{loadError}</Text>}
           {message && (
             <View style={[styles.banner, { backgroundColor: tone(message.type === 'success' ? 'success' : 'danger').bg }]} accessibilityRole="alert" testID="visit-message">
@@ -254,27 +297,50 @@ export default function CustomerVisitScreen() {
             </View>
           )}
 
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Lịch hẹn</Text>
-            <Text style={styles.value} testID="visit-schedule">
-              {sessionLabel({ bookingMode: visit.bookingMode, slot: visit.slot, start: visit.preferredStartAt })}
-            </Text>
+          {visit.status !== 'cancelled' && <OrderStepBar step={visitStep({ payState, orderStatuses })} />}
+          <View style={styles.card} testID="visit-summary">
+            <View style={styles.row}>
+              <View style={styles.flex}>
+                <Text style={styles.cardTitle}>Lượt sửa · {devices.length} thiết bị</Text>
+                <View style={styles.iconLine} accessible accessibilityLabel={technician ? `Kỹ thuật viên: ${technician.fullName}` : 'Chưa có kỹ thuật viên'}>
+                  <User size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.lineIcon} />
+                  <Text style={[styles.hint, styles.flex]} numberOfLines={1}>{technician ? technician.fullName : 'Chưa có kỹ thuật viên'}</Text>
+                </View>
+              </View>
+              {!!technician?.phoneNumber && (
+                <TouchableOpacity style={styles.iconBtn} accessibilityRole="button" accessibilityLabel="Gọi kỹ thuật viên" testID="visit-call"
+                  onPress={() => void Linking.openURL(`tel:${technician.phoneNumber}`)}>
+                  <Phone size={20} color={colors.primaryStrong} strokeWidth={1.75} />
+                </TouchableOpacity>
+              )}
+              {!!technician && !!lead && (
+                <TouchableOpacity style={[styles.iconBtn, openingChat && styles.disabled]} accessibilityRole="button" accessibilityLabel="Nhắn tin cho kỹ thuật viên"
+                  accessibilityState={{ disabled: openingChat }} disabled={openingChat} testID="visit-chat" onPress={() => void openChat()}>
+                  <MessageCircle size={20} color={colors.primaryStrong} strokeWidth={1.75} />
+                </TouchableOpacity>
+              )}
+            </View>
+            <View style={styles.iconLine}>
+              <Clock size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.lineIcon} />
+              <Text style={[styles.value, styles.flex]} testID="visit-schedule">
+                {sessionLabel({ bookingMode: visit.bookingMode, slot: visit.slot, start: visit.preferredStartAt })}
+              </Text>
+            </View>
+            {!!lead?.addressSummary && (
+              <View style={styles.iconLine}>
+                <MapPin size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.lineIcon} />
+                <Text style={[styles.hint, styles.flex]} numberOfLines={2}>{lead.addressSummary}</Text>
+              </View>
+            )}
             {visit.status === 'cancelled'
               ? <Text style={styles.hint}>Lượt sửa đã hủy.</Text>
-              : checkout && <Text style={styles.hint}>Kết quả {resolved}/{checkout.devices.length} máy</Text>}
+              : checkout && (
+                <View style={styles.iconLine}>
+                  <CheckCircle2 size={16} color={colors.textSecondary} strokeWidth={1.75} style={styles.lineIcon} />
+                  <Text style={[styles.hint, styles.flex]}>Kết quả {resolved}/{checkout.devices.length} máy</Text>
+                </View>
+              )}
           </View>
-
-          {priorityQuote && (
-            <TouchableOpacity
-              style={[styles.card, { borderColor: tone('warning').fg }]}
-              onPress={() => navigation.navigate('CustomerOrderDetail', { serviceOrderId: priorityQuote.orderId })}
-              accessibilityRole="button"
-              testID="visit-quote-shortcut"
-            >
-              <Text style={styles.cardTitle}>Máy {priorityQuote.item.sequence} chờ bạn duyệt báo giá</Text>
-              <Text style={[styles.link, { color: colors.primaryStrong }]}>Xem và duyệt báo giá</Text>
-            </TouchableOpacity>
-          )}
 
           <Text style={styles.section}>Thiết bị trong lượt ({devices.length})</Text>
           {devices.map((item) => {
@@ -291,7 +357,7 @@ export default function CustomerVisitScreen() {
                   </View>
                 </View>
                 {!!description && (
-                  <TouchableOpacity onPress={() => setExpanded((cur) => ({ ...cur, [item.id]: !open }))} accessibilityRole="button" accessibilityState={{ expanded: open }}>
+                  <TouchableOpacity style={styles.toggle} onPress={() => setExpanded((cur) => ({ ...cur, [item.id]: !open }))} accessibilityRole="button" accessibilityState={{ expanded: open }}>
                     <Text
                       style={styles.hint}
                       numberOfLines={open ? undefined : 2}
@@ -310,7 +376,18 @@ export default function CustomerVisitScreen() {
                     <Text style={styles.primaryText}>Đặt lại máy này</Text>
                   </TouchableOpacity>
                 )}
-                {!!device?.serviceOrderId && (
+                {!!device?.serviceOrderId && !!quoteOrderBySequence[item.sequence] && (
+                  <TouchableOpacity
+                    style={styles.primaryBtn}
+                    onPress={() => navigation.navigate('CustomerOrderDetail', { serviceOrderId: device.serviceOrderId! })}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Xem và duyệt báo giá máy ${item.sequence}`}
+                    testID={`visit-quote-${item.sequence}`}
+                  >
+                    <Text style={styles.primaryText}>Xem và duyệt báo giá</Text>
+                  </TouchableOpacity>
+                )}
+                {!!device?.serviceOrderId && !quoteOrderBySequence[item.sequence] && (
                   <TouchableOpacity
                     style={styles.secondaryBtn}
                     onPress={() => navigation.navigate('CustomerOrderDetail', { serviceOrderId: device.serviceOrderId! })}
@@ -332,17 +409,6 @@ export default function CustomerVisitScreen() {
               testID="visit-rebook-all"
             >
               <Text style={styles.primaryText}>Đặt lại {failedIds.length} máy không sửa được</Text>
-            </TouchableOpacity>
-          )}
-
-          {actions?.canChooseTechnician && lead && (
-            <TouchableOpacity
-              style={styles.primaryBtn}
-              onPress={() => navigation.navigate('CustomerMatching', { bookingId: lead.id, visitGroupId })}
-              accessibilityRole="button"
-              testID="visit-choose-technician"
-            >
-              <Text style={styles.primaryText}>{lead.status === 'CLOSED' ? 'Chọn kỹ thuật viên khác cho cả lượt' : `Chọn 1 kỹ thuật viên sửa cả ${visit.items.length} thiết bị`}</Text>
             </TouchableOpacity>
           )}
 
@@ -414,18 +480,6 @@ export default function CustomerVisitScreen() {
                   {payState === 'wallet_short' && (
                     <Text style={[styles.hint, { color: tone('danger').text }]} accessibilityRole="alert">Ví chưa đủ. Nạp thêm vào ví hoặc chọn cách thanh toán khác.</Text>
                   )}
-                  {(fullyFunded || method !== 'cash') && (
-                    <TouchableOpacity
-                      style={[styles.primaryBtn, (busy || payState === 'wallet_short') && styles.disabled]}
-                      disabled={busy || payState === 'wallet_short'}
-                      onPress={pay}
-                      accessibilityRole="button"
-                      accessibilityState={{ disabled: busy || payState === 'wallet_short', busy }}
-                      testID="visit-pay-submit"
-                    >
-                      {busy ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.primaryText}>{fullyFunded ? 'Xác nhận thanh toán 0 ₫' : method === 'vnpay' ? 'Thanh toán qua VNPay' : `Thanh toán ${formatVnd(payable)}`}</Text>}
-                    </TouchableOpacity>
-                  )}
                   {vnpayOpened && (
                     <TouchableOpacity style={styles.secondaryBtn} onPress={() => void load()} accessibilityRole="button">
                       <Text style={styles.secondaryText}>Kiểm tra thanh toán</Text>
@@ -454,6 +508,21 @@ export default function CustomerVisitScreen() {
             <Text style={styles.hint}>Đã đổi lịch một lần. Mỗi lượt sửa chỉ đổi lịch được một lần, mọi thiết bị đổi cùng nhau.</Text>
           )}
         </ScrollView>
+        {footerPrimary && (
+          <View style={[styles.footer, { paddingBottom: Math.max(12, insets.bottom) }]} testID="visit-footer">
+            <TouchableOpacity
+              style={[styles.primaryBtn, styles.footerBtn, footerPrimary.disabled && styles.disabled]}
+              disabled={footerPrimary.disabled}
+              onPress={footerPrimary.onPress}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !!footerPrimary.disabled, busy }}
+              testID={footerPrimary.testID}
+            >
+              <Text style={styles.footerText}>{footerPrimary.label}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        </>
       )}
 
       {visit && lead && (
@@ -488,6 +557,9 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   link: { fontSize: 14, lineHeight: 20, fontWeight: '600' },
   errorText: { fontSize: 14, lineHeight: 20, color: colors.tone.danger.text },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  iconLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  // The text line is 20 high and the icon 16: 2 down puts the icon on the middle of the first line.
+  lineIcon: { marginTop: 2 },
   flex: { flex: 1 },
   chip: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, maxWidth: '55%' },
   chipText: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
@@ -498,4 +570,9 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   secondaryBtn: { minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   secondaryText: { color: colors.text, fontSize: 14, fontWeight: '600' },
   disabled: { opacity: 0.5 },
+  toggle: { minHeight: 44, justifyContent: 'center' },
+  footer: { backgroundColor: colors.surface, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingHorizontal: 16, paddingTop: 12 },
+  footerBtn: { minHeight: 52 },
+  footerText: { color: colors.surface, fontSize: 16, fontWeight: '700', textAlign: 'center' },
+  iconBtn: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
 });

@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-29 10:25 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/web-be-sync-20261026
+> Cập nhật lần cuối: 2026-10-29 20:02 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/web-be-sync-20261026
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -94,7 +94,7 @@ Luật nghiệp vụ gốc nằm ở tài liệu dự án (bản chính thức c
 
 ### Khách hàng
 
-SEP-137/139: editor địa chỉ Booking phân biệt ghim đã xác nhận với địa chỉ đủ điều kiện lưu; tỉnh/quận thiếu được chọn rõ ràng từ GET `/geo/provinces`, không tự gán khu vực. Giữ createAddress một lần và đối chiếu GET/owner trước khi dùng địa chỉ. Booking Create có hai bước nhập Tình trạng và Địa chỉ & thời gian, giữ bước review snapshot bất biến riêng; chỉ nút xác nhận cuối mới tải ảnh và POST Booking. Receipt sau gửi dùng chi tiết đã lưu trong snapshot, chưa phải ServiceOrder. Matching hiển thị toàn bộ candidate server trả; khách chọn một hoặc hai TECH user ID khác nhau theo thứ tự, Backend xử lý ưu tiên đầu PENDING và ưu tiên hai STANDBY. Radar chỉ hiển thị cho Booking thuộc khách đang đăng nhập, status Backend MATCHING và có invitation PENDING hợp lệ khi màn focus, app foreground, không lỗi/ACK chưa rõ/khóa; Reduce Motion chặn pulse. Customer Order detail hiển thị một section theo action/status hiện tại; progress sheet chỉ đọc, các controller giữ guard/readback riêng. Thanh hành động dưới scroll điều hướng đến section hiện hành, không thay thế các nút xác nhận trong section. Thiết bị và visual 320–430dp CHƯA KIỂM CHỨNG; không có POST Booking/matching thực trong kiểm thử.
+SEP-137/139: editor địa chỉ Booking phân biệt ghim đã xác nhận với địa chỉ đủ điều kiện lưu; tỉnh/quận thiếu được chọn rõ ràng từ GET `/geo/provinces`, không tự gán khu vực. Giữ createAddress một lần và đối chiếu GET/owner trước khi dùng địa chỉ. Booking Create có hai bước nhập Tình trạng và Địa chỉ & thời gian, giữ bước review snapshot bất biến riêng; chỉ nút xác nhận cuối mới tải ảnh và POST Booking. Receipt sau gửi dùng chi tiết đã lưu trong snapshot, chưa phải ServiceOrder. Matching hiển thị toàn bộ candidate server trả; khách chọn một hoặc hai TECH user ID khác nhau theo thứ tự, Backend xử lý ưu tiên đầu PENDING và ưu tiên hai STANDBY. Radar chỉ hiển thị cho Booking thuộc khách đang đăng nhập, status Backend MATCHING và có invitation PENDING hợp lệ khi màn focus, app foreground, không lỗi/ACK chưa rõ/khóa; Reduce Motion chặn pulse. Màn đơn của khách là chuỗi bước C03 đến C12 trong `features/order-flow` (xem phần Hoạt động bên dưới về khung thanh 5 bước); mỗi controller giữ guard và đối soát GET riêng. Thiết bị và visual 320–430dp CHƯA KIỂM CHỨNG; không có POST Booking/matching thực trong kiểm thử.
 
 - Home chọn dịch vụ phổ biến theo service code/alias cục bộ và category fallback có thật; danh mục tra cứu catalog động, không gửi text hint thành query Backend. Đặt lịch thường: Dịch vụ → Chi tiết dịch vụ → Tạo booking hai bước (địa chỉ đã lưu có GPS, chọn buổi sáng 8-12 hoặc chiều 13-18 trong 14 ngày tới, hoặc `Tới ngay`, ghi chú cho thợ tùy chọn) → review snapshot → xác nhận cuối mới tải tối đa 5 ảnh và `POST /bookings` gửi `mode`, `date`, `slot`, `customerNote` kèm cửa sổ giờ đã tính (`BookingSessionPicker`, `utils/booking-session.ts`); mô tả tối đa 5.000 ký tự, gợi ý là văn bản sửa được; không còn chọn giờ bắt đầu tự do.
 - Đặt lịch có AI: màn chẩn đoán nhận mô tả và tối đa 3 ảnh, chuyển sang trò chuyện với AI; AI không tự đặt lịch mà điền sẵn dịch vụ, mô tả và `aiSessionId` vào màn tạo booking.
@@ -257,6 +257,8 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 ### Thanh tab của khách bớt lệch (20/10/2026, nhánh `fix/home-catalog-v2`)
 
 - `CustomerAnimatedBottomBar`: tab đang chọn từng là một vòng tròn xanh đặc cạnh nút "Đặt lịch" cũng xanh đặc và nhô lên, hai thứ giống nhau tranh nhau và nhìn lệch. Nay tab đang chọn là viên nền xanh nhạt (`primaryTint`) với biểu tượng xanh đậm (`primaryStrong`), chỉ nút "Đặt lịch" là xanh đặc; nút có viền ngoài màu nền (3 điểm, vẫn 56 điểm tổng) để trông gắn liền với thanh. Vị trí, vùng chạm và cách chuyển tab giữ nguyên. Thanh của kỹ thuật viên (`GlassTabBar`) chưa đổi. CHƯA xem trên máy thật.
+- Màn đơn của khách có một khung chung ở mọi bước (`CustomerOrderContext.tsx`, cắm vào `TaskScreenShell` qua `order-context-slot.ts`, chỉ bật cho khách): thanh 5 bước Đặt lịch, Chọn kỹ thuật viên, Kỹ thuật viên đến, Sửa chữa, Thanh toán lấy từ `customerActivityStage`; dải tóm tắt có dịch vụ, kỹ thuật viên (nút Gọi), lịch hẹn, địa chỉ, thẻ báo giá (tổng và trạng thái) và bốn lối tắt Chi tiết đơn, Tiến độ, Nhắn tin, Hỗ trợ. Chi tiết đơn và Tiến độ mở thành cửa sổ trượt (`Modal`) chứa lại `OrderInformationScreen` và `OrderProgressHistoryScreen`; nút quay lại trong cửa sổ chỉ đóng cửa sổ (`SheetCloseContext`) và cửa sổ tự đóng khi màn đơn mất focus. Ba bước chờ C03, C04, C06 dùng chung `StatusStepScreen` (chỉ một câu nói đang diễn ra, nút chân trang là Gọi kỹ thuật viên); bỏ năm dòng tóm tắt lặp và hai đường dẫn sang màn riêng. Bước báo giá C05 đưa phần xác nhận lên chân trang ngay trên hai nút xác nhận, bỏ khối xác nhận trong vùng cuộn, nút Chi tiết đơn và nút Xem chi tiết báo giá (không còn hiện mã báo giá). Đơn đã hủy (kể cả do từ chối báo giá) hiện màn "Đơn đã hủy" với Về trang chủ và Yêu cầu hỗ trợ thay cho dòng "đang hoàn thiện". Thiết bị CHƯA KIỂM CHỨNG; chưa xem cửa sổ trượt trên iOS và Android thật.
+- Trang lượt nhiều thiết bị (`CustomerVisitScreen`, mở từ thẻ ở tab Nhiều thiết bị) theo cùng khung: thanh 5 bước chung (`OrderStepBar`, bước của lượt do `visitStep` tính), thẻ tóm tắt có kỹ thuật viên lấy từ các đơn của lượt, lịch hẹn, địa chỉ và icon Gọi, Nhắn tin; nút chính duy nhất cố định ở chân trang theo thứ tự duyệt báo giá, chọn kỹ thuật viên, thanh toán cả lượt (không còn nằm cuối vùng cuộn); máy đang chờ báo giá có nút "Xem và duyệt báo giá" riêng trên thẻ máy; thêm nút Home ở đầu trang, nút Xem mô tả đủ 44 điểm. Thiết bị CHƯA KIỂM CHỨNG.
 
 ### Lượt sửa nhiều thiết bị (25/10/2026, nhánh `feat/web-visit-groups`, mốc web `c0b043c`, backend `9f1370f`)
 
@@ -404,6 +406,8 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-29 20:02 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Trang lượt nhiều thiết bị có thanh 5 bước, thẻ tóm tắt kèm Gọi và Nhắn tin, nút chính cố định ở chân trang và nút duyệt báo giá trên từng máy.
+- 2026-10-29 19:17 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Màn đơn của khách có khung chung thanh 5 bước và dải tóm tắt, Chi tiết đơn và Tiến độ mở thành cửa sổ trượt; bước báo giá xác nhận ở chân trang; đơn đã hủy có lối thoát.
 - 2026-10-29 10:25 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Tìm thợ chờ tối đa 60 giây (backend mất 20-30 giây), mô tả máy chỉ hiện "Xem mô tả" khi bị cắt, viền thẻ Thiết bị trong lượt rõ hơn, màn Đơn hoàn thành của thợ có đổi máy và Linh kiện và khai trả; chưa kiểm chứng trên thiết bị.
 - 2026-10-28 18:00 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Đồng bộ web #183 và BE #168: khách yêu cầu dừng sửa hoặc đổi thợ, nút đặt lại của đơn đã hủy phân loại máy không sửa được, gián đoạn và hủy thường; chưa kiểm chứng với backend thật.
 - 2026-10-28 08:55 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Đồng bộ web #180 và #182, BE #164-#167: thanh toán bằng voucher cho đơn lẻ và lượt (ví, VNPay, 0 ₫, tiền mặt, phía thợ lẫn khách); chưa kiểm chứng với backend thật.
@@ -442,8 +446,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-19 23:12 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Làm lại màn Khám phá dịch vụ: thẻ dịch vụ có giá công, dải chip danh mục, danh mục chọn từ Home chỉ hiện dịch vụ con
 - 2026-10-19 23:05 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Home gọn lại: danh mục lớn vuốt ngang hai hàng mỗi trang kèm chấm trang
 - 2026-10-19 21:10 (UTC+7) | Hgnv11 | feat/realtime-full | Realtime đầy đủ: đọc lại đúng phần bị đổi theo kinds, thông báo, ví, thu nhập, màn chính, poll dự phòng khi socket rớt
-- 2026-10-19 21:02 (UTC+7) | Hgnv11 | feat/chat-parity-n4-n3 | Chat gửi ảnh/video, khoá khi đơn hoàn tất, mã đơn; realtime nhẹ cho lời mời, đơn và danh sách việc như web
-- 2026-10-19 20:52 (UTC+7) | Hgnv11 | feat/technician-part-returns | Thợ khai trả linh kiện FixHome như web (P1), ẩn khi backend chưa bật custody
 
 ### Lịch sử giữ lại khi tích hợp
 

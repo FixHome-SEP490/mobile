@@ -222,7 +222,7 @@ export default function VisitGroupsPanel({ search, onOpen, bottomInset = 0, term
             {!assigned && !!lead?.technician?.fullName && (
               <View style={styles.iconRow}>
                 <User size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
-                <Text style={styles.hint} numberOfLines={2}>Kỹ thuật viên: {lead.technician.fullName}</Text>
+                <Text style={styles.hint} numberOfLines={2} accessibilityLabel={`Kỹ thuật viên: ${lead.technician.fullName}`}>{lead.technician.fullName}</Text>
               </View>
             )}
             {assigned && !!lead?.customerName && (

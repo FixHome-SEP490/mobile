@@ -69,7 +69,7 @@ export default function HandoverReviewScreen() {
       }}
       primary={visitGroupId
         ? {
-          label: 'Thanh toán cả lượt',
+          label: 'Thanh toán',
           testID: 'visit-payment-open',
           disabled: revoked,
           accessibilityHint: 'Mở lượt sửa nhiều thiết bị để thanh toán một lần cho cả lượt',

@@ -8,7 +8,7 @@ const mockWallet = jest.fn();
 jest.mock('../../../api/funded-checkout.api', () => ({
   fundedCheckoutApi: new Proxy({}, { get: (_t, name: string) => (...args: unknown[]) => (mockFunded as Record<string, (...a: unknown[]) => unknown>)[name](...args) }),
 }));
-jest.mock('../../../api/vouchers.api', () => ({ vouchersApi: { wallet: (...args: unknown[]) => mockWallet(...args) } }));
+jest.mock('../../../api/vouchers.api', () => ({ vouchersApi: { wallet: (...args: unknown[]) => mockWallet(...args), general: () => Promise.resolve([]), claim: jest.fn() } }));
 
 const CLAIM = 'c1';
 const claim = {

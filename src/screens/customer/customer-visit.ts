@@ -116,3 +116,14 @@ export function resolveVisitCheckoutState(checkout: VisitCheckout | null, method
 
 /** Whole-visit payment can start only when every device has its result and nothing else is pending. */
 export const canStartVisitPayment = (state: VisitCheckoutState): boolean => state === 'ready' || state === 'vnpay' || state === 'wallet_short';
+
+/**
+ * Where the whole visit is on the five steps shared with a single order: choosing the technician, waiting for them,
+ * repairing, then paying once for every device.
+ */
+export function visitStep(input: { payState: string; orderStatuses: Record<string, string> | null }): 2 | 3 | 4 | 5 {
+  if (['ready', 'vnpay', 'wallet_short', 'pending_cash', 'paid', 'zero_due'].includes(input.payState)) return 5;
+  const statuses = Object.values(input.orderStatuses ?? {}).map((status) => String(status).toUpperCase());
+  if (statuses.some((status) => status === 'UNDER_REPAIR')) return 4;
+  return statuses.length > 0 ? 3 : 2;
+}

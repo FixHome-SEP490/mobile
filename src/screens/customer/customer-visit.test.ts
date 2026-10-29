@@ -7,6 +7,7 @@ import {
   visitDeviceStatusText,
   visitPayMethods,
   visitStatusView,
+  visitStep,
 } from './customer-visit';
 
 const visit = (over: Partial<Visit> = {}, leadStatus = 'SUBMITTED', rescheduleCount = 0): Visit => ({
@@ -117,5 +118,15 @@ describe('payment', () => {
     expect(canStartVisitPayment('paid')).toBe(false);
     expect(canStartVisitPayment('pending_cash')).toBe(false);
     expect(canStartVisitPayment('zero_due')).toBe(false);
+  });
+});
+
+describe('visitStep', () => {
+  it('walks from choosing the technician to paying once for the whole visit', () => {
+    expect(visitStep({ payState: 'waiting', orderStatuses: {} })).toBe(2);
+    expect(visitStep({ payState: 'waiting', orderStatuses: { a: 'ACCEPTED', b: 'EN_ROUTE' } })).toBe(3);
+    expect(visitStep({ payState: 'waiting', orderStatuses: { a: 'EN_ROUTE', b: 'UNDER_REPAIR' } })).toBe(4);
+    expect(visitStep({ payState: 'ready', orderStatuses: { a: 'UNDER_REPAIR' } })).toBe(5);
+    expect(visitStep({ payState: 'paid', orderStatuses: null })).toBe(5);
   });
 });

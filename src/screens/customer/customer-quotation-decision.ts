@@ -223,7 +223,7 @@ export function createQuotationDecisionController(
       if (kind === 'approve') {
         deps.notify('Đã duyệt báo giá', 'Đã ghi nhận duyệt báo giá. Đây chưa phải thanh toán.');
       } else {
-        deps.notify('Đã từ chối báo giá', 'Đơn dịch vụ đã bị hủy theo quyết định từ chối báo giá.');
+        deps.notify('Đã từ chối báo giá', 'Đơn sửa chữa đã bị hủy theo quyết định từ chối báo giá.');
       }
       await deps.refreshDetail();
     } catch (error) {

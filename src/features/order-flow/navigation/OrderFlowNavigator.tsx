@@ -6,6 +6,7 @@ import { useLiveRefresh } from '../../../hooks/useLiveRefresh';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import type { CustomerOrderFlowParamList, TechnicianOrderFlowParamList } from './order-flow-navigation.types';
 import OrderTaskScreen from '../shared/OrderTaskScreen';
+import { CustomerOrderContextProvider } from '../customer/CustomerOrderContext';
 import ArrivalCheckInScreen from '../technician/ArrivalCheckInScreen';
 import BeforeEvidenceScreen from '../technician/BeforeEvidenceScreen';
 import OrderInformationScreen from '../shared/OrderInformationScreen';
@@ -78,7 +79,9 @@ function Screens({ Stack, role, reduceMotion }: { Stack: { Navigator: React.Comp
 // give up as unknown, so while a command is pending the read waits and runs once the command has settled.
 function LiveOrderRefresh() {
   const { key, snapshot, refresh } = useOrderSession();
-  const pending = snapshot?.pendingIntent === true;
+  // A re-read of an order that is already on screen is quiet (it keeps the data and drops no draft), so only an order still loading waits for its command.
+  // Holding on every unresolved command left the page stale until a manual refresh whenever one marker stayed open.
+  const pending = snapshot?.pendingIntent === true && snapshot.order.status !== 'ready';
   const pendingRef = useRef(pending);
   const missed = useRef(false);
   const refreshRef = useRef(refresh);
@@ -103,7 +106,7 @@ export default function OrderFlowNavigator({ role }: { role: 'customer' | 'techn
   return <>
     <LiveOrderRefresh />
     {role === 'customer'
-      ? <Screens Stack={CustomerStack} role={role} reduceMotion={reduceMotion} />
+      ? <CustomerOrderContextProvider><Screens Stack={CustomerStack} role={role} reduceMotion={reduceMotion} /></CustomerOrderContextProvider>
       : <Screens Stack={TechnicianStack} role={role} reduceMotion={reduceMotion} />}
   </>;
 }

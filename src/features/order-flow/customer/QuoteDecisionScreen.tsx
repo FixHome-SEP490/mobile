@@ -13,10 +13,10 @@ import {
   type DecisionAction,
 } from '../customer/customer-quotation-controller';
 import type { OrderQuotation } from '../domain/order-session.types';
-import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import { ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import { DecisionSummary } from '../shared/DecisionSummary';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
-import { lightTheme as colors, spacing } from '../../../constants/theme';
+import { lightTheme as colors } from '../../../constants/theme';
 
 function latestSentQuote(quotations: OrderQuotation[] | undefined, serviceOrderId: string, technicianId: string): OrderQuotation | null {
   if (!quotations) return null;
@@ -155,6 +155,24 @@ export default function QuoteDecisionScreen() {
     navigation.goBack();
   };
 
+  // The confirmation sits above the footer buttons that confirm it, so the customer reads and answers in one place.
+  const confirmSummary = sheetValid && sheet ? (
+    <View testID="quote-confirm-sheet" style={{ gap: 4 }}>
+      <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
+        {sheet.action === 'APPROVE' ? 'Xác nhận duyệt báo giá' : 'Xác nhận từ chối báo giá'}
+      </Text>
+      {sheet.action === 'APPROVE' ? (
+        <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+          Bảo hành có phí đã chọn: {sheet.selectedIds.length ? `${sheet.selectedIds.length} hạng mục` : 'không chọn'}. Duyệt báo giá chưa phải thanh toán.
+        </Text>
+      ) : (
+        <Text accessibilityRole="alert" style={{ color: colors.error, fontSize: 13, lineHeight: 19 }}>
+          {REJECT_WHOLE_ORDER_WARNING}
+        </Text>
+      )}
+    </View>
+  ) : undefined;
+
   if (!current || !order) {
     return (
       <TaskScreenShell title="Báo giá" onBack={() => navigation.goBack()}>
@@ -185,6 +203,7 @@ export default function QuoteDecisionScreen() {
       title="Báo giá"
       stage={2}
       onBack={onBack}
+      summary={confirmSummary}
       secondary={
         sheetValid && sheet
           ? {
@@ -281,49 +300,9 @@ export default function QuoteDecisionScreen() {
         </View>
       )}
 
-      {sheetValid && sheet && (
-        <View testID="quote-confirm-sheet" style={{ backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md, gap: 8 }}>
-          <Text style={{ color: colors.text, fontSize: 17, fontWeight: '700' }}>
-            {sheet.action === 'APPROVE' ? 'Xác nhận duyệt báo giá' : 'Xác nhận từ chối báo giá'}
-          </Text>
-          <DetailRow label="Mã báo giá" value={sheet.quoteId} />
-          <DetailRow label="Phiên bản" value={sheet.quoteVersion ?? 'Chưa rõ'} />
-          {sheet.action === 'APPROVE' ? (
-            <DetailRow label="Bảo hành có phí đã chọn" value={sheet.selectedIds.length ? `${sheet.selectedIds.length} hạng mục` : 'Không chọn'} />
-          ) : (
-            <Text accessibilityRole="alert" style={{ color: colors.error, fontSize: 14, lineHeight: 21 }}>
-              {REJECT_WHOLE_ORDER_WARNING}
-            </Text>
-          )}
-          <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
-            Dùng nút xác nhận ở thanh dưới cùng, ngoài vùng cuộn.
-          </Text>
-        </View>
-      )}
-
       {state.phase === 'denied' && state.message && <ReadOnlyNotice>{state.message}</ReadOnlyNotice>}
       {state.phase === 'unknown' && <ReadOnlyNotice>{state.message ?? 'Kết quả chưa xác định. Không gửi lại.'}</ReadOnlyNotice>}
 
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <TouchableOpacity
-          testID="task-detail-link"
-          accessibilityRole="button"
-          onPress={() => navigation.navigate('OrderInformation')}
-          style={{ flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12 }}
-        >
-          <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Chi tiết đơn</Text>
-        </TouchableOpacity>
-      </View>
-      {quote && (
-        <TouchableOpacity
-          testID="quote-proposal-link"
-          accessibilityRole="button"
-          onPress={() => navigation.navigate('ProposalDetail', { proposalId: quote.id })}
-          style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12 }}
-        >
-          <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Xem chi tiết báo giá</Text>
-        </TouchableOpacity>
-      )}
     </TaskScreenShell>
   );
 }

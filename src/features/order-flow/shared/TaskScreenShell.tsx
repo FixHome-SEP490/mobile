@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardInset } from '../../../hooks/useKeyboardInset';
 import BackButton, { HomeButton } from '../../../components/BackButton';
 import VisitCustomerPanel from '../customer/VisitCustomerPanel';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+import { OrderContextSlot, SheetCloseContext } from './order-context-slot';
 
 export interface TaskAction {
   label: string;
@@ -57,16 +58,19 @@ export function TaskScreenShell({ title, stage, children, primary, secondary, su
 }) {
   const insets = useSafeAreaInsets();
   const keyboardInset = useKeyboardInset();
+  const slot = useContext(OrderContextSlot);
+  const closeSheet = useContext(SheetCloseContext);
   // Data is live (OrderFlowNavigator); a manual refresh button would only suggest it is not.
   if (secondary?.testID === 'task-refresh' || secondary?.testID === 'readonly-detail-refresh') secondary = undefined;
   return <SafeAreaView edges={['top', 'left', 'right']} style={styles.page}>
     <View style={styles.header}>
-      <BackButton onPress={onBack ?? (() => {})} />
+      <BackButton onPress={closeSheet ?? onBack ?? (() => {})} />
       <Text accessibilityRole="header" style={styles.headerTitle}>{title}</Text>
-      <HomeButton />
+      {closeSheet ? <View style={{ width: 44 }} /> : <HomeButton />}
     </View>
-    {stage !== undefined && <StageHeader stage={stage} />}
+    {stage !== undefined && !closeSheet && (slot ? <slot.Stepper /> : <StageHeader stage={stage} />)}
     <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, contentStyle]} keyboardShouldPersistTaps="handled">
+      {stage !== undefined && !closeSheet && slot && <slot.Summary />}
       {children}
       <VisitCustomerPanel />
     </ScrollView>
