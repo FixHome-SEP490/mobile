@@ -5,6 +5,7 @@ import {
   resolveVisitCheckoutState,
   visitActions,
   visitDeviceStatusText,
+  visitGrandTotal,
   visitPayMethods,
   visitStatusView,
   visitStep,
@@ -128,5 +129,15 @@ describe('visitStep', () => {
     expect(visitStep({ payState: 'waiting', orderStatuses: { a: 'EN_ROUTE', b: 'UNDER_REPAIR' } })).toBe(4);
     expect(visitStep({ payState: 'ready', orderStatuses: { a: 'UNDER_REPAIR' } })).toBe(5);
     expect(visitStep({ payState: 'paid', orderStatuses: null })).toBe(5);
+  });
+});
+
+describe('visitGrandTotal', () => {
+  const devices = [
+    { state: 'succeeded', amount: 360000 }, { state: 'succeeded', amount: 219000 }, { state: 'failed', amount: 0 },
+  ] as never;
+  it('is what is still due before payment, and the repaired devices once paid (the server total is then 0)', () => {
+    expect(visitGrandTotal({ paid: false, total: 579000, devices })).toBe(579000);
+    expect(visitGrandTotal({ paid: true, total: 0, devices })).toBe(579000);
   });
 });

@@ -30,6 +30,7 @@ import {
   resolveVisitCheckoutState,
   visitActions,
   visitStep,
+  visitGrandTotal,
   visitDeviceStatusText,
   visitPayMethods,
   type VisitPayMethod,
@@ -425,7 +426,7 @@ export default function CustomerVisitScreen() {
                 ))}
                 <View style={styles.row}>
                   <Text style={styles.cardTitle}>{held ? 'Tổng gốc' : 'Tổng cộng'}</Text>
-                  <Text style={styles.cardTitle} testID="visit-total">{payState === 'waiting' ? '—' : formatVnd(checkout.total)}</Text>
+                  <Text style={styles.cardTitle} testID="visit-total">{payState === 'waiting' ? '—' : formatVnd(visitGrandTotal(checkout))}</Text>
                 </View>
                 {held ? (
                   <>
