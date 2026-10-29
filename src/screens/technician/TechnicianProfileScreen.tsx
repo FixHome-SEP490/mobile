@@ -405,7 +405,7 @@ export default function TechnicianProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
@@ -743,7 +743,7 @@ export default function TechnicianProfileScreen() {
             }}
             ListEmptyComponent={skillsSheetLoaded && !skillsSheetError
               ? <Text style={styles.emptyText}>Không có dịch vụ nào.</Text>
-              : null}
+              : undefined}
           />
         )}
       </BottomSheetModal>

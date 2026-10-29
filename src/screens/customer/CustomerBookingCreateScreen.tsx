@@ -1,17 +1,6 @@
 import BookingActionBar from '../../components/BookingActionBar';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions, TextInputInstance, ScrollViewInstance } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {
   BottomSheetModal,
@@ -294,9 +283,9 @@ export default function CustomerBookingCreateScreen() {
   const pickerSheetRef = useRef<BottomSheetModal>(null);
   const pickerSnapPoints = useMemo(() => ['80%'], []);
   const addressSheetRef = useRef<BottomSheetModal>(null);
-  const descriptionInputRef = useRef<TextInput>(null);
+  const descriptionInputRef = useRef<TextInputInstance>(null);
   const descriptionTopRef = useRef(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
 
   useEffect(() => {
     const syncRuntime = () => {

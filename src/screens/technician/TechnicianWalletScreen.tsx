@@ -267,7 +267,7 @@ export default function TechnicianWalletScreen({ route }: { route?: { name: stri
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       <View style={styles.header}>
         <BackButton onPress={() => isTab ? (navigation as unknown as { navigate: (name: string) => void }).navigate('Home') : navigation.goBack()} />

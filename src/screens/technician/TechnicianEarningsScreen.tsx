@@ -84,7 +84,7 @@ export default function TechnicianEarningsScreen({ embedded = false }: { embedde
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <View style={styles.header}>
         {embedded ? (
           <View style={styles.iconBtn} />

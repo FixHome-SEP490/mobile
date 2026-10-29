@@ -140,7 +140,6 @@ export default function CustomerBookingDetailScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={colors.background}
       />
       <View style={styles.header}>
         <BackButton />

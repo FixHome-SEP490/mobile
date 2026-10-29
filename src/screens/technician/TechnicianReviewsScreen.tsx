@@ -208,7 +208,7 @@ export default function TechnicianReviewsScreen() {
 
   return (
     <SafeAreaView style={styles2.container} edges={['top']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <View style={styles2.header}>
         <BackButton />
         <Text style={styles2.headerTitle} accessibilityRole="header">Đánh giá từ khách hàng</Text>
@@ -224,9 +224,9 @@ export default function TechnicianReviewsScreen() {
           data={reviews}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          ListHeaderComponent={reviews.length > 0 ? header : null}
+          ListHeaderComponent={reviews.length > 0 ? header : undefined}
           ListEmptyComponent={empty}
-          ListFooterComponent={loadingMore ? <ActivityIndicator style={styles2.footer} color={colors.primaryStrong} /> : null}
+          ListFooterComponent={loadingMore ? <ActivityIndicator style={styles2.footer} color={colors.primaryStrong} /> : undefined}
           onEndReached={onEndReached}
           onEndReachedThreshold={0.4}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primaryStrong]} />}

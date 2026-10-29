@@ -285,7 +285,7 @@ export default function TechnicianNotificationsScreen({ route }: { route?: { nam
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       <View style={styles.header}>
         {!isTab && <BackButton onPress={onBackPress} />}
@@ -333,7 +333,7 @@ export default function TechnicianNotificationsScreen({ route }: { route?: { nam
           )}
           stickySectionHeadersEnabled={false}
           ListEmptyComponent={renderEmpty}
-          ListFooterComponent={loadingMore ? <ActivityIndicator style={styles.footerSpinner} color={colors.primaryStrong} /> : null}
+          ListFooterComponent={loadingMore ? <ActivityIndicator style={styles.footerSpinner} color={colors.primaryStrong} /> : undefined}
           onEndReached={onEndReached}
           onEndReachedThreshold={0.4}
           contentContainerStyle={[

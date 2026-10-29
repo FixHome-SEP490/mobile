@@ -202,7 +202,7 @@ export default function CustomerVisitCreateScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+      <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
         <BackButton />
         <Text accessibilityRole="header" style={styles.headerTitle}>Đặt nhiều thiết bị</Text>

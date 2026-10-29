@@ -720,7 +720,7 @@ export default function CustomerAIChatScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       <View style={styles.header}>
         <BackButton />
@@ -762,7 +762,7 @@ export default function CustomerAIChatScreen() {
           keyExtractor={(item) => item.id}
           renderItem={renderMessage}
           contentContainerStyle={styles.listContent}
-          ListFooterComponent={isThinking ? <TypingDots /> : null}
+          ListFooterComponent={isThinking ? <TypingDots /> : undefined}
           onContentSizeChange={scrollToEnd}
           keyboardShouldPersistTaps="handled"
         />

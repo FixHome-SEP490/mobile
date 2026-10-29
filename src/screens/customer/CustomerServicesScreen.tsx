@@ -270,7 +270,7 @@ export default function CustomerServicesScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {/* Header: where you are and how many services it holds */}
       <View style={styles.header}>
@@ -455,7 +455,7 @@ export default function CustomerServicesScreen() {
                   <Text style={styles.retryText}>Thử lại</Text>
                 </TouchableOpacity>
               </View>
-            ) : null
+            ) : undefined
           }
           ListFooterComponent={
             services.length < total ? (
@@ -472,7 +472,7 @@ export default function CustomerServicesScreen() {
                   <Text style={styles.retryText}>Tải thêm ({services.length}/{total})</Text>
                 )}
               </TouchableOpacity>
-            ) : null
+            ) : undefined
           }
           renderItem={({ item }) => <ServiceRowCard service={item} onPress={openService} />}
         />

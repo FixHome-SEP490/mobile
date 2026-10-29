@@ -894,7 +894,7 @@ export default function CustomerProfileScreen() {
 
   return (
     <SafeAreaView style={[styles.container, isDarkMode && styles.containerDark]} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 96 + Math.max(insets.bottom, 16) }]}
         onScroll={handleScroll}

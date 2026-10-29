@@ -74,6 +74,6 @@ it('honors Reduce Motion and never claims a location, ETA or a match', async () 
   const tree = await render(true);
   expect(tree.root.findAll((node) => node.props.testID === 'matching-radar-pulse')).toHaveLength(0);
   expect(mockWithRepeat).not.toHaveBeenCalled();
-  expect(tree.toJSON()).not.toContain('ETA');
+  expect(JSON.stringify(tree.toJSON())).not.toContain('ETA');
   await act(async () => tree.unmount());
 });

@@ -499,7 +499,7 @@ export default function ChatThreadScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -583,11 +583,11 @@ export default function ChatThreadScreen() {
             initialNumToRender={20}
             maxToRenderPerBatch={20}
             windowSize={11}
-            ListHeaderComponent={peerTyping ? <TypingDots /> : null}
+            ListHeaderComponent={peerTyping ? <TypingDots /> : undefined}
             ListFooterComponent={
               loadingOlder ? (
                 <ActivityIndicator style={styles.olderSpinner} color={colors.muted} />
-              ) : null
+              ) : undefined
             }
             ListEmptyComponent={
               <View style={styles.center}>

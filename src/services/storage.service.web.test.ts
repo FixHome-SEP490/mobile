@@ -1,8 +1,19 @@
-/** @jest-environment jsdom */
 import { storageService } from './storage.service.web';
+
+// The React Native jest preset (SDK 58) cannot load inside jsdom, so the two web storages are small in-memory stand-ins.
+const memoryStorage = () => {
+  const items = new Map<string, string>();
+  return {
+    getItem: (key: string) => items.get(key) ?? null,
+    setItem: (key: string, value: string) => void items.set(key, String(value)),
+    removeItem: (key: string) => void items.delete(key),
+    clear: () => items.clear(),
+  };
+};
 
 describe('Expo Web token storage', () => {
   beforeEach(() => {
+    Object.assign(window, { sessionStorage: memoryStorage(), localStorage: memoryStorage() });
     window.sessionStorage.clear();
   });
 

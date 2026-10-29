@@ -30,7 +30,7 @@ describe('openExternal', () => {
   let open: jest.SpyInstance;
   let alert: jest.SpyInstance;
   beforeEach(() => {
-    open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
     alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   });
   afterEach(() => { open.mockClear(); alert.mockClear(); });

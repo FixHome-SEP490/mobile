@@ -1,18 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  AccessibilityInfo,
-  ActivityIndicator,
-  AppState,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, AppState, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, TextInputInstance } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -77,10 +64,10 @@ export default function CustomerKycScreen() {
   const uploadAbortRef = useRef<AbortController | null>(null);
   const submitLockRef = useRef(false);
   const submittingRequestRef = useRef(false);
-  const fullNameRef = useRef<TextInput>(null);
-  const dobRef = useRef<TextInput>(null);
-  const citizenIdRef = useRef<TextInput>(null);
-  const addressRef = useRef<TextInput>(null);
+  const fullNameRef = useRef<TextInputInstance>(null);
+  const dobRef = useRef<TextInputInstance>(null);
+  const citizenIdRef = useRef<TextInputInstance>(null);
+  const addressRef = useRef<TextInputInstance>(null);
 
   const [verification, setVerification] = useState<CustomerVerificationState | null>(null);
   const [form, setForm] = useState<CustomerKycFormValues>(EMPTY_FORM);
@@ -508,7 +495,7 @@ type RenderFieldOptions = {
   testID: string;
   error?: string;
   helper?: string;
-  inputRef?: React.RefObject<TextInput | null>;
+  inputRef?: React.RefObject<TextInputInstance | null>;
   placeholder?: string;
   keyboardType?: 'default' | 'number-pad' | 'numbers-and-punctuation';
   maxLength?: number;

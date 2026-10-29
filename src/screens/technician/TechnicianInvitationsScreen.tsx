@@ -373,7 +373,7 @@ export default function TechnicianInvitationsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {isFocused ? (
         <View style={styles.topBar}>
@@ -600,7 +600,7 @@ export default function TechnicianInvitationsScreen() {
               Địa chỉ đầy đủ và thông tin liên lạc chỉ hiển thị sau khi bạn nhận việc thành công.
             </Text>
           </View>
-        ) : null}
+        ) : undefined}
       />
     </SafeAreaView>
   );

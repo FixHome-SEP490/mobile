@@ -86,7 +86,7 @@ export default function CustomerFailedRepairRebookScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+      <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
         <BackButton />
         <Text accessibilityRole="header" style={styles.headerTitle}>{kind === 'interruption' ? 'Đặt lịch mới' : 'Đặt lại máy không sửa được'}</Text>

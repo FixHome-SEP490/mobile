@@ -174,8 +174,8 @@ export default function VisitGroupsPanel({ search, onOpen, bottomInset = 0, term
           <Text style={styles.hint}>{error}</Text>
           <TouchableOpacity onPress={() => void read(1, 'refresh')} accessibilityRole="button"><Text style={styles.retry}>Thử lại</Text></TouchableOpacity>
         </View>
-      ) : null}
-      ListEmptyComponent={error ? null : (
+      ) : undefined}
+      ListEmptyComponent={error ? undefined : (
         <View style={styles.empty} testID="visit-groups-empty">
           <Text style={styles.title}>{search.trim() || filter !== 'all' ? 'Không có lượt sửa phù hợp' : emptyTitle ?? 'Chưa có lượt sửa nhiều thiết bị'}</Text>
           <Text style={styles.hint}>{search.trim() ? 'Hãy đổi từ khóa tìm kiếm.' : filter !== 'all' ? 'Hãy chọn bộ lọc khác.' : 'Khi bạn đặt từ 2 thiết bị trong một lần, lượt sửa sẽ hiện ở đây.'}</Text>
@@ -183,7 +183,7 @@ export default function VisitGroupsPanel({ search, onOpen, bottomInset = 0, term
       )}
       ListFooterComponent={loadingMore ? (
         <View style={styles.more} accessibilityLiveRegion="polite"><ActivityIndicator size="small" color={colors.primary} /><Text style={styles.hint}>Đang tải thêm…</Text></View>
-      ) : null}
+      ) : undefined}
       renderItem={({ item }) => {
         const when = sessionLabel({ bookingMode: item.bookingMode, slot: item.slot, start: item.scheduledAt });
         const deviceOrders = item.items.map((d) => (d.orderId ? orders[d.orderId] : undefined));

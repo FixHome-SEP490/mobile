@@ -289,7 +289,7 @@ export default function TechnicianJobsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <View style={styles.header}>
         <Text style={styles.headerTitle} accessibilityRole="header">Công việc của tôi</Text>
         <Text style={styles.headerSubtitle}>

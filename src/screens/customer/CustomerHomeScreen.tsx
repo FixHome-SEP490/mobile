@@ -4,17 +4,7 @@ import { CUSTOMER_UI_ARTWORK } from '../../constants/customer-artwork';
 // src/screens/customer/CustomerHomeScreen.tsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MessageCircle } from 'lucide-react-native';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  TouchableOpacity,
-  Image,
-  StatusBar,
-  useWindowDimensions,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TouchableOpacity, Image, StatusBar, useWindowDimensions, ScrollViewInstance } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useLiveRefresh } from '../../hooks/useLiveRefresh';
@@ -75,7 +65,7 @@ export default function CustomerHomeScreen() {
 
   const { user, isAuthenticated } = useAuthStore();
   const isGuest = !isAuthenticated;
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const reduceMotion = useReduceMotion();
   const [selectedAddress, setSelectedAddress] = useState('Đang tải địa chỉ...');
   const [addresses, setAddresses] = useState<AddressData[]>([]);
@@ -182,7 +172,7 @@ export default function CustomerHomeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="light-content" backgroundColor="#1D4ED8" />
+      <StatusBar barStyle="light-content" />
 
       <ScrollView
         ref={scrollRef}
