@@ -119,11 +119,10 @@ export default function CustomerRepairHistoryScreen() {
       <View style={styles.header}>
         <BackButton />
         <View style={styles.headerCopy}>
-          <Text style={styles.headerOverline}>LỊCH SỬ & BẢO HÀNH</Text>
           <Text style={styles.headerTitle} accessibilityRole="header">Lịch sử sửa chữa</Text>
-          <Text style={styles.headerSubtitle}>Những đơn đã sửa chữa và hoàn tất</Text>
+          <Text style={styles.headerSubtitle}>Theo dõi các đơn đã hoàn tất</Text>
         </View>
-        <View style={{ width: 44, height: 44 }} />
+        <View style={styles.headerSpacer} />
       </View>
 
       <View style={styles.searchWrap}>
@@ -159,7 +158,7 @@ export default function CustomerRepairHistoryScreen() {
       )}
 
       <View style={styles.modeRow} accessibilityRole="tablist">
-        {([['orders', 'Đơn sửa chữa'], ['visits', 'Nhiều thiết bị']] as const).map(([id, label]) => (
+        {([['orders', 'Đơn 1 thiết bị'], ['visits', 'Đơn nhiều thiết bị']] as const).map(([id, label]) => (
           <TouchableOpacity
             key={id}
             testID={`repair-history-mode-${id}`}
@@ -181,7 +180,7 @@ export default function CustomerRepairHistoryScreen() {
         />
       ) : loading ? (
         <View style={styles.centerState}>
-          <Text style={styles.stateText}>Đang tải lịch sử sửa chữa...</Text>
+          <Text style={styles.stateText}>Đang tải lịch sử sửa chữa…</Text>
           <CustomerSkeleton variant="booking" rows={3} />
         </View>
       ) : (
@@ -192,7 +191,7 @@ export default function CustomerRepairHistoryScreen() {
         >
           {!!error && (
             <View style={styles.errorBanner} accessibilityRole="alert">
-              <Ionicons name="alert-circle-outline" size={20} color={colors.warning} />
+              <Ionicons name="alert-circle-outline" size={20} color={colors.tone?.danger?.fg ?? colors.error} />
               <View style={styles.errorCopy}>
                 <Text style={styles.errorText}>{error}</Text>
                 <TouchableOpacity
@@ -232,6 +231,9 @@ export default function CustomerRepairHistoryScreen() {
           ) : (
             <>
               <View style={styles.listHeading}>
+                <View style={styles.sectionIcon}>
+                  <Ionicons name="checkmark-done-outline" size={16} color={colors.primary} />
+                </View>
                 <Text style={styles.sectionTitle} accessibilityRole="header">Đã hoàn tất</Text>
                 <Text style={styles.sectionCount}>
                   {query.trim() ? `${visibleRows.length} trong ${rows.length} đã tải` : `Đã tải ${rows.length}/${total}`}
@@ -248,21 +250,28 @@ export default function CustomerRepairHistoryScreen() {
                     accessibilityLabel={`Xem chi tiết đơn sửa chữa ${item.code || ''}`.trim()}
                     activeOpacity={0.8}
                   >
-                    <View style={styles.cardTop}>
-                      <View style={styles.statusPill}>
-                        <Ionicons name="checkmark-circle" size={15} color={colors.success} />
-                        <Text style={styles.statusText}>Hoàn thành</Text>
+                    <View style={styles.cardMain}>
+                      <View style={styles.doneTile}>
+                        <Ionicons name="construct-outline" size={22} color={colors.tone?.success?.fg ?? colors.success} />
                       </View>
-                      <Text style={styles.dateText}>{repairHistoryDate(item)}</Text>
-                    </View>
-                    <Text style={styles.serviceTitle} numberOfLines={2}>
-                      {item.serviceName || 'Dịch vụ sửa chữa'}
-                    </Text>
-                    <View style={styles.metaRow}>
-                      <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
-                      <Text style={styles.metaText} numberOfLines={1}>
-                        {item.technicianName ? `Kỹ thuật viên ${item.technicianName}` : 'Kỹ thuật viên chưa xác định'}
-                      </Text>
+                      <View style={styles.cardInfo}>
+                        <View style={styles.cardTop}>
+                          <View style={styles.statusPill}>
+                            <Ionicons name="checkmark-circle" size={15} color={colors.tone?.success?.fg ?? colors.success} />
+                            <Text style={styles.statusText}>Hoàn thành</Text>
+                          </View>
+                          <Text style={styles.dateText}>{repairHistoryDate(item)}</Text>
+                        </View>
+                        <Text style={styles.serviceTitle} numberOfLines={2}>
+                          {item.serviceName || 'Dịch vụ sửa chữa'}
+                        </Text>
+                        <View style={styles.metaRow}>
+                          <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
+                          <Text style={styles.metaText} numberOfLines={1}>
+                            {item.technicianName ? `Kỹ thuật viên ${item.technicianName}` : 'Kỹ thuật viên chưa xác định'}
+                          </Text>
+                        </View>
+                      </View>
                     </View>
                     <View style={styles.cardBottom}>
                       <View style={{ flex: 1 }}>
@@ -285,7 +294,7 @@ export default function CustomerRepairHistoryScreen() {
                       </View>
                       <View style={styles.totalBlock}>
                         <Text style={styles.referenceLabel}>Tổng thanh toán</Text>
-                        <Text style={styles.totalText}>{totalText || 'Chưa xác định'}</Text>
+                        <Text style={styles.totalText} numberOfLines={1}>{totalText || 'Chưa xác định'}</Text>
                       </View>
                       <Ionicons name="chevron-forward" size={18} color={colors.muted} />
                     </View>
@@ -328,18 +337,10 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 4,
-  },
+  headerSpacer: { width: 44, height: 44 },
   headerCopy: { flex: 1, alignItems: 'center' },
-  headerOverline: { fontSize: 12, lineHeight: 16, fontWeight: '700', letterSpacing: 1, color: colors.textSecondary, textAlign: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text, textAlign: 'center' },
-  headerSubtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2, textAlign: 'center' },
+  headerTitle: { fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  headerSubtitle: { fontSize: 12, lineHeight: 17, color: colors.textSecondary, marginTop: 2, textAlign: 'center' },
   searchWrap: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
   searchBar: {
     minHeight: 48,
@@ -352,17 +353,25 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  searchInput: { flex: 1, fontSize: 14, color: colors.text, paddingVertical: 0 },
+  searchInput: { flex: 1, fontSize: 16, color: colors.text, paddingVertical: 0 },
   searchResetButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  modeRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
-  modeChip: { minHeight: 44, paddingHorizontal: 16, borderRadius: 22, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-  modeChipActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  modeRow: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 4,
+    gap: 4,
+    borderRadius: 14,
+    backgroundColor: colors.divider,
+  },
+  modeChip: { flex: 1, minHeight: 44, paddingHorizontal: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  modeChipActive: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.primary },
   modeText: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
-  modeTextActive: { fontSize: 14, fontWeight: '600', color: colors.primaryStrong },
+  modeTextActive: { fontSize: 14, fontWeight: '700', color: colors.primaryStrong },
   searchScopeNote: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
   scrollContent: { padding: 16, paddingBottom: 56, flexGrow: 1 },
   centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 32 },
-  stateText: { fontSize: 13, lineHeight: 19, color: colors.textSecondary, textAlign: 'center' },
+  stateText: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
   emptyState: { alignItems: 'center', paddingHorizontal: 28, paddingVertical: 56 },
   emptyIcon: {
     width: 56,
@@ -373,24 +382,25 @@ const getStyles = (colors: any) => StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 12,
   },
-  emptyTitle: { fontSize: 17, fontWeight: '800', color: colors.text, marginBottom: 6 },
+  emptyTitle: { fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.text, marginBottom: 6 },
   errorBanner: {
     flexDirection: 'row',
     gap: 8,
     padding: 16,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: colors.tone?.danger?.fg ?? colors.border,
+    backgroundColor: colors.tone?.danger?.bg ?? colors.surface,
     marginBottom: 12,
   },
   errorCopy: { flex: 1 },
-  errorText: { fontSize: 13, lineHeight: 18, color: colors.text, marginBottom: 6 },
-  retryText: { fontSize: 13, fontWeight: '700', color: colors.primary },
+  errorText: { fontSize: 14, lineHeight: 20, color: colors.tone?.danger?.text ?? colors.text, marginBottom: 6 },
+  retryText: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.primary },
   retryButton: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start', paddingHorizontal: 2 },
-  listHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  sectionTitle: { fontSize: 14, fontWeight: '800', color: colors.text },
-  sectionCount: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+  listHeading: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, marginBottom: 8 },
+  sectionIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primaryTint },
+  sectionTitle: { flex: 1, fontSize: 16, lineHeight: 24, fontWeight: '700', color: colors.text },
+  sectionCount: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.textSecondary },
   card: {
     backgroundColor: colors.surface,
     borderRadius: 16,
@@ -400,7 +410,17 @@ const getStyles = (colors: any) => StyleSheet.create({
     marginBottom: 12,
     minHeight: 84,
   },
-  cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  cardMain: { flexDirection: 'row', gap: 12 },
+  doneTile: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.tone?.success?.bg ?? colors.primarySoft,
+  },
+  cardInfo: { flex: 1 },
+  cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -408,13 +428,13 @@ const getStyles = (colors: any) => StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: colors.tone?.success?.bg ?? '#DCFCE7',
+    backgroundColor: colors.tone?.success?.bg ?? colors.primarySoft,
   },
-  statusText: { fontSize: 12, fontWeight: '700', color: colors.tone?.success?.text ?? colors.success },
-  dateText: { fontSize: 12, color: colors.textSecondary },
-  serviceTitle: { fontSize: 16, lineHeight: 22, fontWeight: '800', color: colors.text, marginBottom: 8 },
+  statusText: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.tone?.success?.text ?? colors.success },
+  dateText: { fontSize: 12, lineHeight: 16, fontWeight: '500', color: colors.textSecondary },
+  serviceTitle: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: colors.text, marginBottom: 8 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-  metaText: { flex: 1, fontSize: 13, color: colors.textSecondary },
+  metaText: { flex: 1, fontSize: 14, lineHeight: 20, color: colors.textSecondary },
   cardBottom: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -423,12 +443,21 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.divider,
   },
-  referenceLabel: { fontSize: 12, lineHeight: 17, textTransform: 'uppercase', fontWeight: '700', color: colors.textSecondary },
-  referenceText: { fontSize: 12, fontWeight: '700', color: colors.text, marginTop: 2 },
+  referenceLabel: { fontSize: 12, lineHeight: 16, fontWeight: '500', color: colors.textSecondary },
+  referenceText: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.text, marginTop: 2 },
   copyCodeButton: { minHeight: 44, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 4 },
-  copyCodeText: { fontSize: 12, fontWeight: '600', color: colors.primaryStrong },
-  copyCodeFeedback: { fontSize: 11, color: colors.textSecondary },
+  copyCodeText: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.primaryStrong },
+  copyCodeFeedback: { fontSize: 12, lineHeight: 16, color: colors.textSecondary },
   totalBlock: { flex: 1, alignItems: 'flex-end' },
-  totalText: { fontSize: 14, fontWeight: '800', color: colors.primaryStrong, marginTop: 2 },
-  loadMoreButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+  totalText: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: colors.primaryStrong, marginTop: 2, fontVariant: ['tabular-nums'] },
+  loadMoreButton: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
 });

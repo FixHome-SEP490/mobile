@@ -143,11 +143,12 @@ describe('CustomerRepairHistoryScreen real UI', () => {
     }
   });
 
-  it('shows the Codex history/warranty overline and keeps completed rows on a 44pt target', async () => {
+  it('shows the repair history title and keeps completed rows on a 44pt target', async () => {
     mockHistory.mockResolvedValue({ data: [validRow], total: 1 });
     const tree = await mount();
     try {
-      expect(texts(tree)).toContain('LỊCH SỬ & BẢO HÀNH');
+      expect(texts(tree)).toContain('Lịch sử sửa chữa');
+      expect(texts(tree)).not.toContain('LỊCH SỬ & BẢO HÀNH');
       const open = action(tree, 'Xem chi tiết đơn sửa chữa FH-001');
       expect(open).toBeDefined();
       expect(StyleSheet.flatten(open?.props.style).minHeight).toBeGreaterThanOrEqual(44);

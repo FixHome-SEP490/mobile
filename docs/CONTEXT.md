@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-30 15:45 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/web-be-sync-20261026
+> Cập nhật lần cuối: 2026-10-30 17:58 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/web-be-sync-20261026
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -409,6 +409,8 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-30 17:58 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Hai tab đơn của khách đổi nhãn thành Đơn 1 thiết bị và Đơn nhiều thiết bị (Hoạt động, Lịch sử sửa chữa); header Ví FixHome của khách theo header chuẩn, bỏ dòng Ví của tôi; chỉ đổi giao diện, chưa kiểm chứng trên máy thật.
+- 2026-10-30 17:45 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Màn Lịch sử sửa chữa của khách đổi giao diện theo token: thẻ có ô biểu tượng, tab chuyển dạng segmented, tiêu đề nhóm có biểu tượng, lỗi dùng tông đỏ, nút Tải thêm có viền; chỉ đổi giao diện, chưa kiểm chứng trên máy thật.
 - 2026-10-30 15:45 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | `npm test` chạy thêm script hợp đồng cấu hình Android Maps; Jest bỏ qua file `.cjs` để không coi script độc lập là suite rỗng trên Jest 30.
 - 2026-10-30 15:39 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Merge origin/dev (cấu hình Google Maps Android, hạn bảo hành) vào nhánh; không đổi hành vi của nhánh.
 - 2026-10-30 14:05 (UTC+7) | foxonworld | foxonworld/fixhome-bug-detector-android-maps-config-m1-20261030 | Ghi cấu hình Google Maps Android lúc EAS build và quy tắc phục hồi ACCEPT qua GET PENDING xác thực, giữ UNKNOWN khi invitation vắng mặt.
@@ -447,8 +449,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-20 19:39 (UTC+7) | Hgnv11 | feat/web-be-sync-20261020 | Kỹ thuật viên: sheet Kỹ năng và dịch vụ nhận làm gọn lại, hàng phẳng, công tắc nhận làm, nút Lưu thay đổi chỉ hiện khi có chỉnh sửa
 - 2026-10-20 16:40 (UTC+7) | Hgnv11 | feat/web-be-sync-20261020 | Đồng bộ web và backend: ca tối, hóa đơn 0 ₫ (no-charge) và VNPay từ 5.000 ₫, loại linh kiện theo báo giá, trạng thái trả linh kiện
 - 2026-10-20 01:57 (UTC+7) | Hgnv11 | fix/activity-split | Hoạt động: số đếm hai tab và các chip lấy từ server (GET /bookings/my/activity-counts), không còn đếm theo số đã tải; mỗi tab chỉ tải dữ liệu của mình
-- 2026-10-20 00:54 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Ví của khách làm lại theo kiểu ví của thợ: thẻ số dư xanh đậm, nút Nạp tiền và Rút tiền, giao dịch dạng thẻ, kéo để làm mới
-- 2026-10-20 00:36 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Thanh tab khách: tab đang chọn là viên xanh nhạt, chỉ nút Đặt lịch xanh đặc có viền
 
 ### Lịch sử giữ lại khi tích hợp
 

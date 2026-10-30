@@ -647,8 +647,8 @@ export default function CustomerBookingsScreen() {
       { id: 'cancelled', label: withCount('Đã hủy', counts?.repair.cancelled), testID: 'activity-filter-cancelled' },
     ] as const).map((chip) => ({ ...chip, selected: activityTab === chip.id, onPress: () => setActivityTab(chip.id) }));
   const kindTabs = [
-    { id: 'repair', label: 'Đơn sửa chữa', count: counts?.repair.all ?? null, urgent: 0 },
-    { id: 'visit', label: 'Nhiều thiết bị', count: null, urgent: 0 },
+    { id: 'repair', label: 'Đơn 1 thiết bị', count: counts?.repair.all ?? null, urgent: 0 },
+    { id: 'visit', label: 'Đơn nhiều thiết bị', count: null, urgent: 0 },
     { id: 'request', label: 'Yêu cầu đặt lịch', count: counts?.request.all ?? null, urgent: urgentCount },
   ] as const;
 
