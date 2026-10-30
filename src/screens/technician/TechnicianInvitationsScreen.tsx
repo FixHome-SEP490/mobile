@@ -463,7 +463,7 @@ export default function TechnicianInvitationsScreen() {
                 <View style={[styles.banner, { backgroundColor: colors.tone.warning.bg }]} accessibilityLiveRegion="polite">
                   <RefreshCw size={18} color={colors.tone.warning.fg} strokeWidth={1.75} />
                   <Text style={[styles.bannerText, { color: colors.tone.warning.text }]}>
-                    Có phản hồi nhận việc chưa xác định. Không gửi lại; ứng dụng chỉ đối chiếu bằng danh sách Công việc.
+                    Kết quả nhận việc chưa xác định. Không gửi lại để tránh nhận trùng. Kéo xuống làm mới khi có mạng để ứng dụng đối chiếu phân công trên máy chủ.
                   </Text>
                 </View>
               ) : null}
@@ -539,7 +539,7 @@ export default function TechnicianInvitationsScreen() {
               <View style={[styles.banner, { backgroundColor: colors.tone.warning.bg }]} accessibilityLiveRegion="polite">
                 <RefreshCw size={18} color={colors.tone.warning.fg} strokeWidth={1.75} />
                 <Text style={[styles.bannerText, { color: colors.tone.warning.text }]}>
-                  Có phản hồi nhận việc chưa xác định. Không gửi lại; ứng dụng chỉ đối chiếu bằng danh sách Công việc.
+                  Kết quả nhận việc chưa xác định. Không gửi lại để tránh nhận trùng. Kéo xuống làm mới khi có mạng để ứng dụng đối chiếu phân công trên máy chủ.
                 </Text>
               </View>
             ) : null}

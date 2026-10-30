@@ -41,11 +41,11 @@ export function warrantyCoverageUiStatus(
 ): WarrantyCoverageUiStatus {
   const raw = String(coverage.status ?? '').toUpperCase();
   if (raw === 'VOIDED') return 'VOIDED';
+  if (raw === 'EXPIRED') return 'EXPIRED';
+  if (raw !== 'ACTIVE') return 'UNKNOWN';
   const expiry = new Date(coverage.expiresAt).getTime();
-  if (!Number.isFinite(expiry)) return raw === 'ACTIVE' ? 'UNKNOWN' : (raw === 'EXPIRED' ? 'EXPIRED' : 'UNKNOWN');
-  if (raw === 'ACTIVE' && expiry > nowMs) return 'ACTIVE';
-  if (raw === 'EXPIRED' || expiry <= nowMs) return 'EXPIRED';
-  return 'UNKNOWN';
+  if (!Number.isFinite(expiry)) return 'UNKNOWN';
+  return expiry <= nowMs ? 'EXPIRED' : 'ACTIVE';
 }
 
 export function isWarrantyCoverageClaimable(

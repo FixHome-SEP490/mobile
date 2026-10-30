@@ -16,15 +16,19 @@ function fixture() {
   const controller = () => createInvitationInbox(api, orders, write, notify, auth, createEntryAttemptJournal(storage));
   return { controller, api, orders, storage, write, notify, auth, change: () => { owner = 'other'; } };
 }
-it('uncertainty remains locked after a process-local cache cannot be relied on', async () => {
-  const f = fixture(); f.api.respondInvitation.mockRejectedValue(Error('timeout'));
+it('after restart a positive live PENDING GET enables only an explicit same-invitation ACCEPT retry', async () => {
+  const f = fixture(); f.api.respondInvitation.mockRejectedValueOnce(Error('timeout'));
   let c = f.controller(); await c.focus(); await c.respond('invite', 'ACCEPT'); c.blur();
-  c = f.controller(); await c.focus(); await c.respond('invite', 'ACCEPT'); expect(f.api.respondInvitation).toHaveBeenCalledTimes(1);
+  c = f.controller(); await c.focus();
+  expect(f.api.respondInvitation).toHaveBeenCalledTimes(1);
+  await c.respond('invite', 'ACCEPT');
+  expect(f.api.respondInvitation.mock.calls).toEqual([['invite', 'ACCEPT'], ['invite', 'ACCEPT']]);
 });
-it('durable restored invitation alone prevents POST; missing linked order never unlocks', async () => {
+it('a restored ACCEPT journal stays locked when the server omits that invitation', async () => {
   const f = fixture(), j = createEntryAttemptJournal(f.storage); await j.restore();
   await j.begin({ kind: 'invitation', invitationId: 'invite', bookingId: 'booking', action: 'ACCEPT', ownerUserId: f.auth.getUserId()!, intentId: 'prior', createdAt: 1 });
-  const c = f.controller(); await c.focus(); await c.respond('invite', 'DECLINE'); expect(f.api.respondInvitation).not.toHaveBeenCalled();
+  f.api.getMyInvitations = async () => [];
+  const c = f.controller(); await c.focus(); await c.respond('invite', 'ACCEPT'); expect(f.api.respondInvitation).not.toHaveBeenCalled();
 });
 it('captures original owner and rechecks session after durable storage before POST', async () => {
   const f = fixture(), save = f.storage.setItem;
@@ -69,7 +73,7 @@ it('failed preflight GET never POSTs and is eligible again after a fresh success
   f.api.getMyInvitations = async () => [invitation]; await c.load();
   await c.respond('invite', 'ACCEPT'); expect(f.api.respondInvitation).toHaveBeenCalledTimes(1);
 });
-it('unsent cleanup persistence failure retains the durable barrier across restart', async () => {
+it('a durable marker from a never-sent attempt recovers after restart when GET proves the invitation remains PENDING', async () => {
   const f = fixture(), save = f.storage.setItem; let writes = 0;
   f.storage.setItem = async (key, value) => { if (++writes === 2) throw Error('cleanup storage offline'); await save(key, value); };
   const c = f.controller(); await c.focus();
@@ -77,8 +81,10 @@ it('unsent cleanup persistence failure retains the durable barrier across restar
   await c.respond('invite', 'ACCEPT'); expect(f.api.respondInvitation).not.toHaveBeenCalled();
   const restored = createEntryAttemptJournal(f.storage); await restored.restore();
   expect(restored.blocked(f.auth.getUserId()!, 'invitation', 'invite')).toBe(true);
-  f.api.getMyInvitations = async () => [invitation]; await f.controller().focus(); await c.respond('invite', 'ACCEPT');
+  f.api.getMyInvitations = async () => [invitation]; const recovered = f.controller(); await recovered.focus();
   expect(f.api.respondInvitation).not.toHaveBeenCalled();
+  await recovered.respond('invite', 'ACCEPT');
+  expect(f.api.respondInvitation).toHaveBeenCalledTimes(1);
 });
 it('dispatched DECLINE timeout stays locked after refresh and never uses unsent cleanup', async () => {
   const f = fixture(), c = f.controller(); f.api.respondInvitation.mockRejectedValueOnce(Error('response lost'));
