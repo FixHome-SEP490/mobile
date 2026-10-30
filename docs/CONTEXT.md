@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-26 15:10 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/web-visit-groups
+> Cập nhật lần cuối: 2026-10-30 14:05 (UTC+7) · Người cập nhật (git): foxonworld · Nhánh: foxonworld/fixhome-bug-detector-android-maps-config-m1-20261030
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -382,7 +382,8 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - Chat có ảnh/video, khoá khi đơn hoàn tất và realtime đã làm ở các mục "Chat" và "Realtime" dưới (19/10/2026); chưa kiểm chứng trên thiết bị. Thông báo đẩy lên điện thoại và số chưa đọc của thông báo qua `notification:new` mobile chưa nối.
 - SEP-136: một màn Lịch làm việc chứa editor khung giờ tuần theo ngày, preset/giờ chính xác, ngày nghỉ với chọn ngày và lịch đơn hiện có. Một màn Khu vực hoạt động chứa vị trí/bán kính và quận/huyện. Giữ payload lưu hiện hành, ngày tuần Sunday=0, khoảng giờ đã lưu, giới hạn 40 km, GPS/camera và tài chính. Bàn phím/safe area đã xử lý trong source; thiết bị còn CHƯA KIỂM CHỨNG.
 - Chưa có push notification (`expo-notifications` đã cài nhưng chưa dùng); ảnh booking đã có upload adapter/controller nhưng runtime CHƯA KIỂM CHỨNG; khu vực phục vụ có màn chỉnh sau onboarding.
-- Chưa có cấu hình EAS và bundle id. Root đã xử lý cold/warm return `fixhome://app/wallet` bằng đích an toàn cho Customer và GET-only refresh, bỏ mọi query payload; luồng Google/Technician giữ nguyên. OS delivery/native chưa kiểm chứng.
+- Chưa có cấu hình EAS và bundle id. Android `react-native-maps` đọc `FIXHOME_ANDROID_MAPS_API_KEY` lúc build qua `app.config.js`; EAS Android dừng nếu thiếu biến này. Chưa có khóa EAS và chưa chạy Android build; cần khóa Google Maps đã giới hạn theo Android package cùng SHA-1 của chứng thư debug/release tương ứng. Root đã xử lý cold/warm return `fixhome://app/wallet` bằng đích an toàn cho Customer và GET-only refresh, bỏ mọi query payload; luồng Google/Technician giữ nguyên. OS delivery/native chưa kiểm chứng.
+- Technician ACCEPT có journal bền vững và không tự gửi lại POST sau timeout. Khi GET `/invitations/my` trả đúng invitation/booking còn PENDING và chưa hết hạn, app giải journal cũ, bật lại thao tác rõ ràng của thợ và chỉ gửi lại khi thợ chạm; Backend dev khóa Booking và replay ACCEPT trả lại ServiceOrder hiện hành cho cùng thợ. Khi invitation vắng khỏi GET, app đối chiếu GET Công việc; nếu chưa thấy phân công thì giữ UNKNOWN vì API không trả trạng thái terminal riêng để phân biệt DECLINED/EXPIRED/CANCELLED/đã nhận bởi thợ khác. `useLiveRefresh` poll mỗi 30 giây khi Socket.IO mất kết nối và đọc lại sau reconnect/resync; restart/offline E2E CHƯA KIỂM CHỨNG.
 - Các hàm API chưa dùng trong UI production: `completeRepair`, `payInvoice`, `getWarranties`. `getStatusHistory` đã nối vào adapter redesign nhưng UI chưa cutover.
 - Repo đang theo dõi `CLAUDE.md` và `.claude/settings.json` từ commit đầu; luật chung của nhóm không đưa cấu hình công cụ AI vào repo. Chờ PO quyết có gỡ hay không.
 - Tài liệu audit ngày 23 và 24/09 trong `docs/` là ảnh chụp lịch sử, không phản ánh hiện trạng.
@@ -392,6 +393,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-30 14:05 (UTC+7) | foxonworld | foxonworld/fixhome-bug-detector-android-maps-config-m1-20261030 | Ghi cấu hình Google Maps Android lúc EAS build và quy tắc phục hồi ACCEPT qua GET PENDING xác thực, giữ UNKNOWN khi invitation vắng mặt.
 - 2026-10-26 15:10 (UTC+7) | Hgnv11 | feat/web-visit-groups | Đặt nhiều thiết bị chuyển vào form đặt lịch: danh sách ô dịch vụ Máy 1/2/3 và ô Thêm dịch vụ, gửi cả lượt ở bước địa chỉ; màn tạo lượt riêng chỉ còn cho luồng AI.
 - 2026-10-26 14:25 (UTC+7) | Hgnv11 | feat/web-visit-groups | Màn tạo lượt nhiều thiết bị đổi sang thanh chip từng máy (thêm dịch vụ, bấm chip để nhập mô tả và ảnh, địa chỉ và buổi hẹn dùng chung); gợi ý AI nạp đủ chip và phải xác nhận từng máy.
 - 2026-10-25 19:21 (UTC+7) | Hgnv11 | feat/web-visit-groups | Lượt sửa nhiều thiết bị đủ ba phía như web #164 và #168 (khách, kỹ thuật viên, AI), thông báo linh kiện mở đúng đơn, màn Bàn giao kiểm linh kiện khớp báo giá như web #167.
@@ -431,7 +433,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-19 13:27 (UTC+7) | Hgnv11 | feat/technician-job-preview | Thợ xem mô tả, giá, tóm tắt AI, ảnh, video và khoảng cách trong lời mời trước khi nhận như web
 - 2026-10-18 12:59 (UTC+7) | ToanAltF4 | feat/mobile-call-ai-chat | Tải lên không gửi lại cả file khi byte cuối đã đi và đang chờ server trả lời
 - 2026-10-18 12:20 (UTC+7) | ToanAltF4 | feat/mobile-call-ai-chat | Trợ lý AI: tối đa 3 ảnh + 2 video mỗi cuộc trò chuyện, nén video trên máy (react-native-compressor, bản gốc khi không nén được), tải lên ở nền có tiến độ, thử lại khi mạng yếu; Đặt thợ chờ, thử lại hoặc bỏ tệp chưa gửi xong
-- 2026-10-18 04:09 (UTC+7) | ToanAltF4 | feat/mobile-call-ai-chat | Gọi thoại như web (nút gọi trong chat, màn cuộc gọi chung, nút Loa to/Loa nhỏ, cần bản build native) và trợ lý AI như web (trả lời nhanh, Đúng ý/Chưa đúng, video gửi kèm cho thợ không qua AI, ảnh và video theo sang form đặt lịch).
 
 ### Lịch sử giữ lại khi tích hợp
 

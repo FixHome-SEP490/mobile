@@ -57,11 +57,31 @@ describe('customer warranty helpers', () => {
   });
 
   it('allows expired coverage submission but fails closed for voided/unknown coverage', () => {
-    const now = new Date('2026-11-01T00:00:00.000Z').getTime();
-    expect(warrantyCoverageUiStatus(coverage(), now)).toBe('EXPIRED');
-    expect(isWarrantyCoverageClaimable(coverage({ status: 'EXPIRED' }), [])).toBe(true);
-    expect(isWarrantyCoverageClaimable(coverage({ status: 'VOIDED' }), [])).toBe(false);
-    expect(isWarrantyCoverageClaimable(coverage({ status: 'SOMETHING' }), [])).toBe(false);
+    jest.useFakeTimers().setSystemTime(new Date('2026-11-01T00:00:00.000Z'));
+    try {
+      expect(warrantyCoverageUiStatus(coverage())).toBe('EXPIRED');
+      expect(isWarrantyCoverageClaimable(coverage({ status: 'EXPIRED' }), [])).toBe(true);
+      expect(isWarrantyCoverageClaimable(coverage({ status: 'VOIDED' }), [])).toBe(false);
+      expect(isWarrantyCoverageClaimable(coverage({ status: 'SOMETHING' }), [])).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('expires only ACTIVE coverage by date and keeps unknown status unclaimable', () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-11-01T00:00:00.000Z'));
+    try {
+      const pastExpiry = '2026-10-30T00:00:00.000Z';
+      const unknown = coverage({ status: 'SOMETHING', expiresAt: pastExpiry });
+      const active = coverage({ status: 'ACTIVE', expiresAt: pastExpiry });
+
+      expect(warrantyCoverageUiStatus(unknown)).toBe('UNKNOWN');
+      expect(isWarrantyCoverageClaimable(unknown, [])).toBe(false);
+      expect(warrantyCoverageUiStatus(active)).toBe('EXPIRED');
+      expect(isWarrantyCoverageClaimable(active, [])).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('never exposes a raw inspection result in the customer status label', () => {

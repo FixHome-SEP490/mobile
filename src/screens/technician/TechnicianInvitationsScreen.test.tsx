@@ -108,7 +108,7 @@ it.each(['ACCEPT', 'DECLINE'] as const)('locks synchronous concurrent %s and opp
   await first;
 });
 it.each([undefined, 500])(
-  'keeps lock after ambiguous POST error %s, failed GET, and live PENDING reconciliation',
+  'keeps lock after ambiguous POST error %s until a later GET confirms the same live PENDING invitation',
   async status => {
     const h = setup();
     await h.controller.focus();
@@ -117,22 +117,24 @@ it.each([undefined, 500])(
     });
     h.api.getMyInvitations.mockResolvedValueOnce([invitation]).mockRejectedValueOnce(new Error('offline'));
     await h.controller.respond(invitation.id, 'ACCEPT');
-    await h.controller.respond(invitation.id, 'ACCEPT');
-    await h.controller.load();
-    await h.controller.respond(invitation.id, 'DECLINE');
-    expect(h.api.respondInvitation).toHaveBeenCalledTimes(1);
-    expect(h.state().actionInFlight[invitation.id]).toBe('ACCEPT');
     expect(h.state().recoveryPending).toBe(true);
+    expect(h.api.respondInvitation).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(h.notify.mock.calls)).not.toContain('PRIVATE');
+    await h.controller.load();
+    expect(h.state().recoveryPending).toBe(false);
+    expect(h.state().actionInFlight[invitation.id]).toBeUndefined();
+    expect(h.api.respondInvitation).toHaveBeenCalledTimes(1);
+    await h.controller.respond(invitation.id, 'ACCEPT');
+    expect(h.api.respondInvitation).toHaveBeenCalledTimes(2);
     h.api.getMyInvitations.mockResolvedValue([]);
     await h.controller.load();
     expect(h.state().invitations).toEqual([]);
-    expect(h.state().recoveryPending).toBe(true);
+    expect(h.state().recoveryPending).toBe(false);
   },
 );
 
 it.each([400, 401, 403, 404, 409, 422])(
-  'keeps server rejection %s unresolved and never exposes an accepted order',
+  'does not auto-retry server rejection %s; an explicit retry follows only a positive PENDING GET',
   async status => {
     const h = setup();
     await h.controller.focus();
@@ -140,10 +142,10 @@ it.each([400, 401, 403, 404, 409, 422])(
     await h.controller.respond(invitation.id, 'ACCEPT');
     expect(h.api.respondInvitation).toHaveBeenCalledTimes(1);
     expect(h.state().acceptedOrderId).toBeNull();
-    expect(h.state().actionInFlight[invitation.id]).toBe('ACCEPT');
-    expect(h.state().recoveryPending).toBe(true);
+    expect(h.state().actionInFlight[invitation.id]).toBeUndefined();
+    expect(h.state().recoveryPending).toBe(false);
     await h.controller.respond(invitation.id, 'ACCEPT');
-    expect(h.api.respondInvitation).toHaveBeenCalledTimes(1);
+    expect(h.api.respondInvitation).toHaveBeenCalledTimes(2);
   },
 );
 it.each(['success', 'error'])('ignores older GET %s including error/loading writes', async outcome => {
@@ -186,7 +188,7 @@ it.each([true, false])('suppresses late POST effects after blur (success=%s)', a
   expect(h.notify).not.toHaveBeenCalled();
   await h.controller.focus();
   await h.controller.respond(invitation.id, 'ACCEPT');
-  expect(h.api.respondInvitation).toHaveBeenCalledTimes(1);
+  expect(h.api.respondInvitation).toHaveBeenCalledTimes(success ? 1 : 2);
 });
 it('invalidates GET started before POST so it cannot restore the responded row', async () => {
   const h = setup();
@@ -244,7 +246,7 @@ it.each([{}, { serviceOrder: { id: ORDER_ID } }])(
       expect(isCurrent()).toBe(false);
     } else {
       expect(h.state().acceptedOrderId).toBeNull();
-      expect(h.state().recoveryPending).toBe(true);
+      expect(h.state().recoveryPending).toBe(false);
     }
   },
 );
@@ -309,10 +311,11 @@ it.each(['ACCEPT', 'DECLINE'] as const)('blocks %s from a second controller whil
   post.reject(new Error('timeout'));
   await pending;
   await second.controller.load();
-  await second.controller.respond(invitation.id, action);
   expect(second.api.respondInvitation).not.toHaveBeenCalled();
+  await second.controller.respond(invitation.id, action);
+  expect(second.api.respondInvitation).toHaveBeenCalledTimes(1);
 });
-it('keeps an ambiguous lock across timeout, logout, remount and same-account login', async () => {
+it('does not auto-retry across logout but permits an explicit ACCEPT after exact live PENDING readback', async () => {
   const first = setup();
   const user = first.auth.getUserId();
   await first.controller.focus();
@@ -324,8 +327,9 @@ it('keeps an ambiguous lock across timeout, logout, remount and same-account log
   first.auth.change(user);
   const second = setup(true, first.auth);
   await second.controller.focus();
-  await second.controller.respond(invitation.id, 'DECLINE');
   expect(second.api.respondInvitation).not.toHaveBeenCalled();
+  await second.controller.respond(invitation.id, 'ACCEPT');
+  expect(second.api.respondInvitation).toHaveBeenCalledTimes(1);
 });
 it('isolates account locks and suppresses old-account GET, POST and notification effects', async () => {
   const first = setup();
@@ -386,9 +390,67 @@ it('does not clear ambiguity from an empty GET, failed GET, or ACCEPT lacking a 
   second.api.getMyInvitations.mockRejectedValueOnce(new Error('offline'));
   await second.controller.focus();
   await second.controller.load();
-  expect(second.state().actionInFlight[invitation.id]).toBe('ACCEPT');
+  expect(second.state().recoveryPending).toBe(false);
   await second.controller.respond(invitation.id, 'DECLINE');
-  expect(second.api.respondInvitation).not.toHaveBeenCalled();
+  expect(second.api.respondInvitation).toHaveBeenCalledTimes(1);
+});
+
+it('unlocks only after an exact live PENDING GET and requires an explicit retry tap', async () => {
+  const h = setup();
+  await h.controller.focus();
+  h.api.respondInvitation
+    .mockRejectedValueOnce(new Error('response lost'))
+    .mockResolvedValueOnce({ serviceOrder: { id: ORDER_ID } });
+  h.orders.getOrder.mockResolvedValue(makeOrder(ORDER_ID, h.auth.getUserId()!));
+
+  await h.controller.respond(invitation.id, 'ACCEPT');
+
+  expect(h.api.respondInvitation).toHaveBeenCalledTimes(1);
+  expect(h.api.respondInvitation).toHaveBeenNthCalledWith(1, invitation.id, 'ACCEPT');
+  expect(h.state().invitations).toContainEqual(expect.objectContaining({ id: invitation.id, bookingId: BOOKING_ID, status: 'PENDING' }));
+  expect(h.state().actionInFlight[invitation.id]).toBeUndefined();
+  expect(h.state().recoveryPending).toBe(false);
+
+  await h.controller.respond(invitation.id, 'ACCEPT');
+
+  expect(h.api.respondInvitation).toHaveBeenCalledTimes(2);
+  expect(h.api.respondInvitation).toHaveBeenNthCalledWith(2, invitation.id, 'ACCEPT');
+  expect(h.state().acceptedOrderId).toBe(ORDER_ID);
+});
+
+it('clears the uncertainty banner after PENDING readback and a confirmed DECLINED response', async () => {
+  const h = setup();
+  await h.controller.focus();
+  h.api.respondInvitation
+    .mockRejectedValueOnce(new Error('response lost'))
+    .mockResolvedValueOnce({ invitation: { id: invitation.id, bookingId: BOOKING_ID, status: 'DECLINED' } });
+
+  await h.controller.respond(invitation.id, 'ACCEPT');
+  expect(h.state().recoveryPending).toBe(false);
+  expect(h.state().actionInFlight[invitation.id]).toBeUndefined();
+  await h.controller.respond(invitation.id, 'DECLINE');
+
+  expect(h.state().recoveryPending).toBe(false);
+  expect(h.state().invitations).toEqual([]);
+  expect(h.state().actionInFlight[invitation.id]).toBeUndefined();
+});
+
+it('keeps an absent invitation locked across timeout and restart because absence has no terminal status', async () => {
+  const first = setup();
+  await first.controller.focus();
+  first.api.respondInvitation.mockRejectedValue(new Error('timeout'));
+  first.api.getMyInvitations.mockResolvedValueOnce([invitation]).mockResolvedValue([]);
+  await first.controller.respond(invitation.id, 'ACCEPT');
+  first.controller.blur();
+
+  const restarted = setup(true, first.auth);
+  restarted.api.getMyInvitations.mockResolvedValue([]);
+  await restarted.controller.focus();
+
+  expect(restarted.state().recoveryPending).toBe(true);
+  expect(restarted.state().invitations).toEqual([]);
+  await restarted.controller.respond(invitation.id, 'ACCEPT');
+  expect(restarted.api.respondInvitation).not.toHaveBeenCalled();
 });
 
 it('recovers lost ACCEPT ACK from paginated own Jobs and verifies exact active assignment', async () => {
