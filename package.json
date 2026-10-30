@@ -67,12 +67,16 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint --max-warnings=0",
-    "test": "jest --ci",
+    "test": "jest --ci && node app.config.contract.test.cjs",
     "typecheck": "tsc --noEmit",
     "check:expo": "expo install --check"
   },
   "jest": {
     "preset": "jest-expo",
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "\\.cjs$"
+    ],
     "setupFiles": [
       "<rootDir>/jest.setup.ts"
     ]

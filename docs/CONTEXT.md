@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-30 15:39 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/web-be-sync-20261026
+> Cập nhật lần cuối: 2026-10-30 15:45 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/web-be-sync-20261026
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -359,7 +359,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 - Node 22.13 trở lên (`.nvmrc` 22.15.0). `npm ci`, `npm start`, quét mã QR LAN bằng Expo Go. Backend cùng máy với Metro: để trống `EXPO_PUBLIC_API_BASE_URL` như `.env.example`. Backend máy khác, cổng khác hoặc Expo tunnel: cấu hình URL rõ ràng trong env cục bộ không theo dõi; coordinator khởi động lại Metro hiện có khi đổi env. Đăng nhập Google trên Android emulator cần `adb reverse tcp:3000 tcp:3000`.
 - Cài thư viện native bằng `npx expo install`, không eject, không commit `android/` hay `ios/` (đã gitignore). Gọi thoại cần `react-native-webrtc` và `react-native-incall-manager` (plugin `@config-plugins/react-native-webrtc` trong `app.json` khai quyền micro), nén video cần `react-native-compressor` và `react-native-nitro-modules`, nên hai việc này chỉ chạy trên bản build có mã native: `npx expo run:android` sinh `android/` cục bộ rồi cài lên máy hoặc emulator. Expo Go vẫn chạy mọi màn khác (không gọi được, video gửi bản gốc).
-- Gate trước mỗi commit: `npm run check:expo`, `npm run lint`, `npm run typecheck`, `npm test`. CI chạy đúng các bước này.
+- Gate trước mỗi commit: `npm run check:expo`, `npm run lint`, `npm run typecheck`, `npm test`. CI chạy đúng các bước này. `npm test` chạy `jest --ci` rồi script Node `app.config.contract.test.cjs` (hợp đồng cấu hình Google Maps Android lúc build); Jest bỏ qua mọi file `.cjs` vì đó là script độc lập, không phải test Jest.
 - Test radar lifecycle trong `CustomerMatchingScreen.test.tsx` dùng `act` đồng bộ cho focus/AppState, cleanup cả khi mount lỗi và timeout riêng 15 giây cho cold module loading; timeout Jest chung và các assertion giữ nguyên. GitHub Ubuntu sau sửa CHƯA KIỂM CHỨNG.
 - Quy trình nhánh: tách nhánh từ `dev`, PR vào `dev`, CI xanh mới merge; không merge vào `main`.
 - Tính năng mới hoặc sửa tính năng phải làm và kiểm tra trên cả `mobile` lẫn `web` khi vai trò đó có trên cả hai.
@@ -409,6 +409,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-10-30 15:45 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | `npm test` chạy thêm script hợp đồng cấu hình Android Maps; Jest bỏ qua file `.cjs` để không coi script độc lập là suite rỗng trên Jest 30.
 - 2026-10-30 15:39 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Merge origin/dev (cấu hình Google Maps Android, hạn bảo hành) vào nhánh; không đổi hành vi của nhánh.
 - 2026-10-30 14:05 (UTC+7) | foxonworld | foxonworld/fixhome-bug-detector-android-maps-config-m1-20261030 | Ghi cấu hình Google Maps Android lúc EAS build và quy tắc phục hồi ACCEPT qua GET PENDING xác thực, giữ UNKNOWN khi invitation vắng mặt.
 - 2026-10-29 21:45 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Thợ: nút Home và Back giữ màn đơn, Back hai lần về Công việc, mở lại đơn hoặc lượt thì về đúng màn đang giữ; khách: bảng chọn voucher có tab Của tôi, Ưu đãi chung và nhập mã; thêm client API cash-intents (web #184), chưa nối vào màn.
@@ -448,7 +449,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-20 01:57 (UTC+7) | Hgnv11 | fix/activity-split | Hoạt động: số đếm hai tab và các chip lấy từ server (GET /bookings/my/activity-counts), không còn đếm theo số đã tải; mỗi tab chỉ tải dữ liệu của mình
 - 2026-10-20 00:54 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Ví của khách làm lại theo kiểu ví của thợ: thẻ số dư xanh đậm, nút Nạp tiền và Rút tiền, giao dịch dạng thẻ, kéo để làm mới
 - 2026-10-20 00:36 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Thanh tab khách: tab đang chọn là viên xanh nhạt, chỉ nút Đặt lịch xanh đặc có viền
-- 2026-10-19 23:36 (UTC+7) | Hgnv11 | fix/home-catalog-v2 | Hoạt động có hai tab Đơn sửa chữa và Yêu cầu đặt lịch như web, mỗi tab một danh sách và số đếm
 
 ### Lịch sử giữ lại khi tích hợp
 
