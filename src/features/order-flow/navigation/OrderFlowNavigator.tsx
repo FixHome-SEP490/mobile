@@ -17,6 +17,7 @@ import InvoiceDetailScreen from '../shared/InvoiceDetailScreen';
 import ProposalDetailScreen from '../shared/ProposalDetailScreen';
 import PersonalOrderNotesScreen from '../shared/PersonalOrderNotesScreen';
 import ExtraProposalScreen from '../technician/ExtraProposalScreen';
+import DelayReportScreen from '../technician/DelayReportScreen';
 import ExtraWaitingScreen from '../technician/ExtraWaitingScreen';
 import PartsLifecycleScreen from '../technician/PartsLifecycleScreen';
 import AcceptedPartsScreen from '../technician/AcceptedPartsScreen';
@@ -55,6 +56,7 @@ function Screens({ Stack, role, reduceMotion }: { Stack: { Navigator: React.Comp
     {role === 'technician' && <Stack.Screen name="ArrivalCheckIn" component={ArrivalCheckInScreen} />}
     {role === 'technician' && <Stack.Screen name="BeforeCapture" component={BeforeEvidenceScreen} />}
     {role === 'technician' && <Stack.Screen name="PersonalOrderNotes" component={PersonalOrderNotesScreen} />}
+    {role === 'technician' && <Stack.Screen name="DelayReport" component={DelayReportScreen} />}
     {role === 'technician' && <Stack.Screen name="ExtraProposal" component={ExtraProposalScreen} />}
     {role === 'technician' && <Stack.Screen name="ExtraWaiting" component={ExtraWaitingScreen} />}
     {role === 'technician' && <Stack.Screen name="PartsLifecycle" component={PartsLifecycleScreen} />}

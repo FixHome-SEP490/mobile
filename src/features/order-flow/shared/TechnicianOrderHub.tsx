@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import {
-  Camera, ChevronRight, FileText, HandCoins, History, Info, NotebookPen, Package, ReceiptText, Wrench,
+  Camera, ChevronRight, Clock, FileText, HandCoins, History, Info, NotebookPen, Package, ReceiptText, Wrench,
   type LucideIcon,
 } from 'lucide-react-native';
 import { isHistoricalOrder } from '../../../api/orders.api';
@@ -10,9 +10,10 @@ import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { useLoadUnloadedResources } from './useLoadUnloadedResources';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import VisitTechnicianPanel from '../technician/VisitTechnicianPanel';
+import { useReleasableOrders } from '../technician/useReleasableOrders';
 
 type HubScreen = 'PartsLifecycle' | 'OrderInformation' | 'PersonalOrderNotes' | 'OrderProgressHistory'
-  | 'AfterEvidence' | 'CompletionRequest' | 'CashDeclaration' | 'ExtraProposal';
+  | 'AfterEvidence' | 'CompletionRequest' | 'CashDeclaration' | 'ExtraProposal' | 'DelayReport';
 
 const MANAGE: { screen: HubScreen; label: string; Icon: LucideIcon }[] = [
   { screen: 'PartsLifecycle', label: 'Linh kiện', Icon: Package },
@@ -20,6 +21,9 @@ const MANAGE: { screen: HubScreen; label: string; Icon: LucideIcon }[] = [
   { screen: 'PersonalOrderNotes', label: 'Ghi chú riêng trên thiết bị', Icon: NotebookPen },
   { screen: 'OrderProgressHistory', label: 'Xem tiến độ', Icon: History },
 ];
+
+/** Shown only while Backend lists an upcoming order the technician can report late (current job overruns). */
+const NEXT_ORDERS: { screen: HubScreen; label: string; Icon: LucideIcon } = { screen: 'DelayReport', label: 'Báo trễ đơn kế tiếp', Icon: Clock };
 
 /** Only valid while the order is UNDER_REPAIR (backend rejects them earlier). */
 const REPAIR: { screen: HubScreen; label: string; Icon: LucideIcon }[] = [
@@ -89,12 +93,15 @@ export default function TechnicianOrderHub() {
       && ((pr.fulfillmentMethod === 'pickup' && pr.status === 'ready') || (pr.fulfillmentMethod === 'delivery' && pr.status === 'delivering'))).length
     : 0;
   const repairing = order?.status === 'UNDER_REPAIR' && !order.completionRequestedAt;
+  // The report needs photos of this job, which Backend only takes while it is under repair.
+  const nextOrders = useReleasableOrders(key?.userId, !revoked && repairing).items.filter((item) => item.status.currentOrderId === order?.id).length;
   // Cash of a device in a visit is declared once for the whole visit, never on its own.
   const manage = (items: typeof REPAIR) => (order?.visitGroupId ? items.filter(i => i.screen !== 'CashDeclaration') : items);
   const open = (screen: HubScreen) => { if (!revoked) navigation.navigate(screen as never); };
   const render = (items: typeof MANAGE) => items.map((item, i) => (
     <Row key={item.screen} {...item} disabled={revoked} last={i === items.length - 1} onPress={() => open(item.screen)}
-      hint={item.screen === 'PartsLifecycle' && waiting > 0 ? `${waiting} chờ nhận` : undefined} />
+      hint={item.screen === 'PartsLifecycle' && waiting > 0 ? `${waiting} chờ nhận`
+        : item.screen === 'DelayReport' ? `${nextOrders} đơn` : undefined} />
   ));
 
   return (
@@ -105,7 +112,7 @@ export default function TechnicianOrderHub() {
         <View style={styles.card}>{render(manage(REPAIR))}</View>
       </>}
       <Text accessibilityRole="header" style={styles.title}>Quản lý đơn</Text>
-      <View style={styles.card}>{render(MANAGE)}</View>
+      <View style={styles.card}>{render(nextOrders > 0 ? [...MANAGE, NEXT_ORDERS] : MANAGE)}</View>
     </View>
   );
 }

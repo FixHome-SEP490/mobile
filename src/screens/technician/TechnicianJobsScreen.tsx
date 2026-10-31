@@ -52,8 +52,6 @@ import ContactActions from '../../components/ContactActions';
 import { serviceOrderDisplayView } from './technician-status';
 import {
   loadReleasable,
-  releaseConfirmText,
-  releaseErrorText,
   type ReleasableJob,
 } from './technician-overrun-release';
 import { formatVnd } from '../../utils/format';
@@ -84,7 +82,6 @@ export default function TechnicianJobsScreen() {
   const { jobs, loading, refreshing, loadingMoreJobs, error, actionLoading, blockedOrderIds } = jobsState;
   const [checkInBusy, setCheckInBusy] = useState<string | null>(null);
   const [releasable, setReleasable] = useState<{ items: ReleasableJob[]; failed: number; loading: boolean }>({ items: [], failed: 0, loading: true });
-  const [releasingId, setReleasingId] = useState<string | null>(null);
   const releaseSeq = useRef(0);
   const [arrivalStates, setArrivalStates] = useState<Record<string, Exclude<ArrivalVerificationState, 'clear'>>>({});
   const technicianUserId = useAuthStore(technicianJobsUserId);
@@ -198,25 +195,10 @@ export default function TechnicianJobsScreen() {
     if (activeTab === 'overrun' && !loading) void reloadReleasable();
   }, [activeTab, loading, jobsState.jobs, reloadReleasable]);
 
-  const doRelease = async (orderId: string) => {
-    setReleasingId(orderId);
-    try {
-      await ordersApi.releaseForOverrun(orderId);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await loader.refresh(true);
-    } catch (err) {
-      Alert.alert('Không thể nhả đơn', releaseErrorText(err));
-      void reloadReleasable();
-    } finally {
-      setReleasingId(null);
-    }
-  };
-  const handleRelease = ({ job, status }: ReleasableJob) => {
-    const code = job.code || job.id.slice(0, 8);
-    Alert.alert(`Không kịp tới đơn #${code}?`, releaseConfirmText(code, status.currentOrderCode), [
-      { text: 'Quay lại', style: 'cancel' },
-      { text: 'Nhả đơn', style: 'destructive', onPress: () => void doRelease(job.id) },
-    ]);
+  // PO 31/10/2026: the delay report (reason, photos of the job under repair) is made on that job's own screen.
+  const openCurrentJob = ({ status }: ReleasableJob) => {
+    const currentId = status.currentOrderId;
+    if (currentId) openOrResume([currentId], () => navigation.navigate('TechnicianOrderDetail', { serviceOrderId: currentId }));
   };
 
   const onRefresh = () => {
@@ -437,11 +419,11 @@ export default function TechnicianJobsScreen() {
                   <Briefcase size={56} color={colors.muted} strokeWidth={1.5} />
                 )}
                 <Text style={styles.emptyTitle} accessibilityRole="header">
-                  {overrunTab ? 'Chưa có đơn nào cần nhả' : searching ? 'Không tìm thấy mã phù hợp trong phần đã tải' : 'Chưa có công việc nào'}
+                  {overrunTab ? 'Chưa có đơn nào cần báo trễ' : searching ? 'Không tìm thấy mã phù hợp trong phần đã tải' : 'Chưa có công việc nào'}
                 </Text>
                 <Text style={styles.emptyDesc}>
                   {overrunTab
-                    ? 'Bạn chỉ nhả được đơn khi đang làm dở một đơn khác và đơn này sắp tới giờ hẹn. Nhả đơn không bị trừ điểm uy tín.'
+                    ? 'Bạn chỉ báo trễ được khi đang làm dở một đơn khác và đơn này sắp tới giờ hẹn. Báo trễ không bị trừ điểm uy tín.'
                     : searching
                     ? 'Chỉ các công việc đã tải mới được lọc theo mã. Nếu còn trang tiếp theo, chọn “Tải thêm công việc” để kiểm tra thêm.'
                     : emptyNote === 'more-pages'
@@ -461,7 +443,7 @@ export default function TechnicianJobsScreen() {
               </View>
             )}
             {overrunTab && releasable.loading && (
-              <Text style={styles.loadingText}>Đang kiểm tra các đơn có thể nhả…</Text>
+              <Text style={styles.loadingText}>Đang kiểm tra các đơn có thể báo trễ…</Text>
             )}
             {overrunTab && releasable.failed > 0 && (
               <View style={[styles.stateBox, styles.releaseNote, { backgroundColor: colors.tone.warning.bg }]} accessibilityRole="alert">
@@ -475,7 +457,6 @@ export default function TechnicianJobsScreen() {
                 {visibleReleasable.map((item) => {
                   const { job, status } = item;
                   const code = job.code || job.id.slice(0, 8);
-                  const busy = releasingId === job.id;
                   return (
                     <View key={job.id} style={styles.jobCard}>
                       <View style={styles.info}>
@@ -497,27 +478,21 @@ export default function TechnicianJobsScreen() {
                           </View>
                         )}
                         <Text style={styles.jobMeta}>
-                          {status.currentOrderCode ? `Bạn đang làm đơn #${status.currentOrderCode}. ` : ''}Nhả đơn không bị trừ điểm uy tín.
+                          {status.currentOrderCode ? `Bạn đang làm đơn #${status.currentOrderCode}. ` : ''}Mở đơn đó để báo trễ kèm lý do và ảnh bằng chứng.
                         </Text>
                       </View>
                       <View style={styles.actionsRow}>
                         <TouchableOpacity
                           style={[styles.actionBtn, { backgroundColor: colors.tone.warning.text }]}
-                          onPress={() => handleRelease(item)}
-                          disabled={releasingId !== null}
+                          onPress={() => openCurrentJob(item)}
+                          disabled={!status.currentOrderId}
                           activeOpacity={0.85}
                           hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
                           accessibilityRole="button"
-                          accessibilityLabel={`Không kịp tới đơn ${code}`}
+                          accessibilityLabel={`Báo trễ đơn ${code}`}
                         >
-                          {busy ? (
-                            <ActivityIndicator size="small" color={colors.surface} />
-                          ) : (
-                            <>
-                              <AlertTriangle size={18} color={colors.surface} strokeWidth={1.75} />
-                              <Text style={styles.actionBtnText}>Không kịp tới</Text>
-                            </>
-                          )}
+                          <AlertTriangle size={18} color={colors.surface} strokeWidth={1.75} />
+                          <Text style={styles.actionBtnText}>Báo trễ tại đơn đang làm</Text>
                         </TouchableOpacity>
                       </View>
                     </View>

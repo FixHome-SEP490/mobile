@@ -44,7 +44,9 @@ import AfterEvidenceScreen from '../technician/AfterEvidenceScreen';
 import CompletionRequestScreen from '../technician/CompletionRequestScreen';
 import CashDeclarationScreen from '../technician/CashDeclarationScreen';
 import { getRestoredExtraRecovery, getRestoredPartsRecovery } from '../domain/extra-and-parts-recovery';
-import { ReadOnlyNotice, TaskScreenShell } from './TaskScreenShell';
+import { DetailRow, ReadOnlyNotice, Section, TaskScreenShell } from './TaskScreenShell';
+import { serviceOrderStatusView } from '../../../screens/technician/technician-status';
+import { vnDateTimeString } from '../../../utils/vn-time';
 import { goHome } from '../../../components/BackButton';
 
 type M6RecoveryTarget = 'payment' | 'after-evidence' | 'completion-request' | 'cash-declare';
@@ -145,6 +147,31 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
       navigation.setParams({ taskId: transition.taskId });
     }
   }, [navigation, resolution, resolutionTaskId, snapshot, route.name, route.params?.taskId]);
+
+  // The order is no longer the technician's (cancelled by the customer, replaced, released): say so, instead of waiting forever for data that will never come.
+  const gone = role === 'technician' && snapshot?.access === 'historical' && snapshot.order.status === 'ready' && isHistoricalOrder(snapshot.order.data) ? snapshot.order.data : null;
+  if (gone) {
+    const cancelled = gone.status === 'CANCELLED';
+    return (
+      <TaskScreenShell
+        title={cancelled ? 'Đơn đã hủy' : 'Đơn không còn thuộc về bạn'}
+        stage={null}
+        onBack={() => backFromFlow(navigation)}
+        primary={{ label: 'Quay lại', testID: 'task-go-back', onPress: () => backFromFlow(navigation) }}
+      >
+        <ReadOnlyNotice tone={cancelled ? 'warning' : 'info'}>
+          {cancelled ? `Đơn #${gone.code} đã bị hủy nên không còn bước nào cần bạn làm.` : `Đơn #${gone.code} không còn do bạn phụ trách.`}
+        </ReadOnlyNotice>
+        <Section title="Thông tin đơn">
+          <DetailRow label="Mã đơn" value={gone.code} />
+          <DetailRow label="Trạng thái" value={serviceOrderStatusView(gone.status).label} />
+          <DetailRow label="Tạo lúc" value={vnDateTimeString(gone.createdAt)} />
+          {!!gone.cancelledAt && <DetailRow label="Hủy lúc" value={vnDateTimeString(gone.cancelledAt)} />}
+          {!!gone.completedAt && <DetailRow label="Hoàn thành lúc" value={vnDateTimeString(gone.completedAt)} />}
+        </Section>
+      </TaskScreenShell>
+    );
+  }
 
   if (!snapshot || snapshot.access !== 'current' || (snapshot.order.status !== 'ready' && !(hold && lastTask)) || !resolution) {
     // A failed read must not look like endless loading: say so and offer a read-only retry.

@@ -23,6 +23,16 @@ export function visitStatusView(status: string): { label: string; tone: ToneName
   return VISIT_STATUS[status as VisitGroupReadStatus] ?? UNKNOWN_VISIT_STATUS;
 }
 
+/**
+ * What a visit row shows. Backend keeps a visit `under_repair` until it is paid, but once every device has been handed over
+ * (`completionRequestedAt`) the work is done and only the payment is awaited, as for a single order.
+ * `orders` must be every device's order that is still live; with none, or one not yet handed over, the server label stands.
+ */
+export function visitDisplayView(status: string, orders: readonly { completionRequestedAt?: string | null }[]): { label: string; tone: ToneName } {
+  if (status === 'under_repair' && orders.length > 0 && orders.every((o) => !!o.completionRequestedAt)) return { label: 'Chờ thanh toán', tone: 'warning' };
+  return visitStatusView(status);
+}
+
 export const VISIT_DEVICE_STATE_LABEL: Record<VisitDeviceState, string> = {
   succeeded: 'Đã sửa xong',
   failed: 'Không sửa được, không tính tiền sửa',

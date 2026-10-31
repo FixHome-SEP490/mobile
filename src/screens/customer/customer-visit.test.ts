@@ -5,6 +5,7 @@ import {
   resolveVisitCheckoutState,
   visitActions,
   visitDeviceStatusText,
+  visitDisplayView,
   visitGrandTotal,
   visitPayMethods,
   visitStatusView,
@@ -139,5 +140,21 @@ describe('visitGrandTotal', () => {
   it('is what is still due before payment, and the repaired devices once paid (the server total is then 0)', () => {
     expect(visitGrandTotal({ paid: false, total: 579000, devices })).toBe(579000);
     expect(visitGrandTotal({ paid: true, total: 0, devices })).toBe(579000);
+  });
+});
+
+describe('visitDisplayView', () => {
+  const handed = { completionRequestedAt: '2026-10-29T13:20:00.000Z' };
+  it('shows "Chờ thanh toán" once every live device is handed over but the visit is not paid', () => {
+    expect(visitDisplayView('under_repair', [handed, handed])).toEqual({ label: 'Chờ thanh toán', tone: 'warning' });
+  });
+  it('keeps "Đang sửa chữa" while any device is still being repaired, or when no device order is known', () => {
+    expect(visitDisplayView('under_repair', [handed, {}])).toEqual({ label: 'Đang sửa chữa', tone: 'repair' });
+    expect(visitDisplayView('under_repair', [handed, { completionRequestedAt: null }]).label).toBe('Đang sửa chữa');
+    expect(visitDisplayView('under_repair', []).label).toBe('Đang sửa chữa');
+  });
+  it('leaves every other status to the server', () => {
+    expect(visitDisplayView('completed', [handed, handed]).label).toBe('Hoàn thành');
+    expect(visitDisplayView('en_route', [handed]).label).toBe('Đang di chuyển');
   });
 });

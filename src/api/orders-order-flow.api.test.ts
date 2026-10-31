@@ -45,13 +45,34 @@ it('invoice and cash null remain null', async () => {
   expect(await ordersApi.getInvoice('o')).toBeNull();
   expect(await ordersApi.getCashSettlement('o')).toBeNull();
 });
-it('overrun release reads the eligibility and posts without a body to the same route', async () => {
-  api.get.mockResolvedValue({ data: { data: { eligible: true, block: null, currentOrderCode: 'C1', windowMinutes: 180 } } });
-  expect(await ordersApi.overrunReleaseStatus('o')).toEqual({ eligible: true, block: null, currentOrderCode: 'C1', windowMinutes: 180 });
+const report = { reasonCode: 'new_fault_found' as const, reason: 'Phát sinh lỗi thêm cần thay linh kiện', evidenceIds: ['e1'], confirm: true as const };
+it('reads whether the next order can be reported late, with the job the technician is on', async () => {
+  const status = { eligible: true, block: null, currentOrderCode: 'C1', currentOrderId: 'c1', currentOrderStatus: 'under_repair', windowMinutes: 180,
+    delayNotice: { minutes: 60, noticedAt: '2026-10-31T03:00:00Z', decision: null, reasonCode: 'new_fault_found' } };
+  api.get.mockResolvedValue({ data: { data: status } });
+  expect(await ordersApi.overrunReleaseStatus('o')).toEqual(status);
   expect(api.get).toHaveBeenCalledWith('/service-orders/o/overrun-release');
   api.get.mockResolvedValue({ data: { data: null } });
   expect((await ordersApi.overrunReleaseStatus('o')).eligible).toBe(false);
-  api.post.mockResolvedValue({ data: { data: { currentOrderCode: 'C1' } } });
-  expect(await ordersApi.releaseForOverrun('o')).toEqual({ currentOrderCode: 'C1' });
-  expect(api.post).toHaveBeenCalledWith('/service-orders/o/overrun-release', {});
+});
+it('delay notice and the customer decision post to their own routes', async () => {
+  api.post.mockResolvedValue({ data: { data: { id: 'o' } } });
+  await ordersApi.sendDelayNotice('o', { ...report, delayMinutes: 60 });
+  expect(api.post).toHaveBeenLastCalledWith('/service-orders/o/delay-notice', { ...report, delayMinutes: 60 });
+  await ordersApi.decideDelay('o', 'switch');
+  expect(api.post).toHaveBeenLastCalledWith('/service-orders/o/delay-decision', { decision: 'switch' });
+});
+it('an ADDITIONAL photo upload returns the evidence id and refuses a reply without one', async () => {
+  api.post.mockResolvedValue({ data: { data: { id: 'ev-1' } } });
+  expect(await ordersApi.uploadEvidenceAdditional('o', { uri: 'file:///a.jpg', name: 'a.jpg', type: 'image/jpeg' })).toEqual({ id: 'ev-1' });
+  expect(api.post.mock.calls.at(-1)![0]).toBe('/service-orders/o/evidence');
+  api.post.mockResolvedValue({ data: { data: {} } });
+  await expect(ordersApi.uploadEvidenceAdditional('o', { uri: 'file:///a.jpg', name: 'a.jpg', type: 'image/jpeg' })).rejects.toThrow('ảnh');
+});
+it('asks Backend to filter the technician list by status before it builds each order', async () => {
+  api.get.mockResolvedValue({ data: { data: [] } });
+  await ordersApi.getTechnicianJobs({ excludeVisitGroups: true, statuses: ['accepted', 'en_route'] });
+  expect(api.get).toHaveBeenLastCalledWith('/service-orders/my', { params: { excludeVisitGroups: 'true', statuses: 'accepted,en_route' } });
+  await ordersApi.getTechnicianJobs({ excludeVisitGroups: true });
+  expect(api.get).toHaveBeenLastCalledWith('/service-orders/my', { params: { excludeVisitGroups: 'true' } });
 });

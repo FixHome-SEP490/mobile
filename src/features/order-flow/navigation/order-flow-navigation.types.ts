@@ -32,6 +32,8 @@ export type TechnicianOrderFlowParamList = Omit<CustomerOrderFlowParamList, 'Ord
    */
   BeforeCapture: undefined;
   PersonalOrderNotes: undefined;
+  /** The technician tells the customer of the next order that it will be late; the customer decides. */
+  DelayReport: undefined;
   ExtraProposal: { proposalId?: string; costId?: string; capturedAfter?: boolean } | undefined;
   ExtraWaiting: undefined;
   PartsLifecycle: undefined;

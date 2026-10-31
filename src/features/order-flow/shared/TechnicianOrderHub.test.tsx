@@ -11,6 +11,8 @@ const mockLoadResource = jest.fn();
 jest.mock('../runtime/OrderSessionProvider', () => ({
   useOrderSession: () => ({ key: mockSnapshot.key, snapshot: mockSnapshot, loadResource: mockLoadResource }),
 }));
+let mockNextOrders: unknown[] = [];
+jest.mock('../technician/useReleasableOrders', () => ({ useReleasableOrders: () => ({ items: mockNextOrders, loading: false, reload: jest.fn() }) }));
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: mockNavigate }) }));
 
 function snapshotWith(status: string, parts: unknown[]): OrderSessionSnapshot {
@@ -24,7 +26,17 @@ function snapshotWith(status: string, parts: unknown[]): OrderSessionSnapshot {
 const part = (fulfillmentMethod: string, status: string) => ({ id: `${fulfillmentMethod}-${status}`, serviceOrderId: 'order-1', technicianId: 'tech-1', fulfillmentMethod, status });
 const render = async () => { let r!: ReturnType<typeof create>; await act(async () => { r = create(<TechnicianOrderHub />); }); return r; };
 
-beforeEach(() => mockNavigate.mockClear());
+beforeEach(() => { mockNavigate.mockClear(); mockNextOrders = []; });
+
+it('lists the delay-report page only while Backend has a next order to report late, and opens it', async () => {
+  mockSnapshot = snapshotWith('UNDER_REPAIR', []);
+  expect((await render()).root.findAllByProps({ testID: 'task-link-DelayReport' })).toHaveLength(0);
+  mockNextOrders = [{ job: { id: 'o-2' }, status: { currentOrderId: 'order-1' } }, { job: { id: 'o-3' }, status: { currentOrderId: 'another-job' } }];
+  const r = await render();
+  expect(JSON.stringify(r.toJSON())).toMatch(/1 đơn/);
+  await act(async () => r.root.findByProps({ testID: 'task-link-DelayReport' }).props.onPress());
+  expect(mockNavigate).toHaveBeenCalledWith('DelayReport');
+});
 
 it('counts only parts the technician can receive now and opens the parts screen', async () => {
   mockSnapshot = snapshotWith('EN_ROUTE', [part('delivery', 'delivering'), part('pickup', 'ready'), part('pickup', 'requested'), part('delivery', 'received')]);
