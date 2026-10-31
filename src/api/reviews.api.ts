@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { useAuthStore } from '../store/auth.store';
 
 export interface TechnicianReview {
   id: string;
@@ -17,13 +18,18 @@ export interface TechnicianReviewsPage {
 }
 
 export const reviewsApi = {
-  /** The signed-in technician's own reviews (identity comes from the token, never from the client). */
+  /** The signed-in technician's own reviews: the existing public route with the session's own user id (the Backend has no /me variant). */
   async getMine(page = 1, pageSize = 20): Promise<TechnicianReviewsPage> {
-    const res = await apiClient.get<{ data?: TechnicianReview[]; meta?: { total?: number } }>(
-      '/technicians/me/reviews',
+    const userId = useAuthStore.getState().user?.id;
+    if (!userId) throw new Error('No signed-in technician');
+    const res = await apiClient.get<{ data?: Partial<TechnicianReview>[]; meta?: { total?: number } }>(
+      `/technicians/${userId}/reviews`,
       { params: { page, pageSize } },
     );
-    const rows = Array.isArray(res.data?.data) ? res.data.data : [];
+    // The public route has no order code or service name; the screen skips an empty order line.
+    const rows = (Array.isArray(res.data?.data) ? res.data.data : []).map((r) => ({
+      ...r, orderCode: r.orderCode ?? '', serviceName: r.serviceName ?? '', customerName: r.customerName ?? 'Khách hàng FixHome',
+    })) as TechnicianReview[];
     const total = typeof res.data?.meta?.total === 'number' ? res.data.meta.total : rows.length;
     return { data: rows, total };
   },
