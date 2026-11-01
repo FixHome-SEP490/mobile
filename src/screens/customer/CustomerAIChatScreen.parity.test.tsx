@@ -18,10 +18,11 @@ const mockPick = jest.fn();
 const mockJpeg = jest.fn();
 const mockUploadPhoto = jest.fn();
 const mockUploadVideo = jest.fn();
+let mockRouteParams: unknown;
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }),
-  useRoute: () => ({ params: undefined }),
+  useRoute: () => ({ params: mockRouteParams }),
 }));
 jest.mock('react-native-safe-area-context', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -160,7 +161,7 @@ describe('CustomerAIChatScreen parity with the web', () => {
       expect(byTestId(tree, 'ai-video-note').length).toBeGreaterThan(0);
       // Without a compressor the original goes, with the type the file name tells.
       expect(mockUploadVideo).toHaveBeenCalledWith({ uri: VIDEO.uri, name: VIDEO.name, type: 'video/quicktime' }, expect.objectContaining({ signal: expect.anything() }));
-      expect(texts(tree)).toContain('Video đã gửi kèm cho thợ');
+      expect(texts(tree)).not.toContain('Video đã gửi kèm cho thợ');
     } finally {
       alert.mockRestore();
       act(() => tree.unmount());
@@ -223,6 +224,23 @@ describe('CustomerAIChatScreen parity with the web', () => {
     } finally { act(() => tree.unmount()); }
   });
 
+  it('uploads the photos handed over from the description step and books with them', async () => {
+    mockRouteParams = { initialDescription: 'Vòi rửa chén rỉ nước', initialImages: ['data:image/jpeg;base64,AAAA'] };
+    const tree = await mountScreen();
+    try {
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 950)); });
+      expect(mockJpeg).toHaveBeenCalledWith('data:image/jpeg;base64,AAAA');
+      expect(mockUploadPhoto).toHaveBeenCalledTimes(1);
+      await act(async () => { button(tree, BOOK)?.props.onPress(); });
+      expect(mockNavigate).toHaveBeenCalledWith('CustomerBookingCreate', {
+        prefill: expect.objectContaining({ attachmentUploadIds: [expect.objectContaining({ uploadId: 'upload-photo-1', kind: 'image' })] }),
+      });
+    } finally {
+      mockRouteParams = undefined;
+      act(() => tree.unmount());
+    }
+  });
+
   it('books with what already went up, uploading nothing again', async () => {
     const alert = answerAlerts();
     mockPick.mockResolvedValueOnce({ images: [{ uri: 'file:///photo.heic', dataUri: 'data:image/jpeg;base64,AAAA' }] });
@@ -235,14 +253,14 @@ describe('CustomerAIChatScreen parity with the web', () => {
       expect(mockAnalyze.mock.calls[0][0].images).toEqual(['data:image/jpeg;base64,AAAA']);
       expect(mockJpeg).toHaveBeenCalledWith('file:///photo.heic');
       expect(mockUploadPhoto).toHaveBeenCalledWith({ uri: 'file:///photo.heic.jpg', name: 'tro-ly.jpg', type: 'image/jpeg' }, expect.anything());
-      expect(texts(tree)).toEqual(expect.arrayContaining(['Ảnh đã gửi kèm cho thợ', 'Video đã gửi kèm cho thợ']));
+      expect(texts(tree)).not.toEqual(expect.arrayContaining(['Ảnh đã gửi kèm cho thợ']));
 
       await act(async () => { button(tree, BOOK)?.props.onPress(); });
       expect(mockNavigate).toHaveBeenCalledWith('CustomerBookingCreate', {
         prefill: {
           serviceId: 'service-1', serviceCode: 'SUA_VOI_NUOC', serviceName: 'Sửa vòi nước',
           description: 'Vòi rửa chén rỉ nước', aiSessionId: 'session-1',
-          attachmentUploadIds: [{ uploadId: 'upload-photo-1', kind: 'image' }, { uploadId: 'upload-video-1', kind: 'video' }],
+          attachmentUploadIds: [expect.objectContaining({ uploadId: 'upload-photo-1', kind: 'image' }), expect.objectContaining({ uploadId: 'upload-video-1', kind: 'video' })],
         },
       });
       await act(async () => { button(tree, BOOK)?.props.onPress(); });
@@ -295,9 +313,9 @@ describe('CustomerAIChatScreen parity with the web', () => {
 
       await act(async () => { button(tree, 'Gửi lại tệp này')?.props.onPress(); });
       await settle();
-      expect(texts(tree)).toContain('Video đã gửi kèm cho thợ');
+      expect(texts(tree)).not.toContain('Video đã gửi kèm cho thợ');
       await act(async () => { button(tree, BOOK)?.props.onPress(); });
-      expect(mockNavigate.mock.calls[0][1].prefill.attachmentUploadIds).toEqual([{ uploadId: 'upload-video-1', kind: 'video' }]);
+      expect(mockNavigate.mock.calls[0][1].prefill.attachmentUploadIds).toEqual([expect.objectContaining({ uploadId: 'upload-video-1', kind: 'video' })]);
     } finally {
       alert.mockRestore();
       act(() => tree.unmount());

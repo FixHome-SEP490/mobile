@@ -106,8 +106,8 @@ export class ChatUploadQueue {
   }
 
   /** What reached the server, for the booking. */
-  uploadIds(): { uploadId: string; kind: 'image' | 'video' }[] {
-    const done = this.items.flatMap((item) => (item.sent && item.state === 'done' && item.uploadId ? [{ uploadId: item.uploadId, kind: item.kind }] : []));
+  uploadIds(): { uploadId: string; kind: 'image' | 'video'; previewUri?: string }[] {
+    const done = this.items.flatMap((item) => (item.sent && item.state === 'done' && item.uploadId ? [{ uploadId: item.uploadId, kind: item.kind, previewUri: item.uri }] : []));
     // Photos first, then videos, as the booking form lists them.
     return [...done.filter((item) => item.kind === 'image'), ...done.filter((item) => item.kind === 'video')];
   }

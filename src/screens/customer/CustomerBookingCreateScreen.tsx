@@ -114,6 +114,13 @@ const MAX_BOOKING_PHOTOS = 5;
 const MAX_BOOKING_PHOTO_BYTES = 10 * 1024 * 1024;
 const BOOKING_PHOTO_TTL_MS = 2 * 60 * 60 * 1000;
 
+/** The assistant chat's photos go into the photo grid itself (already uploaded); its videos stay a note. */
+const chatPhotoDrafts = (items: ChatAttachmentId[] = []): BookingPhotoDraft[] =>
+  items.filter((a) => a.kind === 'image' && a.previewUri).map((a) => ({
+    uri: a.previewUri!, name: 'tro-ly.jpg', type: 'image/jpeg' as const, uploadId: a.uploadId, uploadExpiresAt: Date.now() + BOOKING_PHOTO_TTL_MS,
+  }));
+const chatNotes = (items: ChatAttachmentId[] = []) => items.filter((a) => !(a.kind === 'image' && a.previewUri));
+
 interface BookingPhotoDraft extends BookingPhotoPreview {
   assetId?: string;
   uploadId?: string;
@@ -216,8 +223,8 @@ export default function CustomerBookingCreateScreen() {
     setDeviceState((d) => ({ ...(d.serviceId === serviceId ? d : { serviceId, attrs: {}, code: null, preview: null }), ...patch }));
   const [addressId, setAddressId] = useState('');
   const [description, setDescription] = useState(prefill?.description ?? '');
-  const [bookingPhotos, setBookingPhotos] = useState<BookingPhotoDraft[]>([]);
-  const bookingPhotosRef = useRef<BookingPhotoDraft[]>([]);
+  const [bookingPhotos, setBookingPhotos] = useState<BookingPhotoDraft[]>(() => chatPhotoDrafts(prefill?.attachmentUploadIds));
+  const bookingPhotosRef = useRef<BookingPhotoDraft[]>(chatPhotoDrafts(prefill?.attachmentUploadIds));
   const uncertainPhotoUrisByOwnerRef = useRef(runtimeUncertainPhotoUris);
   const [photoUploadError, setPhotoUploadError] = useState('');
   const [uploadingPhotoUri, setUploadingPhotoUri] = useState<string | null>(null);
@@ -225,7 +232,7 @@ export default function CustomerBookingCreateScreen() {
   const [schedule, setSchedule] = useState<BookingSchedule | null>(null);
   const [customerNote, setCustomerNote] = useState('');
   /** Photos and videos the customer sent the assistant, already uploaded, for the technician (PO 18/10/2026). */
-  const [chatAttachments, setChatAttachments] = useState<ChatAttachmentId[]>(() => prefill?.attachmentUploadIds ?? []);
+  const [chatAttachments, setChatAttachments] = useState<ChatAttachmentId[]>(() => chatNotes(prefill?.attachmentUploadIds));
   // Keep one owner-bound draft while moving between dedicated booking scenes.
   const [bookingStage, setBookingStage] = useState<0 | 1>(() =>
     customerOwnerId && (runtimeCreateStates[customerOwnerId]?.flowId === flowId
@@ -359,9 +366,10 @@ export default function CustomerBookingCreateScreen() {
     setAddressId('');
     setDescription(sameOwner ? prefill?.description ?? '' : '');
     // Uploaded by the customer who chatted; anyone else signing in starts without them.
-    setChatAttachments(sameOwner ? prefill?.attachmentUploadIds ?? [] : []);
-    bookingPhotosRef.current = [];
-    setBookingPhotos([]);
+    setChatAttachments(sameOwner ? chatNotes(prefill?.attachmentUploadIds) : []);
+    const chatPhotos = sameOwner ? chatPhotoDrafts(prefill?.attachmentUploadIds) : [];
+    bookingPhotosRef.current = chatPhotos;
+    setBookingPhotos(chatPhotos);
     setPhotoUploadError('');
     setUploadingPhotoUri(null);
     setDescriptionTouched(false);
@@ -524,7 +532,9 @@ export default function CustomerBookingCreateScreen() {
   const selectedAddress =
     addresses.find((address) => address.id === addressId) ?? null;
   const selectedAddressReady = addressReadyForBooking(selectedAddress);
-  const isAiFlow = Boolean(prefill?.aiSessionId);
+  // Several appliances from the assistant go through the device tabs like a normal visit, so the service facts are asked as usual.
+  const aiDevices = prefill?.devices ?? [];
+  const isAiFlow = Boolean(prefill?.aiSessionId) && aiDevices.length < 2;
   const showDeviceDetails = !isAiFlow && !!selectedService && isCatalogV2ServiceCode(selectedService.code);
   const pricingReady = isCatalogV2PreviewReady({
     service: selectedService, preview: device.preview, selectedVariantCode: device.code, isAiFlow,
@@ -563,6 +573,20 @@ export default function CustomerBookingCreateScreen() {
 
 
   const tabsOn = multiDeviceEnabled && !isAiFlow;
+  // Máy 2 and 3 of the assistant's list become tabs once the catalogue is in; Máy 1's photos fill the form.
+  const aiDevicesLoadedFor = useRef('');
+  useEffect(() => {
+    if (aiDevices.length < 2 || !multiDeviceEnabled || services.length === 0 || aiDevicesLoadedFor.current === flowId) return;
+    aiDevicesLoadedFor.current = flowId;
+    const draft = (x: (typeof aiDevices)[number]) => (x.photos ?? []).slice(0, 5).map((p) => ({ uri: p.uri, name: p.name, type: p.type, uploadId: p.uploadId }));
+    const rest: VisitDeviceDraft[] = aiDevices.slice(1, deviceLimit).flatMap((x, i) => {
+      const svc = services.find((s) => s.id === x.serviceId);
+      return svc ? [{ key: `ai-${i}`, serviceId: svc.id, serviceName: svc.name, priceSummary: svc.priceSummary ?? null, serviceCode: svc.code, description: x.description, photos: draft(x) }] : [];
+    });
+    updateBookingPhotos(draft(aiDevices[0]));
+    setExtras(rest);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiDevices.length, multiDeviceEnabled, services, flowId, deviceLimit]);
   const onMain = activeTab === 'main' || !extras.some((d) => d.key === activeTab);
   const activeExtra = onMain ? null : extras.find((d) => d.key === activeTab) ?? null;
   const pickerSelectedId = pickerTarget === 'main' ? serviceId : extras.find((d) => d.key === pickerTarget)?.serviceId ?? '';
@@ -604,7 +628,7 @@ export default function CustomerBookingCreateScreen() {
   const visitDevices = (): VisitDeviceDraft[] => [
     ...(selectedService ? [{
       key: 'main', serviceId: selectedService.id, serviceName: selectedService.name, priceSummary: selectedService.priceSummary ?? null, description,
-      photos: bookingPhotos.map((p) => ({ uri: p.uri, name: p.name, type: p.type, assetId: p.assetId, sizeBytes: p.sizeBytes })),
+      photos: bookingPhotos.map((p) => ({ uri: p.uri, name: p.name, type: p.type, assetId: p.assetId, sizeBytes: p.sizeBytes, uploadId: p.uploadId })),
       ...(showDeviceDetails ? { deviceAttributes: device.attrs, selectedVariantCode: device.code } : {}),
     }] : []),
     ...extras,
@@ -1125,7 +1149,7 @@ export default function CustomerBookingCreateScreen() {
     setVisitBusy(true); setReviewError('');
     try {
       const visit = await sendVisit({
-        devices: visitDevices(), addressId: selectedAddress.id, schedule, note: customerNote, idempotencyKey: visitKey.current,
+        devices: visitDevices(), addressId: selectedAddress.id, schedule, note: customerNote, idempotencyKey: visitKey.current, aiSessionId: prefill?.aiSessionId,
         onUploaded: (uploaded) => setExtras(uploaded.filter((d) => d.key !== 'main')),
       });
       // Like a single booking: Home underneath, then the technician list for the whole visit.
@@ -1620,11 +1644,6 @@ export default function CustomerBookingCreateScreen() {
                         Đang tải ảnh...
                       </Text>
                     )}
-                    {photo.uploadId && !photo.uploadUncertain && (
-                      <Text style={[styles.photoStatus, { color: colors.success }]}>
-                        Ảnh đã sẵn sàng
-                      </Text>
-                    )}
                     {photo.uploadUncertain && (
                       <Text style={[styles.photoStatus, { color: colors.error }]}>
                         Chưa xác nhận lượt tải
@@ -2108,7 +2127,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   photoError: { fontSize: 13, lineHeight: 19 },
-  chatAttachments: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12 },
+  chatAttachments: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12 },
   action: { padding: 15, marginTop: 0, borderRadius: 14, alignItems: 'center', justifyContent: 'center', minHeight: 52 },
   actionText: { fontWeight: '700', fontSize: 15, lineHeight: 22 },
   pickerHeader: { paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, gap: 8 },

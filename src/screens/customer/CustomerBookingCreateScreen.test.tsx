@@ -879,6 +879,26 @@ it('sends the photos and videos from the assistant chat after the booking photos
   }
 });
 
+it('puts the assistant chat photos in the photo grid, counted and sent without uploading again', async () => {
+  const prefill = mockRoute.params.prefill as Record<string, unknown>;
+  prefill.attachmentUploadIds = [{ uploadId: 'chat-photo-1', kind: 'image', previewUri: 'file:///chat-1.jpg' }];
+  try {
+    const renderer = await renderScreen();
+    expect(renderer.root.findAll((n) => (n.props.source as { uri?: string } | undefined)?.uri === 'file:///chat-1.jpg').length).toBeGreaterThan(0);
+    expect(textContent(renderer.root)).toContain('Thêm ảnh (1/5)');
+    expect(textContent(renderer.root)).not.toContain('Gửi kèm từ trò chuyện với trợ lý');
+    await act(async () => {
+      (findDescriptionInput(renderer)!.props.onChangeText as (value: string) => void)('Máy lạnh chảy nước');
+    });
+    await openAndConfirmReview(renderer);
+    expect(mockUploadBookingPhoto).not.toHaveBeenCalled();
+    expect(mockCreateBooking).toHaveBeenCalledWith(expect.objectContaining({ photoUploadIds: ['chat-photo-1'] }));
+    await act(async () => renderer.unmount());
+  } finally {
+    delete prefill.attachmentUploadIds;
+  }
+});
+
 it('lets the customer leave out what the assistant chat carried over', async () => {
   const prefill = mockRoute.params.prefill as Record<string, unknown>;
   prefill.attachmentUploadIds = [{ uploadId: 'chat-video-1', kind: 'video' }];
@@ -1577,6 +1597,25 @@ describe('changing the service of a device of a multi-device visit (pencil on it
     expect(cardLabel(renderer, 2)).not.toContain('Sửa máy giặt');
     expect(cardLabel(renderer, 1)).toContain('Sửa máy lạnh');
     await act(async () => renderer.unmount());
+  });
+  it('opens the assistant appliances as device tabs, each with its service, words and uploaded photos', async () => {
+    mockVisitContact.mockResolvedValue({ enabled: true, deviceLimit: 3, hotline: null });
+    mockGetServices.mockResolvedValue({ data: [service, washerRepair, washerClean], total: 3 });
+    const prefill = mockRoute.params.prefill as Record<string, unknown>;
+    const photo = { uploadId: 'chat-1', uri: 'file:///w.jpg', name: 'tro-ly.jpg', type: 'image/jpeg' };
+    Object.assign(prefill, {
+      aiSessionId: 'session-1',
+      devices: [{ serviceId: SERVICE_ID, description: 'Máy lạnh chảy nước' }, { serviceId: washerRepair.id, description: 'Máy giặt không vắt', photos: [photo] }],
+    });
+    try {
+      const renderer = await renderScreen();
+      expect(cardLabel(renderer, 1)).toContain('Sửa máy lạnh');
+      expect(cardLabel(renderer, 2)).toContain('Sửa máy giặt');
+      await act(async () => renderer.unmount());
+    } finally {
+      delete prefill.aiSessionId;
+      delete prefill.devices;
+    }
   });
   it('replaces the first device with the service picked, and leaves the second one alone', async () => {
     const renderer = await withTwoDevices();

@@ -162,6 +162,8 @@ export function videoMimeType(uri: string, reported?: string | null): string {
 export interface ChatAttachmentId {
   uploadId: string;
   kind: 'image' | 'video';
+  /** Where the customer can see it (the booking form shows the photos); not sent anywhere. */
+  previewUri?: string;
 }
 
 /** The booking takes at most two videos beside its five photos, as the server allows. */

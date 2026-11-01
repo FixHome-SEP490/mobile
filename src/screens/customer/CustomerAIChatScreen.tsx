@@ -410,9 +410,18 @@ export default function CustomerAIChatScreen() {
     // The rule cannot see that this is async: awaitReply opens with an await,
     // so every setState inside it runs a microtask later, not during this
     // effect. The ref above is what actually prevents it running twice.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void awaitReply(text, handedOver, false);
-  }, [awaitReply, handover]);
+    // They have no file, but go up like the chat's own photos (the data URI is converted to a JPEG file first),
+    // so "Đặt thợ" can attach them for the technician. State is set after the awaits inside `startHandover`.
+    void (async () => {
+      const sent = images.map((dataUri) => queue.addSentImage({ uri: dataUri }));
+      await Promise.resolve();
+      if (sent.length) {
+        const ids = sent.map((item) => item.id);
+        setMessages((prev) => prev.map((m, i) => (i === prev.findIndex((x) => x.sender === 'user') ? { ...m, imageUploads: ids, uploadIds: ids } : m)));
+      }
+      await awaitReply(text, handedOver, false);
+    })();
+  }, [awaitReply, handover, queue]);
 
   // -------------------------------------------------------------- images
 
@@ -546,15 +555,14 @@ export default function CustomerAIChatScreen() {
       const u = uploadsById.get(id);
       return u && { uploadId: u.uploadId, uri: u.uri, done: u.state === 'done' };
     });
-    navigation.navigate('CustomerVisitCreate', {
-      prefill: {
-        aiSessionId: sessionId.current ?? undefined,
-        devices: pinnedDevices.map((d) => ({
-          serviceId: d.service!.serviceId!,
-          description: d.descriptionVi?.trim() || lastCustomerWords.current,
-          photos: photos.get(d.deviceType) ?? [],
-        })),
-      },
+    const devices = pinnedDevices.map((d) => ({
+      serviceId: d.service!.serviceId!,
+      description: d.descriptionVi?.trim() || lastCustomerWords.current,
+      photos: photos.get(d.deviceType) ?? [],
+    }));
+    // The booking form's device tabs take them: Máy 1 is the form, the others are its tabs.
+    navigation.navigate('CustomerBookingCreate', {
+      prefill: { serviceId: devices[0].serviceId, description: devices[0].description, aiSessionId: sessionId.current ?? undefined, devices },
     });
   }, [navigation, pinnedDevices, messages, uploadsById]);
 
@@ -642,9 +650,10 @@ export default function CustomerAIChatScreen() {
             </View>
             {sentVideosOf(item).length > 0 && <Text style={styles.videoNote} testID="ai-video-note">{VIDEO_NOT_ANALYSED}</Text>}
             {/* PO 18/10/2026: what goes with the booking is sent now, in the background; each says how far it is. */}
-            {attachmentsOf(item).length > 0 && (
+            {/* A finished upload says nothing; only what is still on its way, or failed, is shown. */}
+            {attachmentsOf(item).some((upload) => upload.state !== 'done') && (
               <View style={styles.uploadList} testID="ai-attachment-status">
-                {attachmentsOf(item).map((upload) => (
+                {attachmentsOf(item).filter((upload) => upload.state !== 'done').map((upload) => (
                   <View key={upload.id} style={styles.uploadRow} testID={`ai-attachment-${upload.state}`}>
                     <Ionicons
                       name={upload.state === 'done' ? 'checkmark-circle' : upload.state === 'failed' ? 'alert-circle' : upload.kind === 'video' ? 'videocam-outline' : 'image-outline'}

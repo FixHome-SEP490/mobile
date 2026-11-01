@@ -16,11 +16,11 @@ jest.mock('./OrderFlowNavigator', () => {
   const ReactRuntime = jest.requireActual('react');
   return { __esModule: true, default: ({ role }: { role: string }) => ReactRuntime.createElement(Native.Text, { testID: 'role' }, role) };
 });
-jest.mock('@react-navigation/bottom-tabs', () => {
+jest.mock('./PlainTabs', () => {
   const ReactRuntime = jest.requireActual('react');
   const Native = jest.requireActual('react-native');
   return {
-    createBottomTabNavigator: () => ({
+    createPlainTabs: () => ({
       Navigator: ({ children }: { children: React.ReactNode }) => ReactRuntime.createElement(Native.View, null, ReactRuntime.Children.toArray(children)[0]),
       Screen: ({ component: Component }: { component: React.ComponentType }) => ReactRuntime.createElement(Component),
     }),
