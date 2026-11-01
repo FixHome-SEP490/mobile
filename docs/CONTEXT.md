@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-01 19:20 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: fix/android-map-fallback
+> Cập nhật lần cuối: 2026-11-01 19:29 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: fix/technician-reviews-route
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -409,6 +409,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-11-01 19:29 (UTC+7) | ToanAltF4 | fix/technician-reviews-route | Màn Đánh giá từ khách hàng của thợ đọc GET /technicians/{id người dùng}/reviews thay cho /technicians/me/reviews (backend không có route me, trả 400, bug 51); mã đơn và tên dịch vụ để trống vì API chưa trả.
 - 2026-11-01 19:20 (UTC+7) | ToanAltF4 | fix/android-map-fallback | Bản đồ Android không còn màn lỗi đỏ khi bản build thiếu khóa Google Maps (bug 44): app.config.js ghi extra.androidMapsConfigured, AddressMap và PublicOrderTrackingMap hiện khung thay thế dễ đọc khi chưa có khóa.
 - 2026-11-01 18:39 (UTC+7) | ToanAltF4 | fix/customer-kyc-gender | Xác minh danh tính khách (bug 50): giới tính gửi theo enum backend male, female, other thay cho MALE, FEMALE, OTHER (trước đây backend trả 400); đọc lại hồ sơ có giới tính chữ thường; mở thư viện ảnh hoặc camera không còn xoá nháp và ảnh mặt kia.
 - 2026-10-30 17:58 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Hai tab đơn của khách đổi nhãn thành Đơn 1 thiết bị và Đơn nhiều thiết bị (Hoạt động, Lịch sử sửa chữa); header Ví FixHome của khách theo header chuẩn, bỏ dòng Ví của tôi; chỉ đổi giao diện, chưa kiểm chứng trên máy thật.
@@ -448,7 +449,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-20 21:11 (UTC+7) | Hgnv11 | dev | Làm lại giao diện chuẩn bị linh kiện, chi phí phát sinh và quản lý linh kiện của thợ (PartPickerRow, CatalogPicker, ConfirmSummary, lỗi theo ô, tổng cố định, ảnh nhỏ); không đổi API; chưa chạy trên máy thật.
 - 2026-10-20 20:39 (UTC+7) | Hgnv11 | dev | Tab thứ tư của kỹ thuật viên đổi từ Ví sang Thông báo (Ví vào qua Hồ sơ); màn Thông báo ẩn nút Quay lại khi nằm trong tab, tiêu đề 24/32 và màu nền/viền/cỡ chữ đồng bộ với Thông báo khách; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-20 20:09 (UTC+7) | Hgnv11 | feat/web-be-sync-20261020 | Báo giá, chi phí phát sinh, linh kiện đã nhận: danh sách linh kiện FixHome cuộn trong khung, hiện SKU và giá; chọn linh kiện luôn ghi tên vào Mô tả
-- 2026-10-20 19:39 (UTC+7) | Hgnv11 | feat/web-be-sync-20261020 | Kỹ thuật viên: sheet Kỹ năng và dịch vụ nhận làm gọn lại, hàng phẳng, công tắc nhận làm, nút Lưu thay đổi chỉ hiện khi có chỉnh sửa
 
 ### Lịch sử giữ lại khi tích hợp
 
