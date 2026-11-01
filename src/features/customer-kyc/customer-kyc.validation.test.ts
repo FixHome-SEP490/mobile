@@ -11,7 +11,7 @@ const today = { year: 2026, month: 10, day: 17 };
 const validForm: CustomerKycFormValues = {
   fullName: 'Nguyễn Văn An',
   dateOfBirth: '1995-06-15',
-  gender: 'MALE',
+  gender: 'male',
   citizenIdNumber: '079123456789',
   address: '12 Nguyễn Trãi, Quận 1',
 };
@@ -31,6 +31,9 @@ describe('Vietnam customer KYC validation', () => {
     expect(validateCustomerKycForm(validForm, today)).toEqual({});
     expect(validateCustomerKycForm({ ...validForm, citizenIdNumber: '079 123456789' }, today).citizenIdNumber).toBeTruthy();
     expect(validateCustomerKycForm({ ...validForm, gender: 'UNSPECIFIED' as never }, today).gender).toBeTruthy();
+    // The Backend Gender enum is lowercase, an uppercase value would be refused with HTTP 400.
+    expect(validateCustomerKycForm({ ...validForm, gender: 'MALE' as never }, today).gender).toBeTruthy();
+    expect(validateCustomerKycForm({ ...validForm, gender: 'female' }, today)).toEqual({});
     expect(validateCustomerKycForm({ ...validForm, fullName: 'A' }, today).fullName).toBeTruthy();
     expect(validateCustomerKycForm({ ...validForm, address: '1234' }, today).address).toBeTruthy();
     expect(validateCustomerKycForm({ ...validForm, dateOfBirth: '2008-10-18' }, today).dateOfBirth).toBeTruthy();
