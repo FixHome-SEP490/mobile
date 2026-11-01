@@ -64,6 +64,10 @@ export default function CustomerKycScreen() {
   const uploadAbortRef = useRef<AbortController | null>(null);
   const submitLockRef = useRef(false);
   const submittingRequestRef = useRef(false);
+  // On Android the photo library and the camera open as another activity, so the app
+  // reports "background" while they are open. That is not the user leaving the app:
+  // keep the draft, otherwise every photo pick wipes the form and the other photo (bug 50).
+  const pickerOpenRef = useRef(false);
   const fullNameRef = useRef<TextInputInstance>(null);
   const dobRef = useRef<TextInputInstance>(null);
   const citizenIdRef = useRef<TextInputInstance>(null);
@@ -148,7 +152,7 @@ export default function CustomerKycScreen() {
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', next => {
-      if (next === 'background') cancelUploadsAndClear(true);
+      if (next === 'background' && !pickerOpenRef.current) cancelUploadsAndClear(true);
       if (next === 'active' && focusedRef.current && unknownAck) {
         void loadVerification().then(() => undefined);
       }
@@ -193,12 +197,16 @@ export default function CustomerKycScreen() {
         setMessage(source === 'camera' ? 'Cần quyền camera để chụp ảnh CCCD.' : 'Cần quyền truy cập ảnh để chọn ảnh CCCD.');
         return;
       }
+      pickerOpenRef.current = true;
       const result = source === 'camera'
         ? await ImagePicker.launchCameraAsync({ mediaTypes: 'images', quality: 0.9, cameraType: ImagePicker.CameraType.back })
         : await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.9 });
+      pickerOpenRef.current = false;
       if (!result.canceled && result.assets[0]) acceptAsset(side, result.assets[0]);
     } catch {
       setMessage('Không thể mở ảnh. Hãy thử lại.');
+    } finally {
+      pickerOpenRef.current = false;
     }
   };
 
@@ -399,7 +407,7 @@ export default function CustomerKycScreen() {
                     <View style={styles.field}>
                       <Text style={styles.label}>Giới tính</Text>
                       <View style={styles.genderRow}>
-                        {([['MALE', 'Nam'], ['FEMALE', 'Nữ'], ['OTHER', 'Khác']] as const).map(([gender, label]) => (
+                        {([['male', 'Nam'], ['female', 'Nữ'], ['other', 'Khác']] as const).map(([gender, label]) => (
                           <Pressable
                             key={gender}
                             testID={`customer-kyc-gender-${gender}`}

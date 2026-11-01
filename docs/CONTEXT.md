@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-10-30 17:58 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/web-be-sync-20261026
+> Cập nhật lần cuối: 2026-11-01 18:39 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: fix/customer-kyc-gender
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -409,6 +409,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-11-01 18:39 (UTC+7) | ToanAltF4 | fix/customer-kyc-gender | Xác minh danh tính khách (bug 50): giới tính gửi theo enum backend male, female, other thay cho MALE, FEMALE, OTHER (trước đây backend trả 400); đọc lại hồ sơ có giới tính chữ thường; mở thư viện ảnh hoặc camera không còn xoá nháp và ảnh mặt kia.
 - 2026-10-30 17:58 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Hai tab đơn của khách đổi nhãn thành Đơn 1 thiết bị và Đơn nhiều thiết bị (Hoạt động, Lịch sử sửa chữa); header Ví FixHome của khách theo header chuẩn, bỏ dòng Ví của tôi; chỉ đổi giao diện, chưa kiểm chứng trên máy thật.
 - 2026-10-30 17:45 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Màn Lịch sử sửa chữa của khách đổi giao diện theo token: thẻ có ô biểu tượng, tab chuyển dạng segmented, tiêu đề nhóm có biểu tượng, lỗi dùng tông đỏ, nút Tải thêm có viền; chỉ đổi giao diện, chưa kiểm chứng trên máy thật.
 - 2026-10-30 15:45 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | `npm test` chạy thêm script hợp đồng cấu hình Android Maps; Jest bỏ qua file `.cjs` để không coi script độc lập là suite rỗng trên Jest 30.
@@ -448,7 +449,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-20 20:09 (UTC+7) | Hgnv11 | feat/web-be-sync-20261020 | Báo giá, chi phí phát sinh, linh kiện đã nhận: danh sách linh kiện FixHome cuộn trong khung, hiện SKU và giá; chọn linh kiện luôn ghi tên vào Mô tả
 - 2026-10-20 19:39 (UTC+7) | Hgnv11 | feat/web-be-sync-20261020 | Kỹ thuật viên: sheet Kỹ năng và dịch vụ nhận làm gọn lại, hàng phẳng, công tắc nhận làm, nút Lưu thay đổi chỉ hiện khi có chỉnh sửa
 - 2026-10-20 16:40 (UTC+7) | Hgnv11 | feat/web-be-sync-20261020 | Đồng bộ web và backend: ca tối, hóa đơn 0 ₫ (no-charge) và VNPay từ 5.000 ₫, loại linh kiện theo báo giá, trạng thái trả linh kiện
-- 2026-10-20 01:57 (UTC+7) | Hgnv11 | fix/activity-split | Hoạt động: số đếm hai tab và các chip lấy từ server (GET /bookings/my/activity-counts), không còn đếm theo số đã tải; mỗi tab chỉ tải dữ liệu của mình
 
 ### Lịch sử giữ lại khi tích hợp
 
