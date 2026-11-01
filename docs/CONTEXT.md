@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-01 18:39 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: fix/customer-kyc-gender
+> Cập nhật lần cuối: 2026-11-01 19:20 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: fix/android-map-fallback
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -396,7 +396,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - Chat có ảnh/video, khoá khi đơn hoàn tất và realtime đã làm ở các mục "Chat" và "Realtime" dưới (19/10/2026); chưa kiểm chứng trên thiết bị. Thông báo đẩy lên điện thoại và số chưa đọc của thông báo qua `notification:new` mobile chưa nối.
 - SEP-136: một màn Lịch làm việc chứa editor khung giờ tuần theo ngày, preset/giờ chính xác, ngày nghỉ với chọn ngày và lịch đơn hiện có. Một màn Khu vực hoạt động chứa vị trí/bán kính và quận/huyện. Giữ payload lưu hiện hành, ngày tuần Sunday=0, khoảng giờ đã lưu, giới hạn 40 km, GPS/camera và tài chính. Bàn phím/safe area đã xử lý trong source; thiết bị còn CHƯA KIỂM CHỨNG.
 - Chưa có push notification (`expo-notifications` đã cài nhưng chưa dùng); ảnh booking đã có upload adapter/controller nhưng runtime CHƯA KIỂM CHỨNG; khu vực phục vụ có màn chỉnh sau onboarding.
-- Chưa có cấu hình EAS và bundle id. Android `react-native-maps` đọc `FIXHOME_ANDROID_MAPS_API_KEY` lúc build qua `app.config.js`; EAS Android dừng nếu thiếu biến này. Chưa có khóa EAS và chưa chạy Android build; cần khóa Google Maps đã giới hạn theo Android package cùng SHA-1 của chứng thư debug/release tương ứng. Root đã xử lý cold/warm return `fixhome://app/wallet` bằng đích an toàn cho Customer và GET-only refresh, bỏ mọi query payload; luồng Google/Technician giữ nguyên. OS delivery/native chưa kiểm chứng.
+- Chưa có cấu hình EAS và bundle id. Android `react-native-maps` đọc `FIXHOME_ANDROID_MAPS_API_KEY` lúc build qua `app.config.js`; EAS Android dừng nếu thiếu biến này. Bản build không có khóa (app.config.js ghi extra.androidMapsConfigured false) không dựng MapView trên Android mà hiện khung "Bản đồ chưa khả dụng trên bản ứng dụng này" ở Quản lý địa chỉ, bước địa chỉ khi đặt lịch, khu vực hoạt động của thợ và tra cứu đơn (bug 44, src/components/map-availability.ts). Chưa có khóa EAS và chưa chạy Android build; cần khóa Google Maps đã giới hạn theo Android package cùng SHA-1 của chứng thư debug/release tương ứng. Root đã xử lý cold/warm return `fixhome://app/wallet` bằng đích an toàn cho Customer và GET-only refresh, bỏ mọi query payload; luồng Google/Technician giữ nguyên. OS delivery/native chưa kiểm chứng.
 - Technician ACCEPT có journal bền vững và không tự gửi lại POST sau timeout. Khi GET `/invitations/my` trả đúng invitation/booking còn PENDING và chưa hết hạn, app giải journal cũ, bật lại thao tác rõ ràng của thợ và chỉ gửi lại khi thợ chạm; Backend dev khóa Booking và replay ACCEPT trả lại ServiceOrder hiện hành cho cùng thợ. Khi invitation vắng khỏi GET, app đối chiếu GET Công việc; nếu chưa thấy phân công thì giữ UNKNOWN vì API không trả trạng thái terminal riêng để phân biệt DECLINED/EXPIRED/CANCELLED/đã nhận bởi thợ khác. `useLiveRefresh` poll mỗi 30 giây khi Socket.IO mất kết nối và đọc lại sau reconnect/resync; restart/offline E2E CHƯA KIỂM CHỨNG.
 - Các hàm API chưa dùng trong UI production: `completeRepair`, `payInvoice`, `getWarranties`. `getStatusHistory` đã nối vào adapter redesign nhưng UI chưa cutover.
 - Repo đang theo dõi `CLAUDE.md` và `.claude/settings.json` từ commit đầu; luật chung của nhóm không đưa cấu hình công cụ AI vào repo. Chờ PO quyết có gỡ hay không.
@@ -409,6 +409,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 
+- 2026-11-01 19:20 (UTC+7) | ToanAltF4 | fix/android-map-fallback | Bản đồ Android không còn màn lỗi đỏ khi bản build thiếu khóa Google Maps (bug 44): app.config.js ghi extra.androidMapsConfigured, AddressMap và PublicOrderTrackingMap hiện khung thay thế dễ đọc khi chưa có khóa.
 - 2026-11-01 18:39 (UTC+7) | ToanAltF4 | fix/customer-kyc-gender | Xác minh danh tính khách (bug 50): giới tính gửi theo enum backend male, female, other thay cho MALE, FEMALE, OTHER (trước đây backend trả 400); đọc lại hồ sơ có giới tính chữ thường; mở thư viện ảnh hoặc camera không còn xoá nháp và ảnh mặt kia.
 - 2026-10-30 17:58 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Hai tab đơn của khách đổi nhãn thành Đơn 1 thiết bị và Đơn nhiều thiết bị (Hoạt động, Lịch sử sửa chữa); header Ví FixHome của khách theo header chuẩn, bỏ dòng Ví của tôi; chỉ đổi giao diện, chưa kiểm chứng trên máy thật.
 - 2026-10-30 17:45 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Màn Lịch sử sửa chữa của khách đổi giao diện theo token: thẻ có ô biểu tượng, tab chuyển dạng segmented, tiêu đề nhóm có biểu tượng, lỗi dùng tông đỏ, nút Tải thêm có viền; chỉ đổi giao diện, chưa kiểm chứng trên máy thật.
@@ -448,7 +449,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-20 20:39 (UTC+7) | Hgnv11 | dev | Tab thứ tư của kỹ thuật viên đổi từ Ví sang Thông báo (Ví vào qua Hồ sơ); màn Thông báo ẩn nút Quay lại khi nằm trong tab, tiêu đề 24/32 và màu nền/viền/cỡ chữ đồng bộ với Thông báo khách; thiết bị CHƯA KIỂM CHỨNG.
 - 2026-10-20 20:09 (UTC+7) | Hgnv11 | feat/web-be-sync-20261020 | Báo giá, chi phí phát sinh, linh kiện đã nhận: danh sách linh kiện FixHome cuộn trong khung, hiện SKU và giá; chọn linh kiện luôn ghi tên vào Mô tả
 - 2026-10-20 19:39 (UTC+7) | Hgnv11 | feat/web-be-sync-20261020 | Kỹ thuật viên: sheet Kỹ năng và dịch vụ nhận làm gọn lại, hàng phẳng, công tắc nhận làm, nút Lưu thay đổi chỉ hiện khi có chỉnh sửa
-- 2026-10-20 16:40 (UTC+7) | Hgnv11 | feat/web-be-sync-20261020 | Đồng bộ web và backend: ca tối, hóa đơn 0 ₫ (no-charge) và VNPay từ 5.000 ₫, loại linh kiện theo báo giá, trạng thái trả linh kiện
 
 ### Lịch sử giữ lại khi tích hợp
 
