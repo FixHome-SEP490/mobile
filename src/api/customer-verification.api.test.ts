@@ -34,6 +34,15 @@ describe('customerVerificationApi', () => {
     expect(mockedClient.get).toHaveBeenCalledWith('/customer/verification');
   });
 
+  it('reads the lowercase Backend gender a previous submission stored on the profile', async () => {
+    mockedClient.get.mockResolvedValue(envelope({ ...state, status: 'rejected', profile: { ...state.profile, gender: 'male' } }));
+    await expect(customerVerificationApi.getMine()).resolves.toMatchObject({ status: 'rejected', profile: { gender: 'male' } });
+    mockedClient.get.mockResolvedValue(envelope({ ...state, profile: { ...state.profile, gender: 'FEMALE' } }));
+    await expect(customerVerificationApi.getMine()).resolves.toMatchObject({ profile: { gender: 'female' } });
+    mockedClient.get.mockResolvedValue(envelope({ ...state, profile: { ...state.profile, gender: 'unknown' } }));
+    await expect(customerVerificationApi.getMine()).rejects.toThrow();
+  });
+
   it.each(['unknown', 'PENDING', null])('rejects unsupported or malformed status %s', async status => {
     mockedClient.get.mockResolvedValue(envelope({ ...state, status }));
     await expect(customerVerificationApi.getMine()).rejects.toThrow();
@@ -129,9 +138,10 @@ describe('customerVerificationApi', () => {
   });
 
   it('posts exactly the form and two document records and normalizes pending status', async () => {
-    mockedClient.post.mockResolvedValue(envelope({ ...state, status: 'pending' }));
+    // The Backend answers with the profile it just saved, gender in its own lowercase enum.
+    mockedClient.post.mockResolvedValue(envelope({ ...state, status: 'pending', profile: { ...state.profile, gender: 'male' } }));
     const submission = {
-      fullName: 'Nguyễn Văn An', dateOfBirth: '1995-06-15', gender: 'MALE' as const,
+      fullName: 'Nguyễn Văn An', dateOfBirth: '1995-06-15', gender: 'male' as const,
       citizenIdNumber: '079123456789', address: '12 Nguyễn Trãi, Quận 1', documents: [
         { documentType: 'citizen_id_front' as const, storageObjectPath: 'kyc/customer-1/front.jpg', fileName: 'front.jpg', fileSize: 1024, mimeType: 'image/jpeg' as const },
         { documentType: 'citizen_id_back' as const, storageObjectPath: 'kyc/customer-1/back.jpg', fileName: 'back.jpg', fileSize: 1024, mimeType: 'image/jpeg' as const },

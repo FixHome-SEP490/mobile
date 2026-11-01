@@ -6,7 +6,9 @@ import {
 
 export type CustomerKycStatus = 'none' | 'pending' | 'rejected' | 'verified';
 export type CustomerKycMimeType = 'image/jpeg' | 'image/png' | 'image/webp';
-export type CustomerKycGender = 'MALE' | 'FEMALE' | 'OTHER';
+// Same values as the backend Gender enum (SubmitCustomerVerificationDto uses IsEnum(Gender)).
+export type CustomerKycGender = 'male' | 'female' | 'other';
+const GENDERS: readonly string[] = ['male', 'female', 'other'];
 export type CustomerKycDocumentType = 'citizen_id_front' | 'citizen_id_back';
 
 export interface CustomerKycProfile {
@@ -80,8 +82,9 @@ function normalizeVerificationState(value: unknown): CustomerVerificationState {
   if (!state || !profile || !['none', 'pending', 'rejected', 'verified'].includes(String(status))) {
     throw new Error('Trạng thái xác minh chưa được hỗ trợ.');
   }
-  const gender = nullableString(profile.gender, 'giới tính');
-  if (gender !== null && !['MALE', 'FEMALE', 'OTHER'].includes(gender)) {
+  const rawGender = nullableString(profile.gender, 'giới tính');
+  const gender = rawGender === null ? null : rawGender.toLowerCase();
+  if (gender !== null && !GENDERS.includes(gender)) {
     throw new Error('Dữ liệu xác minh giới tính chưa hợp lệ.');
   }
   if (typeof profile.fullName !== 'string') throw new Error('Dữ liệu hồ sơ chưa hợp lệ.');
