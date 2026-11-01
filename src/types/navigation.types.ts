@@ -63,7 +63,7 @@ export type RootStackParamList = {
   /** Book again a job a manager closed; `bookingId` anchors the server draft. */
   CustomerInterruptionRebook: { bookingId: string };
   /** Several devices in one visit; `prefill.devices` are the assistant's suggestions, each still checked and saved by the customer. */
-  CustomerVisitCreate: { prefill?: { aiSessionId?: string; devices: { serviceId: string; description: string }[] } } | undefined;
+  CustomerVisitCreate: { prefill?: { aiSessionId?: string; devices: { serviceId: string; description: string; photos?: { uploadId: string; uri: string; name: string; type: 'image/jpeg' }[] }[] } } | undefined;
   /**
    * `rebooked: 'invited'` after "Đặt lại thợ" when the former technician was invited.
    * `released: true` when opened from the `TECHNICIAN_RELEASED` notification.

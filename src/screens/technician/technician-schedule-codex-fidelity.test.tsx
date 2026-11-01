@@ -95,10 +95,11 @@ beforeEach(() => {
   profileApi.getMyTimeOff.mockResolvedValue([]);
 });
 describe('T12B1 real jobs calendar read-only Codex presentation', () => {
-  it('preserves Lịch làm việc heading and adds a source-honest weekly eyebrow', async () => {
+  it('preserves Lịch làm việc heading and adds a weekly subtitle instead of an overline', async () => {
     const r = await render();
     expect(visibleText(r)).toContain('Lịch làm việc');
-    expect(visibleText(r)).toContain('Công việc trong tuần');
+    expect(visibleText(r)).toContain('Công việc và ngày nghỉ trong tuần');
+    expect(visibleText(r)).not.toContain('Công việc trong tuần');
     await act(async () => r.unmount());
   });
   it('discloses loaded orders and shares availability editing on the same screen', async () => {

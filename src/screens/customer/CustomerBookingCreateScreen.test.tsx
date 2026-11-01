@@ -35,6 +35,7 @@ const mockNavigation = { goBack: jest.fn(), navigate: jest.fn(), replace: jest.f
 const mockUsePreventRemove = jest.fn();
 const mockRoute = { key: 'booking-flow-a', params: { prefill: { serviceId: SERVICE_ID } } };
 const mockGetServices = jest.fn();
+const mockVisitContact = jest.fn();
 const mockGetAddresses = jest.fn();
 const mockGetCategories = jest.fn();
 const mockGetMyBookingsPage = jest.fn();
@@ -104,6 +105,11 @@ jest.mock('expo-image-picker', () => ({
     mockRequestMediaLibraryPermissions(...args),
   launchImageLibraryAsync: (...args: unknown[]) => mockLaunchImageLibrary(...args),
 }));
+
+jest.mock('../../api/visit-groups.api', () => {
+  const actual = jest.requireActual('../../api/visit-groups.api');
+  return { ...actual, visitGroupsApi: { ...actual.visitGroupsApi, contact: (...args: unknown[]) => mockVisitContact(...args) } };
+});
 
 jest.mock('../../api/services.api', () => ({
   servicesApi: {
@@ -360,6 +366,7 @@ beforeEach(() => {
     mockAuthState.user.id === 'customer-b' ? [addressB] : [address],
   );
   mockGetCategories.mockResolvedValue([]);
+  mockVisitContact.mockResolvedValue({ enabled: false, deviceLimit: 3, hotline: null });
   mockGetMyBookingsPage.mockResolvedValue({ data: [], total: 0 });
   mockRequestMediaLibraryPermissions.mockResolvedValue({ granted: true });
   mockLaunchImageLibrary.mockResolvedValue({ canceled: true, assets: [] });
@@ -1539,4 +1546,44 @@ it('states the preferred window is only desired time and the review creates noth
   expect(mockUploadBookingPhoto).not.toHaveBeenCalled();
   expect(findActions(renderer, 'Xác nhận đặt lịch')).toHaveLength(1);
   await act(async () => renderer.unmount());
+});
+
+describe('changing the service of a device of a multi-device visit (pencil on its card)', () => {
+  const washerRepair: ServiceItem = { ...service, id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa', name: 'Sửa máy giặt', code: 'WM-01', sortOrder: 2 };
+  const washerClean: ServiceItem = { ...service, id: 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb', name: 'Vệ sinh máy giặt', code: 'WM-02', sortOrder: 3 };
+  const cardLabel = (renderer: TestRenderer, n: number) =>
+    renderer.root.findAll((node) => node.props.testID === `visit-service-box-${n}` && typeof node.props.onPress === 'function')[0]?.props.accessibilityLabel as string;
+  const pickFromSheet = async (renderer: TestRenderer, name: string) => {
+    const option = renderer.root.findAll((node) => node.type === TouchableOpacity && node.props.accessibilityRole === 'radio' && textContent(node).includes(name))[0];
+    await act(async () => { (option.props.onPress as () => void)(); await flushPromises(); });
+  };
+
+  async function withTwoDevices() {
+    mockVisitContact.mockResolvedValue({ enabled: true, deviceLimit: 3, hotline: null });
+    mockGetServices.mockResolvedValue({ data: [service, washerRepair, washerClean], total: 3 });
+    const renderer = await renderScreen();
+    const add = renderer.root.findAll((node) => node.props.testID === 'booking-multi-device' && typeof node.props.onPress === 'function')[0];
+    await act(async () => { (add.props.onPress as () => void)(); await flushPromises(); });
+    await pickFromSheet(renderer, 'Sửa máy giặt');
+    return renderer;
+  }
+
+  it('replaces the second device with the service picked, not with another one of the same category', async () => {
+    const renderer = await withTwoDevices();
+    expect(cardLabel(renderer, 2)).toContain('Sửa máy giặt');
+    await act(async () => { (findAccessibleActions(renderer, 'Đổi dịch vụ Sửa máy giặt')[0].props.onPress as () => void)(); await flushPromises(); });
+    await pickFromSheet(renderer, 'Vệ sinh máy giặt');
+    expect(cardLabel(renderer, 2)).toContain('Vệ sinh máy giặt');
+    expect(cardLabel(renderer, 2)).not.toContain('Sửa máy giặt');
+    expect(cardLabel(renderer, 1)).toContain('Sửa máy lạnh');
+    await act(async () => renderer.unmount());
+  });
+  it('replaces the first device with the service picked, and leaves the second one alone', async () => {
+    const renderer = await withTwoDevices();
+    await act(async () => { (findAccessibleActions(renderer, 'Đổi dịch vụ Sửa máy lạnh')[0].props.onPress as () => void)(); await flushPromises(); });
+    await pickFromSheet(renderer, 'Vệ sinh máy giặt');
+    expect(cardLabel(renderer, 1)).toContain('Vệ sinh máy giặt');
+    expect(cardLabel(renderer, 2)).toContain('Sửa máy giặt');
+    await act(async () => renderer.unmount());
+  });
 });

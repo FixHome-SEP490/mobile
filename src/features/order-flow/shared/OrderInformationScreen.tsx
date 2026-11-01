@@ -21,6 +21,7 @@ import { serviceOrderDisplayView, serviceOrderStatusView } from '../../../screen
 import { sessionLabel } from '../../../utils/booking-session';
 import { findChatForBooking } from '../../../screens/technician/technician-chat-shortcut';
 import { backFromFlow } from '../navigation/resume-order';
+import BookingMediaViewer from '../../../components/technician/BookingMediaViewer';
 
 const PRICING_LABELS: Record<string, string> = {
   FIXED_PRICE: 'Giá cố định',
@@ -129,6 +130,10 @@ export default function OrderInformationScreen() {
       {order.laborWarrantyDays ?<DetailRow label="Bảo hành tiền công" value={`${order.laborWarrantyDays} ngày`} /> : null}
       <DetailRow label="Tổng tiền" value={formatVnd(typeof order.grandTotal === 'number' ? order.grandTotal : Number.isFinite(Number(order.grandTotal)) ? Number(order.grandTotal) : undefined)} />
       </Section>
+      {order.bookingDescription?.trim() || order.bookingMedia?.length ? <Section title="Khách mô tả">
+        {order.bookingDescription?.trim() ? <Text selectable testID="order-booking-description" style={{ color: colors.text, fontSize: 15, lineHeight: 22, paddingVertical: 8 }}>{order.bookingDescription.trim()}</Text> : null}
+        {order.bookingMedia?.length ? <BookingMediaViewer bookingId={order.bookingId} media={order.bookingMedia} /> : null}
+      </Section> : null}
       {order.scopeDescription ? <Section title="Phạm vi ban đầu"><DetailRow label="Nội dung" value={order.scopeDescription} /></Section> : null}
     </>}
     {order && !history ? <OrderCostHistory /> : null}

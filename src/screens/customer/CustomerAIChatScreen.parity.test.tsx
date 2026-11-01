@@ -238,7 +238,7 @@ describe('CustomerAIChatScreen parity with the web', () => {
       expect(texts(tree)).toEqual(expect.arrayContaining(['Ảnh đã gửi kèm cho thợ', 'Video đã gửi kèm cho thợ']));
 
       await act(async () => { button(tree, BOOK)?.props.onPress(); });
-      expect(mockNavigate).toHaveBeenCalledWith('CustomerAIDiagnosis', {
+      expect(mockNavigate).toHaveBeenCalledWith('CustomerBookingCreate', {
         prefill: {
           serviceId: 'service-1', serviceCode: 'SUA_VOI_NUOC', serviceName: 'Sửa vòi nước',
           description: 'Vòi rửa chén rỉ nước', aiSessionId: 'session-1',

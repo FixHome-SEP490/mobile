@@ -10,6 +10,7 @@ import OrderStepBar from '../../features/order-flow/customer/OrderStepBar';
 import { findChatForBooking } from '../technician/technician-chat-shortcut';
 import BookingRescheduleSheet from '../../components/BookingRescheduleSheet';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
+import { confirmAction } from '../../utils/confirm-action';
 import { customerWalletApi, wholeVnd } from '../../api/customer-wallet.api';
 import { ordersApi } from '../../api/orders.api';
 import { visitGroupsApi, type Visit, type VisitCheckout, type VisitDeviceState } from '../../api/visit-groups.api';
@@ -23,6 +24,8 @@ import { extractApiErrorMessage } from '../../utils/input-validation';
 import { failedBookingIds } from './failed-repair-rebook';
 import { fundedCheckoutApi } from '../../api/funded-checkout.api';
 import VoucherCheckoutSection from '../../features/order-flow/customer/VoucherCheckoutSection';
+import CashIntentPanel from '../../features/order-flow/customer/CashIntentPanel';
+import { useCashIntent } from '../../features/order-flow/customer/useCashIntent';
 import { secondsLeft, type AppliedVoucher } from '../../features/order-flow/customer/voucher-checkout';
 import {
   canStartVisitPayment,
@@ -75,6 +78,9 @@ export default function CustomerVisitScreen() {
   // A voucher held for the whole visit; the amounts are the server's.
   const [voucher, setVoucher] = useState<AppliedVoucher | null>(null);
   const generation = useRef(0);
+  // Cash first (web #184): the customer asks for cash, the server fixes the amount, the technician confirms receipt.
+  const cashIntent = useCashIntent('VISIT_GROUP', visitGroupId);
+  const cashFirstOffer = cashIntent.cashFirst && !cashIntent.active;
 
   const load = useCallback(async (mode: 'first' | 'refresh' = 'refresh') => {
     const mine = ++generation.current;
@@ -191,17 +197,17 @@ export default function CustomerVisitScreen() {
     }
   };
 
-  const confirmCancel = () => Alert.alert(
-    'Hủy cả lượt sửa?',
-    `Tất cả ${devices.length} thiết bị trong lượt này sẽ bị hủy cùng lúc. Nếu thợ đã nhận lịch, điểm uy tín của bạn có thể bị trừ.`,
-    [
-      { text: 'Giữ lại lượt sửa', style: 'cancel' },
-      { text: 'Hủy lượt sửa', style: 'destructive', onPress: () => void run(async () => { await visitGroupsApi.cancel(visitGroupId, 'Khách hủy lượt sửa'); return 'Đã hủy lượt sửa.'; }, 'Chưa hủy được lượt sửa.') },
-    ],
-  );
+  const confirmCancel = () => confirmAction({
+    title: 'Hủy cả lượt sửa?',
+    message: `Tất cả ${devices.length} thiết bị trong lượt này sẽ bị hủy cùng lúc. Nếu thợ đã nhận lịch, điểm uy tín của bạn có thể bị trừ.`,
+    cancelLabel: 'Giữ lại lượt sửa',
+    confirmLabel: 'Hủy lượt sửa',
+    destructive: true,
+    onConfirm: () => void run(async () => { await visitGroupsApi.cancel(visitGroupId, 'Khách hủy lượt sửa'); return 'Đã hủy lượt sửa.'; }, 'Chưa hủy được lượt sửa.'),
+  });
 
   const pay = () => {
-    if (!checkout || !canStartVisitPayment(payState)) return;
+    if (!checkout || !canStartVisitPayment(payState) || cashIntent.busy) return;
     if (held && fullyFunded) {
       void run(async () => {
         await fundedCheckoutApi.zero(scope, held.reservationId);
@@ -223,6 +229,8 @@ export default function CustomerVisitScreen() {
         // Coming back from VNPay is not a payment: the read after this step decides.
         return 'Đang chờ VNPay xác nhận. Nếu chưa thấy "Đã thanh toán", chạm "Kiểm tra thanh toán".';
       }, 'Chưa mở được trang thanh toán VNPay. Vui lòng thử lại.');
+    } else if (method === 'cash' && cashFirstOffer) {
+      void cashIntent.create(held?.reservationId);
     }
   };
 
@@ -253,7 +261,7 @@ export default function CustomerVisitScreen() {
   };
 
   // The one thing to do now stays at the bottom, so it is never found by scrolling past every device.
-  const canPay = (payState === 'ready' || payState === 'vnpay' || payState === 'wallet_short') && (fullyFunded || method !== 'cash');
+  const canPay = (payState === 'ready' || payState === 'vnpay' || payState === 'wallet_short') && !cashIntent.active && (fullyFunded || method !== 'cash' || cashFirstOffer);
   const footerPrimary = !visit || visit.status === 'cancelled' ? undefined
     : priorityQuote ? {
       label: 'Xem và duyệt báo giá', testID: 'visit-quote-shortcut',
@@ -265,8 +273,8 @@ export default function CustomerVisitScreen() {
         onPress: () => navigation.navigate('CustomerMatching', { bookingId: lead.id, visitGroupId }),
       }
         : checkout && canPay ? {
-          label: busy ? 'Đang xử lý…' : fullyFunded ? 'Xác nhận thanh toán 0 ₫' : method === 'vnpay' ? 'Thanh toán qua VNPay' : `Thanh toán ${formatVnd(payable)}`,
-          testID: 'visit-pay-submit', disabled: busy || payState === 'wallet_short', onPress: pay,
+          label: busy ? 'Đang xử lý…' : fullyFunded ? 'Xác nhận thanh toán 0 ₫' : method === 'cash' ? 'Yêu cầu trả tiền mặt' : method === 'vnpay' ? 'Thanh toán qua VNPay' : `Thanh toán ${formatVnd(payable)}`,
+          testID: 'visit-pay-submit', disabled: busy || cashIntent.busy || payState === 'wallet_short', onPress: pay,
         }
           : undefined;
 
@@ -439,6 +447,8 @@ export default function CustomerVisitScreen() {
               {payState === 'waiting' && <Text style={styles.hint}>Chờ kết quả các thiết bị. Bạn chỉ trả tiền một lần, sau khi mọi thiết bị đã có kết quả, và chỉ trả cho máy đã sửa xong.</Text>}
               {payState === 'paid' && <Text style={[styles.value, { color: tone('success').text }]}>Đã thanh toán</Text>}
               {payState === 'zero_due' && <Text style={styles.hint}>Không phát sinh khoản cần thanh toán.</Text>}
+              {cashIntent.cashFirst && payState !== 'paid' ? <CashIntentPanel intent={cashIntent.intent} busy={cashIntent.busy} onCancel={() => { void cashIntent.cancel(); }} /> : null}
+              {!!cashIntent.error && <Text style={styles.errorText} accessibilityRole="alert" testID="visit-cash-intent-error">{cashIntent.error}</Text>}
               {payState === 'pending_cash' && checkout.pendingCash && (
                 <View style={{ gap: 8 }}>
                   <Text style={styles.value}>Kỹ thuật viên báo đã thu {formatVnd(checkout.pendingCash.amount)} tiền mặt.</Text>
@@ -456,13 +466,13 @@ export default function CustomerVisitScreen() {
                 <VoucherCheckoutSection
                   scopeId={visitGroupId}
                   applied={held}
-                  disabled={busy}
+                  disabled={busy || cashIntent.active}
                   keepWhenExpired={payState === 'pending_cash'}
                   onApplied={setVoucher}
                   onReleased={(reason) => { setVoucher(null); if (reason) setMessage({ type: 'error', text: reason }); }}
                 />
               )}
-              {(payState === 'ready' || payState === 'vnpay' || payState === 'wallet_short') && (
+              {(payState === 'ready' || payState === 'vnpay' || payState === 'wallet_short') && !cashIntent.active && (
                 <View style={{ gap: 8 }}>
                   {(fullyFunded ? [] : methods).map((m) => (
                     <TouchableOpacity
@@ -477,7 +487,8 @@ export default function CustomerVisitScreen() {
                       {m === 'wallet' && <Text style={styles.hint}>{walletBalance === null ? 'Chưa tải được số dư' : `Số dư ${formatVnd(walletBalance)}`}</Text>}
                     </TouchableOpacity>
                   ))}
-                  {!fullyFunded && method === 'cash' && <Text style={styles.hint}>{`Trả tiền trực tiếp cho kỹ thuật viên số tiền của cả lượt: ${formatVnd(payable)}. Đây chỉ là hướng dẫn, chưa ghi nhận đã thanh toán. Kỹ thuật viên khai báo số tiền đã nhận, sau đó bạn xác nhận đúng số tiền hoặc báo chưa đúng.`}</Text>}
+                  {!fullyFunded && method === 'cash' && cashFirstOffer && <Text style={styles.hint} testID="visit-cash-intent-hint">{`Hệ thống sẽ chốt số tiền của cả lượt (${formatVnd(payable)}) và báo cho kỹ thuật viên. Chỉ trả tiền sau khi gửi yêu cầu; kỹ thuật viên xác nhận khi đã nhận đủ.`}</Text>}
+                  {!fullyFunded && method === 'cash' && !cashFirstOffer && <Text style={styles.hint}>{`Trả tiền trực tiếp cho kỹ thuật viên số tiền của cả lượt: ${formatVnd(payable)}. Đây chỉ là hướng dẫn, chưa ghi nhận đã thanh toán. Kỹ thuật viên khai báo số tiền đã nhận, sau đó bạn xác nhận đúng số tiền hoặc báo chưa đúng.`}</Text>}
                   {payState === 'wallet_short' && (
                     <Text style={[styles.hint, { color: tone('danger').text }]} accessibilityRole="alert">Ví chưa đủ. Nạp thêm vào ví hoặc chọn cách thanh toán khác.</Text>
                   )}

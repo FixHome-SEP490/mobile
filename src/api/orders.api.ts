@@ -106,6 +106,8 @@ export interface ServiceOrderItem {
   quantity?: number;
   scopeDescription?: string;
   bookingDescription?: string;
+  /** Photos/videos the customer attached when booking; read per item through /bookings/:bookingId/media. */
+  bookingMedia?: { id: string; url: string | null; isPrivate: boolean; mimeType: string }[];
   completionRequestedAt?: string;
   customerConfirmed?: boolean;
   arrivalVerified?: boolean;

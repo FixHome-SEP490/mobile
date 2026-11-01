@@ -115,8 +115,8 @@ export default function TechnicianScheduleScreen() {
       <View style={styles.header}>
         <BackButton />
         <View style={styles.headerTitleGroup}>
-          <Text style={styles.headerEyebrow}>Công việc trong tuần</Text>
           <Text style={styles.headerTitle} accessibilityRole="header">Lịch làm việc</Text>
+          <Text style={styles.headerSubtitle}>Công việc và ngày nghỉ trong tuần</Text>
         </View>
         <View style={styles.iconBtn} />
       </View>
@@ -176,7 +176,7 @@ export default function TechnicianScheduleScreen() {
               return (
                 <TouchableOpacity
                   key={day.key}
-                  style={[styles.dayChip, active && styles.dayChipActive]}
+                  style={[styles.dayChip, isToday && !active && styles.dayChipToday, active && styles.dayChipActive]}
                   onPress={() => setSelectedKey(day.key)}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
@@ -265,20 +265,21 @@ export default function TechnicianScheduleScreen() {
 const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   pad: { flex: 1, padding: 16 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, paddingVertical: 4, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 16, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
   iconBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-  headerTitleGroup: { flex: 1, gap: 1, justifyContent: 'center', alignItems: 'center' },
-  headerEyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.textSecondary },
-  headerTitle: { fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.text },
+  headerTitleGroup: { flex: 1, gap: 2, justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  headerSubtitle: { fontSize: 12, lineHeight: 17, color: colors.textSecondary, textAlign: 'center' },
   content: { padding: 16, gap: 12 },
-  sourceNotice: { padding: 12, borderRadius: 14, backgroundColor: colors.primarySoft },
-  sourceNoticeText: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
-  weekNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sourceNotice: { padding: 12, borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  sourceNoticeText: { fontSize: 12, lineHeight: 17, color: colors.textSecondary },
+  weekNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 4 },
   weekTitleBtn: { alignItems: 'center', minHeight: 44, justifyContent: 'center' },
   weekTitle: { fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.text },
   caption: { fontSize: 12, lineHeight: 16, fontWeight: '500', color: colors.textSecondary },
   dayStrip: { flexDirection: 'row', gap: 6 },
   dayChip: { flex: 1, alignItems: 'center', gap: 2, minHeight: 72, paddingVertical: 8, borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  dayChipToday: { borderColor: colors.primaryStrong },
   dayChipActive: { backgroundColor: colors.primaryStrong, borderColor: colors.primaryStrong },
   dayLabel: { fontSize: 12, lineHeight: 16, fontWeight: '500', color: colors.textSecondary },
   dayNumber: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: colors.text },

@@ -14,6 +14,7 @@ import { parseWholeVndInput } from '../shared/m6-amount-input';
 import { formatVnd } from '../../../utils/format';
 import { CASH_VOUCHER_UNCHECKED } from './technician-cash-controller';
 import { backFromFlow } from '../navigation/resume-order';
+import { useCashIntent } from '../customer/useCashIntent';
 
 function parseAmount(text: string): number | null {
   return parseWholeVndInput(text, { min: 0, max: 999999999999 });
@@ -34,6 +35,9 @@ export default function CashDeclarationScreen() {
   const [notes, setNotes] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const cashIntent = useCashIntent('SOLO', key?.serviceOrderId ?? null);
+  // Cash first (web #184): the customer asks, the server fixes the amount, the technician only confirms receipt.
+  const [confirmingReceipt, setConfirmingReceipt] = useState(false);
   const [draftOwner, setDraftOwner] = useState(key);
   if (!(draftOwner === key || (!!key && !!draftOwner && sameOrderSession(draftOwner, key)))) {
     setDraftOwner(key);
@@ -41,6 +45,7 @@ export default function CashDeclarationScreen() {
     setNotes('');
     setFormError(null);
     setConfirming(false);
+    setConfirmingReceipt(false);
   }
 
   const orderValue = snapshot?.order.status === 'ready' ? snapshot.order.data : null;
@@ -67,7 +72,11 @@ export default function CashDeclarationScreen() {
   const voucherReady = voucher.status === 'none' || voucher.status === 'held';
   const canSend = current && !frozen && eligible && voucherReady && parsed !== null && !notesTooLong;
   const checkVoucher = controller.checkVoucher;
-  useEffect(() => { if (current && eligible && !frozen) void checkVoucher(); }, [current, eligible, frozen, checkVoucher]);
+  const checkingCash = cashIntent.capability === null;
+  const legacy = !checkingCash && !cashIntent.cashFirst;
+  const intent = cashIntent.intent;
+  const pendingIntent = cashIntent.cashFirst && intent?.status === 'pending';
+  useEffect(() => { if (current && eligible && !frozen && legacy) void checkVoucher(); }, [current, eligible, frozen, legacy, checkVoucher]);
 
   const openConfirm = () => {
     if (!current || frozen || !eligible) return;
@@ -89,6 +98,14 @@ export default function CashDeclarationScreen() {
     setConfirming(false);
   };
 
+  const receiveCash = () => {
+    if (!current || !pendingIntent || cashIntent.busy) return;
+    void cashIntent.receive().then((done) => {
+      setConfirmingReceipt(false);
+      if (done) { void refresh('manual'); navigation.navigate('OrderTask'); }
+    });
+  };
+
   const submitConfirm = () => {
     if (!sheetValid || busy) return;
     setConfirming(false);
@@ -108,17 +125,27 @@ export default function CashDeclarationScreen() {
       title="Khai báo tiền mặt"
       stage={4}
       onBack={() => {
-        if (sheetValid) cancelConfirm();
+        if (sheetValid || confirmingReceipt) cancelConfirm();
         else backFromFlow(navigation);
       }}
       secondary={{
         label: 'Làm mới dữ liệu',
         testID: 'task-refresh',
         disabled: !canRefresh || busy,
-        onPress: () => { if (canRefresh && !busy) void refresh('manual'); },
+        onPress: () => { if (canRefresh && !busy) { void refresh('manual'); void cashIntent.refresh(); } },
       }}
       primary={
-        unknown
+        checkingCash
+          ? { label: 'Đang kiểm tra…', testID: 'cash-intent-checking', disabled: true, onPress: () => {} }
+          : cashIntent.cashFirst
+            ? pendingIntent
+              ? confirmingReceipt
+                ? { label: 'Xác nhận đã nhận tiền', testID: 'cash-intent-receive-submit', disabled: cashIntent.busy,
+                    accessibilityHint: 'Báo đã nhận đủ số tiền mặt hệ thống đã chốt', onPress: receiveCash }
+                : { label: 'Xác nhận đã nhận tiền mặt', testID: 'cash-intent-receive-open', disabled: cashIntent.busy, onPress: () => setConfirmingReceipt(true) }
+              : { label: 'Kiểm tra lại', testID: 'cash-intent-recheck', disabled: cashIntent.busy,
+                  onPress: () => { void cashIntent.refresh(); void refresh('manual'); } }
+            : unknown
           ? { label: 'Kiểm tra lại', testID: 'cash-declare-verify', disabled: busy,
               onPress: () => { if (!busy) void controller.verify(); } }
           : sheetValid
@@ -134,24 +161,33 @@ export default function CashDeclarationScreen() {
           <DetailRow label="Đối soát hiện có" value={`${cash?.id} · ${String(cash?.status)}`} />
         ) : null}
       </View>
-      {!eligible ? (
+      {checkingCash ? <ReadOnlyNotice>Đang kiểm tra trạng thái tiền mặt. Chưa khai báo khi chưa xác nhận được yêu cầu của khách.</ReadOnlyNotice> : null}
+      {cashIntent.cashFirst ? (
+        <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }} testID="cash-intent-card">
+          <DetailRow label="Yêu cầu tiền mặt" value={intent?.status === 'pending' ? 'Khách đã yêu cầu, chờ bạn xác nhận' : intent?.status === 'received' ? 'Đã báo nhận tiền mặt' : intent?.status === 'cancelled' ? 'Khách đã hủy yêu cầu' : 'Chờ khách tạo yêu cầu'} />
+          {intent && intent.status !== 'cancelled' ? <DetailRow label="Số tiền cần thu" value={formatVnd(intent.customerDueVnd)} /> : null}
+        </View>
+      ) : null}
+      {cashIntent.cashFirst && (!intent || intent.status === 'cancelled') ? <ReadOnlyNotice>Chỉ nhận tiền sau khi khách gửi yêu cầu trên ứng dụng.</ReadOnlyNotice> : null}
+      {cashIntent.cashFirst && intent?.status === 'received' ? <ReadOnlyNotice>Hệ thống đã ghi nhận bạn nhận tiền mặt. Đang chờ trạng thái hóa đơn được cập nhật.</ReadOnlyNotice> : null}
+      {legacy && !eligible ? (
         <ReadOnlyNotice>
           {existingCash
             ? 'Đơn đã có khai báo tiền mặt; khai báo hiện có được đọc và đối soát, không ghi đè bằng khai báo mới.'
             : 'Hóa đơn hiện không cho phép khai báo tiền mặt.'}
         </ReadOnlyNotice>
-      ) : (
+      ) : legacy ? (
         <ReadOnlyNotice>Hãy nhập đúng số tiền mặt bạn đã nhận từ khách hàng. Tổng hóa đơn phía trên chỉ để tham khảo, không phải số tiền đã nhận.</ReadOnlyNotice>
-      )}
-      {eligible && voucher.status === 'held' ? (
+      ) : null}
+      {legacy && eligible && voucher.status === 'held' ? (
         <ReadOnlyNotice>Khách đang dùng voucher. Số tiền mặt cần thu là {formatVnd(voucher.dueVnd)}; hãy nhập đúng số này. Phần voucher giảm không thu từ khách.</ReadOnlyNotice>
       ) : null}
-      {eligible && voucher.status === 'checking' ? <ReadOnlyNotice>Đang kiểm tra voucher của khách…</ReadOnlyNotice> : null}
-      {eligible && voucher.status === 'error' ? <ReadOnlyNotice>{CASH_VOUCHER_UNCHECKED}</ReadOnlyNotice> : null}
+      {legacy && eligible && voucher.status === 'checking' ? <ReadOnlyNotice>Đang kiểm tra voucher của khách…</ReadOnlyNotice> : null}
+      {legacy && eligible && voucher.status === 'error' ? <ReadOnlyNotice>{CASH_VOUCHER_UNCHECKED}</ReadOnlyNotice> : null}
       {unknown ? (
         <ReadOnlyNotice>Có thao tác chưa rõ kết quả. Bạn không thể gửi khai báo mới; hãy kiểm tra lại từ máy chủ trước.</ReadOnlyNotice>
       ) : null}
-      {eligible && !unknown ? (
+      {legacy && eligible && !unknown ? (
         <View style={{ backgroundColor: colors.surface, borderRadius: 14, padding: spacing.md, gap: 12 }}>
           <View>
             <Text accessibilityRole="none" style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 4 }}>
@@ -195,6 +231,14 @@ export default function CashDeclarationScreen() {
           {state.confirmation.dto.technicianNotes ? <DetailRow label="Ghi chú" value={state.confirmation.dto.technicianNotes} /> : null}
         </View>
       ) : null}
+      {confirmingReceipt && pendingIntent && intent ? (
+        <View style={{ backgroundColor: colors.tone.warning.bg, borderColor: colors.tone.warning.fg, borderWidth: 1, borderRadius: 12, padding: spacing.md }} testID="cash-intent-receive-sheet">
+          <Text accessibilityRole="header" style={{ fontSize: 16, fontWeight: '700', color: colors.tone.warning.text }}>Xác nhận đã nhận tiền mặt</Text>
+          <DetailRow label="Số tiền đã nhận" value={formatVnd(intent.customerDueVnd)} />
+          <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }}>Chỉ xác nhận sau khi bạn đã thực nhận đủ số tiền trên từ khách.</Text>
+        </View>
+      ) : null}
+      {cashIntent.error ? <ReadOnlyNotice tone="error">{cashIntent.error}</ReadOnlyNotice> : null}
       {formError ? <ReadOnlyNotice>{formError}</ReadOnlyNotice> : null}
       {state.message && state.phase !== 'unknown' ? <ReadOnlyNotice>{state.message}</ReadOnlyNotice> : null}
     </TaskScreenShell>

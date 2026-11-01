@@ -14,6 +14,8 @@ import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { rememberVisitDevice, useRegisterVisitDevices, visitDeviceTabName } from '../navigation/visit-device-tabs';
 import { PanelRow } from '../shared/VisitPanelRow';
 import { CASH_VOUCHER_UNCHECKED } from './technician-cash-controller';
+import { useCashIntent } from '../customer/useCashIntent';
+import { confirmAction } from '../../../utils/confirm-action';
 import {
   canDeclareVisitCash,
   nextOpenVisitDevice,
@@ -53,6 +55,8 @@ function VisitPanelBody({ section }: { section: 'devices' | 'cash' }) {
   const generation = useRef(0);
   const switching = useRef(false);
   const registerDevices = useRegisterVisitDevices();
+  // Cash first (web #184): the technician confirms the customer's request for the whole visit instead of declaring an amount.
+  const cashIntent = useCashIntent('VISIT_GROUP', groupId);
 
   const load = useCallback(async () => {
     if (!groupId) return;
@@ -135,6 +139,18 @@ function VisitPanelBody({ section }: { section: 'devices' | 'cash' }) {
     ]);
   };
 
+  const receiveCash = () => {
+    const intent = cashIntent.intent;
+    if (cashIntent.busy || intent?.status !== 'pending') return;
+    confirmAction({
+      title: 'Xác nhận đã nhận tiền mặt cả lượt?',
+      message: `Bạn xác nhận đã thực nhận ${formatVnd(intent.customerDueVnd)} tiền mặt cho cả lượt. Chỉ xác nhận khi đã nhận đủ.`,
+      cancelLabel: 'Chưa',
+      confirmLabel: 'Đã nhận đủ',
+      onConfirm: () => { void cashIntent.receive().then((done) => { if (done) afterAction(); }); },
+    });
+  };
+
   const withdraw = () => Alert.alert(
     'Rút khỏi cả lượt sửa?',
     'Bạn sẽ rời tất cả thiết bị trong lượt. Các đơn quay lại bước tìm thợ cho khách.',
@@ -163,6 +179,10 @@ function VisitPanelBody({ section }: { section: 'devices' | 'cash' }) {
       : state === 'pending_cash' ? { Icon: Clock, label: 'Chờ khách xác nhận tiền mặt', sub: undefined }
       : state === 'zero_due' ? { Icon: CheckCircle2, label: 'Không phát sinh khoản cần thanh toán', sub: undefined }
       : state === 'waiting' ? { Icon: Clock, label: 'Chờ các máy khác trong lượt', sub: 'Khách trả tiền một lần khi mọi thiết bị đã có kết quả.' }
+      : cashIntent.capability === null && state === 'ready' ? { Icon: Clock, label: 'Đang kiểm tra trạng thái tiền mặt…', sub: 'Chưa khai báo khi chưa xác nhận được yêu cầu của khách.' }
+      : cashIntent.cashFirst && state === 'ready' && cashIntent.intent?.status === 'pending' ? { Icon: HandCoins, label: `Khách cần trả ${formatVnd(cashIntent.intent.customerDueVnd)} tiền mặt`, sub: 'Chỉ xác nhận sau khi đã nhận đủ tiền.' }
+      : cashIntent.cashFirst && state === 'ready' && cashIntent.intent?.status === 'received' ? { Icon: Clock, label: 'Đã báo nhận tiền mặt', sub: `Hệ thống ghi nhận ${formatVnd(cashIntent.intent.customerDueVnd)}. Đang chờ trạng thái thanh toán cập nhật.` }
+      : cashIntent.cashFirst && state === 'ready' ? { Icon: Clock, label: 'Chờ khách tạo yêu cầu tiền mặt', sub: 'Chỉ nhận tiền sau khi khách gửi yêu cầu trên ứng dụng.' }
       : { Icon: Clock, label: 'Chờ khách thanh toán', sub: 'Khách thanh toán một lần cho cả lượt.' };
     return (
       <View testID="visit-cash-panel" style={styles.wrap}>
@@ -175,11 +195,22 @@ function VisitPanelBody({ section }: { section: 'devices' | 'cash' }) {
           <View style={checkout ? styles.divider : undefined}>
             <PanelRow testID="visit-cash-status" Icon={status.Icon} readOnly label={status.label} sub={status.sub} />
           </View>
-          {checkout && canDeclareVisitCash(checkout) && (
+          {checkout && canDeclareVisitCash(checkout) && cashIntent.capability !== null && !cashIntent.cashFirst && (
             <View style={styles.divider}>
               <PanelRow testID="visit-declare-cash" Icon={HandCoins} label="Khai báo đã thu tiền mặt cả lượt" disabled={busy} chevron onPress={declareCash} />
             </View>
           )}
+          {checkout && canDeclareVisitCash(checkout) && cashIntent.cashFirst && cashIntent.intent?.status === 'pending' && (
+            <View style={styles.divider}>
+              <PanelRow testID="visit-receive-cash" Icon={HandCoins} label="Xác nhận đã nhận tiền mặt" disabled={busy || cashIntent.busy} chevron onPress={receiveCash} />
+            </View>
+          )}
+          {checkout && cashIntent.cashFirst && cashIntent.intent?.status !== 'received' && (
+            <View style={styles.divider}>
+              <PanelRow testID="visit-cash-recheck" Icon={Clock} label="Kiểm tra lại" disabled={busy || cashIntent.busy} chevron onPress={() => { void cashIntent.refresh(); void load(); }} />
+            </View>
+          )}
+          {!!cashIntent.error && <Text accessibilityRole="alert" style={styles.note}>{cashIntent.error}</Text>}
           {!!message && <Text accessibilityRole="alert" style={styles.note}>{message}</Text>}
         </View>
       </View>

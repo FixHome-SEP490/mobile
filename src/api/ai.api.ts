@@ -121,9 +121,13 @@ export type AiStatus =
   | 'no_grounding'
   | 'unavailable';
 
+/** Why a turn failed, so the screen retries only what a retry can fix (as on the web). */
+export type AiFailureReason = 'service_unavailable' | 'image_transport' | 'validation' | 'rate_limited' | 'request_failed';
+
 export interface AiReply {
   sessionId: string | null;
   status: AiStatus;
+  failureReason?: AiFailureReason;
   /** False only when the backend could not reach the AI. */
   aiAvailable?: boolean;
 
@@ -156,9 +160,23 @@ export interface AiReply {
 export const AI_TOO_FAST_MESSAGE =
   'Anh/chị nhắn hơi nhanh, em chưa kịp xử lý hết ạ. Anh/chị đợi khoảng một phút rồi gửi lại giúp em nhé.';
 
-function isTooFast(error: unknown): boolean {
-  return (error as { response?: { status?: number } })?.response?.status === 429;
+/** A 413 with photos is the payload; a timeout is ambiguous (the AI may already have the POST), so it is not retried. */
+export function failureReason(error: unknown, hasImages: boolean): AiFailureReason {
+  const status = (error as { response?: { status?: unknown } } | null)?.response?.status;
+  if (status === 429) return 'rate_limited';
+  if (status === 400 || status === 422) return 'validation';
+  if (hasImages && status === 413) return 'image_transport';
+  const code = String((error as { code?: unknown } | null)?.code);
+  if (status === 408 || (typeof status === 'number' && status >= 500)) return 'service_unavailable';
+  if (status === undefined && ['ERR_NETWORK', 'ECONNABORTED', 'ETIMEDOUT'].includes(code)) return 'service_unavailable';
+  return 'request_failed';
 }
+
+const FAILURE_TEXT: Record<Exclude<AiFailureReason, 'rate_limited' | 'service_unavailable'>, string> = {
+  validation: 'Mô tả chưa hợp lệ. Anh/chị kiểm tra lại nội dung rồi thử lại giúp em nhé.',
+  image_transport: 'Ảnh chưa gửi được ạ. Anh/chị thử gửi lại, hoặc tiếp tục đặt lịch bằng cách chọn dịch vụ thủ công.',
+  request_failed: 'Trợ lý chưa xử lý được yêu cầu ạ. Anh/chị có thể chọn dịch vụ thủ công để tiếp tục đặt lịch.',
+};
 
 export type AcknowledgementSituations = Record<string, string[]>;
 
@@ -190,23 +208,21 @@ function unwrap<T>(payload: { data: T } | T): T {
   return payload as T;
 }
 
-/** The backend refused the turn because it came too fast. */
-function tooFast(sessionId?: string | null): AiReply {
-  return { ...offline(sessionId), messageVi: AI_TOO_FAST_MESSAGE, answerVi: AI_TOO_FAST_MESSAGE };
-}
+const UNREACHABLE =
+  'Hiện chưa kết nối được tới trợ lý ạ. Anh/chị kiểm tra lại mạng giúp em, hoặc vẫn có thể đặt thợ bình thường.';
 
-/** The sentence to show when even our own backend is unreachable. */
-function offline(sessionId?: string | null): AiReply {
+/** The reply to show when the turn failed: the sentence follows the reason. */
+function offline(sessionId: string | null | undefined, error: unknown, hasImages: boolean): AiReply {
+  const reason = failureReason(error, hasImages);
+  const sentence =
+    reason === 'rate_limited' ? AI_TOO_FAST_MESSAGE : reason === 'service_unavailable' ? UNREACHABLE : FAILURE_TEXT[reason];
   return {
     sessionId: sessionId ?? null,
     status: 'unavailable',
-    aiAvailable: false,
-    messageVi:
-      'Hiện chưa kết nối được tới trợ lý ạ. Anh/chị kiểm tra lại mạng giúp em, ' +
-      'hoặc vẫn có thể đặt thợ bình thường.',
-    answerVi:
-      'Hiện chưa kết nối được tới trợ lý ạ. Anh/chị kiểm tra lại mạng giúp em, ' +
-      'hoặc vẫn có thể đặt thợ bình thường.',
+    aiAvailable: reason === 'service_unavailable' ? false : reason === 'validation' || reason === 'rate_limited' ? true : undefined,
+    failureReason: reason,
+    messageVi: sentence,
+    answerVi: sentence,
     suspectedFaults: [],
     recommendedServices: [],
     suggestedActionsVi: [],
@@ -234,7 +250,7 @@ export const aiApi = {
       );
       return unwrap(res.data);
     } catch (error) {
-      return isTooFast(error) ? tooFast(payload.sessionId) : offline(payload.sessionId);
+      return offline(payload.sessionId, error, (payload.images?.length ?? 0) > 0);
     }
   },
 
@@ -252,7 +268,7 @@ export const aiApi = {
       );
       return unwrap(res.data);
     } catch (error) {
-      return isTooFast(error) ? tooFast(payload.sessionId) : offline(payload.sessionId);
+      return offline(payload.sessionId, error, false);
     }
   },
 

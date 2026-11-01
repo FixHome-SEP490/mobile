@@ -15,6 +15,8 @@ import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import type { PaymentMethod } from './payment-facts';
 import VoucherCheckoutSection from './VoucherCheckoutSection';
+import CashIntentPanel from './CashIntentPanel';
+import { useCashIntent } from './useCashIntent';
 import { secondsLeft } from './voucher-checkout';
 
 /** VNPay does not take less than this; the backend answers 422 before it creates a payment. */
@@ -46,6 +48,9 @@ export default function PaymentMethodScreen() {
   const navigation = useNavigation<any>();
   const { controller, state } = useCustomerOrderPayment();
   useLoadUnloadedResources(snapshot, ['invoice', 'cash'], loadResource);
+  const cashIntent = useCashIntent('SOLO', key?.serviceOrderId ?? null);
+  // Cash first: the customer asks, the server fixes the amount, the technician confirms receipt.
+  const [cashAsk, setCashAsk] = useState(false);
 
   const [sheet, setSheet] = useState<FrozenVnpaySheet | null>(null);
   const [sheetMethod, setSheetMethod] = useState<Exclude<PaymentMethod, 'wallet'> | null>(null);
@@ -54,6 +59,7 @@ export default function PaymentMethodScreen() {
     setDraftOwner(key);
     setSheet(null);
     setSheetMethod(null);
+    setCashAsk(false);
   }
 
   const orderValue = snapshot?.order.status === 'ready' ? snapshot.order.data : null;
@@ -68,7 +74,7 @@ export default function PaymentMethodScreen() {
 
   const busy = state.phase === 'submitting' || state.phase === 'verifying';
   const unknown = state.phase === 'unknown' || (!!key && !!snapshot?.pendingIntent);
-  const frozen = busy || unknown;
+  const frozen = busy || unknown || cashIntent.busy;
   const unpaid = !!invoice && invoice.status === 'unpaid';
   const cashAwaiting = !!cash && cash.status === 'pending_confirmation';
   // The hold that pays this order, and what the server says is due with it (the invoice total otherwise).
@@ -86,7 +92,10 @@ export default function PaymentMethodScreen() {
       navigation.navigate('WalletPayment');
       return;
     }
-    if (method === 'cash' && !cashAwaiting) return;
+    if (method === 'cash' && !cashAwaiting) {
+      if (cashIntent.cashFirst && !cashIntent.active) setCashAsk(true);
+      return;
+    }
     if (!invoice || !ownerKey) return;
     void controller.requestPayment(method).then(() => {
       setSheet({ invoiceId: invoice.id, amount: invoice.amount, ownerKey });
@@ -98,6 +107,13 @@ export default function PaymentMethodScreen() {
     controller.cancelConfirmation();
     setSheet(null);
     setSheetMethod(null);
+    setCashAsk(false);
+  };
+
+  const submitCashAsk = () => {
+    if (!current || frozen || !unpaid || !cashIntent.cashFirst || cashIntent.active) return;
+    setCashAsk(false);
+    void cashIntent.create(voucher?.reservationId);
   };
 
   const submitSheet = () => {
@@ -135,20 +151,22 @@ export default function PaymentMethodScreen() {
       title="Thanh toán"
       stage={4}
       onBack={() => {
-        if (sheetValid) cancelSheet();
+        if (sheetValid || cashAsk) cancelSheet();
         else navigation.goBack();
       }}
       secondary={{
         label: 'Làm mới dữ liệu',
         testID: 'task-refresh',
         disabled: !canRefresh || busy,
-        onPress: () => { if (canRefresh && !busy) void refresh('manual'); },
+        onPress: () => { if (canRefresh && !busy) { void refresh('manual'); void cashIntent.refresh(); } },
       }}
       primary={
         unknown
           ? { label: 'Kiểm tra kết quả', testID: 'payment-check-result', disabled: busy,
               accessibilityHint: 'Đối chiếu kết quả thanh toán chưa rõ từ máy chủ',
               onPress: () => { void controller.verify(); navigation.navigate('OrderTask'); } }
+          : cashAsk && cashIntent.cashFirst && !cashIntent.active
+            ? { label: 'Gửi yêu cầu tiền mặt', testID: 'cash-intent-submit', disabled: frozen, onPress: submitCashAsk }
           : sheetValid && sheetMethod
             ? { label: sheetMethod === 'vnpay' ? 'Xác nhận mở VNPay' : sheetMethod === 'no_charge' ? 'Xác nhận miễn phí' : sheetMethod === 'voucher_zero' ? 'Xác nhận thanh toán 0 ₫' : 'Xác nhận tiền mặt',
                 testID: 'payment-confirm-submit', disabled: busy, onPress: submitSheet }
@@ -166,6 +184,24 @@ export default function PaymentMethodScreen() {
       {invoice ? <M6InvoiceSummary invoice={{ id: invoice.id, grandTotal: invoice.grandTotal, paymentStatus: invoice.paymentStatus, items: invoice.items }} /> : (
         <ReadOnlyNotice>Đang chờ hóa đơn từ máy chủ. Tổng tiền do máy chủ trả về; ứng dụng không tự tính lại.</ReadOnlyNotice>
       )}
+      {cashAsk && cashIntent.cashFirst && !cashIntent.active ? (
+        <View style={{ backgroundColor: colors.tone.warning.bg, borderColor: colors.tone.warning.fg, borderWidth: 1, borderRadius: 12, padding: spacing.md }} testID="cash-intent-sheet">
+          <Text accessibilityRole="header" style={{ fontSize: 16, fontWeight: '700', color: colors.tone.warning.text }}>Yêu cầu trả tiền mặt</Text>
+          <DetailRow label="Số tiền cần trả" value={formatVnd(payable)} />
+          <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }}>
+            Hệ thống sẽ chốt số tiền hiện tại và báo cho kỹ thuật viên. Chỉ trả tiền sau khi gửi yêu cầu; kỹ thuật viên xác nhận khi đã nhận đủ.
+          </Text>
+          <TouchableOpacity
+            testID="cash-intent-sheet-cancel"
+            accessibilityRole="button"
+            accessibilityLabel="Hủy"
+            onPress={cancelSheet}
+            style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Text style={{ color: colors.primaryStrong, fontWeight: '600', fontSize: 14, lineHeight: 20 }}>Hủy</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       {sheetValid && sheet && sheetMethod ? (
         <View style={{ backgroundColor: colors.tone.warning.bg, borderColor: colors.tone.warning.fg, borderWidth: 1, borderRadius: 12, padding: spacing.md }} testID="payment-confirm-sheet">
           <Text style={{ fontSize: 16, fontWeight: '700', color: colors.tone.warning.text }}>
@@ -203,23 +239,26 @@ export default function PaymentMethodScreen() {
         <VoucherCheckoutSection
           scopeId={key.serviceOrderId}
           applied={voucher}
-          disabled={frozen || !!sheet}
+          disabled={frozen || !!sheet || cashIntent.active}
           keepWhenExpired={cashAwaiting}
           onApplied={controller.setVoucher}
           onReleased={() => controller.setVoucher(null)}
         />
       ) : null}
-      <HubSection title="Phương thức thanh toán" items={(invoice?.amount === 0 ? [NO_CHARGE_METHOD] : voucher?.customerDueVnd === 0 ? [VOUCHER_ZERO_METHOD] : METHODS).map((method): HubLink => {
-        const cashBlocked = method.id === 'cash' && !cashAwaiting;
+      {cashIntent.cashFirst ? <CashIntentPanel intent={cashIntent.intent} busy={cashIntent.busy} onCancel={() => { void cashIntent.cancel(); }} /> : null}
+      {cashIntent.error ? <ReadOnlyNotice tone="error">{cashIntent.error}</ReadOnlyNotice> : null}
+      {cashIntent.active ? null : <HubSection title="Phương thức thanh toán" items={(invoice?.amount === 0 ? [NO_CHARGE_METHOD] : voucher?.customerDueVnd === 0 ? [VOUCHER_ZERO_METHOD] : METHODS).map((method): HubLink => {
+        const cashFirstOffer = cashIntent.cashFirst && !cashIntent.active;
+        const cashBlocked = method.id === 'cash' && !cashAwaiting && !cashFirstOffer;
         const vnpayTooSmall = method.id === 'vnpay' && !!invoice && payable < VNPAY_MIN;
         return {
           screen: method.id, testID: `payment-method-${method.id}`, label: method.label, Icon: METHOD_ICONS[method.id],
           accessibilityHint: method.hint,
-          sub: cashBlocked ? 'Chờ kỹ thuật viên khai báo số tiền đã nhận.' : vnpayTooSmall ? 'VNPay chỉ nhận từ 5.000 ₫; hãy dùng ví hoặc tiền mặt.' : method.hint,
+          sub: cashBlocked ? 'Chờ kỹ thuật viên khai báo số tiền đã nhận.' : method.id === 'cash' && !cashAwaiting && cashFirstOffer ? 'Gửi yêu cầu để kỹ thuật viên xác nhận khi nhận tiền.' : vnpayTooSmall ? 'VNPay chỉ nhận từ 5.000 ₫; hãy dùng ví hoặc tiền mặt.' : method.hint,
           disabled: frozen || !unpaid || !invoice || cashBlocked || vnpayTooSmall || busy,
           onPress: () => choose(method.id),
         };
-      })} onOpen={() => {}} />
+      })} onOpen={() => {}} />}
       <HubSection title="Bàn giao" items={[{
         screen: 'HandoverReview', testID: 'payment-handover-link', label: 'Xem lại bàn giao', Icon: ClipboardCheck, disabled: !current,
         sub: 'Ảnh, ghi chú và phạm vi bàn giao trước khi thanh toán',

@@ -4,7 +4,7 @@ import { act, create } from 'react-test-renderer';
 import InvitationJobDetails from './InvitationJobDetails';
 import type { TechnicianBookingPreview } from '../../api/bookings.api';
 
-jest.mock('lucide-react-native', () => ({ Sparkles: () => null }));
+jest.mock('lucide-react-native', () => ({ Sparkles: () => null, ChevronDown: () => null, ChevronUp: () => null }));
 jest.mock('../../api/media.api', () => ({
   apiUrl: (p: string) => p,
   mediaApi: { getBookingPhotoUri: jest.fn().mockResolvedValue('data:image/jpeg;base64,AAAA'), getBookingVideoLink: jest.fn() },
@@ -26,15 +26,16 @@ describe('InvitationJobDetails', () => {
     expect(texts(r)).toContain('hiện sau khi bạn nhận đơn');
   });
 
-  it('says so when there is no description or AI summary, and opens the summary on tap', () => {
+  it('says so when there is no description or AI summary, and shows the AI summary open, foldable on tap', () => {
     let r!: ReturnType<typeof create>;
     act(() => { r = create(<InvitationJobDetails booking={base} />); });
     expect(texts(r)).toContain('Khách chưa ghi mô tả.');
     expect(r.root.findAllByType(TouchableOpacity)).toHaveLength(0);
 
     act(() => { r.update(<InvitationJobDetails booking={{ ...base, aiSummary: { conclusion: 'Hỏng gioăng', suspectedFaults: ['Gioăng mòn'] } }} />); });
-    act(() => { r.root.findByType(TouchableOpacity).props.onPress(); });
     expect(texts(r)).toContain('Hỏng gioăng');
     expect(texts(r)).toContain('Gioăng mòn');
+    act(() => { r.root.findByType(TouchableOpacity).props.onPress(); });
+    expect(texts(r)).not.toContain('Hỏng gioăng');
   });
 });

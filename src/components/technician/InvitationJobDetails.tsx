@@ -4,7 +4,7 @@
 // basis, the assistant's summary and the photos/videos. Never the address, phone or private note.
 import React, { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Sparkles } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Sparkles } from 'lucide-react-native';
 import type { TechnicianBookingPreview } from '../../api/bookings.api';
 import { useAppTheme } from '../../constants/theme';
 import { invitationPriceText } from '../../screens/technician/invitation-view';
@@ -26,55 +26,67 @@ function Lines({ label, items }: { label: string; items?: string[] }) {
 /** `hidePrivacyNote`: a visit of several devices says it once for the whole visit, not under every device. */
 export default function InvitationJobDetails({ booking, hidePrivacyNote = false }: { booking: TechnicianBookingPreview; hidePrivacyNote?: boolean }) {
   const { colors } = useAppTheme();
-  const [aiOpen, setAiOpen] = useState(false);
+  // Open at once: the diagnosis is what the technician came to read; it can still be folded away.
+  const [aiOpen, setAiOpen] = useState(true);
   const ai = booking.aiSummary;
   const hasPrice = ai && (ai.priceMin != null || ai.priceMax != null);
+  const words = (booking.description ?? ai?.customerText ?? '').trim();
+  const faults = (ai?.suspectedFaults ?? []).filter(Boolean);
   const noteStyle = [styles.value, styles.note, { color: colors.tone.warning.text, backgroundColor: colors.tone.warning.bg }];
+  const card = [styles.row, styles.card, { borderColor: colors.border, backgroundColor: colors.surface }];
   return (
     <View testID="invitation-job-details" style={styles.wrap}>
-      <View style={[styles.row, styles.card, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+      <View style={card}>
         <Text style={[styles.label, { color: colors.textSecondary }]}>Khách mô tả</Text>
-        <Text style={[styles.value, { color: booking.description ? colors.text : colors.textSecondary }]}>
-          {booking.description ?? 'Khách chưa ghi mô tả.'}
-        </Text>
-        <Text style={[styles.value, { color: colors.text }]}>{invitationPriceText(booking, formatVnd)}</Text>
-        {ai ? (
+        <Text style={[styles.value, { color: words ? colors.text : colors.textSecondary }]}>{words || 'Khách chưa ghi mô tả.'}</Text>
+        <Text style={[styles.value, styles.price, { color: colors.text }]}>{invitationPriceText(booking, formatVnd)}</Text>
+      </View>
+      {booking.media?.length ? (
+        <View style={styles.mediaSection}>
+          <Text style={[styles.heading, { color: colors.text }]}>{`Ảnh/video khách gửi (${booking.media.length})`}</Text>
+          <BookingMediaViewer bookingId={booking.id} media={booking.media} />
+        </View>
+      ) : null}
+      {ai ? (
+        <View testID="invitation-ai-summary" style={card}>
           <TouchableOpacity
             style={styles.aiBtn}
             onPress={() => setAiOpen((v) => !v)}
             accessibilityRole="button"
             accessibilityState={{ expanded: aiOpen }}
+            accessibilityLabel={aiOpen ? 'Thu gọn nhận định của trợ lý AI' : 'Mở nhận định của trợ lý AI'}
           >
             <Sparkles size={16} color={colors.primaryStrong} strokeWidth={1.75} />
-            <Text style={[styles.aiBtnText, { color: colors.primaryStrong }]}>
-              {aiOpen ? 'Ẩn tóm tắt vấn đề từ AI' : 'Xem tóm tắt vấn đề từ AI'}
-            </Text>
+            <Text style={[styles.aiBtnText, { color: colors.primaryStrong }]}>Khách đã hỏi trợ lý AI trước khi đặt</Text>
+            {aiOpen ? <ChevronUp size={16} color={colors.textSecondary} /> : <ChevronDown size={16} color={colors.textSecondary} />}
           </TouchableOpacity>
-        ) : null}
-      </View>
-      {ai && aiOpen ? (
-        <View testID="invitation-ai-summary" style={[styles.row, styles.card, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>AI nhận định</Text>
-          {ai.deviceName ? <Text style={[styles.value, { color: colors.text }]}>{`Thiết bị: ${ai.deviceName}`}</Text> : null}
-          <Lines label="Có thể là" items={ai.suspectedFaults} />
-          <Lines label="Đã trao đổi" items={ai.notes} />
-          <Lines label="Đã khuyên khách" items={ai.suggestedActions} />
-          {hasPrice ? (
-            <Text style={[styles.value, { color: colors.text }]}>
-              {`Giá tham khảo: ${[ai.priceMin, ai.priceMax].filter((n) => n != null).map((n) => formatVnd(n)).join(' - ')}`}
-            </Text>
+          {aiOpen ? (
+            <>
+              {ai.deviceName ? <Text style={[styles.value, styles.strong, { color: colors.text }]}>{`Thiết bị: ${ai.deviceName}`}</Text> : null}
+              {faults.length ? (
+                <View style={styles.row}>
+                  <Text style={[styles.label, { color: colors.textSecondary }]}>Có thể là</Text>
+                  <View style={styles.chips}>
+                    {faults.map((f) => (
+                      <Text key={f} style={[styles.chip, { color: colors.tone.warning.text, backgroundColor: colors.tone.warning.bg }]}>{f}</Text>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+              <Lines label="Khách đã thử / loại trừ" items={ai.notes} />
+              <Lines label="AI đã khuyên khách" items={ai.suggestedActions} />
+              {hasPrice ? (
+                <Text style={[styles.value, { color: colors.text }]}>
+                  {`Giá tham khảo: ${[ai.priceMin, ai.priceMax].filter((n) => n != null).map((n) => formatVnd(n)).join(' - ')}`}
+                </Text>
+              ) : null}
+              {ai.recommendedServiceName ? (
+                <Text style={[styles.value, { color: colors.text }]}>{`Dịch vụ gợi ý: ${ai.recommendedServiceName}`}</Text>
+              ) : null}
+              {ai.conclusion ? <Text style={[styles.value, { color: colors.text }]}>{ai.conclusion}</Text> : null}
+              <Text style={noteStyle}>Đây là gợi ý sơ bộ, bạn kiểm tra tận nơi rồi mới kết luận.</Text>
+            </>
           ) : null}
-          {ai.recommendedServiceName ? (
-            <Text style={[styles.value, { color: colors.text }]}>{`Dịch vụ gợi ý: ${ai.recommendedServiceName}`}</Text>
-          ) : null}
-          {ai.conclusion ? <Text style={[styles.value, { color: colors.text }]}>{ai.conclusion}</Text> : null}
-          <Text style={noteStyle}>Đây là gợi ý sơ bộ, bạn kiểm tra tận nơi rồi mới kết luận.</Text>
-        </View>
-      ) : null}
-      {booking.media?.length ? (
-        <View style={styles.mediaSection}>
-          <Text style={[styles.heading, { color: colors.text }]}>{`Ảnh/video khách gửi (${booking.media.length})`}</Text>
-          <BookingMediaViewer bookingId={booking.id} media={booking.media} />
         </View>
       ) : null}
       {!hidePrivacyNote && (
@@ -96,5 +108,9 @@ const styles = StyleSheet.create({
   value: { fontSize: 14, lineHeight: 22 },
   note: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
   aiBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44 },
-  aiBtnText: { fontSize: 14, fontWeight: '600' },
+  aiBtnText: { flex: 1, fontSize: 14, fontWeight: '600' },
+  price: { fontWeight: '600' },
+  strong: { fontWeight: '600' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: { fontSize: 13, lineHeight: 18, fontWeight: '600', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, overflow: 'hidden' },
 });

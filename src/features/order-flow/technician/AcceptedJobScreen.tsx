@@ -6,6 +6,7 @@ import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { useTechnicianArrivalProof } from './useTechnicianArrivalProof';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import TechnicianOrderHub from '../shared/TechnicianOrderHub';
+import CustomerRequestPreview from './CustomerRequestPreview';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { backFromFlow } from '../navigation/resume-order';
@@ -100,6 +101,7 @@ export default function AcceptedJobScreen() {
           }
         />
       </View>
+      <CustomerRequestPreview order={revoked ? null : order} />
       {revoked ? (
         <ReadOnlyNotice>Quyền xem đơn đã thay đổi hoặc phân công không còn thuộc về bạn. Bản nháp xác nhận đã được xóa; không có thao tác nào được gửi.</ReadOnlyNotice>
       ) : !timeGatePassed ? (

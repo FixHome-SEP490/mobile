@@ -65,6 +65,48 @@ export function nextPinnedDevices(current: AiDeviceSuggestion[], reply: { device
   return devices.length >= 2 ? devices : [];
 }
 
+/** A photo already uploaded in the chat, handed to the visit form so it need not be picked again. */
+export interface AiVisitPhoto { uploadId: string; uri: string; name: string; type: 'image/jpeg' }
+
+interface PhotoSource {
+  sender: string;
+  images?: string[];
+  /** Upload id of each image, null for one with no file (handed over). */
+  imageUploads?: (string | null)[];
+  reply?: { photos?: { index: number; deviceType?: string | null }[] };
+}
+
+/**
+ * Each uploaded photo of the conversation under the appliance the assistant read it as (the reply that follows the
+ * message says so), so every machine of the visit takes its own photos. Photos not recognised or not uploaded yet stay out.
+ */
+export function photosByAppliance(
+  messages: PhotoSource[],
+  uploaded: (id: string) => { uploadId?: string; uri: string; done: boolean } | undefined,
+): Map<string, AiVisitPhoto[]> {
+  const found = new Map<string, AiVisitPhoto[]>();
+  messages.forEach((sent, at) => {
+    if (sent.sender !== 'user' || !sent.images?.length) return;
+    const answer = messages.slice(at + 1).find((m) => m.sender === 'user' || m.reply?.photos?.length);
+    const readings = answer?.sender === 'bot' ? answer.reply?.photos ?? [] : [];
+    readings.forEach(({ index, deviceType }) => {
+      const id = sent.imageUploads?.[index];
+      const item = id ? uploaded(id) : undefined;
+      if (!deviceType || !item?.done || !item.uploadId) return;
+      found.set(deviceType, [...(found.get(deviceType) ?? []), { uploadId: item.uploadId, uri: item.uri, name: 'tro-ly.jpg', type: 'image/jpeg' }]);
+    });
+  });
+  return found;
+}
+
+/** Show "Chọn dịch vụ" when a failure left no suggestion and a retry would not help (as on the web). */
+export function showsManualBooking(reply: { status?: string; aiAvailable?: boolean; failureReason?: string } | null | undefined, hasPin: boolean): boolean {
+  if (hasPin || !reply) return false;
+  const reason = reply.failureReason;
+  if (reason === 'validation' || reason === 'rate_limited') return false;
+  return reply.status === 'unavailable' || reply.aiAvailable === false;
+}
+
 /** Videos in the chat: never sent to the AI, kept for the technician (PO 18/10/2026). */
 export const AI_MAX_VIDEOS = 2;
 export const AI_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
