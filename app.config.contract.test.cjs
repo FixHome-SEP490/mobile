@@ -8,13 +8,16 @@ try {
   delete process.env.EAS_BUILD_PLATFORM;
   const normal = configFn({ config: base });
   assert.deepEqual(normal.plugins, base.plugins, 'without key existing plugins remain unchanged');
+  assert.equal(normal.extra.androidMapsConfigured, false, 'without key the app is told to show the map placeholder');
   process.env.FIXHOME_ANDROID_MAPS_API_KEY = 'example-synthetic-not-a-real-key';
   const withKey = configFn({ config: base });
   assert.equal(withKey.plugins.length, base.plugins.length + 1);
   assert.deepEqual(withKey.plugins.at(-1), ['react-native-maps', {
     androidGoogleMapsApiKey: 'example-synthetic-not-a-real-key',
   }]);
-  assert.deepEqual({ ...withKey, plugins: base.plugins }, base, 'dynamic config preserves app.json fields');
+  assert.equal(withKey.extra.androidMapsConfigured, true, 'with key the native map is used');
+  const { extra: _extra, ...withKeyRest } = withKey;
+  assert.deepEqual({ ...withKeyRest, plugins: base.plugins }, base, 'dynamic config preserves app.json fields');
   delete process.env.FIXHOME_ANDROID_MAPS_API_KEY;
   process.env.EAS_BUILD_PLATFORM = 'android';
   assert.throws(() => configFn({ config: base }), /FIXHOME_ANDROID_MAPS_API_KEY/);
