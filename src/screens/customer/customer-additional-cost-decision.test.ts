@@ -128,7 +128,7 @@ it('rejects only the cost request and keeps the repair order alive in copy', asy
   expect(approve(h)).not.toHaveBeenCalled();
   expect(h.state().decided).toMatchObject({ costId: COST_ID, action: 'REJECTED' });
   expect(notified(h).mock.calls[notified(h).mock.calls.length - 1]).toEqual(
-    ['Đã từ chối chi phí phát sinh', 'Yêu cầu chi phí đã bị từ chối. Đơn dịch vụ vẫn tiếp tục sửa chữa.'],
+    ['Đã từ chối chi phí phát sinh', 'Yêu cầu chi phí đã bị từ chối. Đơn sửa chữa vẫn tiếp tục.'],
   );
   expect(refreshed(h)).toHaveBeenCalledTimes(1);
 });

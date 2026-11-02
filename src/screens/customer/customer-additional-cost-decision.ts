@@ -276,7 +276,7 @@ export function createCostDecisionController(
       if (confirming.kind === 'approve') {
         deps.notify('Đã duyệt chi phí phát sinh', 'Chi phí đã được duyệt và cộng vào tổng đơn. Đây chưa phải thanh toán.');
       } else {
-        deps.notify('Đã từ chối chi phí phát sinh', 'Yêu cầu chi phí đã bị từ chối. Đơn dịch vụ vẫn tiếp tục sửa chữa.');
+        deps.notify('Đã từ chối chi phí phát sinh', 'Yêu cầu chi phí đã bị từ chối. Đơn sửa chữa vẫn tiếp tục.');
       }
       await deps.refreshCosts();
     } catch (error) {

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
-import { partReturnsApi } from '../../../api/part-requests.api';
+import { canDeclareMoreQty, partReturnsApi } from '../../../api/part-requests.api';
 import { PARTS_MISMATCH, partsCompletionBlockers, partsMismatchDetails } from './parts-completion';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { useTechnicianCompletion } from './useTechnicianCompletion';
@@ -11,6 +11,7 @@ import { sameOrderSession } from '../domain/order-session.types';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
+import { backFromFlow } from '../navigation/resume-order';
 
 /**
  * T14 — completion request. Scope, explicit note (<=2000), known blockers
@@ -25,6 +26,8 @@ export default function CompletionRequestScreen() {
 
   // Used quantities from the custody ledger; unknown (null) when the ledger is off, then only the Backend checks quantities.
   const [usedByItem, setUsedByItem] = useState<Map<string, number> | null>(null);
+  // Units still owed back to FixHome: declaring them is not a handover blocker, it can follow completion (web #177).
+  const [returnsToDeclare, setReturnsToDeclare] = useState(0);
   const [note, setNote] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [draftOwner, setDraftOwner] = useState(key);
@@ -63,8 +66,12 @@ export default function CompletionRequestScreen() {
     if (!orderId) return undefined;
     let live = true;
     partReturnsApi.getByOrderId(orderId).then(
-      (rows) => { if (live) setUsedByItem(new Map(rows.filter((r) => r.usageRecorded !== false).map((r) => [r.partRequestItemId, r.usedQty]))); },
-      () => { if (live) setUsedByItem(null); },
+      (rows) => {
+        if (!live) return;
+        setUsedByItem(new Map(rows.filter((r) => r.usageRecorded !== false).map((r) => [r.partRequestItemId, r.usedQty])));
+        setReturnsToDeclare(rows.filter((r) => r.usageRecorded !== false).reduce((n, r) => n + canDeclareMoreQty(r), 0));
+      },
+      () => { if (live) { setUsedByItem(null); setReturnsToDeclare(0); } },
     );
     return () => { live = false; };
   }, [orderId, snapshot?.resources.parts]);
@@ -112,7 +119,7 @@ export default function CompletionRequestScreen() {
 
   if (!current || !order) {
     return (
-      <TaskScreenShell title="Bàn giao và yêu cầu thanh toán" onBack={() => navigation.goBack()}>
+      <TaskScreenShell title="Bàn giao và yêu cầu thanh toán" onBack={() => backFromFlow(navigation)}>
         <ReadOnlyNotice>Bàn giao chỉ thực hiện trên đơn đang sửa chữa thuộc về bạn và chưa có yêu cầu bàn giao.</ReadOnlyNotice>
       </TaskScreenShell>
     );
@@ -124,7 +131,7 @@ export default function CompletionRequestScreen() {
       stage={3}
       onBack={() => {
         if (sheetValid) cancelConfirm();
-        else navigation.goBack();
+        else backFromFlow(navigation);
       }}
       secondary={{
         label: 'Làm mới dữ liệu',
@@ -158,6 +165,9 @@ export default function CompletionRequestScreen() {
         <ReadOnlyNotice>
           Máy chủ sẽ kiểm tra điều kiện ảnh và linh kiện khi bạn gửi. Ứng dụng không tự kết luận đã đủ ảnh.
         </ReadOnlyNotice>
+      ) : null}
+      {returnsToDeclare > 0 ? (
+        <ReadOnlyNotice>{`Còn ${returnsToDeclare} linh kiện cần khai trả kho. Có thể khai trả sau khi hoàn tất sửa.`}</ReadOnlyNotice>
       ) : null}
       {partsBlocked && !unknown ? (
         <TouchableOpacity testID="completion-open-parts" accessibilityRole="button" onPress={() => navigation.navigate('PartsLifecycle')}

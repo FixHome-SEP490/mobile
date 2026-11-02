@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Text, TouchableOpacity } from 'react-native';
+import { Alert, Text, TouchableOpacity, Linking } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import CustomerVisitScreen from './CustomerVisitScreen';
 
@@ -20,9 +20,9 @@ jest.mock('@react-navigation/native', () => {
 jest.mock('react-native-safe-area-context', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const Native = require('react-native');
-  return { SafeAreaView: Native.View };
+  return { SafeAreaView: Native.View, useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) };
 });
-jest.mock('../../components/BackButton', () => ({ __esModule: true, default: () => null }));
+jest.mock('../../components/BackButton', () => ({ __esModule: true, default: () => null, HomeButton: () => null }));
 jest.mock('../../components/BookingRescheduleSheet', () => ({ __esModule: true, default: () => null }));
 jest.mock('../../components/customer/CustomerSkeleton', () => ({ __esModule: true, default: () => null }));
 jest.mock('../../hooks/useLiveRefresh', () => ({ useLiveRefresh: jest.fn() }));
@@ -44,6 +44,25 @@ jest.mock('../../constants/theme', () => {
 jest.mock('../../api/visit-groups.api', () => ({
   visitGroupsApi: new Proxy({}, { get: (_t, name: string) => (...args: unknown[]) => (mockVisit as Record<string, (...a: unknown[]) => unknown>)[name](...args) }),
 }));
+const mockFunded = { wallet: jest.fn(), vnpay: jest.fn(), zero: jest.fn(), confirmCash: jest.fn() };
+jest.mock('../../api/funded-checkout.api', () => ({
+  fundedCheckoutApi: new Proxy({}, { get: (_t, name: string) => (...args: unknown[]) => (mockFunded as Record<string, (...a: unknown[]) => unknown>)[name](...args) }),
+}));
+let mockHeld: Record<string, unknown> = {};
+// The real section is tested with the order payment screens; here it only reports a held voucher.
+jest.mock('../../features/order-flow/customer/VoucherCheckoutSection', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { TouchableOpacity } = require('react-native');
+  return {
+    __esModule: true,
+    default: ({ onApplied, onReleased }: { onApplied: (v: unknown) => void; onReleased: () => void }) => (
+      <>
+        <TouchableOpacity testID="mock-voucher-apply" onPress={() => onApplied(mockHeld)} />
+        <TouchableOpacity testID="mock-voucher-release" onPress={() => onReleased()} />
+      </>
+    ),
+  };
+});
 jest.mock('../../api/orders.api', () => ({ ordersApi: { getOrder: (...args: unknown[]) => mockOrder(...args) } }));
 jest.mock('../../api/customer-wallet.api', () => ({
   customerWalletApi: { getSummary: (...args: unknown[]) => mockWallet(...args) },
@@ -80,6 +99,7 @@ async function mount() {
 
 beforeEach(() => {
   jest.resetAllMocks();
+  mockHeld = { reservationId: 'hold-1', claimId: 'claim-1', scopeId: 'v1', expiresAt: new Date(Date.now() + 600_000).toISOString(), originalGrossVnd: 300000, discountVnd: 100000, customerDueVnd: 200000 };
   mockWallet.mockResolvedValue({ balance: 1_000_000 });
   mockOrder.mockImplementation(async (id: string) => ({ id, status: 'ACCEPTED' }));
 });
@@ -112,9 +132,35 @@ it('points to a quotation that waits for the customer', async () => {
   mockVisit.getCheckout.mockResolvedValue(baseCheckout({ devices: [device(1, { serviceOrderId: 'o1' }), device(2, { serviceOrderId: 'o2' })] }));
   mockOrder.mockImplementation(async (id: string) => ({ id, status: 'EN_ROUTE', quotation: id === 'o2' ? { status: 'SENT' } : undefined }));
   const tree = await mount();
-  expect(texts(tree)).toContain('Máy 2 chờ bạn duyệt báo giá');
+  // The device that waits has its own approve button; the one action at the bottom opens the same order.
+  expect(press(tree, 'visit-quote-2')).toBeDefined();
+  expect(press(tree, 'visit-quote-1')).toBeUndefined();
   act(() => { press(tree, 'visit-quote-shortcut').props.onPress(); });
   expect(mockNavigate).toHaveBeenCalledWith('CustomerOrderDetail', { serviceOrderId: 'o2' });
+});
+
+it('keeps the visit summary, five steps and the technician contacts on the page', async () => {
+  mockVisit.get.mockResolvedValue(baseVisit('MATCHED'));
+  mockVisit.getCheckout.mockResolvedValue(baseCheckout({ devices: [device(1, { serviceOrderId: 'o1' }), device(2, { serviceOrderId: 'o2' })] }));
+  mockOrder.mockImplementation(async (id: string) => ({ id, status: 'UNDER_REPAIR', technician: { id: 't1', fullName: 'Lê Quốc Bảo', phoneNumber: '0900' } }));
+  const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+  const tree = await mount();
+  const all = texts(tree);
+  expect(all).toContain('Lượt sửa · 2 thiết bị');
+  expect(all).toContain('Lê Quốc Bảo');
+  expect(tree.root.findAllByProps({ accessibilityLabel: 'Tiến độ bước 4 trên 5: Sửa chữa' }).length).toBeGreaterThan(0);
+  act(() => { press(tree, 'visit-call').props.onPress(); });
+  expect(openURL).toHaveBeenCalledWith('tel:0900');
+  expect(press(tree, 'visit-chat')).toBeDefined();
+  openURL.mockRestore();
+});
+
+it('shows no bottom action while there is nothing to do yet', async () => {
+  mockVisit.get.mockResolvedValue(baseVisit('MATCHED'));
+  mockVisit.getCheckout.mockResolvedValue(baseCheckout({ devices: [device(1, { serviceOrderId: 'o1' }), device(2, { serviceOrderId: 'o2' })] }));
+  mockOrder.mockImplementation(async (id: string) => ({ id, status: 'UNDER_REPAIR' }));
+  const tree = await mount();
+  expect(tree.root.findAllByProps({ testID: 'visit-footer' })).toHaveLength(0);
 });
 
 it('pays the whole visit from the wallet once every device has a result, then reads the visit again', async () => {
@@ -173,4 +219,64 @@ it('shows a retry when the visit cannot be loaded', async () => {
   mockVisit.get.mockRejectedValue(new Error('offline'));
   const tree = await mount();
   expect(texts(tree)).toContain('Thử lại');
+});
+
+const readyCheckout = () => baseCheckout({ ready: true, devices: [device(1, { serviceOrderId: 'o1', state: 'succeeded', amount: 300000 }), device(2, { serviceOrderId: 'o2', state: 'failed' })] });
+
+it('pays the whole visit through the funded wallet route at the held due', async () => {
+  mockWallet.mockResolvedValue({ balance: 250000 });
+  mockVisit.get.mockResolvedValue(baseVisit('MATCHED'));
+  mockVisit.getCheckout.mockResolvedValue(readyCheckout());
+  mockFunded.wallet.mockResolvedValue({ amount: 200000, balance: 50000 });
+  const tree = await mount();
+  expect(texts(tree).some((t) => t.startsWith('Ví chưa đủ'))).toBe(true);
+  await act(async () => { press(tree, 'mock-voucher-apply').props.onPress(); });
+  expect(texts(tree).some((t) => t.startsWith('Ví chưa đủ'))).toBe(false);
+  expect(String(tree.root.findAll((n) => n.props.testID === 'visit-due')[0].props.children).replace(/\s/g, ' ')).toBe('200.000 ₫');
+  await act(async () => { press(tree, 'visit-pay-submit').props.onPress(); });
+  await act(async () => { await Promise.resolve(); });
+  expect(mockFunded.wallet).toHaveBeenCalledWith({ kind: 'VISIT_GROUP', id: 'v1' }, 'hold-1');
+  expect(mockVisit.payWithWallet).not.toHaveBeenCalled();
+});
+
+it('closes a fully funded visit in one funded call and offers no other method', async () => {
+  mockHeld = { ...mockHeld, discountVnd: 300000, customerDueVnd: 0 };
+  mockVisit.get.mockResolvedValue(baseVisit('MATCHED'));
+  mockVisit.getCheckout.mockResolvedValue(readyCheckout());
+  mockFunded.zero.mockResolvedValue(undefined);
+  const tree = await mount();
+  await act(async () => { press(tree, 'mock-voucher-apply').props.onPress(); });
+  expect(press(tree, 'visit-pay-wallet')).toBeUndefined();
+  expect(press(tree, 'visit-pay-vnpay')).toBeUndefined();
+  await act(async () => { press(tree, 'visit-pay-submit').props.onPress(); });
+  await act(async () => { await Promise.resolve(); });
+  expect(mockFunded.zero).toHaveBeenCalledWith({ kind: 'VISIT_GROUP', id: 'v1' }, 'hold-1');
+  expect(mockVisit.payWithWallet).not.toHaveBeenCalled();
+});
+
+it('goes back to the full total when the voucher is released', async () => {
+  mockVisit.get.mockResolvedValue(baseVisit('MATCHED'));
+  mockVisit.getCheckout.mockResolvedValue(readyCheckout());
+  mockVisit.payWithWallet.mockResolvedValue({ amount: 300000, balance: 700000 });
+  const tree = await mount();
+  await act(async () => { press(tree, 'mock-voucher-apply').props.onPress(); });
+  await act(async () => { press(tree, 'mock-voucher-release').props.onPress(); });
+  expect(tree.root.findAll((n) => n.props.testID === 'visit-due')).toHaveLength(0);
+  await act(async () => { press(tree, 'visit-pay-submit').props.onPress(); });
+  await act(async () => { await Promise.resolve(); });
+  expect(mockVisit.payWithWallet).toHaveBeenCalledWith('v1');
+  expect(mockFunded.wallet).not.toHaveBeenCalled();
+});
+
+it('confirms the technician cash through the hold when a voucher is held', async () => {
+  mockVisit.get.mockResolvedValue(baseVisit('MATCHED'));
+  mockVisit.getCheckout.mockResolvedValue(baseCheckout({ ready: true, pendingCash: { amount: 200000 }, devices: [device(1, { serviceOrderId: 'o1', state: 'succeeded', amount: 300000 })] }));
+  mockFunded.confirmCash.mockResolvedValue(undefined);
+  const tree = await mount();
+  await act(async () => { press(tree, 'mock-voucher-apply').props.onPress(); });
+  const yes = tree.root.findAll((n) => n.props.accessibilityRole === 'button' && [n.props.children].flat().some((c: unknown) => typeof c === 'object' && c !== null && 'props' in (c as object) && (c as { props: { children?: unknown } }).props.children === 'Đúng, tôi đã trả'))[0];
+  await act(async () => { yes.props.onPress(); });
+  await act(async () => { await Promise.resolve(); });
+  expect(mockFunded.confirmCash).toHaveBeenCalledWith({ kind: 'VISIT_GROUP', id: 'v1' }, 'hold-1', { agreed: true });
+  expect(mockVisit.confirmCash).not.toHaveBeenCalled();
 });

@@ -3,7 +3,7 @@
 // The rules the web assistant follows (PO 18/10/2026: the app's assistant works
 // the same way), kept apart from the screen so they are tested on their own.
 
-import type { AiDeviceSuggestion, RecommendedService } from '../../api/ai.api';
+import type { AiDeviceSuggestion, AiReply, RecommendedService } from '../../api/ai.api';
 
 /**
  * One-tap answers to the question the assistant just asked, or none when it is
@@ -152,4 +152,60 @@ export function chatAttachmentSummary(fromChat: ChatAttachmentId[]): string {
   const photos = fromChat.filter((item) => item.kind === 'image').length;
   const videos = fromChat.filter((item) => item.kind === 'video').length;
   return [photos ? `${photos} ảnh` : '', videos ? `${videos} video` : ''].filter(Boolean).join(', ');
+}
+
+export interface PhotoLabel {
+  text: string;
+  uncertain: boolean;
+  /** What the composer is filled with when the label is tapped. */
+  correction: string;
+}
+
+interface LabelledMessage {
+  sender: 'user' | 'bot';
+  images?: string[];
+  reply?: Pick<AiReply, 'photos'>;
+}
+
+/**
+ * The label under photo `imageIndex` of the customer's message at `messageIndex`: what the assistant read it as,
+ * from the first reply after it that reports its photos (same as the web's `photoLabel`).
+ */
+export function photoLabel(messages: LabelledMessage[], messageIndex: number, imageIndex: number): PhotoLabel | null {
+  const sent = messages[messageIndex];
+  if (!sent || sent.sender !== 'user' || !sent.images?.length) return null;
+  for (let i = messageIndex + 1; i < messages.length; i++) {
+    const message = messages[i];
+    if (message.sender === 'user') return null;
+    const photos = message.reply?.photos;
+    if (!photos?.length) continue;
+    const reading = photos.find((photo) => photo.index === imageIndex);
+    const correction = sent.images.length > 1 ? `Ảnh ${imageIndex + 1} là ` : 'Ảnh này là ';
+    if (!reading?.nameVi) return { text: 'Chưa nhận ra', uncertain: true, correction };
+    return { text: reading.uncertain ? `${reading.nameVi}?` : reading.nameVi, uncertain: Boolean(reading.uncertain), correction };
+  }
+  return null;
+}
+
+/**
+ * What the price range is made of: the low end is the service's own price, the high end adds the parts the fault
+ * usually needs. Null when no part is involved.
+ */
+export function priceBreakdown(reply: Pick<AiReply, 'priceEstimate'>): string | null {
+  const price = reply.priceEstimate;
+  if (!price || !price.partsMax || price.labourMin == null) return null;
+  const money = (value: number) => `${value.toLocaleString('vi-VN')}đ`;
+  const labour = price.labourMax && price.labourMax > price.labourMin
+    ? `${money(price.labourMin)} – ${money(price.labourMax)}`
+    : money(price.labourMin);
+  return `Gồm tiền công dịch vụ ${labour}, cộng linh kiện nếu phải thay (tới ${money(price.partsMax)}).`;
+}
+
+/**
+ * The words this turn adds to the booking description: a turn that told the assistant it was wrong goes in without
+ * the "sai rồi" (`restVi`), and not at all when that was all it said.
+ */
+export function wordsForDescription(text: string, reply: Pick<AiReply, 'customerDisagreed'> | null | undefined): string {
+  const disagreed = reply?.customerDisagreed;
+  return disagreed ? (disagreed.restVi ?? text) : text;
 }

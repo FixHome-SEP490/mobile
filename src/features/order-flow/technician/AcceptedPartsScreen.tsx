@@ -27,6 +27,7 @@ import { ConfirmSummary } from '../shared/ConfirmSummary';
 import { ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+import { backFromFlow } from '../navigation/resume-order';
 
 const newPartRow = (): CostItemRow => ({ ...createCostItemRow('parts_equipment'), partSource: 'fixhome', quantity: '1' });
 
@@ -221,12 +222,12 @@ export default function AcceptedPartsScreen() {
       onCancelConfirm();
       return;
     }
-    navigation.goBack();
+    backFromFlow(navigation);
   };
 
   if (!current || !order) {
     return (
-      <TaskScreenShell title="Chuẩn bị linh kiện" onBack={() => navigation.goBack()}>
+      <TaskScreenShell title="Chuẩn bị linh kiện" onBack={() => backFromFlow(navigation)}>
         <ReadOnlyNotice>
           {snapshot?.access === 'historical'
             ? 'Không chuẩn bị linh kiện cho đơn lịch sử.'
@@ -238,7 +239,7 @@ export default function AcceptedPartsScreen() {
 
   if (!isAccepted && !showRecovery && !isUnknown && state.phase !== 'resolved') {
     return (
-      <TaskScreenShell title="Chuẩn bị linh kiện" stage={1} onBack={() => navigation.goBack()}>
+      <TaskScreenShell title="Chuẩn bị linh kiện" stage={1} onBack={() => backFromFlow(navigation)}>
         <ReadOnlyNotice>
           Yêu cầu linh kiện dự kiến chỉ tạo được khi đơn ở trạng thái Đã tiếp nhận, trước khi bạn xuất phát.
         </ReadOnlyNotice>

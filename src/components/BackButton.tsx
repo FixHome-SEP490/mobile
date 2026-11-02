@@ -40,13 +40,13 @@ export default function BackButton({ onPress, label }: { onPress?: () => void; l
 export const goHome = () => { void import('../navigation/root-navigation').then((m) => m.goHome()); };
 
 /** Header shortcut that skips every screen in between. */
-export function HomeButton() {
+export function HomeButton({ onPress = goHome }: { onPress?: () => void } = {}) {
   const { colors } = useAppTheme();
   return (
     <TouchableOpacity
       accessibilityRole="button"
       accessibilityLabel="Về trang chủ"
-      onPress={goHome}
+      onPress={onPress}
       style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
     >
       <Ionicons name="home-outline" size={22} color={colors.text} />

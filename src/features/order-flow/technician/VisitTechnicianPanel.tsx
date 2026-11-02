@@ -1,16 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { visitGrandTotal } from '../../../screens/customer/customer-visit';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ChevronUp, Clock, HandCoins, Layers, LogOut, Wallet, Wrench } from 'lucide-react-native';
 import { isHistoricalOrder, ordersApi } from '../../../api/orders.api';
+import { fundedCheckoutApi, NoFundedCashReservationError } from '../../../api/funded-checkout.api';
 import { REPAIR_FAILURE_REASONS, visitGroupsApi, type RepairFailureReason, type VisitCheckout } from '../../../api/visit-groups.api';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLiveRefresh } from '../../../hooks/useLiveRefresh';
 import { formatVnd } from '../../../utils/format';
 import { extractApiErrorMessage } from '../../../utils/input-validation';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
-import { useRegisterVisitDevices, visitDeviceTabName } from '../navigation/visit-device-tabs';
+import { rememberVisitDevice, useRegisterVisitDevices, visitDeviceTabName } from '../navigation/visit-device-tabs';
 import { PanelRow } from '../shared/VisitPanelRow';
+import { CASH_VOUCHER_UNCHECKED } from './technician-cash-controller';
 import {
   canDeclareVisitCash,
   nextOpenVisitDevice,
@@ -70,6 +73,8 @@ function VisitPanelBody({ section }: { section: 'devices' | 'cash' }) {
     if (firstFocus.current) { firstFocus.current = false; return; }
     void load();
   }, [load]));
+  const orderId = order?.id;
+  useFocusEffect(useCallback(() => { if (groupId && orderId) rememberVisitDevice(groupId, orderId); }, [groupId, orderId]));
 
   const devices = useMemo(() => [...(checkout?.devices ?? [])].sort((a, b) => a.sequence - b.sequence).slice(0, 3), [checkout]);
   // Each device order gets its own tab in the order screen once the visit is known.
@@ -96,16 +101,31 @@ function VisitPanelBody({ section }: { section: 'devices' | 'cash' }) {
   const early = order.status === 'ACCEPTED' || order.status === 'EN_ROUTE';
   const open = openChoice ?? !early;
 
-  const declareCash = () => {
+  const declareCash = async () => {
     if (!checkout || busy) return;
-    Alert.alert('Khai báo tiền mặt cả lượt?', `Bạn xác nhận đã thu ${formatVnd(checkout.total)} tiền mặt cho cả lượt. Khách sẽ được hỏi xác nhận.`, [
+    // Ask the server whether the customer holds a voucher before anything is said about the amount. Only an explicit "none"
+    // allows the full total; a failed lookup collects nothing.
+    setBusy(true); setMessage('');
+    let due = checkout.total;
+    let reservationId: string | null = null;
+    try {
+      const held = await fundedCheckoutApi.cashReservation({ kind: 'VISIT_GROUP', id: groupId });
+      due = held.customerDueVnd;
+      reservationId = held.voucherReservationId;
+    } catch (e) {
+      if (!(e instanceof NoFundedCashReservationError)) { setMessage(CASH_VOUCHER_UNCHECKED); setBusy(false); return; }
+    }
+    setBusy(false);
+    const voucherNote = reservationId ? ' Khách đang dùng voucher nên đây là số sau khi trừ phần giảm.' : '';
+    Alert.alert('Khai báo tiền mặt cả lượt?', `Bạn xác nhận đã thu ${formatVnd(due)} tiền mặt cho cả lượt.${voucherNote} Khách sẽ được hỏi xác nhận.`, [
       { text: 'Chưa', style: 'cancel' },
       {
         text: 'Đã thu đủ',
         onPress: async () => {
           setBusy(true); setMessage('');
           try {
-            await visitGroupsApi.declareCash(groupId, checkout.total);
+            if (reservationId) await fundedCheckoutApi.declareCash({ kind: 'VISIT_GROUP', id: groupId }, reservationId, { declaredAmount: due });
+            else await visitGroupsApi.declareCash(groupId, due);
             setMessage('Đã báo nhận tiền mặt cả lượt, chờ khách xác nhận.');
           } catch (e) {
             setMessage(extractApiErrorMessage(e, 'Chưa khai báo được tiền mặt. Vui lòng kiểm tra lại trạng thái trước khi thử lại.'));
@@ -150,7 +170,7 @@ function VisitPanelBody({ section }: { section: 'devices' | 'cash' }) {
         <View style={styles.card}>
           {checkout && (
             <PanelRow testID="visit-cash-total" Icon={Wallet} readOnly label="Tổng cả lượt"
-              sub={state === 'waiting' ? 'Chờ kết quả các máy' : formatVnd(checkout.total)} />
+              sub={state === 'waiting' ? 'Chờ kết quả các máy' : formatVnd(visitGrandTotal(checkout))} />
           )}
           <View style={checkout ? styles.divider : undefined}>
             <PanelRow testID="visit-cash-status" Icon={status.Icon} readOnly label={status.label} sub={status.sub} />
@@ -302,7 +322,7 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.textSecondary, fontSize: 14, lineHeight: 20, fontWeight: '600', marginTop: spacing.sm },
   divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   note: { color: colors.textSecondary, fontSize: 14, lineHeight: 20, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  card: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, overflow: 'hidden' },
+  card: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
   cashCard: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, padding: spacing.md, gap: spacing.sm },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   title: { color: colors.text, fontSize: 16, lineHeight: 24, fontWeight: '600' },

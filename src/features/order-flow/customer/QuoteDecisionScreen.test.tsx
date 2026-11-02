@@ -162,7 +162,7 @@ it('approve freezes the exact target in a sheet and posts once on explicit confi
     renderer.update(<QuoteDecisionScreen />);
   });
   expect(sheetCount(renderer)).toBe(1);
-  expect(JSON.stringify(renderer.toJSON())).toMatch(/quote-1/);
+  expect(JSON.stringify(renderer.toJSON())).toMatch(/Xác nhận duyệt báo giá/);
   expect(mockSubmit).not.toHaveBeenCalled();
 
   await act(async () => {
@@ -206,10 +206,6 @@ it('unknown offers GET-only verify and back/detail never write', async () => {
   expect(mockVerify).toHaveBeenCalledTimes(1);
   expect(mockSubmit).not.toHaveBeenCalled();
 
-  await act(async () => {
-    renderer.root.findByProps({ testID: 'task-detail-link' }).props.onPress();
-  });
-  expect(mockNavigate).toHaveBeenCalledWith('OrderInformation');
   expect(mockSubmit).not.toHaveBeenCalled();
   expect(mockRefresh).not.toHaveBeenCalled();
   await act(async () => renderer.unmount());

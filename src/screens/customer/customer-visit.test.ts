@@ -5,8 +5,10 @@ import {
   resolveVisitCheckoutState,
   visitActions,
   visitDeviceStatusText,
+  visitGrandTotal,
   visitPayMethods,
   visitStatusView,
+  visitStep,
 } from './customer-visit';
 
 const visit = (over: Partial<Visit> = {}, leadStatus = 'SUBMITTED', rescheduleCount = 0): Visit => ({
@@ -75,6 +77,7 @@ describe('visitDeviceStatusText', () => {
   it('describes matching before an order exists', () => {
     expect(visitDeviceStatusText({ ...base, deviceState: 'open', leadStatus: 'MATCHING' })).toBe('Đang chờ thợ nhận');
     expect(visitDeviceStatusText({ ...base, deviceState: 'open', leadStatus: 'CLOSED' })).toBe('Chưa có thợ nhận');
+    expect(visitDeviceStatusText({ ...base, deviceState: 'open', leadStatus: 'MATCHED' })).toBe('Đã ghép kỹ thuật viên cho lượt');
     expect(visitDeviceStatusText({ ...base, deviceState: 'open' })).toBe('Chưa chọn thợ');
     expect(visitDeviceStatusText({ ...base, deviceState: 'open', hasOrder: true })).toBe('Đang xử lý');
     expect(visitDeviceStatusText({ ...base, deviceState: undefined, visit: visit({ status: 'cancelled' }) })).toBe('Đã hủy');
@@ -116,5 +119,25 @@ describe('payment', () => {
     expect(canStartVisitPayment('paid')).toBe(false);
     expect(canStartVisitPayment('pending_cash')).toBe(false);
     expect(canStartVisitPayment('zero_due')).toBe(false);
+  });
+});
+
+describe('visitStep', () => {
+  it('walks from choosing the technician to paying once for the whole visit', () => {
+    expect(visitStep({ payState: 'waiting', orderStatuses: {} })).toBe(2);
+    expect(visitStep({ payState: 'waiting', orderStatuses: { a: 'ACCEPTED', b: 'EN_ROUTE' } })).toBe(3);
+    expect(visitStep({ payState: 'waiting', orderStatuses: { a: 'EN_ROUTE', b: 'UNDER_REPAIR' } })).toBe(4);
+    expect(visitStep({ payState: 'ready', orderStatuses: { a: 'UNDER_REPAIR' } })).toBe(5);
+    expect(visitStep({ payState: 'paid', orderStatuses: null })).toBe(5);
+  });
+});
+
+describe('visitGrandTotal', () => {
+  const devices = [
+    { state: 'succeeded', amount: 360000 }, { state: 'succeeded', amount: 219000 }, { state: 'failed', amount: 0 },
+  ] as never;
+  it('is what is still due before payment, and the repaired devices once paid (the server total is then 0)', () => {
+    expect(visitGrandTotal({ paid: false, total: 579000, devices })).toBe(579000);
+    expect(visitGrandTotal({ paid: true, total: 0, devices })).toBe(579000);
   });
 });

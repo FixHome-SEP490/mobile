@@ -1,18 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  AccessibilityInfo,
-  ActivityIndicator,
-  AppState,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, AppState, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, TextInputInstance } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -77,10 +64,14 @@ export default function CustomerKycScreen() {
   const uploadAbortRef = useRef<AbortController | null>(null);
   const submitLockRef = useRef(false);
   const submittingRequestRef = useRef(false);
-  const fullNameRef = useRef<TextInput>(null);
-  const dobRef = useRef<TextInput>(null);
-  const citizenIdRef = useRef<TextInput>(null);
-  const addressRef = useRef<TextInput>(null);
+  // On Android the photo library and the camera open as another activity, so the app
+  // reports "background" while they are open. That is not the user leaving the app:
+  // keep the draft, otherwise every photo pick wipes the form and the other photo (bug 50).
+  const pickerOpenRef = useRef(false);
+  const fullNameRef = useRef<TextInputInstance>(null);
+  const dobRef = useRef<TextInputInstance>(null);
+  const citizenIdRef = useRef<TextInputInstance>(null);
+  const addressRef = useRef<TextInputInstance>(null);
 
   const [verification, setVerification] = useState<CustomerVerificationState | null>(null);
   const [form, setForm] = useState<CustomerKycFormValues>(EMPTY_FORM);
@@ -161,7 +152,7 @@ export default function CustomerKycScreen() {
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', next => {
-      if (next === 'background') cancelUploadsAndClear(true);
+      if (next === 'background' && !pickerOpenRef.current) cancelUploadsAndClear(true);
       if (next === 'active' && focusedRef.current && unknownAck) {
         void loadVerification().then(() => undefined);
       }
@@ -206,12 +197,16 @@ export default function CustomerKycScreen() {
         setMessage(source === 'camera' ? 'Cần quyền camera để chụp ảnh CCCD.' : 'Cần quyền truy cập ảnh để chọn ảnh CCCD.');
         return;
       }
+      pickerOpenRef.current = true;
       const result = source === 'camera'
         ? await ImagePicker.launchCameraAsync({ mediaTypes: 'images', quality: 0.9, cameraType: ImagePicker.CameraType.back })
         : await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.9 });
+      pickerOpenRef.current = false;
       if (!result.canceled && result.assets[0]) acceptAsset(side, result.assets[0]);
     } catch {
       setMessage('Không thể mở ảnh. Hãy thử lại.');
+    } finally {
+      pickerOpenRef.current = false;
     }
   };
 
@@ -412,7 +407,7 @@ export default function CustomerKycScreen() {
                     <View style={styles.field}>
                       <Text style={styles.label}>Giới tính</Text>
                       <View style={styles.genderRow}>
-                        {([['MALE', 'Nam'], ['FEMALE', 'Nữ'], ['OTHER', 'Khác']] as const).map(([gender, label]) => (
+                        {([['male', 'Nam'], ['female', 'Nữ'], ['other', 'Khác']] as const).map(([gender, label]) => (
                           <Pressable
                             key={gender}
                             testID={`customer-kyc-gender-${gender}`}
@@ -508,7 +503,7 @@ type RenderFieldOptions = {
   testID: string;
   error?: string;
   helper?: string;
-  inputRef?: React.RefObject<TextInput | null>;
+  inputRef?: React.RefObject<TextInputInstance | null>;
   placeholder?: string;
   keyboardType?: 'default' | 'number-pad' | 'numbers-and-punctuation';
   maxLength?: number;

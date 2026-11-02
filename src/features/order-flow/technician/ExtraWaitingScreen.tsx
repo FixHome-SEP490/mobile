@@ -15,6 +15,7 @@ import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { formatVnd } from '../../../utils/format';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+import { backFromFlow } from '../navigation/resume-order';
 
 export default function ExtraWaitingScreen() {
   const { key, snapshot, refresh, loadResource, journal } = useOrderSession();
@@ -81,7 +82,7 @@ export default function ExtraWaitingScreen() {
 
   if (!current || !order) {
     return (
-      <TaskScreenShell title="Chờ duyệt phát sinh" onBack={() => navigation.goBack()}>
+      <TaskScreenShell title="Chờ duyệt phát sinh" onBack={() => backFromFlow(navigation)}>
         <ReadOnlyNotice>
           {snapshot?.access === 'historical'
             ? 'Không tải trạng thái chi phí cho đơn lịch sử.'
@@ -98,7 +99,7 @@ export default function ExtraWaitingScreen() {
     <TaskScreenShell
       title="Chờ duyệt phát sinh"
       stage={3}
-      onBack={() => navigation.goBack()}
+      onBack={() => backFromFlow(navigation)}
       secondary={
         canRevise
           ? {

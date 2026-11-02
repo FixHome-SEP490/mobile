@@ -9,6 +9,7 @@ import type { FreshOrderPosition } from './arrival-proof-controller';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+import { backFromFlow } from '../navigation/resume-order';
 
 /**
  * Manual T04 — separate typed route, never an automatic OrderTask taskId.
@@ -67,7 +68,7 @@ export default function ArrivalCheckInScreen() {
     <TaskScreenShell
       title="Xác nhận đã tới nơi"
       stage={2}
-      onBack={() => navigation.goBack()}
+      onBack={() => backFromFlow(navigation)}
       secondary={{
         label: capturing ? 'Đang lấy vị trí…' : 'Lấy vị trí mới',
         testID: 'capture-position',

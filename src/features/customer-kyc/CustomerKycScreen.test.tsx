@@ -111,7 +111,7 @@ describe('CustomerKycScreen', () => {
     await change('customer-kyc-dateOfBirth', '1995-06-15');
     await change('customer-kyc-citizenIdNumber', '079123456789');
     await change('customer-kyc-address', '12 Nguyễn Trãi, Quận 1');
-    await act(async () => renderer.root.findByProps({ testID: 'customer-kyc-gender-MALE' }).props.onPress());
+    await act(async () => renderer.root.findByProps({ testID: 'customer-kyc-gender-male' }).props.onPress());
     await act(async () => renderer.root.findByProps({ testID: 'customer-kyc-pick-front' }).props.onPress());
     await act(async () => renderer.root.findByProps({ testID: 'customer-kyc-pick-back' }).props.onPress());
     await act(async () => renderer.root.findByProps({ testID: 'customer-kyc-submit' }).props.onPress());
@@ -121,7 +121,7 @@ describe('CustomerKycScreen', () => {
     expect(api.uploadDocument).toHaveBeenNthCalledWith(2, expect.objectContaining({ userId: 'customer-1', documentType: 'citizen_id_back' }));
     expect(api.submit).toHaveBeenCalledTimes(1);
     expect(api.submit).toHaveBeenCalledWith(expect.objectContaining({
-      fullName: 'Nguyễn Văn An', dateOfBirth: '1995-06-15', gender: 'MALE',
+      fullName: 'Nguyễn Văn An', dateOfBirth: '1995-06-15', gender: 'male',
       citizenIdNumber: '079123456789', address: '12 Nguyễn Trãi, Quận 1',
       documents: expect.arrayContaining([
         expect.objectContaining({ documentType: 'citizen_id_front' }),
@@ -146,7 +146,7 @@ describe('CustomerKycScreen', () => {
     await change('customer-kyc-dateOfBirth', '1995-06-15');
     await change('customer-kyc-citizenIdNumber', '079123456789');
     await change('customer-kyc-address', '12 Nguyễn Trãi, Quận 1');
-    await act(async () => renderer.root.findByProps({ testID: 'customer-kyc-gender-MALE' }).props.onPress());
+    await act(async () => renderer.root.findByProps({ testID: 'customer-kyc-gender-male' }).props.onPress());
     await act(async () => renderer.root.findByProps({ testID: 'customer-kyc-pick-front' }).props.onPress());
     await act(async () => renderer.root.findByProps({ testID: 'customer-kyc-pick-back' }).props.onPress());
     const submit = renderer.root.findByProps({ testID: 'customer-kyc-submit' }).props.onPress;
@@ -155,6 +155,39 @@ describe('CustomerKycScreen', () => {
     expect(renderer.root.findByProps({ testID: 'customer-kyc-submit' }).props.disabled).toBe(true);
     const text = renderer.root.findAllByType(Text).map(node => String(node.props.children)).join(' ');
     expect(text).toContain('Chưa xác định được kết quả gửi');
+    await act(async () => renderer.unmount());
+  });
+
+  it('keeps the draft while its own photo picker is open, then submits both sides', async () => {
+    // Android reports background while the system photo picker is on screen (bug 50).
+    const picker = jest.requireMock('expo-image-picker') as { launchImageLibraryAsync: jest.Mock };
+    picker.launchImageLibraryAsync.mockImplementation(async () => {
+      mockAppStateListener?.('background');
+      mockAppStateListener?.('active');
+      return { canceled: false, assets: [mockImages.shift()] };
+    });
+    mockImages = [
+      { uri: 'file:///local/front.jpg', mimeType: 'image/jpeg', fileSize: 1024 * 1024 },
+      { uri: 'file:///local/back.jpg', mimeType: 'image/jpeg', fileSize: 1024 * 1024 },
+    ];
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => { renderer = create(<CustomerKycScreen />); });
+    const change = async (testID: string, value: string) => {
+      await act(async () => renderer.root.findByProps({ testID }).props.onChangeText(value));
+    };
+    await change('customer-kyc-fullName', 'Nguyễn Văn An');
+    await change('customer-kyc-dateOfBirth', '1995-06-15');
+    await change('customer-kyc-citizenIdNumber', '079123456789');
+    await change('customer-kyc-address', '12 Nguyễn Trãi, Quận 1');
+    await act(async () => renderer.root.findByProps({ testID: 'customer-kyc-gender-female' }).props.onPress());
+    await act(async () => renderer.root.findByProps({ testID: 'customer-kyc-pick-front' }).props.onPress());
+    await act(async () => renderer.root.findByProps({ testID: 'customer-kyc-pick-back' }).props.onPress());
+    expect(renderer.root.findByProps({ testID: 'customer-kyc-fullName' }).props.value).toBe('Nguyễn Văn An');
+    expect(renderer.root.findAllByType(Image).some(node => node.props.source?.uri === 'file:///local/front.jpg')).toBe(true);
+    expect(renderer.root.findAllByType(Image).some(node => node.props.source?.uri === 'file:///local/back.jpg')).toBe(true);
+    await act(async () => renderer.root.findByProps({ testID: 'customer-kyc-submit' }).props.onPress());
+    expect(api.submit).toHaveBeenCalledWith(expect.objectContaining({ gender: 'female' }), 'customer-1');
+    picker.launchImageLibraryAsync.mockImplementation(async () => ({ canceled: false, assets: [mockImages.shift()] }));
     await act(async () => renderer.unmount());
   });
 

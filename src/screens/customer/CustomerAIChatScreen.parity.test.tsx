@@ -1,7 +1,7 @@
 // The assistant on the phone as on the web (PO 18/10/2026): at most three photos
 // and two videos per conversation; videos go to the technician and never to the
 // AI; what is sent goes up at once in the background with how far it is; one-tap
-// answers, "Đúng ý / Chưa đúng"; booking takes what arrived, and waits for,
+// answers; booking takes what arrived, and waits for,
 // retries or leaves out the rest.
 import React from 'react';
 import { Alert, Text, TextInput, TouchableOpacity, type AlertButton } from 'react-native';
@@ -12,7 +12,6 @@ import { ATTACHMENT_LIMIT_TEXT } from './chat-upload-queue';
 const mockNavigate = jest.fn();
 const mockAnalyze = jest.fn();
 const mockAsk = jest.fn();
-const mockFeedback = jest.fn();
 const mockPickVideo = jest.fn();
 const mockRecordVideo = jest.fn();
 const mockPick = jest.fn();
@@ -80,7 +79,6 @@ jest.mock('../../api/ai.api', () => ({
     acknowledgements: jest.fn(async () => ({})),
     analyze: (...args: unknown[]) => mockAnalyze(...args),
     ask: (...args: unknown[]) => mockAsk(...args),
-    feedback: (...args: unknown[]) => mockFeedback(...args),
   },
 }));
 jest.mock('../chat/TypingDots', () => () => null);
@@ -206,16 +204,14 @@ describe('CustomerAIChatScreen parity with the web', () => {
     }
   });
 
-  it('offers one-tap answers to a yes/no question and a "Đúng ý / Chưa đúng" under the newest answer', async () => {
+  it('offers one-tap answers to a yes/no question and no "Đúng ý / Chưa đúng" buttons', async () => {
     const tree = await mountScreen();
     try {
       await sendText(tree, 'Vòi rửa chén rỉ nước');
       expect(byTestId(tree, 'ai-quick-replies')).not.toHaveLength(0);
       expect(button(tree, 'Trả lời Rồi')).toBeDefined();
-      expect(texts(tree)).toContain('Câu trả lời này có đúng ý anh/chị không?');
-      await act(async () => { button(tree, 'Đúng ý')?.props.onPress(); });
-      expect(mockFeedback).toHaveBeenCalledWith({ sessionId: 'session-1', verdict: 'right', note: undefined, reply: 'Dạ có thể gioăng vòi bị mòn ạ.' });
-      expect(texts(tree)).toContain('Em cảm ơn anh/chị, em ghi nhận để học thêm ạ.');
+      expect(texts(tree)).not.toContain('Câu trả lời này có đúng ý anh/chị không?');
+      expect(button(tree, 'Đúng ý')).toBeUndefined();
 
       mockAnalyze.mockResolvedValueOnce({ ...REPLY, messageVi: 'Dạ vậy anh/chị khoá van rồi gọi thợ nhé.', clarification: null });
       await act(async () => {
@@ -224,18 +220,6 @@ describe('CustomerAIChatScreen parity with the web', () => {
       });
       expect(mockAnalyze).toHaveBeenLastCalledWith({ description: 'Rồi', images: [], sessionId: 'session-1' });
       expect(byTestId(tree, 'ai-quick-replies')).toHaveLength(0);
-    } finally { act(() => tree.unmount()); }
-  });
-
-  it('sends a "Chưa đúng" with the note the customer writes', async () => {
-    const tree = await mountScreen();
-    try {
-      await sendText(tree, 'Vòi rửa chén rỉ nước');
-      await act(async () => { button(tree, 'Chưa đúng')?.props.onPress(); });
-      const note = tree.root.findAllByType(TextInput).find((node) => node.props.accessibilityLabel === 'Góp ý cho trợ lý');
-      await act(async () => { note?.props.onChangeText('Vòi nhà em là vòi nóng lạnh'); });
-      await act(async () => { button(tree, 'Gửi góp ý')?.props.onPress(); });
-      expect(mockFeedback).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'session-1', verdict: 'wrong', note: 'Vòi nhà em là vòi nóng lạnh' }));
     } finally { act(() => tree.unmount()); }
   });
 

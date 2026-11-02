@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { BackHandler } from 'react-native';
+import { backFromFlow } from '../navigation/resume-order';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { resolveCustomerTask, resolveTechnicianTask } from '../domain/order-task-resolver';
 import type { OrderTaskResolution, OrderSessionKey, OrderSessionSnapshot } from '../domain/order-session.types';
@@ -43,6 +45,7 @@ import CompletionRequestScreen from '../technician/CompletionRequestScreen';
 import CashDeclarationScreen from '../technician/CashDeclarationScreen';
 import { getRestoredExtraRecovery, getRestoredPartsRecovery } from '../domain/extra-and-parts-recovery';
 import { ReadOnlyNotice, TaskScreenShell } from './TaskScreenShell';
+import { goHome } from '../../../components/BackButton';
 
 type M6RecoveryTarget = 'payment' | 'after-evidence' | 'completion-request' | 'cash-declare';
 
@@ -84,6 +87,15 @@ function getRestoredM6Recovery(
 export default function OrderTaskScreen({ role }: { role: 'customer' | 'technician' }) {
   const { key, snapshot, loadResource, journal, refresh } = useOrderSession();
   const navigation = useNavigation<any>();
+  // Hardware back on the root screen of the flow: same as the header back (a technician keeps the order screen).
+  React.useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (navigation.isFocused?.() === false) return false;
+      backFromFlow(navigation);
+      return true;
+    });
+    return () => sub.remove();
+  }, [navigation]);
   const route = useRoute<any>();
   const liveResolution: OrderTaskResolution | null = snapshot
     ? role === 'customer'
@@ -139,9 +151,9 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
     if (snapshot?.order.status === 'error') {
       return (
         <TaskScreenShell
-          title="Đơn dịch vụ"
+          title="Đơn sửa chữa"
           stage={null}
-          onBack={() => navigation.goBack()}
+          onBack={() => backFromFlow(navigation)}
           primary={{ label: 'Thử lại', onPress: () => void refresh('manual') }}
         >
           <ReadOnlyNotice>Chưa tải được thông tin đơn. Vui lòng kiểm tra kết nối rồi thử lại.</ReadOnlyNotice>
@@ -149,7 +161,7 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
       );
     }
     return (
-      <TaskScreenShell title="Đơn dịch vụ" stage={null} onBack={() => navigation.goBack()}>
+      <TaskScreenShell title="Đơn sửa chữa" stage={null} onBack={() => backFromFlow(navigation)}>
         <ReadOnlyNotice>
           Đang xác minh quyền truy cập và tải thông tin đơn. Các thao tác vẫn bị khóa trong lúc chờ dữ liệu chuẩn.
         </ReadOnlyNotice>
@@ -222,10 +234,20 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
 
   if (role === 'technician' && resolution.taskId === 'TR') return <RepairRecoveryScreen />;
 
+  // A cancelled order (including one cancelled by rejecting its quotation) is not a dead end: say so and give the way out.
+  const cancelled = role === 'customer' && snapshot.order.status === 'ready' && !isHistoricalOrder(snapshot.order.data) && snapshot.order.data.status === 'CANCELLED';
   return (
-    <TaskScreenShell title="Đơn dịch vụ" stage={resolution.stage} onBack={() => navigation.goBack()}>
+    <TaskScreenShell
+      title={cancelled ? 'Đơn đã hủy' : 'Đơn sửa chữa'}
+      stage={resolution.stage}
+      onBack={() => backFromFlow(navigation)}
+      primary={role === 'customer' ? { label: 'Về trang chủ', testID: 'task-go-home', onPress: goHome } : undefined}
+      secondary={role === 'customer' ? { label: 'Yêu cầu hỗ trợ', testID: 'task-support', onPress: () => navigation.navigate('SupportCases') } : undefined}
+    >
       <ReadOnlyNotice>
-        Bước tiếp theo của đơn đang được hoàn thiện. Dữ liệu đơn vẫn an toàn; bạn có thể xem thông tin đơn hoặc làm mới dữ liệu.
+        {cancelled
+          ? 'Đơn này đã được hủy nên không còn bước nào cần bạn làm. Bạn có thể đặt lịch mới hoặc gửi yêu cầu hỗ trợ nếu cần.'
+          : 'Đơn đang được cập nhật. Dữ liệu đơn vẫn an toàn; bạn có thể xem Chi tiết đơn hoặc Tiến độ.'}
       </ReadOnlyNotice>
     </TaskScreenShell>
   );

@@ -9,6 +9,7 @@ import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { formatVnd } from '../../../utils/format';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+import { backFromFlow } from '../navigation/resume-order';
 
 /** T09 — UNDER_REPAIR with no actionable extra. Focused current task; later branches stay honestly disabled. */
 const AUTHENTICATED_AFTER = /^https:\/\/res\.cloudinary\.com\/[^/]+\/image\/authenticated\/s--[^/]+\//;
@@ -41,7 +42,7 @@ export default function RepairWorkspaceScreen() {
     <TaskScreenShell
       title="Đang sửa chữa"
       stage={3}
-      onBack={() => navigation.goBack()}
+      onBack={() => backFromFlow(navigation)}
       secondary={{
         label: 'Xem ảnh',
         testID: 'task-evidence-link',

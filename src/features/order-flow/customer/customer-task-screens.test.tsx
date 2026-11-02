@@ -1,4 +1,5 @@
 import React from 'react';
+import { Linking } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { OrderSessionSnapshot } from '../domain/order-session.types';
 import { createOrderSessionSnapshot, readyResource } from '../domain/order-session.types';
@@ -69,8 +70,9 @@ const cases = [
 ];
 
 for (const { name, Screen, status } of cases) {
-  it(`${name}: one body plus one footer outside scroll, back and detail never write`, async () => {
+  it(`${name}: one body plus one footer outside scroll, calling never writes`, async () => {
     mockSnapshot = customerSnapshot(status);
+    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
     let renderer!: ReturnType<typeof create>;
     await act(async () => {
       renderer = create(<Screen />);
@@ -83,26 +85,27 @@ for (const { name, Screen, status } of cases) {
     expect(footerIndex).toBeGreaterThan(scrollIndex);
     const text = JSON.stringify(tree);
     expect(text).not.toMatch(/C0[346]|T0[234]|CHECKIN_FACE|POST|GET/);
+    // The summary rows moved to the order frame: the body only says what is happening.
+    expect(text).not.toContain('Mã đơn');
     await act(async () => {
-      renderer.root.findByProps({ testID: 'task-detail-link' }).props.onPress();
+      renderer.root.findByProps({ testID: 'task-call' }).props.onPress();
     });
-    expect(mockNavigate).toHaveBeenCalledWith('OrderInformation');
+    expect(openURL).toHaveBeenCalledWith('tel:0900');
+    expect(mockNavigate).not.toHaveBeenCalled();
     expect(mockRefresh).not.toHaveBeenCalled();
     expect(renderer.root.findAllByProps({ testID: 'task-refresh' }).length).toBe(0);
     await act(async () => renderer.unmount());
+    openURL.mockRestore();
   });
 
-  it(`${name}: revoked access disables detail and clears draft without writes`, async () => {
+  it(`${name}: revoked access offers no call and clears draft without writes`, async () => {
     mockSnapshot = customerSnapshot(status);
     mockSnapshot.access = 'revoked';
     let renderer!: ReturnType<typeof create>;
     await act(async () => {
       renderer = create(<Screen />);
     });
-    expect(renderer.root.findByProps({ testID: 'task-detail-link' }).props.disabled).toBe(true);
-    await act(async () => {
-      renderer.root.findByProps({ testID: 'task-detail-link' }).props.onPress();
-    });
+    expect(JSON.stringify(renderer.toJSON())).toContain('Quyền xem đơn đã thay đổi');
     expect(mockNavigate).not.toHaveBeenCalled();
     expect(mockRefresh).not.toHaveBeenCalled();
     await act(async () => renderer.unmount());

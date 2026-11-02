@@ -13,6 +13,7 @@ import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import VisitTechnicianPanel from './VisitTechnicianPanel';
 import VisitDevicesSummary from '../shared/VisitDevicesSummary';
 import { visitDeviceTechnicianStatus } from './technician-visit';
+import { backFromFlow } from '../navigation/resume-order';
 
 /**
  * T15 — payment waiting. Who is awaited and the actual invoice/payment
@@ -46,7 +47,7 @@ export default function PaymentWaitingScreen() {
 
   if (!current || !order) {
     return (
-      <TaskScreenShell title="Chờ thanh toán" onBack={() => navigation.goBack()}>
+      <TaskScreenShell title="Chờ thanh toán" onBack={() => backFromFlow(navigation)}>
         <ReadOnlyNotice>Chờ thanh toán chỉ hiển thị trên đơn đã bàn giao thuộc về bạn.</ReadOnlyNotice>
       </TaskScreenShell>
     );
@@ -54,7 +55,7 @@ export default function PaymentWaitingScreen() {
 
   if (order.visitGroupId) {
     return (
-      <TaskScreenShell title="Chờ thanh toán cả lượt" stage={4} onBack={() => navigation.goBack()}>
+      <TaskScreenShell title="Chờ thanh toán cả lượt" stage={4} onBack={() => backFromFlow(navigation)}>
         <VisitDevicesSummary groupId={order.visitGroupId} stateLabel={visitDeviceTechnicianStatus} />
         <VisitTechnicianPanel section="devices" />
         <VisitTechnicianPanel section="cash" />
@@ -66,7 +67,7 @@ export default function PaymentWaitingScreen() {
     <TaskScreenShell
       title="Chờ thanh toán"
       stage={4}
-      onBack={() => navigation.goBack()}
+      onBack={() => backFromFlow(navigation)}
       secondary={{
         label: 'Làm mới dữ liệu',
         testID: 'task-refresh',

@@ -174,8 +174,8 @@ export default function VisitGroupsPanel({ search, onOpen, bottomInset = 0, term
           <Text style={styles.hint}>{error}</Text>
           <TouchableOpacity onPress={() => void read(1, 'refresh')} accessibilityRole="button"><Text style={styles.retry}>Thử lại</Text></TouchableOpacity>
         </View>
-      ) : null}
-      ListEmptyComponent={error ? null : (
+      ) : undefined}
+      ListEmptyComponent={error ? undefined : (
         <View style={styles.empty} testID="visit-groups-empty">
           <Text style={styles.title}>{search.trim() || filter !== 'all' ? 'Không có lượt sửa phù hợp' : emptyTitle ?? 'Chưa có lượt sửa nhiều thiết bị'}</Text>
           <Text style={styles.hint}>{search.trim() ? 'Hãy đổi từ khóa tìm kiếm.' : filter !== 'all' ? 'Hãy chọn bộ lọc khác.' : 'Khi bạn đặt từ 2 thiết bị trong một lần, lượt sửa sẽ hiện ở đây.'}</Text>
@@ -183,13 +183,15 @@ export default function VisitGroupsPanel({ search, onOpen, bottomInset = 0, term
       )}
       ListFooterComponent={loadingMore ? (
         <View style={styles.more} accessibilityLiveRegion="polite"><ActivityIndicator size="small" color={colors.primary} /><Text style={styles.hint}>Đang tải thêm…</Text></View>
-      ) : null}
+      ) : undefined}
       renderItem={({ item }) => {
-        const status = visitStatusView(item.status);
         const when = sessionLabel({ bookingMode: item.bookingMode, slot: item.slot, start: item.scheduledAt });
         const deviceOrders = item.items.map((d) => (d.orderId ? orders[d.orderId] : undefined));
         const lead = deviceOrders.find(Boolean);
         const live = deviceOrders.filter((o): o is ServiceOrderItem => !!o && o.status !== 'CANCELLED');
+        // Same rule as the device rows (stepLabel): the visit stays en_route after the check-in, but it is "arrived", not "on the way".
+        const arrived = item.status === 'en_route' && live.some((o) => o.status === 'EN_ROUTE' && o.arrivalVerified);
+        const status = arrived ? { label: 'Đã đến nơi', tone: 'warning' as const } : visitStatusView(item.status);
         const money = live.reduce((sum, o) => sum + (o.grandTotal || 0), 0);
         const code = lead?.code ?? item.items.find((d) => d.orderCode)?.orderCode;
         const moneyLabel = assigned ? (live.every((o) => o.status === 'COMPLETED') ? 'Tổng thu' : 'Dự kiến thu') : 'Tổng thanh toán';
@@ -220,7 +222,7 @@ export default function VisitGroupsPanel({ search, onOpen, bottomInset = 0, term
             {!assigned && !!lead?.technician?.fullName && (
               <View style={styles.iconRow}>
                 <User size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
-                <Text style={styles.hint} numberOfLines={2}>Kỹ thuật viên: {lead.technician.fullName}</Text>
+                <Text style={styles.hint} numberOfLines={2} accessibilityLabel={`Kỹ thuật viên: ${lead.technician.fullName}`}>{lead.technician.fullName}</Text>
               </View>
             )}
             {assigned && !!lead?.customerName && (

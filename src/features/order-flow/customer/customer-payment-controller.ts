@@ -3,8 +3,10 @@ import { sameOrderSession, type OrderResourceKind, type OrderSessionKey, type Re
 import { createOrderCommandAdapter, type CommandReadbackVerdict } from '../runtime/order-controller-adapters';
 import type { OrderCommandJournal, OrderCommandMarker } from '../runtime/order-command-journal';
 import type { OrderReadCoordinator } from '../runtime/order-read-coordinator';
+import type { fundedCheckoutApi } from '../../../api/funded-checkout.api';
 import { cashFact, financialResult, hasCompletionRequest, invoiceFact, isUnresolvedMarker, m6Order, validateCashConfirmation,
   FINANCIAL_UNKNOWN, type CashConfirmationDto, type FinancialResult, type M6Phase, type PaymentMethod } from './payment-facts';
+import { VOUCHER_HOLD_EXPIRED, voucherUsable, type AppliedVoucher } from './voucher-checkout';
 
 export interface OrderPaymentTransport {
   payWallet: (invoiceId: string) => Promise<unknown>;
@@ -13,6 +15,8 @@ export interface OrderPaymentTransport {
   confirmCash: (orderId: string, dto: CashConfirmationDto) => Promise<unknown>;
   readWallet: () => Promise<unknown>;
   openUrl: (url: string) => Promise<unknown>;
+  /** The server-funded routes used while a voucher is held (backend T2.1). */
+  funded?: Pick<typeof fundedCheckoutApi, 'wallet' | 'vnpay' | 'zero' | 'confirmCash'>;
 }
 export interface OrderPaymentDependencies {
   coordinator: OrderReadCoordinator; journal: OrderCommandJournal; transport: OrderPaymentTransport;
@@ -21,11 +25,15 @@ export interface OrderPaymentDependencies {
 export interface PaymentConfirmation {
   key: OrderSessionKey; invoiceId: string; amount: number; method: PaymentMethod;
   settlementId?: string; declaredAmount?: number; declaredByTechnicianId?: string; declaredAt?: string; cashDto?: CashConfirmationDto;
+  /** The held voucher this payment goes through; `amount` stays the invoice total, `voucher.customerDueVnd` is what is paid. */
+  voucher?: AppliedVoucher;
 }
 export interface OrderPaymentState {
   phase: M6Phase; method: PaymentMethod | null; target: PaymentConfirmation | null;
   confirmation: PaymentConfirmation | null; result: FinancialResult; message: string | null;
   wallet: Resource<CustomerWalletSummary>; urlReady: boolean;
+  /** The voucher held for this order, if any. Set by the voucher section, cleared on release, expiry or a resolved payment. */
+  voucher: AppliedVoucher | null;
 }
 const paymentOperations = ['wallet-pay', 'vnpay-url', 'no-charge', 'cash-confirm'];
 /** Answers that prove the no-charge call changed nothing: it validates and locks before any write. CONFLICT is a zero invoice that does not match the approved costs; the invoice is read back, so a locked screen is worse than a retry. */
@@ -34,7 +42,7 @@ const VNPAY_LINK_TTL_MS = 15 * 60 * 1000;
 /** Exclusive durable order/invoice lock. No amount or redirect data is persisted. */
 export function createOrderPaymentController(deps: OrderPaymentDependencies) {
   let state: OrderPaymentState = { phase: 'idle', method: null, target: null, confirmation: null, result: 'unverified', message: null,
-    wallet: { status: 'unloaded', requestSeq: 0 }, urlReady: false };
+    wallet: { status: 'unloaded', requestSeq: 0 }, urlReady: false, voucher: null };
   let busy = false, epoch = 0, walletSeq = 0;
   let redirect: { key: OrderSessionKey; intentId: string; invoiceId: string; url: string; opened: boolean; failed: boolean } | null = null;
   const listeners = new Set<() => void>();
@@ -63,9 +71,17 @@ export function createOrderPaymentController(deps: OrderPaymentDependencies) {
     if (!current || current.invoiceId !== target.invoiceId || current.amount !== target.amount
       || current.settlementId !== target.settlementId || current.declaredAmount !== target.declaredAmount
       || current.declaredByTechnicianId !== target.declaredByTechnicianId || current.declaredAt !== target.declaredAt) return false;
-    if (target.method === 'wallet') return state.wallet.status === 'ready' && wholeVnd(state.wallet.data.balance)! >= target.amount;
-    return !target.cashDto?.agreed || target.declaredAmount === target.amount
-      && (target.cashDto.confirmedAmount === undefined || target.cashDto.confirmedAmount === target.amount);
+    // With a voucher the payable amount is the server-calculated due of the hold, and the hold must still be the one on screen.
+    const held = target.voucher;
+    // A cash declaration already made against the hold keeps it valid past the 15 minutes: the customer must still confirm through it.
+    const cashPending = target.method === 'cash' && !!target.settlementId;
+    if (held && (state.voucher?.reservationId !== held.reservationId || !(cashPending || voucherUsable(state.voucher, target.key.serviceOrderId)))) return false;
+    if ((target.method === 'voucher_zero') !== (held?.customerDueVnd === 0)) return false;
+    const payable = held ? held.customerDueVnd : target.amount;
+    if (target.method === 'voucher_zero') return true;
+    if (target.method === 'wallet') return state.wallet.status === 'ready' && wholeVnd(state.wallet.data.balance)! >= payable;
+    return !target.cashDto?.agreed || target.declaredAmount === payable
+      && (target.cashDto.confirmedAmount === undefined || target.cashDto.confirmedAmount === payable);
   }
   async function readWallet(key: OrderSessionKey) {
     const seq = ++walletSeq; publish({ wallet: { status: 'loading', requestSeq: seq } });
@@ -86,7 +102,12 @@ export function createOrderPaymentController(deps: OrderPaymentDependencies) {
       if (!owned(key) || generation !== epoch) return;
       const target = eligible(key, method);
       if (!target || (cashDto && !target.settlementId)) { publish({ phase: 'denied', result: financialResult(snapshot(), key), message: 'Điều kiện thanh toán chưa sẵn sàng. Vui lòng kiểm tra hóa đơn và tiền mặt.' }); return; }
-      const captured = Object.freeze({ ...target, key: Object.freeze({ ...target.key }), ...(cashDto ? { cashDto: Object.freeze({ ...cashDto }) } : {}) });
+      const held = state.voucher;
+      if (held && method !== 'no_charge' && !(method === 'cash' && target.settlementId) && !voucherUsable(held, key.serviceOrderId)) {
+        publish({ voucher: null, phase: 'denied', message: VOUCHER_HOLD_EXPIRED }); return;
+      }
+      const captured = Object.freeze({ ...target, key: Object.freeze({ ...target.key }), ...(cashDto ? { cashDto: Object.freeze({ ...cashDto }) } : {}),
+        ...(held && method !== 'no_charge' ? { voucher: Object.freeze({ ...held }) } : {}) });
       if (!matches(captured)) { publish({ phase: 'denied', message: method === 'wallet' ? 'Số dư ví chưa đủ hoặc chưa xác minh được. Vui lòng kiểm tra ví.' : 'Số tiền chưa khớp hóa đơn và khai báo. Vui lòng kiểm tra hoặc báo sai lệch.' }); return; }
       publish({ phase: method === 'cash' && !cashDto ? 'idle' : 'confirming', target: captured,
         confirmation: method === 'cash' && !cashDto ? null : captured, result: financialResult(snapshot(), key) });
@@ -112,7 +133,7 @@ export function createOrderPaymentController(deps: OrderPaymentDependencies) {
     const resolved = marker?.status === 'resolved', failed = marker?.status === 'failed-known';
     const pending = !resolved && !failed && redirect && redirect.intentId === marker?.intentId && !redirect.failed;
     if (resolved) redirect = null;
-    publish({ phase: resolved ? 'resolved' : failed ? 'failed-known' : pending ? 'pending' : 'unknown',
+    publish({ ...(resolved ? { voucher: null } : {}), phase: resolved ? 'resolved' : failed ? 'failed-known' : pending ? 'pending' : 'unknown',
       method: marker?.operation === 'wallet-pay' ? 'wallet' : marker?.operation === 'vnpay-url' ? 'vnpay' : marker?.operation === 'no-charge' ? 'no_charge' : marker?.operation === 'cash-confirm' ? 'cash' : null,
       confirmation: null, result: financialResult(snapshot(), key), urlReady: !!pending && !redirect?.opened,
       message: resolved ? null : failed ? 'Thanh toán chưa được thực hiện. Hãy kiểm tra dữ liệu trước khi xác nhận lại.' : FINANCIAL_UNKNOWN });
@@ -121,7 +142,11 @@ export function createOrderPaymentController(deps: OrderPaymentDependencies) {
     const target = state.confirmation; if (!target || busy || state.phase !== 'confirming' || !matches(target)) return;
     const key = target.key; busy = true; let sent = false, precommit = false;
     publish({ phase: 'submitting', target, message: null });
-    const operation = target.method === 'wallet' ? 'wallet-pay' : target.method === 'vnpay' ? 'vnpay-url' : target.method === 'no_charge' ? 'no-charge' : 'cash-confirm';
+    // A fully funded voucher closes with the same "invoice is paid" readback as a free invoice, so it shares that operation.
+    const operation = target.method === 'wallet' ? 'wallet-pay' : target.method === 'vnpay' ? 'vnpay-url' : target.method === 'no_charge' || target.method === 'voucher_zero' ? 'no-charge' : 'cash-confirm';
+    const held = target.voucher, funded = deps.transport.funded;
+    const scope = { kind: 'SOLO' as const, serviceOrderId: key.serviceOrderId, invoiceId: target.invoiceId };
+    if (held && !funded) { busy = false; publish({ phase: 'denied', confirmation: null, message: 'Chưa thanh toán bằng voucher được. Vui lòng thử lại sau.' }); return; }
     const intentId = deps.newIntentId();
     const adapter = createOrderCommandAdapter(deps.journal, { isCurrent: owned, refresh: key => refresh(key) });
     try {
@@ -131,7 +156,7 @@ export function createOrderPaymentController(deps: OrderPaymentDependencies) {
         if (state.confirmation !== target || !matches(target)) return;
         sent = true; publish({ confirmation: null });
         if (target.method === 'wallet') {
-          try { await deps.transport.payWallet(target.invoiceId); }
+          try { await (held ? funded!.wallet(scope, held.reservationId) : deps.transport.payWallet(target.invoiceId)); }
           catch (error) {
             // Pinned payInvoiceWithWallet rejects insufficient balance before writes (HTTP422 VALIDATION_FAILED) and the transaction rolls back.
             // Generic HTTP400/409, arbitrary 422, and other endpoints do not inherit this proof.
@@ -140,8 +165,11 @@ export function createOrderPaymentController(deps: OrderPaymentDependencies) {
             throw error;
           }
         } else if (target.method === 'vnpay') {
-          const url = paymentHttpsUrl(await deps.transport.createVnpayUrl(target.invoiceId));
+          const url = paymentHttpsUrl(held ? await funded!.vnpay(scope, held.reservationId) : await deps.transport.createVnpayUrl(target.invoiceId));
           if (url && same(key)) redirect = { key: { ...key }, intentId, invoiceId: target.invoiceId, url, opened: false, failed: false };
+        } else if (target.method === 'voucher_zero') {
+          // The server settles the zero due in one step; an unclear answer is read back from the invoice, never repeated.
+          await funded!.zero(scope, held!.reservationId);
         } else if (target.method === 'no_charge') {
           try { await deps.transport.confirmNoCharge(target.invoiceId); }
           catch (error) {
@@ -150,7 +178,11 @@ export function createOrderPaymentController(deps: OrderPaymentDependencies) {
             precommit = body?.success === false && typeof code === 'string' && NO_CHARGE_REJECTED.includes(code);
             throw error;
           }
-        } else if (target.cashDto) await deps.transport.confirmCash(key.serviceOrderId, target.cashDto);
+        } else if (target.cashDto) {
+          if (held) await funded!.confirmCash({ kind: 'SOLO', serviceOrderId: key.serviceOrderId }, held.reservationId,
+            target.cashDto.agreed ? { agreed: true } : { agreed: false, disputeReason: target.cashDto.disputeReason ?? '' });
+          else await deps.transport.confirmCash(key.serviceOrderId, target.cashDto);
+        }
       }, () => !sent ? 'failed-known' : verdict(key, deps.journal.list(key.userId).find(m => m.intentId === intentId)!));
       if (precommit || !sent) {
         const marker = deps.journal.list(key.userId).find(m => m.intentId === intentId);
@@ -177,7 +209,15 @@ export function createOrderPaymentController(deps: OrderPaymentDependencies) {
   return {
     getState: () => state,
     subscribe(fn: () => void) { listeners.add(fn); return () => { listeners.delete(fn); }; },
-    requestPayment: (method: PaymentMethod) => ['wallet', 'vnpay', 'cash', 'no_charge'].includes(method) ? prepare(method) : Promise.resolve(),
+    requestPayment: (method: PaymentMethod) => ['wallet', 'vnpay', 'cash', 'no_charge', 'voucher_zero'].includes(method) ? prepare(method) : Promise.resolve(),
+    /** The voucher section reports a held voucher (or none). A held voucher is never kept across a different scope. */
+    setVoucher(voucher: AppliedVoucher | null) {
+      const key = deps.getKey();
+      const next = voucher && key && voucher.scopeId === key.serviceOrderId ? voucher : null;
+      if (state.voucher?.reservationId === next?.reservationId) return;
+      epoch++;
+      publish({ voucher: next, confirmation: null, target: null, ...(busy ? {} : { phase: 'idle' as const }), message: null });
+    },
     async requestCashConfirmation(input: CashConfirmationDto) {
       let dto: CashConfirmationDto;
       try { dto = validateCashConfirmation(input); }
@@ -188,7 +228,7 @@ export function createOrderPaymentController(deps: OrderPaymentDependencies) {
     revalidateConfirmation() { if (state.confirmation && !matches(state.confirmation)) { epoch++; publish({ confirmation: null, ...(busy ? {} : { phase: 'idle' as const }) }); } },
     invalidatePresentation() {
       epoch++; walletSeq++; redirect = null;
-      publish({ phase: 'idle', target: null, confirmation: null, wallet: { status: 'unloaded', requestSeq: walletSeq }, urlReady: false, result: 'unverified', method: null, message: null });
+      publish({ phase: 'idle', target: null, confirmation: null, wallet: { status: 'unloaded', requestSeq: walletSeq }, urlReady: false, result: 'unverified', method: null, message: null, voucher: null });
     },
     submitConfirmation, verify,
     async restoredMarkers(): Promise<OrderCommandMarker[]> {

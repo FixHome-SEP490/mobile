@@ -6,6 +6,7 @@ import { useTechnicianWarranty } from './useTechnicianWarranty';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { vnDateTimeString } from '../../../utils/vn-time';
+import { backFromFlow } from '../navigation/resume-order';
 
 const field = { minHeight: 52, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: spacing.md, color: colors.text, backgroundColor: colors.surface, textAlignVertical: 'top' as const };
 const choice = { minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: spacing.md, justifyContent: 'center' as const, backgroundColor: colors.surface };
@@ -15,7 +16,7 @@ const labels: Record<string, string> = { submitted: 'Đang chờ kỹ thuật vi
 export function TechnicianWarrantyInboxScreen() {
   const navigation = useNavigation<any>(); const { controller, state } = useTechnicianWarranty();
   const rows = state.inbox.status === 'ready' ? state.inbox.data.data : [];
-  return <TaskScreenShell title="Công việc bảo hành" onBack={() => navigation.goBack()} secondary={{ label: 'Làm mới', disabled: state.inbox.status === 'loading', onPress: () => void controller.loadInbox() }}>
+  return <TaskScreenShell title="Công việc bảo hành" onBack={() => backFromFlow(navigation)} secondary={{ label: 'Làm mới', disabled: state.inbox.status === 'loading', onPress: () => void controller.loadInbox() }}>
     {state.inbox.status === 'loading' || state.inbox.status === 'unloaded' ? <ReadOnlyNotice>Đang tải yêu cầu được phân công…</ReadOnlyNotice> : null}
     {state.inbox.status === 'error' ? <ReadOnlyNotice>Chưa tải được danh sách. Hãy làm mới để thử lại.</ReadOnlyNotice> : null}
     {state.inbox.status === 'ready' && rows.length === 0 ? <ReadOnlyNotice>Chưa có yêu cầu bảo hành được phân công.</ReadOnlyNotice> : null}
@@ -61,7 +62,7 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
       ? { label: 'Từ chối phân công', disabled: locked || !commands.includes('decline') || (reason === 'other' && note.trim().length < 10), testID: 'technician-warranty-secondary-action', onPress: () => prepare('decline') }
       : { label: 'Làm mới', disabled: !claimId || busy, onPress: () => claimId && void controller.refreshClaim() };
 
-  return <TaskScreenShell title="Chi tiết bảo hành" onBack={() => { controller.cancelConfirmation(); navigation.goBack(); }} primary={action} secondary={secondary}>
+  return <TaskScreenShell title="Chi tiết bảo hành" onBack={() => { controller.cancelConfirmation(); backFromFlow(navigation); }} primary={action} secondary={secondary}>
     {!claim ? state.access === 'revoked' || state.access === 'not-assigned' ? <ReadOnlyNotice>Yêu cầu này không còn được phân công cho tài khoản hiện tại.</ReadOnlyNotice> : state.claim.status === 'error' ? <ReadOnlyNotice>Chưa xác minh được phân công. Hãy quay lại hộp thư và mở lại yêu cầu.</ReadOnlyNotice> : <ReadOnlyNotice>Đang xác minh yêu cầu được phân công…</ReadOnlyNotice> : <>
       <View style={{ backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: spacing.md }}><DetailRow label="Mã đơn" value={claim.order.code} /><DetailRow label="Dịch vụ" value={claim.order.serviceName} /><DetailRow label="Khách hàng" value={claim.order.customerName} /><DetailRow label="Địa chỉ" value={claim.order.addressSummary} /><DetailRow label="Tình trạng yêu cầu" value={labels[claim.status] || 'Chưa xác định'} /><DetailRow label="Phạm vi" value={claim.coverage?.itemDescription || 'Chưa có thông tin'} /><DetailRow label="Lịch hẹn" value={claim.visit?.scheduledAt ? vnDateTimeString(claim.visit.scheduledAt) : 'Chưa xếp lịch'} /><DetailRow label="Kết quả kiểm tra" value={claim.visit?.findings || 'Chưa có'} /></View>
       {state.task === 'TW02' ? <>

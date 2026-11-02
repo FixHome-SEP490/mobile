@@ -5,6 +5,7 @@ import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { loadNote, NOTE_MAX_LENGTH, saveNote } from '../../../screens/technician/technician-notes';
 import { ReadOnlyNotice, TaskScreenShell } from './TaskScreenShell';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+import { backFromFlow } from '../navigation/resume-order';
 
 export default function PersonalOrderNotesScreen() {
   const { key, snapshot } = useOrderSession();
@@ -60,7 +61,7 @@ export default function PersonalOrderNotesScreen() {
   };
   const authorized = !!userId && !!orderId;
   const visibleState = isSaving ? 'saving' : state;
-  return <TaskScreenShell title="Ghi chú riêng" onBack={() => navigation.goBack()}
+  return <TaskScreenShell title="Ghi chú riêng" onBack={() => backFromFlow(navigation)}
     primary={{ label: visibleState === 'saving' ? 'Đang lưu ghi chú…' : 'Lưu ghi chú trên thiết bị', testID: 'personal-order-note-save', onPress: () => { void save(); }, disabled: !authorized || !loaded || visibleState === 'loading' || isSaving }}>
     <ReadOnlyNotice>Ghi chú chỉ lưu trên thiết bị theo tài khoản và mã đơn. Nội dung không gửi lên máy chủ, không hiển thị cho khách hàng và không dùng làm ghi chú hoàn tất.</ReadOnlyNotice>
     {!authorized && <ReadOnlyNotice>Ghi chú chỉ mở cho kỹ thuật viên đang được xác minh trên đơn hiện tại.</ReadOnlyNotice>}

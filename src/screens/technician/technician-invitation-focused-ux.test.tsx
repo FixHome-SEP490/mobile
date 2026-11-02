@@ -179,6 +179,15 @@ describe('Technician T03 focused invitation scene (FH-TECH-02 UX01A)', () => {
     expect(mockRespond).not.toHaveBeenCalled();
   });
 
+  it('explains offline ACCEPT uncertainty without encouraging duplicate POST', async () => {
+    await render([invitation('recover', 'Sửa bơm phục hồi (fixture)', 20)]);
+    review('Sửa bơm phục hồi (fixture)');
+    await act(async () => { mockWrite({ ...mockState, recoveryPending: true }); });
+    expect(visibleText()).toContain('Kéo xuống làm mới khi có mạng');
+    expect(visibleText()).toContain('Không gửi lại để tránh nhận trùng');
+    expect(mockRespond).not.toHaveBeenCalled();
+  });
+
   it('locks both focused actions during an in-flight response and keeps reconcile guidance', async () => {
     await render([invitation('lock', 'Sửa bơm khóa (fixture)', 20)]);
     review('Sửa bơm khóa (fixture)');

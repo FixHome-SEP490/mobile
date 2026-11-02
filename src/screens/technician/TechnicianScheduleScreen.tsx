@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { openOrResume } from '../../features/order-flow/navigation/resume-order';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -110,7 +111,7 @@ export default function TechnicianScheduleScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <View style={styles.header}>
         <BackButton />
         <View style={styles.headerTitleGroup}>
@@ -215,7 +216,7 @@ export default function TechnicianScheduleScreen() {
             <ScheduleDayTimeline
               day={selected}
               now={loadedAt}
-              onOpenOrder={(id) => navigation.navigate('TechnicianOrderDetail', { serviceOrderId: id })}
+              onOpenOrder={(id) => openOrResume([id], () => navigation.navigate('TechnicianOrderDetail', { serviceOrderId: id }))}
             />
           )}
 
@@ -231,7 +232,7 @@ export default function TechnicianScheduleScreen() {
                 key={order.id}
                 style={styles.card}
                 activeOpacity={0.7}
-                onPress={() => navigation.navigate('TechnicianOrderDetail', { serviceOrderId: order.id })}
+                onPress={() => openOrResume([order.id], () => navigation.navigate('TechnicianOrderDetail', { serviceOrderId: order.id }))}
                 accessibilityRole="button"
                 accessibilityLabel={`Xem chi tiết công việc ${order.code || ''} ${order.serviceName || ''}`.trim()}
               >

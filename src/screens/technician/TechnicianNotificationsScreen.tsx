@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { openOrResume } from '../../features/order-flow/navigation/resume-order';
 import {
   View,
   Text,
@@ -214,7 +215,7 @@ export default function TechnicianNotificationsScreen({ route }: { route?: { nam
         });
     }
     void resolveTechnicianNotificationOrderId(item, partRequestsApi.getById).then(
-      (serviceOrderId) => { if (serviceOrderId) navigation.navigate('TechnicianOrderDetail', { serviceOrderId }); },
+      (serviceOrderId) => { if (serviceOrderId) openOrResume([serviceOrderId], () => navigation.navigate('TechnicianOrderDetail', { serviceOrderId })); },
       () => setLoadError('Không mở được máy liên quan. Vui lòng tải lại thông báo và thử lại.'),
     );
   };
@@ -285,7 +286,7 @@ export default function TechnicianNotificationsScreen({ route }: { route?: { nam
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       <View style={styles.header}>
         {!isTab && <BackButton onPress={onBackPress} />}
@@ -333,7 +334,7 @@ export default function TechnicianNotificationsScreen({ route }: { route?: { nam
           )}
           stickySectionHeadersEnabled={false}
           ListEmptyComponent={renderEmpty}
-          ListFooterComponent={loadingMore ? <ActivityIndicator style={styles.footerSpinner} color={colors.primaryStrong} /> : null}
+          ListFooterComponent={loadingMore ? <ActivityIndicator style={styles.footerSpinner} color={colors.primaryStrong} /> : undefined}
           onEndReached={onEndReached}
           onEndReachedThreshold={0.4}
           contentContainerStyle={[

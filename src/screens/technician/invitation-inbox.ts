@@ -26,6 +26,7 @@ interface PendingResponse {
 interface AccountResponses {
   pending: Map<string, PendingResponse>;
   completed: Set<string>;
+  inFlight: Set<string>;
 }
 
 // UI cache only. Durable journal below remains the authority across process restart.
@@ -37,7 +38,7 @@ const accountResponses = new Map<string, AccountResponses>();
 function responsesFor(userId: string): AccountResponses {
   let responses = accountResponses.get(userId);
   if (!responses) {
-    responses = { pending: new Map(), completed: new Set() };
+    responses = { pending: new Map(), completed: new Set(), inFlight: new Set() };
     accountResponses.set(userId, responses);
   }
   return responses;
@@ -253,7 +254,10 @@ export function createInvitationInbox(
     );
   };
 
-  async function reconcilePendingAccepts(valid: () => boolean) {
+  async function reconcilePendingAccepts(
+    valid: () => boolean,
+    liveInvitations: readonly InvitationItem[] = [],
+  ) {
     if (!ownerId || !valid()) return;
     const responses = responsesFor(ownerId);
     const pendingAccepts = [...responses.pending.entries()].filter(
@@ -269,6 +273,32 @@ export function createInvitationInbox(
 
     for (const [invitationId, pending] of pendingAccepts) {
       if (!valid() || !ownerId) return;
+      const isStillPending = liveInvitations.some(
+        (invitation) =>
+          invitation.id === invitationId &&
+          invitation.bookingId === pending.bookingId &&
+          isActionable(invitation),
+      ) && !pending.expectedOrderId;
+      if (isStillPending && !responses.inFlight.has(invitationId)) {
+        try {
+          // GET /invitations/my positively returns only this technician's live PENDING rows.
+          // It is safe to clear the old barrier, but a retry remains an explicit user action.
+          await journal.resolve(ownerId, pending.intentId);
+        } catch {
+          continue;
+        }
+        if (!valid() || !ownerId || responses.pending.get(invitationId)?.intentId !== pending.intentId) return;
+        responses.pending.delete(invitationId);
+        const actionInFlight = { ...state.actionInFlight };
+        delete actionInFlight[invitationId];
+        publish({
+          actionInFlight,
+          recoveryPending: [...responses.pending.values()].some(
+            (response) => response.action === 'ACCEPT',
+          ),
+        });
+        continue;
+      }
       const known = pending.expectedOrderId ? await verifyOrderId(orderApi, pending.expectedOrderId, pending.bookingId, ownerId, valid) : null;
       const orderId = known?.state === 'verified' ? known.orderId : await findCurrentAssignedOrderForBooking(
         orderApi,
@@ -328,7 +358,7 @@ export function createInvitationInbox(
       }
 
       publish({ invitations, actionInFlight, error: null });
-      await reconcilePendingAccepts(valid);
+      await reconcilePendingAccepts(valid, data);
     } catch (error) {
       if (!valid()) return;
       publish({
@@ -361,6 +391,7 @@ export function createInvitationInbox(
       bookingId: invitation.bookingId,
       intentId,
     });
+    responses.inFlight.add(id);
     ++requestGeneration;
     const focus = focusGeneration;
     const valid = () => current() && focus === focusGeneration;
@@ -498,6 +529,7 @@ export function createInvitationInbox(
         );
       }
     } finally {
+      responses.inFlight.delete(id);
       if (!dispatched) {
         try {
           const ownMarker = journal.list(respondingOwner).find(marker => marker.intentId === intentId);

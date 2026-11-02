@@ -1637,7 +1637,7 @@ export default function TechnicianOrderDetailScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <View style={styles.header} testID={isAllDetails ? 'technician-all-details-header' : undefined}>
         <BackButton label={isAllDetails ? 'Đóng toàn bộ chi tiết' : 'Quay lại'} onPress={() => isAllDetails ? closeAllDetails() : navigation.goBack()} />
         <Text style={styles.headerTitle} accessibilityRole="header">{isAllDetails ? 'Toàn bộ chi tiết' : isStageFocus ? `Bước ${Math.max(1, staged.steps.findIndex(step => step.id === activeStage) + 1)}/${staged.steps.length} · ${sceneTitle}` : 'Chi tiết công việc'}</Text>

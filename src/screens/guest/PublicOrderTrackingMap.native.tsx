@@ -1,7 +1,8 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, type Region } from 'react-native-maps';
 import { lightTheme as colors } from '../../constants/theme';
+import { isNativeMapAvailable, MAP_UNAVAILABLE_TITLE } from '../../components/map-availability';
 
 type Coordinates = { lat: number; lng: number };
 
@@ -23,6 +24,13 @@ function mapRegion(technicianLocation: Coordinates, destination: Coordinates | n
 }
 
 export default function PublicOrderTrackingMap({ technicianLocation, destination }: PublicOrderTrackingMapProps) {
+  if (!isNativeMapAvailable()) {
+    return (
+      <View testID="public-tracking-map-unavailable" style={styles.fallback}>
+        <Text style={styles.fallbackText}>{MAP_UNAVAILABLE_TITLE}.</Text>
+      </View>
+    );
+  }
   return (
     <View testID="public-tracking-map-container" style={styles.container}>
       <MapView testID="public-tracking-map" style={styles.map} region={mapRegion(technicianLocation, destination)}>
@@ -48,4 +56,6 @@ export default function PublicOrderTrackingMap({ technicianLocation, destination
 const styles = StyleSheet.create({
   container: { height: 220, overflow: 'hidden', borderRadius: 10, marginTop: 8 },
   map: { flex: 1 },
+  fallback: { minHeight: 56, justifyContent: 'center', padding: 12, borderRadius: 10, marginTop: 8, backgroundColor: colors.divider },
+  fallbackText: { color: colors.textSecondary, textAlign: 'center', fontSize: 13, lineHeight: 18 },
 });

@@ -13,6 +13,7 @@ import { quoteMoneyText } from '../shared/DecisionSummary';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+import { backFromFlow } from '../navigation/resume-order';
 
 function latestOwnQuote(quotations: OrderQuotation[] | undefined, serviceOrderId: string, technicianId: string): OrderQuotation | null {
   if (!quotations) return null;
@@ -76,7 +77,7 @@ export default function QuotationWaitingScreen() {
 
   if (!current || !order) {
     return (
-      <TaskScreenShell title="Chờ duyệt báo giá" onBack={() => navigation.goBack()}>
+      <TaskScreenShell title="Chờ duyệt báo giá" onBack={() => backFromFlow(navigation)}>
         <ReadOnlyNotice>
           {snapshot?.access === 'historical'
             ? 'Báo giá không được tải cho đơn lịch sử.'
@@ -90,7 +91,7 @@ export default function QuotationWaitingScreen() {
     <TaskScreenShell
       title="Chờ duyệt báo giá"
       stage={2}
-      onBack={() => navigation.goBack()}
+      onBack={() => backFromFlow(navigation)}
       secondary={{
         label: 'Làm mới dữ liệu',
         testID: 'task-refresh',

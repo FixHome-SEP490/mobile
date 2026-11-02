@@ -647,14 +647,14 @@ export default function CustomerBookingsScreen() {
       { id: 'cancelled', label: withCount('Đã hủy', counts?.repair.cancelled), testID: 'activity-filter-cancelled' },
     ] as const).map((chip) => ({ ...chip, selected: activityTab === chip.id, onPress: () => setActivityTab(chip.id) }));
   const kindTabs = [
-    { id: 'repair', label: 'Đơn sửa chữa', count: counts?.repair.all ?? null, urgent: 0 },
+    { id: 'repair', label: 'Đơn 1 thiết bị', count: counts?.repair.all ?? null, urgent: 0 },
+    { id: 'visit', label: 'Đơn nhiều thiết bị', count: null, urgent: 0 },
     { id: 'request', label: 'Yêu cầu đặt lịch', count: counts?.request.all ?? null, urgent: urgentCount },
-    { id: 'visit', label: 'Nhiều thiết bị', count: null, urgent: 0 },
   ] as const;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerCopy}>

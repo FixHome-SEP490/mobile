@@ -6,6 +6,7 @@ import { wholeVnd } from '../../../api/customer-wallet.api';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { useCustomerOrderPayment } from './useCustomerOrderPayment';
 import { hasCompletionRequest, invoiceFact } from './payment-facts';
+import { secondsLeft } from './voucher-checkout';
 import { sameOrderSession } from '../domain/order-session.types';
 import { DetailRow, ReadOnlyNotice, Section, TaskScreenShell } from '../shared/TaskScreenShell';
 import { quoteMoneyText } from '../shared/DecisionSummary';
@@ -52,7 +53,11 @@ export default function WalletPaymentScreen() {
   const unpaid = !!invoice && invoice.status === 'unpaid';
   const balance = state.wallet.status === 'ready' ? wholeVnd(state.wallet.data.balance) : null;
   const walletError = state.wallet.status === 'error';
-  const sufficient = balance !== null && !!invoice && balance >= invoice.amount;
+  // With a held voucher the wallet pays the server-calculated due, not the invoice total.
+  const held = state.voucher;
+  const voucher = key && held && held.scopeId === key.serviceOrderId && secondsLeft(held) > 0 ? held : null;
+  const payable = voucher ? voucher.customerDueVnd : invoice?.amount ?? 0;
+  const sufficient = balance !== null && !!invoice && balance >= payable;
   const sheetValid = current && !!sheet && !!invoice && sheet.invoiceId === invoice.id
     && sheet.amount === invoice.amount && sheet.ownerKey === ownerKey && state.confirmation !== null
     && state.confirmation.invoiceId === invoice.id && state.confirmation.amount === invoice.amount;
@@ -106,7 +111,7 @@ export default function WalletPaymentScreen() {
           ? { label: 'Kiểm tra kết quả', testID: 'wallet-check-result', disabled: busy,
               onPress: () => navigation.navigate('OrderTask') }
           : sheetValid && sheet
-            ? { label: `Xác nhận thanh toán ${formatVnd(sheet.amount)}`, testID: 'wallet-confirm-submit',
+            ? { label: `Xác nhận thanh toán ${formatVnd(payable)}`, testID: 'wallet-confirm-submit',
                 disabled: busy, accessibilityHint: 'Gửi yêu cầu trừ ví đúng số tiền đã chốt',
                 onPress: submitSheet }
             : state.confirmation && !sheet && sufficient
@@ -118,7 +123,8 @@ export default function WalletPaymentScreen() {
       <Section title="Thanh toán bằng ví">
         <View style={{ paddingVertical: 12, gap: 4, borderBottomWidth: 0.5, borderBottomColor: colors.border }}>
           <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Tổng tiền phải trả</Text>
-          <Text style={{ color: colors.primaryStrong, fontSize: 26, lineHeight: 34, fontWeight: '700' }}>{invoice ? quoteMoneyText(invoice.grandTotal) : 'Chưa có dữ liệu'}</Text>
+          <Text style={{ color: colors.primaryStrong, fontSize: 26, lineHeight: 34, fontWeight: '700' }}>{voucher ? formatVnd(voucher.customerDueVnd) : invoice ? quoteMoneyText(invoice.grandTotal) : 'Chưa có dữ liệu'}</Text>
+          {voucher ? <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Đã giảm {formatVnd(voucher.discountVnd)} từ tổng gốc {formatVnd(voucher.originalGrossVnd)} bằng voucher.</Text> : null}
         </View>
         <DetailRow
           label="Số dư ví"
@@ -140,7 +146,7 @@ export default function WalletPaymentScreen() {
         <View style={{ backgroundColor: colors.tone.warning.bg, borderColor: colors.tone.warning.fg, borderWidth: 1, borderRadius: 12, padding: spacing.md }} testID="wallet-confirm-sheet">
           <Text style={{ fontSize: 16, fontWeight: '700', color: colors.tone.warning.text }}>Xác nhận thanh toán bằng ví</Text>
           <DetailRow label="Mã hóa đơn" value={`#${sheet.invoiceId.slice(0, 8).toUpperCase()}`} />
-          <DetailRow label="Số tiền trừ ví" value={formatVnd(sheet.amount)} />
+          <DetailRow label="Số tiền trừ ví" value={formatVnd(payable)} />
           <DetailRow label="Số dư ví lúc xác nhận" value={formatVnd(sheet.balance)} />
           <TouchableOpacity
             testID="wallet-confirm-cancel"

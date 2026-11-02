@@ -38,7 +38,7 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
       technicianId: technicianProfileId, userId: firstUserId, fullName: 'Demo Technician',
     }] } });
     const candidates = await bookingsApi.getCandidates('booking-1');
-    expect(api.get).toHaveBeenCalledWith('/bookings/booking-1/technician-candidates');
+    expect(api.get).toHaveBeenCalledWith('/bookings/booking-1/technician-candidates', { timeout: 60000 });
     expect(candidates[0].userId).toBe(firstUserId);
     expect(candidates[0].id).toBe(firstUserId);
     expect(candidates[0].technicianId).toBe(technicianProfileId);

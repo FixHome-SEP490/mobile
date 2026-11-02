@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
-import { Banknote, ClipboardCheck, CreditCard, Gift, Wallet, type LucideIcon } from 'lucide-react-native';
+import { Banknote, ClipboardCheck, CreditCard, Gift, Ticket, Wallet, type LucideIcon } from 'lucide-react-native';
 import { formatVnd } from '../../../utils/format';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
@@ -14,6 +14,8 @@ import { HubSection, type HubLink } from '../shared/TechnicianOrderHub';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import type { PaymentMethod } from './payment-facts';
+import VoucherCheckoutSection from './VoucherCheckoutSection';
+import { secondsLeft } from './voucher-checkout';
 
 /** VNPay does not take less than this; the backend answers 422 before it creates a payment. */
 const VNPAY_MIN = 5000;
@@ -25,7 +27,9 @@ const METHODS: { id: PaymentMethod; label: string; hint: string }[] = [
   { id: 'cash', label: 'Tiền mặt', hint: 'Xác nhận đã trả tiền mặt cho kỹ thuật viên' },
 ];
 
-const METHOD_ICONS: Record<PaymentMethod, LucideIcon> = { wallet: Wallet, vnpay: CreditCard, cash: Banknote, no_charge: Gift };
+const VOUCHER_ZERO_METHOD = { id: 'voucher_zero' as PaymentMethod, label: 'Xác nhận thanh toán 0 ₫', hint: 'Voucher đã trả đủ hóa đơn, không cần trả thêm' };
+
+const METHOD_ICONS: Record<PaymentMethod, LucideIcon> = { wallet: Wallet, vnpay: CreditCard, cash: Banknote, no_charge: Gift, voucher_zero: Ticket };
 
 interface FrozenVnpaySheet {
   invoiceId: string;
@@ -67,6 +71,10 @@ export default function PaymentMethodScreen() {
   const frozen = busy || unknown;
   const unpaid = !!invoice && invoice.status === 'unpaid';
   const cashAwaiting = !!cash && cash.status === 'pending_confirmation';
+  // The hold that pays this order, and what the server says is due with it (the invoice total otherwise).
+  const held = state.voucher;
+  const voucher = key && held && held.scopeId === key.serviceOrderId && (cashAwaiting || secondsLeft(held) > 0) ? held : null;
+  const payable = voucher ? voucher.customerDueVnd : invoice?.amount ?? 0;
   const sheetValid = current && !!sheet && !!sheetMethod && !!invoice && sheet.invoiceId === invoice.id
     && sheet.amount === invoice.amount && sheet.ownerKey === ownerKey && state.confirmation !== null
     && state.confirmation.invoiceId === invoice.id;
@@ -101,7 +109,7 @@ export default function PaymentMethodScreen() {
       // VNPay initiation only creates the link; this explicit confirmation opens it once.
       // Cash confirm only sends the captured declaration; the dispatcher shows the outcome.
       if (method === 'vnpay') void controller.openPaymentUrl();
-      else if (method === 'cash' || method === 'no_charge') navigation.navigate('OrderTask');
+      else if (method === 'cash' || method === 'no_charge' || method === 'voucher_zero') navigation.navigate('OrderTask');
     });
   };
 
@@ -142,7 +150,7 @@ export default function PaymentMethodScreen() {
               accessibilityHint: 'Đối chiếu kết quả thanh toán chưa rõ từ máy chủ',
               onPress: () => { void controller.verify(); navigation.navigate('OrderTask'); } }
           : sheetValid && sheetMethod
-            ? { label: sheetMethod === 'vnpay' ? 'Xác nhận mở VNPay' : sheetMethod === 'no_charge' ? 'Xác nhận miễn phí' : 'Xác nhận tiền mặt',
+            ? { label: sheetMethod === 'vnpay' ? 'Xác nhận mở VNPay' : sheetMethod === 'no_charge' ? 'Xác nhận miễn phí' : sheetMethod === 'voucher_zero' ? 'Xác nhận thanh toán 0 ₫' : 'Xác nhận tiền mặt',
                 testID: 'payment-confirm-submit', disabled: busy, onPress: submitSheet }
             : state.urlReady
               ? { label: 'Mở cổng thanh toán', testID: 'payment-open-browser', disabled: busy, onPress: openBrowser }
@@ -161,17 +169,18 @@ export default function PaymentMethodScreen() {
       {sheetValid && sheet && sheetMethod ? (
         <View style={{ backgroundColor: colors.tone.warning.bg, borderColor: colors.tone.warning.fg, borderWidth: 1, borderRadius: 12, padding: spacing.md }} testID="payment-confirm-sheet">
           <Text style={{ fontSize: 16, fontWeight: '700', color: colors.tone.warning.text }}>
-            {sheetMethod === 'vnpay' ? 'Xác nhận mở cổng VNPay' : sheetMethod === 'no_charge' ? 'Xác nhận hóa đơn miễn phí' : 'Xác nhận thanh toán tiền mặt'}
+            {sheetMethod === 'vnpay' ? 'Xác nhận mở cổng VNPay' : sheetMethod === 'no_charge' ? 'Xác nhận hóa đơn miễn phí' : sheetMethod === 'voucher_zero' ? 'Xác nhận thanh toán 0 ₫ bằng voucher' : 'Xác nhận thanh toán tiền mặt'}
           </Text>
           <DetailRow label="Mã hóa đơn" value={`#${sheet.invoiceId.slice(0, 8).toUpperCase()}`} />
-          <DetailRow label="Số tiền đã chốt" value={formatVnd(sheet.amount)} />
+          <DetailRow label="Số tiền đã chốt" value={formatVnd(voucher ? payable : sheet.amount)} />
+          {voucher ? <DetailRow label="Tổng gốc / voucher giảm" value={`${formatVnd(voucher.originalGrossVnd)} / - ${formatVnd(voucher.discountVnd)}`} /> : null}
           {sheetMethod === 'cash' ? (
             <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }}>
               Chỉ xác nhận khi bạn đã trực tiếp trả đúng số tiền trên cho kỹ thuật viên.
             </Text>
-          ) : sheetMethod === 'no_charge' ? (
+          ) : sheetMethod === 'no_charge' || sheetMethod === 'voucher_zero' ? (
             <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }}>
-              Hóa đơn này là 0 ₫ nên không có khoản thanh toán nào. Xác nhận để hoàn tất đơn.
+              {sheetMethod === 'voucher_zero' ? 'Voucher đã trả đủ hóa đơn nên bạn không phải trả thêm. Xác nhận để hoàn tất đơn.' : 'Hóa đơn này là 0 ₫ nên không có khoản thanh toán nào. Xác nhận để hoàn tất đơn.'}
             </Text>
           ) : (
             <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }}>
@@ -190,9 +199,19 @@ export default function PaymentMethodScreen() {
           </TouchableOpacity>
         </View>
       ) : null}
-      <HubSection title="Phương thức thanh toán" items={(invoice?.amount === 0 ? [NO_CHARGE_METHOD] : METHODS).map((method): HubLink => {
+      {invoice && key && unpaid && invoice.amount > 0 ? (
+        <VoucherCheckoutSection
+          scopeId={key.serviceOrderId}
+          applied={voucher}
+          disabled={frozen || !!sheet}
+          keepWhenExpired={cashAwaiting}
+          onApplied={controller.setVoucher}
+          onReleased={() => controller.setVoucher(null)}
+        />
+      ) : null}
+      <HubSection title="Phương thức thanh toán" items={(invoice?.amount === 0 ? [NO_CHARGE_METHOD] : voucher?.customerDueVnd === 0 ? [VOUCHER_ZERO_METHOD] : METHODS).map((method): HubLink => {
         const cashBlocked = method.id === 'cash' && !cashAwaiting;
-        const vnpayTooSmall = method.id === 'vnpay' && !!invoice && invoice.amount < VNPAY_MIN;
+        const vnpayTooSmall = method.id === 'vnpay' && !!invoice && payable < VNPAY_MIN;
         return {
           screen: method.id, testID: `payment-method-${method.id}`, label: method.label, Icon: METHOD_ICONS[method.id],
           accessibilityHint: method.hint,

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { openOrResume } from '../../features/order-flow/navigation/resume-order';
 import {
   AccessibilityInfo,
   View,
@@ -164,7 +165,7 @@ export default function TechnicianHomeScreen() {
 
   const openDetail = (order: ServiceOrderItem) => {
     const id = techOrderDetailTarget(order);
-    if (id) rootNavigation.navigate('TechnicianOrderDetail', { serviceOrderId: id });
+    if (id) openOrResume([id], () => rootNavigation.navigate('TechnicianOrderDetail', { serviceOrderId: id }));
   };
 
   // Accept/en-route/check-in actions live in the Jobs tab; only a repair in progress opens the detail.
@@ -183,7 +184,7 @@ export default function TechnicianHomeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {/* Header */}
       <View style={styles.header}>

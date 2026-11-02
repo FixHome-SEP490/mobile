@@ -9,6 +9,7 @@ import { useTechnicianArrivalProof } from './useTechnicianArrivalProof';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import VisitTechnicianPanel from './VisitTechnicianPanel';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+import { backFromFlow } from '../navigation/resume-order';
 
 /**
  * TR — Backend still EN_ROUTE after proof capture. Recovery POST only when the
@@ -64,7 +65,7 @@ export default function RepairRecoveryScreen() {
     <TaskScreenShell
       title="Tiếp tục sửa chữa"
       stage={2}
-      onBack={() => navigation.goBack()}
+      onBack={() => backFromFlow(navigation)}
       secondary={{
         label: confirming ? 'Hủy xác nhận' : 'Làm mới dữ liệu',
         testID: confirming ? 'recovery-cancel' : 'task-refresh',

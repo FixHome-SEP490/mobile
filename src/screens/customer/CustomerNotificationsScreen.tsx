@@ -316,7 +316,7 @@ export default function CustomerNotificationsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       
       {/* Header */}
       <View style={styles.header}>
@@ -356,7 +356,7 @@ export default function CustomerNotificationsScreen() {
                   <Text style={styles.retryText}>Thử lại</Text>
                 </TouchableOpacity>
               </View>
-            ) : null
+            ) : undefined
           }
           ListEmptyComponent={renderEmpty}
           ListFooterComponent={renderFooter}

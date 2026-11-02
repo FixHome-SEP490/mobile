@@ -415,7 +415,7 @@ export default function CustomerSupportCasesSection({
         visible={detailOpen}
         transparent
         animationType="slide"
-        onRequestClose={() => !detailLoading && setDetailOpen(false)}
+        onRequestClose={() => { if (!detailLoading) setDetailOpen(false); }}
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>

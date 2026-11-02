@@ -197,7 +197,7 @@ export default function ServiceDeviceDetails({
           <Text style={[styles.legend, { color: colors.primaryStrong }]}>Phạm vi đã xác nhận</Text>
           <Text style={{ color: colors.text, fontWeight: '600' }}>{confirmed.scopeVi}</Text>
           <Text style={{ color: colors.primaryStrong, fontWeight: '700' }}>{`${formatVnd(confirmed.laborPriceVnd)} tiền công`}</Text>
-          <Text style={[styles.hint, { color: colors.textSecondary }]}>Tiền công theo phạm vi đã chọn, chưa gồm linh kiện và vật tư.</Text>
+          <Text style={[styles.hint, { color: colors.textSecondary }]}>Tiền công theo phạm vi đã xác nhận; chưa gồm linh kiện FixHome hoặc tiền công phát sinh ngoài phạm vi. Kỹ thuật viên cần gửi báo giá, bạn duyệt trước khi thực hiện.</Text>
         </View>
       ) : state !== 'failed' && range ? (
         <View style={[styles.result, { borderColor: colors.tone.warning.text, backgroundColor: colors.tone.warning.bg }]} testID="pricing-reference-range">

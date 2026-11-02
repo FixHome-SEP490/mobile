@@ -423,7 +423,7 @@ export default function CustomerWarrantiesScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <View style={styles.header}>
         <BackButton />
         <View style={styles.headerCopy}>
@@ -535,7 +535,7 @@ export default function CustomerWarrantiesScreen() {
         </ScrollView>
       )}
 
-      <Modal visible={!!disputeClaim} transparent animationType="slide" onRequestClose={() => !responseBusyId && setDisputeClaim(null)}>
+      <Modal visible={!!disputeClaim} transparent animationType="slide" onRequestClose={() => { if (!responseBusyId) setDisputeClaim(null); }}>
         <KeyboardAvoidingView style={styles.modalBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>

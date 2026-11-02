@@ -146,8 +146,8 @@ export default function CustomerWalletScreen() {
       <View style={styles.header}>
         <BackButton onPress={() => navigation.goBack()} />
         <View style={styles.headerTitleGroup}>
-          <Text style={styles.headerEyebrow}>Ví của tôi</Text>
           <Text accessibilityRole="header" style={styles.headerTitle}>Ví FixHome</Text>
+          <Text style={styles.headerSubtitle}>Số dư và giao dịch của bạn</Text>
         </View>
         <TouchableOpacity
           testID="wallet-refresh"
@@ -322,13 +322,16 @@ export default function CustomerWalletScreen() {
   );
 }
 
-// Same look as the technician wallet: header with an eyebrow, a dark balance card, one filled and one outlined
+// Same look as the technician wallet: standard header, a dark balance card, one filled and one outlined
 // action, ledger rows as cards, text buttons to page.
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4 },
+  header: {
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 16,
+    backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border,
+  },
   headerTitleGroup: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 1 },
-  headerEyebrow: { fontSize: 12, lineHeight: 16, color: colors.textSecondary, fontWeight: '600' },
+  headerSubtitle: { fontSize: 12, lineHeight: 17, color: colors.textSecondary, textAlign: 'center' },
   headerTitle: { fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.text },
   iconBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   scrollContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40, gap: 12 },

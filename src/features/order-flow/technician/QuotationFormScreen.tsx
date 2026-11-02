@@ -28,6 +28,7 @@ import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { AddRow, EarlierPartCard, GroupLabel, LaborCard, LinkRow, PartLineCard, Section, type EarlierPartLine } from './QuotationItemCards';
 import { formatVnd } from '../../../utils/format';
 import { lightTheme as colors, spacing, type ToneName } from '../../../constants/theme';
+import { backFromFlow } from '../navigation/resume-order';
 
 const EARLIER_STATUS: Record<string, { label: string; tone: ToneName }> = {
   requested: { label: 'Đã gửi yêu cầu', tone: 'neutral' },
@@ -335,12 +336,12 @@ export default function QuotationFormScreen() {
       cancelReview();
       return;
     }
-    navigation.goBack();
+    backFromFlow(navigation);
   };
 
   if (!current || !order) {
     return (
-      <TaskScreenShell title="Tạo báo giá" onBack={() => navigation.goBack()}>
+      <TaskScreenShell title="Tạo báo giá" onBack={() => backFromFlow(navigation)}>
         <ReadOnlyNotice>
           {snapshot?.access === 'historical'
             ? 'Báo giá không được tạo cho đơn lịch sử.'
@@ -355,7 +356,7 @@ export default function QuotationFormScreen() {
       <TaskScreenShell
         title="Tạo báo giá"
         stage={2}
-        onBack={() => navigation.goBack()}
+        onBack={() => backFromFlow(navigation)}
         primary={{ label: 'Tiếp tục', testID: 'quote-bypass-continue', onPress: () => navigation.navigate('OrderTask') }}
       >
         <ReadOnlyNotice>Đơn giá cố định không cần tạo báo giá khảo sát.</ReadOnlyNotice>

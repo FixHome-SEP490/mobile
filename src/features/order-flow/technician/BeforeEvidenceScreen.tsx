@@ -12,6 +12,7 @@ import PhotoDraftGallery from '../../../components/technician/PhotoDraftGallery'
 import SentEvidenceGallery from './SentEvidenceGallery';
 import { Section } from './QuotationItemCards';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+import { backFromFlow } from '../navigation/resume-order';
 
 /** Photos taken and not yet sent in one go; every photo but the last tells the Backend not to start the repair yet. */
 const MAX_BEFORE_DRAFTS = 10;
@@ -142,7 +143,7 @@ export default function BeforeEvidenceScreen() {
     <TaskScreenShell
       title="Ảnh trước sửa chữa"
       stage={2}
-      onBack={() => navigation.goBack()}
+      onBack={() => backFromFlow(navigation)}
       secondary={{
         label: 'Làm mới dữ liệu',
         testID: 'task-refresh',

@@ -58,6 +58,10 @@ export type RootStackParamList = {
    */
   CustomerMatching: { bookingId: string; rebooked?: 'choose'; released?: true; visitGroupId?: string };
   CustomerVisit: { visitGroupId: string };
+  /** Book again the devices of a visit that could not be repaired; the first id anchors the server draft. */
+  CustomerFailedRepairRebook: { sourceBookingIds: string[] };
+  /** Book again a job a manager closed; `bookingId` anchors the server draft. */
+  CustomerInterruptionRebook: { bookingId: string };
   /** Several devices in one visit; `prefill.devices` are the assistant's suggestions, each still checked and saved by the customer. */
   CustomerVisitCreate: { prefill?: { aiSessionId?: string; devices: { serviceId: string; description: string }[] } } | undefined;
   /**
@@ -72,6 +76,7 @@ export type RootStackParamList = {
   CustomerSecurity: undefined;
   /** Customer-only FixHome wallet (overview + top-up). No Technician equivalent at this route. */
   CustomerWallet: undefined;
+  CustomerVouchers: undefined;
   /** Customer-only identity verification; never exposed to guests or Technicians. */
   CustomerKyc: undefined;
   /** Customer-only bank account, withdrawal confirmation, and paged history. */

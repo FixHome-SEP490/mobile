@@ -301,7 +301,7 @@ describe('CustomerBookingsScreen activity ordering (C-RUI1)', () => {
     const tree = await mountCounted();
     try {
       const tab = (id: string) => tree.root.findAllByProps({ testID: `activity-kind-${id}` }).find((node) => node.props.accessibilityRole === 'tab')!;
-      expect(tab('repair').props.accessibilityLabel).toBe('Đơn sửa chữa, 6');
+      expect(tab('repair').props.accessibilityLabel).toBe('Đơn 1 thiết bị, 6');
       expect(tab('request').props.accessibilityLabel).toBe('Yêu cầu đặt lịch, 42');
       // Repairs open first when nothing needs action, and the request list is not drawn under them.
       expect(tab('repair').props.accessibilityState.selected).toBe(true);
@@ -435,7 +435,7 @@ describe('CustomerBookingsScreen loads more pages by itself while scrolling', ()
       expect(mockLoader.loadMore).not.toHaveBeenCalled();
       expect(mockLoader.loadMoreOrders).toHaveBeenCalledTimes(1);
       const tab = (id: string) => tree.root.findAllByProps({ testID: `activity-kind-${id}` }).find((node) => node.props.accessibilityRole === 'tab')!;
-      expect(tab('repair').props.accessibilityLabel).toBe('Đơn sửa chữa, 6');
+      expect(tab('repair').props.accessibilityLabel).toBe('Đơn 1 thiết bị, 6');
       expect(tab('request').props.accessibilityLabel).toBe('Yêu cầu đặt lịch, 42');
     } finally {
       act(() => tree.unmount());

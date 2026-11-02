@@ -1,22 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { quoteStatusLabel } from '../../utils/quote-status';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  RefreshControl,
-  StatusBar,
-  Image,
-  Modal,
-  Alert,
-  TextInput,
-  Linking,
-  AppState,
-  type LayoutChangeEvent,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, StatusBar, Image, Modal, Alert, TextInput, Linking, AppState, type LayoutChangeEvent, ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -116,7 +100,7 @@ export default function CustomerOrderDetailScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<DetailRoute>();
   const serviceOrderId = route.params.serviceOrderId;
-  const detailScrollRef = useRef<ScrollView | null>(null);
+  const detailScrollRef = useRef<ScrollViewInstance | null>(null);
   const [detailView, setDetailView] = useState<{ orderId: string; section: OrderDetailSection | 'all' } | null>(null);
   const pendingScroll = useRef<{ orderId: string; kind: OrderNextActionKind } | null>(null);
   const openDetailSection = (section: OrderDetailSection) => {
@@ -899,7 +883,7 @@ export default function CustomerOrderDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <View style={styles.header}>
         <BackButton />
         <Text style={styles.headerTitle} accessibilityRole="header">{`Bước · ${orderSummaryAction?.title ?? 'Chi tiết đơn sửa chữa'}`}</Text>

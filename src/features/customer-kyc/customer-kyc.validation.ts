@@ -68,7 +68,7 @@ export function validateCustomerKycForm(
   if (name.length < 2 || name.length > 200) errors.fullName = 'Họ và tên cần từ 2 đến 200 ký tự.';
   const dateError = validateVnDateOfBirth(form.dateOfBirth, today);
   if (dateError) errors.dateOfBirth = dateError;
-  if (!['MALE', 'FEMALE', 'OTHER'].includes(form.gender)) errors.gender = 'Chọn giới tính.';
+  if (!['male', 'female', 'other'].includes(form.gender)) errors.gender = 'Chọn giới tính.';
   if (!/^\d{12}$/.test(form.citizenIdNumber)) errors.citizenIdNumber = 'Số CCCD phải gồm đúng 12 chữ số.';
   if (address.length < 5 || address.length > 500) errors.address = 'Địa chỉ cần từ 5 đến 500 ký tự.';
   return errors;

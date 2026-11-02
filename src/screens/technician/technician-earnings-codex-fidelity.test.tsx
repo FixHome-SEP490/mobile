@@ -244,7 +244,7 @@ describe('technician earnings codex fidelity', () => {
       node.props.accessibilityLabel === 'Xem đơn FH-BEST'
     );
     expect(linkButtons.length).toBe(1);
-    await act(async () => { linkButtons[0].props.onPress(); });
+    await act(async () => { linkButtons[0].props.onPress(); await new Promise((resolve) => setTimeout(resolve, 0)); });
     expect(mockNavigate).toHaveBeenCalledWith('TechnicianOrderDetail', { serviceOrderId: 'best-1' });
     await act(async () => renderer.unmount());
   });

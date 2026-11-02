@@ -16,11 +16,13 @@ import CustomerBookingCreateScreen from '../screens/customer/CustomerBookingCrea
 import CustomerAIChatScreen from '../screens/customer/CustomerAIChatScreen';
 import CustomerMatchingScreen from '../screens/customer/CustomerMatchingScreen';
 import CustomerBookingDetailScreen from '../screens/customer/CustomerBookingDetailScreen';
+import CustomerFailedRepairRebookScreen from '../screens/customer/CustomerFailedRepairRebookScreen';
 import CustomerVisitScreen from '../screens/customer/CustomerVisitScreen';
 import CustomerVisitCreateScreen from '../screens/customer/CustomerVisitCreateScreen';
 import CustomerRepairHistoryScreen from '../screens/customer/CustomerRepairHistoryScreen';
 import CustomerWarrantiesScreen from '../screens/customer/CustomerWarrantiesScreen';
 import CustomerSecurityScreen from '../screens/customer/CustomerSecurityScreen';
+import CustomerVouchersScreen from '../screens/customer/CustomerVouchersScreen';
 import CustomerWalletScreen from '../features/order-flow/customer/CustomerWalletScreen';
 import CustomerKycScreen from '../features/customer-kyc/CustomerKycScreen';
 import CustomerWithdrawScreen from '../features/customer-withdrawal/CustomerWithdrawScreen';
@@ -109,6 +111,8 @@ export default function AppNavigator({ firstRunSeen = false }: { firstRunSeen?: 
             <Stack.Screen name="CustomerMatching" component={CustomerMatchingScreen} />
             <Stack.Screen name="CustomerBookingDetail" component={CustomerBookingDetailScreen} />
             <Stack.Screen name="CustomerVisit" component={CustomerVisitScreen} />
+            <Stack.Screen name="CustomerFailedRepairRebook" component={CustomerFailedRepairRebookScreen} />
+            <Stack.Screen name="CustomerInterruptionRebook" component={CustomerFailedRepairRebookScreen} />
             <Stack.Screen name="CustomerVisitCreate" component={CustomerVisitCreateScreen} />
             <Stack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailEntry} />
             <Stack.Screen name="CustomerRepairHistory" component={CustomerRepairHistoryScreen} />
@@ -152,12 +156,15 @@ export default function AppNavigator({ firstRunSeen = false }: { firstRunSeen?: 
             <Stack.Screen name="CustomerMatching" component={CustomerMatchingScreen} />
             <Stack.Screen name="CustomerBookingDetail" component={CustomerBookingDetailScreen} />
             <Stack.Screen name="CustomerVisit" component={CustomerVisitScreen} />
+            <Stack.Screen name="CustomerFailedRepairRebook" component={CustomerFailedRepairRebookScreen} />
+            <Stack.Screen name="CustomerInterruptionRebook" component={CustomerFailedRepairRebookScreen} />
             <Stack.Screen name="CustomerVisitCreate" component={CustomerVisitCreateScreen} />
             <Stack.Screen name="CustomerOrderDetail" component={CustomerOrderDetailEntry} />
             <Stack.Screen name="CustomerRepairHistory" component={CustomerRepairHistoryScreen} />
             <Stack.Screen name="CustomerWarranties" component={CustomerWarrantiesScreen} />
             <Stack.Screen name="CustomerSecurity" component={CustomerSecurityScreen} />
             <Stack.Screen name="CustomerWallet" component={CustomerWalletScreen} />
+            <Stack.Screen name="CustomerVouchers" component={CustomerVouchersScreen} />
             <Stack.Screen name="CustomerKyc" component={CustomerKycScreen} />
             <Stack.Screen name="CustomerWithdraw" component={CustomerWithdrawScreen} />
             <Stack.Screen name="TechnicianOrderDetail" component={TechnicianOrderDetailEntry} />

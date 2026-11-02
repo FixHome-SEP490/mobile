@@ -5,7 +5,7 @@
 // streams through a short-lived link, only after the technician taps it (nothing
 // is downloaded up front), and a link that stops working is asked for again by "Thử lại".
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { ActivityIndicator, FlatList, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, ScrollViewInstance } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Play } from 'lucide-react-native';
 import type { BookingMedia } from '../../api/bookings.api';
@@ -132,7 +132,7 @@ export default function BookingMediaViewer({ bookingId, media }: { bookingId: st
   const [index, setIndex] = useState(0);
   const [width, setWidth] = useState(0);
   const pager = useRef<FlatList<BookingMedia>>(null);
-  const thumbs = useRef<ScrollView>(null);
+  const thumbs = useRef<ScrollViewInstance>(null);
   useEffect(() => () => { media.forEach((m) => photoReads.delete(m.id)); }, [media]);
   if (!media.length) return null;
 
