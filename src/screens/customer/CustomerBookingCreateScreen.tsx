@@ -1,5 +1,5 @@
 import BookingActionBar from '../../components/BookingActionBar';
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions, TextInputInstance, ScrollViewInstance } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {
