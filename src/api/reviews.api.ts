@@ -17,19 +17,38 @@ export interface TechnicianReviewsPage {
   total: number;
 }
 
+type RawReview = Partial<Record<keyof TechnicianReview, unknown>>;
+
+const text = (value: unknown) => (typeof value === 'string' ? value : '');
+
+function toReview(row: RawReview): TechnicianReview {
+  return {
+    id: text(row.id),
+    serviceOrderId: text(row.serviceOrderId),
+    // The backend list does not carry the order code or service name yet; the screen skips them when empty.
+    orderCode: text(row.orderCode),
+    serviceName: text(row.serviceName),
+    customerName: text(row.customerName),
+    rating: Number(row.rating),
+    comment: typeof row.comment === 'string' ? row.comment : null,
+    createdAt: text(row.createdAt),
+  };
+}
+
 export const reviewsApi = {
-  /** The signed-in technician's own reviews: the existing public route with the session's own user id (the Backend has no /me variant). */
+  /**
+   * The signed-in technician's own reviews. The backend has no /technicians/me/reviews route
+   * ("me" fails its UUID check with HTTP 400, bug 51), so the list is read from
+   * GET /technicians/{user id}/reviews with the id of the session user.
+   */
   async getMine(page = 1, pageSize = 20): Promise<TechnicianReviewsPage> {
     const userId = useAuthStore.getState().user?.id;
-    if (!userId) throw new Error('No signed-in technician');
-    const res = await apiClient.get<{ data?: Partial<TechnicianReview>[]; meta?: { total?: number } }>(
-      `/technicians/${userId}/reviews`,
+    if (!userId) throw new Error('Chưa đăng nhập tài khoản kỹ thuật viên.');
+    const res = await apiClient.get<{ data?: RawReview[]; meta?: { total?: number } }>(
+      `/technicians/${encodeURIComponent(userId)}/reviews`,
       { params: { page, pageSize } },
     );
-    // The public route has no order code or service name; the screen skips an empty order line.
-    const rows = (Array.isArray(res.data?.data) ? res.data.data : []).map((r) => ({
-      ...r, orderCode: r.orderCode ?? '', serviceName: r.serviceName ?? '', customerName: r.customerName ?? 'Khách hàng FixHome',
-    })) as TechnicianReview[];
+    const rows = Array.isArray(res.data?.data) ? res.data.data.map(toReview) : [];
     const total = typeof res.data?.meta?.total === 'number' ? res.data.meta.total : rows.length;
     return { data: rows, total };
   },

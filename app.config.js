@@ -7,6 +7,9 @@ module.exports = ({ config }) => {
   }
   return {
     ...config,
+    // Read by src/components/map-availability.ts: without a key the app shows a map
+    // placeholder instead of the native "API key not found" error (bug 44).
+    extra: { ...(config.extra ?? {}), androidMapsConfigured: Boolean(androidMapsKey) },
     plugins: [
       ...(config.plugins ?? []),
       ...(androidMapsKey
