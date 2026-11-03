@@ -4,6 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import VisitGroupsPanel from './VisitGroupsPanel';
 
 const mockGetMyPage = jest.fn();
+const mockGetMyOrders = jest.fn();
 
 jest.mock('@react-navigation/native', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -25,6 +26,10 @@ jest.mock('../../constants/theme', () => {
     }),
   };
 });
+jest.mock('../../api/orders.api', () => ({
+  ordersApi: { getMyOrders: (...args: unknown[]) => mockGetMyOrders(...args), getTechnicianJobs: jest.fn(async () => []) },
+  isHistoricalOrder: () => false,
+}));
 jest.mock('../../api/visit-groups.api', () => ({
   visitGroupsApi: { getMyPage: (...args: unknown[]) => mockGetMyPage(...args) },
 }));
@@ -47,6 +52,7 @@ async function mount(props: Partial<React.ComponentProps<typeof VisitGroupsPanel
   await act(async () => { await Promise.resolve(); });
   return { tree, onOpen };
 }
+beforeEach(() => { mockGetMyOrders.mockResolvedValue([]); });
 afterEach(() => { jest.useRealTimers(); jest.resetAllMocks(); });
 
 it('shows each visit with its devices and status, and opens it', async () => {
@@ -83,4 +89,27 @@ it('history mode merges the finished statuses, newest first', async () => {
 it('shows a retry when the list cannot be read', async () => {
   mockGetMyPage.mockRejectedValue(new Error('offline'));
   expect(texts((await mount()).tree)).toContain('Thử lại');
+});
+
+const repairRow = () => ({
+  ...row('v9', 'under_repair', '2026-10-29T01:00:00.000Z'),
+  items: [1, 2].map((n) => ({ itemId: `v9-${n}`, sequence: n, bookingId: `b${n}`, serviceId: 's', deviceLabel: null, outcome: 'succeeded', bookingStatus: 'MATCHED', serviceName: `Máy ${n}`, orderId: `o${n}`, orderCode: `SO-${n}`, orderStatus: 'under_repair' })),
+});
+const deviceOrder = (n: number, extra: object) => ({ id: `o${n}`, code: `SO-${n}`, status: 'UNDER_REPAIR', grandTotal: 100000, ...extra });
+
+it('shows Chờ thanh toán when every device of an under-repair visit is handed over, not Đang sửa chữa', async () => {
+  mockGetMyPage.mockResolvedValue({ data: [repairRow()], total: 1 });
+  mockGetMyOrders.mockResolvedValue([deviceOrder(1, { completionRequestedAt: '2026-10-29T13:20:00.000Z' }), deviceOrder(2, { completionRequestedAt: '2026-10-29T13:15:00.000Z' })]);
+  const all = texts((await mount()).tree);
+  expect(all).toContain('Chờ thanh toán');
+  expect(all).not.toContain('Đang sửa chữa');
+});
+
+it('keeps Đang sửa chữa while one device is still not handed over, or its order could not be read', async () => {
+  mockGetMyPage.mockResolvedValue({ data: [repairRow()], total: 1 });
+  mockGetMyOrders.mockResolvedValue([deviceOrder(1, { completionRequestedAt: '2026-10-29T13:20:00.000Z' }), deviceOrder(2, {})]);
+  expect(texts((await mount()).tree)).toContain('Đang sửa chữa');
+  jest.useRealTimers();
+  mockGetMyOrders.mockResolvedValue([deviceOrder(1, { completionRequestedAt: '2026-10-29T13:20:00.000Z' })]);
+  expect(texts((await mount()).tree)).toContain('Đang sửa chữa');
 });

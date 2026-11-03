@@ -164,6 +164,39 @@ beforeEach(() => {
   mockJournal = null;
 });
 
+describe('an order that is no longer the technician\'s', () => {
+  const historical = (status: string, extra: Record<string, unknown> = {}) => {
+    const snapshot = snapshotFor('technician', baseOrder('ACCEPTED'));
+    snapshot.access = 'historical';
+    snapshot.order = readyResource({ id: 'order-1', code: 'SO-9', status, createdAt: '2026-10-31T01:00:00.000Z', historical: true, ...extra } as any, 1, 1);
+    return snapshot;
+  };
+  const shown = (renderer: ReturnType<typeof create>) => renderer.root.findAllByType(Text).map((n: any) => n.props.children).flat().join(' ');
+
+  it('says a cancelled order was cancelled, with its summary, instead of waiting forever (customer cancelled it after a delay notice)', async () => {
+    mockRole = 'technician';
+    mockSnapshot = historical('CANCELLED', { cancelledAt: '2026-10-31T07:45:00.000Z' });
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => { renderer = create(<OrderTaskScreen role={mockRole} />); });
+    const texts = shown(renderer);
+    expect(texts).toContain('Đơn đã hủy');
+    expect(texts).toContain('Đơn #SO-9 đã bị hủy');
+    expect(texts).toContain('Hủy lúc');
+    expect(texts).not.toContain('Đang xác minh quyền truy cập');
+    await act(async () => renderer.unmount());
+  });
+
+  it('says an order handed to someone else is no longer theirs', async () => {
+    mockRole = 'technician';
+    mockSnapshot = historical('ACCEPTED');
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => { renderer = create(<OrderTaskScreen role={mockRole} />); });
+    expect(shown(renderer)).toContain('Đơn #SO-9 không còn do bạn phụ trách');
+    expect(shown(renderer)).not.toContain('Đang xác minh quyền truy cập');
+    await act(async () => renderer.unmount());
+  });
+});
+
 it('says a failed order read failed and offers a read-only retry instead of loading forever', async () => {
   mockRole = 'customer';
   mockSnapshot = snapshotFor('customer', baseOrder('ACCEPTED'));

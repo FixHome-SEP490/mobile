@@ -48,7 +48,9 @@ export type RootStackParamList = {
           /** Assistant session; the technician who accepts gets a summary of it. */
           aiSessionId?: string;
           /** Photos and videos sent in the assistant chat, already uploaded, for the technician (PO 18/10/2026). */
-          attachmentUploadIds?: { uploadId: string; kind: 'image' | 'video' }[];
+          attachmentUploadIds?: { uploadId: string; kind: 'image' | 'video'; previewUri?: string }[];
+          /** Two or three appliances the assistant advised on, each with its service and the photos already uploaded; the first is Máy 1. */
+          devices?: { serviceId: string; description: string; photos?: { uploadId: string; uri: string; name: string; type: 'image/jpeg' }[] }[];
         };
       }
     | undefined;
@@ -63,7 +65,7 @@ export type RootStackParamList = {
   /** Book again a job a manager closed; `bookingId` anchors the server draft. */
   CustomerInterruptionRebook: { bookingId: string };
   /** Several devices in one visit; `prefill.devices` are the assistant's suggestions, each still checked and saved by the customer. */
-  CustomerVisitCreate: { prefill?: { aiSessionId?: string; devices: { serviceId: string; description: string }[] } } | undefined;
+  CustomerVisitCreate: { prefill?: { aiSessionId?: string; devices: { serviceId: string; description: string; photos?: { uploadId: string; uri: string; name: string; type: 'image/jpeg' }[] }[] } } | undefined;
   /**
    * `rebooked: 'invited'` after "Đặt lại thợ" when the former technician was invited.
    * `released: true` when opened from the `TECHNICIAN_RELEASED` notification.

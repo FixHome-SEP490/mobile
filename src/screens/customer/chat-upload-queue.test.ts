@@ -37,7 +37,7 @@ describe('ChatUploadQueue', () => {
     // The light copy goes, not the 80 MB original.
     expect(uploadVideo).toHaveBeenCalledWith({ uri: 'file:///light.mp4', type: 'video/mp4', name: 'light.mp4' }, expect.anything());
     expect(queue.snapshot()[0]).toMatchObject({ state: 'done', uploadId: 'video-1' });
-    expect(queue.uploadIds()).toEqual([{ uploadId: 'video-1', kind: 'video' }]);
+    expect(queue.uploadIds()).toEqual([expect.objectContaining({ uploadId: 'video-1', kind: 'video' })]);
     expect(changes).toHaveBeenCalled();
   });
 
@@ -53,7 +53,7 @@ describe('ChatUploadQueue', () => {
     await flush();
     expect(uploadVideo).toHaveBeenCalledWith({ uri: 'file:///v1.mov', name: 'v1.mov', type: 'video/quicktime' }, expect.anything());
     // Photos first, then videos, as the booking form lists them.
-    expect(queue.uploadIds()).toEqual([{ uploadId: 'photo-1', kind: 'image' }, { uploadId: 'video-1', kind: 'video' }]);
+    expect(queue.uploadIds()).toEqual([expect.objectContaining({ uploadId: 'photo-1', kind: 'image' }), expect.objectContaining({ uploadId: 'video-1', kind: 'video' })]);
   });
 
   it('sends one file at a time and reports progress that only moves forward', async () => {

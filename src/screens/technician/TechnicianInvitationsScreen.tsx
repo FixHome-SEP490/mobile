@@ -21,7 +21,7 @@ import {
   BackHandler,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AlertTriangle, ArrowUpRight, CheckCircle2, Clock, FileText, Image as ImageIcon, Info, MailOpen, MapPin, RefreshCw, Wrench } from 'lucide-react-native';
+import { AlertTriangle, ArrowUpRight, CheckCircle2, ChevronDown, ChevronUp, Clock, FileText, Image as ImageIcon, Info, MailOpen, MapPin, RefreshCw, Wrench } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -104,6 +104,7 @@ export default function TechnicianInvitationsScreen() {
   // Re-evaluate countdowns/expiry while focused. Deadlines come from the server (`expiresAt`).
   const [now, setNow] = useState(() => Date.now());
   const [reviewingInvitationId, setReviewingInvitationId] = useState<string | null>(null);
+  const [openDevices, setOpenDevices] = useState<Record<string, boolean>>({});
   // After the technician answers, the detail closes by itself and a notice shows for 5 s.
   const [responded, setResponded] = useState<{ id: string; action: 'ACCEPT' | 'DECLINE' } | null>(null);
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
@@ -287,12 +288,34 @@ export default function TechnicianInvitationsScreen() {
               {devices
                 ? (
                   <>
-                    {devices.map((d) => (
-                      <View key={d.sequence} style={styles.deviceSection} testID={`invitation-device-${d.sequence}`}>
-                        <Text style={styles.deviceHeading} accessibilityRole="header">{`Máy ${d.sequence}: ${deviceName(d)}`}</Text>
-                        <InvitationJobDetails booking={d.booking} hidePrivacyNote />
-                      </View>
-                    ))}
+                    {devices.map((d) => {
+                      // Folded at first: a visit of several devices is long, and each device opens on its own.
+                      const key = `${inv.id}-${d.sequence}`;
+                      const open = !!openDevices[key];
+                      const Chevron = open ? ChevronUp : ChevronDown;
+                      return (
+                        <View key={d.sequence} style={styles.deviceSection} testID={`invitation-device-${d.sequence}`}>
+                          <TouchableOpacity
+                            testID={`invitation-device-toggle-${d.sequence}`}
+                            style={styles.deviceHead}
+                            onPress={() => setOpenDevices((current) => ({ ...current, [key]: !current[key] }))}
+                            activeOpacity={0.8}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Máy ${d.sequence}: ${deviceName(d)}`}
+                            accessibilityHint={open ? 'Thu gọn chi tiết máy' : 'Mở chi tiết máy'}
+                            accessibilityState={{ expanded: open }}
+                          >
+                            <Text style={styles.deviceHeading}>{`Máy ${d.sequence}: ${deviceName(d)}`}</Text>
+                            <Chevron size={20} color={colors.textSecondary} strokeWidth={1.75} />
+                          </TouchableOpacity>
+                          {open && (
+                            <View style={styles.deviceBody} testID={`invitation-device-body-${d.sequence}`}>
+                              <InvitationJobDetails booking={d.booking} hidePrivacyNote />
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })}
                     <Text style={styles.visitPrivacy} testID="invitation-privacy-note">
                       Địa chỉ cụ thể, số điện thoại và ghi chú riêng của khách hiện sau khi bạn nhận đơn.
                     </Text>
@@ -693,8 +716,10 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   tilePair: { flexDirection: 'row', gap: 12 },
   tileHalf: { flex: 1 },
   tileBody: { flex: 1, gap: 4 },
-  deviceSection: { gap: 4 },
-  deviceHeading: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: colors.text },
+  deviceSection: { borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, overflow: 'hidden' },
+  deviceHead: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 16, paddingVertical: 10 },
+  deviceBody: { paddingHorizontal: 16, paddingBottom: 16, gap: 4 },
+  deviceHeading: { flex: 1, fontSize: 16, lineHeight: 24, fontWeight: '700', color: colors.text },
   visitPrivacy: { fontSize: 14, lineHeight: 22, color: colors.tone.warning.text, backgroundColor: colors.tone.warning.bg, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
   fieldLabel: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
   fieldValue: { fontSize: 14, lineHeight: 22, color: colors.text },

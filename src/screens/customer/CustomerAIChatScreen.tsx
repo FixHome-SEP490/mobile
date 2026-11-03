@@ -59,6 +59,8 @@ import {
   VIDEO_SOURCE_MAX_BYTES,
   VIDEO_NOT_ANALYSED,
   nextPinnedDevices,
+  photosByAppliance,
+  showsManualBooking,
   nextPinnedService,
   photoLabel,
   priceBreakdown,
@@ -103,6 +105,8 @@ interface ChatMessage {
   text: string;
   /** Data URIs the customer attached to this message. */
   images?: string[];
+  /** Upload id of each image above, null when it has no file. */
+  imageUploads?: (string | null)[];
   /** The photos and videos of this message on their way to the technician; the AI never gets the videos. */
   uploadIds?: string[];
   /** Set on a bot message that carries a diagnosis. */
@@ -292,7 +296,7 @@ export default function CustomerAIChatScreen() {
       // retry at roughly a tenth of the bytes - still above the 640px the
       // detector actually sees - turns that into an answer.
       let reply = firstTry;
-      if (reply.status === 'unavailable' && images.length > 0) {
+      if (reply.failureReason === 'image_transport' && images.length > 0) {
         setMessages((prev) => [
           ...prev,
           {
@@ -354,10 +358,8 @@ export default function CustomerAIChatScreen() {
       // For the technician, sent at once in the background: the chat's own photos (they have
       // a file on the phone; handed-over ones do not) and the videos waiting in the tray.
       const q = queue;
-      const sentNow: ChatUpload[] = [
-        ...images.filter((image) => !!image.uri).map((image) => q.addSentImage(image)),
-        ...q.sendWaitingVideos(),
-      ];
+      const sentImages = images.map((image) => (image.uri ? q.addSentImage(image) : null));
+      const sentNow: ChatUpload[] = [...sentImages.filter((item): item is ChatUpload => !!item), ...q.sendWaitingVideos()];
 
       const isQuestion = images.length === 0 && looksLikeAQuestion(trimmed);
       const situation: Situation =
@@ -376,6 +378,7 @@ export default function CustomerAIChatScreen() {
           sender: 'user',
           text: trimmed,
           images: images.map((i) => i.dataUri),
+          imageUploads: sentImages.map((item) => item?.id ?? null),
           ...(sentNow.length ? { uploadIds: sentNow.map((item) => item.id) } : {}),
         },
         {
@@ -407,9 +410,18 @@ export default function CustomerAIChatScreen() {
     // The rule cannot see that this is async: awaitReply opens with an await,
     // so every setState inside it runs a microtask later, not during this
     // effect. The ref above is what actually prevents it running twice.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void awaitReply(text, handedOver, false);
-  }, [awaitReply, handover]);
+    // They have no file, but go up like the chat's own photos (the data URI is converted to a JPEG file first),
+    // so "Đặt thợ" can attach them for the technician. State is set after the awaits inside `startHandover`.
+    void (async () => {
+      const sent = images.map((dataUri) => queue.addSentImage({ uri: dataUri }));
+      await Promise.resolve();
+      if (sent.length) {
+        const ids = sent.map((item) => item.id);
+        setMessages((prev) => prev.map((m, i) => (i === prev.findIndex((x) => x.sender === 'user') ? { ...m, imageUploads: ids, uploadIds: ids } : m)));
+      }
+      await awaitReply(text, handedOver, false);
+    })();
+  }, [awaitReply, handover, queue]);
 
   // -------------------------------------------------------------- images
 
@@ -523,7 +535,7 @@ export default function CustomerAIChatScreen() {
   const openBooking = useCallback(
     (service: RecommendedService) => {
       const attachmentUploadIds = queue.uploadIds() ?? [];
-      navigation.navigate('CustomerAIDiagnosis', {
+      navigation.navigate('CustomerBookingCreate', {
         prefill: {
           serviceId: service.serviceId ?? null,
           serviceCode: service.serviceCode,
@@ -539,13 +551,24 @@ export default function CustomerAIChatScreen() {
 
   /** "Đặt N thiết bị": the suggested appliances go to the visit form, where the customer checks and saves each. */
   const openVisitBooking = useCallback(() => {
-    navigation.navigate('CustomerVisitCreate', {
-      prefill: {
-        aiSessionId: sessionId.current ?? undefined,
-        devices: pinnedDevices.map((d) => ({ serviceId: d.service!.serviceId!, description: d.descriptionVi?.trim() || lastCustomerWords.current })),
-      },
+    const photos = photosByAppliance(messages, (id) => {
+      const u = uploadsById.get(id);
+      return u && { uploadId: u.uploadId, uri: u.uri, done: u.state === 'done' };
     });
-  }, [navigation, pinnedDevices]);
+    const devices = pinnedDevices.map((d) => ({
+      serviceId: d.service!.serviceId!,
+      description: d.descriptionVi?.trim() || lastCustomerWords.current,
+      photos: photos.get(d.deviceType) ?? [],
+    }));
+    // The booking form's device tabs take them: Máy 1 is the form, the others are its tabs.
+    navigation.navigate('CustomerBookingCreate', {
+      prefill: { serviceId: devices[0].serviceId, description: devices[0].description, aiSessionId: sessionId.current ?? undefined, devices },
+    });
+  }, [navigation, pinnedDevices, messages, uploadsById]);
+
+  /** A failure with no suggestion left: the customer can still pick a service by hand. */
+  const lastReply = useMemo(() => [...messages].reverse().find((m) => m.reply)?.reply ?? null, [messages]);
+  const manualBooking = !isThinking && showsManualBooking(lastReply, !!pinnedService);
 
   const goToBooking = useCallback(
     (service: RecommendedService) => {
@@ -627,9 +650,10 @@ export default function CustomerAIChatScreen() {
             </View>
             {sentVideosOf(item).length > 0 && <Text style={styles.videoNote} testID="ai-video-note">{VIDEO_NOT_ANALYSED}</Text>}
             {/* PO 18/10/2026: what goes with the booking is sent now, in the background; each says how far it is. */}
-            {attachmentsOf(item).length > 0 && (
+            {/* A finished upload says nothing; only what is still on its way, or failed, is shown. */}
+            {attachmentsOf(item).some((upload) => upload.state !== 'done') && (
               <View style={styles.uploadList} testID="ai-attachment-status">
-                {attachmentsOf(item).map((upload) => (
+                {attachmentsOf(item).filter((upload) => upload.state !== 'done').map((upload) => (
                   <View key={upload.id} style={styles.uploadRow} testID={`ai-attachment-${upload.state}`}>
                     <Ionicons
                       name={upload.state === 'done' ? 'checkmark-circle' : upload.state === 'failed' ? 'alert-circle' : upload.kind === 'video' ? 'videocam-outline' : 'image-outline'}
@@ -771,11 +795,14 @@ export default function CustomerAIChatScreen() {
         {pinnedDevices.length >= 2 && !isThinking && (
           <View style={styles.pinnedBar} testID="ai-visit-bar">
             <View style={styles.pinnedText}>
-              <Text style={styles.pinnedLabel}>{pinnedDevices.length} thiết bị một lượt</Text>
-              <Text style={styles.pinnedValue} numberOfLines={2}>{pinnedDevices.map((d) => d.nameVi).join(', ')}</Text>
-              {pinnedService && (
-                <TouchableOpacity accessibilityRole="button" onPress={() => goToBooking(pinnedService)} testID="ai-book-single">
-                  <Text style={styles.pinnedHint}>{`Chỉ đặt ${pinnedService.nameVi}`}</Text>
+              <Text style={styles.pinnedLabel}>{`Dịch vụ sẽ đặt cho ${pinnedDevices.length} thiết bị`}</Text>
+              {pinnedDevices.map((d) => (
+                <Text key={d.deviceType} style={styles.pinnedValue} numberOfLines={1} testID="ai-visit-bar-service">{`${d.nameVi}: ${d.service?.nameVi ?? ''}`}</Text>
+              ))}
+              <Text style={styles.pinnedHint}>Đổi dịch vụ từng máy ở bước sau</Text>
+              {pinnedDevices[0]?.service && (
+                <TouchableOpacity accessibilityRole="button" onPress={() => goToBooking(pinnedDevices[0].service!)} testID="ai-book-single">
+                  <Text style={styles.pinnedHint}>{`Chỉ đặt ${pinnedDevices[0].nameVi.toLowerCase()}`}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -789,6 +816,22 @@ export default function CustomerAIChatScreen() {
             >
               <Ionicons name="calendar-outline" size={15} color={colors.surface} />
               <Text style={styles.pinnedBtnText}>{`Đặt ${pinnedDevices.length} thiết bị`}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {manualBooking && (
+          <View style={styles.pinnedBar} testID="ai-manual-booking-bar">
+            <View style={styles.pinnedText}>
+              <Text style={styles.pinnedValue}>Tiếp tục đặt lịch bằng cách chọn dịch vụ</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.pinnedBtn}
+              accessibilityRole="button"
+              testID="ai-book-manual"
+              onPress={() => navigation.navigate('CustomerServices')}
+            >
+              <Text style={styles.pinnedBtnText}>Chọn dịch vụ</Text>
             </TouchableOpacity>
           </View>
         )}

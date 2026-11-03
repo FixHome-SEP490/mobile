@@ -85,9 +85,14 @@ jest.mock('lucide-react-native', () => {
   return new Proxy({}, { get: () => Icon });
 });
 
+const mockNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: jest.fn(), isFocused: () => true, addListener: () => () => undefined }),
+  useNavigation: () => ({ navigate: mockNavigate, isFocused: () => true, addListener: () => () => undefined }),
   useFocusEffect: () => undefined,
+}));
+jest.mock('../../features/order-flow/navigation/resume-order', () => ({
+  ...jest.requireActual('../../features/order-flow/navigation/resume-order'),
+  openOrResume: (_ids: string[], open: () => void) => open(),
 }));
 
 jest.mock('react-native-safe-area-context', () => {
@@ -122,8 +127,7 @@ jest.mock('../../api/orders.api', () => ({
     enRoute: jest.fn(),
     checkIn: jest.fn(),
     getOrder: jest.fn(),
-    overrunReleaseStatus: jest.fn(async () => ({ eligible: true, block: null, currentOrderCode: 'SO-CUR', windowMinutes: 180 })),
-    releaseForOverrun: jest.fn(async () => ({})),
+    overrunReleaseStatus: jest.fn(async () => ({ eligible: true, block: null, currentOrderCode: 'SO-CUR', currentOrderId: 'order-cur', currentOrderStatus: 'UNDER_REPAIR', windowMinutes: 180, delayNotice: null })),
   },
 }));
 
@@ -290,10 +294,10 @@ describe('TechnicianJobsScreen real-UI presentation (T-RUI2B)', () => {
     await act(async () => renderer.unmount());
   });
 
-  it('lists releasable orders in the Không kịp tới tab and releases after confirmation', async () => {
+  it('lists reportable orders in the Không kịp tới tab and sends the technician to the job under repair to report the delay there', async () => {
     mockedJobsState = loadedState();
+    mockNavigate.mockClear();
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    const { ordersApi } = jest.requireMock('../../api/orders.api') as { ordersApi: { releaseForOverrun: jest.Mock } };
     let renderer!: ReturnType<typeof create>;
     await act(async () => {
       renderer = create(<TechnicianJobsScreen />);
@@ -305,15 +309,11 @@ describe('TechnicianJobsScreen real-UI presentation (T-RUI2B)', () => {
     await act(async () => chip.props.onPress());
     expect(visibleText(renderer)).toContain('Bạn đang làm đơn #SO-CUR.');
     const release = renderer.root.find(
-      (node) => node.type === TouchableOpacity && node.props.accessibilityLabel === 'Không kịp tới đơn SO-1',
+      (node) => node.type === TouchableOpacity && node.props.accessibilityLabel === 'Báo trễ đơn SO-1',
     );
     await act(async () => release.props.onPress());
-    expect(alertSpy).toHaveBeenCalledTimes(1);
-    expect(ordersApi.releaseForOverrun).not.toHaveBeenCalled();
-    const buttons = alertSpy.mock.calls[0][2] as { text: string; onPress?: () => void }[];
-    await act(async () => buttons.find((b) => b.text === 'Nhả đơn')!.onPress!());
-    expect(ordersApi.releaseForOverrun).toHaveBeenCalledWith(activeJob.id);
-    expect(mockLoader.refresh).toHaveBeenCalledWith(true);
+    expect(mockNavigate).toHaveBeenCalledWith('TechnicianOrderDetail', { serviceOrderId: 'order-cur' });
+    expect(alertSpy).not.toHaveBeenCalled();
     alertSpy.mockRestore();
     await act(async () => renderer.unmount());
   });
@@ -321,7 +321,7 @@ describe('TechnicianJobsScreen real-UI presentation (T-RUI2B)', () => {
   it('shows the explained empty state when no order may be released', async () => {
     mockedJobsState = loadedState();
     const { ordersApi } = jest.requireMock('../../api/orders.api') as { ordersApi: { overrunReleaseStatus: jest.Mock } };
-    ordersApi.overrunReleaseStatus.mockResolvedValueOnce({ eligible: false, block: 'NO_CURRENT_JOB', currentOrderCode: null, windowMinutes: 180 });
+    ordersApi.overrunReleaseStatus.mockResolvedValueOnce({ eligible: false, block: 'NO_CURRENT_JOB', currentOrderCode: null, currentOrderId: null, currentOrderStatus: null, windowMinutes: 180, delayNotice: null });
     let renderer!: ReturnType<typeof create>;
     await act(async () => {
       renderer = create(<TechnicianJobsScreen />);
@@ -330,7 +330,7 @@ describe('TechnicianJobsScreen real-UI presentation (T-RUI2B)', () => {
       (node) => node.type === TouchableOpacity && node.props.accessibilityLabel === 'Không kịp tới',
     );
     await act(async () => chip.props.onPress());
-    expect(visibleText(renderer)).toContain('Chưa có đơn nào cần nhả');
+    expect(visibleText(renderer)).toContain('Chưa có đơn nào cần báo trễ');
     expect(visibleText(renderer)).toContain('không bị trừ điểm uy tín');
     await act(async () => renderer.unmount());
   });

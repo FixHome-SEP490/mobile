@@ -2,7 +2,6 @@ import React, { useCallback, useState } from 'react';
 import { Text, TouchableOpacity } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { OrderSessionProvider } from '../runtime/OrderSessionProvider';
 import { useAuthStore } from '../../../store/auth.store';
@@ -10,8 +9,9 @@ import OrderFlowNavigator from './OrderFlowNavigator';
 import type { RootStackParamList } from '../../../types';
 import { lightTheme } from '../../../constants/theme';
 import { VisitDevicesContext, visitDeviceTabName } from './visit-device-tabs';
+import { createPlainTabs } from './PlainTabs';
 
-const DeviceTabs = createBottomTabNavigator();
+const DeviceTabs = createPlainTabs();
 type DeviceTabParams = Record<string, { serviceOrderId: string } | undefined>;
 
 // Module-level on purpose (a render callback would be a new component on every render and remount the order).
@@ -39,8 +39,7 @@ function OrderDeviceTabs({ role, firstId }: { role: 'customer' | 'technician'; f
       <DeviceTabs.Navigator
         initialRouteName={visitDeviceTabName(firstId)}
         backBehavior="none"
-        tabBar={() => null}
-        screenOptions={{ headerShown: false, lazy: true, animation: 'fade', sceneStyle: { backgroundColor: lightTheme.background } }}
+        screenOptions={{ sceneStyle: { backgroundColor: lightTheme.background } }}
       >
         {[firstId, ...others].map((id) => (
           <DeviceTabs.Screen key={id} name={visitDeviceTabName(id)} component={DEVICE_SCREEN[role]} initialParams={{ serviceOrderId: id }} />

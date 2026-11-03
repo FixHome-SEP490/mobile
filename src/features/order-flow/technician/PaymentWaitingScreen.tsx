@@ -14,6 +14,8 @@ import VisitTechnicianPanel from './VisitTechnicianPanel';
 import VisitDevicesSummary from '../shared/VisitDevicesSummary';
 import { visitDeviceTechnicianStatus } from './technician-visit';
 import { backFromFlow } from '../navigation/resume-order';
+import { useCashIntent } from '../customer/useCashIntent';
+import { formatVnd } from '../../../utils/format';
 
 /**
  * T15 — payment waiting. Who is awaited and the actual invoice/payment
@@ -38,7 +40,12 @@ export default function PaymentWaitingScreen() {
   const result = current && key ? financialResult(snapshot, key) : 'unverified';
   const paidUpdating = result === 'paid-awaiting-order';
   const unknown = state.phase === 'unknown' || (!!key && !!snapshot?.pendingIntent && !paidUpdating);
-  const canDeclare = !!invoice && invoice.status === 'unpaid' && cash === null && !unknown && !busy;
+  // Cash first (web #184): the technician confirms the customer's request instead of declaring an amount.
+  const cashIntent = useCashIntent('SOLO', key?.serviceOrderId ?? null);
+  const intent = cashIntent.cashFirst ? cashIntent.intent : null;
+  const legacyCash = cashIntent.capability !== null && !cashIntent.cashFirst;
+  const canDeclare = !!invoice && invoice.status === 'unpaid' && cash === null && !unknown && !busy
+    && (legacyCash || intent?.status === 'pending');
 
   const verify = () => {
     if (!current || busy) return;
@@ -72,7 +79,7 @@ export default function PaymentWaitingScreen() {
         label: 'Làm mới dữ liệu',
         testID: 'task-refresh',
         disabled: !canRefresh || busy,
-        onPress: () => { if (canRefresh && !busy) void refresh('manual'); },
+        onPress: () => { if (canRefresh && !busy) { void refresh('manual'); void cashIntent.refresh(); } },
       }}
       primary={{
         label: busy ? 'Đang kiểm tra…' : 'Kiểm tra kết quả',
@@ -91,6 +98,14 @@ export default function PaymentWaitingScreen() {
           label="Trạng thái thanh toán"
           value={!invoice ? 'Chưa có dữ liệu' : invoice.status === 'paid' ? 'Đã thanh toán' : invoice.status === 'refunded' ? 'Đã hoàn tiền' : 'Chưa thanh toán'}
         />
+        {cashIntent.cashFirst ? (
+          <DetailRow
+            label="Yêu cầu tiền mặt"
+            value={intent?.status === 'pending' ? `Khách cần trả ${formatVnd(intent.customerDueVnd)}`
+              : intent?.status === 'received' ? `Đã báo nhận ${formatVnd(intent.customerDueVnd)}`
+                : intent?.status === 'cancelled' ? 'Khách đã hủy yêu cầu' : 'Chờ khách tạo yêu cầu'}
+          />
+        ) : null}
         {cash ? (
           <DetailRow
             label="Đối soát tiền mặt"
@@ -110,14 +125,14 @@ export default function PaymentWaitingScreen() {
         <TouchableOpacity
           testID="task-link-CashDeclaration"
           accessibilityRole="button"
-          accessibilityLabel="Khai báo số tiền mặt đã nhận"
+          accessibilityLabel={intent ? 'Xác nhận đã nhận tiền mặt' : 'Khai báo số tiền mặt đã nhận'}
           onPress={() => navigation.navigate('CashDeclaration')}
           style={{
             backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12,
             minHeight: 52, justifyContent: 'center', paddingHorizontal: spacing.md,
           }}
         >
-          <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Khai báo tiền mặt đã nhận ›</Text>
+          <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>{intent ? 'Xác nhận đã nhận tiền mặt ›' : 'Khai báo tiền mặt đã nhận ›'}</Text>
         </TouchableOpacity>
       ) : null}
     </TaskScreenShell>

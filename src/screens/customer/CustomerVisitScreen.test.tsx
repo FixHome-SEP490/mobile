@@ -63,6 +63,14 @@ jest.mock('../../features/order-flow/customer/VoucherCheckoutSection', () => {
     ),
   };
 });
+const mockCash = { get: jest.fn(), create: jest.fn(), cancel: jest.fn() };
+jest.mock('../../api/cash-intents.api', () => ({
+  cashIntentsApi: {
+    get: (...args: unknown[]) => mockCash.get(...args),
+    create: (...args: unknown[]) => mockCash.create(...args),
+    cancel: (...args: unknown[]) => mockCash.cancel(...args),
+  },
+}));
 jest.mock('../../api/orders.api', () => ({ ordersApi: { getOrder: (...args: unknown[]) => mockOrder(...args) } }));
 jest.mock('../../api/customer-wallet.api', () => ({
   customerWalletApi: { getSummary: (...args: unknown[]) => mockWallet(...args) },
@@ -101,6 +109,7 @@ beforeEach(() => {
   jest.resetAllMocks();
   mockHeld = { reservationId: 'hold-1', claimId: 'claim-1', scopeId: 'v1', expiresAt: new Date(Date.now() + 600_000).toISOString(), originalGrossVnd: 300000, discountVnd: 100000, customerDueVnd: 200000 };
   mockWallet.mockResolvedValue({ balance: 1_000_000 });
+  mockCash.get.mockResolvedValue({ cashFirstEnabled: false, intent: null });
   mockOrder.mockImplementation(async (id: string) => ({ id, status: 'ACCEPTED' }));
 });
 
@@ -279,4 +288,59 @@ it('confirms the technician cash through the hold when a voucher is held', async
   await act(async () => { await Promise.resolve(); });
   expect(mockFunded.confirmCash).toHaveBeenCalledWith({ kind: 'VISIT_GROUP', id: 'v1' }, 'hold-1', { agreed: true });
   expect(mockVisit.confirmCash).not.toHaveBeenCalled();
+});
+
+describe('cash first (web #184)', () => {
+  const intent = (status: 'pending' | 'received' | 'cancelled') => ({
+    id: '11111111-1111-4111-8111-111111111111', scopeKind: 'VISIT_GROUP', scopeId: 'v1', status, grossVnd: 300000, customerDueVnd: 300000,
+    technicianId: 't1', createdAt: '2026-10-26T04:00:00.000Z', receivedAt: null, receiptId: null,
+  });
+  const ready = () => {
+    mockVisit.get.mockResolvedValue(baseVisit('MATCHED'));
+    mockVisit.getCheckout.mockResolvedValue(baseCheckout({ ready: true, devices: [device(1, { serviceOrderId: 'o1', state: 'succeeded', amount: 300000 }), device(2, { serviceOrderId: 'o2', state: 'failed' })] }));
+  };
+  const chooseCash = async (tree: ReactTestRenderer) => { await act(async () => { press(tree, 'visit-pay-cash').props.onPress(); }); };
+
+  it('asks for cash for the whole visit instead of pretending it is paid', async () => {
+    mockCash.get.mockResolvedValue({ cashFirstEnabled: true, intent: null });
+    mockCash.create.mockResolvedValue(intent('pending'));
+    ready();
+    const tree = await mount();
+    await chooseCash(tree);
+    expect(texts(tree).some((t) => t.startsWith('Hệ thống sẽ chốt số tiền của cả lượt'))).toBe(true);
+    await act(async () => { press(tree, 'visit-pay-submit').props.onPress(); });
+    expect(mockCash.create).toHaveBeenCalledWith('VISIT_GROUP', 'v1', { commandId: expect.stringMatching(/^[0-9a-f-]{36}$/) });
+    expect(tree.root.findAllByProps({ testID: 'cash-intent-pending' }).length).toBeGreaterThan(0);
+    expect(press(tree, 'visit-pay-wallet')).toBeUndefined();
+    expect(press(tree, 'visit-pay-submit')).toBeUndefined();
+  });
+
+  it('cancels a pending request', async () => {
+    mockCash.get.mockResolvedValue({ cashFirstEnabled: true, intent: intent('pending') });
+    mockCash.cancel.mockResolvedValue(intent('cancelled'));
+    ready();
+    const tree = await mount();
+    await act(async () => { press(tree, 'cash-intent-cancel').props.onPress(); });
+    expect(mockCash.cancel).toHaveBeenCalledWith('VISIT_GROUP', 'v1', { intentId: intent('pending').id, commandId: expect.any(String) });
+    expect(texts(tree).some((t) => t.includes('đã được hủy'))).toBe(true);
+    expect(press(tree, 'visit-pay-wallet')).toBeDefined();
+  });
+
+  it('explains a pending-payment conflict', async () => {
+    mockCash.get.mockResolvedValue({ cashFirstEnabled: true, intent: null });
+    mockCash.create.mockRejectedValue({ response: { status: 409, data: { message: 'Lượt sửa có thanh toán đang xử lý.' } } });
+    ready();
+    const tree = await mount();
+    await chooseCash(tree);
+    await act(async () => { press(tree, 'visit-pay-submit').props.onPress(); });
+    expect(texts(tree).some((t) => t.includes('tránh trả hai lần'))).toBe(true);
+  });
+
+  it('keeps the older declaration flow while the server flag is off', async () => {
+    ready();
+    const tree = await mount();
+    await chooseCash(tree);
+    expect(press(tree, 'visit-pay-submit')).toBeUndefined();
+    expect(mockCash.create).not.toHaveBeenCalled();
+  });
 });

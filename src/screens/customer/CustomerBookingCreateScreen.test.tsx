@@ -35,6 +35,7 @@ const mockNavigation = { goBack: jest.fn(), navigate: jest.fn(), replace: jest.f
 const mockUsePreventRemove = jest.fn();
 const mockRoute = { key: 'booking-flow-a', params: { prefill: { serviceId: SERVICE_ID } } };
 const mockGetServices = jest.fn();
+const mockVisitContact = jest.fn();
 const mockGetAddresses = jest.fn();
 const mockGetCategories = jest.fn();
 const mockGetMyBookingsPage = jest.fn();
@@ -104,6 +105,11 @@ jest.mock('expo-image-picker', () => ({
     mockRequestMediaLibraryPermissions(...args),
   launchImageLibraryAsync: (...args: unknown[]) => mockLaunchImageLibrary(...args),
 }));
+
+jest.mock('../../api/visit-groups.api', () => {
+  const actual = jest.requireActual('../../api/visit-groups.api');
+  return { ...actual, visitGroupsApi: { ...actual.visitGroupsApi, contact: (...args: unknown[]) => mockVisitContact(...args) } };
+});
 
 jest.mock('../../api/services.api', () => ({
   servicesApi: {
@@ -360,6 +366,7 @@ beforeEach(() => {
     mockAuthState.user.id === 'customer-b' ? [addressB] : [address],
   );
   mockGetCategories.mockResolvedValue([]);
+  mockVisitContact.mockResolvedValue({ enabled: false, deviceLimit: 3, hotline: null });
   mockGetMyBookingsPage.mockResolvedValue({ data: [], total: 0 });
   mockRequestMediaLibraryPermissions.mockResolvedValue({ granted: true });
   mockLaunchImageLibrary.mockResolvedValue({ canceled: true, assets: [] });
@@ -866,6 +873,26 @@ it('sends the photos and videos from the assistant chat after the booking photos
     expect(mockCreateBooking).toHaveBeenCalledWith(expect.objectContaining({
       photoUploadIds: ['8f9c9a41-bc0e-4a25-99a6-16e8d11c2c9a', 'chat-photo-1', 'chat-video-1'],
     }));
+    await act(async () => renderer.unmount());
+  } finally {
+    delete prefill.attachmentUploadIds;
+  }
+});
+
+it('puts the assistant chat photos in the photo grid, counted and sent without uploading again', async () => {
+  const prefill = mockRoute.params.prefill as Record<string, unknown>;
+  prefill.attachmentUploadIds = [{ uploadId: 'chat-photo-1', kind: 'image', previewUri: 'file:///chat-1.jpg' }];
+  try {
+    const renderer = await renderScreen();
+    expect(renderer.root.findAll((n) => (n.props.source as { uri?: string } | undefined)?.uri === 'file:///chat-1.jpg').length).toBeGreaterThan(0);
+    expect(textContent(renderer.root)).toContain('Thêm ảnh (1/5)');
+    expect(textContent(renderer.root)).not.toContain('Gửi kèm từ trò chuyện với trợ lý');
+    await act(async () => {
+      (findDescriptionInput(renderer)!.props.onChangeText as (value: string) => void)('Máy lạnh chảy nước');
+    });
+    await openAndConfirmReview(renderer);
+    expect(mockUploadBookingPhoto).not.toHaveBeenCalled();
+    expect(mockCreateBooking).toHaveBeenCalledWith(expect.objectContaining({ photoUploadIds: ['chat-photo-1'] }));
     await act(async () => renderer.unmount());
   } finally {
     delete prefill.attachmentUploadIds;
@@ -1539,4 +1566,63 @@ it('states the preferred window is only desired time and the review creates noth
   expect(mockUploadBookingPhoto).not.toHaveBeenCalled();
   expect(findActions(renderer, 'Xác nhận đặt lịch')).toHaveLength(1);
   await act(async () => renderer.unmount());
+});
+
+describe('changing the service of a device of a multi-device visit (pencil on its card)', () => {
+  const washerRepair: ServiceItem = { ...service, id: 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa', name: 'Sửa máy giặt', code: 'WM-01', sortOrder: 2 };
+  const washerClean: ServiceItem = { ...service, id: 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb', name: 'Vệ sinh máy giặt', code: 'WM-02', sortOrder: 3 };
+  const cardLabel = (renderer: TestRenderer, n: number) =>
+    renderer.root.findAll((node) => node.props.testID === `visit-service-box-${n}` && typeof node.props.onPress === 'function')[0]?.props.accessibilityLabel as string;
+  const pickFromSheet = async (renderer: TestRenderer, name: string) => {
+    const option = renderer.root.findAll((node) => node.type === TouchableOpacity && node.props.accessibilityRole === 'radio' && textContent(node).includes(name))[0];
+    await act(async () => { (option.props.onPress as () => void)(); await flushPromises(); });
+  };
+
+  async function withTwoDevices() {
+    mockVisitContact.mockResolvedValue({ enabled: true, deviceLimit: 3, hotline: null });
+    mockGetServices.mockResolvedValue({ data: [service, washerRepair, washerClean], total: 3 });
+    const renderer = await renderScreen();
+    const add = renderer.root.findAll((node) => node.props.testID === 'booking-multi-device' && typeof node.props.onPress === 'function')[0];
+    await act(async () => { (add.props.onPress as () => void)(); await flushPromises(); });
+    await pickFromSheet(renderer, 'Sửa máy giặt');
+    return renderer;
+  }
+
+  it('replaces the second device with the service picked, not with another one of the same category', async () => {
+    const renderer = await withTwoDevices();
+    expect(cardLabel(renderer, 2)).toContain('Sửa máy giặt');
+    await act(async () => { (findAccessibleActions(renderer, 'Đổi dịch vụ Sửa máy giặt')[0].props.onPress as () => void)(); await flushPromises(); });
+    await pickFromSheet(renderer, 'Vệ sinh máy giặt');
+    expect(cardLabel(renderer, 2)).toContain('Vệ sinh máy giặt');
+    expect(cardLabel(renderer, 2)).not.toContain('Sửa máy giặt');
+    expect(cardLabel(renderer, 1)).toContain('Sửa máy lạnh');
+    await act(async () => renderer.unmount());
+  });
+  it('opens the assistant appliances as device tabs, each with its service, words and uploaded photos', async () => {
+    mockVisitContact.mockResolvedValue({ enabled: true, deviceLimit: 3, hotline: null });
+    mockGetServices.mockResolvedValue({ data: [service, washerRepair, washerClean], total: 3 });
+    const prefill = mockRoute.params.prefill as Record<string, unknown>;
+    const photo = { uploadId: 'chat-1', uri: 'file:///w.jpg', name: 'tro-ly.jpg', type: 'image/jpeg' };
+    Object.assign(prefill, {
+      aiSessionId: 'session-1',
+      devices: [{ serviceId: SERVICE_ID, description: 'Máy lạnh chảy nước' }, { serviceId: washerRepair.id, description: 'Máy giặt không vắt', photos: [photo] }],
+    });
+    try {
+      const renderer = await renderScreen();
+      expect(cardLabel(renderer, 1)).toContain('Sửa máy lạnh');
+      expect(cardLabel(renderer, 2)).toContain('Sửa máy giặt');
+      await act(async () => renderer.unmount());
+    } finally {
+      delete prefill.aiSessionId;
+      delete prefill.devices;
+    }
+  });
+  it('replaces the first device with the service picked, and leaves the second one alone', async () => {
+    const renderer = await withTwoDevices();
+    await act(async () => { (findAccessibleActions(renderer, 'Đổi dịch vụ Sửa máy lạnh')[0].props.onPress as () => void)(); await flushPromises(); });
+    await pickFromSheet(renderer, 'Vệ sinh máy giặt');
+    expect(cardLabel(renderer, 1)).toContain('Vệ sinh máy giặt');
+    expect(cardLabel(renderer, 2)).toContain('Sửa máy giặt');
+    await act(async () => renderer.unmount());
+  });
 });

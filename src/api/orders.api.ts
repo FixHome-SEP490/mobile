@@ -21,11 +21,38 @@ export type OverrunReleaseBlock =
   | 'NO_CURRENT_JOB'
   | 'NOT_STARTING_SOON';
 
+/** PO 31/10/2026: why the technician cannot reach the next order in time; Backend stores it with the report. */
+export type DelayReasonCode = 'new_fault_found' | 'waiting_parts' | 'repair_longer' | 'other';
+export type DelayDecision = 'wait' | 'switch' | 'cancel';
+
+/** A report of a late or released next order is never a bare tap: reason, 1 to 3 photos of the job under repair, confirmation. */
+export interface DelayReportPayload {
+  reasonCode: DelayReasonCode;
+  reason: string;
+  evidenceIds: string[];
+  confirm: true;
+}
+export interface DelayNoticePayload extends DelayReportPayload { delayMinutes: number }
+
+export interface DelayNoticeView {
+  minutes: number;
+  noticedAt: string;
+  decision: DelayDecision | null;
+  reasonCode: DelayReasonCode | null;
+  /** Only in the technician's own read (`overrun-release`): what they wrote and the photos they attached. The customer's order never carries these. */
+  reason?: string | null;
+  evidenceIds?: string[];
+}
+
 export interface OverrunReleaseStatus {
   eligible: boolean;
   block: OverrunReleaseBlock | null;
   currentOrderCode: string | null;
+  /** The job the technician is on: its order screen holds the report form and its photos. */
+  currentOrderId: string | null;
+  currentOrderStatus: string | null;
   windowMinutes: number | null;
+  delayNotice: DelayNoticeView | null;
 }
 
 export interface OrdersPage {
@@ -79,6 +106,8 @@ export interface ServiceOrderItem {
   quantity?: number;
   scopeDescription?: string;
   bookingDescription?: string;
+  /** Photos/videos the customer attached when booking; read per item through /bookings/:bookingId/media. */
+  bookingMedia?: { id: string; url: string | null; isPrivate: boolean; mimeType: string }[];
   completionRequestedAt?: string;
   customerConfirmed?: boolean;
   arrivalVerified?: boolean;
@@ -97,6 +126,8 @@ export interface ServiceOrderItem {
   laborWarrantyDays?: number | null;
   /** The technician may set out from this instant (one hour before the appointment). */
   departAvailableAt?: string | null;
+  /** PO 31/10/2026: set when the technician told the customer this order will start late; `decision` is the customer's answer. */
+  delayNotice?: DelayNoticeView | null;
   technician?: {
     id: string;
     fullName: string;
@@ -398,9 +429,14 @@ const del = async (url: string): Promise<void> => {
 };
 
 export const ordersApi = {
-  async getTechnicianJobs(options: { excludeVisitGroups?: boolean } = {}): Promise<TechnicianOrderItem[]> {
-    const rows = options.excludeVisitGroups
-      ? unwrap<TechnicianOrderItem[]>((await apiClient.get('/service-orders/my', { params: { excludeVisitGroups: 'true' } })).data)
+  /** `statuses` lets Backend filter before it builds each order (lowercase, comma separated on the wire); without it every order the technician ever held is built. */
+  async getTechnicianJobs(options: { excludeVisitGroups?: boolean; statuses?: string[] } = {}): Promise<TechnicianOrderItem[]> {
+    const params = {
+      ...(options.excludeVisitGroups ? { excludeVisitGroups: 'true' } : {}),
+      ...(options.statuses?.length ? { statuses: options.statuses.join(',') } : {}),
+    };
+    const rows = Object.keys(params).length
+      ? unwrap<TechnicianOrderItem[]>((await apiClient.get('/service-orders/my', { params })).data)
       : await get<TechnicianOrderItem[]>('/service-orders/my');
     return rows.map(normalizeTechnicianOrder);
   },
@@ -500,13 +536,33 @@ export const ordersApi = {
       eligible: data?.eligible === true,
       block: data?.block ?? null,
       currentOrderCode: data?.currentOrderCode ?? null,
+      currentOrderId: data?.currentOrderId ?? null,
+      currentOrderStatus: data?.currentOrderStatus ?? null,
       windowMinutes: typeof data?.windowMinutes === 'number' ? data.windowMinutes : null,
+      delayNotice: data?.delayNotice ?? null,
     };
   },
 
-  /** The technician steps off an upcoming order while still on another job; the customer picks another technician. */
-  async releaseForOverrun(id: string) {
-    return post(`/service-orders/${id}/overrun-release`);
+  /** BE 31/10/2026: tell the customer of the upcoming order it will start late; the customer then waits, picks another technician or cancels. */
+  async sendDelayNotice(id: string, notice: DelayNoticePayload) {
+    return post(`/service-orders/${id}/delay-notice`, notice);
+  },
+
+  /** The customer's answer to a delay notice. */
+  async decideDelay(id: string, decision: DelayDecision) {
+    return post(`/service-orders/${id}/delay-decision`, { decision });
+  },
+
+  /** ADDITIONAL photo of the job under repair (the evidence of a delay report). Returns the evidence id. */
+  async uploadEvidenceAdditional(id: string, image: EvidenceUploadImage): Promise<{ id: string }> {
+    const form = new FormData();
+    form.append('type', 'additional');
+    form.append('file', { uri: image.uri, name: image.name, type: image.type } as unknown as Blob);
+    const row = unwrap<{ id?: unknown }>((await apiClient.post(`/service-orders/${id}/evidence`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' }, timeout: EVIDENCE_UPLOAD_TIMEOUT,
+    })).data);
+    if (typeof row?.id !== 'string') throw new Error('Chưa xác nhận được ảnh đã tải lên.');
+    return { id: row.id };
   },
 
   async getEvidence(id: string): Promise<EvidenceResponse[]> {

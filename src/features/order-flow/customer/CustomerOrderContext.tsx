@@ -9,6 +9,7 @@ import OrderInformationScreen from '../shared/OrderInformationScreen';
 import OrderProgressHistoryScreen from '../shared/OrderProgressHistoryScreen';
 import { customerActivityStage } from './customer-activity-stage';
 import OrderStepBar from './OrderStepBar';
+import DelayNoticeCard from './DelayNoticeCard';
 import { findChatForBooking } from '../../../screens/technician/technician-chat-shortcut';
 import { sessionLabel } from '../../../utils/booking-session';
 import { formatVnd } from '../../../utils/format';
@@ -94,6 +95,7 @@ function CustomerOrderSummary() {
       <MapPin size={16} color={colors.textSecondary} strokeWidth={1.75} />
       <Text numberOfLines={1} style={[styles.meta, { flex: 1 }]}>{order.addressSummary}</Text>
     </View>}
+    <DelayNoticeCard order={order} />
     {!!quote && !!quoteLabel && <TouchableOpacity testID="order-quote-chip" accessibilityRole="button" onPress={() => setSheet('detail')} style={styles.quote}>
       <Text numberOfLines={1} style={styles.quoteText}>
         Báo giá {formatVnd((quote.laborTotal ?? 0) + (quote.partsTotal ?? 0))} · {quoteLabel}

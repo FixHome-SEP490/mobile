@@ -5,6 +5,8 @@ import {
   bookingMediaIds,
   chatAttachmentSummary,
   nextPinnedService,
+  photosByAppliance,
+  showsManualBooking,
   quickReplies,
   revealSteps,
   REVEAL_STEPS,
@@ -160,5 +162,29 @@ describe('photo labels, price breakdown and disagreement', () => {
     expect(wordsForDescription('sai rồi, tủ vẫn kêu', { customerDisagreed: { restVi: 'tủ vẫn kêu' } })).toBe('tủ vẫn kêu');
     expect(wordsForDescription('sai rồi', { customerDisagreed: { restVi: '' } })).toBe('');
     expect(wordsForDescription('tủ kêu', undefined)).toBe('tủ kêu');
+  });
+});
+
+describe('photosByAppliance', () => {
+  const uploaded = (id: string) => (id === 'u-bad' ? { uri: 'f', done: false } : { uploadId: `srv-${id}`, uri: `file-${id}`, done: true });
+  const messages = [
+    { sender: 'user', images: ['a', 'b', 'c'], imageUploads: ['u1', null, 'u-bad'] },
+    { sender: 'bot', reply: { photos: [{ index: 0, deviceType: 'FRIDGE' }, { index: 1, deviceType: 'AC' }, { index: 2, deviceType: 'AC' }, { index: 3, deviceType: null }] } },
+  ];
+
+  it('gives each uploaded photo to the appliance it was read as, skipping handed-over and unfinished ones', () => {
+    const found = photosByAppliance(messages, uploaded);
+    expect(found.get('FRIDGE')).toEqual([{ uploadId: 'srv-u1', uri: 'file-u1', name: 'tro-ly.jpg', type: 'image/jpeg' }]);
+    expect(found.has('AC')).toBe(false);
+  });
+});
+
+describe('showsManualBooking', () => {
+  it('offers manual booking after an outage but not when a retry helps or a service is pinned', () => {
+    expect(showsManualBooking({ status: 'unavailable', failureReason: 'service_unavailable' }, false)).toBe(true);
+    expect(showsManualBooking({ status: 'unavailable', failureReason: 'rate_limited' }, false)).toBe(false);
+    expect(showsManualBooking({ status: 'unavailable', failureReason: 'validation' }, false)).toBe(false);
+    expect(showsManualBooking({ status: 'unavailable', failureReason: 'request_failed' }, true)).toBe(false);
+    expect(showsManualBooking({ status: 'ok' }, false)).toBe(false);
   });
 });

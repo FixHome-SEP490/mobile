@@ -97,7 +97,7 @@ export default function CustomerVisitCreateScreen() {
         const max = contact.status === 'fulfilled' ? contact.value.deviceLimit : VISIT_DEVICE_LIMIT;
         const loaded: VisitDeviceDraft[] = prefill.devices.flatMap((suggestion, i) => {
           const svc = list.find((x) => x.id === suggestion.serviceId);
-          return svc ? [{ key: `ai-${i}`, serviceId: svc.id, serviceName: svc.name, priceSummary: svc.priceSummary ?? null, description: suggestion.description, photos: [], unconfirmed: true }] : [];
+          return svc ? [{ key: `ai-${i}`, serviceId: svc.id, serviceName: svc.name, priceSummary: svc.priceSummary ?? null, description: suggestion.description, photos: (suggestion.photos ?? []).slice(0, VISIT_PHOTOS_PER_DEVICE), unconfirmed: true }] : [];
         }).slice(0, max);
         if (loaded.length) { setDevices(loaded); setActiveKey(loaded[0].key); }
       }
@@ -331,6 +331,7 @@ export default function CustomerVisitCreateScreen() {
                   <Text style={styles.hint}>Giá công tạm tính: {visitPriceText(total, formatVnd) || 'Thợ báo giá tại nhà'}</Text>
                   <Text style={styles.hint}>{total.kind === 'firm' ? 'Tiền công theo phạm vi đã xác nhận; chưa gồm linh kiện FixHome hoặc tiền công phát sinh ngoài phạm vi. Kỹ thuật viên cần gửi báo giá, bạn duyệt trước khi thực hiện.' : 'Đây là giá tham khảo. Thợ báo giá từng máy, bạn duyệt máy nào thì sửa máy đó.'}</Text>
                 </View>
+                <Text style={styles.hint} testID="visit-tech-sees">Kỹ thuật viên sẽ xem mô tả và ảnh của từng máy trước khi nhận lượt (không thấy địa chỉ hay số điện thoại).</Text>
                 {devices.length < 2 && <Text style={styles.hint}>Hiện có 1 thiết bị. Thêm ít nhất 1 thiết bị nữa, hoặc đặt lịch thông thường cho 1 máy.</Text>}
                 {devices.length >= 2 && !!problem && !error && <Text style={styles.hint} testID="visit-problem">{problem}</Text>}
                 {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
