@@ -287,8 +287,9 @@ export default function CustomerBookingCreateScreen() {
   const [pickerCategoryId, setPickerCategoryId] = useState<string | null>(null);
   const [pickerCategories, setPickerCategories] = useState<CategoryItem[]>([]);
   const { height: windowHeight } = useWindowDimensions();
+  // On web the sheet list jumps to the top on touch end, so the click lands on another row: choose the row the press started on.
+  const pressedService = useRef<ServiceItem | null>(null);
   const pickerSheetRef = useRef<BottomSheetModal>(null);
-  const pickerSnapPoints = useMemo(() => ['80%'], []);
   const addressSheetRef = useRef<BottomSheetModal>(null);
   const descriptionInputRef = useRef<TextInputInstance>(null);
   const descriptionTopRef = useRef(0);
@@ -1947,33 +1948,39 @@ export default function CustomerBookingCreateScreen() {
 
       <BottomSheetModal
         ref={pickerSheetRef}
-        snapPoints={pickerSnapPoints}
+        enableDynamicSizing
+        maxDynamicContentSize={Math.min(480, Math.round(windowHeight * 0.8))}
         backdropComponent={(props) => (
           <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} />
         )}
       >
-        <View style={[styles.pickerHeader, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}>Chọn dịch vụ</Text>
-          {pickerCategories.length > 0 && (
-            <CategoryPills
-              categories={pickerCategories}
-              selectedId={pickerCategoryId}
-              onSelect={setPickerCategoryId}
-            />
-          )}
-          <BottomSheetTextInput accessibilityLabel="Tìm dịch vụ"
-            value={pickerQuery}
-            onChangeText={setPickerQuery}
-            placeholder="Tìm dịch vụ..."
-            placeholderTextColor={colors.textSecondary}
-            style={[
-              styles.input,
-              { minHeight: 44, color: colors.text, borderColor: colors.border, backgroundColor: colors.background },
-            ]}
-          />
-        </View>
         <BottomSheetFlatList
           data={pickerServices}
+          showsVerticalScrollIndicator
+          persistentScrollbar
+          stickyHeaderIndices={[0]}
+          ListHeaderComponent={
+            <View style={[styles.pickerHeader, { borderBottomColor: colors.border, backgroundColor: colors.surface, marginHorizontal: -16, marginTop: -12, marginBottom: 12 }]}>
+              <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}>Chọn dịch vụ</Text>
+              {pickerCategories.length > 0 && (
+                <CategoryPills
+                  categories={pickerCategories}
+                  selectedId={pickerCategoryId}
+                  onSelect={setPickerCategoryId}
+                />
+              )}
+              <BottomSheetTextInput accessibilityLabel="Tìm dịch vụ"
+                value={pickerQuery}
+                onChangeText={setPickerQuery}
+                placeholder="Tìm dịch vụ..."
+                placeholderTextColor={colors.textSecondary}
+                style={[
+                  styles.input,
+                  { minHeight: 44, color: colors.text, borderColor: colors.border, backgroundColor: colors.background },
+                ]}
+              />
+            </View>
+          }
           keyExtractor={(service) => service.id}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.pickerListContent}
@@ -1988,9 +1995,11 @@ export default function CustomerBookingCreateScreen() {
                   backgroundColor: colors.surface,
                 },
               ]}
+              onPressIn={() => { pressedService.current = service; }}
               onPress={() => {
                 Haptics.selectionAsync();
-                chooseService(service);
+                chooseService(pressedService.current ?? service);
+                pressedService.current = null;
               }}
             >
               <Text style={{ color: colors.text }}>
