@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-03 12:06 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
+> Cập nhật lần cuối: 2026-11-04 11:30 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: warranty-cost-sla-20261104
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -339,6 +339,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 5. Hợp đồng với repo khác
 
+- Bảo hành (PO 04/11/2026, Backend `warranty-cost-sla-20261104`, chưa đổi mã Mobile): view yêu cầu của thợ (`/warranty-claims/mine`) thêm `declineReview`, `declineReasonCode`, `outcomeCode`, `refundAmount`, `noShowFlaggedAt`, nhưng `normalizeClaim` và `normalizeTechnicianWarrantyClaim` dựng đối tượng theo trường cố định nên bỏ qua trường lạ; `WarrantyNotCoveredReason` thêm `third_party_repair`, `force_majeure`, `transport_damage` (chuỗi, parser không giới hạn); trạng thái yêu cầu không đổi. Backend giữ `busy` trong lý do từ chối (vào hàng chờ quản lý xét) và bắt `evidenceRefs` cho kết luận `covered_part`: lệnh `propose` `covered_part` không kèm ảnh sẽ bị từ chối. CHƯA KIỂM CHỨNG trên thiết bị và với Backend thật.
 - REST tới `backend` qua `EXPO_PUBLIC_API_BASE_URL`; override rõ ràng luôn ưu tiên. Native development suy ra host LAN từ Expo/Metro và dùng cổng backend mặc định; Web giữ localhost, Android emulator với Metro loopback giữ bridge emulator. Không suy ra host từ tunnel hoặc ở production. Token vẫn lưu bằng `expo-secure-store`; session refresh không đổi.
 - Gặp 401 thì gọi một lần `POST /auth/refresh` dùng chung; chỉ chạy lại yêu cầu GET, HEAD, OPTIONS, không tự chạy lại thao tác ghi.
 - Danh sách gửi `page` và `pageSize` hoặc `limit` không quá 100; `status` viết thường đúng enum.
@@ -383,6 +384,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 8. Việc đang dở và rủi ro đã biết
 
+- Bảo hành 04/11: màn thợ (`TechnicianWarrantyScreens.tsx`) chưa bắt chọn ảnh khi kết luận lỗi linh kiện nên có thể bị Backend từ chối; chưa hiển thị trạng thái chờ quản lý xét từ chối và kết cục hoàn tiền; việc này cần một đợt Mobile riêng, đổi đồng thời `aftercare-contracts.ts`, `technician-warranty.api.ts` và các màn.
 - UX1–UX5 visual: đã xem 13 ảnh AGY trước/sau Luna, nhưng AGY xác nhận cửa sổ resize chỉ đạt 502 CSS px với DPR 1.25, không chứng minh viewport 320/360/390/430dp. Cần chụp lại bằng device emulation và ghi kích thước thực. Customer đăng nhập, bàn phím, fontScale 1.3, Reduce Motion tương tác, native và Web runtime parity CHƯA KIỂM CHỨNG. Không đăng nhập live để chụp Booking/Matching vì GET có thể thay đổi trạng thái; chỉ dùng fixture chặn mạng trước bootstrap.
 
 - C50 PR-A đã nhận diện ledger `withdrawal`/`withdrawal_refund`, chấp nhận `balanceAfter: 0`, và hiển thị chiều tiền theo Backend. C45 KYC API/UI/validation, C50 PR-C bank/rút tiền và Guest map có unit tests. Expo Web Guest Home/PublicOrderTracking đã kiểm tra ở 320/360/390/430dp: không tràn ngang, shortcut và route hiển thị, focus bàn phím và lỗi form rỗng hoạt động. Authenticated wallet/KYC/withdrawal trên browser, native safe-area/IME, native map thực, signed PUT, tài khoản Backend thật, payout/finance E2E và Web parity CHƯA KIỂM CHỨNG. Không có KYC hoặc giao dịch tài chính thật được gửi.
@@ -411,6 +413,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload support/warranty mới bị khóa theo quyết định owner. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-04 11:30 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Ghi hợp đồng bảo hành mới của Backend (trường thêm, lý do không bảo hành mới, ảnh bắt buộc cho lỗi linh kiện) và việc Mobile còn dở; không đổi mã.
 - 2026-11-03 12:06 (UTC+7) | Hgnv11 | dev | Chọn dịch vụ ở trang đặt lịch: sheet co theo số dịch vụ (tối đa 480px), tiêu đề, tab danh mục và ô tìm kiếm ghim cố định, cuộn được ở mọi tab; chưa kiểm chứng trên thiết bị.
 - 2026-11-01 19:29 (UTC+7) | ToanAltF4 | fix/technician-reviews-route | Màn Đánh giá từ khách hàng của thợ đọc GET /technicians/{id người dùng}/reviews thay cho /technicians/me/reviews (backend không có route me, trả 400, bug 51); mã đơn và tên dịch vụ để trống vì API chưa trả.
 - 2026-11-01 19:20 (UTC+7) | ToanAltF4 | fix/android-map-fallback | Bản đồ Android không còn màn lỗi đỏ khi bản build thiếu khóa Google Maps (bug 44): app.config.js ghi extra.androidMapsConfigured, AddressMap và PublicOrderTrackingMap hiện khung thay thế dễ đọc khi chưa có khóa.
@@ -451,7 +454,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-23 16:19 (UTC+7) | Hgnv11 | dev | Các trang con của đơn (Thông tin đơn, Hóa đơn, Tiến độ, Ảnh và bằng chứng, Chi tiết yêu cầu hỗ trợ, Đơn hoàn thành) chia theo nhóm có tiêu đề như bên thợ; Hóa đơn tách Tiền công và Linh kiện và ghi Báo giá cần dùng so với Thực dùng theo sourceItemId của dòng hóa đơn; màn Hoạt động của khách không còn tự nhảy sang tab Yêu cầu đặt lịch
 - 2026-10-23 14:51 (UTC+7) | Hgnv11 | dev | Màn Quản lý linh kiện của kỹ thuật viên: ghi Báo giá duyệt cạnh số lượng, sửa số đã dùng được cả giảm (backend cho phép trước khi hóa đơn được tạo), nút Khai trả X cái còn lại sau khi ghi số đã dùng, gộp các thông báo cần xử lý thành một khối, mục Linh kiện sửa chữa tự đọc lại không nháy
 - 2026-10-23 06:16 (UTC+7) | Hgnv11 | dev | Màn Đề xuất (ProposalDetail) đổi thành Chi tiết báo giá hoặc Chi tiết chi phí phát sinh và dùng chung thẻ của OrderCostHistory (OrderCostHistory nhận onlyId): bỏ mã thô và câu nhắc M2, nút Xem đề xuất gốc đổi thành Xem chi tiết báo giá; chỉ đổi giao diện; chưa kiểm chứng trên máy thật
-- 2026-10-23 06:08 (UTC+7) | Hgnv11 | dev | Làm lại màn Chờ duyệt báo giá của kỹ thuật viên: tiêu đề Báo giá lần N kèm nhãn Chờ duyệt báo giá, bỏ mã báo giá thô, giờ gửi theo giờ Việt Nam, khối Đang chờ khách hàng duyệt, tiền công và linh kiện căn phải, nút Xem chi tiết báo giá; chỉ đổi giao diện; chưa kiểm chứng trên máy thật
 
 ### Lịch sử giữ lại khi tích hợp
 
