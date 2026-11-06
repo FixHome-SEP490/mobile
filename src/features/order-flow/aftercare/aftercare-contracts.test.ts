@@ -31,6 +31,14 @@ it('technician commands match actual phases DTO; check-in requires neither GPS n
   expect(() => warrantyCommandPayload('check-in', { accuracyMeters: 2 }, [])).toThrow();
   expect(() => warrantyCommandPayload('propose', { result: 'not_covered', findings: 'Kiểm tra lỗi thực tế', notCoveredReasonCode: 'other', evidenceRefs: [] }, [])).toThrow();
   expect(warrantyCommandPayload('propose', { result: 'not_covered', findings: 'Kiểm tra lỗi thực tế', notCoveredReasonCode: 'expired', evidenceRefs: ['existing-ref'] }, ['existing-ref'])).toMatchObject({ result: 'not_covered', evidenceRefs: ['existing-ref'] });
+  expect(() => warrantyCommandPayload('propose', { result: 'covered_part', findings: 'Linh kiện hỏng do lỗi', evidenceRefs: [], faultyInvoiceItemIds: ['11111111-1111-4111-8111-111111111111'] }, [])).toThrow();
+  expect(warrantyCommandPayload('propose', { result: 'covered_part', findings: 'Linh kiện hỏng do lỗi', evidenceRefs: ['existing-ref'], faultyInvoiceItemIds: ['11111111-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111'] }, ['existing-ref'])).toMatchObject({ result: 'covered_part', evidenceRefs: ['existing-ref'], faultyInvoiceItemIds: ['11111111-1111-4111-8111-111111111111'] });
+  // A part fault must name the faulty lines.
+  for (const bad of [undefined, [], ['not-a-uuid']]) {
+    expect(() => warrantyCommandPayload('propose', { result: 'covered_part', findings: 'Linh kiện hỏng do lỗi', evidenceRefs: ['existing-ref'], faultyInvoiceItemIds: bad }, ['existing-ref'])).toThrow('Chọn ít nhất một linh kiện bị hỏng.');
+  }
+  expect(warrantyCommandPayload('propose', { result: 'covered_workmanship', findings: 'Mối nối bị lỏng do lắp' }, [])).not.toHaveProperty('faultyInvoiceItemIds');
+  expect(warrantyCommandPayload('propose', { result: 'not_covered', findings: 'Kiểm tra lỗi thực tế', notCoveredReasonCode: 'force_majeure', evidenceRefs: ['existing-ref'] }, ['existing-ref'])).toMatchObject({ notCoveredReasonCode: 'force_majeure' });
   expect(() => warrantyCommandPayload('decline', { reasonCode: 'other' }, [])).toThrow();
 });
 it('review and claim readmodels reject foreign IDs and drop private backend/staff fields', () => {

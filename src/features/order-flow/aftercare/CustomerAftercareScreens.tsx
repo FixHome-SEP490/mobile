@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useCustomerAftercare } from '../customer/useCustomerAftercare';
+import { useOrderSession } from '../runtime/OrderSessionProvider';
+import { WarrantyPhotos } from './WarrantyPhotos';
 import { DetailRow, ReadOnlyNotice, Section, TaskScreenShell } from '../shared/TaskScreenShell';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { vnDateTimeString } from '../../../utils/vn-time';
@@ -47,6 +49,16 @@ export function CustomerWarrantyScreen() {
   const navigation = useNavigation<any>(); const { controller, state } = useCustomerAftercare('warranty');
   const coverages = state.coverages.status === 'ready' ? state.coverages.data : [];
   const claims = state.claims.status === 'ready' ? state.claims.data : [];
+  const isOpen = (item: any) => !['resolved', 'rejected', 'closed'].includes(String(item.status).toLowerCase());
+  // The customer cannot tell a workmanship fault from a faulty part (the technician decides at inspection): one claim for the whole order,
+  // filed on the free item that is covered longest.
+  const free = coverages.filter((coverage: any) => !claims.some((item: any) => item.warrantyCoverageId === coverage.id && isOpen(item)));
+  const rank = (coverage: any) => (String(coverage.status).toLowerCase() === 'expired' ? 0 : 1) * 1e15 + (Date.parse(coverage.expiresAt) || 0);
+  const best = [...free].sort((x: any, y: any) => rank(y) - rank(x))[0] as any;
+  const loaded = state.coverages.status === 'ready' && state.claims.status === 'ready';
+  const nothingOpen = !claims.some(isOpen);
+  const bestId: string | undefined = best?.id;
+  useEffect(() => { if (loaded && bestId && nothingOpen) navigation.replace('WarrantyClaimCreate', { coverageId: bestId }); }, [navigation, loaded, bestId, nothingOpen]);
   return <TaskScreenShell title="Bảo hành" onBack={() => navigation.goBack()} secondary={{ label: 'Làm mới', onPress: () => void controller.loadWarranty(), disabled: state.phase === 'verifying' }}>
     {state.coverages.status === 'loading' || state.coverages.status === 'unloaded' ? <Loading /> : null}
     {state.coverages.status === 'error' || state.claims.status === 'error' ? <Status>Chưa tải được thông tin bảo hành. Hãy thử làm mới.</Status> : null}
@@ -54,10 +66,9 @@ export function CustomerWarrantyScreen() {
     {coverages.map((coverage: any) => {
       const claim = claims.find((item: any) => item.warrantyCoverageId === coverage.id && !['resolved', 'rejected', 'closed'].includes(String(item.status).toLowerCase()));
       const expired = String(coverage.status).toLowerCase() === 'expired';
-      const labor = coverage.itemType === 'labor';
       const days = Number(coverage.warrantyDaysSnapshot) || 0;
       const title = coverage.itemDescription || coverage.note || 'Bảo hành của đơn';
-      return <Section key={coverage.id} title={coverage.itemType ? (labor ? 'Bảo hành tiền công' : 'Bảo hành linh kiện') : 'Bảo hành'}>
+      return <Section key={coverage.id} title="Được bảo hành">
         <View style={{ paddingVertical: 12, gap: 2, borderBottomWidth: 0.5, borderBottomColor: colors.border }}>
           <Text style={{ ...label, fontWeight: '700', fontSize: 16 }}>{title}</Text>
           <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
@@ -68,12 +79,12 @@ export function CustomerWarrantyScreen() {
         {coverage.startsAt ? <DetailRow label="Bắt đầu" value={vnDateTimeString(coverage.startsAt)} /> : null}
         <DetailRow label="Hết hạn" value={coverage.expiresAt ? vnDateTimeString(coverage.expiresAt) : 'Chưa có thông tin'} />
         <View style={{ paddingVertical: 12 }}>
-        {claim ? <Pressable accessibilityRole="button" accessibilityLabel="Mở yêu cầu bảo hành" onPress={() => navigation.navigate('CustomerWarrantyClaim', { claimId: claim.id })} style={link}><Text style={linkText}>Mở yêu cầu bảo hành ›</Text></Pressable>
-          : <Pressable accessibilityRole="button" accessibilityLabel="Tạo yêu cầu bảo hành" onPress={() => navigation.navigate('WarrantyClaimCreate', { coverageId: coverage.id })} style={link}><Text style={linkText}>Tạo yêu cầu bảo hành ›</Text></Pressable>}
+        {claim ? <Pressable accessibilityRole="button" accessibilityLabel="Mở yêu cầu bảo hành" onPress={() => navigation.navigate('CustomerWarrantyClaim', { claimId: claim.id })} style={link}><Text style={linkText}>Mở yêu cầu bảo hành ›</Text></Pressable> : null}
         {expired ? <Text style={{ color: colors.textSecondary, marginTop: 8 }}>Đã hết hạn bảo hành. Máy chủ vẫn xác định khả năng tiếp nhận yêu cầu.</Text> : null}
         </View>
       </Section>;
     })}
+    {best ? <Pressable accessibilityRole="button" accessibilityLabel="Tạo yêu cầu bảo hành" onPress={() => navigation.navigate('WarrantyClaimCreate', { coverageId: best.id })} style={link}><Text style={linkText}>Tạo yêu cầu bảo hành mới ›</Text></Pressable> : null}
     {state.message ? <Status>{state.message}</Status> : null}
   </TaskScreenShell>;
 }
@@ -86,6 +97,9 @@ export function WarrantyClaimCreateScreen() {
 function WarrantyClaimCreateForCoverage({ coverageId }: { coverageId?: string }) {
   const navigation = useNavigation<any>();
   const { controller, state } = useCustomerAftercare('warranty'); const [description, setDescription] = useState('');
+  const [photos, setPhotos] = useState<string[]>([]);
+  const covered: any[] = state.coverages.status === 'ready' ? state.coverages.data : [];
+  const { snapshot } = useOrderSession(); const order: any = snapshot?.order.status === 'ready' ? snapshot.order.data : null;
   useEffect(() => () => controller.cancelConfirmation(), [controller]);
   const coverage = useMemo(() => state.coverages.status === 'ready' ? state.coverages.data.find((item: any) => item.id === coverageId) : null, [state.coverages, coverageId]);
   const can = !!coverageId && controller.canClaim(coverageId); const confirmed = state.confirmation?.operation === 'warranty-create'; const busy = ['verifying', 'submitting'].includes(state.phase); const locked = busy || state.phase === 'confirming' || state.phase === 'unknown' || !!state.confirmation;
@@ -94,12 +108,20 @@ function WarrantyClaimCreateForCoverage({ coverageId }: { coverageId?: string })
     const claim = state.claims.data.find((item: any) => item.warrantyCoverageId === coverageId && item.status === 'submitted');
     if (claim) navigation.replace('CustomerWarrantyClaim', { claimId: claim.id });
   }, [navigation, state.phase, state.claims, coverageId]);
-  return <TaskScreenShell title="Tạo yêu cầu bảo hành" onBack={() => { controller.cancelConfirmation(); navigation.goBack(); }} primary={confirmed ? { label: busy ? 'Đang gửi…' : 'Xác nhận gửi yêu cầu', disabled: busy || state.phase !== 'confirming', onPress: () => void controller.submitConfirmation() } : { label: busy ? 'Đang kiểm tra…' : 'Kiểm tra yêu cầu', disabled: locked || state.phase !== 'idle' || !can || description.trim().length < 10, accessibilityHint: !can ? 'Chưa xác minh phạm vi bảo hành hoặc không đủ điều kiện' : 'Kiểm tra điều kiện trước khi gửi', onPress: () => coverageId && void controller.prepareClaim({ warrantyCoverageId: coverageId, description: description.trim() }) }} secondary={{ label: confirmed ? 'Sửa nội dung' : 'Quay lại', disabled: busy, onPress: () => { if (confirmed) controller.cancelConfirmation(); else { controller.cancelConfirmation(); navigation.goBack(); } } }}>
+  return <TaskScreenShell title="Tạo yêu cầu bảo hành" onBack={() => { controller.cancelConfirmation(); navigation.goBack(); }} primary={confirmed ? { label: busy ? 'Đang gửi…' : 'Xác nhận gửi yêu cầu', disabled: busy || state.phase !== 'confirming', onPress: () => void controller.submitConfirmation() } : { label: busy ? 'Đang kiểm tra…' : 'Kiểm tra yêu cầu', disabled: locked || state.phase !== 'idle' || !can || description.trim().length < 10, accessibilityHint: !can ? 'Chưa xác minh phạm vi bảo hành hoặc không đủ điều kiện' : 'Kiểm tra điều kiện trước khi gửi', onPress: () => coverageId && void controller.prepareClaim({ warrantyCoverageId: coverageId, description: description.trim(), ...(photos.length ? { evidenceRefs: photos } : {}) }) }} secondary={{ label: confirmed ? 'Sửa nội dung' : 'Quay lại', disabled: busy, onPress: () => { if (confirmed) controller.cancelConfirmation(); else { controller.cancelConfirmation(); navigation.goBack(); } } }}>
     {!coverage ? <Loading>Đang xác minh phạm vi bảo hành…</Loading> : <>
-      <DetailRow label="Phạm vi" value={coverage.note || 'Bảo hành'} /><DetailRow label="Tình trạng" value={coverageLabel[String(coverage.status).toLowerCase()] || 'Chưa xác định'} />
+      {order ? <DetailRow label="Đơn sửa chữa" value={`#${order.code} · ${order.serviceName}`} /> : null}
+      <Section title="Được bảo hành">
+        {covered.slice(0, 3).map((item: any) => <View key={item.id} style={{ paddingVertical: 10, gap: 2, borderBottomWidth: 0.5, borderBottomColor: colors.border }}>
+          <Text style={{ ...label, fontWeight: '700' }}>{item.itemDescription || item.note || 'Bảo hành của đơn'}</Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>{item.warrantyDaysSnapshot ? `Bảo hành ${item.warrantyDaysSnapshot} ngày` : 'Thời hạn bảo hành theo đơn'}{item.expiresAt ? ` · đến ${vnDateTimeString(item.expiresAt)}` : ''} · {coverageLabel[String(item.status).toLowerCase()] || 'Chưa xác định'}</Text>
+        </View>)}
+        {covered.length > 3 ? <Text style={{ color: colors.textSecondary, paddingVertical: 8 }}>và {covered.length - 3} hạng mục khác</Text> : null}
+      </Section>
       {coverage.status === 'expired' ? <Status>Phạm vi đã hết hạn. Bạn vẫn có thể gửi yêu cầu để máy chủ xem xét.</Status> : null}
+      <Status>Bạn chỉ cần mô tả sự cố. Kỹ thuật viên sẽ kiểm tra và xác định lỗi do công hay do linh kiện.</Status>
       <Text style={label}>Mô tả sự cố</Text><TextInput accessibilityLabel="Mô tả sự cố" value={description} editable={!locked} onChangeText={setDescription} multiline maxLength={2000} style={[field, { minHeight: 130 }]} />
-      <Status>Ảnh mới đang chờ hỗ trợ lưu trữ riêng tư. Hiện chưa thể đính kèm ảnh.</Status>
+      <WarrantyPhotos urls={photos} onChange={setPhotos} onUploaded={urls => controller.registerUploadedPhotos(urls)} disabled={locked} />
       {!can ? <Status>Chưa thể tạo yêu cầu. Hãy làm mới thông tin phạm vi hoặc kiểm tra yêu cầu đang mở.</Status> : null}
     </>}
     {confirmed ? <Status>Yêu cầu sẽ được gửi với phạm vi đã chọn và mô tả bạn vừa nhập.</Status> : null}{state.message ? <Status>{state.message}</Status> : null}

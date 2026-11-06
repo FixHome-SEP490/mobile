@@ -105,9 +105,9 @@ export function normalizeCoverage(value: unknown, orderId: string): WarrantyCove
 }
 export type WarrantyCommand = 'accept' | 'decline' | 'check-in' | 'propose' | 'complete';
 export type InspectionResult = 'covered_workmanship' | 'covered_part' | 'not_covered';
-export interface WarrantyCommandDto { scheduledAt?: string; reasonCode?: 'busy' | 'on_leave' | 'out_of_area' | 'other'; note?: string; lat?: number; lng?: number; result?: InspectionResult; findings?: string; notCoveredReasonCode?: string; evidenceRefs?: string[]; notes?: string }
+export interface WarrantyCommandDto { scheduledAt?: string; reasonCode?: 'busy' | 'on_leave' | 'out_of_area' | 'other'; note?: string; lat?: number; lng?: number; result?: InspectionResult; findings?: string; notCoveredReasonCode?: string; evidenceRefs?: string[]; faultyInvoiceItemIds?: string[]; notes?: string }
 export function warrantyCommandPayload(op: WarrantyCommand, value: unknown, refs: readonly string[]): WarrantyCommandDto {
-  const fields = { accept: ['scheduledAt'], decline: ['reasonCode', 'note'], 'check-in': ['lat', 'lng'], propose: ['result', 'findings', 'notCoveredReasonCode', 'evidenceRefs'], complete: ['notes', 'evidenceRefs'] };
+  const fields = { accept: ['scheduledAt'], decline: ['reasonCode', 'note'], 'check-in': ['lat', 'lng'], propose: ['result', 'findings', 'notCoveredReasonCode', 'evidenceRefs', 'faultyInvoiceItemIds'], complete: ['notes', 'evidenceRefs'] };
   if (!Object.prototype.hasOwnProperty.call(fields, op)) throw Error('Thao tác bảo hành chưa hợp lệ.');
   const r = record(value, fields[op]);
   if (op === 'accept') { if (r.scheduledAt !== undefined && !validTimestamp(r.scheduledAt)) throw Error('Lịch kiểm tra chưa hợp lệ.'); return r.scheduledAt === undefined ? {} : { scheduledAt: r.scheduledAt as string }; }
@@ -123,7 +123,10 @@ export function warrantyCommandPayload(op: WarrantyCommand, value: unknown, refs
   const evidenceRefs = existingRefs(r.evidenceRefs, refs);
   if (op === 'complete') return { notes: warrantyText(r.notes), ...(evidenceRefs ? { evidenceRefs } : {}) };
   if (!['covered_workmanship', 'covered_part', 'not_covered'].includes(String(r.result))) throw Error('Kết luận chưa hợp lệ.');
-  const reasons = ['customer_misuse', 'normal_wear', 'other_component', 'not_workmanship_related', 'expired', 'cannot_reproduce', 'customer_unavailable', 'other'];
-  if ((r.notCoveredReasonCode !== undefined && !reasons.includes(String(r.notCoveredReasonCode))) || (r.result === 'not_covered' && (!r.notCoveredReasonCode || !evidenceRefs?.length))) throw Error(PRIVATE_ATTACHMENT_NOTICE);
-  return { result: r.result as InspectionResult, findings: warrantyText(r.findings), ...(r.result === 'not_covered' ? { notCoveredReasonCode: r.notCoveredReasonCode as string } : {}), ...(evidenceRefs ? { evidenceRefs } : {}) };
+  const reasons = ['customer_misuse', 'normal_wear', 'other_component', 'not_workmanship_related', 'expired', 'cannot_reproduce', 'customer_unavailable', 'third_party_repair', 'force_majeure', 'transport_damage', 'other'];
+  if ((r.notCoveredReasonCode !== undefined && !reasons.includes(String(r.notCoveredReasonCode))) || (r.result === 'not_covered' && !r.notCoveredReasonCode) || ((r.result === 'not_covered' || r.result === 'covered_part') && !evidenceRefs?.length)) throw Error(PRIVATE_ATTACHMENT_NOTICE);
+  // A part fault must say which part lines of the original job are faulty: FixHome supplies exactly those.
+  const faulty = r.faultyInvoiceItemIds;
+  if (r.result === 'covered_part' && (!Array.isArray(faulty) || !faulty.length || faulty.length > 20 || faulty.some(id => !uuid4(id)))) throw Error('Chọn ít nhất một linh kiện bị hỏng.');
+  return { result: r.result as InspectionResult, findings: warrantyText(r.findings), ...(r.result === 'not_covered' ? { notCoveredReasonCode: r.notCoveredReasonCode as string } : {}), ...(r.result === 'covered_part' ? { faultyInvoiceItemIds: [...new Set(faulty as string[])] } : {}), ...(evidenceRefs ? { evidenceRefs } : {}) };
 }

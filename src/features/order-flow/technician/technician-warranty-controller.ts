@@ -21,15 +21,17 @@ export interface TechnicianWarrantyState { phase: M6Phase; access: 'unverified' 
 type Marker = Extract<EntryAttempt, { kind: 'warranty-command' }>;
 export function createTechnicianWarrantyController(deps: TechnicianWarrantyDependencies) {
   let busy = false, epoch = 0, seq = 0;
+  // Photos the technician uploaded in this session (PO 05/11/2026), allowed as evidence next to the order's own.
+  let uploaded: string[] = [];
   const empty = (id: string | null = null): TechnicianWarrantyState => ({ phase: 'idle', access: 'unverified', task: 'TW01', selectedClaimId: id, claim: { status: 'unloaded', requestSeq: seq }, inbox: { status: 'unloaded', requestSeq: seq }, confirmation: null, message: null });
   let state = empty(); const listeners = new Set<() => void>();
   const publish = (patch: Partial<TechnicianWarrantyState>) => { state = { ...state, ...patch }; listeners.forEach(f => f()); };
   const sameOwner = (o: AftercareOwner) => { const current = deps.getOwner(); return deps.isActive() && o.role === 'technician' && current?.role === 'technician' && current.userId === o.userId && current.sessionGeneration === o.sessionGeneration; };
   const same = (o: AftercareOwner, id: string) => sameOwner(o) && state.selectedClaimId === id;
   const currentClaim = (o: AftercareOwner, id: string) => same(o, id) && state.claim.status === 'ready' && state.claim.data?.id === id && state.claim.data.technician?.id === o.userId ? state.claim.data : null;
-  const refs = (c: TechnicianWarrantyClaim) => [...new Set([...(c.evidenceRefs ?? []), ...(c.visit?.evidenceRefs ?? []), ...(c.visit?.reServiceEvidenceRefs ?? [])])];
+  const refs = (c: TechnicianWarrantyClaim) => [...new Set([...(c.evidenceRefs ?? []), ...(c.visit?.evidenceRefs ?? []), ...(c.visit?.reServiceEvidenceRefs ?? []), ...uploaded])];
   const pending = (o: AftercareOwner, id: string) => deps.journal.list(o.userId).filter((m): m is Marker => m.kind === 'warranty-command' && m.claimId === id && !m.resolved);
-  function purge(access: TechnicianWarrantyState['access'] = 'unverified') { epoch++; seq++; const id = state.selectedClaimId; state = empty(id); publish({ access }); }
+  function purge(access: TechnicianWarrantyState['access'] = 'unverified') { epoch++; seq++; uploaded = []; const id = state.selectedClaimId; state = empty(id); publish({ access }); }
   function allowed(c: TechnicianWarrantyClaim, op: WarrantyCommand) {
     if (op === 'accept' || op === 'decline') return c.status === 'submitted';
     if (op === 'check-in') return c.status === 'accepted' && !!c.visit && ['scheduled', 'checked_in'].includes(c.visit.status);
@@ -69,6 +71,7 @@ export function createTechnicianWarrantyController(deps: TechnicianWarrantyDepen
     getState: () => state, subscribe(fn: () => void) { listeners.add(fn); return () => { listeners.delete(fn); }; },
     selectClaim(id: string | null) { epoch++; seq++; state = empty(id && uuid4(id) ? id : null); publish({}); },
     invalidatePresentation: purge,
+    registerUploadedPhotos(urls: readonly string[]) { uploaded = urls.filter(url => /^https:\/\//i.test(url)).slice(0, 10); },
     cancelConfirmation() { epoch++; publish({ confirmation: null, ...(busy ? {} : { phase: 'idle' as const }) }); },
     revalidateConfirmation() { if (state.confirmation && !matches(state.confirmation)) { epoch++; publish({ confirmation: null, ...(busy ? {} : { phase: 'idle' as const }) }); } },
     async refreshClaim() { const o = deps.getOwner(), id = state.selectedClaimId; if (!o || !id || !same(o, id) || busy) return; busy = true; try { await readClaim(o, id); } finally { busy = false; } },

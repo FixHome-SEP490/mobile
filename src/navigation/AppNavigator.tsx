@@ -125,6 +125,8 @@ export default function AppNavigator({ firstRunSeen = false }: { firstRunSeen?: 
             {__DEV__ && <Stack.Screen name="TechnicianWarrantyDevPreview" component={TechnicianWarrantyDevPreviewScreen} />}
             <Stack.Screen name="TechnicianKyc" component={TechnicianKycScreen} />
             <Stack.Screen name="TechnicianOnboarding" component={TechnicianOnboardingScreen} />
+            <Stack.Screen name="TechnicianWarrantyInbox" component={TechnicianWarrantyInboxScreen} />
+            <Stack.Screen name="TechnicianWarrantyTask" component={TechnicianWarrantyTaskScreen} />
             <Stack.Screen name="TechnicianWallet" component={TechnicianWalletScreen} />
             <Stack.Screen name="TechnicianReviews" component={TechnicianReviewsScreen} />
             <Stack.Screen name="TechnicianSchedule" component={TechnicianScheduleScreen} />

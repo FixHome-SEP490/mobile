@@ -2,15 +2,17 @@ import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { Text, TextInput, TouchableOpacity } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { CustomerReviewScreen, CustomerWarrantyClaimScreen, WarrantyClaimCreateScreen } from './CustomerAftercareScreens';
+import { CustomerReviewScreen, CustomerWarrantyClaimScreen, CustomerWarrantyScreen, WarrantyClaimCreateScreen } from './CustomerAftercareScreens';
 
 const mockController = { canSubmitReview: jest.fn(() => true), canClaim: jest.fn(() => false), canRespond: jest.fn(() => false),
   prepareReview: jest.fn(), prepareClaim: jest.fn(), prepareResponse: jest.fn(), submitConfirmation: jest.fn(), cancelConfirmation: jest.fn(), loadReview: jest.fn(), loadWarranty: jest.fn(), verify: jest.fn() };
 let mockState: any;
 const mockGoBack = jest.fn();
+const mockReplace = jest.fn();
 const mockRoute: any = { params: {} };
+jest.mock('../runtime/OrderSessionProvider', () => ({ ...jest.requireActual('../runtime/OrderSessionProvider'), useOrderSession: () => ({ snapshot: { order: { status: 'ready', data: { code: 'FH-01', serviceName: 'Sửa máy giặt' } } } }) }));
 jest.mock('../customer/useCustomerAftercare', () => ({ useCustomerAftercare: () => ({ controller: mockController, state: mockState }) }));
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: mockGoBack, replace: jest.fn() }), useRoute: () => mockRoute }));
+jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: mockGoBack, replace: mockReplace, navigate: jest.fn() }), useRoute: () => mockRoute }));
 
 function pressByText(tree: ReturnType<typeof create>, value: string) {
   const text = tree.root.findAllByType(Text).find(node => node.props.children === value);
@@ -81,5 +83,37 @@ it('clears the customer response draft when the claim target changes', async () 
   await act(async () => renderer.update(screen()));
   expect(renderer.root.findByType(TextInput).props.value).toBe('');
   expect(mockController.cancelConfirmation).toHaveBeenCalled();
+  await act(async () => renderer.unmount());
+});
+
+it('opens one claim for the whole order on the item covered longest, so the customer never picks labor or part', async () => {
+  const day = 86_400_000;
+  mockState.coverages = { status: 'ready', data: [
+    { id: 'labor', status: 'active', itemDescription: 'Công thay tụ', expiresAt: new Date(Date.now() + 10 * day).toISOString() },
+    { id: 'part', status: 'active', itemDescription: 'Tụ khởi động', expiresAt: new Date(Date.now() + 60 * day).toISOString() }] };
+  mockState.claims = { status: 'ready', data: [] };
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><CustomerWarrantyScreen /></SafeAreaProvider>); });
+  expect(mockReplace).toHaveBeenCalledWith('WarrantyClaimCreate', { coverageId: 'part' });
+  await act(async () => renderer.unmount());
+});
+
+it('shows each item with its own term and caps a long order at three items plus a count', async () => {
+  mockRoute.params = { coverageId: 'c0' };
+  mockState.coverages = { status: 'ready', data: [
+    { id: 'c0', status: 'active', itemDescription: 'Công thay tụ', warrantyDaysSnapshot: 30, expiresAt: '2026-12-05T00:00:00Z' },
+    { id: 'c1', status: 'active', itemDescription: 'Tụ khởi động', warrantyDaysSnapshot: 90, expiresAt: '2027-02-03T00:00:00Z' },
+    ...Array.from({ length: 8 }, (_, i) => ({ id: `x${i}`, status: 'active', itemDescription: `Linh kiện ${i + 3}` }))] };
+  mockState.claims = { status: 'ready', data: [] };
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><WarrantyClaimCreateScreen /></SafeAreaProvider>); });
+  const texts = renderer.root.findAllByType(Text).map(text => String(text.props.children));
+  const joined = texts.join('|');
+  // Labor keeps its 30 days and the part its 90: never one merged term.
+  expect(joined).toContain('Bảo hành 30 ngày');
+  expect(joined).toContain('Bảo hành 90 ngày');
+  expect(texts).toContain('#FH-01 · Sửa máy giặt');
+  expect(texts.some(text => text.includes('Linh kiện 4'))).toBe(false);
+  expect(joined).toContain('hạng mục khác');
   await act(async () => renderer.unmount());
 });
