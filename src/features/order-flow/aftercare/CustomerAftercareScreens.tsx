@@ -52,7 +52,7 @@ export function CustomerWarrantyScreen() {
   const isOpen = (item: any) => !['resolved', 'rejected', 'closed'].includes(String(item.status).toLowerCase());
   // The customer cannot tell a workmanship fault from a faulty part (the technician decides at inspection): one claim for the whole order,
   // filed on the free item that is covered longest.
-  const free = coverages.filter((coverage: any) => !claims.some((item: any) => item.warrantyCoverageId === coverage.id && isOpen(item)));
+  const free = coverages.filter((coverage: any) => String(coverage.status).toLowerCase() !== 'voided' && !claims.some((item: any) => item.warrantyCoverageId === coverage.id && isOpen(item)));
   const rank = (coverage: any) => (String(coverage.status).toLowerCase() === 'expired' ? 0 : 1) * 1e15 + (Date.parse(coverage.expiresAt) || 0);
   const best = [...free].sort((x: any, y: any) => rank(y) - rank(x))[0] as any;
   const loaded = state.coverages.status === 'ready' && state.claims.status === 'ready';

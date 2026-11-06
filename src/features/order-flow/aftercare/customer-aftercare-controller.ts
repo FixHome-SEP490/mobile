@@ -77,7 +77,7 @@ export function createCustomerAftercareController(deps: CustomerAftercareDepende
     if (operation === 'warranty-create') {
       if (state.coverages.status !== 'ready') return null;
       const coverage = state.coverages.data.find(c => c.id === id);
-      if (!coverage || coverage.status === 'voided' || state.claims.data.some(c => c.warrantyCoverageId === id && !['resolved', 'rejected'].includes(c.status))) return null;
+      if (!coverage || String(coverage.status).toLowerCase() === 'voided' || state.claims.data.some(c => c.warrantyCoverageId === id && !['resolved', 'rejected', 'closed'].includes(String(c.status).toLowerCase()))) return null;
       return JSON.stringify(coverage);
     }
     const claim = state.claims.data.find(c => c.id === id);
