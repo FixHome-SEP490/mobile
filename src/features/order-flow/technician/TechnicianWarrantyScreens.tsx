@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Image, Linking, Pressable, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { WarrantyCommandDto } from '../aftercare/aftercare-contracts';
 import { useTechnicianWarranty } from './useTechnicianWarranty';
@@ -98,6 +99,8 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
     if (op === 'decline') dto = { reasonCode: reason, ...(reason === 'other' || note.trim() ? { note: note.trim() } : {}) };
     if (op === 'propose') dto = { result: result ?? undefined, ...(result === 'covered_part' ? { faultyInvoiceItemIds: faultyIds, faultyQuantities: Object.fromEntries(faultyIds.map(id => [id, faultyCounts[id] ?? partLines.find(l => l.id === id)?.quantity ?? 1])) } : {}), findings: findings.trim(), ...(result === 'not_covered' ? { notCoveredReasonCode } : {}), ...(result !== 'covered_workmanship' && photos.length ? { evidenceRefs: photos } : {}) };
     if (op === 'complete') dto = { notes: note.trim(), ...(photos.length ? { evidenceRefs: photos } : {}) };
+    // The controller forgets uploaded URLs whenever the app is backgrounded (picker, camera); the photos on screen are the ones just uploaded, so tell it again.
+    if (op === 'propose' || op === 'complete') controller.registerUploadedPhotos(photos);
     void controller.prepare(op as any, dto);
   };
   const action = confirmed
@@ -112,7 +115,7 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
     ? { label: 'Sửa nội dung', disabled: busy, testID: 'technician-warranty-secondary-action', onPress: () => { controller.cancelConfirmation(); } }
     : state.task === 'TW02' && state.phase === 'idle' && claim
       ? { label: 'Từ chối phân công', disabled: locked || !commands.includes('decline') || (reason === 'other' && note.trim().length < 10), testID: 'technician-warranty-secondary-action', onPress: () => prepare('decline') }
-      : { label: 'Làm mới', disabled: !claimId || busy, onPress: () => claimId && void controller.refreshClaim() };
+      : { label: 'Làm mới', disabled: !claimId || busy, onPress: () => { if (!claimId) return; if (state.phase === 'denied' || state.phase === 'failed-known') controller.cancelConfirmation(); void (state.phase === 'unknown' ? controller.verify() : controller.refreshClaim()); } };
 
   return <TaskScreenShell title="Chi tiết bảo hành" onBack={() => { controller.cancelConfirmation(); backFromFlow(navigation); }} primary={action} secondary={secondary}>
     {!claim ? state.access === 'revoked' || state.access === 'not-assigned' ? <ReadOnlyNotice>Yêu cầu này không còn được phân công cho tài khoản hiện tại.</ReadOnlyNotice> : state.claim.status === 'error' ? <ReadOnlyNotice>Chưa xác minh được phân công. Hãy quay lại hộp thư và mở lại yêu cầu.</ReadOnlyNotice> : <ReadOnlyNotice>Đang xác minh yêu cầu được phân công…</ReadOnlyNotice> : <>
@@ -192,26 +195,34 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
         {result === 'covered_part' ? <>
           <Text style={choiceText}>Linh kiện nào bị hỏng?</Text>
           {partLines.length === 0 ? <Text style={{ color: colors.textSecondary }}>Đơn gốc không có linh kiện. Hãy chọn kết luận khác.</Text> : null}
-          {partLines.map(line => {
-            const on = faultyIds.includes(line.id); const count = faultyCounts[line.id] ?? line.quantity;
-            const step = (delta: number) => setFaultyCounts(current => ({ ...current, [line.id]: Math.min(line.quantity, Math.max(1, count + delta)) }));
-            return <View key={line.id} style={[choice, on && { borderColor: colors.primaryStrong }]}>
-              <Pressable disabled={locked} accessibilityRole="checkbox" accessibilityState={{ disabled: locked, checked: on }} onPress={() => setFaultyIds(current => on ? current.filter(id => id !== line.id) : [...current, line.id])}><Text style={choiceText}>{line.name} (đã dùng {line.quantity})</Text></Pressable>
-              {on && line.quantity > 1 ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 }}>
-                <Text style={choiceText}>Số cái bị hỏng:</Text>
-                <Pressable disabled={locked || count <= 1} accessibilityRole="button" accessibilityLabel={`Giảm số lượng hỏng ${line.name}`} onPress={() => step(-1)} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}><Text style={choiceText}>−</Text></Pressable>
-                <Text accessibilityLabel={`${count} trên ${line.quantity} cái hỏng`} style={choiceText}>{count}/{line.quantity}</Text>
-                <Pressable disabled={locked || count >= line.quantity} accessibilityRole="button" accessibilityLabel={`Tăng số lượng hỏng ${line.name}`} onPress={() => step(1)} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}><Text style={choiceText}>+</Text></Pressable>
-              </View> : null}
-            </View>;
-          })}
+          {partLines.length > 0 ? <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.surface, overflow: 'hidden' }}>
+            {partLines.map((line, index) => {
+              const on = faultyIds.includes(line.id); const count = faultyCounts[line.id] ?? line.quantity;
+              const step = (delta: number) => setFaultyCounts(current => ({ ...current, [line.id]: Math.min(line.quantity, Math.max(1, count + delta)) }));
+              const canDown = !locked && count > 1, canUp = !locked && count < line.quantity;
+              return <View key={line.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, borderTopWidth: index ? 0.5 : 0, borderTopColor: colors.border, borderLeftWidth: 3, borderLeftColor: on ? colors.primaryStrong : 'transparent' }}>
+                <Pressable disabled={locked} accessibilityRole="checkbox" accessibilityState={{ disabled: locked, checked: on }} onPress={() => setFaultyIds(current => on ? current.filter(id => id !== line.id) : [...current, line.id])} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 56 }}>
+                  <Ionicons name={on ? 'checkbox' : 'square-outline'} size={24} color={on ? colors.primaryStrong : colors.textSecondary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ ...choiceText, fontWeight: on ? '700' : '500' }}>{line.name}</Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Đã dùng {line.quantity}</Text>
+                  </View>
+                </Pressable>
+                {on && line.quantity > 1 ? <View style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 22, backgroundColor: colors.background }}>
+                  <Pressable disabled={!canDown} accessibilityRole="button" accessibilityLabel={`Giảm số lượng hỏng ${line.name}`} onPress={() => step(-1)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: canDown ? 1 : 0.35 }}><Ionicons name="remove" size={20} color={colors.text} /></Pressable>
+                  <Text accessibilityLabel={`${count} trên ${line.quantity} cái hỏng`} style={{ ...choiceText, fontWeight: '700', minWidth: 36, textAlign: 'center' }}>{count}/{line.quantity}</Text>
+                  <Pressable disabled={!canUp} accessibilityRole="button" accessibilityLabel={`Tăng số lượng hỏng ${line.name}`} onPress={() => step(1)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: canUp ? 1 : 0.35 }}><Ionicons name="add" size={20} color={colors.text} /></Pressable>
+                </View> : null}
+              </View>;
+            })}
+          </View> : null}
         </> : null}
         {result === 'not_covered' || result === 'covered_part' ? <>
           <ReadOnlyNotice>Cần ít nhất 1 ảnh do bạn chụp.</ReadOnlyNotice>
           <WarrantyPhotos urls={photos} onChange={setPhotos} onUploaded={urls => controller.registerUploadedPhotos(urls)} disabled={locked} />
           {result === 'not_covered' ? <>{reasonCodes.map(value => <Pressable key={value} disabled={locked} accessibilityRole="radio" accessibilityState={{ disabled: locked, checked: notCoveredReasonCode === value }} onPress={() => setNotCoveredReasonCode(value)} style={[choice, notCoveredReasonCode === value && { borderColor: colors.primaryStrong }]}><Text style={choiceText}>{reasonLabel[value] || value}</Text></Pressable>)}</> : null}
         </> : null}
-        <ReadOnlyNotice>Chờ quản lý duyệt rồi mới được sửa.</ReadOnlyNotice>
+        <ReadOnlyNotice>{result === 'covered_workmanship' ? 'Lỗi do công lắp đặt thì hệ thống duyệt luôn, bạn sửa lại miễn phí cho khách. Yêu cầu gửi sau hạn vẫn chờ quản lý duyệt.' : 'Chờ quản lý duyệt rồi mới được sửa.'}</ReadOnlyNotice>
       </Card> : null}
       {state.task === 'TW05' ? <Card title="Báo hoàn tất bảo hành"><ReadOnlyNotice>Chỉ gửi khi đã sửa xong.</ReadOnlyNotice><TextInput accessibilityLabel="Ghi chú hoàn tất bảo hành" placeholder="Ghi chú hoàn tất (ít nhất 10 ký tự: đã làm gì, thay gì)" value={note} editable={!locked} onChangeText={setNote} multiline maxLength={2000} style={[field, { minHeight: 100 }]} /></Card> : null}
       {state.task === 'TW06' ? <ReadOnlyNotice>Yêu cầu đang chờ khách hàng, Quản lý dịch vụ hoặc đã kết thúc. Màn này chỉ đọc; không có thao tác duyệt hay đóng yêu cầu.</ReadOnlyNotice> : null}
