@@ -1,3 +1,4 @@
+import { orderWarrantyRoute } from './customer-warranty';
 import { useAppTheme } from '../../constants/theme';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
@@ -155,6 +156,9 @@ export default function CustomerNotificationsScreen() {
 
       if (target.name === 'CustomerBookingDetail') {
         navigation.navigate('CustomerBookingDetail', target.params);
+      } else if (target.name === 'CustomerWarranties') {
+        const route = orderWarrantyRoute(target.params.orderId);
+        navigation.navigate(route.name as any, route.params as any);
       } else if (target.name === 'CustomerVisit') {
         navigation.navigate('CustomerVisit', target.params);
       } else {

@@ -75,3 +75,33 @@ it('an unclear payment leftover of a completed order does not lock the review, a
   f.transport.submitReview.mockRejectedValue(Error('timeout')); await f.c.submitConfirmation();
   expect(f.c.canSubmitReview()).toBe(false);
 });
+
+it('lets a photo the person just uploaded travel as claim evidence, but nothing else', async () => {
+  const url = 'https://cdn.test/new.jpg';
+  const unknown = setup(); unknown.server.order.status = 'COMPLETED'; unknown.server.coverages[0].status = 'pending';
+  await unknown.c.prepareClaim({ warrantyCoverageId: ids.coverage, description: 'Lỗi vẫn còn xuất hiện', evidenceRefs: [url] });
+  expect(unknown.c.getState().phase).toBe('denied');
+
+  const known = setup(); known.server.order.status = 'COMPLETED'; known.server.coverages[0].status = 'pending';
+  known.c.registerUploadedPhotos([url, 'file:///private/a.jpg']);
+  await known.c.prepareClaim({ warrantyCoverageId: ids.coverage, description: 'Lỗi vẫn còn xuất hiện', evidenceRefs: [url] });
+  expect(known.c.getState().phase).toBe('confirming');
+
+  const device = setup(); device.server.order.status = 'COMPLETED'; device.server.coverages[0].status = 'pending';
+  device.c.registerUploadedPhotos(['file:///private/a.jpg']);
+  await device.c.prepareClaim({ warrantyCoverageId: ids.coverage, description: 'Lỗi vẫn còn xuất hiện', evidenceRefs: ['file:///private/a.jpg'] });
+  expect(device.c.getState().phase).toBe('denied');
+});
+
+it('drops the "no longer allowed" notice once a later read works again, so a passing re-read does not leave it on screen', async () => {
+  const f = setup(); f.server.order.status = 'COMPLETED';
+  await f.c.loadWarranty();
+  f.c.invalidatePresentation();
+  expect(f.c.getState().message).toContain('không còn quyền');
+
+  await f.c.loadWarranty();
+
+  expect(f.c.getState().phase).not.toBe('denied');
+  expect(f.c.getState().message).toBeNull();
+  expect(f.c.getState().claims.status).toBe('ready');
+});

@@ -22,19 +22,21 @@ export interface CustomerAftercareState { phase: M6Phase; confirmation: Confirma
 const operations = ['review-create', 'warranty-create', 'warranty-respond-agree', 'warranty-respond-dispute'];
 export function createCustomerAftercareController(deps: CustomerAftercareDependencies) {
   let seq = 0, epoch = 0, busy = false, presentationKey: OrderSessionKey | null = null;
+  // Photos the person uploaded in this session (PO 05/11/2026): the only URLs besides the order's own that may travel as evidence.
+  let uploaded: string[] = [];
   const empty = (): CustomerAftercareState => ({ phase: 'idle', confirmation: null, message: null, review: { status: 'unloaded', requestSeq: seq }, coverages: { status: 'unloaded', requestSeq: seq }, claims: { status: 'unloaded', requestSeq: seq } });
   let state = empty(); const listeners = new Set<() => void>();
   const publish = (patch: Partial<CustomerAftercareState>) => { state = { ...state, ...patch }; listeners.forEach(f => f()); };
   const same = (key: OrderSessionKey) => deps.isActive() && key.role === 'customer' && sameOrderSession(deps.getKey(), key) && sameOrderSession(deps.coordinator.getSnapshot()?.key ?? null, key);
   const owned = (key: OrderSessionKey) => same(key) && !!m6Order(deps.coordinator.getSnapshot(), key);
-  function purge() { epoch++; seq++; presentationKey = null; state = empty(); publish({ phase: 'denied', message: 'Bạn không còn quyền xem nội dung này.' }); }
+  function purge() { epoch++; seq++; presentationKey = null; uploaded = []; state = empty(); publish({ phase: 'denied', message: 'Bạn không còn quyền xem nội dung này.' }); }
   const completed = (key: OrderSessionKey) => owned(key) && m6Order(deps.coordinator.getSnapshot(), key)?.status === 'COMPLETED';
   const markers = (key: OrderSessionKey) => deps.journal.list(key.userId).filter(m => m.role === 'customer' && m.serviceOrderId === key.serviceOrderId && operations.includes(m.operation) && !['resolved', 'failed-known'].includes(m.status));
   const refs = () => {
     const key = deps.getKey(), s = deps.coordinator.getSnapshot();
     if (!key || !owned(key)) return [];
     return [...(s?.resources.evidence.status === 'ready' ? s.resources.evidence.data.filter(e => e.type !== 'CHECKIN_FACE' && e.serviceOrderId === key.serviceOrderId).map(e => e.mediaUrl) : []),
-      ...(state.claims.status === 'ready' ? state.claims.data.flatMap(c => c.evidenceRefs ?? []) : [])];
+      ...(state.claims.status === 'ready' ? state.claims.data.flatMap(c => c.evidenceRefs ?? []) : []), ...uploaded];
   };
   async function read(key: OrderSessionKey, kind: 'review' | 'coverages' | 'claims') {
     if (!owned(key)) return; const generation = epoch, requestSeq = ++seq; publish({ [kind]: { status: 'loading', requestSeq } });
@@ -46,7 +48,9 @@ export function createCustomerAftercareController(deps: CustomerAftercareDepende
         const result = kind === 'coverages' ? raw.map(r => normalizeCoverage(r, key.serviceOrderId)) : raw.map(r => normalizeClaim(r, key.serviceOrderId));
         if (new Set(result.map(r => r.id)).size !== result.length) throw Error('Danh sách chưa xác định.'); return result;
       })();
-      presentationKey = { ...key }; publish({ [kind]: { status: 'ready', data, requestSeq, fetchedAt: Date.now() } });
+      presentationKey = { ...key };
+      // A purge that was only a passing re-read leaves "denied" behind; a read that works again proves the person still has access.
+      publish({ [kind]: { status: 'ready', data, requestSeq, fetchedAt: Date.now() }, ...(state.phase === 'denied' ? { phase: 'idle' as const, message: null } : {}) });
     } catch (error) {
       if (!same(key) || generation !== epoch) return;
       if (deniedRead(error)) { deps.coordinator.invalidate(); purge(); }
@@ -75,7 +79,7 @@ export function createCustomerAftercareController(deps: CustomerAftercareDepende
     if (operation === 'warranty-create') {
       if (state.coverages.status !== 'ready') return null;
       const coverage = state.coverages.data.find(c => c.id === id);
-      if (!coverage || coverage.status === 'voided' || state.claims.data.some(c => c.warrantyCoverageId === id && !['resolved', 'rejected'].includes(c.status))) return null;
+      if (!coverage || String(coverage.status).toLowerCase() === 'voided' || state.claims.data.some(c => c.warrantyCoverageId === id && !['resolved', 'rejected', 'closed'].includes(String(c.status).toLowerCase()))) return null;
       return JSON.stringify(coverage);
     }
     const claim = state.claims.data.find(c => c.id === id);
@@ -116,6 +120,7 @@ export function createCustomerAftercareController(deps: CustomerAftercareDepende
     prepareReview: (dto: ReviewDto) => { const key = deps.getKey(); return key ? prepare('review-create', key.serviceOrderId, dto) : Promise.resolve(); },
     prepareClaim: (dto: ClaimDto) => prepare('warranty-create', dto.warrantyCoverageId, dto),
     prepareResponse: (id: string, dto: ResponseDto) => prepare(dto.decision === 'agree' ? 'warranty-respond-agree' : 'warranty-respond-dispute', id, dto),
+    registerUploadedPhotos(urls: readonly string[]) { uploaded = urls.filter(url => /^https:\/\//i.test(url)).slice(0, 10); },
     cancelConfirmation() { epoch++; publish({ confirmation: null, ...(busy ? {} : { phase: 'idle' as const }) }); },
     invalidatePresentation: purge,
     revalidateConfirmation() {
@@ -124,8 +129,8 @@ export function createCustomerAftercareController(deps: CustomerAftercareDepende
         || (presentationKey && !sameOrderSession(key, presentationKey))) { purge(); return; }
       if (state.confirmation && !matches(state.confirmation)) { epoch++; publish({ confirmation: null, ...(busy ? {} : { phase: 'idle' as const }) }); }
     },
-    async loadReview() { const key = deps.getKey(); if (key && same(key) && !busy) { busy = true; try { await refresh(key, 'review'); } finally { busy = false; } } },
-    async loadWarranty() { const key = deps.getKey(); if (key && same(key) && !busy) { busy = true; try { await refresh(key, 'warranty'); } finally { busy = false; } } },
+    async loadReview() { const key = deps.getKey(); if (key && same(key) && !busy) { busy = true; try { await refresh(key, 'review'); } finally { busy = false; publish({}); } } },
+    async loadWarranty() { const key = deps.getKey(); if (key && same(key) && !busy) { busy = true; try { await refresh(key, 'warranty'); } finally { busy = false; publish({}); } } },
     async restoredMarkers() { const key = deps.getKey(); if (!key || !same(key)) return []; await deps.journal.restore(); return same(key) ? markers(key) : []; },
     async submitConfirmation() {
       const t = state.confirmation; if (!t || busy || state.phase !== 'confirming' || !matches(t)) return;

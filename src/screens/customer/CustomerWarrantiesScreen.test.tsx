@@ -157,7 +157,7 @@ describe('CustomerWarrantiesScreen', () => {
     );
     expect(createButtons.length).toBeGreaterThan(0);
     act(() => createButtons[0].props.onPress());
-    expect(mockNavigate).toHaveBeenCalledWith('CustomerOrderDetail', { serviceOrderId: ORDER_ID, screen: 'CustomerWarranty' });
+    expect(mockNavigate).toHaveBeenCalledWith('OrderFlowDevPreview', { serviceOrderId: ORDER_ID, screen: 'CustomerWarranty' });
     expect(mockCreateWarrantyClaim).not.toHaveBeenCalled();
   });
 

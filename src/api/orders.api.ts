@@ -363,6 +363,8 @@ export interface WarrantyClaimView {
   submittedAt: string;
   resolvedAt: string | null;
   technician: { id: string; fullName: string } | null;
+  /** When the technician comes to inspect; null until the claim is accepted. */
+  inspectionScheduledAt?: string | null;
 }
 
 export interface CreateWarrantyClaimPayload {

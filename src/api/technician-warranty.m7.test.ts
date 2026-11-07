@@ -22,7 +22,7 @@ it('malformed metadata and unsupported/staff query fields never become empty aut
 });
 it.each(['accept', 'decline', 'check-in', 'propose', 'complete'] as const)('dispatches only the real %s route with whitelisted DTO', async operation => {
   client.post.mockResolvedValue({ data: { data: assignedClaim() } });
-  const dto = operation === 'accept' || operation === 'check-in' ? {} : operation === 'decline' ? { reasonCode: 'busy' } : operation === 'propose' ? { result: 'covered_workmanship', findings: 'Kiểm tra lỗi thực tế' } : { notes: 'Đã xử lý lỗi thực tế' };
+  const dto = operation === 'accept' ? { scheduledAt: '2099-01-01T02:00:00.000Z' } : operation === 'check-in' ? {} : operation === 'decline' ? { reasonCode: 'busy' } : operation === 'propose' ? { result: 'covered_workmanship', findings: 'Kiểm tra lỗi thực tế' } : { notes: 'Đã xử lý lỗi thực tế' };
   await technicianWarrantyApi.command(ids.claim, operation, dto); expect(client.post).toHaveBeenCalledWith(`/warranty-claims/${ids.claim}/${operation}`, dto);
   await expect(technicianWarrantyApi.command(ids.claim, operation, { ...dto, approvedByManager: true })).rejects.toThrow(); expect(client.post).toHaveBeenCalledTimes(1);
 });

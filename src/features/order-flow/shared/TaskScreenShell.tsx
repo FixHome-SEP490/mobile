@@ -47,7 +47,7 @@ export function StageHeader({ stage }: { stage: 1 | 2 | 3 | 4 | null }) {
   </View>;
 }
 
-export function TaskScreenShell({ title, stage, children, primary, secondary, summary, onBack, contentStyle }: {
+export function TaskScreenShell({ title, stage, children, primary, secondary, summary, onBack, contentStyle, hideVisitPanel }: {
   title: string;
   stage?: 1 | 2 | 3 | 4 | null;
   children: React.ReactNode;
@@ -57,6 +57,8 @@ export function TaskScreenShell({ title, stage, children, primary, secondary, su
   summary?: React.ReactNode;
   onBack?: () => void;
   contentStyle?: StyleProp<ViewStyle>;
+  /** For screens that are not about the devices of the visit (a warranty claim). */
+  hideVisitPanel?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const keyboardInset = useKeyboardInset();
@@ -74,7 +76,7 @@ export function TaskScreenShell({ title, stage, children, primary, secondary, su
     <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, contentStyle]} keyboardShouldPersistTaps="handled">
       {stage !== undefined && !closeSheet && slot && <slot.Summary />}
       {children}
-      <VisitCustomerPanel />
+      {hideVisitPanel ? null : <VisitCustomerPanel />}
     </ScrollView>
     {keyboardInset > 0 && <View testID="order-flow-keyboard-spacer" style={{ height: keyboardInset }} />}
     {(primary || secondary) && <FixedActionFooter primary={primary} secondary={secondary} summary={summary} bottomInset={insets.bottom} keyboardInset={keyboardInset} />}

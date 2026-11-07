@@ -168,3 +168,10 @@ export function orderToWarrantyGroupSeed(order: ServiceOrderItem): Omit<Customer
     completedAt: undefined,
   };
 }
+
+/** The warranty page of ONE order: the order-flow screen while it runs (dev), the warranty list focused on that order otherwise. */
+export function orderWarrantyRoute(orderId: string) {
+  return __DEV__
+    ? ({ name: 'OrderFlowDevPreview', params: { serviceOrderId: orderId, screen: 'CustomerWarranty' } } as const)
+    : ({ name: 'CustomerWarranties', params: { orderId } } as const);
+}

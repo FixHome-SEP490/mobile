@@ -1,10 +1,9 @@
 import React from 'react';
 import { Text } from 'react-native';
 import { useRoute } from '@react-navigation/native';
-import { OrderSessionProvider } from '../runtime/OrderSessionProvider';
+import { OrderDeviceTabs } from './OrderDetailEntry';
 import { useAuthStore } from '../../../store/auth.store';
 import { orderFlowPreviewRoute } from './order-flow-preview-policy';
-import OrderFlowNavigator from './OrderFlowNavigator';
 import type { RootStackParamList } from '../../../types';
 import type { RouteProp } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,5 +18,6 @@ export default function OrderFlowEntry() {
       <Text style={{ marginTop: 8, color: '#475569', lineHeight: 22 }}>Phiên đăng nhập hoặc quyền xem đơn chưa hợp lệ.</Text>
     </SafeAreaView>;
   }
-  return <OrderSessionProvider serviceOrderId={route.params.serviceOrderId}><OrderFlowNavigator role={user.role} /></OrderSessionProvider>;
+  // Same device tabs as the production order screen, so switching device works in the preview too.
+  return <OrderDeviceTabs key={route.params.serviceOrderId} role={user.role} firstId={route.params.serviceOrderId} screen={route.params.screen} />;
 }

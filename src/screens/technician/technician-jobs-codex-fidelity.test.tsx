@@ -78,6 +78,7 @@ jest.mock('lucide-react-native', () => {
 });
 
 jest.mock('@react-navigation/native', () => ({
+  useRoute: () => ({ params: undefined }),
   useNavigation: () => ({ navigate: jest.fn(), isFocused: () => true, addListener: () => () => undefined }),
   useFocusEffect: () => undefined,
 }));

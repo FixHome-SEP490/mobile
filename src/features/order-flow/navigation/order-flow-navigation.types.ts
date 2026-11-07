@@ -13,8 +13,8 @@ export type CustomerOrderFlowParamList = {
   /** Manual handover review. Lets the customer inspect handover before paying; never an automatic OrderTask taskId. */
   HandoverReview: undefined;
   CustomerReview: undefined;
-  CustomerWarranty: undefined;
-  WarrantyClaimCreate: { coverageId: string };
+  CustomerWarranty: { returnTab?: string } | undefined;
+  WarrantyClaimCreate: { coverageId: string; returnTab?: string };
   CustomerWarrantyClaim: { claimId: string };
   SupportCases: undefined;
   SupportCreate: undefined;

@@ -19,7 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ordersApi, type RepairHistoryItem, type WarrantyClaimView } from '../../api/orders.api';
+import { ordersApi, type RepairHistoryItem, type WarrantyClaimView, type WarrantyCoverageItem } from '../../api/orders.api';
 import { useAppTheme } from '../../constants/theme';
 import type { RootStackParamList } from '../../types';
 import { extractApiErrorMessage } from '../../utils/input-validation';
@@ -32,7 +32,6 @@ import {
   validateWarrantyText,
   warrantyClaimDisplayMeta,
   warrantyCoverageLabel,
-  warrantyCoverageTerm,
   warrantyCoverageUiStatus,
   warrantyCustomerPromptCopy,
   type CustomerWarrantyGroup,
@@ -50,6 +49,22 @@ const toneIcon: Record<WarrantyClaimTone, keyof typeof Ionicons.glyphMap> = {
   success: 'checkmark-circle-outline',
   neutral: 'remove-circle-outline',
 };
+
+/** The customer needs two things: labor is covered until, parts are covered until. The item names are on the order. */
+function coverageKinds(coverages: WarrantyCoverageItem[]) {
+  const kinds = [
+    { key: 'labor', label: 'Bảo hành tiền công', match: (c: WarrantyCoverageItem) => c.itemType === 'labor' },
+    { key: 'parts', label: 'Bảo hành linh kiện', match: (c: WarrantyCoverageItem) => c.itemType === 'parts_equipment' },
+    { key: 'other', label: 'Bảo hành dịch vụ', match: (c: WarrantyCoverageItem) => c.itemType !== 'labor' && c.itemType !== 'parts_equipment' },
+  ];
+  return kinds.flatMap((kind) => {
+    const items = coverages.filter(kind.match);
+    if (!items.length) return [];
+    const live = items.filter((item) => warrantyCoverageUiStatus(item) === 'ACTIVE');
+    const longest = [...(live.length ? live : items)].sort((x, y) => (Date.parse(y.expiresAt) || 0) - (Date.parse(x.expiresAt) || 0))[0];
+    return [{ key: kind.key, label: kind.label, active: live.length > 0, until: longest.expiresAt }];
+  });
+}
 
 export default function CustomerWarrantiesScreen() {
   const { colors, isDark } = useAppTheme();
@@ -156,10 +171,13 @@ export default function CustomerWarrantiesScreen() {
     }
   }, [loadPage]);
 
+  // The full-page loading is for the first visit only: coming back from an order refreshes quietly, in place.
+  const loadedOnce = useRef(false);
   useFocusEffect(useCallback(() => {
-    void loadFirst();
+    if (loadedOnce.current) void loadPage(1, true);
+    else { loadedOnce.current = true; void loadFirst(); }
     return () => { generationRef.current += 1; };
-  }, [loadFirst]));
+  }, [loadFirst, loadPage]));
 
   const onLoadMore = async () => {
     if (loadingMore || sourceLoaded >= sourceTotal) return;
@@ -182,7 +200,9 @@ export default function CustomerWarrantiesScreen() {
 
   /** Claims are created only by the order-flow warranty screens (idempotent controller), never by a direct POST from this list. */
   const openCreateClaim = (group: CustomerWarrantyGroup) => {
-    navigation.navigate('CustomerOrderDetail', { serviceOrderId: group.orderId, screen: 'CustomerWarranty' });
+    // The warranty screens live in the order flow, which only runs in __DEV__ until the cutover; the order page is the fallback.
+    if (__DEV__) navigation.navigate('OrderFlowDevPreview', { serviceOrderId: group.orderId, screen: 'CustomerWarranty' });
+    else navigation.navigate('CustomerOrderDetail', { serviceOrderId: group.orderId });
   };
 
   const applyClaimUpdate = (updated: WarrantyClaimView) => {
@@ -282,8 +302,8 @@ export default function CustomerWarrantiesScreen() {
               <Ionicons name={toneIcon[meta.tone]} size={16} color={toneColor} />
               <Text style={[styles.statusText, { color: toneColor }]}>{meta.label}</Text>
             </View>
+            <Text style={styles.dateText}>Gửi ngày {formatWarrantyDate(claim.submittedAt)}</Text>
           </View>
-          <Text style={styles.dateText}>{formatWarrantyDate(claim.submittedAt)}</Text>
         </View>
         <Text style={styles.bodyText}>{claim.description}</Text>
         {claim.submittedAfterExpiry && (
@@ -356,36 +376,16 @@ export default function CustomerWarrantiesScreen() {
         </View>
 
         <View style={styles.coverageBox}>
-          <Text style={styles.subheading}>Hạng mục bảo hành</Text>
-          {group.coverages.map((coverage) => {
-            const uiStatus = warrantyCoverageUiStatus(coverage);
-            const busy = busyIds.includes(coverage.id);
-            return (
-              <View key={coverage.id} style={styles.coverageRow}>
-                <Ionicons
-                  name={uiStatus === 'ACTIVE' ? 'checkmark-circle-outline' : 'ellipse-outline'}
-                  size={18}
-                  color={uiStatus === 'ACTIVE' ? colors.success : colors.textSecondary}
-                />
-                <View style={styles.coverageCopy}>
-                  <Text style={styles.coverageTitle}>{warrantyCoverageLabel(coverage)}</Text>
-                  <Text style={styles.helperText}>
-                    {warrantyCoverageTerm(coverage)}
-                    {busy ? ' · Đang có yêu cầu chưa xử lý' : ''}
-                  </Text>
-                </View>
-                <Text style={[styles.coverageState, { color: uiStatus === 'ACTIVE' ? colors.success : colors.textSecondary }]}>
-                  {uiStatus === 'ACTIVE'
-                    ? 'Còn hạn'
-                    : uiStatus === 'VOIDED'
-                      ? 'Đã hủy'
-                      : uiStatus === 'EXPIRED'
-                        ? 'Hết hạn'
-                        : 'Chưa xác định'}
-                </Text>
-              </View>
-            );
-          })}
+          {coverageKinds(group.coverages).map((kind) => (
+            <View key={kind.key} style={styles.coverageRow}>
+              <Ionicons name={kind.active ? 'checkmark-circle-outline' : 'ellipse-outline'} size={18} color={kind.active ? colors.success : colors.textSecondary} />
+              <Text style={[styles.coverageTitle, styles.coverageCopy]}>{kind.label}</Text>
+              <Text style={[styles.coverageState, { color: kind.active ? colors.success : colors.textSecondary }]}>
+                {kind.active ? `đến ${formatWarrantyDate(kind.until)}` : 'Hết hạn'}
+              </Text>
+            </View>
+          ))}
+          {group.coverages.some((coverage) => busyIds.includes(coverage.id)) ? <Text style={styles.helperText}>Đang có yêu cầu chưa xử lý xong</Text> : null}
         </View>
 
         {!!group.claims.length && (

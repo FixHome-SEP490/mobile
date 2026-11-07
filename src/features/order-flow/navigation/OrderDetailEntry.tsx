@@ -12,7 +12,7 @@ import { VisitDevicesContext, visitDeviceTabName } from './visit-device-tabs';
 import { createPlainTabs } from './PlainTabs';
 
 const DeviceTabs = createPlainTabs();
-type DeviceTabParams = Record<string, { serviceOrderId: string } | undefined>;
+type DeviceTabParams = Record<string, { serviceOrderId: string; screen?: string; initial?: boolean } | undefined>;
 
 // Module-level on purpose (a render callback would be a new component on every render and remount the order).
 const createDeviceScreen = (role: 'customer' | 'technician') => function DeviceScreen() {
@@ -25,7 +25,7 @@ const DEVICE_SCREEN = { customer: createDeviceScreen('customer'), technician: cr
  * The order screen. Every device of a visit is its own order and its own tab: a switch only shows another tab,
  * so the order left behind keeps its session, photos and drafts, and nothing reloads. A single order is one tab and looks as before.
  */
-function OrderDeviceTabs({ role, firstId }: { role: 'customer' | 'technician'; firstId: string }) {
+export function OrderDeviceTabs({ role, firstId, screen, screenParams }: { role: 'customer' | 'technician'; firstId: string; screen?: string; screenParams?: object }) {
   const [others, setOthers] = useState<string[]>([]);
   // Only ever adds: a panel that has not read its visit yet reports no devices, which must not take a tab (and the focus) away.
   const register = useCallback((ids: string[]) => {
@@ -42,7 +42,7 @@ function OrderDeviceTabs({ role, firstId }: { role: 'customer' | 'technician'; f
         screenOptions={{ sceneStyle: { backgroundColor: lightTheme.background } }}
       >
         {[firstId, ...others].map((id) => (
-          <DeviceTabs.Screen key={id} name={visitDeviceTabName(id)} component={DEVICE_SCREEN[role]} initialParams={{ serviceOrderId: id }} />
+          <DeviceTabs.Screen key={id} name={visitDeviceTabName(id)} component={DEVICE_SCREEN[role]} initialParams={id === firstId && screen ? { serviceOrderId: id, screen, initial: false, ...(screenParams ? { params: screenParams } : {}) } : { serviceOrderId: id }} />
         ))}
       </DeviceTabs.Navigator>
     </VisitDevicesContext.Provider>
@@ -72,7 +72,8 @@ function createOrderDetailEntry<N extends DetailRouteName>(routeRole: 'customer'
         </TouchableOpacity>
       </SafeAreaView>;
     }
-    return <OrderDeviceTabs key={session.serviceOrderId} role={session.role} firstId={session.serviceOrderId} />;
+    const { screen, params: screenParams } = (route.params ?? {}) as { screen?: string; params?: object };
+    return <OrderDeviceTabs key={session.serviceOrderId} role={session.role} firstId={session.serviceOrderId} screen={screen} screenParams={screenParams} />;
   };
 }
 

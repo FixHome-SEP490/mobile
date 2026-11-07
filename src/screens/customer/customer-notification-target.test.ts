@@ -28,6 +28,9 @@ function supportCase(
 }
 
 describe('resolveCustomerNotificationTarget', () => {
+  it('opens the warranty page for a warranty notice on a ServiceOrder', async () => {
+    await expect(resolveCustomerNotificationTarget({ referenceId: ORDER_ID, referenceType: 'SERVICE_ORDER', type: 'WARRANTY_CUSTOMER_RESPONSE_NEEDED' }, { getSupportCase: jest.fn() })).resolves.toEqual({ name: 'CustomerWarranties', params: { orderId: ORDER_ID } });
+  });
   it('marks a TECHNICIAN_RELEASED booking notification so the request page points to a new technician', async () => {
     const getSupportCase = jest.fn();
     await expect(resolveCustomerNotificationTarget(

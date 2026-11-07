@@ -38,3 +38,19 @@ export function backFromFlow(navigation: { getState?: () => { index: number }; g
   if (useAuthStore.getState().user?.role === 'technician' && navigation.getState?.().index === 0) goJobsKeepingFlow();
   else navigation.goBack();
 }
+
+/** Back from the parts screen: when the order was opened over a warranty claim, closing it shows that claim, not the order screen. */
+export function backFromParts(navigation: Parameters<typeof backFromFlow>[0], fromWarranty = false): void {
+  // Walk up to the stack that holds the order screen; its own back pops exactly that screen.
+  let nav: any = navigation;
+  while (nav) {
+    const state = nav.getState?.();
+    if (state?.routeNames?.includes('TechnicianOrderDetail')) {
+      const top = state.routes.length - 1;
+      if (top > 0 && state.routes[top].name === 'TechnicianOrderDetail' && (fromWarranty || state.routes[top - 1].name === 'TechnicianWarrantyTask')) { nav.goBack(); return; }
+      break;
+    }
+    nav = nav.getParent?.();
+  }
+  backFromFlow(navigation);
+}

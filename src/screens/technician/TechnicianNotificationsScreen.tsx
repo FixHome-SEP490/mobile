@@ -214,6 +214,11 @@ export default function TechnicianNotificationsScreen({ route }: { route?: { nam
           syncUnreadCount();
         });
     }
+    // A warranty notice opens the warranty part of the Jobs tab, where the claims are managed, not the original order.
+    if (String(item.type ?? '').startsWith('WARRANTY_')) {
+      navigation.navigate('TechnicianMain', { screen: 'Jobs', params: { mode: 'warranty' } });
+      return;
+    }
     void resolveTechnicianNotificationOrderId(item, partRequestsApi.getById).then(
       (serviceOrderId) => { if (serviceOrderId) openOrResume([serviceOrderId], () => navigation.navigate('TechnicianOrderDetail', { serviceOrderId })); },
       () => setLoadError('Không mở được máy liên quan. Vui lòng tải lại thông báo và thử lại.'),

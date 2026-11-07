@@ -176,10 +176,18 @@ export interface WarrantyVisit {
   id: string; status: 'scheduled' | 'checked_in' | 'inspected' | 'completed' | 'cancelled'; scheduledAt: string | null; checkedInAt: string | null;
   proposedResult: 'covered_workmanship' | 'covered_part' | 'not_covered' | null; notCoveredReasonCode: string | null; findings: string | null;
   evidenceRefs: string[] | null; reServiceNotes: string | null; reServiceEvidenceRefs: string[] | null; completedAt: string | null;
+  /** Part lines of the original job the technician named as faulty (part fault only). */
+  faultyInvoiceItemIds?: string[] | null;
+  faultyQuantities?: Record<string, number> | null;
 }
 export interface TechnicianWarrantyClaim extends WarrantyClaimView {
-  order: { id: string; code: string; serviceName: string; addressSummary: string; customerName: string; customerPhone: string };
+  order: { id: string; code: string; serviceName: string; addressSummary: string; customerName: string; customerPhone: string; bookingId?: string; partLines?: { id: string; name: string; quantity: number; partSource: string | null }[] };
   coverage: { id: string; itemDescription: string; expiresAt: string } | null; visit: WarrantyVisit | null;
+  /** Backend 04/11: how a closed claim ended, and what went back to the customer. Absent on an older Backend. */
+  outcomeCode?: 'fixed' | 'unfixed' | 'rejected' | null; refundAmount?: number | null;
+  declineReview?: 'pending' | 'valid' | 'invalid' | null; noShowFlaggedAt?: string | null;
+  /** The free warranty part, and the deadline to bring the faulty one back to the warehouse. */
+  partRequest?: { id: string; status: string; faultyReturnDueAt: string | null; faultyReturnedAt: string | null; faultyReturnChargedAt: string | null; faultyInspectionResult: 'manufacturer' | 'installation' | 'undetermined' | null; items?: { id: string; name: string; quantity: number; usageStatus: 'pending' | 'used' | 'returned' }[] } | null;
 }
 export interface WarrantyMinePage { data: TechnicianWarrantyClaim[]; meta: { page: number; pageSize: number; total: number } }
 export interface WarrantyMineQuery { status?: string; page?: number; pageSize?: number }
@@ -200,8 +208,24 @@ export function normalizeTechnicianWarrantyClaim(value: unknown): TechnicianWarr
       evidenceRefs: refs(v.evidenceRefs), reServiceNotes: v.reServiceNotes as string | null, reServiceEvidenceRefs: refs(v.reServiceEvidenceRefs), completedAt: v.completedAt as string | null };
   }
   return { ...base, order: { id: base.serviceOrderId, code: order.code as string, serviceName: order.serviceName as string, addressSummary: order.addressSummary as string,
-    customerName: order.customerName as string, customerPhone: order.customerPhone as string },
-    coverage: c ? { id: c.id as string, itemDescription: c.itemDescription as string, expiresAt: c.expiresAt as string } : null, visit };
+    customerName: order.customerName as string, customerPhone: order.customerPhone as string,
+      ...(uuid4(order.bookingId) ? { bookingId: order.bookingId as string } : {}),
+      ...(Array.isArray(order.partLines) ? { partLines: order.partLines.filter((l: any) => l && uuid4(l.id) && typeof l.name === 'string').map((l: any) => ({ id: l.id as string, name: l.name as string, quantity: Number(l.quantity) || 1, partSource: typeof l.partSource === 'string' ? l.partSource : null })) } : {}) },
+    coverage: c ? { id: c.id as string, itemDescription: c.itemDescription as string, expiresAt: c.expiresAt as string } : null, visit,
+    outcomeCode: ['fixed', 'unfixed', 'rejected'].includes(String(r.outcomeCode)) ? r.outcomeCode as TechnicianWarrantyClaim['outcomeCode'] : null,
+    refundAmount: typeof r.refundAmount === 'number' && Number.isFinite(r.refundAmount) && r.refundAmount >= 0 ? r.refundAmount : null,
+    declineReview: ['pending', 'valid', 'invalid'].includes(String(r.declineReview)) ? r.declineReview as TechnicianWarrantyClaim['declineReview'] : null,
+    noShowFlaggedAt: typeof r.noShowFlaggedAt === 'string' && validTimestamp(r.noShowFlaggedAt) ? r.noShowFlaggedAt : null,
+    partRequest: normalizePartRequest(r.partRequest) };
+}
+const iso = (value: unknown) => (typeof value === 'string' && validTimestamp(value) ? value : null);
+function normalizePartRequest(value: unknown): TechnicianWarrantyClaim['partRequest'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const r = value as Record<string, unknown>;
+  if (!uuid4(r.id) || typeof r.status !== 'string') return null;
+  return { id: r.id, status: r.status, faultyReturnDueAt: iso(r.faultyReturnDueAt), faultyReturnedAt: iso(r.faultyReturnedAt), faultyReturnChargedAt: iso(r.faultyReturnChargedAt),
+    items: (Array.isArray(r.items) ? r.items : []).filter((i: any) => i && uuid4(i.id) && typeof i.name === 'string').map((i: any) => ({ id: i.id as string, name: i.name as string, quantity: Number(i.quantity) || 1, usageStatus: (['used', 'returned'].includes(String(i.usageStatus)) ? i.usageStatus : 'pending') as 'pending' | 'used' | 'returned' })),
+    faultyInspectionResult: ['manufacturer', 'installation', 'undetermined'].includes(String(r.faultyInspectionResult)) ? r.faultyInspectionResult as 'manufacturer' | 'installation' | 'undetermined' : null };
 }
 function query(input: WarrantyMineQuery) {
   const r = record(input, ['status', 'page', 'pageSize']), page = r.page ?? 1, pageSize = r.pageSize ?? 100;
@@ -216,6 +240,16 @@ function body(value: unknown) {
 }
 export const technicianWarrantyApi = {
   ...assignedOverviewApi,
+  /** The faulty part was brought back to the warehouse. Idempotent on the server, so no command journal is needed. */
+  async returnFaultyPart(partRequestId: string): Promise<void> {
+    if (!uuid4(partRequestId)) throw Error('Yêu cầu linh kiện chưa hợp lệ.');
+    await apiClient.post(`/part-requests/${partRequestId}/faulty-return`, {});
+  },
+  /** Moves the inspection time before check-in. Setting the same time twice changes nothing, so no command journal is needed. */
+  async rescheduleVisit(claimId: string, scheduledAt: string): Promise<void> {
+    if (!uuid4(claimId) || !validTimestamp(scheduledAt)) throw Error('Lịch kiểm tra chưa hợp lệ.');
+    await apiClient.post(`/warranty-claims/${claimId}/reschedule`, { scheduledAt });
+  },
   async listMine(input: WarrantyMineQuery = {}): Promise<WarrantyMinePage> {
     const params = query(input), b = body((await apiClient.get('/warranty-claims/mine', { params })).data), meta = record(b.meta);
     if (!Array.isArray(b.data) || meta.page !== params.page || meta.pageSize !== params.pageSize || typeof meta.total !== 'number' || !Number.isSafeInteger(meta.total) || meta.total < 0

@@ -6,7 +6,7 @@ export type RootStackParamList = {
   CustomerGuestHome: undefined;
   PublicOrderTracking: undefined;
   CustomerMain: undefined;
-  TechnicianMain: undefined;
+  TechnicianMain: { screen?: 'Home' | 'Invitations' | 'Jobs' | 'Notifications' | 'Profile'; params?: { mode?: 'warranty' } } | undefined;
   CustomerServices: { query?: string; categoryCode?: string; serviceCode?: string; serviceAlias?: string } | undefined;
   CustomerServiceDetail: { serviceId: string };
   /**
@@ -83,13 +83,16 @@ export type RootStackParamList = {
   CustomerKyc: undefined;
   /** Customer-only bank account, withdrawal confirmation, and paged history. */
   CustomerWithdraw: undefined;
-  TechnicianOrderDetail: { serviceOrderId: string };
+  /** `screen` opens a Technician OrderFlow child directly (e.g. the parts screen from a warranty). */
+  TechnicianOrderDetail: { serviceOrderId: string; screen?: 'PartsLifecycle'; params?: { from?: 'warranty' } };
   /** Internal M2 reader preview, registered only in __DEV__; role comes from authenticated state. */
-  OrderFlowDevPreview: { serviceOrderId: string };
+  OrderFlowDevPreview: { serviceOrderId: string; screen?: 'CustomerWarranty' };
   /** Internal M7 entry points, registered only in __DEV__; IDs still pass through production ownership checks. */
   M7AftercareDevPreview: undefined;
   BookingAftercareDevPreview: { bookingId: string };
   TechnicianWarrantyDevPreview: { claimId?: string };
+  TechnicianWarrantyInbox: undefined;
+  TechnicianWarrantyTask: { claimId: string };
   TechnicianKyc: undefined;
   TechnicianOnboarding: undefined;
   TechnicianWallet: undefined;
@@ -124,7 +127,7 @@ export type CustomerTabParamList = {
 export type TechnicianTabParamList = {
   Home: undefined;
   Invitations: undefined;
-  Jobs: undefined;
+  Jobs: { mode?: 'warranty' } | undefined;
   Notifications: undefined;
   Profile: undefined;
 };

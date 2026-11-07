@@ -309,3 +309,30 @@ describe('Technician assigned warranty GET-only adapter', () => {
     await expect(technicianWarrantyApi.listAssigned()).rejects.toBeDefined();
   });
 });
+
+describe('technicianWarrantyApi.returnFaultyPart', () => {
+  beforeEach(() => { api.post.mockReset(); });
+
+  it('reports the faulty part back to the warehouse on the part request, not on the claim', async () => {
+    api.post.mockResolvedValue({ data: { data: {} } });
+
+    await technicianWarrantyApi.returnFaultyPart(CLAIM_ID);
+
+    expect(api.post).toHaveBeenCalledWith(`/part-requests/${CLAIM_ID}/faulty-return`, {});
+  });
+
+  it('refuses an id that is not a UUID before sending anything', async () => {
+    await expect(technicianWarrantyApi.returnFaultyPart('nope')).rejects.toThrow();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+});
+
+describe('rescheduleVisit', () => {
+  it('posts the new time to the reschedule route and refuses a bad time or id', async () => {
+    api.post.mockResolvedValueOnce({ data: {} });
+    await technicianWarrantyApi.rescheduleVisit(CLAIM_ID, '2099-01-01T02:00:00.000Z');
+    expect(api.post).toHaveBeenCalledWith(`/warranty-claims/${CLAIM_ID}/reschedule`, { scheduledAt: '2099-01-01T02:00:00.000Z' });
+    await expect(technicianWarrantyApi.rescheduleVisit(CLAIM_ID, 'tomorrow')).rejects.toThrow();
+    await expect(technicianWarrantyApi.rescheduleVisit('x', '2099-01-01T02:00:00.000Z')).rejects.toThrow();
+  });
+});

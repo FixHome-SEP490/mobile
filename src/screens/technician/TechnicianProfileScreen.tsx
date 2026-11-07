@@ -510,6 +510,15 @@ export default function TechnicianProfileScreen() {
             desc="Số dư, nạp tiền, rút tiền"
             onPress={() => navigation.navigate('TechnicianWallet')}
           />
+          <View style={styles.divider} />
+          <MenuRow
+            styles={styles}
+            colors={colors}
+            Icon={Wrench}
+            title="Công việc bảo hành"
+            desc="Yêu cầu bảo hành được giao cho bạn"
+            onPress={() => navigation.navigate('TechnicianMain', { screen: 'Jobs', params: { mode: 'warranty' } })}
+          />
         </View>
 
         <View style={styles.group}>

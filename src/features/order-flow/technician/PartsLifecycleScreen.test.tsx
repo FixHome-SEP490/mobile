@@ -60,6 +60,7 @@ jest.mock('./useTechnicianParts', () => ({
 }));
 
 jest.mock('@react-navigation/native', () => ({
+  useRoute: () => ({ params: undefined }),
   useNavigation: () => ({
     navigate: (...args: unknown[]) => mockNavigate(...args),
     goBack: (...args: unknown[]) => mockGoBack(...args),
