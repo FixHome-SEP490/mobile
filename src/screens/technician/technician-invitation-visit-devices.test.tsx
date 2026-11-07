@@ -20,6 +20,7 @@ jest.mock('./invitation-inbox', () => ({
 }));
 jest.mock('../../hooks/useReduceMotion', () => ({ useReduceMotion: () => false }));
 jest.mock('../../hooks/useTechnicianAvailability', () => ({ useTechnicianAvailability: () => mockAvailability }));
+jest.mock('./warranty/WarrantyInvitations', () => ({ WarrantyInvitations: () => null }));
 jest.mock('../../store/badge.store', () => ({ useBadgeStore: (select: (state: unknown) => unknown) => select({ setPendingInvitations: jest.fn() }) }));
 jest.mock('../../store/auth.store', () => ({
   useAuthStore: { getState: () => ({ isAuthenticated: true, user: { id: 'tech-1', role: 'technician' } }), subscribe: () => () => undefined },

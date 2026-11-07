@@ -38,6 +38,9 @@ it('technician commands match actual phases DTO; check-in requires neither GPS n
     expect(() => warrantyCommandPayload('propose', { result: 'covered_part', findings: 'Linh kiện hỏng do lỗi', evidenceRefs: ['existing-ref'], faultyInvoiceItemIds: bad }, ['existing-ref'])).toThrow('Chọn ít nhất một linh kiện bị hỏng.');
   }
   expect(warrantyCommandPayload('propose', { result: 'covered_workmanship', findings: 'Mối nối bị lỏng do lắp' }, [])).not.toHaveProperty('faultyInvoiceItemIds');
+  const L = '11111111-1111-4111-8111-111111111111', counted = (n: unknown) => ({ result: 'covered_part', findings: 'Linh kiện hỏng do lỗi', evidenceRefs: ['existing-ref'], faultyInvoiceItemIds: [L], faultyQuantities: { [L]: n } });
+  expect(warrantyCommandPayload('propose', counted(1), ['existing-ref'])).toMatchObject({ faultyQuantities: { [L]: 1 } });
+  for (const bad of [0, 1.5, 'x']) expect(() => warrantyCommandPayload('propose', counted(bad), ['existing-ref'])).toThrow();
   expect(warrantyCommandPayload('propose', { result: 'not_covered', findings: 'Kiểm tra lỗi thực tế', notCoveredReasonCode: 'force_majeure', evidenceRefs: ['existing-ref'] }, ['existing-ref'])).toMatchObject({ notCoveredReasonCode: 'force_majeure' });
   expect(() => warrantyCommandPayload('decline', { reasonCode: 'other' }, [])).toThrow();
 });

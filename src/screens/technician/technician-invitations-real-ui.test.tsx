@@ -60,6 +60,7 @@ jest.mock('../../hooks/useTechnicianAvailability', () => ({
   useTechnicianAvailability: () => mockAvailability,
 }));
 
+jest.mock('./warranty/WarrantyInvitations', () => ({ WarrantyInvitations: () => null }));
 jest.mock('../../store/badge.store', () => ({
   useBadgeStore: (selector: (state: unknown) => unknown) =>
     selector({ setPendingInvitations: mockSetPendingInvitations }),

@@ -92,3 +92,16 @@ it('lets a photo the person just uploaded travel as claim evidence, but nothing 
   await device.c.prepareClaim({ warrantyCoverageId: ids.coverage, description: 'Lỗi vẫn còn xuất hiện', evidenceRefs: ['file:///private/a.jpg'] });
   expect(device.c.getState().phase).toBe('denied');
 });
+
+it('drops the "no longer allowed" notice once a later read works again, so a passing re-read does not leave it on screen', async () => {
+  const f = setup(); f.server.order.status = 'COMPLETED';
+  await f.c.loadWarranty();
+  f.c.invalidatePresentation();
+  expect(f.c.getState().message).toContain('không còn quyền');
+
+  await f.c.loadWarranty();
+
+  expect(f.c.getState().phase).not.toBe('denied');
+  expect(f.c.getState().message).toBeNull();
+  expect(f.c.getState().claims.status).toBe('ready');
+});

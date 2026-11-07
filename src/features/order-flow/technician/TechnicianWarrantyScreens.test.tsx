@@ -4,14 +4,16 @@ import { Text, TextInput, TouchableOpacity } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { TechnicianWarrantyTaskScreen } from './TechnicianWarrantyScreens';
 import { technicianWarrantyApi } from '../../../api/technician-warranty.api';
+import { partRequestsApi } from '../../../api/part-requests.api';
 
 jest.mock('../../../api/technician-warranty.api', () => ({ technicianWarrantyApi: { returnFaultyPart: jest.fn().mockResolvedValue(undefined) } }));
+jest.mock('../../../api/part-requests.api', () => ({ partRequestsApi: { updateItemUsage: jest.fn().mockResolvedValue({}) } }));
 
 const mockRoute: any = { params: { claimId: 'assigned-claim-id' } };
 const mockController = { availableCommands: jest.fn((): string[] => []), authorizedEvidenceRefs: jest.fn(() => []), refreshClaim: jest.fn(), cancelConfirmation: jest.fn(), submitConfirmation: jest.fn(), prepare: jest.fn() };
 const mockState: any = { phase: 'idle', access: 'assigned', task: 'TW06', selectedClaimId: 'assigned-claim-id', confirmation: null, message: null, inbox: { status: 'unloaded' }, claim: { status: 'ready', data: { id: 'assigned-claim-id', status: 'resolved', description: 'Kiểm tra lại thiết bị', order: { id: 'order-id', code: 'FH-01', serviceName: 'Sửa máy', addressSummary: 'Quận 1', customerName: 'Khách hàng' }, coverage: null, visit: null } } };
 jest.mock('./useTechnicianWarranty', () => ({ useTechnicianWarranty: () => ({ controller: mockController, state: mockState }) }));
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn() }), useRoute: () => mockRoute }));
+jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn() }), useRoute: () => mockRoute, useFocusEffect: () => undefined }));
 
 beforeEach(() => {
   mockRoute.params = { claimId: 'assigned-claim-id' };
@@ -84,6 +86,18 @@ it('shows the deadline for the faulty part and reports it back once, then refres
 
   expect(technicianWarrantyApi.returnFaultyPart).toHaveBeenCalledWith(PART_ID);
   expect(mockController.refreshClaim).toHaveBeenCalled();
+  mockState.claim.data.partRequest = undefined;
+  await act(async () => renderer.unmount());
+});
+
+it('lists the received replacement parts and records each as used', async () => {
+  const PART_ID = '44444444-4444-4444-8444-444444444444', ITEM_ID = '55555555-5555-4555-8555-555555555555';
+  mockState.claim.data.partRequest = { id: PART_ID, status: 'received', faultyReturnDueAt: null, faultyReturnedAt: null, faultyReturnChargedAt: null, faultyInspectionResult: null, items: [{ id: ITEM_ID, name: 'Co đồng 90°', quantity: 2, usageStatus: 'pending' }] };
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><TechnicianWarrantyTaskScreen /></SafeAreaProvider>); });
+  const button = renderer.root.findAll(node => node.props.accessibilityLabel === 'Đã lắp Co đồng 90°' && typeof node.props.onPress === 'function')[0];
+  await act(async () => { await button.props.onPress(); });
+  expect(partRequestsApi.updateItemUsage).toHaveBeenCalledWith(PART_ID, ITEM_ID, 'used');
   mockState.claim.data.partRequest = undefined;
   await act(async () => renderer.unmount());
 });

@@ -12,6 +12,8 @@ export function useAftercareOwner(requiredRole: AftercareOwner['role']) {
   const ownership = useMemo(() => ({ owner, active: false }), [owner]), active = focused && foreground;
   useLayoutEffect(() => { ownership.active = active; return () => { ownership.active = false; }; }, [ownership, active]);
   useEffect(() => {
+    // The cleanup below clears the flag on every focus change; set it again here or a screen that comes back to the front stays inactive and never reads.
+    ownership.active = focused && AppState.currentState === 'active';
     const listener = AppState.addEventListener('change', value => { ownership.active = focused && value === 'active'; setForeground(value === 'active'); });
     return () => { ownership.active = false; listener.remove(); };
   }, [ownership, focused]);

@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AppState, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useIsFocused, useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import type { OrderPartReadModel } from '../domain/order-session.types';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
@@ -16,7 +16,7 @@ import { PartItemRow } from './PartItemRow';
 import { approvedQuoteQty, approvedUsageCap } from './held-parts';
 import { usePartReturns } from './usePartReturns';
 import { lightTheme as colors, spacing, type ToneName } from '../../../constants/theme';
-import { backFromFlow } from '../navigation/resume-order';
+import { backFromParts } from '../navigation/resume-order';
 
 interface QrReceiveModalState {
   requestId: string;
@@ -34,6 +34,8 @@ interface CancelModalState {
 export default function PartsLifecycleScreen() {
   const { key, snapshot, refresh, loadResource, journal } = useOrderSession();
   const navigation = useNavigation<any>();
+  // Opened from a warranty claim: it is not a step of the order, so no order stage and back goes to the claim.
+  const fromWarranty = (useRoute<any>().params as { from?: string } | undefined)?.from === 'warranty';
   const focused = useIsFocused();
   const { controller, state } = useTechnicianParts();
 
@@ -139,12 +141,12 @@ export default function PartsLifecycleScreen() {
       }
       return;
     }
-    navigation.navigate('OrderTask');
+    if (fromWarranty) backFromParts(navigation, fromWarranty); else navigation.navigate('OrderTask');
   };
 
   if (!current || !order) {
     return (
-      <TaskScreenShell title="Quản lý linh kiện" onBack={() => backFromFlow(navigation)}>
+      <TaskScreenShell title="Quản lý linh kiện" onBack={() => backFromParts(navigation, fromWarranty)}>
         <ReadOnlyNotice>
           {snapshot?.access === 'historical'
             ? 'Không quản lý linh kiện cho đơn lịch sử.'
@@ -252,15 +254,14 @@ export default function PartsLifecycleScreen() {
   return (
     <TaskScreenShell
       title="Quản lý linh kiện"
-      stage={3}
-      onBack={() => backFromFlow(navigation)}
+      onBack={() => backFromParts(navigation, fromWarranty)}
       secondary={{
         label: focusedRequestId && !frozen ? 'Quay lại' : 'Làm mới dữ liệu',
         testID: focusedRequestId && !frozen ? 'parts-draft-cancel' : 'task-refresh', disabled: busy || refreshing,
         onPress: () => { if (busy) return; if (focusedRequestId && !frozen) closeDraft(); else if (!refreshing) void refresh('manual'); },
       }}
       primary={{
-        label: frozen ? busy ? 'Đang xử lý…' : 'Kiểm tra lại' : qrModal ? 'Xác nhận nhận linh kiện' : cancelModal ? 'Xác nhận hủy yêu cầu' : usageModal ? usageModal.status === 'used' ? 'Xác nhận đã dùng' : 'Xác nhận hoàn trả' : 'Quay lại tiến độ',
+        label: frozen ? busy ? 'Đang xử lý…' : 'Kiểm tra lại' : qrModal ? 'Xác nhận nhận linh kiện' : cancelModal ? 'Xác nhận hủy yêu cầu' : usageModal ? usageModal.status === 'used' ? 'Xác nhận đã dùng' : 'Xác nhận hoàn trả' : fromWarranty ? 'Quay lại bảo hành' : 'Quay lại tiến độ',
         testID: frozen ? 'parts-verify' : qrModal ? 'parts-qr-submit' : cancelModal ? 'parts-cancel-confirm' : usageModal ? 'parts-usage-confirm' : 'parts-back-task',
         disabled: busy || !frozen && !!qrModal && !qrModal.tokenInput.trim(),
         onPress: () => { if (frozen) onPrimary(); else if (qrModal) onSubmitReceive(); else if (cancelModal) onSubmitCancel(); else if (usageModal) onSubmitUsage(); else onPrimary(); },

@@ -87,6 +87,7 @@ jest.mock('lucide-react-native', () => {
 
 const mockNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({
+  useRoute: () => ({ params: undefined }),
   useNavigation: () => ({ navigate: mockNavigate, isFocused: () => true, addListener: () => () => undefined }),
   useFocusEffect: () => undefined,
 }));
@@ -215,7 +216,7 @@ describe('TechnicianJobsScreen real-UI presentation (T-RUI2B)', () => {
     });
 
     const scrollViews = renderer.root.findAllByType(ScrollView);
-    const filters = scrollViews.find((node) => node.props.horizontal);
+    const filters = scrollViews.find((node) => node.props.horizontal && node.props.accessibilityLabel === 'Bộ lọc công việc');
     const jobs = scrollViews.find((node) => !node.props.horizontal && node.props.refreshControl);
     expect(filters).toBeDefined();
     expect(jobs).toBeDefined();

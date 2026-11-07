@@ -6,10 +6,10 @@ let mockRouteParams: Record<string, unknown> = { serviceOrderId: 'order-1', role
 jest.mock('@react-navigation/native', () => ({ useRoute: () => ({ params: mockRouteParams }) }));
 jest.mock('../../../store/auth.store', () => ({ useAuthStore: () => ({ isAuthenticated: true, user: { id: 'customer-1', role: 'customer' } }) }));
 jest.mock('../runtime/OrderSessionProvider', () => ({ OrderSessionProvider: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
-jest.mock('./OrderFlowNavigator', () => {
+jest.mock('./OrderDetailEntry', () => {
   const Native = jest.requireActual('react-native');
   const ReactRuntime = jest.requireActual('react');
-  return { __esModule: true, default: ({ role }: { role: string }) => ReactRuntime.createElement(Native.Text, { testID: 'authenticated-role' }, role) };
+  return { OrderDeviceTabs: ({ role }: { role: string }) => ReactRuntime.createElement(Native.Text, { testID: 'authenticated-role' }, role) };
 });
 jest.mock('react-native-safe-area-context', () => {
   const Native = jest.requireActual('react-native');

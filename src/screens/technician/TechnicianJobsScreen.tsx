@@ -32,7 +32,7 @@ import { ordersApi } from '../../api/orders.api';
 import { createJobsLoader, getCachedJobsState, technicianJobsUserId } from './technician-jobs-loader';
 import { historicalSummaryDates, isHistoricalOrder, resolveJobsView, techOrderDetailTarget } from './technician-order-detail';
 import { findChatForBooking } from './technician-chat-shortcut';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useLiveRefresh } from '../../hooks/useLiveRefresh';
 import { listsNeedRead } from '../../services/live-kinds';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -58,6 +58,8 @@ import { formatVnd } from '../../utils/format';
 import VisitGroupsPanel from '../../components/customer/VisitGroupsPanel';
 import { openOrResume } from '../../features/order-flow/navigation/resume-order';
 import { rememberedVisitDevice } from '../../features/order-flow/navigation/visit-device-tabs';
+import { TechnicianWarrantyList } from './warranty/TechnicianWarrantyList';
+import { useBadgeStore } from '../../store/badge.store';
 
 import { vnDateTimeString } from '../../utils/vn-time';
 
@@ -74,8 +76,15 @@ export default function TechnicianJobsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [activeTab, setActiveTab] = useState<JobTab>('all');
   // Visits of several devices are listed apart (the single-order list leaves their devices out).
+  const route = useRoute<{ key: string; name: string; params?: { mode?: 'warranty' } }>();
   const [visitMode, setVisitMode] = useState(false);
   const [visitSeen, setVisitSeen] = useState(false);
+  // The warranty claims of the technician sit next to the jobs: a third part of the same tab.
+  const [warrantyMode, setWarrantyMode] = useState(route.params?.mode === 'warranty');
+  const warrantyWaiting = useBadgeStore((state) => state.pendingWarranty);
+  const openedWith = route.params?.mode;
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- opening the tab with a mode (profile, notification) selects that part
+  useEffect(() => { if (openedWith === 'warranty') setWarrantyMode(true); }, [openedWith]);
   // Codex T09 local code search: read-only UI state, no server query.
   const [codeQuery, setCodeQuery] = useState('');
   const [jobsState, setJobsState] = useState(getCachedJobsState);
@@ -304,23 +313,34 @@ export default function TechnicianJobsScreen() {
         </View>
       </View>
 
-      <View style={styles.modeRow} accessibilityRole="tablist">
-        {([[false, 'Công việc đơn'], [true, 'Nhiều thiết bị']] as const).map(([visits, label]) => (
-          <TouchableOpacity
-            key={label}
-            testID={visits ? 'jobs-mode-visits' : 'jobs-mode-orders'}
-            style={[styles.segment, visitMode === visits && styles.segmentActive]}
-            onPress={() => { setVisitMode(visits); if (visits) setVisitSeen(true); }}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: visitMode === visits }}
-          >
-            <Text style={visitMode === visits ? styles.segmentTextActive : styles.segmentText}>{label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.modeScroll} contentContainerStyle={styles.modeRow} accessibilityRole="tablist">
+        {([['orders', 'Công việc đơn'], ['visits', 'Nhiều thiết bị'], ['warranty', 'Bảo hành']] as const).map(([mode, label]) => {
+          const selected = mode === 'warranty' ? warrantyMode : mode === 'visits' ? visitMode && !warrantyMode : !visitMode && !warrantyMode;
+          return (
+            <TouchableOpacity
+              key={mode}
+              testID={`jobs-mode-${mode}`}
+              style={[styles.segment, selected && styles.segmentActive]}
+              onPress={() => {
+                setWarrantyMode(mode === 'warranty');
+                setVisitMode(mode === 'visits');
+                if (mode === 'visits') setVisitSeen(true);
+              }}
+              accessibilityRole="tab"
+              accessibilityState={{ selected }}
+            >
+              <Text style={selected ? styles.segmentTextActive : styles.segmentText}>
+                {label}{mode === 'warranty' && warrantyWaiting > 0 ? ` (${warrantyWaiting})` : ''}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {warrantyMode ? <TechnicianWarrantyList search={codeQuery} /> : null}
 
       {visitSeen && (
-        <View style={[styles.container, !visitMode && styles.hidden]}>
+        <View style={[styles.container, (!visitMode || warrantyMode) && styles.hidden]}>
           <VisitGroupsPanel
             assigned
             search={codeQuery}
@@ -335,7 +355,7 @@ export default function TechnicianJobsScreen() {
         </View>
       )}
       {(
-      <View style={[styles.container, visitMode && styles.hidden]}>
+      <View style={[styles.container, (visitMode || warrantyMode) && styles.hidden]}>
         {/* Bộ lọc công việc — chỉ lọc trên phần đã tải, không bịa số lượng */}
         <ScrollView
           horizontal
@@ -776,8 +796,9 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
     color: colors.text,
   },
   chipScroll: { flexGrow: 0, flexShrink: 0, minHeight: 68 },
-  modeRow: { flexDirection: 'row', marginHorizontal: 16, marginTop: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
-  segment: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent', marginBottom: -1 },
+  modeScroll: { flexGrow: 0, flexShrink: 0, marginTop: 12 },
+  modeRow: { flexGrow: 1, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
+  segment: { flexGrow: 1, paddingHorizontal: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent', marginBottom: -1 },
   segmentActive: { borderBottomColor: colors.primary },
   segmentText: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.textSecondary },
   segmentTextActive: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong },

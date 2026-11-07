@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-06 18:25 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: warranty-cost-sla-20261104
+> Cập nhật lần cuối: 2026-11-07 00:25 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: warranty-cost-sla-20261104
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -339,6 +339,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 5. Hợp đồng với repo khác
 
+- Quản lý bảo hành của thợ (PO 06/11/2026, đồng bộ với mục Bảo hành của web; CHƯA KIỂM CHỨNG trên thiết bị và với Backend thật): tab Công việc có ba phần "Công việc đơn", "Nhiều thiết bị" và "Bảo hành" (hàng phân đoạn kéo ngang được; mở thẳng bằng tham số `TechnicianMain` `{ screen: 'Jobs', params: { mode: 'warranty' } }`). `TechnicianWarrantyList` (`src/screens/technician/warranty/`) đọc `GET /warranty-claims/mine` theo trang 20 (`useWarrantyClaims`), chia ba nhóm như web (Cần xử lý: `submitted|accepted|in_progress`; Đang chờ phản hồi: `inspected|awaiting_customer|disputed`; Đã đóng: `resolved|rejected`), mỗi hàng có #mã, nhãn trạng thái theo góc nhìn của thợ, hạng mục, khách, địa chỉ, "Khách mô tả" và bước kế tiếp. Lời mời bảo hành là yêu cầu `submitted` đang chờ thợ nhận: hiện ở đầu tab Lời mời (`WarrantyInvitations`) và cộng vào badge tab Lời mời (`badge.store.pendingWarranty`, `useInvitationCount`). Thông báo `WARRANTY_*` và mục "Công việc bảo hành" ở Hồ sơ mở phần Bảo hành của tab Công việc; `TechnicianWarrantyInbox` chỉ còn chuyển tới đó. Màn chi tiết `TechnicianWarrantyTaskScreen` dựng lại thành các khối thẻ (đầu trang, Thông tin, Khách mô tả, Kết luận đã đề xuất, Nộp linh kiện hỏng, Phản hồi của quản lý, việc của bước hiện tại), giữ nguyên bước xác nhận hai lần và nhật ký lệnh.
 - Bảo hành thợ (PO 04/11/2026, Backend `warranty-cost-sla-20261104`; Mobile 05/11/2026, CHƯA KIỂM CHỨNG trên thiết bị và với Backend thật): `normalizeTechnicianWarrantyClaim` đọc thêm `outcomeCode`, `refundAmount`, `declineReview`, `noShowFlaggedAt` (tuỳ chọn, thiếu thì `null`); `warrantyCommandPayload('propose')` bắt `evidenceRefs` cho cả `covered_part` lẫn `not_covered` và nhận thêm ba lý do `third_party_repair`, `force_majeure`, `transport_damage`. Màn chi tiết hiện kết cục, tiền đã hoàn cho khách khi `unfixed`, nút Gọi và Nhắn tin sau khi thợ nhận, nút Xem đơn gốc, lối vào "Công việc bảo hành" ở Hồ sơ thợ (màn đăng ký ở `AppNavigator` ngoài luồng đơn), lưu ý lý do từ chối (nghỉ phép, ngoài khu vực được kiểm tra; lý do khác chờ quản lý xét và có thể bị trừ uy tín). Ảnh chỉ chọn từ ảnh có sẵn của đơn hoặc ảnh vừa tải lên (PO 06/11/2026). `findMine` vẫn lặp qua `/warranty-claims/mine` vì đối soát lệnh `decline` dựa vào việc yêu cầu biến khỏi danh sách; chưa dùng `GET /warranty-claims/:claimId`. Linh kiện hỏng (PO 05/11/2026, Backend migration `1793466000004`): `warrantyCommandPayload('propose')` bắt `faultyInvoiceItemIds` (UUID các dòng linh kiện của hoá đơn gốc, lấy từ `order.partLines`) cho `covered_part`; màn thợ cho tick các món hỏng, hiện hạn nộp và nút "Đã nộp linh kiện hỏng" (`technicianWarrantyApi.returnFaultyPart` gọi `POST /part-requests/:id/faulty-return`, lệnh lặp được nên không qua nhật ký lệnh), cảnh báo quá hạn bị trừ ví. Yêu cầu linh kiện `warranty` vẫn nhận bằng QR như trước, nhưng SM không còn phải kiểm tra trước khi sẵn sàng.
 - REST tới `backend` qua `EXPO_PUBLIC_API_BASE_URL`; override rõ ràng luôn ưu tiên. Native development suy ra host LAN từ Expo/Metro và dùng cổng backend mặc định; Web giữ localhost, Android emulator với Metro loopback giữ bridge emulator. Không suy ra host từ tunnel hoặc ở production. Token vẫn lưu bằng `expo-secure-store`; session refresh không đổi.
 - Gặp 401 thì gọi một lần `POST /auth/refresh` dùng chung; chỉ chạy lại yêu cầu GET, HEAD, OPTIONS, không tự chạy lại thao tác ghi.
@@ -384,6 +385,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 8. Việc đang dở và rủi ro đã biết
 
+- Quản lý bảo hành của thợ: form từ chối, đề xuất và hoàn tất vẫn nằm trong thẻ trên trang chi tiết, chưa chuyển thành bottom sheet như modal của web; các nút trên thẻ lời mời và hàng danh sách đều mở trang chi tiết để xác nhận, không gửi lệnh ngay từ danh sách.
 - Bảo hành thợ trên Mobile: sau khi bị từ chối hoặc không đến, yêu cầu rời danh sách của thợ nên thợ không thấy trạng thái chờ quản lý xét (cần Backend trả thêm danh sách yêu cầu đã từ chối); nút "Đã nộp linh kiện hỏng" và hạn nộp chỉ hiện khi Backend mới trả `partRequest` (CHƯA KIỂM CHỨNG trên thiết bị và với Backend thật). CHƯA KIỂM CHỨNG trên thiết bị: lối vào `TechnicianWarrantyInbox` ở Hồ sơ thợ, nút Nhắn tin (cần `order.bookingId` từ Backend mới) và Xem đơn gốc.
 - UX1–UX5 visual: đã xem 13 ảnh AGY trước/sau Luna, nhưng AGY xác nhận cửa sổ resize chỉ đạt 502 CSS px với DPR 1.25, không chứng minh viewport 320/360/390/430dp. Cần chụp lại bằng device emulation và ghi kích thước thực. Customer đăng nhập, bàn phím, fontScale 1.3, Reduce Motion tương tác, native và Web runtime parity CHƯA KIỂM CHỨNG. Không đăng nhập live để chụp Booking/Matching vì GET có thể thay đổi trạng thái; chỉ dùng fixture chặn mạng trước bootstrap.
 
@@ -413,6 +415,8 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-07 00:25 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Bảo hành: thợ chọn số cái hỏng khi dòng linh kiện từ 2 cái; khách: trang Bảo hành gọn, thẻ yêu cầu và phản hồi một nút, thông báo mở trang Bảo hành; thợ: lời mời bấm được, tiêu đề theo tên dịch vụ; sửa nút bị khóa sau khi nhận
+- 2026-11-06 21:45 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Làm lại quản lý bảo hành của thợ như web: phần Bảo hành trong tab Công việc, lời mời bảo hành ở tab Lời mời và badge, thông báo và Hồ sơ mở đúng chỗ, chi tiết dựng lại thành các thẻ
 - 2026-11-06 18:25 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Mở tải ảnh cho bảo hành (khách tạo yêu cầu, thợ đề xuất và hoàn tất) qua đường media công khai như web, theo yêu cầu; đổi quyết định chặn upload ảnh bảo hành
 - 2026-11-06 03:05 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Mobile thợ chọn linh kiện hỏng khi đề xuất lỗi linh kiện, hiện hạn nộp và nút nộp linh kiện hỏng về kho; sửa giờ hai dòng nhật ký 05/11
 - 2026-11-05 18:25 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Mobile thêm lối vào bảo hành ở Hồ sơ thợ, nút Nhắn tin và Xem đơn gốc; trường bảo hành mới, ảnh cho lỗi linh kiện, kết cục hoàn tiền ở màn thợ
@@ -452,8 +456,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-26 22:21 (UTC+7) | Hgnv11 | dev | Lượt nhiều thiết bị đã merge vào dev và push; gate (lint, typecheck, 324 suites Jest) xanh trên SDK 57; ghi việc đồng bộ web #177 còn chờ ở mục 8.
 - 2026-10-26 15:10 (UTC+7) | Hgnv11 | feat/web-visit-groups | Đặt nhiều thiết bị chuyển vào form đặt lịch: danh sách ô dịch vụ Máy 1/2/3 và ô Thêm dịch vụ, gửi cả lượt ở bước địa chỉ; màn tạo lượt riêng chỉ còn cho luồng AI.
 - 2026-10-26 14:25 (UTC+7) | Hgnv11 | feat/web-visit-groups | Màn tạo lượt nhiều thiết bị đổi sang thanh chip từng máy (thêm dịch vụ, bấm chip để nhập mô tả và ảnh, địa chỉ và buổi hẹn dùng chung); gợi ý AI nạp đủ chip và phải xác nhận từng máy.
-- 2026-10-25 19:21 (UTC+7) | Hgnv11 | feat/web-visit-groups | Lượt sửa nhiều thiết bị đủ ba phía như web #164 và #168 (khách, kỹ thuật viên, AI), thông báo linh kiện mở đúng đơn, màn Bàn giao kiểm linh kiện khớp báo giá như web #167.
-- 2026-10-23 23:15 (UTC+7) | Hgnv11 | dev | Giữ SDK 57 vì Expo Go trên iPhone chỉ chạy 57: CI không còn đỏ khi Expo ra bản vá mới (bước check:expo chỉ cảnh báo); bàn giao hiện trước thanh toán, Thanh toán và Ví FixHome và Bàn giao chia nhóm có tiêu đề, Báo giá trong Thông tin đơn chia Tiền công và Linh kiện có tổng, Bảo hành ghi rõ hạng mục được bảo hành
 
 ### Lịch sử giữ lại khi tích hợp
 

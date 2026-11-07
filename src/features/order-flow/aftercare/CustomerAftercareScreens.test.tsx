@@ -8,11 +8,11 @@ const mockController = { canSubmitReview: jest.fn(() => true), canClaim: jest.fn
   prepareReview: jest.fn(), prepareClaim: jest.fn(), prepareResponse: jest.fn(), submitConfirmation: jest.fn(), cancelConfirmation: jest.fn(), loadReview: jest.fn(), loadWarranty: jest.fn(), verify: jest.fn() };
 let mockState: any;
 const mockGoBack = jest.fn();
-const mockReplace = jest.fn();
+const mockReplace = jest.fn(); const mockNavigate = jest.fn();
 const mockRoute: any = { params: {} };
 jest.mock('../runtime/OrderSessionProvider', () => ({ ...jest.requireActual('../runtime/OrderSessionProvider'), useOrderSession: () => ({ snapshot: { order: { status: 'ready', data: { code: 'FH-01', serviceName: 'Sửa máy giặt' } } } }) }));
 jest.mock('../customer/useCustomerAftercare', () => ({ useCustomerAftercare: () => ({ controller: mockController, state: mockState }) }));
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: mockGoBack, replace: mockReplace, navigate: jest.fn() }), useRoute: () => mockRoute }));
+jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: mockGoBack, replace: mockReplace, navigate: mockNavigate }), useRoute: () => mockRoute }));
 
 function pressByText(tree: ReturnType<typeof create>, value: string) {
   const text = tree.root.findAllByType(Text).find(node => node.props.children === value);
@@ -78,15 +78,16 @@ it('clears the customer response draft when the claim target changes', async () 
   let renderer!: ReturnType<typeof create>;
   const screen = () => <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><CustomerWarrantyClaimScreen /></SafeAreaProvider>;
   await act(async () => { renderer = create(screen()); });
+  act(() => renderer.root.findAll(n => n.props.accessibilityRole === 'radio' && typeof n.props.onPress === 'function')[1].props.onPress());
   act(() => renderer.root.findByType(TextInput).props.onChangeText('Old claim note'));
   mockRoute.params = { claimId: 'claim-two' };
   await act(async () => renderer.update(screen()));
-  expect(renderer.root.findByType(TextInput).props.value).toBe('');
+  expect(renderer.root.findAllByType(TextInput)).toHaveLength(0);
   expect(mockController.cancelConfirmation).toHaveBeenCalled();
   await act(async () => renderer.unmount());
 });
 
-it('opens one claim for the whole order on the item covered longest, so the customer never picks labor or part', async () => {
+it('shows the coverages and a create button for the item covered longest, so the customer never picks labor or part', async () => {
   const day = 86_400_000;
   mockState.coverages = { status: 'ready', data: [
     { id: 'labor', status: 'active', itemDescription: 'Công thay tụ', expiresAt: new Date(Date.now() + 10 * day).toISOString() },
@@ -94,7 +95,9 @@ it('opens one claim for the whole order on the item covered longest, so the cust
   mockState.claims = { status: 'ready', data: [] };
   let renderer!: ReturnType<typeof create>;
   await act(async () => { renderer = create(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><CustomerWarrantyScreen /></SafeAreaProvider>); });
-  expect(mockReplace).toHaveBeenCalledWith('WarrantyClaimCreate', { coverageId: 'part' });
+  expect(mockReplace).not.toHaveBeenCalled();
+  act(() => renderer.root.findAll(n => n.props.accessibilityLabel === 'Tạo yêu cầu bảo hành' && typeof n.props.onPress === 'function')[0].props.onPress());
+  expect(mockNavigate).toHaveBeenCalledWith('WarrantyClaimCreate', expect.objectContaining({ coverageId: 'part' }));
   await act(async () => renderer.unmount());
 });
 

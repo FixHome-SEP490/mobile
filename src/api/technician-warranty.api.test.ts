@@ -326,3 +326,13 @@ describe('technicianWarrantyApi.returnFaultyPart', () => {
     expect(api.post).not.toHaveBeenCalled();
   });
 });
+
+describe('rescheduleVisit', () => {
+  it('posts the new time to the reschedule route and refuses a bad time or id', async () => {
+    api.post.mockResolvedValueOnce({ data: {} });
+    await technicianWarrantyApi.rescheduleVisit(CLAIM_ID, '2099-01-01T02:00:00.000Z');
+    expect(api.post).toHaveBeenCalledWith(`/warranty-claims/${CLAIM_ID}/reschedule`, { scheduledAt: '2099-01-01T02:00:00.000Z' });
+    await expect(technicianWarrantyApi.rescheduleVisit(CLAIM_ID, 'tomorrow')).rejects.toThrow();
+    await expect(technicianWarrantyApi.rescheduleVisit('x', '2099-01-01T02:00:00.000Z')).rejects.toThrow();
+  });
+});

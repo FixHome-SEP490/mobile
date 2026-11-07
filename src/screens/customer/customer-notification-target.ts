@@ -7,7 +7,8 @@ const UUID =
 export type CustomerNotificationTarget =
   | { name: 'CustomerBookingDetail'; params: { bookingId: string; released?: true } }
   | { name: 'CustomerOrderDetail'; params: { serviceOrderId: string } }
-  | { name: 'CustomerVisit'; params: { visitGroupId: string } };
+  | { name: 'CustomerVisit'; params: { visitGroupId: string } }
+  | { name: 'CustomerWarranties'; params: { orderId: string } };
 
 export interface CustomerNotificationTargetDeps {
   getSupportCase: (id: string) => Promise<MySupportCase>;
@@ -41,6 +42,11 @@ export async function resolveCustomerNotificationTarget(
 
   // Multi-device visits, including VISIT_CASH_DECLARED, open the parent visit.
   if (type === 'VISIT_GROUP') return { name: 'CustomerVisit', params: { visitGroupId: referenceId } };
+
+  // Warranty notices (e.g. the technician finished, please confirm) open the warranty page of that order.
+  if (type === 'SERVICE_ORDER' && item.type?.trim().toUpperCase().startsWith('WARRANTY_')) {
+    return { name: 'CustomerWarranties', params: { orderId: referenceId } };
+  }
 
   if (type === 'SERVICE_ORDER') {
     return {

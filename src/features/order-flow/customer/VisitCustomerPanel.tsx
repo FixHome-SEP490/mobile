@@ -12,7 +12,7 @@ import { useRegisterVisitDevices, visitDeviceTabName } from '../navigation/visit
 import { PanelRow, visitPanelStyles as styles } from '../shared/VisitPanelRow';
 
 // Screens of an order that make sense for any device of the visit and need no id: switching device keeps the customer on the same one.
-const CARRY_SCREENS = ['OrderInformation', 'OrderProgressHistory', 'EvidenceGallery', 'InvoiceDetail', 'HandoverReview', 'SupportCases'];
+const CARRY_SCREENS = ['OrderInformation', 'OrderProgressHistory', 'EvidenceGallery', 'InvoiceDetail', 'HandoverReview', 'SupportCases', 'CustomerWarranty'];
 
 /**
  * The customer's counterpart of the technician's "Thiết bị trong lượt": the devices of a multi-device visit, one tab each in the order
@@ -72,8 +72,9 @@ function Body({ groupId, orderId, status }: { groupId: string; orderId: string; 
   // the other device. So the screen left is closed, and leaving the opened one by back jumps to where it all started.
   useEffect(() => {
     if (!returnTab) return undefined;
-    return navigation.addListener('beforeRemove', () => {
-      if (switching.current) return;
+    return navigation.addListener('beforeRemove', (e: any) => {
+      // A replace (the warranty page opening its form) keeps the customer on this device.
+      if (switching.current || e?.data?.action?.type === 'REPLACE') return;
       const tabs = navigation.getParent?.();
       setTimeout(() => { try { tabs?.navigate(returnTab); } catch { /* the whole order is closing */ } }, 0);
     });
@@ -89,13 +90,15 @@ function Body({ groupId, orderId, status }: { groupId: string; orderId: string; 
     const tabs = navigation.getParent?.();
     const tabState = tabs?.getState?.();
     const currentTab: string | undefined = tabState?.routes?.[tabState.index]?.name;
-    const carry = CARRY_SCREENS.includes(routeName);
+    // A coverage id belongs to one device: the claim form opens the other device's warranty page, which picks its own coverage.
+    const target = routeName === 'WarrantyClaimCreate' ? 'CustomerWarranty' : routeName;
+    const carry = CARRY_SCREENS.includes(target);
     const go = () => {
       if (!carry) { navigation.navigate(tab); return; }
       // Close the screen being left (its own page stays as it was), then open the same screen of the other device.
       const origin = returnTab ?? currentTab;
       navigation.goBack();
-      tabs?.navigate(tab, { screen: routeName, initial: false, params: { returnTab: origin } });
+      tabs?.navigate(tab, { screen: target, initial: false, params: { returnTab: origin } });
     };
     if (tabState?.routeNames?.includes(tab)) go();
     else {
@@ -145,8 +148,8 @@ function Body({ groupId, orderId, status }: { groupId: string; orderId: string; 
               <PanelRow
                 testID="customer-visit-open"
                 Icon={Layers}
-                label="Xem cả lượt sửa"
-                sub="Thanh toán và lịch của cả lượt"
+                label="Tổng quan lượt sửa"
+                sub="Thanh toán và lịch hẹn của tất cả thiết bị"
                 chevron
                 onPress={() => navigation.navigate('CustomerVisit', { visitGroupId: groupId })}
               />

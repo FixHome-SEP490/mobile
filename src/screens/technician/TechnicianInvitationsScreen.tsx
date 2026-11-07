@@ -6,6 +6,7 @@
 // Accept/Decline: single in-flight lock per invitation to prevent duplicate POST on tap or retry.
 // On ACCEPT: offer the existing Technician area only after a real order id is returned.
 // Ambiguous responses remain locked while GET reconciliation cannot resolve them.
+import { WarrantyInvitations } from './warranty/WarrantyInvitations';
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View,
@@ -92,6 +93,7 @@ export default function TechnicianInvitationsScreen() {
   }
   const controller = controllerRef.current;
   const { invitations, loading, error, actionInFlight, acceptedOrderId, recoveryPending } = state;
+  const warrantyWaiting = useBadgeStore((badge) => badge.pendingWarranty);
   // Spinner only for a user pull; focus/poll reloads are silent (controller `refreshing` would shift the list).
   const [pulling, setPulling] = useState(false);
   useFocusEffect(useCallback(() => {
@@ -493,6 +495,7 @@ export default function TechnicianInvitationsScreen() {
             </View>
           ) : (
           <View style={styles.headerStack}>
+            <WarrantyInvitations />
             {availability.autoAccept !== null && (
               <View style={styles.autoRow}>
                 <Text style={styles.autoLabel}>Tự nhận việc</Text>
@@ -605,7 +608,7 @@ export default function TechnicianInvitationsScreen() {
         ) : (
           <View style={styles.center}>
             <MailOpen size={56} color={colors.muted} strokeWidth={1.5} />
-            <Text style={styles.emptyTitle}>Chưa có lời mời nào</Text>
+            <Text style={styles.emptyTitle}>{warrantyWaiting > 0 ? 'Chưa có lời mời nhận đơn' : 'Chưa có lời mời nào'}</Text>
             <TouchableOpacity
               style={styles.refreshBtn}
               onPress={onRefresh}

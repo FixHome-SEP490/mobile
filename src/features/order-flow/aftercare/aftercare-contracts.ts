@@ -91,7 +91,8 @@ export function normalizeClaim(value: unknown, orderId?: string): WarrantyClaimV
     description: warrantyText(r.description), evidenceRefs, submittedAfterExpiry: r.submittedAfterExpiry,
     customerResponse: r.customerResponse as 'agreed' | 'disputed' | null, awaitingPrompt: r.awaitingPrompt as 'conclusion' | 'completion' | null,
     resolutionNotes: nullableText(r.resolutionNotes), submittedAt: r.submittedAt, resolvedAt: r.resolvedAt as string | null,
-    technician: tech ? { id: tech.id as string, fullName: tech.fullName as string } : null };
+    technician: tech ? { id: tech.id as string, fullName: tech.fullName as string } : null,
+    ...(validTimestamp(r.inspectionScheduledAt) ? { inspectionScheduledAt: r.inspectionScheduledAt } : {}) };
 }
 export function normalizeCoverage(value: unknown, orderId: string): WarrantyCoverageItem {
   const r = record(value);
@@ -105,12 +106,12 @@ export function normalizeCoverage(value: unknown, orderId: string): WarrantyCove
 }
 export type WarrantyCommand = 'accept' | 'decline' | 'check-in' | 'propose' | 'complete';
 export type InspectionResult = 'covered_workmanship' | 'covered_part' | 'not_covered';
-export interface WarrantyCommandDto { scheduledAt?: string; reasonCode?: 'busy' | 'on_leave' | 'out_of_area' | 'other'; note?: string; lat?: number; lng?: number; result?: InspectionResult; findings?: string; notCoveredReasonCode?: string; evidenceRefs?: string[]; faultyInvoiceItemIds?: string[]; notes?: string }
+export interface WarrantyCommandDto { scheduledAt?: string; reasonCode?: 'busy' | 'on_leave' | 'out_of_area' | 'other'; note?: string; lat?: number; lng?: number; result?: InspectionResult; findings?: string; notCoveredReasonCode?: string; evidenceRefs?: string[]; faultyInvoiceItemIds?: string[]; faultyQuantities?: Record<string, number>; notes?: string }
 export function warrantyCommandPayload(op: WarrantyCommand, value: unknown, refs: readonly string[]): WarrantyCommandDto {
-  const fields = { accept: ['scheduledAt'], decline: ['reasonCode', 'note'], 'check-in': ['lat', 'lng'], propose: ['result', 'findings', 'notCoveredReasonCode', 'evidenceRefs', 'faultyInvoiceItemIds'], complete: ['notes', 'evidenceRefs'] };
+  const fields = { accept: ['scheduledAt'], decline: ['reasonCode', 'note'], 'check-in': ['lat', 'lng'], propose: ['result', 'findings', 'notCoveredReasonCode', 'evidenceRefs', 'faultyInvoiceItemIds', 'faultyQuantities'], complete: ['notes', 'evidenceRefs'] };
   if (!Object.prototype.hasOwnProperty.call(fields, op)) throw Error('Thao tác bảo hành chưa hợp lệ.');
   const r = record(value, fields[op]);
-  if (op === 'accept') { if (r.scheduledAt !== undefined && !validTimestamp(r.scheduledAt)) throw Error('Lịch kiểm tra chưa hợp lệ.'); return r.scheduledAt === undefined ? {} : { scheduledAt: r.scheduledAt as string }; }
+  if (op === 'accept') { if (!validTimestamp(r.scheduledAt)) throw Error('Hãy chọn lịch kiểm tra trước khi nhận.'); return { scheduledAt: r.scheduledAt as string }; }
   if (op === 'decline') {
     if (!['busy', 'on_leave', 'out_of_area', 'other'].includes(String(r.reasonCode))) throw Error('Lý do chưa hợp lệ.');
     const note = r.reasonCode === 'other' || r.note !== undefined ? warrantyText(r.note) : undefined;
@@ -128,5 +129,8 @@ export function warrantyCommandPayload(op: WarrantyCommand, value: unknown, refs
   // A part fault must say which part lines of the original job are faulty: FixHome supplies exactly those.
   const faulty = r.faultyInvoiceItemIds;
   if (r.result === 'covered_part' && (!Array.isArray(faulty) || !faulty.length || faulty.length > 20 || faulty.some(id => !uuid4(id)))) throw Error('Chọn ít nhất một linh kiện bị hỏng.');
-  return { result: r.result as InspectionResult, findings: warrantyText(r.findings), ...(r.result === 'not_covered' ? { notCoveredReasonCode: r.notCoveredReasonCode as string } : {}), ...(r.result === 'covered_part' ? { faultyInvoiceItemIds: [...new Set(faulty as string[])] } : {}), ...(evidenceRefs ? { evidenceRefs } : {}) };
+  // How many of each line are faulty (a x3 line can have one bad); only counts of the named lines, 1 or more.
+  const counts = r.faultyQuantities === undefined ? null : record(r.faultyQuantities, Array.isArray(faulty) ? (faulty as string[]) : []);
+  if (counts && Object.values(counts).some(n => !Number.isInteger(n) || (n as number) < 1)) throw Error('Số lượng linh kiện hỏng chưa hợp lệ.');
+  return { result: r.result as InspectionResult, findings: warrantyText(r.findings), ...(r.result === 'not_covered' ? { notCoveredReasonCode: r.notCoveredReasonCode as string } : {}), ...(r.result === 'covered_part' ? { faultyInvoiceItemIds: [...new Set(faulty as string[])], ...(counts ? { faultyQuantities: counts as Record<string, number> } : {}) } : {}), ...(evidenceRefs ? { evidenceRefs } : {}) };
 }

@@ -40,8 +40,9 @@ export function createTechnicianWarrantyController(deps: TechnicianWarrantyDepen
   }
   const signature = (c: TechnicianWarrantyClaim) => JSON.stringify({ id: c.id, technicianId: c.technician?.id, status: c.status, visit: c.visit });
   function matches(t: WarrantyConfirmation) { const c = currentClaim(t.owner, t.claimId); return !!c && allowed(c, t.operation) && signature(c) === t.signature && !t.dto.evidenceRefs?.some(r => !refs(c).includes(r)); }
-  async function readClaim(o: AftercareOwner, id: string) {
-    const generation = epoch, requestSeq = ++seq; publish({ claim: { status: 'loading', requestSeq }, confirmation: null });
+  // quiet: a re-read of a claim already on screen keeps it there instead of blanking the page while it loads.
+  async function readClaim(o: AftercareOwner, id: string, quiet = false) {
+    const generation = epoch, requestSeq = ++seq; if (!quiet || state.claim.status !== 'ready') publish({ claim: { status: 'loading', requestSeq }, confirmation: null });
     try {
       const raw = await deps.transport.findMine(id, () => same(o, id) && generation === epoch); if (!same(o, id) || generation !== epoch) return;
       const c = raw ? normalizeTechnicianWarrantyClaim(raw) : null;
@@ -60,9 +61,16 @@ export function createTechnicianWarrantyController(deps: TechnicianWarrantyDepen
     if (m.operation === 'propose') return ['inspected', 'completed'].includes(c.visit.status) && !!c.visit.proposedResult && ['inspected', 'in_progress', 'awaiting_customer', 'disputed', 'resolved', 'rejected'].includes(c.status);
     return c.visit.status === 'completed' && !!c.visit.completedAt && c.awaitingPrompt === 'completion' && ['awaiting_customer', 'disputed', 'resolved', 'rejected'].includes(c.status);
   }
+  function notApplied(o: AftercareOwner, id: string, m: Marker) {
+    const c = currentClaim(o, id); if (!c || !allowed(c, m.operation)) return false;
+    // A request sent moments ago may still land, so only a marker that has waited a while is released.
+    return m.operation !== 'accept' && m.operation !== 'decline' && c.visit?.id === m.expectedVisitId && Date.now() - m.createdAt > 120_000;
+  }
   async function reconcile(o: AftercareOwner, id: string, m: Marker) {
     await readClaim(o, id); if (!same(o, id)) return;
     if (resolved(o, id, m)) await deps.journal.resolve(o.userId, m.intentId);
+    // Every command is a guarded state change on the server (a repeat answers 409), so a claim still waiting for the same step means the command never landed: release the lock so it can be sent again.
+    else if (state.claim.status === 'ready' && notApplied(o, id, m)) await deps.journal.resolve(o.userId, m.intentId);
     if (!same(o, id)) return;
     const done = deps.journal.list(o.userId).find(r => r.intentId === m.intentId)?.resolved;
     publish({ phase: done ? 'resolved' : 'unknown', confirmation: null, message: done ? null : FINANCIAL_UNKNOWN });
@@ -74,14 +82,14 @@ export function createTechnicianWarrantyController(deps: TechnicianWarrantyDepen
     registerUploadedPhotos(urls: readonly string[]) { uploaded = urls.filter(url => /^https:\/\//i.test(url)).slice(0, 10); },
     cancelConfirmation() { epoch++; publish({ confirmation: null, ...(busy ? {} : { phase: 'idle' as const }) }); },
     revalidateConfirmation() { if (state.confirmation && !matches(state.confirmation)) { epoch++; publish({ confirmation: null, ...(busy ? {} : { phase: 'idle' as const }) }); } },
-    async refreshClaim() { const o = deps.getOwner(), id = state.selectedClaimId; if (!o || !id || !same(o, id) || busy) return; busy = true; try { await readClaim(o, id); } finally { busy = false; } },
+    async refreshClaim() { const o = deps.getOwner(), id = state.selectedClaimId; if (!o || !id || !same(o, id) || busy) return; busy = true; try { await readClaim(o, id, true); } finally { busy = false; publish({}); } },
     async loadInbox(query: WarrantyMineQuery = {}) {
       const o = deps.getOwner(); if (!o || !sameOwner(o) || busy) return; busy = true; const generation = epoch, requestSeq = ++seq; publish({ inbox: { status: 'loading', requestSeq } });
       try { const page = await deps.transport.listMine(query); if (!sameOwner(o) || generation !== epoch) return;
         if (page.data.some(c => c.technician?.id !== o.userId)) { purge('revoked'); return; }
         publish({ inbox: { status: 'ready', data: page, requestSeq, fetchedAt: Date.now() } });
       } catch (e) { if (sameOwner(o) && generation === epoch) { if (deniedRead(e)) purge('revoked'); else publish({ inbox: { status: 'error', requestSeq, error: 'unavailable' } }); } }
-      finally { busy = false; }
+      finally { busy = false; publish({}); }
     },
     async prepare(operation: WarrantyCommand, input: unknown) {
       const o = deps.getOwner(), id = state.selectedClaimId; if (!o || !id || !same(o, id) || busy) return;
@@ -113,7 +121,7 @@ export function createTechnicianWarrantyController(deps: TechnicianWarrantyDepen
         } catch { /* Missing claim from mine alone cannot establish a declined POST outcome. */ }
         if (same(t.owner, t.claimId)) await reconcile(t.owner, t.claimId, deps.journal.list(t.owner.userId).find(m => m.intentId === intentId) as Marker);
       } catch { if (same(t.owner, t.claimId)) publish({ phase: intentId ? 'unknown' : 'failed-known', confirmation: null, message: intentId ? FINANCIAL_UNKNOWN : 'Chưa gửi được thao tác. Hãy xác nhận lại để tiếp tục.' }); }
-      finally { busy = false; }
+      finally { busy = false; publish({}); }
     },
     async restoredMarkers() { const o = deps.getOwner(), id = state.selectedClaimId; if (!o || !id || !same(o, id)) return []; await deps.journal.restore(); return same(o, id) ? pending(o, id) : []; },
     async verify() {
@@ -123,7 +131,7 @@ export function createTechnicianWarrantyController(deps: TechnicianWarrantyDepen
         if (!markers.length) { publish({ phase: 'idle' }); return; }
         for (const m of markers) { if (!same(o, id)) break; await reconcile(o, id, m); }
       } catch { if (same(o, id)) publish({ phase: 'unknown', message: FINANCIAL_UNKNOWN }); }
-      finally { busy = false; }
+      finally { busy = false; publish({}); }
     },
     authorizedEvidenceRefs: () => { const o = deps.getOwner(), id = state.selectedClaimId, c = o && id ? currentClaim(o, id) : null; return c ? refs(c) : []; },
     availableCommands(): WarrantyCommand[] { const o = deps.getOwner(), id = state.selectedClaimId, c = o && id ? currentClaim(o, id) : null;

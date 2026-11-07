@@ -178,6 +178,7 @@ export interface WarrantyVisit {
   evidenceRefs: string[] | null; reServiceNotes: string | null; reServiceEvidenceRefs: string[] | null; completedAt: string | null;
   /** Part lines of the original job the technician named as faulty (part fault only). */
   faultyInvoiceItemIds?: string[] | null;
+  faultyQuantities?: Record<string, number> | null;
 }
 export interface TechnicianWarrantyClaim extends WarrantyClaimView {
   order: { id: string; code: string; serviceName: string; addressSummary: string; customerName: string; customerPhone: string; bookingId?: string; partLines?: { id: string; name: string; quantity: number; partSource: string | null }[] };
@@ -186,7 +187,7 @@ export interface TechnicianWarrantyClaim extends WarrantyClaimView {
   outcomeCode?: 'fixed' | 'unfixed' | 'rejected' | null; refundAmount?: number | null;
   declineReview?: 'pending' | 'valid' | 'invalid' | null; noShowFlaggedAt?: string | null;
   /** The free warranty part, and the deadline to bring the faulty one back to the warehouse. */
-  partRequest?: { id: string; status: string; faultyReturnDueAt: string | null; faultyReturnedAt: string | null; faultyReturnChargedAt: string | null; faultyInspectionResult: 'manufacturer' | 'installation' | 'undetermined' | null } | null;
+  partRequest?: { id: string; status: string; faultyReturnDueAt: string | null; faultyReturnedAt: string | null; faultyReturnChargedAt: string | null; faultyInspectionResult: 'manufacturer' | 'installation' | 'undetermined' | null; items?: { id: string; name: string; quantity: number; usageStatus: 'pending' | 'used' | 'returned' }[] } | null;
 }
 export interface WarrantyMinePage { data: TechnicianWarrantyClaim[]; meta: { page: number; pageSize: number; total: number } }
 export interface WarrantyMineQuery { status?: string; page?: number; pageSize?: number }
@@ -223,6 +224,7 @@ function normalizePartRequest(value: unknown): TechnicianWarrantyClaim['partRequ
   const r = value as Record<string, unknown>;
   if (!uuid4(r.id) || typeof r.status !== 'string') return null;
   return { id: r.id, status: r.status, faultyReturnDueAt: iso(r.faultyReturnDueAt), faultyReturnedAt: iso(r.faultyReturnedAt), faultyReturnChargedAt: iso(r.faultyReturnChargedAt),
+    items: (Array.isArray(r.items) ? r.items : []).filter((i: any) => i && uuid4(i.id) && typeof i.name === 'string').map((i: any) => ({ id: i.id as string, name: i.name as string, quantity: Number(i.quantity) || 1, usageStatus: (['used', 'returned'].includes(String(i.usageStatus)) ? i.usageStatus : 'pending') as 'pending' | 'used' | 'returned' })),
     faultyInspectionResult: ['manufacturer', 'installation', 'undetermined'].includes(String(r.faultyInspectionResult)) ? r.faultyInspectionResult as 'manufacturer' | 'installation' | 'undetermined' : null };
 }
 function query(input: WarrantyMineQuery) {
@@ -242,6 +244,11 @@ export const technicianWarrantyApi = {
   async returnFaultyPart(partRequestId: string): Promise<void> {
     if (!uuid4(partRequestId)) throw Error('Yêu cầu linh kiện chưa hợp lệ.');
     await apiClient.post(`/part-requests/${partRequestId}/faulty-return`, {});
+  },
+  /** Moves the inspection time before check-in. Setting the same time twice changes nothing, so no command journal is needed. */
+  async rescheduleVisit(claimId: string, scheduledAt: string): Promise<void> {
+    if (!uuid4(claimId) || !validTimestamp(scheduledAt)) throw Error('Lịch kiểm tra chưa hợp lệ.');
+    await apiClient.post(`/warranty-claims/${claimId}/reschedule`, { scheduledAt });
   },
   async listMine(input: WarrantyMineQuery = {}): Promise<WarrantyMinePage> {
     const params = query(input), b = body((await apiClient.get('/warranty-claims/mine', { params })).data), meta = record(b.meta);

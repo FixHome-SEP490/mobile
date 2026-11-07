@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { paymentStatusLabel } from './payment-status-label';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { isHistoricalOrder } from '../../../api/orders.api';
+import { isHistoricalOrder, ordersApi } from '../../../api/orders.api';
+import { warrantyClaimDisplayMeta } from '../../../screens/customer/customer-warranty';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { goHome } from '../../../components/BackButton';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from './TaskScreenShell';
@@ -44,6 +45,7 @@ export default function CompletedOrderScreen({ role }: { role: 'customer' | 'tec
   const navigation = useNavigation<any>();
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   useLoadUnloadedResources(snapshot, ['invoice'], loadResource);
+  const [warrantySub, setWarrantySub] = useState<string | undefined>();
 
   const orderValue = snapshot?.order.status === 'ready' ? snapshot.order.data : null;
   const order = orderValue && !isHistoricalOrder(orderValue) ? orderValue : null;
@@ -57,6 +59,17 @@ export default function CompletedOrderScreen({ role }: { role: 'customer' | 'tec
   const orderCode = order && typeof order.code === 'string' && order.code.trim().length > 0 ? order.code : null;
   const canCopyCode = role === 'customer' && !!orderCode;
   const open = (screen: string) => navigation.navigate(screen as never);
+  const serviceOrderId = order?.id;
+  // The customer sees at a glance that a warranty request needs an answer, without opening it.
+  useEffect(() => {
+    if (role !== 'customer' || !serviceOrderId) return;
+    let live = true;
+    ordersApi.getOrderWarrantyClaims(serviceOrderId).then(rows => {
+      const open = rows.find(c => !['resolved', 'rejected'].includes(String(c.status).toLowerCase()));
+      if (live) setWarrantySub(open ? (open.status === 'awaiting_customer' && !open.customerResponse ? 'Cần bạn phản hồi' : warrantyClaimDisplayMeta(open).label) : undefined);
+    }).catch(() => { if (live) setWarrantySub(undefined); });
+    return () => { live = false; };
+  }, [role, serviceOrderId]);
 
   const copyOrderCode = async () => {
     if (!canCopyCode || !orderCode) return;
@@ -149,7 +162,7 @@ export default function CompletedOrderScreen({ role }: { role: 'customer' | 'tec
       )}
       {role === 'technician' && <VisitTechnicianPanel section="devices" />}
       <HubSection title="Chi tiết đơn" items={DETAILS} onOpen={open} />
-      <HubSection title={role === 'customer' ? 'Sau dịch vụ' : 'Bảo hành và hỗ trợ'} items={role === 'customer' ? AFTER_CUSTOMER : AFTER_TECHNICIAN} onOpen={open} />
+      <HubSection title={role === 'customer' ? 'Sau dịch vụ' : 'Bảo hành và hỗ trợ'} items={role === 'customer' ? AFTER_CUSTOMER.map(l => l.screen === 'CustomerWarranty' && warrantySub ? { ...l, sub: warrantySub } : l) : AFTER_TECHNICIAN} onOpen={open} />
     </TaskScreenShell>
   );
 }

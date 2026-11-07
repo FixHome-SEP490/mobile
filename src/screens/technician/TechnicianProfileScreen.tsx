@@ -517,7 +517,7 @@ export default function TechnicianProfileScreen() {
             Icon={Wrench}
             title="Công việc bảo hành"
             desc="Yêu cầu bảo hành được giao cho bạn"
-            onPress={() => navigation.navigate('TechnicianWarrantyInbox')}
+            onPress={() => navigation.navigate('TechnicianMain', { screen: 'Jobs', params: { mode: 'warranty' } })}
           />
         </View>
 

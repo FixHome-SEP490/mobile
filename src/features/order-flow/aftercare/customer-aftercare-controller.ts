@@ -48,7 +48,9 @@ export function createCustomerAftercareController(deps: CustomerAftercareDepende
         const result = kind === 'coverages' ? raw.map(r => normalizeCoverage(r, key.serviceOrderId)) : raw.map(r => normalizeClaim(r, key.serviceOrderId));
         if (new Set(result.map(r => r.id)).size !== result.length) throw Error('Danh sách chưa xác định.'); return result;
       })();
-      presentationKey = { ...key }; publish({ [kind]: { status: 'ready', data, requestSeq, fetchedAt: Date.now() } });
+      presentationKey = { ...key };
+      // A purge that was only a passing re-read leaves "denied" behind; a read that works again proves the person still has access.
+      publish({ [kind]: { status: 'ready', data, requestSeq, fetchedAt: Date.now() }, ...(state.phase === 'denied' ? { phase: 'idle' as const, message: null } : {}) });
     } catch (error) {
       if (!same(key) || generation !== epoch) return;
       if (deniedRead(error)) { deps.coordinator.invalidate(); purge(); }

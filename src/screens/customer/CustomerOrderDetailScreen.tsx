@@ -1,3 +1,4 @@
+import { orderWarrantyRoute } from './customer-warranty';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { quoteStatusLabel } from '../../utils/quote-status';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, StatusBar, Image, Modal, Alert, TextInput, Linking, AppState, type LayoutChangeEvent, ScrollViewInstance } from 'react-native';
@@ -10,6 +11,7 @@ import { orderPartsFor } from '../../services/live-kinds';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAppTheme } from '../../constants/theme';
+import { OrderWarrantyClaims } from './OrderWarrantyClaims';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import CustomerSupportCasesSection from './CustomerSupportCasesSection';
 import { useAuthStore } from '../../store/auth.store';
@@ -980,12 +982,13 @@ export default function CustomerOrderDetailScreen() {
               </View>
               <TouchableOpacity
                 style={[styles.decisionBtn, { backgroundColor: colors.primaryStrong, alignSelf: 'flex-start' }]}
-                onPress={() => navigation.navigate('CustomerWarranties', { orderId: serviceOrderId })}
+                onPress={() => { const route = orderWarrantyRoute(serviceOrderId); navigation.navigate(route.name as any, route.params as any); }}
                 accessibilityRole="button"
                 accessibilityLabel="Mở bảo hành của đơn sửa chữa"
               >
                 <Text style={styles.decisionBtnText}>Xem bảo hành</Text>
               </TouchableOpacity>
+              <OrderWarrantyClaims serviceOrderId={serviceOrderId} />
             </View>
           )}
 
