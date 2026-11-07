@@ -1,5 +1,13 @@
 // src/api/orders.api.ts
+import { Platform } from 'react-native';
 import apiClient from './client';
+
+// Browsers need a real Blob; the {uri,name,type} shape only works in React Native.
+async function appendImage(form: FormData, image: { uri: string; name: string; type: string }) {
+  if (Platform.OS !== 'web') { form.append('file', { uri: image.uri, name: image.name, type: image.type } as unknown as Blob); return; }
+  const blob = await (await fetch(image.uri)).blob();
+  form.append('file', blob.type ? blob : new Blob([blob], { type: image.type }), image.name);
+}
 import type { CheckInDto, UpdateLocationDto, EvidenceUploadMetadata, CompletionRequestDto, OrderStatusHistoryResponse } from '../types/api.types';
 
 // Backend's Cloudinary round-trip for evidence photos is observed at 30s+
@@ -559,7 +567,7 @@ export const ordersApi = {
   async uploadEvidenceAdditional(id: string, image: EvidenceUploadImage): Promise<{ id: string }> {
     const form = new FormData();
     form.append('type', 'additional');
-    form.append('file', { uri: image.uri, name: image.name, type: image.type } as unknown as Blob);
+    await appendImage(form, image);
     const row = unwrap<{ id?: unknown }>((await apiClient.post(`/service-orders/${id}/evidence`, form, {
       headers: { 'Content-Type': 'multipart/form-data' }, timeout: EVIDENCE_UPLOAD_TIMEOUT,
     })).data);
@@ -592,11 +600,7 @@ export const ordersApi = {
     form.append('type', 'before');
     // BE 20/10/2026: `true` keeps a fixed-price order EN_ROUTE for the next photo; the last photo omits it or sends `false`.
     if (options.deferAutoStart !== undefined) form.append('deferAutoStart', String(options.deferAutoStart));
-    form.append('file', {
-      uri: image.uri,
-      name: image.name,
-      type: image.type,
-    } as unknown as Blob);
+    await appendImage(form, image);
     const res = await apiClient.post(`/service-orders/${id}/evidence`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: EVIDENCE_UPLOAD_TIMEOUT,
@@ -611,7 +615,7 @@ export const ordersApi = {
   ): Promise<unknown> {
     const form = new FormData();
     form.append('type', 'checkin_face');
-    form.append('file', { uri: image.uri, name: image.name, type: image.type } as unknown as Blob);
+    await appendImage(form, image);
     if (metadata.note !== undefined) form.append('note', metadata.note);
     if (metadata.capturedAt !== undefined) form.append('capturedAt', metadata.capturedAt);
     return unwrap((await apiClient.post(`/service-orders/${id}/evidence`, form, {
@@ -628,11 +632,7 @@ export const ordersApi = {
   async uploadEvidenceAfter(id: string, image: EvidenceUploadImage): Promise<unknown> {
     const form = new FormData();
     form.append('type', 'after');
-    form.append('file', {
-      uri: image.uri,
-      name: image.name,
-      type: image.type,
-    } as unknown as Blob);
+    await appendImage(form, image);
     const res = await apiClient.post(`/service-orders/${id}/evidence`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: EVIDENCE_UPLOAD_TIMEOUT,

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Linking, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AlertCircle, CheckCircle2, Plus, X } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -14,7 +14,7 @@ import { createIdempotencyKey } from '../../api/part-requests.api';
 import { VISIT_DEVICE_LIMIT, visitGroupsApi } from '../../api/visit-groups.api';
 import { iconSize, iconStroke, useAppTheme } from '../../constants/theme';
 import type { RootStackParamList } from '../../types';
-import type { BookingSchedule } from '../../utils/booking-session';
+import { scheduleSummary, type BookingSchedule } from '../../utils/booking-session';
 import { formatVnd } from '../../utils/format';
 import { extractApiErrorMessage } from '../../utils/input-validation';
 import { summarizeVisitDevicePrices, visitPriceText } from '../../utils/visit-device-pricing';
@@ -67,6 +67,7 @@ export default function CustomerVisitCreateScreen() {
   const [schedule, setSchedule] = useState<BookingSchedule | null>(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState('');
   // A send with no answer may have been saved; the same key makes a retry safe, but the customer is told to check first.
   const [unknownOutcome, setUnknownOutcome] = useState(false);
@@ -186,11 +187,9 @@ export default function CustomerVisitCreateScreen() {
 
   const confirmSend = () => {
     if (problem || busy) { if (problem) setError(problem); return; }
-    Alert.alert('Gửi lượt sửa?', `${devices.length} thiết bị, một kỹ thuật viên nhận cả lượt và bạn thanh toán một lần.`, [
-      { text: 'Xem lại', style: 'cancel' },
-      { text: 'Gửi yêu cầu', onPress: () => void send() },
-    ]);
+    setError(''); setReviewing(true);
   };
+  const address = readyAddresses.find((a) => a.id === addressId);
   const sendConsult = async () => {
     const message = consultText.trim();
     if (!message) return;
@@ -213,6 +212,47 @@ export default function CustomerVisitCreateScreen() {
             <Text style={styles.hint}>Hiện chưa đặt được nhiều thiết bị trong một lượt. Bạn có thể đặt từng thiết bị.</Text>
             <TouchableOpacity style={styles.secondary} onPress={() => navigation.goBack()} accessibilityRole="button"><Text style={styles.secondaryText}>Quay lại</Text></TouchableOpacity>
           </View>
+        ) : reviewing && schedule ? (
+          <ScrollView contentContainerStyle={styles.body} testID="visit-review">
+            <Text style={styles.section}>Xem lại yêu cầu</Text>
+            <Text style={styles.hint}>Kiểm tra thông tin trước khi gửi. Yêu cầu chưa được tạo và ảnh chưa tải lên, chỉ gửi sau khi bạn xác nhận.</Text>
+            {devices.map((d, i) => (
+              <View key={d.key} style={styles.card} testID={`visit-review-device-${i + 1}`}>
+                <Text style={styles.title}>Máy {i + 1} · {d.serviceName}</Text>
+                <Text style={styles.value}>{d.description}</Text>
+                {d.photos.length > 0 && (
+                  <View style={styles.photoRow}>
+                    {d.photos.map((p, n) => <Image key={p.uri} source={{ uri: p.uri }} style={styles.photoImg} accessibilityLabel={`Ảnh máy ${i + 1}, ${n + 1}`} />)}
+                  </View>
+                )}
+                <Text style={styles.hint}>Giá công tạm tính: {visitPriceText(summarizeVisitDevicePrices([devicePrice(d.priceSummary)]), formatVnd) || 'Thợ báo giá tại nhà'}</Text>
+              </View>
+            ))}
+            <View style={styles.card}>
+              <Text style={styles.hint}>Địa chỉ sửa chữa</Text>
+              <Text style={styles.value}>{[address?.label, [address?.line1, address?.ward, address?.district, address?.province].filter(Boolean).join(', ')].filter(Boolean).join(' · ')}</Text>
+              <Text style={styles.hint}>Ngày và giờ</Text>
+              <Text style={styles.value}>{scheduleSummary(schedule)}</Text>
+              {!!note.trim() && <><Text style={styles.hint}>Ghi chú cho thợ</Text><Text style={styles.value}>{note.trim()}</Text></>}
+              <Text style={styles.hint}>Tổng giá công tạm tính</Text>
+              <Text style={styles.value}>{visitPriceText(total, formatVnd) || 'Thợ báo giá tại nhà'}</Text>
+            </View>
+            <Text style={styles.hint}>{devices.length} thiết bị, một kỹ thuật viên nhận cả lượt và bạn thanh toán một lần.</Text>
+            {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+            <TouchableOpacity
+              testID="visit-review-send"
+              style={[styles.primary, (busy || unknownOutcome) && styles.disabled]}
+              disabled={busy || unknownOutcome}
+              onPress={() => void send()}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: busy || unknownOutcome, busy }}
+            >
+              {busy ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.primaryText}>Gửi yêu cầu</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity testID="visit-review-edit" style={[styles.secondary, busy && styles.disabled]} disabled={busy} onPress={() => setReviewing(false)} accessibilityRole="button">
+              <Text style={styles.secondaryText}>Chỉnh sửa</Text>
+            </TouchableOpacity>
+          </ScrollView>
         ) : (
           <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
             {!!loadError && <Text accessibilityRole="alert" style={styles.error}>{loadError}</Text>}
@@ -343,7 +383,7 @@ export default function CustomerVisitCreateScreen() {
                   accessibilityRole="button"
                   accessibilityState={{ disabled: busy || unknownOutcome || !!problem, busy }}
                 >
-                  {busy ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.primaryText}>{`Tiếp tục với ${devices.length} thiết bị`}</Text>}
+                  {busy ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.primaryText}>{`Xem lại và gửi ${devices.length} thiết bị`}</Text>}
                 </TouchableOpacity>
               </>
             )}

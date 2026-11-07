@@ -401,6 +401,25 @@ export default function QuotationFormScreen() {
             }
       }
     >
+      {reviewing && (
+        <Section title="Xem lại báo giá">
+        <View testID="quote-review-sheet" style={styles.review}>
+          {rows.map(row => (
+            <View key={row.key} style={styles.reviewLine}>
+              <Text style={styles.reviewName}>{isPart(row) ? row.partNameSnapshot || row.description : row.description}</Text>
+              <Text style={styles.reviewMeta}>{row.quantity} × {formatVnd(Number(row.unitPrice))} = {formatVnd(costItemRowSubtotal(row) ?? 0)}</Text>
+              {isPart(row) && <Text style={styles.reviewWarranty}>{Number(row.warrantyTermDays) > 0 ? `Bảo hành ${row.warrantyTermDays} ngày theo FixHome` : 'Bảo hành theo chính sách FixHome'}</Text>}
+            </View>
+          ))}
+          <DetailRow label="Số hạng mục" value={rows.length} />
+          <DetailRow label="Ước tính" value={estimate !== null ? formatVnd(estimate) : 'Chưa tính được'} />
+          <Text style={styles.reviewHint}>
+            Số ước tính để tham khảo; tổng theo máy chủ trên chi tiết đã gửi mới có hiệu lực. Dùng nút gửi ở thanh dưới cùng, ngoài vùng cuộn.
+          </Text>
+        </View>
+        </Section>
+      )}
+
       {showRecovery && state.phase !== 'resolved' && (
         <ReadOnlyNotice>
           Có thao tác tạo báo giá chưa rõ kết quả từ phiên trước. Hãy kiểm tra lại từ máy chủ, không tạo mới.
@@ -491,24 +510,6 @@ export default function QuotationFormScreen() {
         </>
       )}
 
-      {reviewing && (
-        <View testID="quote-review-sheet" style={styles.review}>
-          <Text accessibilityRole="header" style={styles.reviewTitle}>Xem lại báo giá</Text>
-          {rows.map(row => (
-            <View key={row.key} style={styles.reviewLine}>
-              <Text style={styles.reviewName}>{isPart(row) ? row.partNameSnapshot || row.description : row.description}</Text>
-              <Text style={styles.reviewMeta}>{row.quantity} × {formatVnd(Number(row.unitPrice))} = {formatVnd(costItemRowSubtotal(row) ?? 0)}</Text>
-              {isPart(row) && <Text style={styles.reviewWarranty}>{Number(row.warrantyTermDays) > 0 ? `Bảo hành ${row.warrantyTermDays} ngày theo FixHome` : 'Bảo hành theo chính sách FixHome'}</Text>}
-            </View>
-          ))}
-          <DetailRow label="Số hạng mục" value={rows.length} />
-          <DetailRow label="Ước tính" value={estimate !== null ? formatVnd(estimate) : 'Chưa tính được'} />
-          <Text style={styles.reviewHint}>
-            Số ước tính để tham khảo; tổng theo máy chủ trên chi tiết đã gửi mới có hiệu lực. Dùng nút gửi ở thanh dưới cùng, ngoài vùng cuộn.
-          </Text>
-        </View>
-      )}
-
       {(formError || (state.phase === 'denied' && state.message)) && (
         <Text testID="quote-form-error" accessibilityRole="alert" style={styles.formError}>
           {formError ?? state.message}
@@ -565,7 +566,7 @@ const styles = StyleSheet.create({
   noteWrap: { gap: 8 },
   noteTitle: { color: colors.text, fontSize: 16, lineHeight: 24, fontWeight: '700' },
   noteInput: { minHeight: 94, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 14, textAlignVertical: 'top', color: colors.text, fontSize: 16, lineHeight: 24, backgroundColor: colors.surface },
-  review: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: 8 },
+  review: { padding: spacing.md, gap: 8 },
   reviewTitle: { color: colors.text, fontSize: 16, lineHeight: 24, fontWeight: '700' },
   reviewLine: { gap: 2, paddingBottom: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   reviewName: { color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '600' },

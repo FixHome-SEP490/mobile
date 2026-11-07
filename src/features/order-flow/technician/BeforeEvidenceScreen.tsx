@@ -181,8 +181,8 @@ export default function BeforeEvidenceScreen() {
         <ReadOnlyNotice>Đang tải danh sách ảnh từ máy chủ. Mọi thao tác chụp, gửi và xóa đều khóa cho đến khi dữ liệu ảnh đầy đủ.</ReadOnlyNotice>
       ) : (
         <ReadOnlyNotice>
-          Hãy chụp ảnh hiện trạng trước sửa chữa, có thể chụp nhiều ảnh rồi gửi một lần. Số ảnh yêu cầu do máy chủ quyết định; một ảnh đã gửi không đồng nghĩa đã đủ.
-          {isFixedPrice ? ' Đơn giá cố định nên không cần báo giá; máy chủ tự bắt đầu sửa chữa sau ảnh cuối bạn gửi.' : null}
+          Chụp ảnh hiện trạng trước sửa chữa, có thể chụp nhiều ảnh rồi gửi một lần.
+          {isFixedPrice ? ' Đơn giá cố định, không cần báo giá.' : null}
         </ReadOnlyNotice>
       )}
       {assets.length ? (
