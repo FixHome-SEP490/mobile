@@ -1,6 +1,7 @@
 // src/api/orders.api.ts
 import { Platform } from 'react-native';
 import apiClient from './client';
+import type { CheckInDto, UpdateLocationDto, EvidenceUploadMetadata, CompletionRequestDto, OrderStatusHistoryResponse } from '../types/api.types';
 
 // Browsers need a real Blob; the {uri,name,type} shape only works in React Native.
 async function appendImage(form: FormData, image: { uri: string; name: string; type: string }) {
@@ -8,7 +9,6 @@ async function appendImage(form: FormData, image: { uri: string; name: string; t
   const blob = await (await fetch(image.uri)).blob();
   form.append('file', blob.type ? blob : new Blob([blob], { type: image.type }), image.name);
 }
-import type { CheckInDto, UpdateLocationDto, EvidenceUploadMetadata, CompletionRequestDto, OrderStatusHistoryResponse } from '../types/api.types';
 
 // Backend's Cloudinary round-trip for evidence photos is observed at 30s+
 // (see service-orders.service.ts uploadEvidence comment); the shared 15s
