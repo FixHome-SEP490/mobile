@@ -31,6 +31,7 @@ import TechnicianKycScreen from '../screens/technician/TechnicianKycScreen';
 import TechnicianOnboardingScreen from '../screens/technician/TechnicianOnboardingScreen';
 import TechnicianWalletScreen from '../screens/technician/TechnicianWalletScreen';
 import TechnicianReviewsScreen from '../screens/technician/TechnicianReviewsScreen';
+import TechnicianPartReturnsScreen from '../screens/technician/TechnicianPartReturnsScreen';
 import TechnicianScheduleScreen from '../screens/technician/TechnicianScheduleScreen';
 import TechnicianServiceAreasScreen from '../screens/technician/TechnicianServiceAreasScreen';
 import TechnicianEarningsScreen from '../screens/technician/TechnicianEarningsScreen';
@@ -129,6 +130,7 @@ export default function AppNavigator({ firstRunSeen = false }: { firstRunSeen?: 
             <Stack.Screen name="TechnicianWarrantyTask" component={TechnicianWarrantyTaskScreen} />
             <Stack.Screen name="TechnicianWallet" component={TechnicianWalletScreen} />
             <Stack.Screen name="TechnicianReviews" component={TechnicianReviewsScreen} />
+            <Stack.Screen name="TechnicianPartReturns" component={TechnicianPartReturnsScreen} />
             <Stack.Screen name="TechnicianSchedule" component={TechnicianScheduleScreen} />
             <Stack.Screen name="TechnicianServiceAreas" component={TechnicianServiceAreasScreen} />
             <Stack.Screen name="TechnicianEarnings" component={TechnicianEarningsScreen} />

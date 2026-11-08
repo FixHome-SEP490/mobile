@@ -565,6 +565,20 @@ describe('createTechnicianPartsController', () => {
 
       expect(controller.getState().phase).toBe('unknown');
     });
+
+    it('shows the backend message and unlocks retry when receive is refused with 409', async () => {
+      transport.receiveByQr.mockRejectedValueOnce({
+        response: { status: 409, data: { error: { message: 'Cần quản lý kho bàn giao vật lý và mã nhận hợp lệ chưa sử dụng.' } } },
+      });
+      transport.getPartRequest.mockResolvedValueOnce({ id: 'req-1', serviceOrderId: 'order-1', technicianId: 'tech-1', status: 'ready' } as any);
+
+      const controller = createTechnicianPartsController(deps);
+      await controller.receiveByQr(key, 'req-1', 'qr-token');
+
+      expect(controller.getState().phase).toBe('denied');
+      expect(controller.getState().error).toMatch(/bàn giao vật lý/);
+      expect(deps.journal.hasUnresolved(key)).toBe(false);
+    });
   });
 
   describe('updateItemUsage', () => {
@@ -768,6 +782,18 @@ describe('createTechnicianPartsController', () => {
       expect(controller.getState().phase).toBe('resolved');
       const marker = journal.list(key.userId).find((m) => m.intentId === 'intent-verify-1');
       expect(marker?.status).toBe('resolved');
+    });
+
+    it('unlocks a stuck parts-receive marker when a fresh read still shows ready', async () => {
+      const controller = createTechnicianPartsController(deps);
+      await journal.begin(key, { intentId: 'intent-recv', operation: 'parts-receive', entityId: 'req-1' });
+      await journal.mark(key.userId, 'intent-recv', 'unknown');
+      transport.getPartRequest.mockResolvedValueOnce({ id: 'req-1', serviceOrderId: 'order-1', technicianId: 'tech-1', status: 'ready' } as any);
+
+      await controller.verify(key, 'intent-recv');
+
+      expect(controller.getState().phase).toBe('denied');
+      expect(journal.hasUnresolved(key)).toBe(false);
     });
 
     it('verifies parts-usage with desired outcome encoded in stableKey', async () => {

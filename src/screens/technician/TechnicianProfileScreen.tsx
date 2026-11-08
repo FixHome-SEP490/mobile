@@ -31,6 +31,7 @@ import {
   ChevronRight,
   MapPin,
   MessageSquareText,
+  PackageCheck,
   ShieldCheck,
   Star,
   Wallet,
@@ -555,6 +556,15 @@ export default function TechnicianProfileScreen() {
                   : 'Mở để xem đánh giá'
             }
             onPress={() => navigation.navigate('TechnicianReviews')}
+          />
+          <View style={styles.divider} />
+          <MenuRow
+            styles={styles}
+            colors={colors}
+            Icon={PackageCheck}
+            title="Linh kiện cần trả"
+            desc="Linh kiện còn giữ, theo từng đơn"
+            onPress={() => navigation.navigate('TechnicianPartReturns')}
           />
         </View>
 

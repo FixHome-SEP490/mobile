@@ -115,6 +115,12 @@ export function createArrivalProofController(deps: ArrivalProofDependencies) {
     const type = marker.operation === 'face-upload' ? 'CHECKIN_FACE' : marker.operation === 'before-upload' ? 'BEFORE' : null;
     return type && marker.resultEntityId && ownedEvidence(key)?.some(e => e.id === marker.resultEntityId && e.type === type) ? 'resolved' : 'unresolved';
   }
+  /** An upload that never got an ID back is safe to resend only when the server lists no photo of its type from that attempt on (unparseable dates count as "maybe stored"). */
+  function neverStored(key: OrderSessionKey, marker: OrderCommandMarker): boolean {
+    const type = marker.operation === 'face-upload' ? 'CHECKIN_FACE' : marker.operation === 'before-upload' ? 'BEFORE' : null;
+    const own = ownedEvidence(key);
+    return !!type && !marker.resultEntityId && own !== null && !own.some(e => e.type === type && !(Date.parse(e.createdAt) < marker.dispatchedAt));
+  }
   async function run(operation: OrderCommandOperation, command: (key: OrderSessionKey, intentId: string) => Promise<unknown>, resources: OrderResourceKind[] = [], entityId?: string, knownFailure: () => boolean = () => false, inputCurrent: () => boolean = () => true, precommitNoEffect: () => boolean = () => false) {
     const key = deps.getKey(); if (busy || !key || !sameKey(key)) return;
     busy = true; publish({ phase: 'verifying', operation, message: null });
@@ -226,7 +232,12 @@ export function createArrivalProofController(deps: ArrivalProofDependencies) {
         await deps.journal.restore(); if (!sameKey(key)) return;
         const markers = deps.journal.list(key.userId).filter(m => m.serviceOrderId === key.serviceOrderId && ['submitting', 'verifying', 'unknown'].includes(m.status));
         const adapter = createOrderCommandAdapter(deps.journal, { isCurrent: sameKey, refresh: k => refresh(k, ['evidence']) });
-        for (const marker of markers) await adapter.verify(key, marker.intentId, () => verdict(key, marker));
+        for (const marker of markers) await adapter.verify(key, marker.intentId, () => {
+          const v = verdict(key, marker);
+          return v === 'unresolved' && neverStored(key, marker) ? 'failed-known' : v;
+        });
+        const released = markers.some(m => deps.journal.list(key.userId).find(x => x.intentId === m.intentId)?.status === 'failed-known');
+        if (sameKey(key) && released && !deps.journal.hasUnresolved(key)) { publish({ phase: 'denied', message: 'Chưa gửi được ảnh. Ảnh chưa được lưu; hãy chụp lại và gửi lại.' }); return; }
         if (sameKey(key)) publish({ phase: markers.length && !deps.journal.hasUnresolved(key) ? 'resolved' : deps.journal.hasUnresolved(key) ? 'unknown' : 'idle', message: deps.journal.hasUnresolved(key) ? unknownMessage : null });
       } catch { if (sameKey(key)) publish({ phase: 'unknown', message: unknownMessage }); }
       finally { busy = false; }

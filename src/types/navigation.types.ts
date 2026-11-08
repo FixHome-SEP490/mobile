@@ -97,6 +97,7 @@ export type RootStackParamList = {
   TechnicianOnboarding: undefined;
   TechnicianWallet: undefined;
   TechnicianReviews: undefined;
+  TechnicianPartReturns: undefined;
   TechnicianSchedule: undefined;
   TechnicianServiceAreas: undefined;
   TechnicianEarnings: undefined;

@@ -120,6 +120,9 @@ export const partRequestsApi = {
  * the obligation ends when the Service Manager physically accepts them at the counter.
  */
 export interface PartCustodyReturnRecord {
+  /** Sent by the Backend on every custody row; absent on older responses. */
+  orderId?: string;
+  handedOverAt?: string;
   partRequestId: string;
   partRequestItemId: string;
   partNameSnapshot: string;

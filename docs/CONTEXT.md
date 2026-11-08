@@ -419,6 +419,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 - 2026-11-08 22:53 (UTC+7) | Hgnv11 | dev | Đăng ký thợ bước 1: thêm quét mã QR trên CCCD để tự điền thông tin, chỉ xử lý trên máy; quyền camera dùng chung với quét linh kiện
+- 2026-11-08 11:36 (UTC+7) | Hgnv11 | dev | Thợ nhận linh kiện bằng mã: khi backend từ chối bằng 4xx (trừ 401, 408) và đọc lại thấy chưa đổi, hiện đúng thông báo của backend, mở lại nút nhận thay vì kẹt `unknown`
 - 2026-11-07 13:32 (UTC+7) | Hgnv11 | dev | Bảo hành: các màn khách và thợ giữ dữ liệu cũ khi đọc lại, không còn tải lại cả trang hay nháy trạng thái rỗng
 - 2026-11-07 10:08 (UTC+7) | Hgnv11 | dev | Bảo hành: thợ chọn buổi kiểm tra bắt buộc và đổi lịch trước check-in, khách thấy lịch kiểm tra và lịch sử yêu cầu đã đóng, bấm thông báo mở đúng đơn, sửa kẹt `unknown`/`denied`, làm lại danh sách linh kiện hỏng
 - 2026-11-07 00:25 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Bảo hành: thợ chọn số cái hỏng khi dòng linh kiện từ 2 cái; khách: trang Bảo hành gọn, thẻ yêu cầu và phản hồi một nút, thông báo mở trang Bảo hành; thợ: lời mời bấm được, tiêu đề theo tên dịch vụ; sửa nút bị khóa sau khi nhận
@@ -443,7 +444,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-31 14:40 (UTC+7) | Hgnv11 | dev | Thợ: trang báo trễ tải nhanh hơn, chỉ hỏi đơn đang chờ (statuses=accepted,en_route) và dùng chung kết quả giữa hub và trang; chưa kiểm chứng trên thiết bị.
 - 2026-10-31 14:32 (UTC+7) | Hgnv11 | dev | Thợ: gửi báo trễ xong thì trang hiện báo cáo đã gửi (số phút, lý do, mô tả, ảnh, trạng thái chờ khách) thay vì biểu mẫu trống; chưa kiểm chứng với Backend thật và thiết bị.
 - 2026-10-31 14:25 (UTC+7) | Hgnv11 | dev | Thợ: trang báo trễ đơn kế tiếp làm lại theo 4 bước, lỗi hiện dưới từng ô, lưới ảnh có xóa từng ảnh; bỏ hẳn nhả đơn trong app (khách quyết định); chưa kiểm chứng với Backend thật và thiết bị.
-- 2026-10-31 13:04 (UTC+7) | Hgnv11 | dev | Khách: thẻ báo trễ của kỹ thuật viên trên màn đơn với ba lựa chọn đợi, chọn kỹ thuật viên khác, hủy không phí (nối delay-decision); chưa kiểm chứng với Backend thật và thiết bị.
 
 - 2026-10-31 12:11 (UTC+7) | Hgnv11 | dev | Thợ: báo trễ hoặc nhả đơn kế tiếp bằng biểu mẫu có lý do, 1-3 ảnh và xác nhận (không còn nhả một chạm), nối delay-notice và overrun-release mới; tab Không kịp tới mở đơn đang làm; chưa làm phía khách, chưa kiểm chứng với Backend thật và thiết bị.
 - 2026-10-30 17:58 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Hai tab đơn của khách đổi nhãn thành Đơn 1 thiết bị và Đơn nhiều thiết bị (Hoạt động, Lịch sử sửa chữa); header Ví FixHome của khách theo header chuẩn, bỏ dòng Ví của tôi; chỉ đổi giao diện, chưa kiểm chứng trên máy thật.

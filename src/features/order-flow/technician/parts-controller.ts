@@ -1,4 +1,5 @@
 import { isHistoricalOrder } from '../../../api/orders.api';
+import { extractApiErrorMessage } from '../../../utils/input-validation';
 import {
   sameOrderSession,
   type OrderSessionKey,
@@ -163,6 +164,12 @@ function currentParts(coordinator: OrderReadCoordinator, key: OrderSessionKey): 
   const parts = s.resources.parts;
   return parts?.status === 'ready' && Array.isArray(parts?.data) ? parts.data : null;
 }
+
+// 4xx except 401 (token renewal may replay) and 408: the server read and refused the request.
+const isServerRejection = (e: unknown): boolean => {
+  const status = (e as { response?: { status?: number } })?.response?.status;
+  return typeof status === 'number' && status >= 400 && status < 500 && status !== 401 && status !== 408;
+};
 
 export function createTechnicianPartsController(deps: TechnicianPartsControllerDeps) {
   const transport = deps.transport ?? defaultTransport;
@@ -390,6 +397,7 @@ export function createTechnicianPartsController(deps: TechnicianPartsControllerD
     }
 
     const intentId = `parts-receive-${Date.now()}`;
+    let rejection: unknown;
     publish({ phase: 'submitting', operation: 'parts-receive', targetId: requestId, error: null, actionSuccess: null });
 
     await adapter.dispatch(
@@ -414,7 +422,7 @@ export function createTechnicianPartsController(deps: TechnicianPartsControllerD
         if (!['pickup', 'delivery'].includes(liveReq.fulfillmentMethod ?? '') || liveReq.status !== expectedStatus) {
           throw new Error('Target request status invalid before receiveByQr dispatch.');
         }
-        await transport.receiveByQr(requestId, token);
+        try { await transport.receiveByQr(requestId, token); } catch (e) { rejection = e; throw e; }
       },
       async (): Promise<CommandReadbackVerdict> => {
         try {
@@ -443,6 +451,16 @@ export function createTechnicianPartsController(deps: TechnicianPartsControllerD
         error: null,
       });
       deps.notify?.('Nhận linh kiện', 'Đã nhận linh kiện thành công.');
+    } else if (isServerRejection(rejection)) {
+      // Backend answered 4xx and readback shows nothing changed: a known failure, so unlock the retry.
+      await deps.journal.mark(key.userId, intentId, 'failed-known');
+      publish({
+        phase: 'denied',
+        operation: 'parts-receive',
+        targetId: requestId,
+        error: extractApiErrorMessage(rejection, 'Không thể nhận linh kiện. Vui lòng kiểm tra mã nhận.'),
+        actionSuccess: null,
+      });
     } else {
       publish({
         phase: 'unknown',
@@ -706,12 +724,10 @@ export function createTechnicianPartsController(deps: TechnicianPartsControllerD
           const detail = transport.getPartRequest
             ? await transport.getPartRequest(marker.entityId)
             : currentParts(deps.readCoordinator, key)?.find((p) => p.id === marker.entityId);
-          return detail?.id === marker.entityId &&
-            detail.serviceOrderId === key.serviceOrderId &&
-            detail.technicianId === key.userId &&
-            detail.status === 'received'
-            ? 'resolved'
-            : 'unresolved';
+          if (detail?.id !== marker.entityId || detail.serviceOrderId !== key.serviceOrderId || detail.technicianId !== key.userId) return 'unresolved';
+          if (detail.status === 'received') return 'resolved';
+          // Receipt is one atomic backend transaction: still ready/delivering after a fresh read means it never applied.
+          return detail.status === 'ready' || detail.status === 'delivering' ? 'failed-known' : 'unresolved';
         }
         if (marker.operation === 'parts-usage') {
           const [requestId, itemId] = marker.entityId.split('__');
@@ -750,6 +766,8 @@ export function createTechnicianPartsController(deps: TechnicianPartsControllerD
     const finalMarker = deps.journal.list(key.userId).find((m) => m.intentId === intentId);
     if (finalMarker?.status === 'resolved') {
       publish({ phase: 'resolved', operation: marker.operation as any, error: null, actionSuccess: 'Đã xác nhận thành công.' });
+    } else if (finalMarker?.status === 'failed-known') {
+      publish({ phase: 'denied', operation: marker.operation as any, error: 'Linh kiện chưa được nhận. Hãy nhờ quản lý kho xác nhận bàn giao, rồi nhập mã nhận mới.', actionSuccess: null });
     } else {
       publish({ phase: 'unknown', operation: marker.operation as any, error: 'Chưa thể xác nhận. Vui lòng thử lại sau.' });
     }
