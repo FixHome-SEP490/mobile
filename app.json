@@ -40,7 +40,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "FixHome cần quyền camera để bạn quét mã QR xác nhận đã nhận linh kiện từ kho."
+          "cameraPermission": "FixHome cần quyền camera để bạn quét mã QR (nhận linh kiện từ kho, hoặc thông tin trên thẻ CCCD khi đăng ký thợ)."
         }
       ],
       "expo-web-browser",

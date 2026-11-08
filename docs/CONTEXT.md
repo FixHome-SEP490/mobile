@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-07 13:32 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
+> Cập nhật lần cuối: 2026-11-08 22:53 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -127,7 +127,7 @@ Production `OrderInformationScreen` chỉ cho Customer sao chép `order.code`; m
 
 Lịch làm việc hiển thị bảy ngày dọc T2–CN từ GET, chỉ mở editor khi chọn ngày; hỗ trợ nhiều khung giờ và bản xem trước sao chép T2–T6, giữ T7/CN. Preset chỉ là gợi ý, mọi thay đổi lịch phải nhấn Lưu; tuần trống không tự thêm khung giờ. Khai báo nghỉ mở theo yêu cầu, chỉ dùng khoảng nghỉ trọn ngày theo API hiện tại. Trang tài khoản hai role dùng cùng nút Đăng xuất viền đỏ ở cuối nội dung cuộn, phía trên thanh tab; giữ menu riêng và logic đăng xuất hiện có. Visual QA 320–430dp và thiết bị CHƯA KIỂM CHỨNG.
 
-Onboarding năm bước (thông tin, KYC tải lên URL ký sẵn, kỹ năng, địa chỉ và khu vực, gửi duyệt), lời mời, công việc (đi đến, check-in GPS có kiểm độ chính xác, ảnh trước và sau, báo giá, chi phí phát sinh, bắt đầu sửa, yêu cầu hoàn tất, tiền mặt, linh kiện có quét QR bằng camera), ví (nạp, tài khoản ngân hàng, rút), hồ sơ (nhận việc, lịch tuần, ngày nghỉ, giá công), thu nhập, đánh giá, ghi chú riêng theo đơn (lưu trên máy).
+Onboarding năm bước (thông tin có nút quét mã QR trên CCCD gắn chip để tự điền số CCCD, họ tên, ngày sinh, giới tính, `CccdQrScanner` + `parseCccdQr`, chỉ xử lý trên máy, không lưu hay gửi chuỗi QR, định dạng chuỗi CHƯA KIỂM CHỨNG trên thẻ thật; KYC tải lên URL ký sẵn, kỹ năng, địa chỉ và khu vực, gửi duyệt), lời mời, công việc (đi đến, check-in GPS có kiểm độ chính xác, ảnh trước và sau, báo giá, chi phí phát sinh, bắt đầu sửa, yêu cầu hoàn tất, tiền mặt, linh kiện có quét QR bằng camera), ví (nạp, tài khoản ngân hàng, rút), hồ sơ (nhận việc, lịch tuần, ngày nghỉ, giá công), thu nhập, đánh giá, ghi chú riêng theo đơn (lưu trên máy).
 
 ### Thay đổi 07/10/2026 (nhánh `fix/no-fake-data-and-po-decisions`)
 
@@ -418,6 +418,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-08 22:53 (UTC+7) | Hgnv11 | dev | Đăng ký thợ bước 1: thêm quét mã QR trên CCCD để tự điền thông tin, chỉ xử lý trên máy; quyền camera dùng chung với quét linh kiện
 - 2026-11-07 13:32 (UTC+7) | Hgnv11 | dev | Bảo hành: các màn khách và thợ giữ dữ liệu cũ khi đọc lại, không còn tải lại cả trang hay nháy trạng thái rỗng
 - 2026-11-07 10:08 (UTC+7) | Hgnv11 | dev | Bảo hành: thợ chọn buổi kiểm tra bắt buộc và đổi lịch trước check-in, khách thấy lịch kiểm tra và lịch sử yêu cầu đã đóng, bấm thông báo mở đúng đơn, sửa kẹt `unknown`/`denied`, làm lại danh sách linh kiện hỏng
 - 2026-11-07 00:25 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Bảo hành: thợ chọn số cái hỏng khi dòng linh kiện từ 2 cái; khách: trang Bảo hành gọn, thẻ yêu cầu và phản hồi một nút, thông báo mở trang Bảo hành; thợ: lời mời bấm được, tiêu đề theo tên dịch vụ; sửa nút bị khóa sau khi nhận
@@ -458,7 +459,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-28 08:55 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Đồng bộ web #180 và #182, BE #164-#167: thanh toán bằng voucher cho đơn lẻ và lượt (ví, VNPay, 0 ₫, tiền mặt, phía thợ lẫn khách); chưa kiểm chứng với backend thật.
 - 2026-10-27 20:18 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Đồng bộ web #172/#175/#176/#178: trợ lý AI bỏ Đúng ý/Chưa đúng và có nhãn ảnh, giải thích giá; đặt lại máy không sửa được; ví ưu đãi của khách; thanh toán bằng voucher (BE #164) chưa làm.
 - 2026-10-26 22:47 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Đồng bộ web #177 và BE #157/#162: báo giá chỉ linh kiện FixHome, ghi chú khai trả kho ở màn Bàn giao, đổi chữ giá cố định, chọn thợ và tiền mặt cả lượt; phần còn lại và chưa kiểm chứng ghi ở mục 8.
-- 2026-10-26 22:21 (UTC+7) | Hgnv11 | dev | Lượt nhiều thiết bị đã merge vào dev và push; gate (lint, typecheck, 324 suites Jest) xanh trên SDK 57; ghi việc đồng bộ web #177 còn chờ ở mục 8.
 
 ### Lịch sử giữ lại khi tích hợp
 

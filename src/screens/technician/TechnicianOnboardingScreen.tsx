@@ -46,6 +46,7 @@ import {
   getKycSummaryLabel,
   getOnboardingStepProgress,
   keysToServiceAreas,
+  parseCccdQr,
   parseDob,
   resolveOnboardingView,
   serviceAreasToKeys,
@@ -53,6 +54,7 @@ import {
   validateCitizenId,
   validateDob,
 } from './technician-onboarding';
+import { CccdQrScanner } from './CccdQrScanner';
 
 const GENDERS: { value: Gender; label: string }[] = [
   { value: 'male', label: 'Nam' },
@@ -90,6 +92,21 @@ export default function TechnicianOnboardingScreen() {
   const [citizenId, setCitizenId] = useState('');
   const [phone, setPhone] = useState(user?.phoneNumber ?? '');
   const [showStep1Errors, setShowStep1Errors] = useState(false);
+  const [scanningCccd, setScanningCccd] = useState(false);
+
+  // Chuỗi QR chỉ được phân tích tại máy rồi điền vào form như nhập tay; không lưu, không gửi đi đâu.
+  const handleCccdScan = (raw: string) => {
+    setScanningCccd(false);
+    const info = parseCccdQr(raw);
+    if (!info) {
+      Alert.alert('Không đọc được mã QR', 'Vui lòng quét mã QR ở mặt trước thẻ CCCD gắn chip, hoặc nhập thủ công.');
+      return;
+    }
+    setCitizenId(info.citizenId);
+    if (info.fullName) setFullName(info.fullName);
+    if (info.dob) setDob(info.dob);
+    setGender(info.gender);
+  };
 
   // Bước 3
   const [services, setServices] = useState<ServiceItem[]>([]);
@@ -438,6 +455,18 @@ export default function TechnicianOnboardingScreen() {
           ))}
         </View>
       </View>
+      {scanningCccd ? (
+        <CccdQrScanner onScan={handleCccdScan} onCancel={() => setScanningCccd(false)} />
+      ) : (
+        <TouchableOpacity
+          style={styles.chip}
+          onPress={() => setScanningCccd(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Quét mã QR trên CCCD để tự điền"
+        >
+          <Text style={styles.chipText}>Quét QR trên CCCD để tự điền</Text>
+        </TouchableOpacity>
+      )}
       {renderField(
         'Số CCCD',
         showStep1Errors ? step1Errors.citizenId : '',

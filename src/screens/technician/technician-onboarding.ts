@@ -170,6 +170,26 @@ export function validateCitizenId(value: string): string {
   return /^\d{12}$/.test(value.trim()) ? '' : 'Số CCCD phải gồm đúng 12 chữ số';
 }
 
+/**
+ * QR trên CCCD gắn chip: `số CCCD|số CMND cũ|họ tên|ddMMyyyy|giới tính|địa chỉ|ddMMyyyy cấp`.
+ * QR chỉ là dữ liệu tự khai (ai cũng tạo được), không chứng minh thẻ thật.
+ */
+export function parseCccdQr(
+  raw: string,
+): { citizenId: string; fullName: string; dob: string; gender: 'male' | 'female' | 'other' } | null {
+  const parts = raw.trim().split('|');
+  if (parts.length < 5 || validateCitizenId(parts[0])) return null;
+  const d = parts[3].trim();
+  const dob = /^\d{8}$/.test(d) ? `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}` : '';
+  const g = parts[4].trim().toLowerCase();
+  return {
+    citizenId: parts[0].trim(),
+    fullName: parts[2].trim(),
+    dob: parseDob(dob) ? dob : '',
+    gender: g === 'nam' ? 'male' : g === 'nữ' || g === 'nu' ? 'female' : 'other',
+  };
+}
+
 // ── Bước 4: khu vực phục vụ ─────────────────────────────────────────────
 
 export const toAreaKey = (provinceCode: string | number, districtCode: string | number) =>

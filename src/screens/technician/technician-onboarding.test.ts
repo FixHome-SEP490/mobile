@@ -5,6 +5,7 @@ import {
   getOnboardingStepProgress,
   keysToServiceAreas,
   ONBOARDING_STEPS,
+  parseCccdQr,
   parseDob,
   resolveOnboardingView,
   serviceAreasToKeys,
@@ -304,5 +305,20 @@ describe('detectArea', () => {
 
   it('returns nothing when the address matches no province', () => {
     expect(detectArea(provinces, 'Somewhere else')).toEqual({});
+  });
+});
+
+describe('parseCccdQr', () => {
+  it('reads a chip CCCD QR', () => {
+    expect(parseCccdQr('079203001234||Nguyễn Văn A|15052003|Nam|12 Lê Lợi, Q1, TP.HCM|01012022')).toEqual({
+      citizenId: '079203001234', fullName: 'Nguyễn Văn A', dob: '15/05/2003', gender: 'male',
+    });
+    expect(parseCccdQr('079203001234|123456789|Trần Thị B|31022003|Nữ|x|01012022')?.dob).toBe('');
+    expect(parseCccdQr('079203001234||B|15052003|Nữ|x|01012022')?.gender).toBe('female');
+  });
+
+  it('rejects anything that is not a CCCD QR', () => {
+    expect(parseCccdQr('https://example.com')).toBeNull();
+    expect(parseCccdQr('123|a|b|c|d')).toBeNull();
   });
 });
