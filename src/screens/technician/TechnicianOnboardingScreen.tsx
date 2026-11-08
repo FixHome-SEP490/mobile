@@ -15,6 +15,7 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,10 +23,9 @@ import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
-import { useAppTheme, type ThemeColors } from '../../constants/theme';
+import { iconSize, iconStroke, useAppTheme, type ThemeColors } from '../../constants/theme';
 import { useAuthStore } from '../../store';
-import { authApi } from '../../api/auth.api';
-import { geoApi, type PlaceSuggestion, type Province } from '../../api/geo.api';
+import { geoApi, type Province } from '../../api/geo.api';
 import { servicesApi, type CategoryItem, type ServiceItem } from '../../api/services.api';
 import { technicianProfileApi } from '../../api/technician-profile.api';
 import {
@@ -39,22 +39,31 @@ import {
   validatePhoneNumber,
 } from '../../utils/input-validation';
 import {
-  ONBOARDING_STEPS,
   SERVICE_RADIUS_OPTIONS_KM,
   detectArea,
   formatDobInput,
   getKycSummaryLabel,
+  isoToDob,
   getOnboardingStepProgress,
   keysToServiceAreas,
   parseCccdQr,
   parseDob,
+  resolveBackAction,
   resolveOnboardingView,
   serviceAreasToKeys,
   toAreaKey,
   validateCitizenId,
   validateDob,
 } from './technician-onboarding';
+import { CheckCircle2, ChevronRight, Info, PenLine, QrCode } from 'lucide-react-native';
+import ToneNote from '../../components/ToneNote';
+import { useLiveRefresh } from '../../hooks/useLiveRefresh';
+import { DEFAULT_SKILL_LEVEL, SKILL_LEVELS } from '../../utils/skill-levels';
+import BackButton from '../../components/BackButton';
 import { CccdQrScanner } from './CccdQrScanner';
+import { formatVisitTime } from './TechnicianOfficeVisitScreen';
+import OnboardingStepper from './OnboardingStepper';
+import TechnicianAddressPicker, { type PickedPlace } from './TechnicianAddressPicker';
 
 const GENDERS: { value: Gender; label: string }[] = [
   { value: 'male', label: 'Nam' },
@@ -70,7 +79,6 @@ export default function TechnicianOnboardingScreen() {
   const styles = getStyles(colors);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const user = useAuthStore((state) => state.user);
-  const logout = useAuthStore((state) => state.logout);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -78,9 +86,10 @@ export default function TechnicianOnboardingScreen() {
   const [step, setStep] = useState(1);
   // The system back (Android button, iOS swipe) steps back like "Quay lại" instead of leaving the wizard.
   const stepRef = useRef(step);
+  const wizardRef = useRef(false);
   useLayoutEffect(() => { stepRef.current = step; });
   useEffect(() => navigation.addListener('beforeRemove', (event) => {
-    if (stepRef.current > 1) { event.preventDefault(); setStep(stepRef.current - 1); }
+    if (wizardRef.current && stepRef.current > 1) { event.preventDefault(); setStep(stepRef.current - 1); }
   }), [navigation]);
   const [editingRejected, setEditingRejected] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,45 +101,49 @@ export default function TechnicianOnboardingScreen() {
   const [citizenId, setCitizenId] = useState('');
   const [phone, setPhone] = useState(user?.phoneNumber ?? '');
   const [showStep1Errors, setShowStep1Errors] = useState(false);
-  const [scanningCccd, setScanningCccd] = useState(false);
+  // Lần đầu vào bước 1 thợ chọn quét QR CCCD hoặc nhập thủ công; sau đó luôn ở form.
+  const [entryMode, setEntryMode] = useState<'choose' | 'scan' | 'form'>('form');
+  const [scannedFromCccd, setScannedFromCccd] = useState(false);
 
   // Chuỗi QR chỉ được phân tích tại máy rồi điền vào form như nhập tay; không lưu, không gửi đi đâu.
-  const handleCccdScan = (raw: string) => {
-    setScanningCccd(false);
+  const handleCccdScan = (raw: string): boolean => {
     const info = parseCccdQr(raw);
-    if (!info) {
-      Alert.alert('Không đọc được mã QR', 'Vui lòng quét mã QR ở mặt trước thẻ CCCD gắn chip, hoặc nhập thủ công.');
-      return;
-    }
+    if (!info) return false;
     setCitizenId(info.citizenId);
     if (info.fullName) setFullName(info.fullName);
     if (info.dob) setDob(info.dob);
     setGender(info.gender);
+    setScannedFromCccd(true);
+    setEntryMode('form');
+    return true;
   };
 
   // Bước 3
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
+  const [skillLevels, setSkillLevels] = useState<Record<string, string>>({});
+  const [defaultLevel, setDefaultLevel] = useState<string>(DEFAULT_SKILL_LEVEL);
+  const [showLevelDetail, setShowLevelDetail] = useState(false);
   const [yearsExperience, setYearsExperience] = useState(2);
   const [bio, setBio] = useState('');
 
   // Bước 4
   const [provinces, setProvinces] = useState<Province[]>([]);
   const [address, setAddress] = useState('');
-  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [placeInfo, setPlaceInfo] = useState<{ ward?: string; province?: string }>({});
   const [radiusKm, setRadiusKm] = useState(15);
   const [activeProvinceCode, setActiveProvinceCode] = useState(HO_CHI_MINH_CODE);
   const [provinceQuery, setProvinceQuery] = useState('');
   const [provincePickerOpen, setProvincePickerOpen] = useState(false);
   const [areaKeys, setAreaKeys] = useState<string[]>([]);
-  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const initialised = useRef(false);
 
   // ── Tải dữ liệu ──────────────────────────────────────────────────────
 
+  const [checking, setChecking] = useState(false);
   const refreshStatus = useCallback(async () => {
     try {
       setStatus(await technicianOnboardingApi.getStatus());
@@ -141,6 +154,9 @@ export default function TechnicianOnboardingScreen() {
       );
     }
   }, []);
+
+  // Admin vừa xử lý hồ sơ: thông báo realtime tới thì đọc lại trạng thái, màn tự đổi bước.
+  useLiveRefresh(['notification:new', 'realtime:resync'], () => { if (initialised.current) void refreshStatus(); });
 
   // Quay lại từ màn Xác minh danh tính thì đọc lại trạng thái nộp ảnh.
   useFocusEffect(
@@ -176,7 +192,15 @@ export default function TechnicianOnboardingScreen() {
 
       if (statusRes) {
         setStatus(statusRes);
-        setStep(Math.min(5, Math.max(1, statusRes.currentStep)));
+        const firstStep = Math.min(5, Math.max(1, statusRes.currentStep));
+        setStep(firstStep);
+        if (firstStep === 1 && !statusRes.citizenIdNumber) setEntryMode('choose');
+        // Điền lại bước 1 từ hồ sơ đã lưu để quay lại xem hoặc sửa không phải nhập lại.
+        if (statusRes.fullName) setFullName(statusRes.fullName);
+        if (statusRes.dateOfBirth) setDob(isoToDob(statusRes.dateOfBirth));
+        if (statusRes.gender) setGender(statusRes.gender);
+        if (statusRes.citizenIdNumber) setCitizenId(statusRes.citizenIdNumber);
+        if (statusRes.phoneNumber) setPhone(statusRes.phoneNumber);
         if (statusRes.fullAddress) setAddress(statusRes.fullAddress);
         if (statusRes.latitude !== undefined && statusRes.longitude !== undefined) {
           setCoords({ lat: statusRes.latitude, lng: statusRes.longitude });
@@ -188,6 +212,9 @@ export default function TechnicianOnboardingScreen() {
         }
         if (statusRes.skillsSelected) {
           setSelectedServiceIds(offeringsRes.map((o) => o.serviceId));
+          setSkillLevels(
+            Object.fromEntries((statusRes.skills ?? []).map((k) => [k.serviceId, k.declaredLevel ?? k.level])),
+          );
           if (profileRes) {
             setYearsExperience(profileRes.yearsExperience);
             setBio(profileRes.bio ?? '');
@@ -199,7 +226,6 @@ export default function TechnicianOnboardingScreen() {
     })();
     return () => {
       mounted = false;
-      if (suggestTimer.current) clearTimeout(suggestTimer.current);
     };
   }, []);
 
@@ -209,9 +235,12 @@ export default function TechnicianOnboardingScreen() {
     !status || (editingRejected && status.onboardingStatus === 'rejected')
       ? 'wizard'
       : resolveOnboardingView(status);
+  useLayoutEffect(() => { wizardRef.current = view === 'wizard'; });
   const stepProgress = status ? getOnboardingStepProgress(status, step) : [];
   const kycRejected = status?.verificationStatus?.toLowerCase() === 'rejected';
   const kycNeedsUpdate = !status?.kycSubmitted || kycRejected;
+  // Đã nộp giấy tờ xác minh (chờ duyệt hoặc đã duyệt) thì thông tin cá nhân phải khớp giấy tờ, không sửa nữa.
+  const personalLocked = !!status?.kycSubmitted && !kycRejected;
 
   const servicesByCategory = useMemo(() => {
     const names = new Map(categories.map((c) => [c.id, c.name]));
@@ -252,6 +281,7 @@ export default function TechnicianOnboardingScreen() {
   };
 
   const saveStep1 = () => {
+    if (personalLocked) { setStep(2); return; }
     setShowStep1Errors(true);
     if (Object.values(step1Errors).some(Boolean)) return;
     const birth = parseDob(dob);
@@ -286,6 +316,10 @@ export default function TechnicianOnboardingScreen() {
       () =>
         technicianOnboardingApi.saveSkills({
           serviceIds: selectedServiceIds,
+          skills: selectedServiceIds.map((serviceId) => ({
+            serviceId,
+            level: skillLevels[serviceId] ?? defaultLevel,
+          })),
           yearsExperience,
           bio: bio.trim() || undefined,
         }),
@@ -317,19 +351,13 @@ export default function TechnicianOnboardingScreen() {
 
   const submit = () => void run(() => technicianOnboardingApi.submit(), 5);
 
-  const performLogout = async () => {
-    await authApi.logout();
-    logout();
-    setTimeout(() => navigation.navigate('Auth'), 100);
-  };
+  const goTechnicianHome = () => navigation.reset({ index: 0, routes: [{ name: 'TechnicianMain' }] });
 
-  const handleLogout = () => {
-    // Alert.alert does not open on React Native Web.
-    if (Platform.OS === 'web') { void performLogout(); return; }
-    Alert.alert('Đăng xuất', 'Bạn có chắc muốn đăng xuất?', [
-      { text: 'Hủy', style: 'cancel' },
-      { text: 'Đăng xuất', style: 'destructive', onPress: performLogout },
-    ]);
+  const handleBack = () => {
+    const action = resolveBackAction({ loading, hasStatus: !!status, view, step, entryMode });
+    if (action === 'prev-step') { setStep(step - 1); return; }
+    if (action === 'close-scan') { setEntryMode('form'); return; }
+    goTechnicianHome();
   };
 
   const toggleService = (id: string) =>
@@ -337,30 +365,40 @@ export default function TechnicianOnboardingScreen() {
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
 
+  /** Chọn hoặc bỏ cả một nhóm (hoặc tất cả) bằng một chạm. */
+  const setGroupSelected = (ids: string[], selected: boolean) =>
+    setSelectedServiceIds((prev) =>
+      selected ? [...prev, ...ids.filter((id) => !prev.includes(id))] : prev.filter((id) => !ids.includes(id)),
+    );
+
+  /** Cấp độ chung: áp cho mọi dịch vụ đang chọn và cho dịch vụ chọn thêm sau đó. */
+  const applyDefaultLevel = (level: string) => {
+    setDefaultLevel(level);
+    setSkillLevels((prev) => ({ ...prev, ...Object.fromEntries(selectedServiceIds.map((id) => [id, level])) }));
+  };
+
+  const cycleLevel = (id: string) =>
+    setSkillLevels((prev) => {
+      const i = SKILL_LEVELS.findIndex((l) => l.value === (prev[id] ?? defaultLevel));
+      return { ...prev, [id]: SKILL_LEVELS[(i + 1) % SKILL_LEVELS.length].value };
+    });
+
   const onAddressChange = (text: string) => {
     setAddress(text);
     setCoords(null); // toạ độ cũ không còn khớp với chữ vừa sửa
-    if (suggestTimer.current) clearTimeout(suggestTimer.current);
-    if (text.trim().length < 3) {
-      setSuggestions([]);
-      return;
-    }
-    suggestTimer.current = setTimeout(() => {
-      geoApi
-        .autocomplete(text)
-        .then(setSuggestions)
-        .catch(() => setSuggestions([]));
-    }, 350);
+    setPlaceInfo({});
   };
 
-  const pickSuggestion = (s: PlaceSuggestion) => {
+  // Gợi ý, chạm bản đồ hoặc vị trí hiện tại; `place` rỗng nghĩa là mới có ghim, chưa tra được địa chỉ.
+  const onPlace = (lat: number, lng: number, place?: PickedPlace) => {
+    setCoords({ lat, lng });
+    if (!place) return;
     Haptics.selectionAsync();
-    setAddress(s.description);
-    setCoords({ lat: s.lat, lng: s.lng });
-    setSuggestions([]);
-    const { province, district } = detectArea(provinces, s.description, {
-      province: s.province,
-      district: s.district,
+    if (place.formattedAddress) setAddress(place.formattedAddress);
+    setPlaceInfo({ ward: place.ward, province: place.province });
+    const { province, district } = detectArea(provinces, place.formattedAddress ?? address, {
+      province: place.province,
+      district: place.district,
     });
     if (province) setActiveProvinceCode(province.code);
     if (province && district) {
@@ -407,13 +445,86 @@ export default function TechnicianOnboardingScreen() {
     </View>
   );
 
-  const renderStep1 = () => (
+  const renderStep1 = () => {
+    if (entryMode === 'scan') {
+      return <CccdQrScanner onScan={handleCccdScan} onCancel={() => setEntryMode('form')} />;
+    }
+    if (entryMode === 'choose') {
+      return (
+        <View style={styles.choiceList}>
+          <Text style={styles.label}>Bạn muốn điền thông tin bằng cách nào?</Text>
+          <TouchableOpacity
+            style={[styles.choiceCard, styles.choiceCardPrimary]}
+            onPress={() => setEntryMode('scan')}
+            accessibilityRole="button"
+            accessibilityLabel="Quét QR trên CCCD, tự điền họ tên, ngày sinh, số CCCD"
+          >
+            <View style={styles.choiceIcon}>
+              <QrCode size={iconSize.lg} color={colors.primaryStrong} strokeWidth={iconStroke} />
+            </View>
+            <View style={styles.choiceText}>
+              <Text style={styles.choiceTitle}>Quét QR trên CCCD</Text>
+              <Text style={styles.choiceSub}>Tự điền họ tên, ngày sinh, số CCCD</Text>
+            </View>
+            <ChevronRight size={iconSize.md} color={colors.textSecondary} strokeWidth={iconStroke} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.choiceCard}
+            onPress={() => setEntryMode('form')}
+            accessibilityRole="button"
+            accessibilityLabel="Nhập thủ công, tự gõ từng thông tin"
+          >
+            <View style={styles.choiceIcon}>
+              <PenLine size={iconSize.lg} color={colors.primaryStrong} strokeWidth={iconStroke} />
+            </View>
+            <View style={styles.choiceText}>
+              <Text style={styles.choiceTitle}>Nhập thủ công</Text>
+              <Text style={styles.choiceSub}>Tự gõ từng thông tin</Text>
+            </View>
+            <ChevronRight size={iconSize.md} color={colors.textSecondary} strokeWidth={iconStroke} />
+          </TouchableOpacity>
+          <ToneNote tone="info" icon={Info}>
+            CCCD gắn chip và thẻ căn cước mới có mã QR. CCCD mẫu cũ không có mã QR, bạn hãy nhập thủ công.
+          </ToneNote>
+        </View>
+      );
+    }
+    return (
     <>
+      <View style={styles.scanBar}>
+        {personalLocked ? (
+          <ToneNote tone="info" icon={Info}>
+            Thông tin này khớp với giấy tờ bạn đã nộp để xác minh nên không thể sửa.
+          </ToneNote>
+        ) : null}
+        {!personalLocked && scannedFromCccd ? (
+          <ToneNote tone="success" icon={CheckCircle2}>
+            Đã điền từ CCCD. Vui lòng kiểm tra lại thông tin.
+          </ToneNote>
+        ) : null}
+        {!personalLocked && scannedFromCccd && !dob ? (
+          <ToneNote tone="warning" icon={Info}>
+            Mã QR trên thẻ này không có ngày sinh, bạn hãy tự nhập.
+          </ToneNote>
+        ) : null}
+        {!personalLocked && (
+          <TouchableOpacity
+            style={styles.scanBtn}
+            onPress={() => setEntryMode('scan')}
+            accessibilityRole="button"
+            accessibilityLabel={scannedFromCccd ? 'Quét lại bằng CCCD' : 'Quét QR trên CCCD để tự điền'}
+          >
+            <QrCode size={iconSize.md} color={colors.primaryStrong} strokeWidth={iconStroke} />
+            <Text style={styles.scanBtnText}>{scannedFromCccd ? 'Quét lại bằng CCCD' : 'Quét QR trên CCCD để tự điền'}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
       {renderField(
         'Họ và tên',
         showStep1Errors ? step1Errors.fullName : '',
         <TextInput
-          style={styles.input}
+          style={[styles.input, personalLocked && styles.inputLocked]}
+          editable={!personalLocked}
           value={fullName}
           onChangeText={setFullName}
           placeholder="Nguyễn Văn An"
@@ -425,7 +536,8 @@ export default function TechnicianOnboardingScreen() {
         'Ngày sinh',
         showStep1Errors ? step1Errors.dob : '',
         <TextInput
-          style={styles.input}
+          style={[styles.input, personalLocked && styles.inputLocked]}
+          editable={!personalLocked}
           value={dob}
           onChangeText={(text) => setDob(formatDobInput(text))}
           placeholder="dd/MM/yyyy"
@@ -442,11 +554,12 @@ export default function TechnicianOnboardingScreen() {
           {GENDERS.map((g) => (
             <TouchableOpacity
               key={g.value}
-              style={[styles.chip, gender === g.value && styles.chipActive]}
+              style={[styles.chip, gender === g.value && styles.chipActive, personalLocked && gender !== g.value && { opacity: 0.5 }]}
               onPress={() => setGender(g.value)}
+              disabled={personalLocked}
               accessibilityRole="radio"
               accessibilityLabel={g.label}
-              accessibilityState={{ selected: gender === g.value }}
+              accessibilityState={{ selected: gender === g.value, disabled: personalLocked }}
             >
               <Text style={[styles.chipText, gender === g.value && styles.chipTextActive]}>
                 {g.label}
@@ -455,23 +568,12 @@ export default function TechnicianOnboardingScreen() {
           ))}
         </View>
       </View>
-      {scanningCccd ? (
-        <CccdQrScanner onScan={handleCccdScan} onCancel={() => setScanningCccd(false)} />
-      ) : (
-        <TouchableOpacity
-          style={styles.chip}
-          onPress={() => setScanningCccd(true)}
-          accessibilityRole="button"
-          accessibilityLabel="Quét mã QR trên CCCD để tự điền"
-        >
-          <Text style={styles.chipText}>Quét QR trên CCCD để tự điền</Text>
-        </TouchableOpacity>
-      )}
       {renderField(
         'Số CCCD',
         showStep1Errors ? step1Errors.citizenId : '',
         <TextInput
-          style={styles.input}
+          style={[styles.input, personalLocked && styles.inputLocked]}
+          editable={!personalLocked}
           value={citizenId}
           onChangeText={(t) => setCitizenId(t.replace(/\D/g, '').slice(0, 12))}
           placeholder="079123456789"
@@ -485,7 +587,8 @@ export default function TechnicianOnboardingScreen() {
         'Số điện thoại',
         showStep1Errors ? step1Errors.phone : '',
         <TextInput
-          style={styles.input}
+          style={[styles.input, personalLocked && styles.inputLocked]}
+          editable={!personalLocked}
           value={phone}
           onChangeText={setPhone}
           placeholder="0901234567"
@@ -495,7 +598,8 @@ export default function TechnicianOnboardingScreen() {
         />,
       )}
     </>
-  );
+    );
+  };
 
   const renderStep2 = () => (
     <>
@@ -546,31 +650,112 @@ export default function TechnicianOnboardingScreen() {
       {servicesByCategory.length === 0 && (
         <Text style={styles.hintText}>Chưa tải được danh sách dịch vụ.</Text>
       )}
-      {servicesByCategory.map(([categoryName, list]) => (
-        <View key={categoryName} style={styles.field}>
-          <Text style={styles.label}>{categoryName}</Text>
-          <View style={styles.chipRow}>
-            {list.map((service) => {
-              const selected = selectedServiceIds.includes(service.id);
+      {services.length > 0 && (
+        <View style={styles.rowBetween}>
+          <Text style={styles.hintText}>Đã chọn {selectedServiceIds.length}/{services.length} dịch vụ</Text>
+          <TouchableOpacity
+            style={styles.linkBtn}
+            onPress={() => setGroupSelected(services.map((x) => x.id), selectedServiceIds.length < services.length)}
+            accessibilityRole="button"
+          >
+            <Text style={styles.linkText}>{selectedServiceIds.length < services.length ? 'Chọn tất cả' : 'Bỏ chọn tất cả'}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      {servicesByCategory.map(([categoryName, list]) => {
+        const ids = list.map((x) => x.id);
+        const picked = ids.filter((id) => selectedServiceIds.includes(id)).length;
+        const all = picked === ids.length;
+        return (
+          <View key={categoryName} style={styles.field}>
+            <View style={styles.rowBetween}>
+              <Text style={[styles.label, { marginBottom: 0, flex: 1 }]}>{categoryName} ({picked}/{ids.length})</Text>
+              <TouchableOpacity
+                style={styles.linkBtn}
+                onPress={() => setGroupSelected(ids, !all)}
+                accessibilityRole="button"
+                accessibilityLabel={`${all ? 'Bỏ chọn' : 'Chọn'} cả nhóm ${categoryName}`}
+              >
+                <Text style={styles.linkText}>{all ? 'Bỏ nhóm' : 'Chọn cả nhóm'}</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={[styles.chipRow, { marginTop: 8 }]}>
+              {list.map((service) => {
+                const selected = selectedServiceIds.includes(service.id);
+                return (
+                  <TouchableOpacity
+                    key={service.id}
+                    style={[styles.chip, selected && styles.chipActive]}
+                    onPress={() => toggleService(service.id)}
+                    accessibilityRole="checkbox"
+                    accessibilityLabel={service.name}
+                    accessibilityState={{ checked: selected }}
+                  >
+                    <Text style={[styles.chipText, selected && styles.chipTextActive]}>{service.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        );
+      })}
+
+      {selectedServiceIds.length > 0 && (
+        <View style={styles.field}>
+          <Text style={styles.label}>Cấp độ tay nghề (tự khai)</Text>
+          <Text style={styles.hintText}>
+            Chọn một cấp cho tất cả dịch vụ đã chọn. FixHome sẽ xác nhận cấp thật khi bạn mang bản công chứng bằng cấp lên trụ sở.
+          </Text>
+          <View style={[styles.chipRow, { marginTop: 8 }]}>
+            {SKILL_LEVELS.map((lv) => {
+              const active = defaultLevel === lv.value;
               return (
                 <TouchableOpacity
-                  key={service.id}
-                  style={[styles.chip, selected && styles.chipActive]}
-                  onPress={() => toggleService(service.id)}
-                  accessibilityRole="checkbox"
-                  accessibilityLabel={service.name}
-                  accessibilityState={{ checked: selected }}
+                  key={lv.value}
+                  style={[styles.chip, active && styles.chipActive]}
+                  onPress={() => applyDefaultLevel(lv.value)}
+                  accessibilityRole="radio"
+                  accessibilityLabel={`Áp dụng cấp ${lv.label} cho tất cả dịch vụ đã chọn`}
+                  accessibilityState={{ selected: active }}
                 >
-                  <Text style={[styles.chipText, selected && styles.chipTextActive]}>
-                    {service.name}
-                  </Text>
+                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{lv.label}</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
+          {selectedServiceIds.length > 1 && (
+            <TouchableOpacity
+              style={[styles.linkBtn, { alignSelf: 'flex-start', marginTop: 8 }]}
+              onPress={() => setShowLevelDetail((v) => !v)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showLevelDetail }}
+            >
+              <Text style={styles.linkText}>
+                {showLevelDetail ? 'Ẩn chỉnh riêng từng dịch vụ' : `Chỉnh riêng từng dịch vụ (${selectedServiceIds.length})`}
+              </Text>
+            </TouchableOpacity>
+          )}
+          {(showLevelDetail || selectedServiceIds.length === 1) &&
+            selectedServiceIds.map((id) => {
+              const name = services.find((x) => x.id === id)?.name ?? 'Dịch vụ';
+              const label = SKILL_LEVELS.find((l) => l.value === (skillLevels[id] ?? defaultLevel))?.label;
+              return (
+                <View key={id} style={styles.levelRow}>
+                  <Text style={styles.levelName} numberOfLines={2}>{name}</Text>
+                  <TouchableOpacity
+                    style={styles.levelBtn}
+                    onPress={() => cycleLevel(id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${name}: ${label}. Chạm để đổi cấp độ`}
+                  >
+                    <Text style={styles.levelBtnText}>{label}</Text>
+                    <Ionicons name="swap-vertical" size={16} color={colors.primaryStrong} />
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
         </View>
-      ))}
-      <Text style={styles.hintText}>Đã chọn {selectedServiceIds.length} dịch vụ.</Text>
+      )}
 
       <View style={styles.field}>
         <Text style={styles.label}>Số năm kinh nghiệm</Text>
@@ -613,33 +798,21 @@ export default function TechnicianOnboardingScreen() {
 
   const renderStep4 = () => (
     <>
-      {renderField(
-        'Địa chỉ của bạn',
-        '',
-        <>
-          <TextInput
-            style={styles.input}
-            value={address}
-            onChangeText={onAddressChange}
-            placeholder="Số nhà, đường, phường/xã…"
-            placeholderTextColor={colors.muted}
-            accessibilityLabel="Địa chỉ của bạn"
-          />
-          {suggestions.slice(0, 5).map((s) => (
-            <TouchableOpacity
-              key={s.placeId}
-              style={styles.suggestion}
-              onPress={() => pickSuggestion(s)}
-              accessibilityRole="button"
-              accessibilityLabel={`Chọn địa chỉ: ${s.description}`}
-            >
-              <Ionicons name="location-outline" size={16} color={colors.textSecondary} />
-              <Text style={styles.suggestionText}>{s.description}</Text>
-            </TouchableOpacity>
-          ))}
-        </>,
-        coords ? 'Đã xác định vị trí trên bản đồ.' : 'Chọn một gợi ý để xác định vị trí chính xác.',
-      )}
+      <View style={styles.field}>
+        <TechnicianAddressPicker
+          label="Địa chỉ của bạn"
+          line1={address}
+          lat={coords?.lat}
+          lng={coords?.lng}
+          ward={placeInfo.ward}
+          province={placeInfo.province}
+          onTextChange={onAddressChange}
+          onPlace={onPlace}
+        />
+        <Text style={styles.hintText}>
+          {coords ? 'Đã xác định vị trí trên bản đồ.' : 'Chọn một gợi ý hoặc chạm vào bản đồ để xác định vị trí.'}
+        </Text>
+      </View>
 
       <View style={styles.field}>
         <Text style={styles.label}>Bán kính phục vụ</Text>
@@ -851,7 +1024,7 @@ export default function TechnicianOnboardingScreen() {
         'Bạn đã trở thành kỹ thuật viên của FixHome và có thể bắt đầu nhận việc.',
         <TouchableOpacity accessibilityRole="button"
           style={styles.primaryBtn}
-          onPress={() => navigation.reset({ index: 0, routes: [{ name: 'TechnicianMain' }] })}
+          onPress={goTechnicianHome}
         >
           <Text style={styles.primaryBtnText}>Vào trang kỹ thuật viên</Text>
         </TouchableOpacity>,
@@ -878,18 +1051,93 @@ export default function TechnicianOnboardingScreen() {
           >
             <Text style={styles.secondaryBtnText}>Kiểm tra lại trạng thái</Text>
           </TouchableOpacity>
+          <TouchableOpacity accessibilityRole="button" style={styles.secondaryBtn} onPress={goTechnicianHome}>
+            <Text style={styles.secondaryBtnText}>Về trang chủ</Text>
+          </TouchableOpacity>
         </View>,
       );
     }
     if (view === 'submitted') {
+      const stage = status.reviewStage;
+      const openVisit = () => navigation.navigate('TechnicianOfficeVisit');
+      const homeBtn = (
+        <TouchableOpacity accessibilityRole="button" style={styles.secondaryBtn} onPress={goTechnicianHome}>
+          <Text style={styles.secondaryBtnText}>Về trang chủ</Text>
+        </TouchableOpacity>
+      );
+      const primary = (label: string, onPress: () => void) => (
+        <TouchableOpacity accessibilityRole="button" style={styles.primaryBtn} onPress={onPress}>
+          <Text style={styles.primaryBtnText}>{label}</Text>
+        </TouchableOpacity>
+      );
+      if (stage === 'visit_required') {
+        return renderStateCard(
+          'calendar-outline',
+          colors.primary,
+          'Đặt lịch lên trụ sở',
+          'Danh tính của bạn đã được xác nhận. Hãy chọn trụ sở và giờ lên gặp, nhớ mang bản công chứng bằng cấp để FixHome duyệt hồ sơ.',
+          <View style={styles.stateActions}>{primary('Chọn trụ sở và giờ hẹn', openVisit)}{homeBtn}</View>,
+        );
+      }
+      if (stage === 'visit_scheduled') {
+        const v = status.officeVisit;
+        return renderStateCard(
+          'calendar-outline',
+          colors.success,
+          'Bạn đã có lịch hẹn',
+          v
+            ? `${formatVisitTime(v.scheduledAt)} tại ${v.officeName} (${v.officeAddress}). Vui lòng mang bản công chứng bằng cấp.`
+            : 'Vui lòng đến trụ sở đúng giờ hẹn và mang bản công chứng bằng cấp.',
+          <View style={styles.stateActions}>
+            {primary('Xem hoặc đổi lịch hẹn', openVisit)}
+            {homeBtn}
+          </View>,
+        );
+      }
+      if (stage === 'visit_blocked') {
+        const phone = status.supportPhone;
+        return renderStateCard(
+          'alert-circle',
+          colors.error,
+          'Cần liên hệ quản lý dịch vụ',
+          phone
+            ? `Bạn đã vắng buổi hẹn nhiều lần. Vui lòng liên hệ quản lý dịch vụ qua số ${phone} để được hỗ trợ.`
+            : 'Bạn đã vắng buổi hẹn nhiều lần. Vui lòng liên hệ quản lý dịch vụ để được hỗ trợ.',
+          <View style={styles.stateActions}>
+            {phone ? primary(`Gọi ${phone}`, () => void Linking.openURL(`tel:${phone}`)) : null}
+            {homeBtn}
+          </View>,
+        );
+      }
+      if (stage === 'profile_rejected') {
+        return renderStateCard(
+          'alert-circle',
+          colors.error,
+          'Hồ sơ chưa được duyệt',
+          status.profileRejectionReason || 'FixHome chưa duyệt hồ sơ của bạn. Vui lòng liên hệ trụ sở để biết thêm chi tiết.',
+          <View style={styles.stateActions}>
+            {primary('Cập nhật hồ sơ', () => { setEditingRejected(true); setStep(1); })}
+            {homeBtn}
+          </View>,
+        );
+      }
+      const waiting =
+        stage === 'profile_review'
+          ? 'Bạn đã gặp FixHome. Hồ sơ và bằng cấp đang được duyệt, bạn sẽ nhận thông báo khi có kết quả.'
+          : 'Hồ sơ của bạn đã được tiếp nhận. FixHome đang xác nhận danh tính, bạn sẽ nhận thông báo để đặt lịch lên trụ sở.';
       return renderStateCard(
         'time-outline',
         colors.warning,
         'Đang chờ xét duyệt',
-        'Hồ sơ của bạn đã được tiếp nhận. Vui lòng đến trụ sở trong thời gian sớm nhất để tiến hành xác minh thông tin và bắt đầu công việc.',
-        <TouchableOpacity accessibilityRole="button" style={styles.primaryBtn} onPress={() => void refreshStatus()}>
-          <Text style={styles.primaryBtnText}>Kiểm tra lại trạng thái</Text>
-        </TouchableOpacity>,
+        waiting,
+        <View style={styles.stateActions}>
+          {primary(checking ? 'Đang kiểm tra...' : 'Kiểm tra lại trạng thái', () => {
+            if (checking) return;
+            setChecking(true);
+            void refreshStatus().finally(() => setChecking(false));
+          })}
+          {homeBtn}
+        </View>,
       );
     }
     if (view === 'rejected') {
@@ -921,37 +1169,7 @@ export default function TechnicianOnboardingScreen() {
           </View>
         ) : null}
         {renderRefreshError()}
-        <View style={styles.stepper5}>
-          {ONBOARDING_STEPS.map((s) => {
-            const progress = stepProgress[s.id - 1];
-            const done = progress?.completed ?? false;
-            const active = progress?.current ?? false;
-            const reachable = progress?.reachable ?? false;
-            return (
-              <TouchableOpacity
-                key={s.id}
-                style={[styles.dot, (active || done) && styles.dotActive]}
-                disabled={!reachable}
-                onPress={() => setStep(s.id)}
-                accessibilityRole="button"
-                accessibilityLabel={`Bước ${s.id}: ${s.title}, ${progress?.statusLabel ?? 'Chưa bắt đầu'}`}
-                accessibilityState={{ selected: active, disabled: !reachable }}
-              >
-                {done ? (
-                  <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-                ) : (
-                  <Text style={[styles.dotText, active && { color: '#FFFFFF' }]}>{s.id}</Text>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-        <Text style={styles.stepTitle} accessibilityRole="header">
-          Bước {step}/5: {ONBOARDING_STEPS[step - 1].title}
-        </Text>
-        <Text style={styles.hintText} accessibilityLiveRegion="polite">
-          {stepProgress[step - 1]?.statusLabel}
-        </Text>
+        <OnboardingStepper progress={stepProgress} step={step} onSelect={setStep} />
 
         <View style={styles.card}>
           {step === 1 && renderStep1()}
@@ -961,6 +1179,7 @@ export default function TechnicianOnboardingScreen() {
           {step === 5 && renderStep5()}
         </View>
 
+        {(step !== 1 || entryMode === 'form') && (
         <View style={styles.footer}>
           {step > 1 && (
             <TouchableOpacity
@@ -987,6 +1206,7 @@ export default function TechnicianOnboardingScreen() {
             )}
           </TouchableOpacity>
         </View>
+        )}
       </>
     );
   };
@@ -994,10 +1214,9 @@ export default function TechnicianOnboardingScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Đăng ký kỹ thuật viên</Text>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton} accessibilityRole="button">
-          <Text style={styles.logout}>Đăng xuất</Text>
-        </TouchableOpacity>
+        <BackButton onPress={handleBack} />
+        <Text style={styles.headerTitle} accessibilityRole="header">Đăng ký kỹ thuật viên</Text>
+        <View style={styles.headerBtn} />
       </View>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -1024,25 +1243,13 @@ const getStyles = (colors: ThemeColors) =>
       justifyContent: 'space-between',
       paddingHorizontal: 16,
       paddingVertical: 12,
-    },
-    headerTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
-    logoutButton: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center' },
-    logout: { fontSize: 14, fontWeight: '600', color: colors.error },
-    content: { padding: 16, paddingBottom: 48 },
-    stepper5: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-    dot: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      alignItems: 'center',
-      justifyContent: 'center',
       backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
     },
-    dotActive: { backgroundColor: colors.primaryStrong, borderColor: colors.primaryStrong },
-    dotText: { fontSize: 14, fontWeight: '700', color: colors.textSecondary },
-    stepTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 12 },
+    headerBtn: { width: 44, height: 44 },
+    headerTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '700', color: colors.text },
+    content: { padding: 16, paddingBottom: 48 },
     card: {
       backgroundColor: colors.surface,
       borderRadius: 14,
@@ -1067,6 +1274,12 @@ const getStyles = (colors: ThemeColors) =>
     hintText: { fontSize: 12, color: colors.textSecondary, marginTop: 6 },
     paragraph: { fontSize: 14, color: colors.textSecondary, marginBottom: 16, lineHeight: 20 },
     chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    linkBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
+    linkText: { fontSize: 14, fontWeight: '700', color: colors.primaryStrong },
+    levelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 48, borderBottomWidth: 1, borderBottomColor: colors.border },
+    levelName: { flex: 1, fontSize: 14, color: colors.text },
+    levelBtn: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 22, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+    levelBtnText: { fontSize: 14, fontWeight: '600', color: colors.text },
     chip: {
       minHeight: 44,
       paddingHorizontal: 16,
@@ -1078,6 +1291,45 @@ const getStyles = (colors: ThemeColors) =>
     },
     chipActive: { backgroundColor: colors.primaryStrong, borderColor: colors.primaryStrong },
     chipText: { fontSize: 14, color: colors.text },
+    inputLocked: { backgroundColor: colors.background, color: colors.textSecondary },
+    choiceList: { gap: 12 },
+    choiceCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      minHeight: 72,
+      padding: 12,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    choiceCardPrimary: { borderColor: colors.primaryStrong, backgroundColor: colors.primarySoft },
+    choiceIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.primaryTint,
+    },
+    choiceText: { flex: 1 },
+    choiceTitle: { fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.text },
+    choiceSub: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
+    scanBar: { gap: 12, marginBottom: 16 },
+    scanBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      minHeight: 48,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingHorizontal: 16,
+    },
+    scanBtnText: { fontSize: 14, fontWeight: '600', color: colors.primaryStrong },
     chipTextActive: { color: '#FFFFFF', fontWeight: '600' },
     stepper: { flexDirection: 'row', alignItems: 'center', gap: 16 },
     stepperBtn: {

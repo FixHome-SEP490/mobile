@@ -6,10 +6,11 @@ jest.mock('./client', () => ({
   default: {
     get: jest.fn(),
     patch: jest.fn(),
+    put: jest.fn(),
   },
 }));
 
-const mockedClient = apiClient as unknown as { get: jest.Mock; patch: jest.Mock };
+const mockedClient = apiClient as unknown as { get: jest.Mock; patch: jest.Mock; put: jest.Mock };
 
 describe('technician profile normalization', () => {
   it('keeps missing rating, reliability and radius as null instead of inventing 5 / 100 / 10', () => {
@@ -70,4 +71,22 @@ describe.each(['raw', 'wrapped'])('service offerings %s payload', (shape) => {
       mockedClient.get.mockResolvedValueOnce({ data: body(value) });
       await expect(technicianProfileApi.getMyServices()).rejects.toThrow();
     });
+});
+
+describe('technician schedule payload', () => {
+  const row = { id: 'x', technicianId: 't', dayOfWeek: 1, startTime: '08:00:00', endTime: '12:00:00', createdAt: 'c', updatedAt: 'u' };
+
+  it('sends only dayOfWeek/startTime/endTime (backend whitelist rejects id, technicianId, createdAt, updatedAt)', async () => {
+    mockedClient.put.mockResolvedValueOnce({ data: { data: [row] } });
+    const saved = await technicianProfileApi.updateMySchedule([row as never]);
+    expect(mockedClient.put).toHaveBeenCalledWith('/technicians/me/schedule', {
+      schedules: [{ dayOfWeek: 1, startTime: '08:00', endTime: '12:00' }],
+    });
+    expect(saved).toEqual([{ dayOfWeek: 1, startTime: '08:00', endTime: '12:00' }]);
+  });
+
+  it('strips server-only fields and seconds when reading the schedule', async () => {
+    mockedClient.get.mockResolvedValueOnce({ data: { data: [row] } });
+    await expect(technicianProfileApi.getMySchedule()).resolves.toEqual([{ dayOfWeek: 1, startTime: '08:00', endTime: '12:00' }]);
+  });
 });

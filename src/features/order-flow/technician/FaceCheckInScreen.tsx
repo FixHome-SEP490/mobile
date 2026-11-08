@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Image, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { isHistoricalOrder } from '../../../api/orders.api';
+import { isHistoricalOrder, ordersApi, type CheckInFaceChallenge } from '../../../api/orders.api';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { useTechnicianArrivalProof } from './useTechnicianArrivalProof';
 import { captureCameraPhoto, confirmCameraPermission } from './camera-capture';
+import { devFacePlaceholder } from './dev-face-skip';
 import type { CameraOrderAsset } from './arrival-proof-controller';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import TechnicianOrderHub from '../shared/TechnicianOrderHub';
@@ -18,7 +19,11 @@ export default function FaceCheckInScreen() {
   const navigation = useNavigation<any>();
   // Capture draft is keyed by session/order owner: revocation or reassignment
   // hides it without an effect-driven reset. Local memory only, never persisted.
-  const [draft, setDraft] = useState<{ owner: string | null; asset: CameraOrderAsset | null; error: string | null }>({
+  const [draft, setDraft] = useState<{
+    owner: string | null; asset: CameraOrderAsset | null; error: string | null;
+    /** Liveness: the server's random challenge and the second photo that does it. */
+    challenge?: CheckInFaceChallenge | null; second?: CameraOrderAsset | null;
+  }>({
     owner: null,
     asset: null,
     error: null,
@@ -47,21 +52,55 @@ export default function FaceCheckInScreen() {
   const isUnresolved = state.phase === 'unknown' || hasPendingIntent;
   const canVerify = !revoked && !busy && isUnresolved;
   const canCapture = !revoked && !busy && !isUnresolved && !!evidenceReady && !hasOwnFace && order?.arrivalVerified === true && order?.status === 'EN_ROUTE';
-  const canSend = canCapture && !!asset;
+  const challenge = !revoked && draft.owner === owner ? draft.challenge ?? null : null;
+  const second = !revoked && draft.owner === owner ? draft.second ?? null : null;
+  const needSecond = !!asset && !!challenge?.challenge && !second;
+  const canSend = canCapture && !!asset && !needSecond;
 
   const capture = async () => {
     if (!canCapture || capturing) return;
     setCapturing(true);
     setDraft({ owner, asset: null, error: null });
     try {
+      // A new plain photo starts a new liveness attempt with a fresh challenge from the server.
+      const issued = key ? await ordersApi.getCheckInFaceChallenge(key.serviceOrderId) : { challenge: null };
       const result = await captureCameraPhoto();
       if (!result.ok) {
         setDraft({ owner, asset: null, error: result.reason === 'cancelled' ? null : result.message });
         return;
       }
-      setDraft({ owner, asset: result.asset, error: null });
+      setDraft({ owner, asset: result.asset, error: null, challenge: issued, second: null });
     } catch {
       setDraft({ owner, asset: null, error: 'Chưa chụp được ảnh. Hãy thử lại.' });
+    } finally {
+      setCapturing(false);
+    }
+  };
+
+  const captureSecond = async () => {
+    if (!needSecond || capturing) return;
+    setCapturing(true);
+    try {
+      const result = await captureCameraPhoto();
+      if (!result.ok) {
+        setDraft(d => ({ ...d, error: result.reason === 'cancelled' ? null : result.message }));
+        return;
+      }
+      setDraft(d => ({ ...d, second: result.asset, error: null }));
+    } catch {
+      setDraft(d => ({ ...d, error: 'Chưa chụp được ảnh. Hãy thử lại.' }));
+    } finally {
+      setCapturing(false);
+    }
+  };
+
+  const devSkip = async () => {
+    if (!__DEV__ || !canCapture || capturing) return;
+    setCapturing(true);
+    try {
+      void controller.uploadFace(await devFacePlaceholder());
+    } catch {
+      setDraft({ owner, asset: null, error: 'Không đọc được ảnh mẫu dev.' });
     } finally {
       setCapturing(false);
     }
@@ -73,16 +112,20 @@ export default function FaceCheckInScreen() {
       setDraft({ owner, asset: null, error: 'Quyền camera đã bị thu hồi trước khi gửi. Bản nháp đã được xóa; hãy chụp lại.' });
       return;
     }
-    void controller.uploadFace(asset);
+    void controller.uploadFace(second && challenge?.token
+      ? { ...asset, liveness: { token: challenge.token, image: { uri: second.uri, name: second.name, type: second.type } } }
+      : asset);
   };
 
   const primaryLabel = capturing
     ? 'Đang mở camera…'
     : canVerify
       ? 'Kiểm tra lại'
-      : asset
-        ? 'Gửi ảnh'
-        : 'Chụp ảnh';
+      : needSecond
+        ? 'Chụp ảnh thứ hai'
+        : asset
+          ? 'Gửi ảnh'
+          : 'Chụp ảnh';
 
   return (
     <TaskScreenShell
@@ -102,15 +145,16 @@ export default function FaceCheckInScreen() {
       }}
       primary={{
         label: primaryLabel,
-        testID: canVerify ? 'face-verify' : asset ? 'face-send' : 'face-capture',
-        disabled: canVerify ? false : asset ? !canSend : !canCapture,
+        testID: canVerify ? 'face-verify' : needSecond ? 'face-capture-second' : asset ? 'face-send' : 'face-capture',
+        disabled: canVerify ? false : needSecond ? !canCapture || capturing : asset ? !canSend : !canCapture,
         onPress: () => {
           if (revoked || busy) return;
           if (canVerify) {
             void controller.verify();
             return;
           }
-          if (asset) void send();
+          if (needSecond) void captureSecond();
+          else if (asset) void send();
           else if (canCapture) void capture();
         },
       }}
@@ -127,7 +171,7 @@ export default function FaceCheckInScreen() {
       ) : hasOwnFace ? (
         <ReadOnlyNotice>Ảnh xác minh đã được máy chủ xác nhận. Đang tải trạng thái mới; không cần gửi lại.</ReadOnlyNotice>
       ) : (
-        <ReadOnlyNotice>Hãy chụp ảnh khuôn mặt của bạn bằng camera để máy chủ xác minh. Ảnh chỉ xem trước trên máy trước khi bạn nhấn gửi.</ReadOnlyNotice>
+        <ReadOnlyNotice>Hãy chụp ảnh khuôn mặt của bạn bằng camera để máy chủ xác minh. Ảnh chỉ xem trước trên máy trước khi bạn nhấn gửi. Ảnh đầu: nhìn thẳng, giữ mặt bình thường. Sau đó hệ thống sẽ yêu cầu thêm một ảnh quay đầu hoặc mỉm cười để xác nhận bạn đang có mặt.</ReadOnlyNotice>
       )}
       {asset && !hasOwnFace ? (
         <View style={{ backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md, gap: 12 }}>
@@ -166,6 +210,34 @@ export default function FaceCheckInScreen() {
             </TouchableOpacity>
           </View>
         </View>
+      ) : null}
+      {needSecond ? (
+        <ReadOnlyNotice>
+          {challenge?.challenge === 'smile'
+            ? 'Bước 2/2: hãy mỉm cười rồi chụp ảnh thứ hai.'
+            : 'Bước 2/2: hãy quay mặt sang một bên (trái hoặc phải) rồi chụp ảnh thứ hai.'}
+        </ReadOnlyNotice>
+      ) : null}
+      {second && !hasOwnFace ? (
+        <Image
+          testID="face-preview-second"
+          source={{ uri: second.uri }}
+          style={{ width: '100%', height: 160, borderRadius: 10, backgroundColor: colors.border }}
+          resizeMode="cover"
+          accessibilityLabel="Ảnh khuôn mặt thứ hai vừa chụp"
+        />
+      ) : null}
+      {__DEV__ && canCapture && !asset ? (
+        <TouchableOpacity
+          testID="face-dev-skip"
+          accessibilityRole="button"
+          accessibilityLabel="Bỏ qua chụp ảnh mặt (chỉ bản dev)"
+          disabled={busy}
+          onPress={() => void devSkip()}
+          style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border, opacity: busy ? 0.5 : 1 }}
+        >
+          <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: 14, lineHeight: 20 }}>Bỏ qua chụp ảnh mặt (chỉ bản dev)</Text>
+        </TouchableOpacity>
       ) : null}
       {captureError ? <ReadOnlyNotice>{captureError}</ReadOnlyNotice> : null}
       {state.phase === 'denied' && state.message ? <ReadOnlyNotice>{state.message}</ReadOnlyNotice> : null}

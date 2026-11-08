@@ -6,9 +6,17 @@ import { replaceDaySchedule, timeOffPayload, validateSchedule } from './technici
 import { extractApiErrorMessage } from '../../utils/input-validation';
 import { vnDateString } from '../../utils/vn-time';
 import CalendarDateField from '../../components/CalendarDateField';
+import ToneNote from '../../components/ToneNote';
+import { AlertCircle, CalendarOff, ChevronDown, ChevronUp, Clock, Plus, Trash2 } from 'lucide-react-native';
 
 const DAYS = [{ day: 1, label: 'T2' }, { day: 2, label: 'T3' }, { day: 3, label: 'T4' }, { day: 4, label: 'T5' }, { day: 5, label: 'T6' }, { day: 6, label: 'T7' }, { day: 0, label: 'CN' }];
 const PRESETS = [{ label: 'Sáng', startTime: '08:00', endTime: '12:00' }, { label: 'Chiều', startTime: '13:00', endTime: '18:00' }, { label: 'Cả ngày', startTime: '08:00', endTime: '18:00' }];
+
+/** Gõ 0800 hoặc 800 thì tự thành 08:00; ô vẫn nhận HH:mm đầy đủ. */
+const formatTime = (text: string) => {
+  const d = text.replace(/\D/g, '').slice(0, 4);
+  return d.length <= 2 ? d : `${d.slice(0, 2)}:${d.slice(2)}`;
+};
 
 export default function TechnicianAvailabilityEditor({ onChanged }: { onChanged: () => void }) {
   const { colors } = useAppTheme();
@@ -53,41 +61,45 @@ export default function TechnicianAvailabilityEditor({ onChanged }: { onChanged:
     if (day === null || lock.current) return;
     setSlots(previous => replaceDaySchedule(previous, day, intervals)); setDirty(true); setCopyPreview(false);
   };
-  const changeInterval = (index: number, field: 'startTime' | 'endTime', value: string) => editDay(selected.map((slot, i) => i === index ? { ...slot, [field]: value } : slot));
+  const changeInterval = (index: number, field: 'startTime' | 'endTime', value: string) => editDay(selected.map((slot, i) => i === index ? { ...slot, [field]: formatTime(value) } : slot));
+  const workingDays = DAYS.filter(item => slots.some(slot => slot.dayOfWeek === item.day)).length;
   const intervalSummary = (intervals: TechnicianScheduleSlot[]) => intervals.length
     ? intervals.map(slot => slot.startTime && slot.endTime ? `${slot.startTime}–${slot.endTime}` : 'Chưa nhập đủ giờ').join(' · ')
     : 'Nghỉ';
   return <View style={styles.section}>
     <Text style={styles.title} accessibilityRole="header">Tuần làm việc</Text>
-    {!!error && <Text style={styles.error} accessibilityRole="alert">{error}</Text>}
+    {!!error && <ToneNote tone="danger" icon={AlertCircle} alert>{error}</ToneNote>}
     {loading ? <ActivityIndicator color={colors.primaryStrong} /> : !loaded ? <TouchableOpacity style={styles.secondary} onPress={() => void load()} accessibilityRole="button"><Text style={styles.link}>Thử lại</Text></TouchableOpacity> : <>
       {!savedSlots.length && !dirty && <View style={styles.empty}>
         <Text style={styles.hint}>Bạn chưa thiết lập lịch nhận việc. Chọn ngày và khung giờ phù hợp rồi lưu.</Text>
         <TouchableOpacity style={styles.secondary} disabled={busy} accessibilityRole="button" onPress={() => setDay(1)}><Text style={styles.link}>Thiết lập lịch nhận việc</Text></TouchableOpacity>
       </View>}
+      <Text style={styles.summaryLine}>{workingDays > 0 ? `Làm việc ${workingDays} ngày mỗi tuần` : 'Chưa có ngày làm việc nào'}</Text>
       <Text style={styles.hint}>{dirty ? 'Bản nháp chưa lưu. Lịch nhận việc chỉ thay đổi khi bạn nhấn Lưu.' : 'Chạm một ngày để chỉnh sửa lịch đã lưu.'}</Text>
       <View style={styles.week}>
         {DAYS.map(item => <View key={item.day}>
           <TouchableOpacity style={[styles.day, item.day === day && styles.dayOn]} disabled={busy} onPress={() => { setDay(day === item.day ? null : item.day); setCopyPreview(false); }} accessibilityRole="button" accessibilityLabel={`Khung giờ ${item.label}`} accessibilityState={{ expanded: item.day === day, disabled: busy }}>
-            <Text style={styles.dayLabel}>{item.label}</Text>
-            <Text style={[styles.hint, styles.summary]}>{intervalSummary(slots.filter(slot => slot.dayOfWeek === item.day))}</Text>
-            <Text style={styles.link}>{item.day === day ? 'Đóng' : 'Sửa'}</Text>
+            <View style={[styles.badge, slots.some(slot => slot.dayOfWeek === item.day) ? styles.badgeOn : styles.badgeOff]}>
+              <Text style={[styles.dayLabel, slots.some(slot => slot.dayOfWeek === item.day) && { color: colors.surface }]}>{item.label}</Text>
+            </View>
+            <Text style={[styles.hint, styles.summary, slots.some(slot => slot.dayOfWeek === item.day) && { color: colors.text, fontWeight: '600' }]}>{intervalSummary(slots.filter(slot => slot.dayOfWeek === item.day))}</Text>
+            {item.day === day ? <ChevronUp size={20} color={colors.primaryStrong} /> : <ChevronDown size={20} color={colors.primaryStrong} />}
           </TouchableOpacity>
           {item.day === day && <View style={styles.editor}>
             <Text style={styles.editorTitle}>Chỉnh sửa {item.label}</Text>
             <Text style={styles.hint}>Gợi ý khung giờ</Text>
-            <View style={styles.row}>{PRESETS.map(preset => <TouchableOpacity key={preset.label} style={styles.secondary} disabled={busy} accessibilityRole="button" accessibilityLabel={`${preset.label} ${preset.startTime}–${preset.endTime}`} onPress={() => editDay([{ startTime: preset.startTime, endTime: preset.endTime }])}><Text style={styles.link}>{preset.label}</Text></TouchableOpacity>)}</View>
+            <View style={styles.row}>{PRESETS.map(preset => <TouchableOpacity key={preset.label} style={styles.secondary} disabled={busy} accessibilityRole="button" accessibilityLabel={`${preset.label} ${preset.startTime}–${preset.endTime}`} onPress={() => editDay([{ startTime: preset.startTime, endTime: preset.endTime }])}><Clock size={16} color={colors.primaryStrong} /><Text style={styles.link}>{preset.label}</Text></TouchableOpacity>)}</View>
             <Text style={styles.hint}>Tùy chỉnh giờ (HH:mm)</Text>
             {selected.map((slot, index) => <View key={index} style={styles.interval}>
               <View style={styles.row}>
                 <View style={styles.flex}><Text style={styles.hint}>Từ</Text><TextInput style={styles.input} value={slot.startTime} onChangeText={value => changeInterval(index, 'startTime', value)} editable={!busy} keyboardType="numbers-and-punctuation" accessibilityLabel={`Giờ bắt đầu khung ${index + 1}`} placeholder="HH:mm" placeholderTextColor={colors.muted} /></View>
                 <View style={styles.flex}><Text style={styles.hint}>Đến</Text><TextInput style={styles.input} value={slot.endTime} onChangeText={value => changeInterval(index, 'endTime', value)} editable={!busy} keyboardType="numbers-and-punctuation" accessibilityLabel={`Giờ kết thúc khung ${index + 1}`} placeholder="HH:mm" placeholderTextColor={colors.muted} /></View>
               </View>
-              <TouchableOpacity style={styles.secondary} disabled={busy} accessibilityRole="button" accessibilityLabel={`Xóa khung giờ ${index + 1}`} onPress={() => editDay(selected.filter((_, i) => i !== index))}><Text style={styles.link}>Xóa khung giờ</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.secondary} disabled={busy} accessibilityRole="button" accessibilityLabel={`Xóa khung giờ ${index + 1}`} onPress={() => editDay(selected.filter((_, i) => i !== index))}><Trash2 size={16} color={colors.tone.danger.text} /><Text style={[styles.link, { color: colors.tone.danger.text }]}>Xóa khung giờ</Text></TouchableOpacity>
             </View>)}
             <View style={styles.row}>
-              <TouchableOpacity style={styles.secondary} disabled={busy} accessibilityRole="button" onPress={() => editDay([...selected, { startTime: '', endTime: '' }])}><Text style={styles.link}>Thêm khung giờ</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.secondary} disabled={busy} accessibilityRole="button" onPress={() => editDay([])}><Text style={styles.link}>Nghỉ ngày này</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.secondary} disabled={busy} accessibilityRole="button" onPress={() => editDay([...selected, { startTime: '', endTime: '' }])}><Plus size={16} color={colors.primaryStrong} /><Text style={styles.link}>Thêm khung giờ</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.secondary} disabled={busy} accessibilityRole="button" onPress={() => editDay([])}><CalendarOff size={16} color={colors.primaryStrong} /><Text style={styles.link}>Nghỉ ngày này</Text></TouchableOpacity>
             </View>
             <TouchableOpacity style={styles.secondary} disabled={busy} accessibilityRole="button" onPress={() => {
               const invalid = validateSchedule(selected); if (invalid) { setError(invalid); return; } setCopyPreview(true);
@@ -105,6 +117,7 @@ export default function TechnicianAvailabilityEditor({ onChanged }: { onChanged:
           </View>}
         </View>)}
       </View>
+      {dirty && <TouchableOpacity style={styles.secondary} disabled={busy} accessibilityRole="button" accessibilityLabel="Hủy thay đổi" onPress={() => { setSlots(savedSlots); setDirty(false); setDay(null); setCopyPreview(false); setError(''); }}><Text style={styles.link}>Hủy thay đổi</Text></TouchableOpacity>}
       {(day !== null || dirty) && <TouchableOpacity style={[styles.primary, busy && styles.disabled]} disabled={busy} accessibilityState={{ disabled: busy, busy }} accessibilityRole="button" accessibilityLabel="Lưu khung giờ" onPress={() => {
         const invalid = validateSchedule(slots); if (invalid) { setError(invalid); return; }
         void mutate(async () => {
@@ -129,7 +142,7 @@ export default function TechnicianAvailabilityEditor({ onChanged }: { onChanged:
         }}><Text style={styles.link}>Thêm ngày nghỉ</Text></TouchableOpacity>
       </View>}
       {!leave.length && <Text style={styles.hint}>Chưa có ngày nghỉ đã khai báo.</Text>}
-      {leave.map(item => <View key={item.id} style={styles.row}><Text style={[styles.hint, styles.flex]}>{vnDateString(item.startAt)} – {vnDateString(item.endAt)}{item.reason ? ` · ${item.reason}` : ''}</Text><TouchableOpacity style={styles.secondary} disabled={busy} accessibilityRole="button" accessibilityLabel="Xóa ngày nghỉ" onPress={() => Alert.alert('Xóa ngày nghỉ?', 'Bạn có thể nhận việc trở lại trong khoảng ngày này.', [{ text: 'Giữ lại', style: 'cancel' }, { text: 'Xóa', style: 'destructive', onPress: () => void mutate(async () => { await technicianProfileApi.deleteTimeOff(item.id); if (alive.current) setLeave(previous => previous.filter(value => value.id !== item.id)); }) }])}><Text style={styles.link}>Xóa</Text></TouchableOpacity></View>)}
+      {leave.map(item => <View key={item.id} style={styles.leaveCard}><Text style={[styles.leaveText, styles.flex]}>{vnDateString(item.startAt)} – {vnDateString(item.endAt)}{item.reason ? ` · ${item.reason}` : ''}</Text><TouchableOpacity style={styles.secondary} disabled={busy} accessibilityRole="button" accessibilityLabel="Xóa ngày nghỉ" onPress={() => Alert.alert('Xóa ngày nghỉ?', 'Bạn có thể nhận việc trở lại trong khoảng ngày này.', [{ text: 'Giữ lại', style: 'cancel' }, { text: 'Xóa', style: 'destructive', onPress: () => void mutate(async () => { await technicianProfileApi.deleteTimeOff(item.id); if (alive.current) setLeave(previous => previous.filter(value => value.id !== item.id)); }) }])}><Trash2 size={20} color={colors.tone.danger.text} /></TouchableOpacity></View>)}
     </>}
   </View>;
 }
@@ -143,7 +156,13 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   week: { gap: 8 },
   day: { minHeight: 56, padding: 12, borderRadius: 12, backgroundColor: colors.background, flexDirection: 'row', alignItems: 'center', gap: 12 },
   dayOn: { backgroundColor: colors.primarySoft },
-  dayLabel: { minWidth: 28, fontSize: 16, fontWeight: '600', color: colors.text },
+  dayLabel: { fontSize: 14, fontWeight: '700', color: colors.textSecondary },
+  badge: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  badgeOn: { backgroundColor: colors.primaryStrong },
+  badgeOff: { backgroundColor: colors.border },
+  summaryLine: { fontSize: 15, fontWeight: '600', color: colors.text },
+  leaveCard: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, backgroundColor: colors.background },
+  leaveText: { fontSize: 14, lineHeight: 20, color: colors.text },
   summary: { flex: 1, minWidth: 0, flexShrink: 1 },
   editor: { paddingVertical: 12, gap: 12 },
   empty: { gap: 12, padding: 12, borderRadius: 12, backgroundColor: colors.background },
@@ -151,7 +170,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   flex: { flex: 1, minWidth: 80 },
   input: { minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, color: colors.text },
-  secondary: { minHeight: 48, minWidth: 48, paddingHorizontal: 12, justifyContent: 'center', alignItems: 'center', borderRadius: 12, backgroundColor: colors.primarySoft },
+  secondary: { minHeight: 48, minWidth: 48, paddingHorizontal: 12, flexDirection: 'row', gap: 6, justifyContent: 'center', alignItems: 'center', borderRadius: 12, backgroundColor: colors.primarySoft },
   link: { color: colors.primaryStrong, fontSize: 14, fontWeight: '600', flexShrink: 1 },
   primary: { minHeight: 48, backgroundColor: colors.primaryStrong, borderRadius: 12, justifyContent: 'center', alignItems: 'center', padding: 12 },
   primaryText: { color: colors.surface, fontSize: 16, fontWeight: '600' },

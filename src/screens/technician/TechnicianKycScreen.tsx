@@ -23,6 +23,8 @@ import {
   type SubmitDocumentPayload,
 } from '../../api/technician-verification.api';
 import BackButton from '../../components/BackButton';
+import ToneNote from '../../components/ToneNote';
+import { extractApiErrorMessage } from '../../utils/input-validation';
 
 const ALLOWED_MIME_TYPES: KycMimeType[] = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -89,6 +91,8 @@ export default function TechnicianKycScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Tải ảnh lên, rồi backend so khớp khuôn mặt CCCD với ảnh chân dung (vài giây) trước khi nhận hồ sơ.
+  const [phase, setPhase] = useState<'uploading' | 'checking'>('uploading');
   const [verification, setVerification] = useState<MyVerification | null>(null);
   const [slots, setSlots] = useState<KycSlot[]>(INITIAL_SLOTS);
   const [certificates, setCertificates] = useState<{ asset: ImagePicker.ImagePickerAsset; mimeType: KycMimeType }[]>([]);
@@ -233,6 +237,7 @@ export default function TechnicianKycScreen() {
   const handleSubmit = async () => {
     if (!canSubmit || submitting) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setPhase('uploading');
     setSubmitting(true);
     try {
       const documents = await Promise.all(slots.map(uploadSlot));
@@ -247,13 +252,14 @@ export default function TechnicianKycScreen() {
           mimeType: cert.mimeType,
         };
       }));
+      setPhase('checking');
       const result = await technicianVerificationApi.submit([...documents, ...certificateDocuments]);
       setVerification(result);
       Alert.alert('Đã nộp hồ sơ', OFFICE_VISIT_NOTE);
     } catch (err) {
       Alert.alert(
         'Không thể nộp hồ sơ',
-        (err as Error)?.message || 'Đã xảy ra lỗi. Vui lòng thử lại.',
+        extractApiErrorMessage(err, (err as Error)?.message || 'Đã xảy ra lỗi. Vui lòng thử lại.'),
       );
     } finally {
       setSubmitting(false);
@@ -429,12 +435,21 @@ export default function TechnicianKycScreen() {
                     {submitting ? (
                       <>
                         <ActivityIndicator color={colors.textSecondary} />
-                        <Text style={[styles.primaryBtnText, styles.disabledBtnText]}>Đang gửi hồ sơ…</Text>
+                        <Text style={[styles.primaryBtnText, styles.disabledBtnText]}>
+                          {phase === 'checking' ? 'Đang kiểm tra khuôn mặt…' : 'Đang tải ảnh lên…'}
+                        </Text>
                       </>
                     ) : (
                       <Text style={[styles.primaryBtnText, !canSubmit && styles.disabledBtnText]}>Nộp hồ sơ xác minh</Text>
                     )}
                   </TouchableOpacity>
+                  {submitting && (
+                    <ToneNote tone="info" icon={Clock} busy alert>
+                      {phase === 'checking'
+                        ? 'Đang kiểm tra độ tương thích khuôn mặt giữa ảnh CCCD và ảnh chân dung. Việc này mất vài giây, vui lòng không thoát màn hình.'
+                        : 'Đang tải ảnh lên. Vui lòng không thoát màn hình.'}
+                    </ToneNote>
+                  )}
                 </View>
               </View>
             )}

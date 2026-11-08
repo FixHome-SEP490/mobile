@@ -29,6 +29,7 @@ import CustomerWithdrawScreen from '../features/customer-withdrawal/CustomerWith
 import PublicOrderTrackingScreen from '../screens/guest/PublicOrderTrackingScreen';
 import TechnicianKycScreen from '../screens/technician/TechnicianKycScreen';
 import TechnicianOnboardingScreen from '../screens/technician/TechnicianOnboardingScreen';
+import TechnicianOfficeVisitScreen from '../screens/technician/TechnicianOfficeVisitScreen';
 import TechnicianWalletScreen from '../screens/technician/TechnicianWalletScreen';
 import TechnicianReviewsScreen from '../screens/technician/TechnicianReviewsScreen';
 import TechnicianPartReturnsScreen from '../screens/technician/TechnicianPartReturnsScreen';
@@ -126,6 +127,7 @@ export default function AppNavigator({ firstRunSeen = false }: { firstRunSeen?: 
             {__DEV__ && <Stack.Screen name="TechnicianWarrantyDevPreview" component={TechnicianWarrantyDevPreviewScreen} />}
             <Stack.Screen name="TechnicianKyc" component={TechnicianKycScreen} />
             <Stack.Screen name="TechnicianOnboarding" component={TechnicianOnboardingScreen} />
+            <Stack.Screen name="TechnicianOfficeVisit" component={TechnicianOfficeVisitScreen} />
             <Stack.Screen name="TechnicianWarrantyInbox" component={TechnicianWarrantyInboxScreen} />
             <Stack.Screen name="TechnicianWarrantyTask" component={TechnicianWarrantyTaskScreen} />
             <Stack.Screen name="TechnicianWallet" component={TechnicianWalletScreen} />
@@ -154,6 +156,7 @@ export default function AppNavigator({ firstRunSeen = false }: { firstRunSeen?: 
             <Stack.Screen name="TechnicianMain" component={TechnicianNavigator} />
             {/* Đăng ký/đăng nhập reset về màn này ngay sau setAuth, lúc nhánh vẫn là chưa đăng nhập. */}
             <Stack.Screen name="TechnicianOnboarding" component={TechnicianOnboardingScreen} />
+            <Stack.Screen name="TechnicianOfficeVisit" component={TechnicianOfficeVisitScreen} />
             <Stack.Screen name="CustomerAIDiagnosis" component={CustomerAIDiagnosisScreen} />
             <Stack.Screen name="CustomerBookingCreate" component={CustomerBookingCreateScreen} />
             <Stack.Screen name="CustomerAIChat" component={CustomerAIChatScreen} />

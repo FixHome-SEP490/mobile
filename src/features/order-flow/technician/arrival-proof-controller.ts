@@ -1,4 +1,5 @@
 import { isHistoricalOrder, type EvidenceUploadImage } from '../../../api/orders.api';
+import { extractApiErrorMessage } from '../../../utils/input-validation';
 import type { CheckInDto } from '../../../types/api.types';
 import { getOrderCapabilities } from '../domain/order-capabilities';
 import { sameOrderSession, type OrderSessionKey, type OrderResourceKind } from '../domain/order-session.types';
@@ -167,14 +168,16 @@ export function createArrivalProofController(deps: ArrivalProofDependencies) {
     }
     // Only a validation-class answer from the server proves nothing was stored; a dropped request or 5xx stays unknown.
     let rejected = false;
+    let serverReason: string | null = null;
     await run(operation, async (key, intentId) => {
-      const image = { uri: asset.uri, name: asset.name, type: asset.type };
+      const image = { uri: asset.uri, name: asset.name, type: asset.type, ...(asset.liveness ? { liveness: asset.liveness } : {}) };
       let result: unknown;
       try {
         result = await (operation === 'face-upload' ? deps.transport.uploadFace(key.serviceOrderId, image) : deps.transport.uploadBefore(key.serviceOrderId, image, options));
       } catch (error) {
         const status = (error as { response?: { status?: number } }).response?.status;
         rejected = !!status && [400, 403, 413, 415, 422].includes(status);
+        if (rejected) serverReason = extractApiErrorMessage(error, '');
         if (__DEV__) { const e = error as { code?: string; message?: string; response?: { status?: number } }; console.warn('[arrival-proof] POST failed', operation, JSON.stringify({ status: e.response?.status, code: e.code, message: e.message })); }
         throw error;
       }
@@ -182,7 +185,7 @@ export function createArrivalProofController(deps: ArrivalProofDependencies) {
       const id = responseRecord(result)?.id;
       if (typeof id === 'string') await deps.journal.recordEntity(key.userId, intentId, id);
     }, ['evidence'], undefined, () => rejected, undefined, () => rejected);
-    if (state.phase === 'denied' && !state.message) publish({ phase: 'denied', operation, message: 'Chưa gửi được ảnh. Ảnh chưa được lưu; hãy chụp lại và gửi lại.' });
+    if (state.phase === 'denied' && !state.message) publish({ phase: 'denied', operation, message: serverReason || 'Chưa gửi được ảnh. Ảnh chưa được lưu; hãy chụp lại và gửi lại.' });
   }
   return {
     getState: () => state,

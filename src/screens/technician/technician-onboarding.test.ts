@@ -5,8 +5,10 @@ import {
   getOnboardingStepProgress,
   keysToServiceAreas,
   ONBOARDING_STEPS,
+  isoToDob,
   parseCccdQr,
   parseDob,
+  resolveBackAction,
   resolveOnboardingView,
   serviceAreasToKeys,
   technicianLandingRoute,
@@ -47,7 +49,8 @@ describe('resolveOnboardingView', () => {
     [{ onboardingStatus: 'submitted' }, 'submitted'],
     [{ onboardingStatus: 'rejected', verificationStatus: 'rejected' }, 'rejected'],
     [{ onboardingStatus: 'approved' }, 'approved'],
-    [{ onboardingStatus: 'submitted', verificationStatus: 'verified' }, 'approved'],
+    // Danh tính đã xác nhận nhưng chưa duyệt hồ sơ cuối: vẫn đang chờ, chưa được vào làm việc.
+    [{ onboardingStatus: 'submitted', verificationStatus: 'verified' }, 'submitted'],
   ] as const)('%j -> %s', (overrides, expected) => {
     expect(resolveOnboardingView(status(overrides))).toBe(expected);
   });
@@ -317,8 +320,47 @@ describe('parseCccdQr', () => {
     expect(parseCccdQr('079203001234||B|15052003|Nữ|x|01012022')?.gender).toBe('female');
   });
 
+  it('reads a card whose QR has no birth date or gender, taking gender from the number', () => {
+    expect(parseCccdQr('079303001234|Trần Thị B|01072024')).toEqual({
+      citizenId: '079303001234', fullName: 'Trần Thị B', dob: '', gender: 'female',
+    });
+    expect(parseCccdQr('079203001234|01072024')).toMatchObject({ fullName: '', gender: 'male' });
+  });
+
   it('rejects anything that is not a CCCD QR', () => {
     expect(parseCccdQr('https://example.com')).toBeNull();
+    expect(parseCccdQr('079203001234')).toBeNull();
     expect(parseCccdQr('123|a|b|c|d')).toBeNull();
+  });
+});
+
+describe('resolveBackAction', () => {
+  const base = { loading: false, hasStatus: true, view: 'wizard', step: 1, entryMode: 'form' } as const;
+
+  it('steps back only while the form is showing', () => {
+    expect(resolveBackAction({ ...base, step: 3 })).toBe('prev-step');
+    expect(resolveBackAction({ ...base, entryMode: 'scan' })).toBe('close-scan');
+    expect(resolveBackAction({ ...base, step: 2, entryMode: 'choose' })).toBe('prev-step');
+  });
+
+  it('goes home once the application is submitted or approved, instead of stepping back unseen', () => {
+    expect(resolveBackAction({ ...base, view: 'submitted', step: 5 })).toBe('home');
+    expect(resolveBackAction({ ...base, view: 'approved', step: 5 })).toBe('home');
+  });
+
+  it('goes home, never logs out, from the first step, while loading, on load error or after a rejection', () => {
+    expect(resolveBackAction(base)).toBe('home');
+    expect(resolveBackAction({ ...base, loading: true, step: 4 })).toBe('home');
+    expect(resolveBackAction({ ...base, hasStatus: false, step: 4 })).toBe('home');
+    expect(resolveBackAction({ ...base, view: 'rejected', step: 4 })).toBe('home');
+  });
+});
+
+describe('isoToDob', () => {
+  it('turns the backend date into the input format', () => {
+    expect(isoToDob('1995-05-15')).toBe('15/05/1995');
+    expect(isoToDob('2003-05-15T00:00:00.000Z')).toBe('15/05/2003');
+    expect(isoToDob(undefined)).toBe('');
+    expect(isoToDob('1995-13-45')).toBe('');
   });
 });

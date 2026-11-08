@@ -95,6 +95,7 @@ export type RootStackParamList = {
   TechnicianWarrantyTask: { claimId: string };
   TechnicianKyc: undefined;
   TechnicianOnboarding: undefined;
+  TechnicianOfficeVisit: undefined;
   TechnicianWallet: undefined;
   TechnicianReviews: undefined;
   TechnicianPartReturns: undefined;
