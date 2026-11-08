@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { WarrantyCommandDto } from '../aftercare/aftercare-contracts';
 import { useTechnicianWarranty } from './useTechnicianWarranty';
-import { technicianWarrantyApi } from '../../../api/technician-warranty.api';
+import { technicianWarrantyTask } from './technician-warranty-controller';
+import { technicianWarrantyApi, type TechnicianWarrantyClaim } from '../../../api/technician-warranty.api';
 import { partRequestsApi } from '../../../api/part-requests.api';
 import { WarrantyPhotos } from '../aftercare/WarrantyPhotos';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
@@ -50,11 +51,18 @@ function SlotPicker({ value, onChange, disabled }: { value: string | null; onCha
 }
 
 const incomingText: Record<string, string> = { requested: 'Kho đang chuẩn bị linh kiện thay thế.', ready: 'Linh kiện đã sẵn sàng, hãy nhận hàng và quét mã QR xác nhận.', delivering: 'Linh kiện đang được giao, quét mã QR khi nhận.' };
+let lastTechClaim: TechnicianWarrantyClaim | null = null;
 function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
   const navigation = useNavigation<any>();
   const { controller, state } = useTechnicianWarranty(claimId ?? null);
   useEffect(() => () => controller.cancelConfirmation(), [controller]);
-  const claim = state.claim.status === 'ready' ? state.claim.data : null;
+  // The controller drops its data whenever the app goes to the background (camera, picker) or the page is left; show the last read, read-only
+  // (every command stays disabled until the claim is verified again), instead of blanking the whole task while it reloads.
+  const fresh = state.claim.status === 'ready' ? state.claim.data : null;
+  useEffect(() => { if (fresh) lastTechClaim = fresh; }, [fresh]);
+  const revalidating = !fresh && ['loading', 'unloaded'].includes(state.claim.status) && lastTechClaim?.id === claimId;
+  const claim = fresh ?? (revalidating ? lastTechClaim : null);
+  const task = state.task ?? (claim ? technicianWarrantyTask(claim) : null);
   const commands = controller.availableCommands();
   const [slot, setSlot] = useState<string | null>(null); const [moving, setMoving] = useState(false); const [moveError, setMoveError] = useState<string | null>(null); const [note, setNote] = useState(''); const [reason, setReason] = useState<'busy' | 'on_leave' | 'out_of_area' | 'other'>('busy');
   const [result, setResult] = useState<'covered_workmanship' | 'covered_part' | 'not_covered' | null>(null); const [findings, setFindings] = useState(''); const [notCoveredReasonCode, setNotCoveredReasonCode] = useState('customer_misuse'); const [photos, setPhotos] = useState<string[]>([]); const [openedAt] = useState(() => Date.now()); const [faultyIds, setFaultyIds] = useState<string[]>([]); const [faultyCounts, setFaultyCounts] = useState<Record<string, number>>({}); const [returning, setReturning] = useState(false); const [returnError, setReturnError] = useState<string | null>(null);
@@ -106,14 +114,14 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
   const action = confirmed
     ? { label: busy ? 'Đang gửi…' : 'Xác nhận thao tác', disabled: busy || state.phase !== 'confirming', testID: 'technician-warranty-primary-action', onPress: () => void controller.submitConfirmation() }
     : (state.phase !== 'idle' && state.phase !== 'resolved') || !claim ? undefined
-      : state.task === 'TW02' ? { label: 'Nhận yêu cầu bảo hành', disabled: locked || !commands.includes('accept') || !slot, testID: 'technician-warranty-primary-action', onPress: () => prepare('accept') }
-        : state.task === 'TW03' ? { label: 'Xác nhận đã đến kiểm tra', disabled: locked || !commands.includes('check-in'), testID: 'technician-warranty-primary-action', onPress: () => prepare('check-in') }
-          : state.task === 'TW04' ? { label: 'Đề xuất kết quả kiểm tra', disabled: locked || !commands.includes('propose') || !result || findings.trim().length < 10 || (result === 'covered_part' && faultyIds.length === 0) || ((result === 'not_covered' || result === 'covered_part') && photos.length === 0) || (result === 'not_covered' && !notCoveredReasonCode), testID: 'technician-warranty-primary-action', onPress: () => prepare('propose') }
-            : state.task === 'TW05' ? { label: 'Đề xuất hoàn tất bảo hành', disabled: locked || !commands.includes('complete') || note.trim().length < 10, testID: 'technician-warranty-primary-action', onPress: () => prepare('complete') }
+      : task === 'TW02' ? { label: 'Nhận yêu cầu bảo hành', disabled: locked || !commands.includes('accept') || !slot, testID: 'technician-warranty-primary-action', onPress: () => prepare('accept') }
+        : task === 'TW03' ? { label: 'Xác nhận đã đến kiểm tra', disabled: locked || !commands.includes('check-in'), testID: 'technician-warranty-primary-action', onPress: () => prepare('check-in') }
+          : task === 'TW04' ? { label: 'Đề xuất kết quả kiểm tra', disabled: locked || !commands.includes('propose') || !result || findings.trim().length < 10 || (result === 'covered_part' && faultyIds.length === 0) || ((result === 'not_covered' || result === 'covered_part') && photos.length === 0) || (result === 'not_covered' && !notCoveredReasonCode), testID: 'technician-warranty-primary-action', onPress: () => prepare('propose') }
+            : task === 'TW05' ? { label: 'Đề xuất hoàn tất bảo hành', disabled: locked || !commands.includes('complete') || note.trim().length < 10, testID: 'technician-warranty-primary-action', onPress: () => prepare('complete') }
               : undefined;
   const secondary = confirmed
     ? { label: 'Sửa nội dung', disabled: busy, testID: 'technician-warranty-secondary-action', onPress: () => { controller.cancelConfirmation(); } }
-    : state.task === 'TW02' && state.phase === 'idle' && claim
+    : task === 'TW02' && state.phase === 'idle' && claim
       ? { label: 'Từ chối phân công', disabled: locked || !commands.includes('decline') || (reason === 'other' && note.trim().length < 10), testID: 'technician-warranty-secondary-action', onPress: () => prepare('decline') }
       : { label: 'Làm mới', disabled: !claimId || busy, onPress: () => { if (!claimId) return; if (state.phase === 'denied' || state.phase === 'failed-known') controller.cancelConfirmation(); void (state.phase === 'unknown' ? controller.verify() : controller.refreshClaim()); } };
 
@@ -176,20 +184,20 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
           </>}
       </Card> : null}
       {claim.outcomeCode === 'unfixed' ? <ReadOnlyNotice tone="warning">Không khắc phục được trong hạn: tiền đã hoàn cho khách và trừ vào ví của bạn.</ReadOnlyNotice> : null}
-      {state.task === 'TW02' ? <Card title="Nhận hay không nhận yêu cầu">
+      {task === 'TW02' ? <Card title="Nhận hay không nhận yêu cầu">
         <ReadOnlyNotice>Chỉ yêu cầu đang được phân công mới hiển thị ở đây. Nhận hoặc từ chối cần xác nhận rõ ràng.</ReadOnlyNotice>
         <ReadOnlyNotice tone="warning">Từ chối vì nghỉ phép hoặc ngoài khu vực sẽ được hệ thống kiểm tra. Lý do khác phải chờ quản lý dịch vụ xét, nếu không chính đáng sẽ bị trừ điểm uy tín. Sát hạn bảo hành, chỉ hai lý do trên được từ chối.</ReadOnlyNotice>
         <SlotPicker value={slot} onChange={setSlot} disabled={locked} />
         <Text style={choiceText}>Nếu từ chối, chọn lý do:</Text>{(['busy', 'on_leave', 'out_of_area', 'other'] as const).map(value => <Pressable key={value} disabled={locked} accessibilityRole="radio" accessibilityState={{ disabled: locked, checked: reason === value }} onPress={() => setReason(value)} style={[choice, reason === value && { borderColor: colors.primaryStrong }]}><Text style={choiceText}>{reasonLabel[value]}</Text></Pressable>)}
         {reason === 'other' ? <TextInput accessibilityLabel="Lý do từ chối" value={note} editable={!locked} onChangeText={setNote} multiline maxLength={2000} style={field} /> : null}
         </Card> : null}
-      {state.task === 'TW03' ? <Card title="Đến nơi kiểm tra"><ReadOnlyNotice>Check-in bảo hành là lượt thăm riêng. Không dùng check-in sửa chữa hoặc yêu cầu gửi vị trí.</ReadOnlyNotice></Card> : null}
-      {state.task === 'TW03' && claim.visit?.status === 'scheduled' ? <Card title="Khách bận, cần đổi lịch?">
+      {task === 'TW03' ? <Card title="Đến nơi kiểm tra"><ReadOnlyNotice>Check-in bảo hành là lượt thăm riêng. Không dùng check-in sửa chữa hoặc yêu cầu gửi vị trí.</ReadOnlyNotice></Card> : null}
+      {task === 'TW03' && claim.visit?.status === 'scheduled' ? <Card title="Khách bận, cần đổi lịch?">
         <SlotPicker value={slot} onChange={setSlot} disabled={locked || moving} />
         <Pressable accessibilityRole="button" accessibilityLabel="Đổi lịch kiểm tra" disabled={locked || moving || !slot} onPress={() => void reschedule()} style={[choice, { alignItems: 'center', opacity: locked || moving || !slot ? 0.5 : 1 }]}><Text style={{ ...choiceText, fontWeight: '700' }}>{moving ? 'Đang đổi…' : 'Đổi lịch và báo khách'}</Text></Pressable>
         {moveError ? <ReadOnlyNotice tone="error">{moveError}</ReadOnlyNotice> : null}
       </Card> : null}
-      {state.task === 'TW04' ? <Card title="Kết luận kiểm tra">
+      {task === 'TW04' ? <Card title="Kết luận kiểm tra">
         <Text style={choiceText}>Bạn thấy lỗi thuộc loại nào?</Text>{(['covered_workmanship', 'covered_part', 'not_covered'] as const).map(value => <Pressable key={value} disabled={locked} accessibilityRole="radio" accessibilityState={{ disabled: locked, checked: result === value }} onPress={() => setResult(value)} style={[choice, result === value && { borderColor: colors.primaryStrong }]}><Text style={choiceText}>{resultLabel[value]}</Text></Pressable>)}
         <TextInput accessibilityLabel="Kết quả kiểm tra" placeholder="Mô tả phát hiện" value={findings} editable={!locked} onChangeText={setFindings} multiline maxLength={2000} style={[field, { minHeight: 100 }]} />
         {result === 'covered_part' ? <>
@@ -224,8 +232,8 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
         </> : null}
         <ReadOnlyNotice>{result === 'covered_workmanship' ? 'Lỗi do công lắp đặt thì hệ thống duyệt luôn, bạn sửa lại miễn phí cho khách. Yêu cầu gửi sau hạn vẫn chờ quản lý duyệt.' : 'Chờ quản lý duyệt rồi mới được sửa.'}</ReadOnlyNotice>
       </Card> : null}
-      {state.task === 'TW05' ? <Card title="Báo hoàn tất bảo hành"><ReadOnlyNotice>Chỉ gửi khi đã sửa xong.</ReadOnlyNotice><TextInput accessibilityLabel="Ghi chú hoàn tất bảo hành" placeholder="Ghi chú hoàn tất (ít nhất 10 ký tự: đã làm gì, thay gì)" value={note} editable={!locked} onChangeText={setNote} multiline maxLength={2000} style={[field, { minHeight: 100 }]} /></Card> : null}
-      {state.task === 'TW06' ? <ReadOnlyNotice>Yêu cầu đang chờ khách hàng, Quản lý dịch vụ hoặc đã kết thúc. Màn này chỉ đọc; không có thao tác duyệt hay đóng yêu cầu.</ReadOnlyNotice> : null}
+      {task === 'TW05' ? <Card title="Báo hoàn tất bảo hành"><ReadOnlyNotice>Chỉ gửi khi đã sửa xong.</ReadOnlyNotice><TextInput accessibilityLabel="Ghi chú hoàn tất bảo hành" placeholder="Ghi chú hoàn tất (ít nhất 10 ký tự: đã làm gì, thay gì)" value={note} editable={!locked} onChangeText={setNote} multiline maxLength={2000} style={[field, { minHeight: 100 }]} /></Card> : null}
+      {task === 'TW06' ? <ReadOnlyNotice>Yêu cầu đang chờ khách hàng, Quản lý dịch vụ hoặc đã kết thúc. Màn này chỉ đọc; không có thao tác duyệt hay đóng yêu cầu.</ReadOnlyNotice> : null}
       {confirmed ? <ReadOnlyNotice>Đọc lại nội dung và xác nhận rõ ràng để gửi thao tác bảo hành.</ReadOnlyNotice> : null}
     </>}
     {state.message ? <ReadOnlyNotice>{state.message}</ReadOnlyNotice> : null}

@@ -58,9 +58,11 @@ export function CustomerReviewScreen() {
 }
 
 let lastWarranty: { orderId: string; coverages: any[]; claims: any[] } | null = null;
-export function CustomerWarrantyScreen() {
-  const navigation = useNavigation<any>(); const { controller, state } = useCustomerAftercare('warranty');
-  // Leaving the page clears its data on purpose; keep the last read to show while the refresh runs so coming back does not blank the page.
+/**
+ * Leaving the page (or the app going to the background, a picker opening) clears the controller's data on purpose; keep the last read
+ * of this order and show it, read-only, while the refresh runs, so the three warranty screens never blank or fall back to a full-page loader.
+ */
+function useWarrantySnapshot(state: { coverages: any; claims: any }) {
   const orderId = useOrderSession().key?.serviceOrderId;
   const last = lastWarranty?.orderId === orderId ? lastWarranty : null;
   useEffect(() => {
@@ -69,6 +71,11 @@ export function CustomerWarrantyScreen() {
   const refreshing = ['loading', 'unloaded'].includes(state.coverages.status) || ['loading', 'unloaded'].includes(state.claims.status);
   const coverages: any[] = state.coverages.status === 'ready' ? state.coverages.data : refreshing ? (last?.coverages ?? []) : [];
   const claims: any[] = state.claims.status === 'ready' ? state.claims.data : refreshing ? (last?.claims ?? []) : [];
+  return { coverages, claims, refreshing };
+}
+export function CustomerWarrantyScreen() {
+  const navigation = useNavigation<any>(); const { controller, state } = useCustomerAftercare('warranty');
+  const { coverages, claims, refreshing } = useWarrantySnapshot(state);
   const isOpen = (item: any) => !['resolved', 'rejected', 'closed'].includes(String(item.status).toLowerCase());
   // The customer cannot tell a workmanship fault from a faulty part (the technician decides at inspection): one claim for the whole order,
   // filed on the free item that is covered longest.
@@ -136,10 +143,10 @@ function WarrantyClaimCreateForCoverage({ coverageId }: { coverageId?: string })
   const navigation = useNavigation<any>();
   const { controller, state } = useCustomerAftercare('warranty'); const [description, setDescription] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
-  const covered: any[] = state.coverages.status === 'ready' ? state.coverages.data : [];
+  const { coverages: covered } = useWarrantySnapshot(state);
   const { snapshot } = useOrderSession(); const order: any = snapshot?.order.status === 'ready' ? snapshot.order.data : null;
   useEffect(() => () => controller.cancelConfirmation(), [controller]);
-  const coverage = useMemo(() => state.coverages.status === 'ready' ? state.coverages.data.find((item: any) => item.id === coverageId) : null, [state.coverages, coverageId]);
+  const coverage = useMemo(() => covered.find((item: any) => item.id === coverageId) ?? null, [covered, coverageId]);
   const can = !!coverageId && controller.canClaim(coverageId); const confirmed = state.confirmation?.operation === 'warranty-create'; const busy = ['verifying', 'submitting'].includes(state.phase); const locked = busy || state.phase === 'confirming' || state.phase === 'unknown' || !!state.confirmation;
   useEffect(() => {
     if (state.phase !== 'resolved' || !coverageId || state.claims.status !== 'ready') return;
@@ -174,7 +181,8 @@ export function CustomerWarrantyClaimScreen() {
 function CustomerWarrantyClaimForId({ claimId }: { claimId?: string }) {
   const navigation = useNavigation<any>(); const { controller, state } = useCustomerAftercare('warranty');
   useEffect(() => () => controller.cancelConfirmation(), [controller]);
-  const claim = state.claims.status === 'ready' ? state.claims.data.find((item: any) => item.id === claimId) : null;
+  const { claims: known } = useWarrantySnapshot(state);
+  const claim = known.find((item: any) => item.id === claimId) ?? null;
   const [decision, setDecision] = useState<'agree' | 'dispute' | null>(null); const [choice, setChoice] = useState<'agree' | 'dispute' | null>(null); const [note, setNote] = useState('');
   const confirmed = state.confirmation?.operation === 'warranty-respond-agree' || state.confirmation?.operation === 'warranty-respond-dispute';
   const busy = ['verifying', 'submitting'].includes(state.phase); const locked = busy || state.phase === 'confirming' || state.phase === 'unknown' || !!state.confirmation; const can = !!claimId && controller.canRespond(claimId);

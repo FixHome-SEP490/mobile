@@ -11,13 +11,16 @@ import { lightTheme } from '../../../constants/theme';
 import { VisitDevicesContext, visitDeviceTabName } from './visit-device-tabs';
 import { createPlainTabs } from './PlainTabs';
 
+// Backend seeds evidence.before/after.min_count = 1 and exposes no endpoint for it; Backend still validates every upload.
+const PROOF_POLICY = { beforeMinimum: 1, afterMinimum: 1 };
+
 const DeviceTabs = createPlainTabs();
 type DeviceTabParams = Record<string, { serviceOrderId: string; screen?: string; initial?: boolean } | undefined>;
 
 // Module-level on purpose (a render callback would be a new component on every render and remount the order).
 const createDeviceScreen = (role: 'customer' | 'technician') => function DeviceScreen() {
   const serviceOrderId = useRoute<RouteProp<DeviceTabParams, string>>().params?.serviceOrderId ?? '';
-  return <OrderSessionProvider serviceOrderId={serviceOrderId}><OrderFlowNavigator role={role} /></OrderSessionProvider>;
+  return <OrderSessionProvider serviceOrderId={serviceOrderId} proofPolicy={PROOF_POLICY}><OrderFlowNavigator role={role} /></OrderSessionProvider>;
 };
 const DEVICE_SCREEN = { customer: createDeviceScreen('customer'), technician: createDeviceScreen('technician') };
 

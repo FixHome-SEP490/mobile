@@ -40,6 +40,11 @@ import {
 import BackButton from '../../components/BackButton';
 
 const PAGE_SIZE = 10;
+const sortGroups = (list: CustomerWarrantyGroup[]) => [...list].sort((a, b) => {
+  const at = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+  const bt = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+  return bt - at;
+});
 type WarrantyRoute = RouteProp<RootStackParamList, 'CustomerWarranties'>;
 
 const toneIcon: Record<WarrantyClaimTone, keyof typeof Ionicons.glyphMap> = {
@@ -93,11 +98,7 @@ export default function CustomerWarrantiesScreen() {
     setGroups((current) => {
       const merged = new Map(current.map((group) => [group.orderId, group] as const));
       incoming.forEach((group) => merged.set(group.orderId, group));
-      return [...merged.values()].sort((a, b) => {
-        const at = a.completedAt ? new Date(a.completedAt).getTime() : 0;
-        const bt = b.completedAt ? new Date(b.completedAt).getTime() : 0;
-        return bt - at;
-      });
+      return sortGroups([...merged.values()]);
     });
   }, []);
 
@@ -122,15 +123,11 @@ export default function CustomerWarrantiesScreen() {
     return { ...orderToWarrantyGroupSeed(order), coverages, claims };
   }, [focusOrderId]);
 
+  // A reset read replaces the list only when it arrives: the rows (and the counters) stay on screen meanwhile, so coming back, pulling
+  // to refresh or an app resume never flashes the empty state or a blank page.
   const loadPage = useCallback(async (page: number, reset = false) => {
     const generation = reset ? ++generationRef.current : generationRef.current;
-    if (reset) {
-      setError(null);
-      setGroups([]);
-      setSourcePage(0);
-      setSourceLoaded(0);
-      setSourceTotal(0);
-    }
+    if (reset) setError(null);
     try {
       const [historyResult, focusedResult] = await Promise.all([
         ordersApi.getRepairHistory(page, PAGE_SIZE, 'completed'),
@@ -147,7 +144,7 @@ export default function CustomerWarrantiesScreen() {
 
       const failedCount = settled.filter((result) => result.status === 'rejected').length;
       if (focusedResult) loadedGroups.unshift(focusedResult);
-      mergeGroups(loadedGroups);
+      if (reset) setGroups(sortGroups(loadedGroups)); else mergeGroups(loadedGroups);
       setSourcePage(page);
       setSourceLoaded((current) => reset ? historyResult.data.length : current + historyResult.data.length);
       setSourceTotal(historyResult.total);

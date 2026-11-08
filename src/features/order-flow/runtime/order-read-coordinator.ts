@@ -29,7 +29,10 @@ export function createOrderReadCoordinator(deps: OrderReadDependencies) {
   }
   async function refreshOrderSession(key: OrderSessionKey, reason: string): Promise<void> {
     if (!matches(key)) return;
-    const active = flights.get('order'); if (active) return active;
+    const active = flights.get('order');
+    // A read-back after a command must start after it: a read already in flight may have been sent before the server applied the command (auto-start), and joining it keeps the old status.
+    if (active && reason !== 'command-readback') return active;
+    if (active) { await active.catch(() => {}); if (!matches(key)) return; }
     const previous = snapshot!;
     const opened = (Object.keys(previous.resources) as OrderResourceKind[])
       .filter(kind => previous.resources[kind].status !== 'unloaded');

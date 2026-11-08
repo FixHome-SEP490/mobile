@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Text, TextInput } from 'react-native';
+import { Text, TextInput } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import CustomerVisitCreateScreen from './CustomerVisitCreateScreen';
 
@@ -72,7 +72,6 @@ it('says so when several devices cannot be booked now', async () => {
 
 it('needs two devices before it can continue, then sends one request with the idempotency key', async () => {
   mockVisit.create.mockResolvedValue({ id: 'v9' });
-  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   const tree = await mount();
   await addDevice(tree, 's1', 'không lạnh');
   expect(byId(tree, 'visit-submit').props.disabled).toBe(true);
@@ -81,18 +80,21 @@ it('needs two devices before it can continue, then sends one request with the id
   await act(async () => { byId(tree, 'pick-session').props.onPress(); });
   expect(byId(tree, 'visit-submit').props.disabled).toBe(false);
   await act(async () => { byId(tree, 'visit-submit').props.onPress(); });
-  const send = alert.mock.calls[0][2]!.find((b) => b.text === 'Gửi yêu cầu')!;
-  await act(async () => { send.onPress!(); });
+  expect(mockVisit.create).not.toHaveBeenCalled();
+  expect(texts(tree)).toContain('Xem lại yêu cầu');
+  expect(texts(tree).some((t) => t.includes('Máy 2'))).toBe(true);
+  await act(async () => { byId(tree, 'visit-review-edit').props.onPress(); });
+  expect(byId(tree, 'visit-submit')).toBeDefined();
+  await act(async () => { byId(tree, 'visit-submit').props.onPress(); });
+  await act(async () => { byId(tree, 'visit-review-send').props.onPress(); });
   expect(mockVisit.create).toHaveBeenCalledTimes(1);
   expect(mockVisit.create.mock.calls[0][0]).toMatchObject({ addressId: 'a1', idempotencyKey: expect.stringMatching(/^visit-/), items: [{ serviceId: 's1' }, { serviceId: 's2' }] });
   expect(mockReplace).toHaveBeenCalledWith('CustomerVisit', { visitGroupId: 'v9' });
-  alert.mockRestore();
 });
 
 it('locks the add button at the limit and keeps the send locked when the outcome is unknown', async () => {
   mockVisit.contact.mockResolvedValue({ enabled: true, deviceLimit: 2, hotline: '1900' });
   mockVisit.create.mockRejectedValue(new Error('network'));
-  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   const tree = await mount();
   await addDevice(tree, 's1', 'a');
   await addDevice(tree, 's2', 'b');
@@ -100,10 +102,9 @@ it('locks the add button at the limit and keeps the send locked when the outcome
   expect(texts(tree)).toContain('Đã đủ 2/2 thiết bị');
   await act(async () => { byId(tree, 'pick-session').props.onPress(); });
   await act(async () => { byId(tree, 'visit-submit').props.onPress(); });
-  await act(async () => { alert.mock.calls[0][2]!.find((b) => b.text === 'Gửi yêu cầu')!.onPress!(); });
+  await act(async () => { byId(tree, 'visit-review-send').props.onPress(); });
   expect(texts(tree).some((t) => t.startsWith('Chưa xác nhận được kết quả'))).toBe(true);
-  expect(byId(tree, 'visit-submit').props.disabled).toBe(true);
-  alert.mockRestore();
+  expect(byId(tree, 'visit-review-send').props.disabled).toBe(true);
 });
 
 it('loads every device the assistant suggested as a chip that must be confirmed before sending', async () => {
