@@ -207,7 +207,7 @@ export interface EvidenceUploadImage {
 
 /** `challenge` is null when the server has face checks off: then one photo is enough. */
 export interface CheckInFaceChallenge {
-  challenge: 'turn_head' | 'smile' | null;
+  challenge: 'turn_left' | 'turn_right' | 'look_up' | 'look_down' | null;
   token?: string;
 }
 

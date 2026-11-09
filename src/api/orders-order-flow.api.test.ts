@@ -35,8 +35,8 @@ it('check-in face with a challenge sends both photos and the token to the livene
   } finally { globalThis.FormData = original; }
 });
 it('face challenge: returns the server challenge, and falls back to no challenge when it cannot be fetched', async () => {
-  api.get.mockResolvedValueOnce({ data: { data: { challenge: 'smile', token: 'tok' } } });
-  expect(await ordersApi.getCheckInFaceChallenge('o')).toEqual({ challenge: 'smile', token: 'tok' });
+  api.get.mockResolvedValueOnce({ data: { data: { challenge: 'look_down', token: 'tok' } } });
+  expect(await ordersApi.getCheckInFaceChallenge('o')).toEqual({ challenge: 'look_down', token: 'tok' });
   api.get.mockResolvedValueOnce({ data: { data: { challenge: null } } });
   expect(await ordersApi.getCheckInFaceChallenge('o')).toEqual({ challenge: null });
   api.get.mockRejectedValueOnce(new Error('offline'));

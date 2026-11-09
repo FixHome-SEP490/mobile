@@ -6,6 +6,7 @@ import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { useTechnicianArrivalProof } from './useTechnicianArrivalProof';
 import { captureCameraPhoto, confirmCameraPermission } from './camera-capture';
 import { devFacePlaceholder } from './dev-face-skip';
+import FaceLivenessCamera, { FACE_STEP_TEXT, type FaceCameraMode, type FaceCameraResult } from './FaceLivenessCamera';
 import type { CameraOrderAsset } from './arrival-proof-controller';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import TechnicianOrderHub from '../shared/TechnicianOrderHub';
@@ -29,6 +30,8 @@ export default function FaceCheckInScreen() {
     error: null,
   });
   const [capturing, setCapturing] = useState(false);
+  // Có thử thách: một lần mở camera trước cho cả hai ảnh (hướng dẫn hiện ngay trên khung hình).
+  const [liveCamera, setLiveCamera] = useState<FaceCameraMode | null>(null);
 
   const orderValue = snapshot?.order.status === 'ready' ? snapshot.order.data : null;
   const order = orderValue && !isHistoricalOrder(orderValue) ? orderValue : null;
@@ -54,8 +57,7 @@ export default function FaceCheckInScreen() {
   const canCapture = !revoked && !busy && !isUnresolved && !!evidenceReady && !hasOwnFace && order?.arrivalVerified === true && order?.status === 'EN_ROUTE';
   const challenge = !revoked && draft.owner === owner ? draft.challenge ?? null : null;
   const second = !revoked && draft.owner === owner ? draft.second ?? null : null;
-  const needSecond = !!asset && !!challenge?.challenge && !second;
-  const canSend = canCapture && !!asset && !needSecond;
+  const canSend = canCapture && !!asset && (!challenge?.challenge || !!second);
 
   const capture = async () => {
     if (!canCapture || capturing) return;
@@ -64,6 +66,11 @@ export default function FaceCheckInScreen() {
     try {
       // A new plain photo starts a new liveness attempt with a fresh challenge from the server.
       const issued = key ? await ordersApi.getCheckInFaceChallenge(key.serviceOrderId) : { challenge: null };
+      if (issued.challenge) {
+        setDraft({ owner, asset: null, error: null, challenge: issued, second: null });
+        setLiveCamera('both');
+        return;
+      }
       const result = await captureCameraPhoto();
       if (!result.ok) {
         setDraft({ owner, asset: null, error: result.reason === 'cancelled' ? null : result.message });
@@ -77,21 +84,10 @@ export default function FaceCheckInScreen() {
     }
   };
 
-  const captureSecond = async () => {
-    if (!needSecond || capturing) return;
-    setCapturing(true);
-    try {
-      const result = await captureCameraPhoto();
-      if (!result.ok) {
-        setDraft(d => ({ ...d, error: result.reason === 'cancelled' ? null : result.message }));
-        return;
-      }
-      setDraft(d => ({ ...d, second: result.asset, error: null }));
-    } catch {
-      setDraft(d => ({ ...d, error: 'Chưa chụp được ảnh. Hãy thử lại.' }));
-    } finally {
-      setCapturing(false);
-    }
+  // Cả hai ảnh, hoặc chỉ ảnh vừa chụp lại: ảnh còn lại giữ nguyên.
+  const onLiveDone = (result: FaceCameraResult) => {
+    setLiveCamera(null);
+    setDraft(d => ({ ...d, owner, asset: result.plain ?? d.asset, second: result.second ?? d.second, error: null }));
   };
 
   const devSkip = async () => {
@@ -121,11 +117,9 @@ export default function FaceCheckInScreen() {
     ? 'Đang mở camera…'
     : canVerify
       ? 'Kiểm tra lại'
-      : needSecond
-        ? 'Chụp ảnh thứ hai'
-        : asset
-          ? 'Gửi ảnh'
-          : 'Chụp ảnh';
+      : asset
+        ? 'Gửi ảnh'
+        : 'Chụp ảnh';
 
   return (
     <TaskScreenShell
@@ -145,16 +139,15 @@ export default function FaceCheckInScreen() {
       }}
       primary={{
         label: primaryLabel,
-        testID: canVerify ? 'face-verify' : needSecond ? 'face-capture-second' : asset ? 'face-send' : 'face-capture',
-        disabled: canVerify ? false : needSecond ? !canCapture || capturing : asset ? !canSend : !canCapture,
+        testID: canVerify ? 'face-verify' : asset ? 'face-send' : 'face-capture',
+        disabled: canVerify ? false : asset ? !canSend : !canCapture,
         onPress: () => {
           if (revoked || busy) return;
           if (canVerify) {
             void controller.verify();
             return;
           }
-          if (needSecond) void captureSecond();
-          else if (asset) void send();
+          if (asset) void send();
           else if (canCapture) void capture();
         },
       }}
@@ -171,18 +164,48 @@ export default function FaceCheckInScreen() {
       ) : hasOwnFace ? (
         <ReadOnlyNotice>Ảnh xác minh đã được máy chủ xác nhận. Đang tải trạng thái mới; không cần gửi lại.</ReadOnlyNotice>
       ) : (
-        <ReadOnlyNotice>Hãy chụp ảnh khuôn mặt của bạn bằng camera để máy chủ xác minh. Ảnh chỉ xem trước trên máy trước khi bạn nhấn gửi. Ảnh đầu: nhìn thẳng, giữ mặt bình thường. Sau đó hệ thống sẽ yêu cầu thêm một ảnh quay đầu hoặc mỉm cười để xác nhận bạn đang có mặt.</ReadOnlyNotice>
+        <ReadOnlyNotice>Hãy chụp ảnh khuôn mặt của bạn bằng camera để máy chủ xác minh. Ảnh chỉ xem trước trên máy trước khi bạn nhấn gửi. Camera sẽ hướng dẫn từng bước: ảnh đầu nhìn thẳng, ảnh sau quay đầu hoặc mỉm cười để xác nhận bạn đang có mặt.</ReadOnlyNotice>
       )}
       {asset && !hasOwnFace ? (
         <View style={{ backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md, gap: 12 }}>
           <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>Đã chụp xong. Kiểm tra kỹ rồi mới gửi.</Text>
-          <Image
-            testID="face-preview"
-            source={{ uri: asset.uri }}
-            style={{ width: '100%', height: 220, borderRadius: 10, backgroundColor: colors.border }}
-            resizeMode="cover"
-            accessibilityLabel="Ảnh khuôn mặt vừa chụp"
-          />
+          {challenge?.challenge && second ? (
+            <>
+              {([
+                { n: 1, label: `Ảnh 1 · ${FACE_STEP_TEXT.plain}`, uri: asset.uri, testID: 'face-preview', mode: 'plain' },
+                { n: 2, label: `Ảnh 2 · ${FACE_STEP_TEXT[challenge.challenge]}`, uri: second.uri, testID: 'face-preview-second', mode: 'challenge' },
+              ] as const).map(item => (
+                <View key={item.n} style={{ gap: 8 }}>
+                  <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600' }}>{item.label}</Text>
+                  <Image
+                    testID={item.testID}
+                    source={{ uri: item.uri }}
+                    style={{ width: '100%', height: 180, borderRadius: 10, backgroundColor: colors.border }}
+                    resizeMode="cover"
+                    accessibilityLabel={`Ảnh khuôn mặt số ${item.n} vừa chụp`}
+                  />
+                  <TouchableOpacity
+                    testID={`face-retake-${item.n}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Chụp lại ảnh ${item.n}`}
+                    disabled={busy}
+                    onPress={() => setLiveCamera(item.mode)}
+                    style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: colors.border, opacity: busy ? 0.5 : 1 }}
+                  >
+                    <Text style={{ color: colors.primaryStrong, fontWeight: '600', fontSize: 14 }}>Chụp lại ảnh {item.n}</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </>
+          ) : (
+            <Image
+              testID="face-preview"
+              source={{ uri: asset.uri }}
+              style={{ width: '100%', height: 220, borderRadius: 10, backgroundColor: colors.border }}
+              resizeMode="cover"
+              accessibilityLabel="Ảnh khuôn mặt vừa chụp"
+            />
+          )}
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity
               testID="face-retake"
@@ -194,7 +217,7 @@ export default function FaceCheckInScreen() {
               }}
               style={{ flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', opacity: busy ? 0.5 : 1 }}
             >
-              <Text style={{ color: colors.primaryStrong, fontWeight: '600', fontSize: 14, lineHeight: 20 }}>Chụp lại</Text>
+              <Text style={{ color: colors.primaryStrong, fontWeight: '600', fontSize: 14, lineHeight: 20 }}>{challenge?.challenge && second ? 'Chụp lại tất cả' : 'Chụp lại'}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               testID="face-cancel"
@@ -210,22 +233,6 @@ export default function FaceCheckInScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      ) : null}
-      {needSecond ? (
-        <ReadOnlyNotice>
-          {challenge?.challenge === 'smile'
-            ? 'Bước 2/2: hãy mỉm cười rồi chụp ảnh thứ hai.'
-            : 'Bước 2/2: hãy quay mặt sang một bên (trái hoặc phải) rồi chụp ảnh thứ hai.'}
-        </ReadOnlyNotice>
-      ) : null}
-      {second && !hasOwnFace ? (
-        <Image
-          testID="face-preview-second"
-          source={{ uri: second.uri }}
-          style={{ width: '100%', height: 160, borderRadius: 10, backgroundColor: colors.border }}
-          resizeMode="cover"
-          accessibilityLabel="Ảnh khuôn mặt thứ hai vừa chụp"
-        />
       ) : null}
       {__DEV__ && canCapture && !asset ? (
         <TouchableOpacity
@@ -246,6 +253,9 @@ export default function FaceCheckInScreen() {
       ) : null}
       {state.phase === 'resolved' ? (
         <ReadOnlyNotice>Đã gửi ảnh. Đang chờ máy chủ xác nhận; trạng thái mới sẽ tự cập nhật sau khi làm mới.</ReadOnlyNotice>
+      ) : null}
+      {liveCamera && challenge?.challenge ? (
+        <FaceLivenessCamera challenge={challenge.challenge} mode={liveCamera} onDone={onLiveDone} onCancel={() => setLiveCamera(null)} />
       ) : null}
       <TechnicianOrderHub />
     </TaskScreenShell>
