@@ -59,6 +59,32 @@ const VN_DATE = { day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 // Floating GlassTabBar: 64pt pill + breathing room, plus the bottom inset (min 16).
 const TAB_BAR_CLEARANCE = 64 + 16;
 
+/** Banner hồ sơ: nói đúng bước đang chờ (đặt lịch, đã có lịch, bị khóa, chờ duyệt hồ sơ). */
+function onboardingBanner(
+  onboarding: OnboardingStatusResponse | null,
+  view: ReturnType<typeof resolveOnboardingView>,
+): { title: string; body: string; target: 'TechnicianOnboarding' | 'TechnicianOfficeVisit' } {
+  if (view === 'submitted') {
+    switch (onboarding?.reviewStage) {
+      case 'visit_required':
+        return { title: 'Đặt lịch lên trụ sở', body: 'Danh tính đã được xác nhận. Chọn trụ sở và giờ hẹn.', target: 'TechnicianOfficeVisit' };
+      case 'visit_scheduled':
+        return { title: 'Bạn đã có lịch lên trụ sở', body: 'Xem hoặc đổi lịch hẹn.', target: 'TechnicianOfficeVisit' };
+      case 'visit_blocked':
+        return { title: 'Cần liên hệ quản lý dịch vụ', body: 'Bạn đã vắng buổi hẹn nhiều lần.', target: 'TechnicianOnboarding' };
+      case 'profile_review':
+        return { title: 'Hồ sơ đang được duyệt', body: 'FixHome đang kiểm tra bằng cấp của bạn.', target: 'TechnicianOnboarding' };
+      default:
+        return { title: 'Hồ sơ đang chờ xét duyệt', body: 'Xem trạng thái xét duyệt.', target: 'TechnicianOnboarding' };
+    }
+  }
+  return {
+    title: view === 'rejected' ? 'Hồ sơ cần bổ sung' : 'Hồ sơ kỹ thuật viên chưa hoàn tất',
+    body: 'Hoàn tất hồ sơ để nhận việc.',
+    target: 'TechnicianOnboarding',
+  };
+}
+
 export default function TechnicianHomeScreen() {
   const { colors, isDark } = useAppTheme();
   const styles = getStyles(colors);
@@ -81,6 +107,7 @@ export default function TechnicianHomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [onboarding, setOnboarding] = useState<OnboardingStatusResponse | null>(null);
   const onboardingView = onboarding ? resolveOnboardingView(onboarding) : 'approved';
+  const banner = onboardingBanner(onboarding, onboardingView);
   // Reduced motion: keep content static (no auto-hide tab bar on scroll).
   const [reduceMotion, setReduceMotion] = useState(false);
   useEffect(() => {
@@ -105,11 +132,12 @@ export default function TechnicianHomeScreen() {
   }, []);
 
   // Hồ sơ chưa được duyệt thì nhắc hoàn tất, giống banner ở bản web.
-  useFocusEffect(
-    React.useCallback(() => {
-      technicianOnboardingApi.getStatus().then(setOnboarding).catch(() => {});
-    }, []),
-  );
+  const loadOnboarding = React.useCallback(() => {
+    technicianOnboardingApi.getStatus().then(setOnboarding).catch(() => {});
+  }, []);
+  useFocusEffect(loadOnboarding);
+  // Admin xác nhận danh tính, đã gặp, duyệt hồ sơ... đều bắn thông báo: đọc lại trạng thái ngay, không đợi mở lại màn.
+  useLiveRefresh(['notification:new', 'realtime:resync'], loadOnboarding);
 
   const loadOrders = useCallback(async () => {
     const request = homeReadGuard.begin();
@@ -251,25 +279,15 @@ export default function TechnicianHomeScreen() {
         {onboardingView !== 'approved' && (
           <TouchableOpacity
             style={[styles.card, styles.noticeCard, { backgroundColor: colors.tone.warning.bg }]}
-            onPress={() => rootNavigation.navigate('TechnicianOnboarding')}
+            onPress={() => rootNavigation.navigate(banner.target)}
             activeOpacity={0.85}
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             accessibilityRole="button"
           >
             <ShieldAlert size={22} color={colors.tone.warning.fg} strokeWidth={1.75} />
             <View style={styles.flex1}>
-              <Text style={[styles.rowTitle, { color: colors.tone.warning.text }]}>
-                {onboardingView === 'submitted'
-                  ? 'Hồ sơ đang chờ xét duyệt'
-                  : onboardingView === 'rejected'
-                    ? 'Hồ sơ cần bổ sung'
-                    : 'Hồ sơ kỹ thuật viên chưa hoàn tất'}
-              </Text>
-              <Text style={[styles.rowBody, { color: colors.tone.warning.text }]}>
-                {onboardingView === 'submitted'
-                  ? 'Xem trạng thái xét duyệt.'
-                  : 'Hoàn tất hồ sơ để nhận việc.'}
-              </Text>
+              <Text style={[styles.rowTitle, { color: colors.tone.warning.text }]}>{banner.title}</Text>
+              <Text style={[styles.rowBody, { color: colors.tone.warning.text }]}>{banner.body}</Text>
             </View>
             <ChevronRight size={18} color={colors.tone.warning.text} strokeWidth={1.75} />
           </TouchableOpacity>

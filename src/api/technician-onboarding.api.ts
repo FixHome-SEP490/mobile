@@ -18,6 +18,34 @@ export interface ServiceAreaItem {
   districtCode: string;
 }
 
+/** Giai đoạn xét duyệt sau khi thợ nộp hồ sơ (tính ở backend). */
+export type ReviewStage =
+  | 'identity_review'
+  | 'visit_required'
+  | 'visit_scheduled'
+  | 'visit_blocked'
+  | 'profile_review'
+  | 'approved'
+  | 'identity_rejected'
+  | 'profile_rejected';
+
+export interface OnboardingSkill {
+  serviceId: string;
+  /** Cấp độ thợ tự khai lúc đăng ký. */
+  declaredLevel: string | null;
+  /** Cấp độ hiện hiệu lực; chỉ là cấp đã xác nhận khi `verificationStatus` là verified. */
+  level: string;
+  verificationStatus: string;
+}
+
+export interface OnboardingOfficeVisit {
+  id: string;
+  officeId: string;
+  officeName: string;
+  officeAddress: string;
+  scheduledAt: string;
+}
+
 export interface OnboardingStatusResponse {
   onboardingStatus: OnboardingStatus;
   verificationStatus?: string;
@@ -27,11 +55,24 @@ export interface OnboardingStatusResponse {
   kycSubmitted: boolean;
   skillsSelected: boolean;
   addressSet: boolean;
+  fullName?: string;
+  /** `yyyy-MM-dd`. */
+  dateOfBirth?: string;
+  gender?: Gender;
+  phoneNumber?: string;
+  citizenIdNumber?: string;
   fullAddress?: string;
   latitude?: number;
   longitude?: number;
   serviceRadiusKm?: number;
   serviceAreas?: ServiceAreaItem[];
+  skills?: OnboardingSkill[];
+  reviewStage?: ReviewStage | null;
+  identityVerifiedAt?: string;
+  profileRejectionReason?: string;
+  officeVisit?: OnboardingOfficeVisit | null;
+  /** Chỉ có khi bị khóa đặt lịch vì vắng nhiều lần. */
+  supportPhone?: string;
 }
 
 export interface SavePersonalInfoPayload {
@@ -45,6 +86,8 @@ export interface SavePersonalInfoPayload {
 
 export interface SaveSkillsPayload {
   serviceIds: string[];
+  /** Cấp độ tự khai cho từng kỹ năng đã chọn. */
+  skills?: { serviceId: string; level: string }[];
   yearsExperience: number;
   bio?: string;
 }

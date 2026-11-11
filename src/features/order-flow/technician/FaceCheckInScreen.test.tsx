@@ -3,6 +3,7 @@ import { act, create } from 'react-test-renderer';
 import type { OrderSessionSnapshot } from '../domain/order-session.types';
 import { createOrderSessionSnapshot, readyResource } from '../domain/order-session.types';
 import FaceCheckInScreen from './FaceCheckInScreen';
+import { ordersApi } from '../../../api/orders.api';
 
 let mockSnapshot: OrderSessionSnapshot;
 let mockRefresh: jest.Mock;
@@ -30,6 +31,15 @@ jest.mock('./useTechnicianArrivalProof', () => ({
     return { controller: { uploadFace: mockUploadFace, verify: mockVerify }, state: { phase: mockPhase, message: mockMessage } };
   },
 }));
+jest.mock('./FaceLivenessCamera', () => {
+  const R = jest.requireActual<typeof import('react')>('react');
+  const View = jest.requireActual<typeof import('react-native')>('react-native').View;
+  return {
+    __esModule: true,
+    default: (props: object) => R.createElement(View, { testID: 'live-camera-mock', ...props }),
+    FACE_STEP_TEXT: { plain: 'Nhìn thẳng', turn_left: 'Quay trái', turn_right: 'Quay phải', look_up: 'Ngẩng lên', look_down: 'Cúi xuống' },
+  };
+});
 jest.mock('./camera-capture', () => ({
   captureCameraPhoto: (...args: unknown[]) => mockCapturePhoto(...args),
   confirmCameraPermission: (...args: unknown[]) => mockConfirmPermission(...args),
@@ -211,5 +221,64 @@ it.each([
   expect(mockVerify).toHaveBeenCalledTimes(1);
   expect(mockCapturePhoto).not.toHaveBeenCalled();
   expect(mockUploadFace).not.toHaveBeenCalled();
+  await act(async () => renderer.unmount());
+});
+
+it('with a server challenge it opens one in-app camera for both photos and uploads them together with the token', async () => {
+  mockSnapshot = faceSnapshot([]);
+  const spy = jest.spyOn(ordersApi, 'getCheckInFaceChallenge').mockResolvedValue({ challenge: 'look_up', token: 'tok' });
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<FaceCheckInScreen />); });
+  await act(async () => { await renderer.root.findByProps({ testID: 'face-capture' }).props.onPress(); });
+  expect(mockCapturePhoto).not.toHaveBeenCalled(); // the system camera is not used for the challenge flow
+  const cam = renderer.root.findByProps({ testID: 'live-camera-mock' });
+  expect(cam.props.challenge).toBe('look_up');
+
+  const second = { ...asset, uri: 'file://second.jpg', name: 'second.jpg' };
+  await act(async () => { cam.props.onDone({ plain: asset, second }); });
+  expect(renderer.root.findAllByProps({ testID: 'live-camera-mock' })).toHaveLength(0);
+  await act(async () => { await renderer.root.findByProps({ testID: 'face-send' }).props.onPress(); });
+  expect(mockUploadFace).toHaveBeenCalledTimes(1);
+  expect(mockUploadFace.mock.calls[0][0]).toMatchObject({
+    uri: asset.uri,
+    liveness: { token: 'tok', image: { uri: 'file://second.jpg', name: 'second.jpg', type: asset.type } },
+  });
+  spy.mockRestore();
+  await act(async () => renderer.unmount());
+});
+
+it('each of the two photos has its own retake button that retakes only that photo', async () => {
+  mockSnapshot = faceSnapshot([]);
+  const spy = jest.spyOn(ordersApi, 'getCheckInFaceChallenge').mockResolvedValue({ challenge: 'turn_left', token: 'tok' });
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<FaceCheckInScreen />); });
+  await act(async () => { await renderer.root.findByProps({ testID: 'face-capture' }).props.onPress(); });
+  const second = { ...asset, uri: 'file://second.jpg', name: 'second.jpg' };
+  await act(async () => { renderer.root.findByProps({ testID: 'live-camera-mock' }).props.onDone({ plain: asset, second }); });
+
+  await act(async () => { renderer.root.findByProps({ testID: 'face-retake-2' }).props.onPress(); });
+  expect(renderer.root.findByProps({ testID: 'live-camera-mock' }).props.mode).toBe('challenge');
+  const redone = { ...asset, uri: 'file://second-b.jpg', name: 'second-b.jpg' };
+  await act(async () => { renderer.root.findByProps({ testID: 'live-camera-mock' }).props.onDone({ second: redone }); });
+  expect(renderer.root.findByProps({ testID: 'face-preview' }).props.source).toEqual({ uri: asset.uri });
+  expect(renderer.root.findByProps({ testID: 'face-preview-second' }).props.source).toEqual({ uri: 'file://second-b.jpg' });
+
+  await act(async () => { renderer.root.findByProps({ testID: 'face-retake-1' }).props.onPress(); });
+  expect(renderer.root.findByProps({ testID: 'live-camera-mock' }).props.mode).toBe('plain');
+  const redone1 = { ...asset, uri: 'file://first-b.jpg', name: 'first-b.jpg' };
+  await act(async () => { renderer.root.findByProps({ testID: 'live-camera-mock' }).props.onDone({ plain: redone1 }); });
+  expect(renderer.root.findByProps({ testID: 'face-preview' }).props.source).toEqual({ uri: 'file://first-b.jpg' });
+  expect(renderer.root.findByProps({ testID: 'face-preview-second' }).props.source).toEqual({ uri: 'file://second-b.jpg' });
+  spy.mockRestore();
+  await act(async () => renderer.unmount());
+});
+
+it('dev builds show a skip button before a photo is taken, and it goes away once a photo exists', async () => {
+  mockSnapshot = faceSnapshot([]);
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<FaceCheckInScreen />); });
+  expect(renderer.root.findAllByProps({ testID: 'face-dev-skip' }).length).toBeGreaterThan(0);
+  await act(async () => { await renderer.root.findByProps({ testID: 'face-capture' }).props.onPress(); });
+  expect(renderer.root.findAllByProps({ testID: 'face-dev-skip' })).toHaveLength(0);
   await act(async () => renderer.unmount());
 });

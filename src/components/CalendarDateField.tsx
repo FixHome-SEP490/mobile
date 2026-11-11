@@ -6,7 +6,8 @@ import { useAppTheme } from '../constants/theme';
 import { vnParts } from '../utils/vn-time';
 import { parseVnDateInput } from '../utils/format';
 
-export default function CalendarDateField({ label, value, onChange, disabled = false }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean }) {
+/** `isDateEnabled` nhận yyyy-MM-dd; ngày không hợp lệ bị mờ và không chạm được. */
+export default function CalendarDateField({ label, value, onChange, disabled = false, isDateEnabled }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; isDateEnabled?: (iso: string) => boolean }) {
   const { colors } = useAppTheme();
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState(() => { const p = vnParts(Date.now()); return new Date(Date.UTC(p.year, p.month - 1, 1)); });
@@ -39,7 +40,8 @@ export default function CalendarDateField({ label, value, onChange, disabled = f
               const day = i + 1;
               const iso = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
               const active = selected === iso;
-              return <TouchableOpacity key={day} style={[styles.cell, { backgroundColor: active ? colors.primaryStrong : colors.surface, borderRadius: 8 }]} accessibilityRole="button" accessibilityState={{ selected: active }} accessibilityLabel={`${day}/${monthIndex + 1}/${year}`} onPress={() => { onChange(`${String(day).padStart(2, '0')}/${String(monthIndex + 1).padStart(2, '0')}/${year}`); setOpen(false); }}><Text style={{ color: active ? colors.surface : colors.text }}>{day}</Text></TouchableOpacity>;
+              const off = isDateEnabled ? !isDateEnabled(iso) : false;
+              return <TouchableOpacity key={day} disabled={off} style={[styles.cell, { backgroundColor: active ? colors.primaryStrong : colors.surface, borderRadius: 8, opacity: off ? 0.3 : 1 }]} accessibilityRole="button" accessibilityState={{ selected: active, disabled: off }} accessibilityLabel={`${day}/${monthIndex + 1}/${year}`} onPress={() => { onChange(`${String(day).padStart(2, '0')}/${String(monthIndex + 1).padStart(2, '0')}/${year}`); setOpen(false); }}><Text style={{ color: active ? colors.surface : colors.text }}>{day}</Text></TouchableOpacity>;
             })}
           </View></ScrollView>
         </View>
@@ -47,4 +49,4 @@ export default function CalendarDateField({ label, value, onChange, disabled = f
     </Modal>
   </View>;
 }
-const styles = StyleSheet.create({ label: { fontSize: 14, fontWeight: '600', marginBottom: 8 }, field: { minHeight: 48, borderWidth: 1, borderRadius: 12, padding: 12, justifyContent: 'center' }, scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 16 }, panel: { padding: 12, borderRadius: 20, width: '100%', maxWidth: 420, alignSelf: 'center' }, row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, target: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }, heading: { fontSize: 20, fontWeight: '600' }, grid: { flexDirection: 'row', flexWrap: 'wrap' }, cell: { width: `${100 / 7}%`, minHeight: 48, alignItems: 'center', justifyContent: 'center' } });
+const styles = StyleSheet.create({ label: { fontSize: 14, fontWeight: '600', marginBottom: 8 }, field: { minHeight: 48, borderWidth: 1, borderRadius: 12, padding: 12, justifyContent: 'center' }, scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 16 }, panel: { padding: 12, borderRadius: 20, width: '100%', maxWidth: 420, alignSelf: 'center' }, row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, target: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }, heading: { fontSize: 20, fontWeight: '600' }, grid: { flexDirection: 'row', flexWrap: 'wrap' }, cell: { width: '14.28%', minHeight: 48, alignItems: 'center', justifyContent: 'center' } });

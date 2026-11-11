@@ -40,6 +40,23 @@ const TYPE_VIEW: Record<string, { tone: ToneName; Icon: typeof Bell }> = {
   PROMOTION: { tone: 'neutral', Icon: Tag },
   // Giờ hẹn đã tới mà chưa bấm "Đang đến": cảnh báo, chạm để mở đơn.
   ORDER_DEPARTURE_WARNING: { tone: 'danger', Icon: AlertTriangle },
+  // Duyệt danh tính / hẹn lên trụ sở / duyệt hồ sơ: chạm để mở màn tương ứng.
+  KYC_IDENTITY_APPROVED: { tone: 'success', Icon: Bell },
+  OFFICE_VISIT_MISSED: { tone: 'warning', Icon: AlertTriangle },
+  OFFICE_VISIT_BLOCKED: { tone: 'danger', Icon: AlertTriangle },
+  OFFICE_VISIT_RESET: { tone: 'info', Icon: Bell },
+  OFFICE_VISIT_ATTENDED: { tone: 'info', Icon: Bell },
+  PROFILE_REJECTED: { tone: 'danger', Icon: AlertTriangle },
+};
+
+/** Thông báo onboarding -> màn xử lý tiếp. */
+const ONBOARDING_TARGET: Record<string, 'TechnicianOfficeVisit' | 'TechnicianOnboarding'> = {
+  KYC_IDENTITY_APPROVED: 'TechnicianOfficeVisit',
+  OFFICE_VISIT_MISSED: 'TechnicianOfficeVisit',
+  OFFICE_VISIT_BLOCKED: 'TechnicianOnboarding',
+  OFFICE_VISIT_RESET: 'TechnicianOfficeVisit',
+  OFFICE_VISIT_ATTENDED: 'TechnicianOnboarding',
+  PROFILE_REJECTED: 'TechnicianOnboarding',
 };
 const DEFAULT_VIEW = { tone: 'info' as ToneName, Icon: Bell };
 
@@ -213,6 +230,11 @@ export default function TechnicianNotificationsScreen({ route }: { route?: { nam
           setLoadError('Không thể đánh dấu đã đọc. Vui lòng thử lại.');
           syncUnreadCount();
         });
+    }
+    const onboardingTarget = ONBOARDING_TARGET[String(item.type ?? '')];
+    if (onboardingTarget) {
+      navigation.navigate(onboardingTarget);
+      return;
     }
     // A warranty notice opens the warranty part of the Jobs tab, where the claims are managed, not the original order.
     if (String(item.type ?? '').startsWith('WARRANTY_')) {

@@ -4,10 +4,10 @@ import apiClient from './client';
 import type { CheckInDto, UpdateLocationDto, EvidenceUploadMetadata, CompletionRequestDto, OrderStatusHistoryResponse } from '../types/api.types';
 
 // Browsers need a real Blob; the {uri,name,type} shape only works in React Native.
-async function appendImage(form: FormData, image: { uri: string; name: string; type: string }) {
-  if (Platform.OS !== 'web') { form.append('file', { uri: image.uri, name: image.name, type: image.type } as unknown as Blob); return; }
+async function appendImage(form: FormData, image: { uri: string; name: string; type: string }, field = 'file') {
+  if (Platform.OS !== 'web') { form.append(field, { uri: image.uri, name: image.name, type: image.type } as unknown as Blob); return; }
   const blob = await (await fetch(image.uri)).blob();
-  form.append('file', blob.type ? blob : new Blob([blob], { type: image.type }), image.name);
+  form.append(field, blob.type ? blob : new Blob([blob], { type: image.type }), image.name);
 }
 
 // Backend's Cloudinary round-trip for evidence photos is observed at 30s+
@@ -201,6 +201,14 @@ export interface EvidenceUploadImage {
   uri: string;
   name: string;
   type: string;
+  /** Check-in face only: the second photo (doing the server's challenge) and the token that proves which challenge. */
+  liveness?: { token: string; image: { uri: string; name: string; type: string } };
+}
+
+/** `challenge` is null when the server has face checks off: then one photo is enough. */
+export interface CheckInFaceChallenge {
+  challenge: 'turn_left' | 'turn_right' | 'look_up' | 'look_down' | null;
+  token?: string;
 }
 
 export interface CreateQuotationLaborItem {
@@ -608,17 +616,35 @@ export const ordersApi = {
     return unwrap(res.data);
   },
 
+  /** Random liveness challenge for the check-in face. A failed call means "no challenge": the single photo path stays. */
+  async getCheckInFaceChallenge(id: string): Promise<CheckInFaceChallenge> {
+    try {
+      const body = unwrap((await apiClient.get(`/service-orders/${id}/checkin-face/challenge`)).data) as Partial<CheckInFaceChallenge> | null;
+      return body?.challenge && body.token ? { challenge: body.challenge, token: body.token } : { challenge: null };
+    } catch {
+      return { challenge: null };
+    }
+  },
+
   async uploadCheckInFace(
     id: string,
     image: EvidenceUploadImage,
     metadata: EvidenceUploadMetadata = {},
   ): Promise<unknown> {
     const form = new FormData();
-    form.append('type', 'checkin_face');
-    await appendImage(form, image);
-    if (metadata.note !== undefined) form.append('note', metadata.note);
+    const { liveness } = image;
+    // With a challenge the server needs both photos in one request; without one the old single-photo route is used.
+    if (liveness) {
+      await appendImage(form, image);
+      await appendImage(form, liveness.image, 'challengeFile');
+      form.append('challengeToken', liveness.token);
+    } else {
+      form.append('type', 'checkin_face');
+      await appendImage(form, image);
+      if (metadata.note !== undefined) form.append('note', metadata.note);
+    }
     if (metadata.capturedAt !== undefined) form.append('capturedAt', metadata.capturedAt);
-    return unwrap((await apiClient.post(`/service-orders/${id}/evidence`, form, {
+    return unwrap((await apiClient.post(liveness ? `/service-orders/${id}/checkin-face` : `/service-orders/${id}/evidence`, form, {
       headers: { 'Content-Type': 'multipart/form-data' }, timeout: EVIDENCE_UPLOAD_TIMEOUT,
     })).data);
   },

@@ -19,6 +19,29 @@ it('uploads exact checkin_face multipart with metadata and existing private tran
     expect(api.post).toHaveBeenCalledWith('/service-orders/o/evidence', expect.anything(), { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60000 });
   } finally { globalThis.FormData = original; }
 });
+it('check-in face with a challenge sends both photos and the token to the liveness route', async () => {
+  api.post.mockResolvedValue({ data: { data: { id: 'e' } } });
+  const original = globalThis.FormData;
+  const fields: unknown[][] = [];
+  globalThis.FormData = class { append(...args: unknown[]) { fields.push(args); } } as unknown as typeof FormData;
+  try {
+    await ordersApi.uploadCheckInFace('o', {
+      uri: 'file://plain', name: 'plain.jpg', type: 'image/jpeg',
+      liveness: { token: 'tok', image: { uri: 'file://moved', name: 'moved.jpg', type: 'image/jpeg' } },
+    });
+    expect(fields.map(f => f[0])).toEqual(['file', 'challengeFile', 'challengeToken']);
+    expect(fields).toContainEqual(['challengeToken', 'tok']);
+    expect(api.post).toHaveBeenCalledWith('/service-orders/o/checkin-face', expect.anything(), { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60000 });
+  } finally { globalThis.FormData = original; }
+});
+it('face challenge: returns the server challenge, and falls back to no challenge when it cannot be fetched', async () => {
+  api.get.mockResolvedValueOnce({ data: { data: { challenge: 'look_down', token: 'tok' } } });
+  expect(await ordersApi.getCheckInFaceChallenge('o')).toEqual({ challenge: 'look_down', token: 'tok' });
+  api.get.mockResolvedValueOnce({ data: { data: { challenge: null } } });
+  expect(await ordersApi.getCheckInFaceChallenge('o')).toEqual({ challenge: null });
+  api.get.mockRejectedValueOnce(new Error('offline'));
+  expect(await ordersApi.getCheckInFaceChallenge('o')).toEqual({ challenge: null });
+});
 it('tracking uses PATCH and exact UpdateLocationDto', async () => {
   api.patch.mockResolvedValue({ data: { data: { updatedAt: 'fixture' } } });
   expect(await ordersApi.updateOrderLocation('o', { lat: 10, lng: 106 })).toEqual({ updatedAt: 'fixture' });

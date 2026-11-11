@@ -168,3 +168,16 @@ it('sends deferAutoStart to the BEFORE transport so several photos can follow ea
   expect(f.transport.uploadBefore.mock.calls.map((call) => (call as unknown[])[2])).toEqual([{ deferAutoStart: true }, { deferAutoStart: false }]);
 });
 
+it('BEFORE upload that failed with no stored photo is released by verify so the technician can resend', async () => {
+  const f = fixture(); f.transport.uploadBefore.mockRejectedValueOnce(new Error('timeout'));
+  const c = createArrivalProofController(f.deps); await c.uploadBefore(asset);
+  expect(f.journal.list('tech')[0].status).toBe('unknown');
+  await c.verify();
+  expect(f.journal.list('tech')[0].status).toBe('failed-known'); expect(c.getState().phase).toBe('denied');
+  await c.uploadBefore(asset); expect(f.transport.uploadBefore).toHaveBeenCalledTimes(2);
+});
+it('verify keeps a failed BEFORE upload locked when the server shows a photo from that attempt', async () => {
+  const f = fixture(); f.transport.uploadBefore.mockImplementation(async () => { f.server.evidence.push({ ...evidence('stored', 'BEFORE'), createdAt: new Date(Date.now() + 1000).toISOString() }); throw new Error('timeout'); });
+  const c = createArrivalProofController(f.deps); await c.uploadBefore(asset); await c.verify();
+  expect(f.journal.list('tech')[0].status).toBe('unknown'); expect(c.getState().phase).toBe('unknown');
+});

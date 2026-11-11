@@ -8,6 +8,16 @@ export interface TechnicianScheduleSlot {
   endTime: string;
 }
 
+/** Server trả thêm id/technicianId/createdAt...; backend (whitelist) từ chối các trường đó khi gửi lại, nên chỉ giữ 3 trường. */
+export function toScheduleSlot(raw: unknown): TechnicianScheduleSlot {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    dayOfWeek: Number(r.dayOfWeek),
+    startTime: String(r.startTime ?? '').slice(0, 5),
+    endTime: String(r.endTime ?? '').slice(0, 5),
+  };
+}
+
 export interface TechnicianTimeOff {
   id: string;
   startAt: string;
@@ -90,7 +100,7 @@ export function normalizeProfile(
     serviceRadiusKm: numberOrNull(profile?.serviceRadiusKm),
     autoAcceptInvitations: profile?.autoAcceptInvitations === true,
     defaultLaborWarrantyDays: numberOrNull(profile?.defaultLaborWarrantyDays),
-    schedules: Array.isArray(profile?.schedules) ? (profile.schedules as TechnicianScheduleSlot[]) : [],
+    schedules: Array.isArray(profile?.schedules) ? (profile.schedules as unknown[]).map(toScheduleSlot) : [],
   };
 }
 
@@ -131,16 +141,16 @@ export const technicianProfileApi = {
       '/technicians/me/schedule',
     );
     const result = unwrap(res.data);
-    return Array.isArray(result) ? result : [];
+    return Array.isArray(result) ? result.map(toScheduleSlot) : [];
   },
 
   async updateMySchedule(schedules: TechnicianScheduleSlot[]): Promise<TechnicianScheduleSlot[]> {
     const res = await apiClient.put<{ data: TechnicianScheduleSlot[] } | TechnicianScheduleSlot[]>(
       '/technicians/me/schedule',
-      { schedules },
+      { schedules: schedules.map(toScheduleSlot) },
     );
     const result = unwrap(res.data);
-    return Array.isArray(result) ? result : [];
+    return Array.isArray(result) ? result.map(toScheduleSlot) : [];
   },
 
   async getMyServiceAreas(): Promise<{ provinceCode: string; districtCode: string }[]> {

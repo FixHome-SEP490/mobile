@@ -100,12 +100,40 @@ export const SERVICE_RADIUS_OPTIONS_KM = [5, 10, 15, 20, 30, 40];
 export type OnboardingView = 'approved' | 'submitted' | 'rejected' | 'wizard';
 
 export function resolveOnboardingView(status: OnboardingStatusResponse): OnboardingView {
-  if (status.onboardingStatus === 'approved' || status.verificationStatus === 'verified') {
+  // Chỉ duyệt hồ sơ cuối mới là approved; danh tính đã xác nhận (`verificationStatus` verified của KYC) chưa đủ.
+  if (status.onboardingStatus === 'approved') {
     return 'approved';
   }
   if (status.onboardingStatus === 'rejected') return 'rejected';
   if (status.onboardingStatus === 'submitted') return 'submitted';
   return 'wizard';
+}
+
+export type BackAction = 'prev-step' | 'close-scan' | 'home';
+
+/**
+ * Nút quay lại ở header. Chỉ lùi bước khi đang hiện form; mọi trường hợp khác (bước đầu, đã nộp, đã duyệt,
+ * bị từ chối, đang tải, lỗi) về trang chủ, không đăng xuất. Đăng xuất nằm ở màn Hồ sơ.
+ */
+export function resolveBackAction(input: {
+  loading: boolean;
+  hasStatus: boolean;
+  view: OnboardingView;
+  step: number;
+  entryMode: 'choose' | 'scan' | 'form';
+}): BackAction {
+  if (!input.loading && input.hasStatus && input.view === 'wizard') {
+    if (input.step > 1) return 'prev-step';
+    if (input.entryMode === 'scan') return 'close-scan';
+  }
+  return 'home';
+}
+
+/** `yyyy-MM-dd` (backend) sang `dd/MM/yyyy` (ô nhập); sai định dạng thì để trống. */
+export function isoToDob(iso: string | undefined): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '');
+  const text = match ? `${match[3]}/${match[2]}/${match[1]}` : '';
+  return parseDob(text) ? text : '';
 }
 
 /** Sau đăng nhập: kỹ thuật viên chưa được duyệt thì vào thẳng luồng đăng ký. */
@@ -168,6 +196,37 @@ export function validateDob(text: string, today: Date = new Date()): string {
 
 export function validateCitizenId(value: string): string {
   return /^\d{12}$/.test(value.trim()) ? '' : 'Số CCCD phải gồm đúng 12 chữ số';
+}
+
+export type CccdInfo = { citizenId: string; fullName: string; dob: string; gender: 'male' | 'female' | 'other' };
+
+/** Chữ số thứ 4 của số CCCD mã hoá thế kỷ sinh và giới tính: chẵn là nam, lẻ là nữ (0/1: TK20, 2/3: TK21). */
+function genderFromCitizenId(id: string): CccdInfo['gender'] {
+  return Number(id[3]) % 2 === 0 ? 'male' : 'female';
+}
+
+/**
+ * QR trên thẻ, chỉ cần số CCCD ở đầu chuỗi `|`; trường nào thiếu thì để trống, người dùng tự nhập:
+ * - CCCD gắn chip: `số CCCD|số CMND cũ|họ tên|ddMMyyyy|giới tính|địa chỉ|ngày cấp`.
+ * - Thẻ căn cước từ 07/2024 (QR mặt sau): số định danh, họ tên, ngày cấp, không có ngày sinh và giới tính;
+ *   họ tên là đoạn đầu tiên không chứa chữ số, giới tính suy từ số CCCD. Bố cục này CHƯA KIỂM CHỨNG trên thẻ thật.
+ * QR chỉ là dữ liệu tự khai (ai cũng tạo được), không chứng minh thẻ thật.
+ */
+export function parseCccdQr(raw: string): CccdInfo | null {
+  const parts = raw.trim().split('|').map((part) => part.trim());
+  const citizenId = parts[0];
+  if (parts.length < 2 || validateCitizenId(citizenId)) return null;
+  const chip = parts.length >= 5;
+  const fullName = chip ? parts[2] : (parts.slice(1).find((part) => part && !/\d/.test(part)) ?? '');
+  const d = chip ? parts[3] : '';
+  const dob = /^\d{8}$/.test(d) ? `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}` : '';
+  const g = chip ? parts[4].toLowerCase() : '';
+  return {
+    citizenId,
+    fullName,
+    dob: parseDob(dob) ? dob : '',
+    gender: g === 'nam' ? 'male' : g === 'nữ' || g === 'nu' ? 'female' : genderFromCitizenId(citizenId),
+  };
 }
 
 // ── Bước 4: khu vực phục vụ ─────────────────────────────────────────────
