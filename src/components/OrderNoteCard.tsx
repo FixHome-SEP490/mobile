@@ -3,9 +3,10 @@ import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View 
 import { Lock } from 'lucide-react-native';
 import { useAppTheme } from '../constants/theme';
 import { useAuthStore } from '../store/auth.store';
-import { NOTE_MAX_LENGTH, loadNote, saveNote } from '../screens/technician/technician-notes';
+import { NOTE_MAX_LENGTH } from '../screens/technician/technician-notes';
+import { loadSyncedNote, saveSyncedNote } from '../screens/technician/technician-notes-sync';
 
-/** Private note for one order, kept on this device only. */
+/** Private note for one order, saved on the server: the same note on web and mobile (TECH 42). */
 export default function OrderNoteCard({ orderId }: { orderId: string }) {
   const { colors } = useAppTheme();
   const userId = useAuthStore((s) => s.user?.id ?? null);
@@ -17,7 +18,7 @@ export default function OrderNoteCard({ orderId }: { orderId: string }) {
 
   useEffect(() => {
     let alive = true;
-    void loadNote(userId, orderId).then((text) => {
+    void loadSyncedNote(userId, orderId).then(({ note: text }) => {
       if (!alive) return;
       setSaved(text);
       setDraft(text);
@@ -33,10 +34,10 @@ export default function OrderNoteCard({ orderId }: { orderId: string }) {
     if (busy || !dirty) return;
     setBusy(true);
     setError(false);
-    const ok = await saveNote(userId, orderId, draft);
+    const result = await saveSyncedNote(userId, orderId, draft);
     setBusy(false);
-    if (ok) {
-      const value = draft.trim();
+    if (result) {
+      const value = result.note;
       setSaved(value);
       setDraft(value);
       setJustSaved(true);
@@ -70,7 +71,7 @@ export default function OrderNoteCard({ orderId }: { orderId: string }) {
         textAlignVertical="top"
       />
       <Text style={s.caption}>
-        Ghi chú lưu trên thiết bị này, không gửi cho khách hàng hay hệ thống.
+        Chỉ bạn xem được, đồng bộ với trang web. Khách hàng và quản lý không thấy.
       </Text>
       {error && <Text style={s.error} accessibilityRole="alert">Không lưu được ghi chú. Vui lòng thử lại.</Text>}
       <TouchableOpacity
