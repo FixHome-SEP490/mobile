@@ -107,21 +107,25 @@ describe('validatePhoneNumber', () => {
 })
 
 describe('extractApiErrorMessage', () => {
-  it('ưu tiên mảng details của ValidationPipe', () => {
-    const err = {
-      response: {
-        data: {
-          error: {
-            code: 'VALIDATION_FAILED',
-            message: 'Validation failed',
-            details: ['email must be a valid email address'],
-          },
-        },
-      },
-    }
-    expect(extractApiErrorMessage(err, 'du phong')).toBe(
-      'email must be a valid email address',
-    )
+  const validation = (details: unknown) => ({
+    response: { data: { error: { code: 'VALIDATION_FAILED', message: 'Validation failed', details } } },
+  })
+
+  it('ưu tiên mảng details của ValidationPipe khi đó là câu tiếng Việt', () => {
+    expect(extractApiErrorMessage(validation(['Họ tên không hợp lệ']), 'du phong')).toBe('Họ tên không hợp lệ')
+  })
+
+  it('không đưa câu tiếng Anh trong details của ValidationPipe ra màn hình', () => {
+    const err = validation([
+      'fullName may only contain letters, spaces, apostrophes, hyphens and periods.',
+      'phoneNumber must be a valid Vietnamese phone number',
+    ])
+    expect(extractApiErrorMessage(err, 'du phong')).toBe('du phong')
+    expect(extractApiErrorMessage(validation(['email must be a valid email address']), 'du phong')).toBe('du phong')
+  })
+
+  it('dịch details là câu tiếng Anh đã biết', () => {
+    expect(extractApiErrorMessage(validation(['Invitation expired']), 'du phong')).toBe('Lời mời đã hết hạn.')
   })
 
   it('dịch câu tiếng Anh đã biết của backend sang tiếng Việt', () => {

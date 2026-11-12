@@ -13,6 +13,7 @@ const mockImpact = jest.fn();
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate, push: mockPush, goBack: mockGoBack }),
   useRoute: () => mockRoute(),
+  useFocusEffect: jest.fn(),
 }));
 jest.mock('react-native-safe-area-context', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -140,6 +141,18 @@ describe('CustomerAIDiagnosisScreen production entry UI', () => {
       expect(mockPush).toHaveBeenCalledWith('CustomerBookingCreate', {
         prefill: { serviceName: 'Vệ sinh máy lạnh', description: 'Máy lạnh hỏng' },
       });
+    } finally { act(() => tree.unmount()); }
+  });
+
+  it('opens the booking screen once when the continue button is tapped twice quickly', async () => {
+    mockRoute.mockReturnValue({ params: { prefill: { description: 'Máy giặt kêu to' } } });
+    const tree = await mountScreen();
+    try {
+      act(() => {
+        press(tree, 'Tiếp tục chọn lịch sửa chữa')?.props.onPress();
+        press(tree, 'Tiếp tục chọn lịch sửa chữa')?.props.onPress();
+      });
+      expect(mockPush).toHaveBeenCalledTimes(1);
     } finally { act(() => tree.unmount()); }
   });
 });

@@ -56,6 +56,20 @@ it('locks the prepared review draft and exposes an explicit edit action', async 
   await act(async () => renderer.unmount());
 });
 
+it('shows a sent review read-only, without the draft actions in the footer', async () => {
+  mockState = { ...mockState, review: { status: 'ready', data: { id: 'r1', rating: 5, comment: 'Tốt', createdAt: '2026-11-12T06:54:15.489Z' } } };
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><CustomerReviewScreen /></SafeAreaProvider>); });
+  const texts = renderer.root.findAllByType(Text).map(text => text.props.children);
+  expect(texts).toContain('Bạn đã gửi đánh giá cho đơn này.');
+  expect(texts).not.toContain('Chuẩn bị gửi đánh giá');
+  expect(texts).not.toContain('Để sau');
+  pressByText(renderer, 'Quay lại');
+  expect(mockGoBack).toHaveBeenCalledTimes(1);
+  expect(mockController.prepareReview).not.toHaveBeenCalled();
+  await act(async () => renderer.unmount());
+});
+
 it('clears the warranty claim draft when its coverage target changes', async () => {
   mockRoute.params = { coverageId: 'coverage-one' };
   mockState.coverages = { status: 'ready', data: [{ id: 'coverage-one', status: 'active', note: 'First' }, { id: 'coverage-two', status: 'active', note: 'Second' }] };

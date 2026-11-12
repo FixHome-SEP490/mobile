@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-09 12:24 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
+> Cập nhật lần cuối: 2026-11-12 17:20 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: fix/mobile-customer-sweep-1211
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -419,6 +419,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-12 17:20 (UTC+7) | ToanAltF4 | fix/mobile-customer-sweep-1211 | Sửa lỗi khách hàng phát hiện khi test thiết bị 12/11: tổng báo giá trên thẻ đơn, bấm đôi mở hai màn đặt lịch, kiểm tra họ tên và số điện thoại trước khi lưu hồ sơ, lỗi validation tiếng Anh không còn hiện ra, tiêu đề cảnh báo khi sửa địa chỉ, nút cuối màn đánh giá đã gửi
 - 2026-11-09 12:24 (UTC+7) | Hgnv11 | dev | Ảnh mặt check-in: thử thách quay trái, phải, ngẩng lên hoặc cúi xuống (bỏ mỉm cười); mỗi ảnh có nút "Chụp lại ảnh 1/2" riêng, chạm ảnh nhỏ bước 1 trong camera để chụp lại bước 1
 - 2026-11-09 11:37 (UTC+7) | Hgnv11 | dev | Ảnh mặt check-in có thử thách: mở camera trước trong app một lần (`FaceLivenessCamera`), hướng dẫn hiện ngay trên khung hình (bước 1 nhìn thẳng, bước 2 quay đầu hoặc mỉm cười), chụp liền hai ảnh rồi gửi; server không cấp thử thách thì vẫn dùng camera hệ thống một ảnh
 - 2026-11-09 05:37 (UTC+7) | Hgnv11 | dev | Màn chụp ảnh mặt trước sửa chữa có nút "Bỏ qua chụp ảnh mặt (chỉ bản dev)" chỉ hiện khi `__DEV__`: gửi ảnh mẫu qua đường check-in cũ một ảnh, nên backend phải để `FACE_CHECKIN_ENFORCE=false`; bản phát hành không có nút này
@@ -459,7 +460,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-30 15:45 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | `npm test` chạy thêm script hợp đồng cấu hình Android Maps; Jest bỏ qua file `.cjs` để không coi script độc lập là suite rỗng trên Jest 30.
 - 2026-10-30 15:39 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Merge origin/dev (cấu hình Google Maps Android, hạn bảo hành) vào nhánh; không đổi hành vi của nhánh.
 - 2026-10-30 14:05 (UTC+7) | foxonworld | foxonworld/fixhome-bug-detector-android-maps-config-m1-20261030 | Ghi cấu hình Google Maps Android lúc EAS build và quy tắc phục hồi ACCEPT qua GET PENDING xác thực, giữ UNKNOWN khi invitation vắng mặt.
-- 2026-10-29 21:45 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Thợ: nút Home và Back giữ màn đơn, Back hai lần về Công việc, mở lại đơn hoặc lượt thì về đúng màn đang giữ; khách: bảng chọn voucher có tab Của tôi, Ưu đãi chung và nhập mã; thêm client API cash-intents (web #184), chưa nối vào màn.
 
 ### Lịch sử giữ lại khi tích hợp
 
