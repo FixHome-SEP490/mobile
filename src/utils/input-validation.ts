@@ -106,9 +106,14 @@ export function extractApiErrorMessage(err: unknown, fallback: string): string {
     }
   )?.response?.data;
 
+  // ValidationPipe details are English developer sentences ("phoneNumber must be
+  // a valid Vietnamese phone number"); like the web, only a known or Vietnamese
+  // sentence reaches the person, otherwise the screen's own fallback does.
   const details = response?.error?.details;
-  if (Array.isArray(details) && details.length > 0) {
-    return details.join('. ');
+  if (Array.isArray(details) && details.length > 0 && details.every((d) => typeof d === 'string')) {
+    const joined = details.join('. ');
+    const readable = translateApiMessage(joined) ?? (looksUntranslated(joined) ? null : joined);
+    if (readable) return readable;
   }
 
   const message = response?.error?.message ?? response?.message;

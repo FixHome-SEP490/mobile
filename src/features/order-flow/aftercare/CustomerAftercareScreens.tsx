@@ -39,7 +39,11 @@ export function CustomerReviewScreen() {
     ? { label: busy ? 'Đang gửi…' : 'Xác nhận gửi đánh giá', disabled: busy || state.phase !== 'confirming', accessibilityHint: 'Gửi đánh giá sau khi xác nhận', onPress: () => void controller.submitConfirmation() }
     : { label: busy ? 'Đang kiểm tra…' : 'Chuẩn bị gửi đánh giá', disabled: locked || state.phase !== 'idle' || !can || !Number.isInteger(rating) || comment.length > 2000, accessibilityHint: !can ? 'Đánh giá hiện chưa được phép gửi' : 'Kiểm tra điều kiện và xem lại nội dung trước khi gửi', onPress: () => void controller.prepareReview({ rating, ...(comment.trim() ? { comment: comment.trim() } : {}) }) };
   const review = state.review.status === 'ready' ? state.review.data : null;
-  return <TaskScreenShell title="Đánh giá dịch vụ" onBack={() => { controller.cancelConfirmation(); navigation.goBack(); }} primary={primary} secondary={{ label: confirmed ? 'Sửa nội dung' : 'Để sau', disabled: busy, onPress: () => { if (confirmed) controller.cancelConfirmation(); else { controller.cancelConfirmation(); navigation.goBack(); } } }}>
+  // A sent review is read-only: no form actions are left to offer, only the way back.
+  const footer = review
+    ? { primary: undefined, secondary: { label: 'Quay lại', onPress: () => { controller.cancelConfirmation(); navigation.goBack(); } } }
+    : { primary, secondary: { label: confirmed ? 'Sửa nội dung' : 'Để sau', disabled: busy, onPress: () => { if (confirmed) controller.cancelConfirmation(); else { controller.cancelConfirmation(); navigation.goBack(); } } } };
+  return <TaskScreenShell title="Đánh giá dịch vụ" onBack={() => { controller.cancelConfirmation(); navigation.goBack(); }} primary={footer.primary} secondary={footer.secondary}>
     {state.review.status === 'loading' || state.review.status === 'unloaded' ? <Loading /> : null}
     {state.review.status === 'error' ? <Status>Chưa tải được đánh giá. Hãy quay lại và mở lại màn hình này để thử lại.</Status> : null}
     {review ? <><Status>Bạn đã gửi đánh giá cho đơn này.</Status><DetailRow label="Số sao" value={`${review.rating} / 5`} /><DetailRow label="Nhận xét" value={review.comment || 'Không có nhận xét'} /><DetailRow label="Ngày gửi" value={vnDateTimeString(review.createdAt)} /></> : null}

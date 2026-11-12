@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useOpenOnce } from '../../hooks/useOpenOnce';
 import type { RootStackParamList } from '../../types';
 import * as Haptics from 'expo-haptics';
 import { servicesApi } from '../../api/services.api';
@@ -53,12 +54,15 @@ export default function CustomerServiceDetailScreen() {
   }, [loader, serviceId]));
 
   const onRetry = () => { void loader.focus(serviceId); };
+  const openOnce = useOpenOnce();
   const onBook = () => {
     if (!service) return;
     if (!useAuthStore.getState().isAuthenticated) { navigation.navigate('Auth'); return; }
-    Haptics.selectionAsync();
-    navigation.push('CustomerBookingCreate', {
-      prefill: { serviceId: service.id, serviceName: service.name },
+    openOnce(() => {
+      Haptics.selectionAsync();
+      navigation.push('CustomerBookingCreate', {
+        prefill: { serviceId: service.id, serviceName: service.name },
+      });
     });
   };
 
