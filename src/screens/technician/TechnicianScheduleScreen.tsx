@@ -3,7 +3,6 @@ import { openOrResume } from '../../features/order-flow/navigation/resume-order'
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -30,6 +29,7 @@ import { vnDateString, vnTimeString } from '../../utils/vn-time';
 import TechnicianAvailabilityEditor from './TechnicianAvailabilityEditor';
 import BackButton from '../../components/BackButton';
 import ScheduleDayTimeline from './ScheduleDayTimeline';
+import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
 
 const VN_DATE = { day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 const VN_TIME = { hour: '2-digit', minute: '2-digit' } as const;
@@ -110,7 +110,7 @@ export default function TechnicianScheduleScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={KEYBOARD_AVOIDING_BEHAVIOR}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <View style={styles.header}>
         <BackButton />

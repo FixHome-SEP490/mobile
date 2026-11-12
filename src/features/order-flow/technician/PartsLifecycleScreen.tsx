@@ -17,6 +17,7 @@ import { approvedQuoteQty, approvedUsageCap } from './held-parts';
 import { usePartReturns } from './usePartReturns';
 import { lightTheme as colors, spacing, type ToneName } from '../../../constants/theme';
 import { backFromParts } from '../navigation/resume-order';
+import PillText from '../../../components/PillText';
 
 interface QrReceiveModalState {
   requestId: string;
@@ -193,7 +194,7 @@ export default function PartsLifecycleScreen() {
             <Text style={styles.requestMeta}>{`Mã #${String(req.id).slice(-6).toUpperCase()}`}</Text>
           </View>
           <View accessible accessibilityLabel={`Trạng thái: ${statusLabel(req.status)}`} style={[styles.statusBadge, { backgroundColor: tone.bg }]}>
-            <Text style={[styles.statusText, { color: tone.text }]}>{statusLabel(req.status)}</Text>
+            <PillText style={[styles.statusText, { color: tone.text }]}>{statusLabel(req.status)}</PillText>
           </View>
         </View>
 

@@ -1,6 +1,6 @@
 import BookingActionBar from '../../components/BookingActionBar';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions, TextInputInstance, ScrollViewInstance } from 'react-native';
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions, TextInputInstance, ScrollViewInstance } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {
   BottomSheetModal,
@@ -21,6 +21,7 @@ import {
 } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../../constants/theme';
+import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
 import { getServicePresentation } from '../../constants/service-presentation';
 import { bookingsApi } from '../../api/bookings.api';
 import { mediaApi, type MediaUploadImage } from '../../api/media.api';
@@ -72,6 +73,7 @@ import CustomerBookingAddressEditor, {
   type BookingAddressCreateAttempt,
 } from './CustomerBookingAddressEditor';
 import BackButton from '../../components/BackButton';
+import BackClosableBottomSheetModal from '../../components/BackClosableBottomSheetModal';
 
 type CreateRoute = RouteProp<RootStackParamList, 'CustomerBookingCreate'>;
 type UncertainBookingCreate = {
@@ -1314,11 +1316,11 @@ export default function CustomerBookingCreateScreen() {
   return (
     <SafeAreaView style={[styles.page, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       {headerBar}
+      <KeyboardAvoidingView style={styles.keyboardArea} behavior={KEYBOARD_AVOIDING_BEHAVIOR}>
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
       >
         {durableBlocked && !isSubmitting && !visibleCreatedBookingId && !visibleUncertainAttempt && (
           <View style={styles.section}>
@@ -1945,8 +1947,9 @@ export default function CustomerBookingCreateScreen() {
           )}
         </BookingActionBar>
       )}
+      </KeyboardAvoidingView>
 
-      <BottomSheetModal
+      <BackClosableBottomSheetModal
         ref={pickerSheetRef}
         enableDynamicSizing
         maxDynamicContentSize={Math.min(480, Math.round(windowHeight * 0.8))}
@@ -2017,9 +2020,9 @@ export default function CustomerBookingCreateScreen() {
             <Text style={{ color: colors.textSecondary, padding: 16 }}>Không tìm thấy dịch vụ phù hợp.</Text>
           }
         />
-      </BottomSheetModal>
+      </BackClosableBottomSheetModal>
 
-      <BottomSheetModal
+      <BackClosableBottomSheetModal
         ref={addressSheetRef}
         enableDynamicSizing
         maxDynamicContentSize={Math.round(windowHeight * 0.8)}
@@ -2074,7 +2077,7 @@ export default function CustomerBookingCreateScreen() {
             <Text style={{ color: colors.textSecondary, padding: 16 }}>Chưa có địa chỉ đã lưu.</Text>
           }
         />
-      </BottomSheetModal>
+      </BackClosableBottomSheetModal>
 
 
     </SafeAreaView>
@@ -2083,6 +2086,7 @@ export default function CustomerBookingCreateScreen() {
 
 const styles = StyleSheet.create({
   page: { flex: 1 },
+  keyboardArea: { flex: 1 },
   content: { padding: 16, paddingBottom: 32, gap: 16, flexGrow: 1 },
   backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', alignSelf: 'flex-start' },
   screenHeader: { minHeight: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderBottomWidth: 1 },

@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-12 17:20 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: fix/mobile-customer-sweep-1211
+> Cập nhật lần cuối: 2026-11-13 00:02 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: fix/mobile-bugs-1211
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -389,6 +389,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 8. Việc đang dở và rủi ro đã biết
 
+- Số đếm tab Hoạt động: mobile gửi `GET /bookings/my/activity-counts?excludeVisitGroups=true` (cùng nghĩa với danh sách). Backend dev lúc 13/11 chưa đọc tham số này (bị bỏ qua, không lỗi) nên số đếm chỉ khớp danh sách khi Backend nhận tham số. Nhãn pill/badge dùng `PillText` (một dòng) vì Android API 35 cắt chữ cuối của nhãn tự co chiều rộng (đã tái hiện trên emulator FixHome_Dev).
 - Quản lý bảo hành của thợ: form từ chối, đề xuất và hoàn tất vẫn nằm trong thẻ trên trang chi tiết, chưa chuyển thành bottom sheet như modal của web; các nút trên thẻ lời mời và hàng danh sách đều mở trang chi tiết để xác nhận, không gửi lệnh ngay từ danh sách.
 - Bảo hành thợ trên Mobile: sau khi bị từ chối hoặc không đến, yêu cầu rời danh sách của thợ nên thợ không thấy trạng thái chờ quản lý xét (cần Backend trả thêm danh sách yêu cầu đã từ chối); nút "Đã nộp linh kiện hỏng" và hạn nộp chỉ hiện khi Backend mới trả `partRequest` (CHƯA KIỂM CHỨNG trên thiết bị và với Backend thật). CHƯA KIỂM CHỨNG trên thiết bị: lối vào `TechnicianWarrantyInbox` ở Hồ sơ thợ, nút Nhắn tin (cần `order.bookingId` từ Backend mới) và Xem đơn gốc.
 - UX1–UX5 visual: đã xem 13 ảnh AGY trước/sau Luna, nhưng AGY xác nhận cửa sổ resize chỉ đạt 502 CSS px với DPR 1.25, không chứng minh viewport 320/360/390/430dp. Cần chụp lại bằng device emulation và ghi kích thước thực. Customer đăng nhập, bàn phím, fontScale 1.3, Reduce Motion tương tác, native và Web runtime parity CHƯA KIỂM CHỨNG. Không đăng nhập live để chụp Booking/Matching vì GET có thể thay đổi trạng thái; chỉ dùng fixture chặn mạng trước bootstrap.
@@ -419,6 +420,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-13 00:02 (UTC+7) | ToanAltF4 | fix/mobile-bugs-1211 | Mobile 12/11 device-sweep fixes (M-3..M-30 except M-20): shared keyboard behaviour, PillText one-line pills, Back closes bottom sheets, live order re-read after a push during a read, activity counts exclude visit groups, tracking code upper-cased, aftercare busy/denied fixes
 - 2026-11-12 17:20 (UTC+7) | ToanAltF4 | fix/mobile-customer-sweep-1211 | Sửa lỗi khách hàng phát hiện khi test thiết bị 12/11: tổng báo giá trên thẻ đơn, bấm đôi mở hai màn đặt lịch, kiểm tra họ tên và số điện thoại trước khi lưu hồ sơ, lỗi validation tiếng Anh không còn hiện ra, tiêu đề cảnh báo khi sửa địa chỉ, nút cuối màn đánh giá đã gửi
 - 2026-11-09 12:24 (UTC+7) | Hgnv11 | dev | Ảnh mặt check-in: thử thách quay trái, phải, ngẩng lên hoặc cúi xuống (bỏ mỉm cười); mỗi ảnh có nút "Chụp lại ảnh 1/2" riêng, chạm ảnh nhỏ bước 1 trong camera để chụp lại bước 1
 - 2026-11-09 11:37 (UTC+7) | Hgnv11 | dev | Ảnh mặt check-in có thử thách: mở camera trước trong app một lần (`FaceLivenessCamera`), hướng dẫn hiện ngay trên khung hình (bước 1 nhìn thẳng, bước 2 quay đầu hoặc mỉm cười), chụp liền hai ảnh rồi gửi; server không cấp thử thách thì vẫn dùng camera hệ thống một ảnh
@@ -459,7 +461,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-30 17:45 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Màn Lịch sử sửa chữa của khách đổi giao diện theo token: thẻ có ô biểu tượng, tab chuyển dạng segmented, tiêu đề nhóm có biểu tượng, lỗi dùng tông đỏ, nút Tải thêm có viền; chỉ đổi giao diện, chưa kiểm chứng trên máy thật.
 - 2026-10-30 15:45 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | `npm test` chạy thêm script hợp đồng cấu hình Android Maps; Jest bỏ qua file `.cjs` để không coi script độc lập là suite rỗng trên Jest 30.
 - 2026-10-30 15:39 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Merge origin/dev (cấu hình Google Maps Android, hạn bảo hành) vào nhánh; không đổi hành vi của nhánh.
-- 2026-10-30 14:05 (UTC+7) | foxonworld | foxonworld/fixhome-bug-detector-android-maps-config-m1-20261030 | Ghi cấu hình Google Maps Android lúc EAS build và quy tắc phục hồi ACCEPT qua GET PENDING xác thực, giữ UNKNOWN khi invitation vắng mặt.
 
 ### Lịch sử giữ lại khi tích hợp
 

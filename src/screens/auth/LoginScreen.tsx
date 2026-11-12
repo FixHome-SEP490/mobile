@@ -1,7 +1,7 @@
 import { useAppTheme } from '../../constants/theme';
 // src/screens/auth/LoginScreen.tsx
 import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, StatusBar, Image, TextInputInstance } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, ActivityIndicator, StatusBar, Image, TextInputInstance } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
@@ -21,6 +21,7 @@ import { technicianLandingRoute } from '../technician/technician-onboarding';
 import { handoffAuthenticatedRoute } from '../../navigation/root-navigation';
 import { markCustomerFirstRunSeen } from '../../services/customer-first-run';
 import BackButton from '../../components/BackButton';
+import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
 
 export default function LoginScreen() {
   const { colors, spacing, fontSize, isDark } = useAppTheme();
@@ -121,10 +122,10 @@ export default function LoginScreen() {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={KEYBOARD_AVOIDING_BEHAVIOR}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        
+
           <View style={styles.brandBar}><BackButton onPress={goGuestHome} /><View style={styles.brandRow}><Image source={require('../../../assets/icon.png')} style={styles.brandLogo} /><Text style={styles.brandText}>Fix<Text style={styles.accent}>Home</Text></Text></View></View>
           <View style={styles.header}>
             <Text style={styles.heroTitle} accessibilityRole="header">Chào bạn.{'\n'}<Text style={styles.accent}>Về với FixHome.</Text></Text>

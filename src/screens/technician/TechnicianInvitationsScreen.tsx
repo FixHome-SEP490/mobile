@@ -45,6 +45,7 @@ import StatusBadge from '../../components/StatusBadge';
 import BackButton from '../../components/BackButton';
 import InvitationJobDetails from '../../components/technician/InvitationJobDetails';
 import InvitationDecisionView from '../../features/order-flow/technician/InvitationDecisionView';
+import PillText from '../../components/PillText';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -348,7 +349,7 @@ export default function TechnicianInvitationsScreen() {
                 {b?.media?.length ? (
                   <View style={styles.mediaChip} testID="invitation-media-chip">
                     <ImageIcon size={14} color={colors.primaryStrong} strokeWidth={1.75} />
-                    <Text style={styles.mediaChipText}>{`${b.media.length} ảnh/video của khách`}</Text>
+                    <PillText style={styles.mediaChipText}>{`${b.media.length} ảnh/video của khách`}</PillText>
                   </View>
                 ) : null}
               </View>

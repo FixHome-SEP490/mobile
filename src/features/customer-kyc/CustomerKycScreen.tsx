@@ -26,6 +26,7 @@ import {
   type CustomerKycFormValues,
   type UploadedCustomerKycDocument,
 } from './customer-kyc.validation';
+import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
 
 type Side = 'front' | 'back';
 type SideAsset = { uri: string; mimeType: CustomerKycMimeType; fileName: string; fileSize: number };
@@ -330,7 +331,7 @@ export default function CustomerKycScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.flex} behavior={KEYBOARD_AVOIDING_BEHAVIOR}>
         <View style={styles.header}>
           <BackButton />
           <View style={styles.headerText}>

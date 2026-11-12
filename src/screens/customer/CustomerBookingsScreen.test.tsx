@@ -303,6 +303,9 @@ describe('CustomerBookingsScreen activity ordering (C-RUI1)', () => {
       const tab = (id: string) => tree.root.findAllByProps({ testID: `activity-kind-${id}` }).find((node) => node.props.accessibilityRole === 'tab')!;
       expect(tab('repair').props.accessibilityLabel).toBe('Đơn 1 thiết bị, 6');
       expect(tab('request').props.accessibilityLabel).toBe('Yêu cầu đặt lịch, 42');
+      // The counts leave out multi-device visits exactly as the lists under them do.
+      const countsApi = (jest.requireMock('../../api/bookings.api') as { bookingsApi: { getActivityCounts: jest.Mock } }).bookingsApi.getActivityCounts;
+      expect(countsApi).toHaveBeenCalledWith({ excludeVisitGroups: true });
       // Repairs open first when nothing needs action, and the request list is not drawn under them.
       expect(tab('repair').props.accessibilityState.selected).toBe(true);
       expect(tree.root.findAllByProps({ testID: 'activity-action-required-section' })).toHaveLength(0);

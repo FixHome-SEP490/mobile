@@ -171,7 +171,9 @@ function WarrantyClaimCreateForCoverage({ coverageId }: { coverageId?: string })
       <Status>Bạn chỉ cần mô tả sự cố. Kỹ thuật viên sẽ kiểm tra và xác định lỗi do công hay do linh kiện.</Status>
       <Text style={label}>Mô tả sự cố</Text><TextInput accessibilityLabel="Mô tả sự cố" value={description} editable={!locked} onChangeText={setDescription} multiline maxLength={2000} placeholder="Mô tả từ 10 đến 2000 ký tự" placeholderTextColor={colors.textSecondary} style={[field, { minHeight: 130 }]} />
       <WarrantyPhotos urls={photos} onChange={setPhotos} onUploaded={urls => controller.registerUploadedPhotos(urls)} disabled={locked} />
-      {!can ? <Status>Chưa thể tạo yêu cầu. Hãy làm mới thông tin phạm vi hoặc kiểm tra yêu cầu đang mở.</Status> : null}
+      {confirmed || locked ? null : description.trim().length < 10
+        ? <Status>Nhập mô tả sự cố từ 10 ký tự để kiểm tra và gửi yêu cầu.</Status>
+        : !can ? <Status>Chưa thể tạo yêu cầu. Hãy làm mới thông tin phạm vi hoặc kiểm tra yêu cầu đang mở.</Status> : null}
     </>}
     {confirmed ? <Status>Yêu cầu sẽ được gửi với phạm vi đã chọn và mô tả bạn vừa nhập.</Status> : null}{state.message ? <Status>{state.message}</Status> : null}
   </TaskScreenShell>;

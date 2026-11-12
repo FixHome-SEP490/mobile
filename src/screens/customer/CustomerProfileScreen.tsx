@@ -59,6 +59,8 @@ import {
   type ExactPinCoordinates,
   type ExactPinState,
 } from './customer-exact-pin';
+import BackClosableBottomSheetModal from '../../components/BackClosableBottomSheetModal';
+import PillText from '../../components/PillText';
 
 export default function CustomerProfileScreen() {
   const { user, sessionGeneration, setAuth, logout } = useAuthStore();
@@ -1106,7 +1108,7 @@ export default function CustomerProfileScreen() {
       </Modal>
 
       {/* Profile Edit Sheet */}
-      <BottomSheetModal
+      <BackClosableBottomSheetModal
         ref={profileSheetRef}
         enableDynamicSizing
         keyboardBehavior="interactive"
@@ -1250,10 +1252,10 @@ export default function CustomerProfileScreen() {
             </TouchableOpacity>
           </View>
         </BottomSheetView>
-      </BottomSheetModal>
+      </BackClosableBottomSheetModal>
 
       {/* Address Edit Sheet (Logic bản thường với Empty State tốt hơn) */}
-      <BottomSheetModal
+      <BackClosableBottomSheetModal
         ref={addressSheetRef}
         snapPoints={addressSnapPoints}
         keyboardBehavior="interactive"
@@ -1308,7 +1310,7 @@ export default function CustomerProfileScreen() {
                         {addr.isDefault && (
                           <View style={styles.defaultBadge}>
                             <Ionicons name="checkmark-circle" size={12} color={colors.primary} />
-                            <Text style={styles.defaultBadgeText}>Mặc định</Text>
+                            <PillText style={styles.defaultBadgeText}>Mặc định</PillText>
                           </View>
                         )}
                       </View>
@@ -1351,7 +1353,7 @@ export default function CustomerProfileScreen() {
                         style={styles.setDefaultBtn}
                       >
                         <Ionicons name="checkmark-circle-outline" size={16} color={colors.primary} />
-                        <Text style={styles.defaultBadgeText}>Đặt mặc định</Text>
+                        <PillText style={styles.defaultBadgeText}>Đặt mặc định</PillText>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1611,7 +1613,7 @@ export default function CustomerProfileScreen() {
             </TouchableOpacity>
           </View>
         </BottomSheetScrollView>
-      </BottomSheetModal>
+      </BackClosableBottomSheetModal>
     </SafeAreaView>
   );
 }

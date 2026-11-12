@@ -10,6 +10,7 @@ import {
 } from '../../../api/part-requests.api';
 import type { OrderPartReadModel } from '../domain/order-session.types';
 import { lightTheme as colors, spacing, type ToneName } from '../../../constants/theme';
+import PillText from '../../../components/PillText';
 
 type Item = OrderPartReadModel['items'][number];
 
@@ -95,7 +96,7 @@ export function PartItemRow({ item, received, canMarkUsage, frozen, record, busy
     <View testID={`parts-item-${item.id}`} style={styles.row}>
       <View style={styles.head}>
         <Text style={styles.name}>{item.partNameSnapshot || 'Linh kiện'}</Text>
-        {view && tone ? <View style={[styles.chip, { backgroundColor: tone.bg }]}><Text style={[styles.chipText, { color: tone.text }]}>{view.label}</Text></View> : null}
+        {view && tone ? <View style={[styles.chip, { backgroundColor: tone.bg }]}><PillText style={[styles.chipText, { color: tone.text }]}>{view.label}</PillText></View> : null}
       </View>
       <Text style={styles.meta}>
         {record

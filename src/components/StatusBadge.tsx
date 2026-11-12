@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import {
   AlertTriangle,
   ArrowDown,
@@ -13,6 +13,7 @@ import {
   XCircle,
 } from 'lucide-react-native';
 import { iconSize, iconStroke, useAppTheme } from '../constants/theme';
+import PillText from './PillText';
 import type { StatusIcon, StatusView } from '../screens/technician/technician-status';
 
 const ICONS = {
@@ -28,7 +29,7 @@ const ICONS = {
   Clock,
 } satisfies Record<StatusIcon, unknown>;
 
-/** Label + icon + tone (never colour alone, DS §8.4). Grows with font scale, no truncation. */
+/** Label + icon + tone (never colour alone, DS §8.4). Grows with font scale; one line so Android never drops its last word (PillText). */
 export default function StatusBadge({ view }: { view: StatusView }) {
   const { colors } = useAppTheme();
   const tone = colors.tone[view.tone];
@@ -36,7 +37,7 @@ export default function StatusBadge({ view }: { view: StatusView }) {
   return (
     <View style={[styles.badge, { backgroundColor: tone.bg }]}>
       <Icon size={iconSize.sm} color={tone.fg} strokeWidth={iconStroke} />
-      <Text style={[styles.text, { color: tone.text }]}>{view.label}</Text>
+      <PillText style={[styles.text, { color: tone.text }]}>{view.label}</PillText>
     </View>
   );
 }

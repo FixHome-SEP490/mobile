@@ -4,9 +4,10 @@ import { CUSTOMER_UI_ARTWORK } from '../../constants/customer-artwork';
 // src/screens/customer/CustomerHomeScreen.tsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MessageCircle } from 'lucide-react-native';
-import { View, Text, StyleSheet, ScrollView, Pressable, TouchableOpacity, Image, StatusBar, useWindowDimensions, ScrollViewInstance } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TouchableOpacity, Image, useWindowDimensions, ScrollViewInstance } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { homeStatusBar } from './home-status-bar';
 import { useLiveRefresh } from '../../hooks/useLiveRefresh';
 import { listsNeedRead } from '../../services/live-kinds';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -30,6 +31,8 @@ import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import BackClosableBottomSheetModal from '../../components/BackClosableBottomSheetModal';
+import PillText from '../../components/PillText';
 
 
 export default function CustomerHomeScreen() {
@@ -170,9 +173,12 @@ export default function CustomerHomeScreen() {
 
   useLiveRefresh(['booking:updated', 'invitation:updated', 'order:updated'], (batch) => { if (listsNeedRead(batch)) setResumeTick((tick) => tick + 1); }, undefined, { pollMs: 60_000 });
 
+  // Light icons on the blue header only while Home is in front. A <StatusBar> element stays in force while Home is
+  // mounted under a pushed screen, which left white icons on white screens such as order tracking.
+  useFocusEffect(useCallback(() => homeStatusBar(), []));
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="light-content" />
 
       <ScrollView
         ref={scrollRef}
@@ -212,7 +218,7 @@ export default function CustomerHomeScreen() {
                 />
                 {chatUnread > 0 && (
                   <View style={styles.notificationBadge}>
-                    <Text style={styles.notificationBadgeText}>{chatUnread > 9 ? '9+' : chatUnread}</Text>
+                    <PillText style={styles.notificationBadgeText}>{chatUnread > 9 ? '9+' : chatUnread}</PillText>
                   </View>
                 )}
               </TouchableOpacity>
@@ -443,7 +449,7 @@ export default function CustomerHomeScreen() {
       {isGuest && <CustomerAnimatedBottomBar mode="guest" activeRouteName="Home" onGuestTabPress={name => name === 'Home' ? scrollRef.current?.scrollTo({ y: 0, animated: !reduceMotion }) : navigation.navigate('Auth')} onGuestBookingChoice={() => navigation.navigate('Auth')} />}
 
       {/* Address Selection Bottom Sheet */}
-      <BottomSheetModal
+      <BackClosableBottomSheetModal
         ref={addressSheetRef}
         enableDynamicSizing
         maxDynamicContentSize={Math.round(windowHeight * 0.8)}
@@ -506,7 +512,7 @@ export default function CustomerHomeScreen() {
             </TouchableOpacity>
           )}
         />
-      </BottomSheetModal>
+      </BackClosableBottomSheetModal>
     </SafeAreaView>
   );
 }

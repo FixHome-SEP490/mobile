@@ -12,7 +12,6 @@ import {
   ScrollView,
   StyleSheet,
   KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
   Alert,
   Linking,
@@ -64,6 +63,8 @@ import { CccdQrScanner } from './CccdQrScanner';
 import { formatVisitTime } from './TechnicianOfficeVisitScreen';
 import OnboardingStepper from './OnboardingStepper';
 import TechnicianAddressPicker, { type PickedPlace } from './TechnicianAddressPicker';
+import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
+import PillText from '../../components/PillText';
 
 const GENDERS: { value: Gender; label: string }[] = [
   { value: 'male', label: 'Nam' },
@@ -561,9 +562,9 @@ export default function TechnicianOnboardingScreen() {
               accessibilityLabel={g.label}
               accessibilityState={{ selected: gender === g.value, disabled: personalLocked }}
             >
-              <Text style={[styles.chipText, gender === g.value && styles.chipTextActive]}>
+              <PillText style={[styles.chipText, gender === g.value && styles.chipTextActive]}>
                 {g.label}
-              </Text>
+              </PillText>
             </TouchableOpacity>
           ))}
         </View>
@@ -691,7 +692,7 @@ export default function TechnicianOnboardingScreen() {
                     accessibilityLabel={service.name}
                     accessibilityState={{ checked: selected }}
                   >
-                    <Text style={[styles.chipText, selected && styles.chipTextActive]}>{service.name}</Text>
+                    <PillText style={[styles.chipText, selected && styles.chipTextActive]}>{service.name}</PillText>
                   </TouchableOpacity>
                 );
               })}
@@ -718,7 +719,7 @@ export default function TechnicianOnboardingScreen() {
                   accessibilityLabel={`Áp dụng cấp ${lv.label} cho tất cả dịch vụ đã chọn`}
                   accessibilityState={{ selected: active }}
                 >
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{lv.label}</Text>
+                  <PillText style={[styles.chipText, active && styles.chipTextActive]}>{lv.label}</PillText>
                 </TouchableOpacity>
               );
             })}
@@ -826,9 +827,9 @@ export default function TechnicianOnboardingScreen() {
               accessibilityLabel={`Bán kính phục vụ ${km} km`}
               accessibilityState={{ selected: radiusKm === km }}
             >
-              <Text style={[styles.chipText, radiusKm === km && styles.chipTextActive]}>
+              <PillText style={[styles.chipText, radiusKm === km && styles.chipTextActive]}>
                 {km} km
-              </Text>
+              </PillText>
             </TouchableOpacity>
           ))}
         </View>
@@ -907,7 +908,7 @@ export default function TechnicianOnboardingScreen() {
                 accessibilityLabel={d.name}
                 accessibilityState={{ checked: selected }}
               >
-                <Text style={[styles.chipText, selected && styles.chipTextActive]}>{d.name}</Text>
+                <PillText style={[styles.chipText, selected && styles.chipTextActive]}>{d.name}</PillText>
               </TouchableOpacity>
             );
           })}
@@ -1220,7 +1221,7 @@ export default function TechnicianOnboardingScreen() {
       </View>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={KEYBOARD_AVOIDING_BEHAVIOR}
       >
         <ScrollView
           contentContainerStyle={styles.content}

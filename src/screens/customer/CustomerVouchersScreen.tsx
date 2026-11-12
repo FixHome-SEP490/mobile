@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, RefreshControl, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View,
+  ActivityIndicator, FlatList, KeyboardAvoidingView, RefreshControl, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -9,9 +9,11 @@ import { vouchersApi, type GeneralVoucher, type VoucherClaim } from '../../api/v
 import { useAppTheme } from '../../constants/theme';
 import { extractApiErrorMessage } from '../../utils/input-validation';
 import {
-  claimState, conditionLabel, discountLabel, isVoucherCode, splitWallet, unsavedGeneral, voucherDate,
+  claimState, conditionLabel, discountLabel, isVoucherCode, splitWallet, unsavedGeneral, voucherCodeProblem, voucherDate,
   VOUCHER_EMPTY, VOUCHER_SAVED_NOTE, VOUCHER_TABS, type VoucherTab,
 } from './voucher-view';
+import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
+import PillText from '../../components/PillText';
 
 type Row = { key: string; title: string; discount: string; condition: string; expires: string; badge: string; claimCode?: string };
 
@@ -87,7 +89,7 @@ export default function CustomerVouchersScreen() {
         <BackButton />
         <Text accessibilityRole="header" style={styles.headerTitle}>Ưu đãi của tôi</Text>
       </View>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.flex} behavior={KEYBOARD_AVOIDING_BEHAVIOR}>
         <FlatList
           data={loading || error ? [] : rows}
           keyExtractor={(row) => row.key}
@@ -113,6 +115,9 @@ export default function CustomerVouchersScreen() {
                   returnKeyType="done"
                   onSubmitEditing={() => void claim(code)}
                 />
+                {!!voucherCodeProblem(code) && (
+                  <Text style={[styles.hint, { color: colors.tone.danger.text }]} testID="voucher-code-problem">{voucherCodeProblem(code)}</Text>
+                )}
                 <TouchableOpacity
                   style={[styles.primaryBtn, !codeReady && styles.disabled]}
                   disabled={!codeReady}
@@ -149,7 +154,7 @@ export default function CustomerVouchersScreen() {
             <View style={styles.card} testID="voucher-row">
               <View style={styles.row}>
                 <Text style={[styles.cardTitle, styles.flex]} numberOfLines={2}>{item.title}</Text>
-                <Text style={styles.badge}>{item.badge}</Text>
+                <PillText style={styles.badge}>{item.badge}</PillText>
               </View>
               <Text style={styles.discount}>{item.discount}</Text>
               <Text style={styles.hint}>{item.condition}</Text>

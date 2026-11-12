@@ -15,7 +15,6 @@ import {
   AppState,
   KeyboardAvoidingView,
   Linking,
-  Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -49,6 +48,8 @@ import {
 import { getWalletSummaryDisplayRows, maskAccountNumber } from './technician-wallet-presentation';
 import { vnDateTimeString } from '../../utils/vn-time';
 import BackButton from '../../components/BackButton';
+import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
+import PillText from '../../components/PillText';
 
 const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 const TOP_UP_PRESETS = [100_000, 200_000, 500_000, 1_000_000];
@@ -466,7 +467,7 @@ export default function TechnicianWalletScreen({ route }: { route?: { name: stri
                         accessibilityLabel={`Lọc giao dịch: ${f.label}`}
                         accessibilityState={{ selected: active }}
                       >
-                        <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{f.label}</Text>
+                        <PillText style={[styles.filterChipText, active && styles.filterChipTextActive]}>{f.label}</PillText>
                       </TouchableOpacity>
                     );
                   })}
@@ -605,9 +606,9 @@ export default function TechnicianWalletScreen({ route }: { route?: { name: stri
               accessibilityLabel={`Nạp ${formatVnd(p)}`}
               accessibilityState={{ selected: topUpAmount === String(p) }}
             >
-              <Text style={[styles.presetChipText, topUpAmount === String(p) && styles.presetChipTextActive]}>
+              <PillText style={[styles.presetChipText, topUpAmount === String(p) && styles.presetChipTextActive]}>
                 {formatVnd(p)}
-              </Text>
+              </PillText>
             </TouchableOpacity>
           ))}
         </View>
@@ -860,7 +861,7 @@ function FormModal({ styles, visible, title, reduceMotion, onClose, children }: 
 }) {
   return (
     <Modal visible={visible} transparent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={onClose}>
-      <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.modalOverlay} behavior={KEYBOARD_AVOIDING_BEHAVIOR}>
         <View style={styles.modalCard}>
           <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <Text style={styles.modalTitle} accessibilityRole="header">{title}</Text>

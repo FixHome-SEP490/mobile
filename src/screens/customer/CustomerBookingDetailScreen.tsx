@@ -31,6 +31,7 @@ import BackButton from '../../components/BackButton';
 import RebookSheet from '../../components/RebookSheet';
 import { useRebookAction } from '../../hooks/useRebookAction';
 import { sessionLabel } from '../../utils/booking-session';
+import PillText from '../../components/PillText';
 
 const MATCH_POLL_MS = 5000;
 
@@ -183,7 +184,7 @@ export default function CustomerBookingDetailScreen() {
           <View style={styles.summaryCard}>
             <View style={styles.summaryTopRow}>
               <View style={styles.statusBadge}>
-                <Text style={styles.statusText}>{bookingStatusLabel(booking.status)}</Text>
+                <PillText style={styles.statusText}>{bookingStatusLabel(booking.status)}</PillText>
               </View>
               <Text style={styles.referenceText}>#{booking.id.slice(0, 8)}</Text>
             </View>

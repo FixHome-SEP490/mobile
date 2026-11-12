@@ -346,8 +346,11 @@ export const bookingsApi = {
     return unwrap<RawBooking[]>(res.data).map(normalizeBooking);
   },
 
-  async getActivityCounts(): Promise<ActivityCounts> {
-    const res = await apiClient.get('/bookings/my/activity-counts');
+  /** `excludeVisitGroups` must match the lists the counts sit on, or a tab counts devices its list does not show. */
+  async getActivityCounts(options: { excludeVisitGroups?: boolean } = {}): Promise<ActivityCounts> {
+    const res = options.excludeVisitGroups
+      ? await apiClient.get('/bookings/my/activity-counts', { params: { excludeVisitGroups: 'true' } })
+      : await apiClient.get('/bookings/my/activity-counts');
     const data = unwrap<{ repair?: Record<string, unknown>; request?: Record<string, unknown> }>(res.data);
     const n = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0);
     const repair = { in_progress: n(data?.repair?.in_progress), completed: n(data?.repair?.completed), cancelled: n(data?.repair?.cancelled) };

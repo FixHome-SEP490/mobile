@@ -12,6 +12,7 @@ import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import BackButton from '../../components/BackButton';
 import { vnDateString } from '../../utils/vn-time';
 import { filterPartReturns, groupPartReturns, type PartReturnFilter } from './technician-part-returns';
+import PillText from '../../components/PillText';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Load = 'loading' | 'ready' | 'error' | 'unavailable';
@@ -79,7 +80,7 @@ export default function TechnicianPartReturnsScreen() {
                   accessibilityState={{ selected: active }}
                   accessibilityLabel={`${label}, ${count(key)} đơn`}
                 >
-                  <Text style={active ? styles.chipTextActive : styles.chipText}>{`${label} (${count(key)})`}</Text>
+                  <PillText style={active ? styles.chipTextActive : styles.chipText}>{`${label} (${count(key)})`}</PillText>
                 </TouchableOpacity>
               );
             })}
@@ -144,7 +145,7 @@ export default function TechnicianPartReturnsScreen() {
                     <View style={styles.codeRow}>
                       <Text style={styles.code}>{group.label}</Text>
                       <View style={[styles.badge, { backgroundColor: tone.bg }]}>
-                        <Text style={[styles.badgeText, { color: tone.text }]}>{state2}</Text>
+                        <PillText style={[styles.badgeText, { color: tone.text }]}>{state2}</PillText>
                       </View>
                     </View>
                     <Text style={styles.meta}>

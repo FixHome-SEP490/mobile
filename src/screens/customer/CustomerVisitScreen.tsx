@@ -38,6 +38,7 @@ import {
   visitPayMethods,
   type VisitPayMethod,
 } from './customer-visit';
+import PillText from '../../components/PillText';
 
 type VisitRoute = RouteProp<RootStackParamList, 'CustomerVisit'>;
 type Message = { type: 'success' | 'error'; text: string };
@@ -362,7 +363,7 @@ export default function CustomerVisitScreen() {
                 <View style={styles.row}>
                   <Text style={styles.cardTitle} numberOfLines={2}>Máy {item.sequence}: {item.booking?.serviceName || device?.serviceName || item.deviceLabel || 'Thiết bị'}</Text>
                   <View style={[styles.chip, { backgroundColor: t.bg }]}>
-                    <Text style={[styles.chipText, { color: t.text }]}>{statusOf(item)}</Text>
+                    <PillText style={[styles.chipText, { color: t.text }]}>{statusOf(item)}</PillText>
                   </View>
                 </View>
                 {!!description && (

@@ -15,6 +15,7 @@ export function createOrderReadCoordinator(deps: OrderReadDependencies) {
   let generation = 0;
   let seq = 0;
   const flights = new Map<string, Promise<void>>();
+  let trailingLive: Promise<void> | null = null;
   const listeners = new Set<() => void>();
   const publish = () => listeners.forEach(listener => listener());
   const matches = (key: OrderSessionKey, gen = generation) => gen === generation && sameOrderSession(snapshot?.key ?? null, key);
@@ -30,6 +31,18 @@ export function createOrderReadCoordinator(deps: OrderReadDependencies) {
   async function refreshOrderSession(key: OrderSessionKey, reason: string): Promise<void> {
     if (!matches(key)) return;
     const active = flights.get('order');
+    // A server push says the order changed after something was written. A read already in flight may have been sent before that
+    // write (approve, then the server's own auto-start a moment later), so joining it would keep the old status with no further push
+    // to correct it. Every push that lands during a read therefore asks for one more read after it; pushes in the same read share it.
+    if (active && reason === 'live') {
+      if (!trailingLive) {
+        trailingLive = active.catch(() => {}).then(() => {
+          trailingLive = null;
+          return matches(key) ? refreshOrderSession(key, 'live') : undefined;
+        });
+      }
+      return trailingLive;
+    }
     // A read-back after a command must start after it: a read already in flight may have been sent before the server applied the command (auto-start), and joining it keeps the old status.
     if (active && reason !== 'command-readback') return active;
     if (active) { await active.catch(() => {}); if (!matches(key)) return; }

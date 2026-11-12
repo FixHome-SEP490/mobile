@@ -1,7 +1,7 @@
 import React from 'react';
 import { Text, TextInput, TouchableOpacity } from 'react-native';
 import { act, create } from 'react-test-renderer';
-import ChatListScreen from './ChatListScreen';
+import ChatListScreen, { chatReadOnlyTag } from './ChatListScreen';
 import ChatThreadScreen from './ChatThreadScreen';
 import { messagingApi } from '../../api/messaging.api';
 
@@ -271,5 +271,25 @@ describe('ChatThreadScreen real-UI presentation', () => {
         (node) => node.props.accessibilityLabel === 'Gửi tin nhắn',
       ),
     ).toHaveLength(0);
+  });
+});
+
+describe('chat list read-only reason', () => {
+  const row = {
+    id: 'conv-9', bookingId: 'booking-9', serviceOrderId: 'order-9', status: 'closed', serviceName: 'Sửa điều hòa', orderCode: 'FH-20261031-6DFAA600',
+    counterpart: { id: 'user-2', fullName: 'Khách', avatarUrl: null, role: 'customer' }, lastMessageAt: null, lastMessagePreview: 'Cảm ơn', unreadCount: 0,
+  };
+  it('says the order is finished when the server closed the chat for that, never "another technician"', async () => {
+    expect(chatReadOnlyTag({ canSend: false, closedReason: 'order_completed' })).toBe('Chỉ xem lại — đơn đã hoàn tất');
+    expect(chatReadOnlyTag({ canSend: false, closedReason: null })).toBe('Chỉ xem lại');
+    expect(chatReadOnlyTag({ canSend: true, closedReason: null })).toBeNull();
+    mockedApi.listConversations.mockResolvedValue([{ ...row, canSend: false, closedReason: 'order_completed' }]);
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => { renderer = create(<ChatListScreen />); });
+    await flushMicrotasks();
+    const text = visibleText(renderer);
+    expect(text).toContain('Chỉ xem lại — đơn đã hoàn tất');
+    expect(text).not.toContain('thợ khác');
+    await act(async () => renderer.unmount());
   });
 });

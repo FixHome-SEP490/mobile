@@ -1,5 +1,6 @@
 import { isHistoricalOrder, type TechnicianOrdersPage, type TechnicianOrderItem } from '../../api/orders.api';
 import { UserRole, type UserInfo } from '../../types/auth.types';
+import { extractApiErrorMessage } from '../../utils/input-validation';
 
 export function technicianJobsUserId(session: { isAuthenticated: boolean; user: UserInfo | null }): string | null {
   return session.isAuthenticated && session.user?.role === UserRole.TECHNICIAN
@@ -40,6 +41,16 @@ const deniedMessage = 'Không có quyền xem công việc. Vui lòng kiểm tra
 function accessDenied(error: unknown) {
   const status = (error as { response?: { status?: number } } | null)?.response?.status;
   return status === 401 || status === 403;
+}
+/**
+ * A 4xx other than 401/403 is the server refusing the step (for example 409 "Chỉ xuất
+ * phát được từ 60 phút trước giờ hẹn"): nothing was written, so the reason is shown
+ * and the button unlocks. Only a missing or 5xx response leaves the outcome unknown.
+ */
+function definiteRejection(error: unknown) {
+  const status = (error as { response?: { status?: number } } | null)?.response?.status;
+  // 408 is a timeout: the server may still have applied the step, so it stays an unknown outcome.
+  return typeof status === 'number' && status >= 400 && status < 500 && status !== 408 && !accessDenied(error);
 }
 // Same-process duplicate guard, scoped by technician User ID. Never replay an ambiguous
 // POST on refresh/remount/login. Contains IDs only; not durable across app restart/devices.
@@ -208,7 +219,12 @@ export function createJobsLoader(
     } catch (error) {
       if (!sameAccount()) return;
       if (accessDenied(error)) denyAccess(); // Also invalidates GETs started before this rejection.
-      else {
+      else if (definiteRejection(error)) {
+        ids.delete(id);
+        publish({ blockedOrderIds: [...ids] });
+        if (isCurrent()) notify('Chưa thể bắt đầu di chuyển', extractApiErrorMessage(error, 'Máy chủ chưa cho phép bắt đầu di chuyển lúc này. Vui lòng thử lại sau.'));
+        await refresh(true);
+      } else {
         if (isCurrent()) notify('Chưa xác nhận trạng thái', 'Không rõ yêu cầu đã được xử lý hay chưa. Vui lòng làm mới; không gửi lại thao tác.');
         await refresh(true); // GET reconciliation only, never another POST.
       }

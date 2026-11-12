@@ -105,3 +105,21 @@ it('drops the "no longer allowed" notice once a later read works again, so a pas
   expect(f.c.getState().message).toBeNull();
   expect(f.c.getState().claims.status).toBe('ready');
 });
+it('an order read that fails or is still loading is not shown as lost access (M-25)', async () => {
+  const f = setup(); f.server.order.status = 'COMPLETED'; f.server.failRead = true;
+  await f.c.loadWarranty();
+  expect(f.c.getState().phase).not.toBe('denied');
+  expect(f.c.getState().message ?? '').not.toContain('không còn quyền');
+  f.server.failRead = false;
+  await f.c.loadWarranty();
+  expect(f.c.getState().claims.status).toBe('ready');
+});
+it('the last state screens read comes after the busy flag dropped, so the claim form does not keep refusing (M-26)', async () => {
+  const f = setup(); f.server.order.status = 'COMPLETED';
+  await f.c.loadWarranty();
+  const seen: boolean[] = []; const stop = f.c.subscribe(() => seen.push(f.c.canClaim(ids.coverage)));
+  await f.c.verify();
+  stop();
+  expect(seen.length).toBeGreaterThan(0);
+  expect(seen[seen.length - 1]).toBe(true);
+});

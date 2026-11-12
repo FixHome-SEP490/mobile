@@ -7,6 +7,7 @@ import {
   nextPinnedService,
   photosByAppliance,
   showsManualBooking,
+  manualBookingCarry,
   quickReplies,
   revealSteps,
   REVEAL_STEPS,
@@ -186,5 +187,16 @@ describe('showsManualBooking', () => {
     expect(showsManualBooking({ status: 'unavailable', failureReason: 'validation' }, false)).toBe(false);
     expect(showsManualBooking({ status: 'unavailable', failureReason: 'request_failed' }, true)).toBe(false);
     expect(showsManualBooking({ status: 'ok' }, false)).toBe(false);
+  });
+});
+
+describe('manualBookingCarry (M-19)', () => {
+  it('carries the typed description, session and uploaded photos to the service picked by hand', () => {
+    expect(manualBookingCarry('  Máy lạnh chảy nước ', 'session-1', [{ uploadId: 'u1', kind: 'image' }]))
+      .toEqual({ description: 'Máy lạnh chảy nước', aiSessionId: 'session-1', attachmentUploadIds: [{ uploadId: 'u1', kind: 'image' }] });
+  });
+  it('carries nothing it does not have', () => {
+    expect(manualBookingCarry('', null, [])).toEqual({});
+    expect(manualBookingCarry(undefined, undefined, undefined)).toEqual({});
   });
 });

@@ -22,8 +22,19 @@ import { useAppTheme } from '../../constants/theme';
 import { chatSocketService } from '../../services/chat-socket.service';
 import { vnDateString } from '../../utils/vn-time';
 import BackButton from '../../components/BackButton';
+import PillText from '../../components/PillText';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+/**
+ * Why a row is read-only, in the same words as the open chat. Only the server's `closedReason`
+ * tells why; without one the reason is not guessed (it used to say "another technician" for a
+ * job the technician had finished himself).
+ */
+export function chatReadOnlyTag(item: Pick<ConversationItem, 'canSend' | 'closedReason'>): string | null {
+  if (item.canSend) return null;
+  return item.closedReason === 'order_completed' ? 'Chỉ xem lại — đơn đã hoàn tất' : 'Chỉ xem lại';
+}
 
 function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -135,15 +146,15 @@ export default function ChatListScreen() {
           </Text>
           {item.unreadCount > 0 && (
             <View style={styles.badge}>
-              <Text style={styles.badgeText}>
+              <PillText style={styles.badgeText}>
                 {item.unreadCount > 99 ? '99+' : item.unreadCount}
-              </Text>
+              </PillText>
             </View>
           )}
         </View>
 
         {!item.canSend && (
-          <Text style={styles.readOnlyTag}>Chỉ xem lại — đơn đã có thợ khác</Text>
+          <PillText style={styles.readOnlyTag}>{chatReadOnlyTag(item)}</PillText>
         )}
       </View>
     </TouchableOpacity>

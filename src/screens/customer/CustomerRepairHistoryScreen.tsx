@@ -26,6 +26,7 @@ import {
 } from './customer-repair-history';
 import BackButton from '../../components/BackButton';
 import VisitGroupsPanel from '../../components/customer/VisitGroupsPanel';
+import PillText from '../../components/PillText';
 
 const PAGE_SIZE = 20;
 
@@ -258,7 +259,7 @@ export default function CustomerRepairHistoryScreen() {
                         <View style={styles.cardTop}>
                           <View style={styles.statusPill}>
                             <Ionicons name="checkmark-circle" size={15} color={colors.tone?.success?.fg ?? colors.success} />
-                            <Text style={styles.statusText}>Hoàn thành</Text>
+                            <PillText style={styles.statusText}>Hoàn thành</PillText>
                           </View>
                           <Text style={styles.dateText}>{repairHistoryDate(item)}</Text>
                         </View>

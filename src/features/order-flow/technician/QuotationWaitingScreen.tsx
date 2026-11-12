@@ -14,6 +14,7 @@ import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { backFromFlow } from '../navigation/resume-order';
+import PillText from '../../../components/PillText';
 
 function latestOwnQuote(quotations: OrderQuotation[] | undefined, serviceOrderId: string, technicianId: string): OrderQuotation | null {
   if (!quotations) return null;
@@ -120,7 +121,7 @@ export default function QuotationWaitingScreen() {
           <View style={styles.head}>
             <Text accessibilityRole="header" style={styles.title}>Báo giá lần {sentQuote.version ?? '—'}</Text>
             <View style={[styles.chip, { backgroundColor: colors.tone.warning.bg }]}>
-              <Text style={[styles.chipText, { color: colors.tone.warning.text }]}>Chờ duyệt báo giá</Text>
+              <PillText style={[styles.chipText, { color: colors.tone.warning.text }]}>Chờ duyệt báo giá</PillText>
             </View>
           </View>
           {sentQuote.sentAt ? <Text style={styles.meta}>Gửi lúc {vnDateTimeString(sentQuote.sentAt)}</Text> : null}

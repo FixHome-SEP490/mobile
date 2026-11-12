@@ -15,6 +15,7 @@ import SentEvidenceGallery from './SentEvidenceGallery';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { backFromFlow } from '../navigation/resume-order';
+import PillText from '../../../components/PillText';
 
 /** Photos taken and not yet sent in one go. */
 const MAX_AFTER_DRAFTS = 5;
@@ -243,9 +244,9 @@ export default function AfterEvidenceScreen() {
           </View>
           {evidenceReady ? (
             <View style={[styles.chip, { backgroundColor: colors.tone[knownInsufficient ? 'warning' : ownAfter.length ? 'success' : 'neutral'].bg }]}>
-              <Text style={[styles.chipText, { color: colors.tone[knownInsufficient ? 'warning' : ownAfter.length ? 'success' : 'neutral'].text }]}>
+              <PillText style={[styles.chipText, { color: colors.tone[knownInsufficient ? 'warning' : ownAfter.length ? 'success' : 'neutral'].text }]}>
                 {knownInsufficient ? 'Cần thêm ảnh' : ownAfter.length ? 'Đã có ảnh' : 'Chưa có ảnh'}
-              </Text>
+              </PillText>
             </View>
           ) : null}
         </View>

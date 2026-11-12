@@ -1,6 +1,6 @@
 "use no memo";
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Dimensions, Platform, TouchableOpacity, Text, useWindowDimensions } from 'react-native';
+import { View, StyleSheet, Dimensions, Platform, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import Animated, { 
   useSharedValue, 
@@ -28,6 +28,7 @@ import {
   getGlassTabIndicatorOffset,
   shouldSyncGlassTabIndicator,
 } from './glass-tab-bar-layout';
+import PillText from '../PillText';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -78,9 +79,9 @@ const AnimatedTabIcon = ({
       </Animated.View>
       {options.tabBarBadge !== undefined && options.tabBarBadge > 0 && (
         <View style={[styles.badge, options.tabBarBadgeStyle?.backgroundColor ? { backgroundColor: options.tabBarBadgeStyle.backgroundColor } : null]}>
-          <Text style={styles.badgeText}>
+          <PillText style={styles.badgeText}>
             {options.tabBarBadge > 99 ? '99+' : options.tabBarBadge}
-          </Text>
+          </PillText>
         </View>
       )}
     </View>

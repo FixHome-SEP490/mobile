@@ -10,6 +10,7 @@ import { useAppTheme } from '../../constants/theme';
 import { invitationPriceText } from '../../screens/technician/invitation-view';
 import { formatVnd } from '../../utils/format';
 import BookingMediaViewer from './BookingMediaViewer';
+import PillText from '../PillText';
 
 function Lines({ label, items }: { label: string; items?: string[] }) {
   const { colors } = useAppTheme();
@@ -68,7 +69,7 @@ export default function InvitationJobDetails({ booking, hidePrivacyNote = false 
                   <Text style={[styles.label, { color: colors.textSecondary }]}>Có thể là</Text>
                   <View style={styles.chips}>
                     {faults.map((f) => (
-                      <Text key={f} style={[styles.chip, { color: colors.tone.warning.text, backgroundColor: colors.tone.warning.bg }]}>{f}</Text>
+                      <PillText key={f} style={[styles.chip, { color: colors.tone.warning.text, backgroundColor: colors.tone.warning.bg }]}>{f}</PillText>
                     ))}
                   </View>
                 </View>

@@ -112,7 +112,7 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
     void controller.prepare(op as any, dto);
   };
   const action = confirmed
-    ? { label: busy ? 'Đang gửi…' : 'Xác nhận thao tác', disabled: busy || state.phase !== 'confirming', testID: 'technician-warranty-primary-action', onPress: () => void controller.submitConfirmation() }
+    ? { label: busy ? 'Đang gửi…' : WARRANTY_CONFIRM_LABEL[state.confirmation!.operation] ?? 'Xác nhận thao tác', disabled: busy || state.phase !== 'confirming', testID: 'technician-warranty-primary-action', onPress: () => void controller.submitConfirmation() }
     : (state.phase !== 'idle' && state.phase !== 'resolved') || !claim ? undefined
       : task === 'TW02' ? { label: 'Nhận yêu cầu bảo hành', disabled: locked || !commands.includes('accept') || !slot, testID: 'technician-warranty-primary-action', onPress: () => prepare('accept') }
         : task === 'TW03' ? { label: 'Xác nhận đã đến kiểm tra', disabled: locked || !commands.includes('check-in'), testID: 'technician-warranty-primary-action', onPress: () => prepare('check-in') }
@@ -188,8 +188,11 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
         <ReadOnlyNotice>Chỉ yêu cầu đang được phân công mới hiển thị ở đây. Nhận hoặc từ chối cần xác nhận rõ ràng.</ReadOnlyNotice>
         <ReadOnlyNotice tone="warning">Từ chối vì nghỉ phép hoặc ngoài khu vực sẽ được hệ thống kiểm tra. Lý do khác phải chờ quản lý dịch vụ xét, nếu không chính đáng sẽ bị trừ điểm uy tín. Sát hạn bảo hành, chỉ hai lý do trên được từ chối.</ReadOnlyNotice>
         <SlotPicker value={slot} onChange={setSlot} disabled={locked} />
+        {/* While accepting is waiting for its confirmation, decline reasons are not part of it and are not shown as chosen. */}
+        {state.confirmation?.operation === 'accept' ? null : <>
         <Text style={choiceText}>Nếu từ chối, chọn lý do:</Text>{(['busy', 'on_leave', 'out_of_area', 'other'] as const).map(value => <Pressable key={value} disabled={locked} accessibilityRole="radio" accessibilityState={{ disabled: locked, checked: reason === value }} onPress={() => setReason(value)} style={[choice, reason === value && { borderColor: colors.primaryStrong }]}><Text style={choiceText}>{reasonLabel[value]}</Text></Pressable>)}
         {reason === 'other' ? <TextInput accessibilityLabel="Lý do từ chối" value={note} editable={!locked} onChangeText={setNote} multiline maxLength={2000} style={field} /> : null}
+        </>}
         </Card> : null}
       {task === 'TW03' ? <Card title="Đến nơi kiểm tra"><ReadOnlyNotice>Check-in bảo hành là lượt thăm riêng. Không dùng check-in sửa chữa hoặc yêu cầu gửi vị trí.</ReadOnlyNotice></Card> : null}
       {task === 'TW03' && claim.visit?.status === 'scheduled' ? <Card title="Khách bận, cần đổi lịch?">
@@ -251,6 +254,14 @@ function StatusPill({ claim }: { claim: Parameters<typeof technicianClaimLabel>[
   const status = technicianClaimLabel(claim); const tone = toneBg[status.tone];
   return <View style={{ backgroundColor: tone.bg, borderRadius: 8, paddingHorizontal: 8, minHeight: 24, justifyContent: 'center' }}><Text style={{ color: tone.text, fontSize: 12, fontWeight: '700' }}>{status.label}</Text></View>;
 }
+/** The confirm button names what it confirms (it used to say only "Xác nhận thao tác" for accepting and declining alike). */
+export const WARRANTY_CONFIRM_LABEL: Record<string, string> = {
+  accept: 'Xác nhận nhận bảo hành',
+  decline: 'Xác nhận từ chối phân công',
+  'check-in': 'Xác nhận đã đến kiểm tra',
+  propose: 'Xác nhận gửi kết quả kiểm tra',
+  complete: 'Xác nhận hoàn tất bảo hành',
+};
 const reasonLabel: Record<string, string> = { busy: 'Đang bận', on_leave: 'Đang nghỉ', out_of_area: 'Ngoài khu vực', other: 'Lý do khác', customer_misuse: 'Sử dụng không đúng cách', normal_wear: 'Hao mòn thông thường', other_component: 'Linh kiện khác', not_workmanship_related: 'Không liên quan chất lượng sửa chữa', expired: 'Đã hết hạn', cannot_reproduce: 'Không tái hiện được sự cố', customer_unavailable: 'Không liên hệ được khách hàng', third_party_repair: 'Đã có người khác sửa', force_majeure: 'Thiên tai, cháy nổ, ngập', transport_damage: 'Hỏng do vận chuyển' };
 const outcomeLabel = { fixed: 'Đã khắc phục', unfixed: 'Không khắc phục được', rejected: 'Không được bảo hành' };
 const resultLabel = { covered_workmanship: 'Bảo hành chất lượng sửa chữa', covered_part: 'Bảo hành linh kiện', not_covered: 'Không thuộc phạm vi bảo hành' };

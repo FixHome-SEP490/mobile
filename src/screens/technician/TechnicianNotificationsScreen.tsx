@@ -26,6 +26,7 @@ import {
   groupNotificationsByDay,
   mergeNotificationPage,
   resolveTechnicianNotificationOrderId,
+  technicianNotificationOpensInvitations,
 } from './technician-notifications';
 import BackButton from '../../components/BackButton';
 
@@ -239,6 +240,11 @@ export default function TechnicianNotificationsScreen({ route }: { route?: { nam
     // A warranty notice opens the warranty part of the Jobs tab, where the claims are managed, not the original order.
     if (String(item.type ?? '').startsWith('WARRANTY_')) {
       navigation.navigate('TechnicianMain', { screen: 'Jobs', params: { mode: 'warranty' } });
+      return;
+    }
+    // A new invitation has no order yet; it lives on the Invitations tab (web bell: /tech/invitations).
+    if (technicianNotificationOpensInvitations(item)) {
+      navigation.navigate('TechnicianMain', { screen: 'Invitations' });
       return;
     }
     void resolveTechnicianNotificationOrderId(item, partRequestsApi.getById).then(

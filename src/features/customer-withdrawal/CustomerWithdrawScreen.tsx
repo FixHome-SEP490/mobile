@@ -2,7 +2,6 @@ import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -31,6 +30,7 @@ import { vnDateTimeString } from '../../utils/vn-time';
 import { wholeVnd } from '../../api/customer-wallet.api';
 import { parseWholeVndInput } from '../order-flow/shared/m6-amount-input';
 import { findNewCustomerWithdrawal } from './customer-withdrawal.workflow';
+import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
 
 const PAGE_LIMIT = 20;
 type PreparedWithdrawal = {
@@ -343,7 +343,7 @@ export default function CustomerWithdrawScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.flex} behavior={KEYBOARD_AVOIDING_BEHAVIOR}>
         <View style={styles.header}>
           <BackButton />
           <View style={styles.headerText}>

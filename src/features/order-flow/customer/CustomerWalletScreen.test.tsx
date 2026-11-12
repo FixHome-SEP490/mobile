@@ -243,3 +243,23 @@ it('non-customer roles see no wallet content and send nothing', async () => {
   expect(mockRequestTopUp).not.toHaveBeenCalled();
   await act(async () => renderer.unmount());
 });
+
+it('confirming the top-up opens the payment gateway once, even when the button is tapped twice (M-23)', async () => {
+  mockWalletState = {
+    ...baseState,
+    phase: 'confirming',
+    summary: { status: 'ready', requestSeq: 1, fetchedAt: 1, data: { balance: '0', transactions: [], meta: { page: 1, limit: 20, total: 0, totalPages: 0 } } },
+    confirmation: { owner: { userId: 'customer', role: 'customer', sessionGeneration: 1 }, dto: { amount: 10000, idempotencyKey: 'key-1' } },
+  };
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<CustomerWalletScreen />); });
+  await expandTopUp(renderer);
+  await act(async () => { renderer.root.findByProps({ testID: 'wallet-topup-open-sheet' }).props.onPress(); });
+  const submit = renderer.root.findByProps({ testID: 'wallet-topup-submit' }).props.onPress;
+  await act(async () => { submit(); submit(); });
+  // The controller sends one top-up (it ignores the second call while busy) and opens the link it got at most once.
+  expect(mockSubmitConfirmation).toHaveBeenCalled();
+  expect(mockOpenPaymentUrl).toHaveBeenCalled();
+  expect(mockOpenPaymentUrl.mock.invocationCallOrder[0]).toBeGreaterThan(mockSubmitConfirmation.mock.invocationCallOrder[0]);
+  await act(async () => renderer.unmount());
+});

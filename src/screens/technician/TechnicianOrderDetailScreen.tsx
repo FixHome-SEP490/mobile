@@ -121,6 +121,7 @@ import {
 } from './technician-cash-settlement';
 import { vnDateTimeString } from '../../utils/vn-time';
 import BackButton from '../../components/BackButton';
+import PillText from '../../components/PillText';
 
 const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 type DetailRoute = RouteProp<RootStackParamList, 'TechnicianOrderDetail'>;
@@ -2274,14 +2275,14 @@ export default function TechnicianOrderDetailScreen() {
                     <View key={row.key} style={styles.acItemCard}>
                       <View style={styles.acItemBadgeRow}>
                         <View style={row.kind === 'labor' ? styles.acBadgeLabor : styles.acBadgeParts}>
-                          <Text style={styles.acBadgeText}>
+                          <PillText style={styles.acBadgeText}>
                             {row.kind === 'labor' ? `CÔNG THỢ ${index + 1}` : `LINH KIỆN ${index + 1}`}
-                          </Text>
+                          </PillText>
                         </View>
                         {row.kind === 'part' && row.warrantyOption === 'paid_warranty' && !!row.warrantyTermDays && (
                           <View style={styles.acWarrantyBadge}>
                             <ShieldCheck size={12} color={colors.tone.success.fg} strokeWidth={2} />
-                            <Text style={styles.acWarrantyBadgeText}>{row.warrantyTermDays} ngày</Text>
+                            <PillText style={styles.acWarrantyBadgeText}>{row.warrantyTermDays} ngày</PillText>
                           </View>
                         )}
                         {quoteState.rows.length > 1 && (
@@ -2591,7 +2592,7 @@ export default function TechnicianOrderDetailScreen() {
                 <View style={styles.acItemCard}>
                   <View style={styles.acItemBadgeRow}>
                     <View style={styles.acBadgeLabor}>
-                      <Text style={styles.acBadgeText}>CÔNG THỢ</Text>
+                      <PillText style={styles.acBadgeText}>CÔNG THỢ</PillText>
                     </View>
                   </View>
                   <TextInput
@@ -2629,12 +2630,12 @@ export default function TechnicianOrderDetailScreen() {
                   <View key={item.partCatalogId} style={styles.acItemCard}>
                     <View style={styles.acItemBadgeRow}>
                       <View style={styles.acBadgeParts}>
-                        <Text style={styles.acBadgeText}>LK FIXHOME</Text>
+                        <PillText style={styles.acBadgeText}>LK FIXHOME</PillText>
                       </View>
                       {!!item.warrantyDays && (
                         <View style={styles.acWarrantyBadge}>
                           <ShieldCheck size={12} color={colors.tone.success.fg} strokeWidth={2} />
-                          <Text style={styles.acWarrantyBadgeText}>{item.warrantyDays} ngày</Text>
+                          <PillText style={styles.acWarrantyBadgeText}>{item.warrantyDays} ngày</PillText>
                         </View>
                       )}
                       <TouchableOpacity

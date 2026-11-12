@@ -3,6 +3,7 @@ import {
   groupNotificationsByDay,
   mergeNotificationPage,
   technicianNotificationOrderId,
+  technicianNotificationOpensInvitations,
 } from './technician-notifications';
 
 const NOW = Date.parse('2026-09-30T07:00:00Z'); // 14:00 30/09/2026 VN
@@ -60,5 +61,17 @@ describe('technicianNotificationOrderId', () => {
     expect(technicianNotificationOrderId({ referenceType: 'SERVICE_ORDER', referenceId: 'FH-123' })).toBeNull();
     expect(technicianNotificationOrderId({ referenceType: null, referenceId: ORDER })).toBeNull();
     expect(technicianNotificationOrderId({ referenceType: 'SERVICE_ORDER', referenceId: null })).toBeNull();
+  });
+});
+
+describe('technicianNotificationOpensInvitations', () => {
+  const orderId = '550e8400-e29b-41d4-a716-446655440000';
+  it('sends a new invitation (BOOKING reference, no order yet) to the Invitations tab', () => {
+    expect(technicianNotificationOpensInvitations({ type: 'BOOKING_INVITATION', referenceType: 'BOOKING', referenceId: orderId })).toBe(true);
+    expect(technicianNotificationOpensInvitations({ type: 'BOOKING_INVITATION', referenceType: null, referenceId: null })).toBe(true);
+  });
+  it('still opens the order when the notice names a real order', () => {
+    expect(technicianNotificationOpensInvitations({ type: 'INVITATION_AUTO_ACCEPTED', referenceType: 'SERVICE_ORDER', referenceId: orderId })).toBe(false);
+    expect(technicianNotificationOpensInvitations({ type: 'QUOTATION_APPROVED', referenceType: 'SERVICE_ORDER', referenceId: orderId })).toBe(false);
   });
 });

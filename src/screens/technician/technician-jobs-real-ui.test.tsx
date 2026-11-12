@@ -239,6 +239,19 @@ describe('TechnicianJobsScreen real-UI presentation (T-RUI2B)', () => {
     await act(async () => renderer.unmount());
   });
 
+  it('gives the job total the free width of its row so the amount is not cut after the label', async () => {
+    mockedJobsState = { ...loadedState(), jobs: [{ ...activeJob, status: 'COMPLETED', grandTotal: 535000 }] };
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<TechnicianJobsScreen />);
+    });
+    const amount = renderer.root.findAllByType(Text).find((node) =>
+      [node.props.children].flat().join('').startsWith('Tổng thu'));
+    expect([amount!.props.children].flat().join('')).toBe('Tổng thu: 535.000 ₫');
+    expect(StyleSheet.flatten(amount!.props.style)).toMatchObject({ flexGrow: 1, textAlign: 'right' });
+    await act(async () => renderer.unmount());
+  });
+
   it('shows honest retry copy on load failure instead of an empty-list claim', async () => {
     mockedJobsState = {
       jobs: [], jobsTotal: 0, jobsPage: 0, loading: false, refreshing: false,

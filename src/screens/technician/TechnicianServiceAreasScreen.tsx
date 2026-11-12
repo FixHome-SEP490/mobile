@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAppTheme } from '../../constants/theme';
@@ -8,6 +8,8 @@ import { technicianProfileApi } from '../../api/technician-profile.api';
 import { areasChanged, initialProvince, keysToServiceAreas, serviceAreasToKeys, toAreaKey } from './technician-service-areas';
 import TechnicianLocationEditor from './TechnicianLocationEditor';
 import BackButton from '../../components/BackButton';
+import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
+import PillText from '../../components/PillText';
 
 /** The technician edits the districts they serve after onboarding (same picker as onboarding). */
 export default function TechnicianServiceAreasScreen() {
@@ -79,7 +81,7 @@ export default function TechnicianServiceAreasScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={KEYBOARD_AVOIDING_BEHAVIOR}>
       <View style={styles.header}>
         <BackButton />
         <Text style={styles.headerTitle} accessibilityRole="header">Khu vực hoạt động</Text>
@@ -119,7 +121,7 @@ export default function TechnicianServiceAreasScreen() {
               const on = keys.includes(toAreaKey(province, d.code));
               return (
                 <TouchableOpacity key={d.code} style={[styles.chip, on && styles.chipOn]} onPress={() => toggle(d.code)} accessibilityRole="checkbox" accessibilityState={{ checked: on }}>
-                  <Text style={[styles.chipText, on && styles.chipTextOn]}>{d.name}</Text>
+                  <PillText style={[styles.chipText, on && styles.chipTextOn]}>{d.name}</PillText>
                 </TouchableOpacity>
               );
             })}
