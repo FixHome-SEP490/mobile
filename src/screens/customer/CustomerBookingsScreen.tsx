@@ -14,7 +14,6 @@ import {
   Modal,
   AccessibilityInfo,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
@@ -59,7 +58,8 @@ import {
   rescheduleBookingConservative,
 } from './customer-booking-manage';
 import { formatVnd } from '../../utils/format';
-import { vnDateString, vnTimeString } from '../../utils/vn-time';
+import { activityCardWhen } from './activity-card-date';
+import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
 
 export default function CustomerBookingsScreen() {
   const { colors, spacing, fontSize, isDark } = useAppTheme();
@@ -115,7 +115,7 @@ export default function CustomerBookingsScreen() {
   useEffect(() => {
     if (loading || refreshing) return;
     let current = true;
-    bookingsApi.getActivityCounts().then((next) => { if (current) setCounts(next); }, () => undefined);
+    bookingsApi.getActivityCounts({ excludeVisitGroups: true }).then((next) => { if (current) setCounts(next); }, () => undefined);
     return () => { current = false; };
   }, [loading, refreshing]);
   useFocusEffect(useCallback(() => {
@@ -296,9 +296,7 @@ export default function CustomerBookingsScreen() {
     order: ServiceOrderItem,
     bookingId: string | null,
   ) => {
-    const dateStr = order.createdAt
-      ? vnDateString(order.createdAt)
-      : 'Gần đây';
+    const dateStr = activityCardWhen(order.scheduledAt, order.createdAt, 'Gần đây');
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
@@ -339,10 +337,7 @@ export default function CustomerBookingsScreen() {
 
   const renderBookingCard = (booking: BookingItem) => {
     const resumeId = resumeTargetFor(booking, !view.ordersCoverageComplete);
-    const schedule = booking.preferredStartAt && Number.isFinite(Date.parse(booking.preferredStartAt))
-      ? booking.preferredStartAt : null;
-    const dateStr = schedule ? `${vnDateString(schedule)} · ${vnTimeString(schedule, { hour: '2-digit', minute: '2-digit', hour12: false })}`
-      : booking.createdAt ? vnDateString(booking.createdAt) : 'Chưa có thời gian';
+    const dateStr = activityCardWhen(booking.preferredStartAt, booking.createdAt, 'Chưa có thời gian');
     const waiting = String(booking.status).toUpperCase() === 'MATCHING';
     return (
       <View style={styles.card}>
@@ -432,7 +427,7 @@ export default function CustomerBookingsScreen() {
           animationType={reduceMotion ? 'none' : 'slide'}
           onRequestClose={closeBookingManage}
         >
-          <KeyboardAvoidingView style={styles.manageModalBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView style={styles.manageModalBackdrop} behavior={KEYBOARD_AVOIDING_BEHAVIOR}>
             <Pressable style={StyleSheet.absoluteFill} onPress={closeBookingManage} accessibilityLabel="Đóng" accessibilityRole="button" />
             <View style={[styles.manageModalSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={styles.manageTitle}>Hủy yêu cầu đặt lịch</Text>
@@ -528,10 +523,7 @@ export default function CustomerBookingsScreen() {
     replacement: 'waiting' | 'support',
   ) => {
     const detailId = orderDetailTarget(order.id);
-    const schedule = booking.preferredStartAt && Number.isFinite(Date.parse(booking.preferredStartAt))
-      ? booking.preferredStartAt : null;
-    const dateStr = schedule ? `${vnDateString(schedule)} · ${vnTimeString(schedule, { hour: '2-digit', minute: '2-digit', hour12: false })}`
-      : booking.createdAt ? vnDateString(booking.createdAt) : 'Chưa có thời gian';
+    const dateStr = activityCardWhen(booking.preferredStartAt, booking.createdAt, 'Chưa có thời gian');
     const message = replacement === 'waiting'
       ? 'Đang tìm kỹ thuật viên thay thế; đang chờ kỹ thuật viên phản hồi; làm mới để cập nhật'
       : 'Lượt mời kỹ thuật viên thay thế đã kết thúc. Xem khả năng chọn lại; hệ thống sẽ kiểm tra trước khi gửi.';

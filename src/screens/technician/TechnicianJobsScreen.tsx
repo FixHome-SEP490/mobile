@@ -62,6 +62,7 @@ import { TechnicianWarrantyList } from './warranty/TechnicianWarrantyList';
 import { useBadgeStore } from '../../store/badge.store';
 
 import { vnDateTimeString } from '../../utils/vn-time';
+import PillText from '../../components/PillText';
 
 const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 type JobTab = 'all' | 'pending' | 'in_progress' | 'completed' | 'overrun';
@@ -378,10 +379,10 @@ export default function TechnicianJobsScreen() {
                 accessibilityState={{ selected: active }}
                 accessibilityLabel={`${label}${tabCount(key)}`}
               >
-                <Text style={active ? styles.chipTextActive : styles.chipText}>
+                <PillText style={active ? styles.chipTextActive : styles.chipText}>
                   {label}
                   {tabCount(key)}
-                </Text>
+                </PillText>
               </TouchableOpacity>
             );
           })}
@@ -845,7 +846,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   iconRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, flexShrink: 1 },
   rowIcon: { marginTop: 2 },
   jobMeta: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
-  jobAmount: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong },
+  jobAmount: { flexGrow: 1, textAlign: 'right', fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong },
   jobAddress: { flexShrink: 1, fontSize: 14, lineHeight: 20, color: colors.textSecondary },
   actionsRow: {
     marginTop: 12,

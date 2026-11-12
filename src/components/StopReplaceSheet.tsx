@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supportCasesApi, type MySupportCase } from '../api/support-cases.api';
 import { useAppTheme } from '../constants/theme';
@@ -8,6 +8,7 @@ import {
   findStopRequest, isActiveStopRequest, isDefiniteRefusal, STOP_REASON_MAX, STOP_REQUEST_NOTE, STOP_UNCLEAR, stopReasonProblem, stopRequestStatusText,
 } from '../screens/customer/stop-replace';
 import { extractApiErrorMessage } from '../utils/input-validation';
+import { KEYBOARD_AVOIDING_BEHAVIOR } from '../constants/keyboard';
 
 /**
  * "Yêu cầu dừng / đổi thợ" (web #183): the customer asks a manager to stop the repair or change the technician. It shows the
@@ -86,7 +87,7 @@ export default function StopReplaceSheet({ orderId, visible, onClose }: { orderI
   const close = () => { if (!busy) onClose(); };
   return (
     <Modal visible={visible} transparent animationType={reduceMotion ? 'none' : 'slide'} onRequestClose={close}>
-      <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.root} behavior={KEYBOARD_AVOIDING_BEHAVIOR}>
         <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityRole="button" accessibilityLabel="Đóng" />
         <View style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: Math.max(insets.bottom, 16) }]}>
           <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>Yêu cầu dừng sửa hoặc đổi thợ</Text>

@@ -1,5 +1,5 @@
 import type { GeneralVoucher, VoucherClaim } from '../../api/vouchers.api';
-import { claimState, conditionLabel, discountLabel, isVoucherCode, normalizeVoucherCode, splitWallet, unsavedGeneral } from './voucher-view';
+import { claimState, conditionLabel, discountLabel, isVoucherCode, normalizeVoucherCode, splitWallet, unsavedGeneral, voucherCodeProblem } from './voucher-view';
 
 const NOW = Date.parse('2026-11-01T00:00:00Z');
 const claim = (patch: Omit<Partial<VoucherClaim>, 'campaign'> & { campaign?: Partial<VoucherClaim['campaign']> } = {}): VoucherClaim => ({
@@ -46,5 +46,18 @@ describe('voucher code', () => {
     expect(isVoucherCode('tet-2026')).toBe(true);
     expect(isVoucherCode('ab')).toBe(false);
     expect(isVoucherCode('có dấu')).toBe(false);
+  });
+});
+
+describe('voucherCodeProblem (M-24)', () => {
+  it('says why a code with special characters cannot be saved instead of only greying the button', () => {
+    expect(voucherCodeProblem("KHONGTONTAI'%<>")).toContain('chỉ gồm chữ không dấu');
+    expect(voucherCodeProblem('có dấu')).toContain('chỉ gồm chữ không dấu');
+    expect(voucherCodeProblem('ab')).toContain('ít nhất 3');
+  });
+  it('stays quiet while the box is empty or the code is valid', () => {
+    expect(voucherCodeProblem('')).toBe('');
+    expect(voucherCodeProblem('  ')).toBe('');
+    expect(voucherCodeProblem('tet-2026')).toBe('');
   });
 });

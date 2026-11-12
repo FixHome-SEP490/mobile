@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { reputationApi, type MyReputation } from '../api/reputation.api';
 import { useAppTheme } from '../constants/theme';
 import { vnDateString, vnDateTimeString } from '../utils/vn-time';
+import BackClosableBottomSheetModal from './BackClosableBottomSheetModal';
 
 const KIND_LABELS: Record<string, string> = { violation: 'Trừ điểm', adjustment: 'Quản lý điều chỉnh', reset: 'Làm mới định kỳ' };
 const signed = (delta: number) => (delta > 0 ? `+${delta}` : String(delta));
@@ -72,7 +73,7 @@ export default function ReputationCard({ role }: { role: 'customer' | 'technicia
           </>
         )}
       </View>
-      <BottomSheetModal
+      <BackClosableBottomSheetModal
         accessible={false}
         ref={infoSheetRef}
         snapPoints={['65%', '88%']}
@@ -107,7 +108,7 @@ export default function ReputationCard({ role }: { role: 'customer' | 'technicia
             </View>
           )) : <Text style={small}>{data ? 'Chưa có sự kiện thay đổi điểm.' : 'Chưa tải được lịch sử điểm.'}</Text>}
         </BottomSheetScrollView>
-      </BottomSheetModal>
+      </BackClosableBottomSheetModal>
     </>
   );
 }

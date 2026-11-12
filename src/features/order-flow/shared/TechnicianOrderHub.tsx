@@ -11,6 +11,7 @@ import { useLoadUnloadedResources } from './useLoadUnloadedResources';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import VisitTechnicianPanel from '../technician/VisitTechnicianPanel';
 import { useReleasableOrders } from '../technician/useReleasableOrders';
+import PillText from '../../../components/PillText';
 
 type HubScreen = 'PartsLifecycle' | 'OrderInformation' | 'PersonalOrderNotes' | 'OrderProgressHistory'
   | 'AfterEvidence' | 'CompletionRequest' | 'CashDeclaration' | 'ExtraProposal' | 'DelayReport';
@@ -55,7 +56,7 @@ function Row({ screen, label, Icon, hint, disabled, last, onPress, testID, sub, 
         <Text style={styles.label}>{label}</Text>
         {sub ? <Text style={styles.sub}>{sub}</Text> : null}
       </View>
-      {hint ? <View style={[styles.badge, { backgroundColor: tone.bg }]}><Text style={[styles.badgeText, { color: tone.text }]}>{hint}</Text></View> : null}
+      {hint ? <View style={[styles.badge, { backgroundColor: tone.bg }]}><PillText style={[styles.badgeText, { color: tone.text }]}>{hint}</PillText></View> : null}
       <ChevronRight size={20} strokeWidth={1.75} color={colors.muted} />
     </Pressable>
   );

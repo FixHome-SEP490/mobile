@@ -4,6 +4,7 @@ import { Check, ChevronRight, Minus, Plus, ShieldCheck, Trash2, type LucideIcon 
 import { costItemRowSubtotal, type CostItemFieldErrors, type CostItemRow } from '../shared/CostItemEditor';
 import { lightTheme as colors, spacing, type ToneName } from '../../../constants/theme';
 import { formatVnd } from '../../../utils/format';
+import PillText from '../../../components/PillText';
 
 /** A FixHome part the technician asked for before the repair; one quote line can reuse it as is. */
 export interface EarlierPartLine {
@@ -163,7 +164,7 @@ export function EarlierPartCard({ line, row, disabled, onToggle, onQuantity }: {
           <Text style={styles.cardTitle}>{line.name}</Text>
           <View style={styles.earlierMeta}>
             <Text style={styles.meta}>Đã yêu cầu {line.quantity}</Text>
-            <View style={[styles.chip, { backgroundColor: tone.bg }]}><Text style={[styles.chipText, { color: tone.text }]}>{line.statusLabel}</Text></View>
+            <View style={[styles.chip, { backgroundColor: tone.bg }]}><PillText style={[styles.chipText, { color: tone.text }]}>{line.statusLabel}</PillText></View>
           </View>
         </View>
       </Pressable>

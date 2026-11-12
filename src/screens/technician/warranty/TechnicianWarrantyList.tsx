@@ -7,6 +7,7 @@ import { useWarrantyClaims } from '../../../hooks/useWarrantyClaims';
 import { lightTheme as colors } from '../../../constants/theme';
 import { vnDateString } from '../../../utils/vn-time';
 import { claimsOfFilter, filterCounts, nextWarrantyStep, technicianClaimLabel, warrantyFilters, type WarrantyFilter, type WarrantyTone } from './technician-warranty-groups';
+import PillText from '../../../components/PillText';
 
 const toneColors: Record<WarrantyTone, { bg: string; text: string }> = {
   info: colors.tone.info, warning: colors.tone.warning, repair: colors.tone.repair, success: colors.tone.success, neutral: colors.tone.neutral,
@@ -20,8 +21,8 @@ export function WarrantyClaimRow({ claim, onOpen }: { claim: TechnicianWarrantyC
   return <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Bảo hành #${claim.order.code}, ${status.label}`} activeOpacity={0.85} onPress={onOpen} style={styles.card} testID={`warranty-claim-${claim.id}`}>
     <View style={styles.metaLine}>
       <Text style={styles.code}>#{claim.order.code}</Text>
-      <View style={[styles.pill, { backgroundColor: tone.bg }]}><Text style={[styles.pillText, { color: tone.text }]}>{status.label}</Text></View>
-      {claim.submittedAfterExpiry ? <View style={[styles.pill, { backgroundColor: colors.tone.warning.bg }]}><Text style={[styles.pillText, { color: colors.tone.warning.text }]}>Gửi sau hạn</Text></View> : null}
+      <View style={[styles.pill, { backgroundColor: tone.bg }]}><PillText style={[styles.pillText, { color: tone.text }]}>{status.label}</PillText></View>
+      {claim.submittedAfterExpiry ? <View style={[styles.pill, { backgroundColor: colors.tone.warning.bg }]}><PillText style={[styles.pillText, { color: colors.tone.warning.text }]}>Gửi sau hạn</PillText></View> : null}
       <Text style={styles.date}>{vnDateString(claim.submittedAt)}</Text>
     </View>
     <Text style={styles.title}>{claim.order.serviceName || 'Bảo hành dịch vụ'}</Text>
@@ -53,7 +54,7 @@ export function TechnicianWarrantyList({ search = '' }: { search?: string }) {
         const active = filter === key;
         return <TouchableOpacity key={key} testID={`warranty-filter-${key}`} accessibilityRole="radio" accessibilityState={{ selected: active }} accessibilityLabel={`${label}, ${counts[key]}`}
           onPress={() => setFilter(key)} style={[styles.chip, active && styles.chipActive]} hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}>
-          <Text style={active ? styles.chipTextActive : styles.chipText}>{label}{key === 'all' || counts[key] > 0 ? ` (${counts[key]})` : ''}</Text>
+          <PillText style={active ? styles.chipTextActive : styles.chipText}>{label}{key === 'all' || counts[key] > 0 ? ` (${counts[key]})` : ''}</PillText>
         </TouchableOpacity>;
       })}
     </ScrollView>

@@ -24,6 +24,7 @@ import {
   supportCaseStatusLabels,
   validateSupportCaseReason,
 } from './customer-support-cases';
+import PillText from '../../components/PillText';
 
 interface Props {
   orderId: string;
@@ -276,9 +277,9 @@ export default function CustomerSupportCasesSection({
                 </View>
                 <View style={styles.caseTrailing}>
                   <View style={[styles.statusPill, { backgroundColor: statusPillBackground(item.status) }]}>
-                    <Text style={[styles.statusText, { color: statusColor(item.status) }]}>
+                    <PillText style={[styles.statusText, { color: statusColor(item.status) }]}>
                       {supportCaseStatusLabels[item.status]}
-                    </Text>
+                    </PillText>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={colors.muted} />
                 </View>
@@ -446,12 +447,12 @@ export default function CustomerSupportCasesSection({
               <View style={styles.detailBody}>
                 <View style={styles.detailTopRow}>
                   <View style={[styles.statusPill, { backgroundColor: statusPillBackground(detail.status) }]}>
-                    <Text style={[styles.statusText, { color: statusColor(detail.status) }]}>
+                    <PillText style={[styles.statusText, { color: statusColor(detail.status) }]}>
                       {supportCaseStatusLabels[detail.status]}
-                    </Text>
+                    </PillText>
                   </View>
                   {detail.isUrgent && isOpenSupportCase(detail) && (
-                    <Text style={styles.urgentBadge}>Cần hỗ trợ ngay</Text>
+                    <PillText style={styles.urgentBadge}>Cần hỗ trợ ngay</PillText>
                   )}
                 </View>
 

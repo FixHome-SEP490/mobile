@@ -7,6 +7,7 @@ import type { ServiceOrderItem } from '../../api/orders.api';
 import { useAppTheme } from '../../constants/theme';
 import { vnDateTimeString } from '../../utils/vn-time';
 import BackButton from '../../components/BackButton';
+import PillText from '../../components/PillText';
 
 type Props = {
   booking: BookingItem;
@@ -38,7 +39,7 @@ export default function CustomerMatchingAcceptedScene({
           <View style={[styles.emblem, { backgroundColor: colors.tone.success.bg }]}>
             <Ionicons name="checkmark-circle-outline" color={colors.tone.success.text} size={44} />
           </View>
-          <Text style={[styles.tag, { color: colors.tone.success.text }]}>Kỹ thuật viên đã nhận đơn</Text>
+          <PillText style={[styles.tag, { color: colors.tone.success.text }]}>Kỹ thuật viên đã nhận đơn</PillText>
           <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>
             Có người cùng bạn lo nhà.
           </Text>

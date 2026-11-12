@@ -25,6 +25,7 @@ import { useAppTheme } from '../../constants/theme';
 import { NO_RATING_TEXT, formatRating, ratingSummary, ratingValue } from '../../utils/rating';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { vnDateString } from '../../utils/vn-time';
+import PillText from '../../components/PillText';
 
 const numberFormat = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 });
 const priceFormat = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 });
@@ -194,7 +195,7 @@ export function MatchingTechnicianCard({
                 testID={`matching-candidate-priority-${candidate.userId}`}
                 style={[styles.priorityBadge, { backgroundColor: colors.primary }]}
               >
-                <Text style={styles.priorityBadgeText}>#{priority}</Text>
+                <PillText style={styles.priorityBadgeText}>#{priority}</PillText>
               </View>
             )}
           </View>
@@ -398,7 +399,7 @@ export function MatchingTechnicianDetailSheet({
                   <TechnicianAvatar candidate={candidate} size={64} />
                   {priority > 0 && (
                     <View testID="matching-detail-priority" style={[styles.priorityBadge, { backgroundColor: colors.primary }]}>
-                      <Text style={styles.priorityBadgeText}>#{priority}</Text>
+                      <PillText style={styles.priorityBadgeText}>#{priority}</PillText>
                     </View>
                   )}
                 </View>

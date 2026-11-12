@@ -1,9 +1,13 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import FaceLivenessCamera, { FACE_STEP_TEXT } from './FaceLivenessCamera';
 
 const mockTake = jest.fn();
 let mockGranted = true;
+let mockCanAskAgain = true;
+const mockRequest = jest.fn();
+const mockGetPermission = jest.fn();
 jest.mock('expo-camera', () => {
   const R = jest.requireActual<typeof import('react')>('react');
   const View = jest.requireActual<typeof import('react-native')>('react-native').View;
@@ -12,10 +16,15 @@ jest.mock('expo-camera', () => {
       R.useImperativeHandle(ref, () => ({ takePictureAsync: mockTake }));
       return R.createElement(View, props);
     }),
-    useCameraPermissions: () => [{ granted: mockGranted, canAskAgain: true }, jest.fn()],
+    useCameraPermissions: () => [{ granted: mockGranted, canAskAgain: mockCanAskAgain }, mockRequest, mockGetPermission],
   };
 });
-jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: ({ children }: { children: React.ReactNode }) => children }));
+jest.mock('react-native-safe-area-context', () => {
+  return {
+    SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
+    useSafeAreaInsets: () => ({ top: 48, bottom: 24, left: 0, right: 0 }),
+  };
+});
 
 const text = (tree: ReturnType<typeof create>) => JSON.stringify(tree.toJSON()).replace(/","/g, '');
 async function render(challenge: 'turn_left' | 'turn_right' | 'look_up' | 'look_down', onDone = jest.fn(), onCancel = jest.fn()) {
@@ -28,6 +37,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockTake.mockReset();
   mockGranted = true;
+  mockCanAskAgain = true;
   globalThis.fetch = jest.fn().mockResolvedValue({ blob: async () => ({ size: 1234 }) }) as unknown as typeof fetch;
 });
 
@@ -92,4 +102,32 @@ it('without camera permission the shutter is disabled and permission can be requ
   const { tree } = await render('turn_left');
   expect(tree.root.findByProps({ testID: 'face-live-shutter' }).props.disabled).toBe(true);
   expect(tree.root.findByProps({ testID: 'face-live-permission' })).toBeTruthy();
+});
+
+it('keeps the close button below the status bar using the screen insets, not the modal window ones', async () => {
+  const { tree } = await render('turn_left');
+  const top = tree.root.findByProps({ testID: 'face-live-top' });
+  expect(StyleSheet.flatten(top.props.style)).toMatchObject({ paddingTop: 64 });
+  expect(top.findAll(node => node.props.accessibilityLabel === 'Đóng camera').length).toBeGreaterThan(0);
+});
+
+it('asks for the camera while Android still asks, and opens the app settings once it no longer does', async () => {
+  const { Linking } = jest.requireActual<typeof import('react-native')>('react-native');
+  const openSettings = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
+  mockGranted = false;
+  let { tree } = await render('turn_left');
+  await act(async () => { tree.root.findByProps({ testID: 'face-live-permission' }).props.onPress(); });
+  expect(mockRequest).toHaveBeenCalledTimes(1);
+  expect(openSettings).not.toHaveBeenCalled();
+  await act(async () => tree.unmount());
+
+  mockCanAskAgain = false;
+  ({ tree } = await render('turn_left'));
+  const button = tree.root.findByProps({ testID: 'face-live-permission' });
+  expect(button.props.disabled).toBeFalsy();
+  expect(text(tree)).toContain('Mở Cài đặt để cấp quyền camera');
+  await act(async () => { button.props.onPress(); });
+  expect(openSettings).toHaveBeenCalledTimes(1);
+  expect(mockRequest).toHaveBeenCalledTimes(1);
+  openSettings.mockRestore();
 });

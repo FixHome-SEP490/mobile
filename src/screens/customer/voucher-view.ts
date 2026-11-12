@@ -63,3 +63,10 @@ export function unsavedGeneral(general: GeneralVoucher[], wallet: VoucherClaim[]
 
 export const normalizeVoucherCode = (code: string): string => code.trim().toUpperCase();
 export const isVoucherCode = (code: string): boolean => /^[A-Z0-9_-]{3,40}$/.test(normalizeVoucherCode(code));
+/** Why the typed code cannot be sent yet, shown under the box instead of a silently grey button; empty while blank or valid. */
+export function voucherCodeProblem(code: string): string {
+  const value = normalizeVoucherCode(code);
+  if (!value || isVoucherCode(value)) return '';
+  if (value.length < 3) return 'Mã ưu đãi có ít nhất 3 ký tự.';
+  return 'Mã ưu đãi chỉ gồm chữ không dấu, chữ số, dấu gạch ngang (-) hoặc gạch dưới (_).';
+}

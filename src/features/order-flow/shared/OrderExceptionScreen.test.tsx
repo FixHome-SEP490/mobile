@@ -29,3 +29,17 @@ it('freezes the cancellation reason until the user explicitly edits the prepared
   expect(renderer.root.findAllByType(Text).some(text => text.props.children === 'Sửa nội dung')).toBe(true);
   await act(async () => renderer.unmount());
 });
+
+it('after the server confirmed the cancellation it only says so and leads back to the cancelled order (M-29)', async () => {
+  mockState.phase = 'resolved'; mockState.result = 'cancelled'; mockState.confirmation = null;
+  mockController.canCancel.mockReturnValue(false);
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><OrderExceptionScreen /></SafeAreaProvider>); });
+  const texts = renderer.root.findAllByType(Text).map(text => String(text.props.children));
+  expect(texts.some(text => text.includes('Đã hủy đơn'))).toBe(true);
+  expect(texts.some(text => text.includes('Chỉ có thể hủy'))).toBe(false);
+  expect(renderer.root.findAllByType(TextInput)).toHaveLength(0);
+  const back = renderer.root.findAllByType(TouchableOpacity).find(node => node.findAllByType(Text).some(text => text.props.children === 'Xem đơn đã hủy'));
+  expect(back?.props.disabled).toBeFalsy();
+  await act(async () => renderer.unmount());
+});

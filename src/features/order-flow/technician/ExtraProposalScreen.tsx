@@ -33,6 +33,7 @@ import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { formatVnd } from '../../../utils/format';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { backFromFlow } from '../navigation/resume-order';
+import BackClosableBottomSheetModal from '../../../components/BackClosableBottomSheetModal';
 
 export const EXTRA_REASON_MAX = 2000;
 // Compare the same private server asset across renewed short-lived signatures.
@@ -525,7 +526,7 @@ export default function ExtraProposalScreen() {
         </>
       )}
       {canEdit && (
-        <BottomSheetModal
+        <BackClosableBottomSheetModal
           ref={sheetRef}
           snapPoints={['90%']}
           enableDynamicSizing={false}
@@ -548,7 +549,7 @@ export default function ExtraProposalScreen() {
             onClose={() => sheetRef.current?.dismiss()}
             onLoadCatalog={search => { void loadCatalog(search); }}
           />
-        </BottomSheetModal>
+        </BackClosableBottomSheetModal>
       )}
     </TaskScreenShell>
   );

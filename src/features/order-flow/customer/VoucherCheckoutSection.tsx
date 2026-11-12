@@ -1,16 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fundedCheckoutApi, type VoucherCheckoutPreview } from '../../../api/funded-checkout.api';
 import { vouchersApi, type GeneralVoucher, type VoucherClaim } from '../../../api/vouchers.api';
 import { spacing, useAppTheme } from '../../../constants/theme';
-import { claimState, conditionLabel, discountLabel, isVoucherCode, unsavedGeneral, voucherDate } from '../../../screens/customer/voucher-view';
+import { claimState, conditionLabel, discountLabel, isVoucherCode, unsavedGeneral, voucherCodeProblem, voucherDate } from '../../../screens/customer/voucher-view';
 import { extractApiErrorMessage } from '../../../utils/input-validation';
 import { formatVnd } from '../../../utils/format';
 import { DetailRow } from '../shared/TaskScreenShell';
 import {
   countdown, newUuidV4, previewBlock, secondsLeft, toApplied, usableClaims, VOUCHER_HOLD_EXPIRED, type AppliedVoucher,
 } from './voucher-checkout';
+import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../../constants/keyboard';
+import PillText from '../../../components/PillText';
 
 type Phase = 'closed' | 'loading' | 'ready' | 'error';
 
@@ -210,7 +212,7 @@ export default function VoucherCheckoutSection({
               <Text style={styles.closeText}>Đóng</Text>
             </TouchableOpacity>
           </View>
-          <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView style={styles.flex} behavior={KEYBOARD_AVOIDING_BEHAVIOR}>
             <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
               {phase === 'loading' ? <View style={styles.center}><ActivityIndicator color={colors.primary} /></View> : null}
               {phase === 'error' ? (
@@ -241,6 +243,7 @@ export default function VoucherCheckoutSection({
                       returnKeyType="done"
                       testID="voucher-code-input"
                     />
+                    {!!voucherCodeProblem(code) && <Text style={styles.error} testID="voucher-code-problem">{voucherCodeProblem(code)}</Text>}
                     <TouchableOpacity
                       style={[styles.primaryBtn, (!isVoucherCode(code) || saving || holding || previewing) && styles.disabled]}
                       disabled={!isVoucherCode(code) || saving || holding || previewing}
@@ -288,7 +291,7 @@ export default function VoucherCheckoutSection({
                     >
                       <View style={styles.row}>
                         <Text style={[styles.cardTitle, styles.flex]} numberOfLines={2}>{claim.campaign.name}</Text>
-                        <Text style={styles.badge}>{selected === claim.id ? 'Đang chọn' : claimState(claim).label}</Text>
+                        <PillText style={styles.badge}>{selected === claim.id ? 'Đang chọn' : claimState(claim).label}</PillText>
                       </View>
                       <Text style={styles.discount}>{discountLabel(claim.policy)}</Text>
                       <Text style={styles.hint}>{conditionLabel(claim.policy)}</Text>

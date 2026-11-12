@@ -26,6 +26,12 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
     expect(counts.request).toEqual({ all: 42, no_technician: 33, sent: 4, cancelled: 5 });
   });
 
+  it('counts only what the Activity lists show: devices of a multi-device visit are left out the same way', async () => {
+    api.get.mockResolvedValue({ data: { data: { repair: { in_progress: 1 }, request: {} } } });
+    await bookingsApi.getActivityCounts({ excludeVisitGroups: true });
+    expect(api.get).toHaveBeenCalledWith('/bookings/my/activity-counts', { params: { excludeVisitGroups: 'true' } });
+  });
+
   it('treats a missing or invalid count as zero, never a made-up number', async () => {
     api.get.mockResolvedValue({ data: { data: { repair: { in_progress: '2' }, request: {} } } });
     const counts = await bookingsApi.getActivityCounts();

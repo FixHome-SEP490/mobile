@@ -4,7 +4,6 @@ import {
   View,
   Text,
   KeyboardAvoidingView,
-  Platform,
   StyleSheet,
   TouchableOpacity,
   TextInput,
@@ -28,6 +27,7 @@ import {
   showDescriptionHint,
 } from './ai-diagnosis-input';
 import BackButton from '../../components/BackButton';
+import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
 
 type DiagnosisRoute = RouteProp<RootStackParamList, 'CustomerAIDiagnosis'>;
 
@@ -107,7 +107,7 @@ export default function CustomerAIDiagnosisScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <KeyboardAvoidingView style={styles.screenBody} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.screenBody} behavior={KEYBOARD_AVOIDING_BEHAVIOR}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
             <BackButton onPress={handleBack} />

@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -27,6 +26,7 @@ import {
   validateCustomerPasswordReset,
 } from './customer-security';
 import BackButton from '../../components/BackButton';
+import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -186,7 +186,7 @@ export default function CustomerSecurityScreen() {
     <SafeAreaView style={[styles.container, isDark && styles.containerDark]} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={KEYBOARD_AVOIDING_BEHAVIOR}
       >
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <BackButton />

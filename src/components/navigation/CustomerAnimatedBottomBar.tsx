@@ -38,6 +38,7 @@ import { BlurView } from 'expo-blur';
 import { useAppTheme } from '../../constants/theme';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import type { CustomerTabParamList, RootStackParamList } from '../../types';
+import PillText from '../PillText';
 
 type CustomerTabName = keyof CustomerTabParamList;
 type BookingChoice = 'standard' | 'ai';
@@ -285,9 +286,9 @@ export default function CustomerAnimatedBottomBar(props: CustomerAnimatedBottomB
               {tab.icon}
               {tab.badgeCount ? (
                 <View accessible={false} style={styles.badge}>
-                  <Text allowFontScaling={false} style={styles.badgeText}>
+                  <PillText allowFontScaling={false} style={styles.badgeText}>
                     {tab.badgeCount > 99 ? '99+' : tab.badgeCount}
-                  </Text>
+                  </PillText>
                 </View>
               ) : null}
             </View>
@@ -311,9 +312,9 @@ export default function CustomerAnimatedBottomBar(props: CustomerAnimatedBottomB
               {tab.icon}
               {tab.badgeCount ? (
                 <View accessible={false} style={[styles.badge, { backgroundColor: colors.error }]}>
-                  <Text allowFontScaling={false} style={styles.badgeText}>
+                  <PillText allowFontScaling={false} style={styles.badgeText}>
                     {tab.badgeCount > 99 ? '99+' : tab.badgeCount}
-                  </Text>
+                  </PillText>
                 </View>
               ) : null}
             </View>

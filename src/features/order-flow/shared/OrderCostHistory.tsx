@@ -6,6 +6,7 @@ import { ReadOnlyNotice } from './TaskScreenShell';
 import { formatVnd } from '../../../utils/format';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing, type ToneName } from '../../../constants/theme';
+import PillText from '../../../components/PillText';
 
 export const QUOTE_STATUS: Record<string, { label: string; tone: ToneName }> = {
   DRAFT: { label: 'Bản nháp', tone: 'neutral' },
@@ -32,7 +33,7 @@ interface Line { id?: string; type?: string; description: string; quantity: numb
 function Chip({ status, map }: { status: string; map: Record<string, { label: string; tone: ToneName }> }) {
   const view = map[status.toUpperCase()] ?? { label: 'Trạng thái chưa xác định', tone: 'neutral' as ToneName };
   const tone = colors.tone[view.tone];
-  return <View style={[styles.chip, { backgroundColor: tone.bg }]}><Text style={[styles.chipText, { color: tone.text }]}>{view.label}</Text></View>;
+  return <View style={[styles.chip, { backgroundColor: tone.bg }]}><PillText style={[styles.chipText, { color: tone.text }]}>{view.label}</PillText></View>;
 }
 
 function LineRow({ line, first }: { line: Line; first: boolean }) {

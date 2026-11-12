@@ -134,3 +134,24 @@ it('shows each item with its own term and caps a long order at three items plus 
   expect(joined).toContain('hạng mục khác');
   await act(async () => renderer.unmount());
 });
+
+it('an empty claim form asks for a 10-character description, not to refresh the coverage (M-26)', async () => {
+  mockRoute.params = { coverageId: 'c0' };
+  mockState.coverages = { status: 'ready', data: [{ id: 'c0', status: 'active', itemDescription: 'Công sửa' }] };
+  mockState.claims = { status: 'ready', data: [] };
+  mockController.canClaim.mockReturnValue(true);
+  const wrap = () => <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><WarrantyClaimCreateScreen /></SafeAreaProvider>;
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(wrap()); });
+  const joined = () => renderer.root.findAllByType(Text).map(text => String(text.props.children)).join('|');
+  expect(joined()).toContain('Nhập mô tả sự cố từ 10 ký tự');
+  expect(joined()).not.toContain('Chưa thể tạo yêu cầu');
+  act(() => renderer.root.findByType(TextInput).props.onChangeText('Máy vẫn kêu to khi chạy'));
+  expect(joined()).not.toContain('Nhập mô tả sự cố từ 10 ký tự');
+  expect(joined()).not.toContain('Chưa thể tạo yêu cầu');
+  // A real refusal (open claim, not ready) still says so once the description is long enough.
+  mockController.canClaim.mockReturnValue(false);
+  await act(async () => renderer.update(wrap()));
+  expect(joined()).toContain('Chưa thể tạo yêu cầu');
+  await act(async () => renderer.unmount());
+});

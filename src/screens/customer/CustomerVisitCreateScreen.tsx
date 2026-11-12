@@ -31,6 +31,7 @@ import {
   type VisitDeviceDraft,
   type VisitPhotoDraft,
 } from './customer-visit-draft';
+import PillText from '../../components/PillText';
 
 type CreateRoute = RouteProp<RootStackParamList, 'CustomerVisitCreate'>;
 
@@ -282,7 +283,7 @@ export default function CustomerVisitCreateScreen() {
               {!atLimit && !busy && (
                 <TouchableOpacity testID="visit-add-device" style={[styles.chip, styles.chipAdd, picking === 'add' && styles.chipOn]} onPress={() => startPick('add')} accessibilityRole="button" accessibilityLabel="Thêm dịch vụ">
                   <Plus size={iconSize.sm} color={colors.primaryStrong} strokeWidth={iconStroke} />
-                  <Text style={styles.chipAddText}>Thêm dịch vụ</Text>
+                  <PillText style={styles.chipAddText}>Thêm dịch vụ</PillText>
                 </TouchableOpacity>
               )}
             </ScrollView>

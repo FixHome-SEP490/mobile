@@ -518,6 +518,27 @@ describe('customer service loader behavior (mocked servicesApi, C-RUI3 M1)', () 
     }
   });
 
+  it('keeps what the customer told the failed assistant when the service is picked by hand (M-19)', async () => {
+    const carry = { description: 'Máy lạnh chảy nước', aiSessionId: 'ai-session-1', attachmentUploadIds: [{ uploadId: 'up-1', kind: 'image' as const }] };
+    mockRouteParams = { serviceId: SERVICE_ID, carry };
+    let tree!: ReactTestRenderer;
+    act(() => {
+      tree = create(detailElement());
+    });
+    try {
+      await settle(400);
+      const book = tree.root.findAllByType(TouchableOpacity).find(
+        (node) => node.props.accessibilityLabel === `Đặt lịch sửa chữa ${LONG_VN_NAME}`,
+      );
+      act(() => book!.props.onPress());
+      expect(mockPush).toHaveBeenCalledWith('CustomerBookingCreate', {
+        prefill: { serviceId: SERVICE_ID, serviceName: LONG_VN_NAME, ...carry },
+      });
+    } finally {
+      act(() => tree.unmount());
+    }
+  });
+
   it('renders the mocked detail with 360-safe title and books with a prefill', async () => {
     mockRouteParams = { serviceId: SERVICE_ID };
     let tree!: ReactTestRenderer;

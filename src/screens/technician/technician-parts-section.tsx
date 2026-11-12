@@ -29,6 +29,7 @@ import { extractApiErrorMessage } from '../../utils/input-validation';
 import { formatVnd } from '../../utils/format';
 
 import { vnDateTimeString } from '../../utils/vn-time';
+import PillText from '../../components/PillText';
 
 const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 const CATEGORY_TABS = [
@@ -422,13 +423,13 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
                   style={[styles.chip, fulfillmentMethod === 'pickup' && styles.chipActive]}
                   onPress={() => setFulfillmentMethod('pickup')}
                 >
-                  <Text style={[styles.chipText, fulfillmentMethod === 'pickup' && styles.chipTextActive]}>Tự lấy tại kho</Text>
+                  <PillText style={[styles.chipText, fulfillmentMethod === 'pickup' && styles.chipTextActive]}>Tự lấy tại kho</PillText>
                 </TouchableOpacity>
                 <TouchableOpacity accessibilityRole="button"
                   style={[styles.chip, fulfillmentMethod === 'delivery' && styles.chipActive]}
                   onPress={() => setFulfillmentMethod('delivery')}
                 >
-                  <Text style={[styles.chipText, fulfillmentMethod === 'delivery' && styles.chipTextActive]}>🚚 Giao hàng</Text>
+                  <PillText style={[styles.chipText, fulfillmentMethod === 'delivery' && styles.chipTextActive]}>🚚 Giao hàng</PillText>
                 </TouchableOpacity>
               </View>
 
@@ -449,7 +450,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
                     style={[styles.chip, activeCategory === cat.value && styles.chipActive]}
                     onPress={() => selectCategory(cat.value)}
                   >
-                    <Text style={[styles.chipText, activeCategory === cat.value && styles.chipTextActive]}>{cat.label}</Text>
+                    <PillText style={[styles.chipText, activeCategory === cat.value && styles.chipTextActive]}>{cat.label}</PillText>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -603,9 +604,9 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
               <View key={pr.id} style={styles.requestCard}>
                 <View style={styles.requestHeader}>
                   <View style={[styles.statusBadge, { borderColor: statusColor(pr.status, colors) }]}>
-                    <Text style={[styles.statusBadgeText, { color: statusColor(pr.status, colors) }]}>{statusLabel(pr.status)}</Text>
+                    <PillText style={[styles.statusBadgeText, { color: statusColor(pr.status, colors) }]}>{statusLabel(pr.status)}</PillText>
                   </View>
-                  <Text style={styles.typeTag}>{pr.requestType === 'pre_repair' ? 'Trước sửa chữa' : pr.requestType === 'quotation' ? 'Theo báo giá' : 'Phát sinh khi sửa'}</Text>
+                  <PillText style={styles.typeTag}>{pr.requestType === 'pre_repair' ? 'Trước sửa chữa' : pr.requestType === 'quotation' ? 'Theo báo giá' : 'Phát sinh khi sửa'}</PillText>
                   <Text style={styles.jobMeta}>{pr.fulfillmentMethod === 'delivery' ? 'Giao hàng' : 'Tự lấy'}</Text>
                 </View>
                 {!!pr.reason && <Text style={styles.jobMeta}>Lý do: {pr.reason}</Text>}
@@ -694,9 +695,9 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
                         </TouchableOpacity>
                       </View>
                     ) : (
-                      <Text style={styles.usageStatusText}>
+                      <PillText style={styles.usageStatusText}>
                         {item.usageStatus === 'used' ? 'Đã dùng' : item.usageStatus === 'returned' ? 'Hoàn trả' : 'Chưa ghi nhận'}
-                      </Text>
+                      </PillText>
                     )}
                   </View>
                 ))}

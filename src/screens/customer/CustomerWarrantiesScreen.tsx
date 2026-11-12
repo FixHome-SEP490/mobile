@@ -13,7 +13,6 @@ import {
   TouchableOpacity,
   View,
   KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -38,6 +37,8 @@ import {
   type WarrantyClaimTone,
 } from './customer-warranty';
 import BackButton from '../../components/BackButton';
+import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
+import PillText from '../../components/PillText';
 
 const PAGE_SIZE = 10;
 const sortGroups = (list: CustomerWarrantyGroup[]) => [...list].sort((a, b) => {
@@ -297,7 +298,7 @@ export default function CustomerWarrantiesScreen() {
             <Text style={styles.claimTitle}>{coverage ? warrantyCoverageLabel(coverage) : 'Yêu cầu bảo hành'}</Text>
             <View style={styles.statusLine}>
               <Ionicons name={toneIcon[meta.tone]} size={16} color={toneColor} />
-              <Text style={[styles.statusText, { color: toneColor }]}>{meta.label}</Text>
+              <PillText style={[styles.statusText, { color: toneColor }]}>{meta.label}</PillText>
             </View>
             <Text style={styles.dateText}>Gửi ngày {formatWarrantyDate(claim.submittedAt)}</Text>
           </View>
@@ -366,9 +367,9 @@ export default function CustomerWarrantiesScreen() {
               size={16}
               color={hasActive ? colors.success : colors.textSecondary}
             />
-            <Text style={[styles.orderStatusText, { color: hasActive ? colors.success : colors.textSecondary }]}>
+            <PillText style={[styles.orderStatusText, { color: hasActive ? colors.success : colors.textSecondary }]}>
               {hasActive ? 'Còn bảo hành' : 'Đã hết hạn'}
-            </Text>
+            </PillText>
           </View>
         </View>
 
@@ -533,7 +534,7 @@ export default function CustomerWarrantiesScreen() {
       )}
 
       <Modal visible={!!disputeClaim} transparent animationType="slide" onRequestClose={() => { if (!responseBusyId) setDisputeClaim(null); }}>
-        <KeyboardAvoidingView style={styles.modalBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={styles.modalBackdrop} behavior={KEYBOARD_AVOIDING_BEHAVIOR}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderCopy}>

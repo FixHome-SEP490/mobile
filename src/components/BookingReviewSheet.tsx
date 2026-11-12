@@ -7,6 +7,7 @@ import {
 } from '@gorhom/bottom-sheet';
 import { CalendarDays, FileText, MapPin, PackageCheck, Wrench } from 'lucide-react-native';
 import type { BookingReviewSnapshot } from '../screens/customer/customer-booking-review';
+import BackClosableBottomSheetModal from './BackClosableBottomSheetModal';
 
 type BookingColors = {
   border: string;
@@ -115,7 +116,7 @@ export default function BookingReviewSheet({
 }) {
   const { height: windowHeight } = useWindowDimensions();
   return (
-    <BottomSheetModal
+    <BackClosableBottomSheetModal
       ref={sheetRef}
       enableDynamicSizing
       maxDynamicContentSize={Math.round(windowHeight * 0.78)}
@@ -172,7 +173,7 @@ export default function BookingReviewSheet({
           </TouchableOpacity>
         </BottomSheetScrollView>
       )}
-    </BottomSheetModal>
+    </BackClosableBottomSheetModal>
   );
 }
 

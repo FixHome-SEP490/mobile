@@ -1,4 +1,11 @@
 // src/types/navigation.types.ts
+/** The description, assistant session and uploaded chat media a manual service pick keeps (AI unavailable: booking must not lose them). */
+export type BookingCarry = {
+  description?: string;
+  aiSessionId?: string;
+  attachmentUploadIds?: { uploadId: string; kind: 'image' | 'video'; previewUri?: string }[];
+};
+
 export type RootStackParamList = {
   Auth: undefined;
   CustomerRoleChoice: undefined;
@@ -7,8 +14,9 @@ export type RootStackParamList = {
   PublicOrderTracking: undefined;
   CustomerMain: undefined;
   TechnicianMain: { screen?: 'Home' | 'Invitations' | 'Jobs' | 'Notifications' | 'Profile'; params?: { mode?: 'warranty' } } | undefined;
-  CustomerServices: { query?: string; categoryCode?: string; serviceCode?: string; serviceAlias?: string } | undefined;
-  CustomerServiceDetail: { serviceId: string };
+  /** `carry`: what the customer already told the assistant, handed on to the booking form of the service they pick by hand. */
+  CustomerServices: { query?: string; categoryCode?: string; serviceCode?: string; serviceAlias?: string; carry?: BookingCarry } | undefined;
+  CustomerServiceDetail: { serviceId: string; carry?: BookingCarry };
   /**
    * The booking flow. `prefill` is how the assistant hands a customer over:
    * chat itself never creates a booking, it only carries the service across.
@@ -23,7 +31,7 @@ export type RootStackParamList = {
           /** Assistant session; the technician who accepts gets a summary of it. */
           aiSessionId?: string;
           /** Photos and videos sent in the assistant chat, already uploaded, for the technician (PO 18/10/2026). */
-          attachmentUploadIds?: { uploadId: string; kind: 'image' | 'video' }[];
+          attachmentUploadIds?: { uploadId: string; kind: 'image' | 'video'; previewUri?: string }[];
         };
       }
     | undefined;
