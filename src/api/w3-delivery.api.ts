@@ -3,6 +3,7 @@
 // - 0đ courier quote:   GET/POST /part-requests/:id/delivery          (consent)
 // - paid courier quote: GET/POST /part-requests/:id/delivery/terms    (consent, 70/30 split)
 // The client never computes money: every amount shown comes from the server read.
+import { Platform } from 'react-native';
 import apiClient from './client';
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -31,7 +32,16 @@ export interface CustomerDeliveryState {
   actualCustomerShare: number | null;
   physicalStatus: DeliveryStatus | null;
   ceilings: { count: number; shipping: string; customer: string; technician: string } | null;
+  /** Paid only: actual technician share recorded by the SM. */
+  actualTechnicianShare?: number | null;
+  /** Base delivery read: physical journal version and its bound warehouse (receipt evidence uses it). */
+  physicalVersion?: number | null;
+  physicalWarehouseId?: string | null;
 }
+
+/** Same normalized state, read by either party. */
+export type DeliveryState = CustomerDeliveryState;
+export type DeliveryAudience = "customer" | "technician";
 
 export class DeliveryShapeError extends Error {
   constructor() { super('Chưa đối chiếu được thông tin giao linh kiện.'); }
@@ -74,7 +84,9 @@ export function parseFreeRead(payload: unknown): CustomerDeliveryState {
   return { kind: 'free', version: d.version, quote, invalidated: d.invalidated,
     customerConsented: d.customerConsented, technicianConsented: d.technicianConsented,
     actualShippingFee: actual ? actual.totalShippingFee as number : null, actualCustomerShare: actual ? 0 : null,
-    physicalStatus: status, ceilings: null };
+    physicalStatus: status, ceilings: null,
+    physicalVersion: physical && int(physical.version, 1) ? physical.version as number : null,
+    physicalWarehouseId: physical && typeof physical.warehouseId === "string" && UUID.test(physical.warehouseId) ? physical.warehouseId : null };
 }
 
 export function parsePaidRead(payload: unknown): CustomerDeliveryState | null {
@@ -97,6 +109,7 @@ export function parsePaidRead(payload: unknown): CustomerDeliveryState | null {
     customerConsented: s.customerConsented, technicianConsented: s.technicianConsented,
     actualShippingFee: actual ? actual.totalShippingFee as number : null,
     actualCustomerShare: actual ? actual.customerShippingShare as number : null,
+    actualTechnicianShare: actual && int(actual.technicianShippingShare) ? actual.technicianShippingShare as number : null,
     physicalStatus: null, ceilings };
 }
 
@@ -108,11 +121,13 @@ export function newCommandId(random: () => number = Math.random): string {
 }
 
 /** Body of the customer consent; the share is the server's customer share, never typed by the user. */
-export function consentBody(state: CustomerDeliveryState, commandId: string) {
-  if (!state.quote || state.invalidated || state.customerConsented || !UUID.test(commandId)) return bad();
+export function consentBody(state: CustomerDeliveryState, commandId: string, audience: DeliveryAudience = "customer") {
+  const mine = audience === "customer" ? state.customerConsented : state.technicianConsented;
+  if (!state.quote || state.invalidated || mine || !UUID.test(commandId)) return bad();
+  const share = audience === "customer" ? state.quote.customerShippingShare : state.quote.technicianShippingShare;
   return { commandId, expectedVersion: state.version, quoteVersion: state.quote.quoteVersion,
     quoteFingerprint: state.quote.fingerprint, totalShippingFee: state.quote.totalShippingFee,
-    shippingShare: state.kind === 'free' ? 0 : state.quote.customerShippingShare, accepted: true as const };
+    shippingShare: state.kind === 'free' ? 0 : share, accepted: true as const };
 }
 
 function path(requestId: string, kind: 'free' | 'paid') {
@@ -127,8 +142,29 @@ export const w3DeliveryApi = {
   async readPaid(requestId: string) {
     return parsePaidRead((await apiClient.get<unknown>(path(requestId, 'paid'))).data);
   },
-  async consent(requestId: string, state: CustomerDeliveryState) {
-    const body = consentBody(state, newCommandId());
+  async consent(requestId: string, state: CustomerDeliveryState, audience: DeliveryAudience = "customer") {
+    const body = consentBody(state, newCommandId(), audience);
     await apiClient.post<unknown>(`${path(requestId, state.kind)}/consent`, body);
+  },
+  /** Technician: reserve (0đ or paid once both consented and the actual fee is recorded) or receipt with evidence. */
+  async physical(requestId: string, action: "reserve" | "receipt", body: { commandId: string; expectedVersion: number; evidenceId?: string }) {
+    if (!UUID.test(body.commandId) || !int(body.expectedVersion) || (action === "receipt" && !UUID.test(body.evidenceId ?? ""))) return bad();
+    await apiClient.post<unknown>(`${path(requestId, "free")}/${action}`, body);
+  },
+  /** TECHNICIAN_RECEIPT photo, bound to the warehouse already on the physical journal. */
+  async uploadReceiptEvidence(requestId: string, input: { warehouseId: string; quoteVersion: number; image: { uri: string; name: string; type: string } }): Promise<string> {
+    if (!UUID.test(input.warehouseId) || !int(input.quoteVersion, 1) || !["image/jpeg", "image/png", "image/webp"].includes(input.image.type)) return bad();
+    const form = new FormData();
+    if (Platform.OS === "web") {
+      const blob = await (await fetch(input.image.uri)).blob();
+      form.append("file", blob, input.image.name);
+    } else form.append("file", input.image as unknown as Blob);
+    form.append("warehouseId", input.warehouseId);
+    form.append("purpose", "TECHNICIAN_RECEIPT");
+    form.append("quoteVersion", String(input.quoteVersion));
+    const res = await apiClient.post<unknown>(`${path(requestId, "free")}/evidence`, form, { headers: { "Content-Type": "multipart/form-data" } });
+    const d = data(res.data);
+    if (typeof d.evidenceId !== "string" || !UUID.test(d.evidenceId)) return bad();
+    return d.evidenceId;
   },
 };

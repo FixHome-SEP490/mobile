@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import PartsSourcingNote from '../../../components/PartsSourcingNote';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
@@ -286,6 +287,7 @@ export default function QuoteDecisionScreen() {
           approveNote={APPROVE_NOT_PAYMENT_NOTE}
         />
       )}
+      {quote && state.phase !== 'resolved' && <PartsSourcingNote quote={quote} audience="customer" refreshKey={state.phase} />}
 
       {state.phase === 'resolved' && state.resolvedQuotation && (
         <View style={{ gap: 8 }}>

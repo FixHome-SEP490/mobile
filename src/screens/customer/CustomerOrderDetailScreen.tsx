@@ -91,6 +91,7 @@ import CustomerOrderTimeline from './CustomerOrderTimeline';
 import { actionDetailSection, customerActiveOrderSection, customerOrderTimeline, type OrderDetailSection } from './customer-order-timeline';
 import BackButton from '../../components/BackButton';
 import PillText from '../../components/PillText';
+import PartsSourcingNote from '../../components/PartsSourcingNote';
 
 type DetailRoute = RouteProp<RootStackParamList, 'CustomerOrderDetail'>;
 
@@ -1162,6 +1163,7 @@ export default function CustomerOrderDetailScreen() {
                   </View>
                 ))
               )}
+              {canDecideQuote && <PartsSourcingNote quote={order.quotation} audience="customer" refreshKey={decisionState.error} />}
               {sections.quoteAwaitingDecision && !canDecideQuote && !decisionState.decided && (
                 <Text style={styles.meta}>
                   Báo giá đang chờ quyết định nhưng đơn không còn ở trạng thái di chuyển.
