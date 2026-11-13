@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../../constants/keyboard';
 import PillText from '../../../components/PillText';
 import { supportCasesApi } from '../../../api/support-cases.api';
 import { useAppTheme } from '../../../constants/theme';
@@ -43,9 +44,9 @@ export default function TechnicianIssueReport({ orderId }: { orderId: string }) 
       </TouchableOpacity>
       {sent ? <Text testID="tech-issue-report-sent" style={styles.note}>Đã gửi báo cáo cho quản lý. Công việc vẫn tiếp tục, báo cáo không hủy đơn.</Text> : null}
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
-        <View style={styles.backdrop}>
+        <KeyboardAvoidingView behavior={KEYBOARD_AVOIDING_BEHAVIOR} style={styles.backdrop} testID="tech-issue-report-kav">
           <View style={styles.sheet}>
-            <ScrollView contentContainerStyle={{ gap: 10 }} keyboardShouldPersistTaps="handled">
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ gap: 10 }} keyboardShouldPersistTaps="handled">
               <Text style={styles.title}>Báo sự cố</Text>
               <Text style={styles.note}>Quản lý sẽ xem xét. Báo cáo không dừng, không hủy đơn và không trừ điểm.</Text>
               <Text style={styles.label}>Nguyên nhân</Text>
@@ -65,6 +66,7 @@ export default function TechnicianIssueReport({ orderId }: { orderId: string }) 
                 style={styles.input} />
               {reason.length > 0 && problem ? <Text style={styles.note}>{problem}</Text> : null}
               {error ? <Text style={styles.error}>{error}</Text> : null}
+            </ScrollView>
               <View style={styles.actions}>
                 <TouchableOpacity accessibilityRole="button" style={styles.secondary} onPress={() => setOpen(false)}>
                   <Text style={styles.secondaryText}>Đóng</Text>
@@ -74,9 +76,8 @@ export default function TechnicianIssueReport({ orderId }: { orderId: string }) 
                   {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Gửi báo cáo</Text>}
                 </TouchableOpacity>
               </View>
-            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -95,7 +96,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   chip: { borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   chipText: { fontSize: 13, color: colors.text },
   input: { minHeight: 96, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, color: colors.text, textAlignVertical: 'top' },
-  actions: { flexDirection: 'row', gap: 10 },
+  actions: { flexDirection: 'row', gap: 10, paddingTop: 10 },
   secondary: { flex: 1, minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   secondaryText: { color: colors.text, fontWeight: '600' },
   primary: { flex: 1, minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primaryStrong },

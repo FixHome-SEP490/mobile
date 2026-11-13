@@ -138,6 +138,12 @@ export function createCustomerAftercareController(deps: CustomerAftercareDepende
     invalidatePresentation: purge,
     revalidateConfirmation() {
       const key = deps.getKey(), s = deps.coordinator.getSnapshot();
+      // M-25: nothing of this order has been shown yet and its session is still opening (no snapshot, or the previous
+      // order's). That is loading, not a lost permission, so "Bạn không còn quyền xem nội dung này" must not appear.
+      if (key && key.role === 'customer' && !presentationKey && (!s || !sameOrderSession(s.key, key))) {
+        if (state.confirmation) { epoch++; publish({ confirmation: null, ...(busy ? {} : { phase: 'idle' as const }) }); }
+        return;
+      }
       if (!key || key.role !== 'customer' || !s || !sameOrderSession(s.key, key) || ['historical', 'revoked'].includes(s.access)
         || (presentationKey && !sameOrderSession(key, presentationKey))) { purge(); return; }
       if (state.confirmation && !matches(state.confirmation)) { epoch++; publish({ confirmation: null, ...(busy ? {} : { phase: 'idle' as const }) }); }

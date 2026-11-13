@@ -123,3 +123,9 @@ it('the last state screens read comes after the busy flag dropped, so the claim 
   expect(seen.length).toBeGreaterThan(0);
   expect(seen[seen.length - 1]).toBe(true);
 });
+it('M-25: a session that is still opening is loading, not "no permission"', () => {
+  const f = setup(); f.coordinator.invalidate();
+  f.c.revalidateConfirmation();
+  expect(f.c.getState().phase).not.toBe('denied');
+  expect(f.c.getState().message).toBeNull();
+});
