@@ -63,6 +63,8 @@ describe('TECH 58/62: split preview, ceilings, summary', () => {
     expect(technicianDeliverySummary(free({ technicianConsented: true }))).toContain('chờ khách hàng');
     expect(technicianDeliverySummary(free({ technicianConsented: true, customerConsented: true }))).toContain('phí giao thực tế');
     expect(technicianDeliverySummary(free({ physical: physical('TECHNICIAN_RECEIVED') }))).toContain('đã nhận');
+    expect(technicianDeliverySummary(free({ invalidated: true, physical: physical('TECHNICIAN_RECEIVED') }))).toContain('đã nhận');
+    expect(technicianDeliverySummary(free({ invalidated: true }))).toContain('đã thay đổi');
   });
 });
 
@@ -138,5 +140,16 @@ describe('CUSTOMER 72 / TECH 66: parts with no source', () => {
     expect(canReviseUnsourcedQuote(true, s)).toBe(true);
     expect(canReviseUnsourcedQuote(false, s)).toBe(false);
     expect(canReviseUnsourcedQuote(true, readPartsSourcing({ status: 'available' }))).toBe(false);
+  });
+});
+
+describe('order session keeps the W3 stage of a part request', () => {
+  it('normalized parts carry w3DeliveryStage for the label and receipt path', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { normalizeOrderResource } = require('../domain/order-view-models');
+    const rows = normalizeOrderResource('parts', [{ id: 'r1', serviceOrderId: 'o1', status: 'requested', requestType: 'additional', fulfillmentMethod: 'delivery',
+      technicianId: 't1', w3DeliveryStage: 'DISPATCH_RECORDED', items: [{ id: 'i1', partNameSnapshot: 'A', quantity: 1, usageStatus: 'pending' }] }], 'o1', 'technician');
+    expect(rows[0].w3DeliveryStage).toBe('DISPATCH_RECORDED');
+    expect(displayPartRequestStatus(rows[0])).toBe('delivering');
   });
 });

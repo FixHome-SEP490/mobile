@@ -1,3 +1,4 @@
+import { readW3Received, type PartRequest } from '../../../api/part-requests.api';
 import { ordersApi } from '../../../api/orders.api';
 import apiClient from '../../../api/client';
 import type { OrderSessionKey } from '../domain/order-session.types';
@@ -17,7 +18,9 @@ export const orderReadDependencies: OrderReadDependencies = {
       // shared transport here so the session boundary can distinguish invalid from empty.
       case 'parts': return apiClient.get(`/service-orders/${id}/part-requests`).then(res => {
         const body: unknown = res.data;
-        return body && typeof body === 'object' && 'data' in body ? (body as { data: unknown }).data : body;
+        const list = body && typeof body === 'object' && 'data' in body ? (body as { data: unknown }).data : body;
+        // A received W3 delivery stays 'requested' in storage; the backend reads it as received (web does the same).
+        return Array.isArray(list) ? list.map(r => (r && typeof r === 'object' ? readW3Received(r as PartRequest) : r)) : list;
       });
       case 'invoice': return ordersApi.getInvoice(id);
       case 'cash': return ordersApi.getCashSettlement(id);

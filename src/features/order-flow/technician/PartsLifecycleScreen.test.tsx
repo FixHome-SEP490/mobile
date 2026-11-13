@@ -27,6 +27,13 @@ jest.mock('expo-camera', () => ({
 const mockGetReturns: jest.Mock = jest.fn();
 const mockDeclare: jest.Mock = jest.fn(async () => {});
 const mockApiUsage: jest.Mock = jest.fn(async () => ({}));
+// The warehouse read decides the W2 receive button; these cases are legacy pickups (status ready = receivable).
+jest.mock('./WarehouseAllocationCard', () => ({
+  __esModule: true,
+  default: () => null,
+  useWarehouseAllocations: (requests: { id: string }[]) => Object.fromEntries(requests.map(r => [r.id, { partRequestId: r.id, mode: 'legacy', status: null }])),
+}));
+jest.mock('./TechnicianDeliverySection', () => ({ __esModule: true, default: () => null }));
 jest.mock('../../../api/part-requests.api', () => {
   const actual = jest.requireActual('../../../api/part-requests.api');
   return {

@@ -120,7 +120,9 @@ export function normalizeOrderResource<K extends OrderResourceKind>(kind: K, pay
         // What ties a request to the quotation or additional cost it serves, and when it was received: the handover check reads them.
         ...(typeof row.quotationId === 'string' ? { quotationId: row.quotationId } : {}),
         ...(typeof row.additionalCostId === 'string' ? { additionalCostId: row.additionalCostId } : {}),
-        ...(typeof row.receivedAt === 'string' ? { receivedAt: row.receivedAt } : {}), items };
+        ...(typeof row.receivedAt === 'string' ? { receivedAt: row.receivedAt } : {}),
+        // W3 delivery progress: the request keeps 'requested' while the stage moves (label + receipt path).
+        ...(typeof row.w3DeliveryStage === 'string' ? { w3DeliveryStage: row.w3DeliveryStage } : {}), items };
     }) as unknown as OrderResourceData[K];
   }
 function isSafeIntegerMoney(value: unknown): boolean {

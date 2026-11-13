@@ -58,9 +58,10 @@ export function technicianCeilingRows(state: DeliveryState): [string, string][] 
 }
 
 export function technicianDeliverySummary(state: DeliveryState): string {
+  // Once received, a later source change (usage recorded) no longer matters to the technician.
+  if (state.physicalStatus === 'TECHNICIAN_RECEIVED') return 'Bạn đã nhận linh kiện. Ghi số lượng thực dùng ở mục Linh kiện.';
   if (state.invalidated) return 'Đề xuất phí giao đã thay đổi. Chờ quản lý dịch vụ đề xuất lại.';
   if (!state.quote) return 'Đang chờ quản lý dịch vụ đề xuất phí giao.';
-  if (state.physicalStatus === 'TECHNICIAN_RECEIVED') return 'Bạn đã nhận linh kiện. Ghi số lượng thực dùng ở mục Linh kiện.';
   if (state.customerConsented && state.technicianConsented) {
     return state.actualShippingFee === null ? 'Hai bên đã đồng ý. Chờ quản lý ghi phí giao thực tế.' : 'Hai bên đã đồng ý điều khoản giao.';
   }
