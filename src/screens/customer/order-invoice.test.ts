@@ -3,6 +3,7 @@ import {
   initialInvoiceState,
   invoicePaymentLabel,
   sanitizeInvoice,
+  shippingOf,
   type InvoiceState,
 } from './order-invoice';
 
@@ -258,11 +259,24 @@ describe('sanitizeInvoice (production helper)', () => {
     const view = sanitizeInvoice(ORDER_ID, payload());
     expect(view).not.toBeNull();
     expect(Object.keys(view ?? {}).sort()).toEqual(
-      ['id', 'issuedText', 'items', 'laborText', 'paidText', 'partsText', 'paymentStatus', 'totalText'].sort(),
+      ['id', 'issuedText', 'items', 'laborText', 'paidText', 'partsText', 'paymentStatus', 'shipping', 'totalText'].sort(),
     );
   });
 });
 
 it('shares the initial state shape', () => {
   expect(initialInvoiceState).toMatchObject({ invoice: null, absent: false, loading: false, error: null, canRetry: false });
+});
+
+describe('invoice W3 shipping snapshot', () => {
+  it('shows the server 70/30 split when fee equals both shares', () => {
+    expect(shippingOf({ shippingFee: 30000, customerShippingShare: 21000, technicianShippingShare: 9000 }))
+      .toEqual({ feeText: '30.000đ', customerShareText: '21.000đ', technicianShareText: '9.000đ' });
+  });
+  it('hides the row for 0đ, missing shares or shares that do not add up', () => {
+    expect(shippingOf({ shippingFee: 0, customerShippingShare: 0, technicianShippingShare: 0 })).toBeNull();
+    expect(shippingOf({ shippingFee: 30000 })).toBeNull();
+    expect(shippingOf({ shippingFee: 30000, customerShippingShare: 21000, technicianShippingShare: 1 })).toBeNull();
+    expect(shippingOf({ shippingFee: -5, customerShippingShare: -5, technicianShippingShare: 0 })).toBeNull();
+  });
 });

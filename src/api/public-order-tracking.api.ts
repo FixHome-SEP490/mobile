@@ -143,7 +143,8 @@ export function createPublicOrderTrackingApi(client: MutableApiClient, now: () =
       budget.take(now());
       try {
         const response = await client.post('/service-orders/public/track', {
-          orderCode: query.orderCode.trim(),
+          // Order codes are upper case (FH-20261112-7ABFF410); a code typed or pasted in lower case still finds the order.
+          orderCode: query.orderCode.trim().toUpperCase(),
           phone: query.phone.trim(),
         });
         return normalizePublicOrderTracking(globalData(response.data));

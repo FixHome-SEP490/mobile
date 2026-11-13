@@ -119,3 +119,19 @@ test('overlapping intervals are rejected without a write', async () => {
   expect(text(tree)).toContain('không được trùng nhau');
   await act(async () => tree.unmount());
 });
+test('a refused save shows its reason next to the save button, not at the top of the screen', async () => {
+  api.getMySchedule.mockResolvedValue([{ dayOfWeek: 1, startTime: '08:00', endTime: '12:00' }]);
+  const tree = await render();
+  await act(async () => button(tree, 'Khung giờ T2').props.onPress());
+  await act(async () => tree.root.findByProps({ accessibilityLabel: 'Giờ bắt đầu khung 1' }).props.onChangeText('23:00'));
+  await act(async () => tree.root.findByProps({ accessibilityLabel: 'Giờ kết thúc khung 1' }).props.onChangeText('22:00'));
+  await act(async () => button(tree, 'Lưu khung giờ').props.onPress());
+  expect(api.updateMySchedule).not.toHaveBeenCalled();
+  const lines = tree.root.findAllByType(Text).map(item => String(item.props.children ?? ''));
+  const reason = lines.findIndex(line => line.includes('giờ kết thúc phải sau'));
+  expect(reason).toBeGreaterThan(lines.indexOf('Chỉnh sửa T2'));
+  expect(reason).toBeGreaterThan(lines.findIndex(line => line.startsWith('CN')));
+  expect(lines.filter(line => line.includes('giờ kết thúc phải sau'))).toHaveLength(1);
+  expect(reason).toBeLessThan(lines.indexOf('Lưu lịch làm việc'));
+  await act(async () => tree.unmount());
+});

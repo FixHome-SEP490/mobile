@@ -123,7 +123,9 @@ export default function CustomerWalletScreen() {
   const submitSheet = () => {
     if (!sheetValid || busy) return;
     setSheet(null);
-    void controller.submitConfirmation();
+    // The confirmation is the customer's go-ahead: open the gateway link it created once, as invoice VNPay does.
+    // openPaymentUrl opens a link only once and only one this top-up created; without one nothing opens.
+    void controller.submitConfirmation().then(() => controller.openPaymentUrl());
   };
 
   const changePage = (next: number) => {

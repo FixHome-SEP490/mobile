@@ -6,6 +6,7 @@ import { vnDateTimeString } from '../../../utils/vn-time';
 import type { OrderQuotation, OrderQuotationItem } from '../domain/order-session.types';
 import type { EligibleWarrantyOption } from '../customer/customer-quotation-controller';
 import { QUOTE_STATUS } from './OrderCostHistory';
+import PillText from '../../../components/PillText';
 
 export interface DecisionPreview {
   baseLabor: number;
@@ -110,7 +111,7 @@ export function DecisionSummary({
         <Text accessibilityRole="header" style={styles.title}>Báo giá lần {quotation.version ?? '—'}</Text>
         {status ? (
           <View style={[styles.chip, { backgroundColor: tone.bg }]}>
-            <Text style={[styles.chipText, { color: tone.text }]}>{status.label}</Text>
+            <PillText style={[styles.chipText, { color: tone.text }]}>{status.label}</PillText>
           </View>
         ) : null}
       </View>

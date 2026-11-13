@@ -17,6 +17,7 @@ import type { CameraOrderAsset } from './arrival-proof-controller';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { useReleasableOrders } from './useReleasableOrders';
+import PillText from '../../../components/PillText';
 
 /** Decorative icons next to visible text stay out of the screen reader's way. */
 const Decor = ({ children }: { children: React.ReactNode }) => (
@@ -237,7 +238,7 @@ export default function DelayReportScreen() {
               return (
                 <Pressable key={option.code} testID={`delay-reason-${option.code}`} accessibilityRole="radio" accessibilityState={{ selected: on, disabled: busy }}
                   disabled={busy} onPress={() => setReasonCode(option.code)} style={({ pressed }) => [styles.chip, on && styles.chipOn, pressed && styles.pressed]}>
-                  <Text style={[styles.chipText, on && styles.chipTextOn]}>{option.label}</Text>
+                  <PillText style={[styles.chipText, on && styles.chipTextOn]}>{option.label}</PillText>
                 </Pressable>
               );
             })}

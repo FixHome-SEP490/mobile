@@ -4,7 +4,6 @@ import {
   View,
   Text,
   KeyboardAvoidingView,
-  Platform,
   StyleSheet,
   TouchableOpacity,
   TextInput,
@@ -18,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useOpenOnce } from '../../hooks/useOpenOnce';
 import type { RootStackParamList } from '../../types';
 import { AI_MAX_IMAGES } from '../../api/ai.api';
 import { pickImagesForAi } from '../../services/image-for-ai';
@@ -27,6 +27,7 @@ import {
   showDescriptionHint,
 } from './ai-diagnosis-input';
 import BackButton from '../../components/BackButton';
+import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
 
 type DiagnosisRoute = RouteProp<RootStackParamList, 'CustomerAIDiagnosis'>;
 
@@ -35,6 +36,7 @@ export default function CustomerAIDiagnosisScreen() {
   const styles = getStyles(colors);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<DiagnosisRoute>();
+  const openOnce = useOpenOnce();
 
   // Set when the assistant sent the customer here with a service in hand. The
   // chat never books; it routes across, and this is the far end of that route.
@@ -90,10 +92,12 @@ export default function CustomerAIDiagnosisScreen() {
       );
       return;
     }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    // Use real catalog and saved address rather than legacy placeholder steps.
-    navigation.push('CustomerBookingCreate', {
-      prefill: { ...prefill, description: description.trim() },
+    openOnce(() => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      // Use real catalog and saved address rather than legacy placeholder steps.
+      navigation.push('CustomerBookingCreate', {
+        prefill: { ...prefill, description: description.trim() },
+      });
     });
   };
   const handleBack = () => {
@@ -103,7 +107,7 @@ export default function CustomerAIDiagnosisScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <KeyboardAvoidingView style={styles.screenBody} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.screenBody} behavior={KEYBOARD_AVOIDING_BEHAVIOR}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
             <BackButton onPress={handleBack} />

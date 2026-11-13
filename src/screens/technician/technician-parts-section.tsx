@@ -21,7 +21,7 @@ import * as Haptics from 'expo-haptics';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { useAppTheme } from '../../constants/theme';
 import {
-  partRequestsApi, partReturnsApi, canDeclareMoreQty, createIdempotencyKey, isPartReturnsUnavailableError, partReturnStatusText, pendingDeclaredQty, usedQtyRange,
+  partRequestsApi, partReturnsApi, canReceivePickup, displayPartRequestStatus, warehouseDistanceText, warehouseStatusText, type WarehouseAllocation, canDeclareMoreQty, createIdempotencyKey, isPartReturnsUnavailableError, partReturnStatusText, pendingDeclaredQty, usedQtyRange,
   type PartRequest, type FulfillmentMethod, type PartCustodyReturnRecord,
 } from '../../api/part-requests.api';
 import { partsCatalogApi, type FixHomePart } from '../../api/parts-catalog.api';
@@ -29,6 +29,7 @@ import { extractApiErrorMessage } from '../../utils/input-validation';
 import { formatVnd } from '../../utils/format';
 
 import { vnDateTimeString } from '../../utils/vn-time';
+import PillText from '../../components/PillText';
 
 const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 const CATEGORY_TABS = [
@@ -114,6 +115,35 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [receivingId, setReceivingId] = useState<string | null>(null);
+  // W2 PICKUP: allocated warehouse per request (null = loading, 'error' = not checked: no receive then).
+  const [allocations, setAllocations] = useState<Record<string, WarehouseAllocation | 'error' | null>>({});
+  // Latest-load wins; a plain holder (not a ref) so render never reads it.
+  const [allocationTicket] = useState(() => ({ current: 0 }));
+  const loadAllocations = async (records: PartRequest[]) => {
+    const mine = ++allocationTicket.current;
+    const pickups = records.filter((pr) => pr.fulfillmentMethod === 'pickup' && pr.status !== 'cancelled');
+    setAllocations(Object.fromEntries(pickups.map((pr) => [pr.id, null])));
+    const entries = await Promise.all(pickups.map(async (pr) => {
+      try { return [pr.id, await partRequestsApi.getWarehouseAllocation(pr.id)] as const; } catch { return [pr.id, 'error' as const] as const; }
+    }));
+    if (mine === allocationTicket.current) setAllocations(Object.fromEntries(entries));
+  };
+  const [stoppingId, setStoppingId] = useState<string | null>(null);
+  const stopUnavailablePreRepair = async (pr: PartRequest) => {
+    if (stoppingId || pr.requestType !== 'pre_repair' || pr.status !== 'requested' || (allocations[pr.id] as WarehouseAllocation | null | undefined)?.status !== 'stock_unavailable') return;
+    setStoppingId(pr.id);
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      await partRequestsApi.cancel(pr.id, 'Kho FixHome không đủ linh kiện; kỹ thuật viên tự chuẩn bị.');
+      setActionSuccess('Đã dừng yêu cầu lấy từ kho. Hãy tự chuẩn bị; hệ thống không tự tính phí linh kiện tự mua.');
+      await loadPartRequests();
+    } catch (err) {
+      setActionError(errorMessage(err, 'Chưa hủy được yêu cầu kho, vui lòng thử lại.'));
+    } finally {
+      setStoppingId(null);
+    }
+  };
   const [qrTokenInput, setQrTokenInput] = useState('');
   const [scanningFor, setScanningFor] = useState<string | null>(null);
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
@@ -189,8 +219,10 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
   const loadPartRequests = async (quiet = false) => {
     try {
       if (!quiet) setLoading(true);
-      setPartRequests(await partRequestsApi.getByOrderId(orderId));
+      const records = await partRequestsApi.getByOrderId(orderId);
+      setPartRequests(records);
       void loadReturns();
+      void loadAllocations(records);
     } catch (err) {
       setActionError(errorMessage(err, 'Không thể tải danh sách yêu cầu linh kiện.'));
     } finally {
@@ -422,13 +454,13 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
                   style={[styles.chip, fulfillmentMethod === 'pickup' && styles.chipActive]}
                   onPress={() => setFulfillmentMethod('pickup')}
                 >
-                  <Text style={[styles.chipText, fulfillmentMethod === 'pickup' && styles.chipTextActive]}>Tự lấy tại kho</Text>
+                  <PillText style={[styles.chipText, fulfillmentMethod === 'pickup' && styles.chipTextActive]}>Tự lấy tại kho</PillText>
                 </TouchableOpacity>
                 <TouchableOpacity accessibilityRole="button"
                   style={[styles.chip, fulfillmentMethod === 'delivery' && styles.chipActive]}
                   onPress={() => setFulfillmentMethod('delivery')}
                 >
-                  <Text style={[styles.chipText, fulfillmentMethod === 'delivery' && styles.chipTextActive]}>🚚 Giao hàng</Text>
+                  <PillText style={[styles.chipText, fulfillmentMethod === 'delivery' && styles.chipTextActive]}>🚚 Giao hàng</PillText>
                 </TouchableOpacity>
               </View>
 
@@ -449,7 +481,7 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
                     style={[styles.chip, activeCategory === cat.value && styles.chipActive]}
                     onPress={() => selectCategory(cat.value)}
                   >
-                    <Text style={[styles.chipText, activeCategory === cat.value && styles.chipTextActive]}>{cat.label}</Text>
+                    <PillText style={[styles.chipText, activeCategory === cat.value && styles.chipTextActive]}>{cat.label}</PillText>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -597,19 +629,39 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
         <View style={{ marginTop: 8, gap: 8 }}>
           <Text style={styles.fieldLabel}>Lịch sử yêu cầu linh kiện ({partRequests.length} đợt)</Text>
           {partRequests.map((pr) => {
-            const showReceive = (pr.fulfillmentMethod === 'pickup' && pr.status === 'ready') ||
-              (pr.fulfillmentMethod === 'delivery' && pr.status === 'delivering');
+            const rawAllocation = allocations[pr.id];
+            const allocation = rawAllocation && rawAllocation !== 'error' ? rawAllocation : null;
+            const showReceive = canReceivePickup(pr, allocation) ||
+              (pr.fulfillmentMethod === 'delivery' && pr.status === 'delivering' && !pr.w3DeliveryStage);
+            const shownStatus = displayPartRequestStatus(pr);
+            const warehouseNote = warehouseStatusText(allocation);
+            const distance = warehouseDistanceText(allocation);
             return (
               <View key={pr.id} style={styles.requestCard}>
                 <View style={styles.requestHeader}>
-                  <View style={[styles.statusBadge, { borderColor: statusColor(pr.status, colors) }]}>
-                    <Text style={[styles.statusBadgeText, { color: statusColor(pr.status, colors) }]}>{statusLabel(pr.status)}</Text>
+                  <View style={[styles.statusBadge, { borderColor: statusColor(shownStatus, colors) }]}>
+                    <PillText style={[styles.statusBadgeText, { color: statusColor(shownStatus, colors) }]}>{statusLabel(shownStatus)}</PillText>
                   </View>
-                  <Text style={styles.typeTag}>{pr.requestType === 'pre_repair' ? 'Trước sửa chữa' : pr.requestType === 'quotation' ? 'Theo báo giá' : 'Phát sinh khi sửa'}</Text>
+                  <PillText style={styles.typeTag}>{pr.requestType === 'pre_repair' ? 'Trước sửa chữa' : pr.requestType === 'quotation' ? 'Theo báo giá' : 'Phát sinh khi sửa'}</PillText>
                   <Text style={styles.jobMeta}>{pr.fulfillmentMethod === 'delivery' ? 'Giao hàng' : 'Tự lấy'}</Text>
                 </View>
                 {!!pr.reason && <Text style={styles.jobMeta}>Lý do: {pr.reason}</Text>}
                 {pr.shippingFee > 0 && <Text style={styles.jobMeta}>Phí giao hàng: {formatVnd(pr.shippingFee)}</Text>}
+                {pr.fulfillmentMethod === 'pickup' && pr.status !== 'cancelled' && (allocations[pr.id] === 'error' ? (
+                  <Text style={styles.jobMeta}>Chưa kiểm tra được kho được phân bổ. Không xác nhận nhận hàng cho tới khi đối chiếu được.</Text>
+                ) : allocation?.mode === 'warehouse' ? (
+                  <View style={styles.receiveBox} testID={`tech-warehouse-${pr.id}`}>
+                    <Text style={styles.resultName}>{allocation.warehouseName || (allocation.status === 'stock_unavailable' ? 'Chưa có kho phân bổ' : 'Kho linh kiện')}</Text>
+                    {!!allocation.warehouseAddress && <Text style={styles.jobMeta}>{allocation.warehouseAddress}</Text>}
+                    {!!distance && <Text style={styles.jobMeta} testID={`tech-warehouse-km-${pr.id}`}>{distance}</Text>}
+                    {!!warehouseNote && <Text style={[styles.jobMeta, allocation.status === 'stock_unavailable' && { color: colors.tone.warning.text }]} testID={`tech-warehouse-status-${pr.id}`}>{warehouseNote}</Text>}
+                    {pr.requestType === 'pre_repair' && pr.status === 'requested' && allocation.status === 'stock_unavailable' && (
+                      <TouchableOpacity accessibilityRole="button" style={styles.ghostBtn} disabled={!!stoppingId} onPress={() => void stopUnavailablePreRepair(pr)} testID={`tech-warehouse-stop-${pr.id}`}>
+                        {stoppingId === pr.id ? <ActivityIndicator size="small" color={colors.primary} /> : <Text style={styles.ghostBtnText}>Dừng yêu cầu kho, tự chuẩn bị</Text>}
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ) : null)}
 
                 {showReceive && (
                   receivingId === pr.id ? (
@@ -694,9 +746,9 @@ export default function TechnicianPartsSection({ orderId, orderStatus, refreshKe
                         </TouchableOpacity>
                       </View>
                     ) : (
-                      <Text style={styles.usageStatusText}>
+                      <PillText style={styles.usageStatusText}>
                         {item.usageStatus === 'used' ? 'Đã dùng' : item.usageStatus === 'returned' ? 'Hoàn trả' : 'Chưa ghi nhận'}
-                      </Text>
+                      </PillText>
                     )}
                   </View>
                 ))}

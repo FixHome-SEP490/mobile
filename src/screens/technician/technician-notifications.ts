@@ -58,3 +58,16 @@ export function technicianNotificationOrderId(
   const id = item.referenceId?.trim() ?? '';
   return UUID.test(id) ? id : null;
 }
+
+/**
+ * A new invitation (`BOOKING_INVITATION`, reference BOOKING) has no order yet, so it opens the Invitations tab,
+ * as the web bell does. A notification that names a real order still opens that order first.
+ */
+export function technicianNotificationOpensInvitations(
+  item: Pick<NotificationItem, 'referenceId' | 'referenceType' | 'type'>,
+): boolean {
+  if (technicianNotificationOrderId(item)) return false;
+  const referenceType = item.referenceType?.trim().toUpperCase() ?? '';
+  const type = String(item.type ?? '').trim().toUpperCase();
+  return referenceType === 'BOOKING' || type.includes('INVITATION');
+}

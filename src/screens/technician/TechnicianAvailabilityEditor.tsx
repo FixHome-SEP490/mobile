@@ -30,7 +30,10 @@ export default function TechnicianAvailabilityEditor({ onChanged }: { onChanged:
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setErrorText] = useState('');
+  // Where the message is shown: next to the action that failed, so a refused save is seen without scrolling back up.
+  const [errorAt, setErrorAt] = useState<'top' | 'schedule' | 'leave'>('top');
+  const setError = (text: string, at: 'top' | 'schedule' | 'leave' = 'top') => { setErrorText(text); setErrorAt(at); };
   const [busy, setBusy] = useState(false);
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
@@ -49,11 +52,11 @@ export default function TechnicianAvailabilityEditor({ onChanged }: { onChanged:
   }, []);
   // eslint-disable-next-line react-hooks/set-state-in-effect -- initial server fetch, same pattern as profile
   useEffect(() => { alive.current = true; void load(); return () => { alive.current = false; }; }, [load]);
-  const mutate = async (operation: () => Promise<void>) => {
+  const mutate = async (operation: () => Promise<void>, at: 'schedule' | 'leave') => {
     if (lock.current || !loaded) return;
     lock.current = true; setBusy(true); setError('');
     try { await operation(); if (alive.current) onChanged(); }
-    catch (err) { if (alive.current) setError(extractApiErrorMessage(err, 'Chưa lưu được thay đổi. Kiểm tra kết nối rồi thử lại.')); }
+    catch (err) { if (alive.current) setError(extractApiErrorMessage(err, 'Chưa lưu được thay đổi. Kiểm tra kết nối rồi thử lại.'), at); }
     finally { lock.current = false; if (alive.current) setBusy(false); }
   };
   const selected = slots.filter(slot => slot.dayOfWeek === day);
@@ -68,7 +71,7 @@ export default function TechnicianAvailabilityEditor({ onChanged }: { onChanged:
     : 'Nghỉ';
   return <View style={styles.section}>
     <Text style={styles.title} accessibilityRole="header">Tuần làm việc</Text>
-    {!!error && <ToneNote tone="danger" icon={AlertCircle} alert>{error}</ToneNote>}
+    {!!error && errorAt === 'top' && <ToneNote tone="danger" icon={AlertCircle} alert>{error}</ToneNote>}
     {loading ? <ActivityIndicator color={colors.primaryStrong} /> : !loaded ? <TouchableOpacity style={styles.secondary} onPress={() => void load()} accessibilityRole="button"><Text style={styles.link}>Thử lại</Text></TouchableOpacity> : <>
       {!savedSlots.length && !dirty && <View style={styles.empty}>
         <Text style={styles.hint}>Bạn chưa thiết lập lịch nhận việc. Chọn ngày và khung giờ phù hợp rồi lưu.</Text>
@@ -102,7 +105,7 @@ export default function TechnicianAvailabilityEditor({ onChanged }: { onChanged:
               <TouchableOpacity style={styles.secondary} disabled={busy} accessibilityRole="button" onPress={() => editDay([])}><CalendarOff size={16} color={colors.primaryStrong} /><Text style={styles.link}>Nghỉ ngày này</Text></TouchableOpacity>
             </View>
             <TouchableOpacity style={styles.secondary} disabled={busy} accessibilityRole="button" onPress={() => {
-              const invalid = validateSchedule(selected); if (invalid) { setError(invalid); return; } setCopyPreview(true);
+              const invalid = validateSchedule(selected); if (invalid) { setError(invalid, 'schedule'); return; } setCopyPreview(true);
             }}><Text style={styles.link}>Áp dụng T2–T6</Text></TouchableOpacity>
             {copyPreview && <View style={styles.empty}>
               <Text style={styles.editorTitle}>Bản xem trước T2–T6</Text>
@@ -117,13 +120,14 @@ export default function TechnicianAvailabilityEditor({ onChanged }: { onChanged:
           </View>}
         </View>)}
       </View>
+      {!!error && errorAt === 'schedule' && <ToneNote tone="danger" icon={AlertCircle} alert>{error}</ToneNote>}
       {dirty && <TouchableOpacity style={styles.secondary} disabled={busy} accessibilityRole="button" accessibilityLabel="Hủy thay đổi" onPress={() => { setSlots(savedSlots); setDirty(false); setDay(null); setCopyPreview(false); setError(''); }}><Text style={styles.link}>Hủy thay đổi</Text></TouchableOpacity>}
       {(day !== null || dirty) && <TouchableOpacity style={[styles.primary, busy && styles.disabled]} disabled={busy} accessibilityState={{ disabled: busy, busy }} accessibilityRole="button" accessibilityLabel="Lưu khung giờ" onPress={() => {
-        const invalid = validateSchedule(slots); if (invalid) { setError(invalid); return; }
+        const invalid = validateSchedule(slots); if (invalid) { setError(invalid, 'schedule'); return; }
         void mutate(async () => {
           const saved = await technicianProfileApi.updateMySchedule(slots);
           if (alive.current) { setSlots(saved); setSavedSlots(saved); setDirty(false); setDay(null); setCopyPreview(false); }
-        });
+        }, 'schedule');
       }}><Text style={styles.primaryText}>{busy ? 'Đang lưu…' : 'Lưu lịch làm việc'}</Text></TouchableOpacity>}
       <Text style={[styles.title, { marginTop: 12 }]} accessibilityRole="header">Ngày nghỉ & thay đổi tạm thời</Text>
       <TouchableOpacity style={styles.secondary} disabled={busy} accessibilityRole="button" accessibilityLabel="Khai báo ngày nghỉ" accessibilityState={{ expanded: leaveOpen, disabled: busy }} onPress={() => setLeaveOpen(!leaveOpen)}><Text style={styles.link}>{leaveOpen ? 'Đóng khai báo' : 'Khai báo ngày nghỉ'}</Text></TouchableOpacity>
@@ -134,15 +138,16 @@ export default function TechnicianAvailabilityEditor({ onChanged }: { onChanged:
         <Text style={styles.hint}>Lý do (không bắt buộc)</Text>
         <TextInput style={styles.input} value={reason} onChangeText={setReason} editable={!busy} accessibilityLabel="Lý do ngày nghỉ" placeholderTextColor={colors.muted} />
         <TouchableOpacity style={styles.secondary} disabled={busy} accessibilityRole="button" accessibilityLabel="Thêm ngày nghỉ" onPress={() => {
-          const payload = timeOffPayload(start, end, reason); if (!payload) { setError('Chọn ngày hợp lệ; ngày kết thúc phải sau hoặc trùng ngày bắt đầu.'); return; }
+          const payload = timeOffPayload(start, end, reason); if (!payload) { setError('Chọn ngày hợp lệ; ngày kết thúc phải sau hoặc trùng ngày bắt đầu.', 'leave'); return; }
           void mutate(async () => {
             const saved = await technicianProfileApi.createTimeOff(payload);
             if (alive.current) { setLeave(previous => [...previous, saved]); setStart(''); setEnd(''); setReason(''); setLeaveOpen(false); }
-          });
+          }, 'leave');
         }}><Text style={styles.link}>Thêm ngày nghỉ</Text></TouchableOpacity>
       </View>}
+      {!!error && errorAt === 'leave' && <ToneNote tone="danger" icon={AlertCircle} alert>{error}</ToneNote>}
       {!leave.length && <Text style={styles.hint}>Chưa có ngày nghỉ đã khai báo.</Text>}
-      {leave.map(item => <View key={item.id} style={styles.leaveCard}><Text style={[styles.leaveText, styles.flex]}>{vnDateString(item.startAt)} – {vnDateString(item.endAt)}{item.reason ? ` · ${item.reason}` : ''}</Text><TouchableOpacity style={styles.secondary} disabled={busy} accessibilityRole="button" accessibilityLabel="Xóa ngày nghỉ" onPress={() => Alert.alert('Xóa ngày nghỉ?', 'Bạn có thể nhận việc trở lại trong khoảng ngày này.', [{ text: 'Giữ lại', style: 'cancel' }, { text: 'Xóa', style: 'destructive', onPress: () => void mutate(async () => { await technicianProfileApi.deleteTimeOff(item.id); if (alive.current) setLeave(previous => previous.filter(value => value.id !== item.id)); }) }])}><Trash2 size={20} color={colors.tone.danger.text} /></TouchableOpacity></View>)}
+      {leave.map(item => <View key={item.id} style={styles.leaveCard}><Text style={[styles.leaveText, styles.flex]}>{vnDateString(item.startAt)} – {vnDateString(item.endAt)}{item.reason ? ` · ${item.reason}` : ''}</Text><TouchableOpacity style={styles.secondary} disabled={busy} accessibilityRole="button" accessibilityLabel="Xóa ngày nghỉ" onPress={() => Alert.alert('Xóa ngày nghỉ?', 'Bạn có thể nhận việc trở lại trong khoảng ngày này.', [{ text: 'Giữ lại', style: 'cancel' }, { text: 'Xóa', style: 'destructive', onPress: () => void mutate(async () => { await technicianProfileApi.deleteTimeOff(item.id); if (alive.current) setLeave(previous => previous.filter(value => value.id !== item.id)); }, 'leave') }])}><Trash2 size={20} color={colors.tone.danger.text} /></TouchableOpacity></View>)}
     </>}
   </View>;
 }

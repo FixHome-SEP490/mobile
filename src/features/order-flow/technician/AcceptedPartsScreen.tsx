@@ -28,6 +28,8 @@ import { ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { backFromFlow } from '../navigation/resume-order';
+import BackClosableBottomSheetModal from '../../../components/BackClosableBottomSheetModal';
+import PillText from '../../../components/PillText';
 
 const newPartRow = (): CostItemRow => ({ ...createCostItemRow('parts_equipment'), partSource: 'fixhome', quantity: '1' });
 
@@ -356,7 +358,7 @@ export default function AcceptedPartsScreen() {
           <View style={styles.card}>
             <View style={styles.listHead}>
               <Text accessibilityRole="header" style={[styles.sectionTitle, { marginBottom: 0 }]}>Danh sách linh kiện</Text>
-              <View style={styles.countBadge}><Text style={styles.countText}>{rows.length}</Text></View>
+              <View style={styles.countBadge}><PillText style={styles.countText}>{rows.length}</PillText></View>
             </View>
             {!rows.length && (
               <View testID="pre-parts-empty" style={styles.empty}>
@@ -398,7 +400,7 @@ export default function AcceptedPartsScreen() {
           </View>
 
           {canCreate && (
-            <BottomSheetModal
+            <BackClosableBottomSheetModal
               ref={sheetRef}
               snapPoints={['90%']}
               enableDynamicSizing={false}
@@ -421,7 +423,7 @@ export default function AcceptedPartsScreen() {
                 onClose={() => sheetRef.current?.dismiss()}
                 onLoadCatalog={search => { void loadCatalog(search); }}
               />
-            </BottomSheetModal>
+            </BackClosableBottomSheetModal>
           )}
         </>
       )}

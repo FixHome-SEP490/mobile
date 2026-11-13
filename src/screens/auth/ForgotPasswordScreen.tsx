@@ -9,7 +9,6 @@ import {
   StyleSheet,
   ScrollView,
   KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
   Image,
 } from 'react-native';
@@ -22,6 +21,7 @@ import type { AuthStackParamList } from '../../types';
 import { authApi } from '../../api/auth.api';
 import { extractApiErrorMessage } from '../../utils/input-validation';
 import BackButton from '../../components/BackButton';
+import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
 
 export default function ForgotPasswordScreen() {
   const { colors, spacing, fontSize } = useAppTheme();
@@ -57,7 +57,7 @@ export default function ForgotPasswordScreen() {
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={KEYBOARD_AVOIDING_BEHAVIOR}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <View style={styles.brandBar}><BackButton /><View style={styles.brandRow}><Image source={require('../../../assets/icon.png')} style={styles.brandLogo} /><Text style={styles.brandText}>Fix<Text style={styles.accent}>Home</Text></Text></View></View>

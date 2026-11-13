@@ -61,11 +61,14 @@ import { useAppTheme } from '../../constants/theme';
 import { extractApiErrorMessage } from '../../utils/input-validation';
 import { formatVnd } from '../../utils/format';
 import StatusBadge from '../../components/StatusBadge';
+import { readSkillPricing, skillDigitsOnly } from './skill-pricing-input';
 import type { StatusView } from './technician-status';
 
 import { NO_RATING_TEXT, formatRating, ratingValue } from '../../utils/rating';
 import { avatarErrorMessage, updateMyAvatar } from '../../services/avatar-upload';
 import AccountLogoutAction from '../../components/account/AccountLogoutAction';
+import BackClosableBottomSheetModal from '../../components/BackClosableBottomSheetModal';
+import PillText from '../../components/PillText';
 
 // Match Customer account clearance above the floating bar, plus the bottom inset.
 const TAB_BAR_CLEARANCE = 96;
@@ -337,18 +340,19 @@ export default function TechnicianProfileScreen() {
   const handleSaveSkill = async (service: ServiceItem) => {
     const draft = skillDrafts[service.id];
     if (!draft) return;
+    const isFixedPrice = String(service.pricingMode).toLowerCase() === 'fixed_price';
+    const pricing = readSkillPricing(draft, isFixedPrice);
+    if ('error' in pricing) {
+      Alert.alert('Chưa lưu được', pricing.error);
+      return;
+    }
     setSavingSkillId(service.id);
     try {
-      const isFixedPrice = String(service.pricingMode).toLowerCase() === 'fixed_price';
       const offering = await technicianProfileApi.setSkillPricing(service.id, {
         isActive: draft.enabled,
         level: draft.level.trim() || 'INTERMEDIATE',
-        typicalWarrantyDays: draft.typicalWarrantyDays ? Number(draft.typicalWarrantyDays) : null,
-        listedLaborPrice: isFixedPrice
-          ? null
-          : draft.listedLaborPrice
-            ? Number(draft.listedLaborPrice)
-            : null,
+        typicalWarrantyDays: pricing.values.typicalWarrantyDays,
+        listedLaborPrice: isFixedPrice ? null : pricing.values.listedLaborPrice,
       });
       setMyOfferings((prev) => ({ ...prev, [service.id]: offering }));
       await loadTechnicianProfile();
@@ -463,20 +467,20 @@ export default function TechnicianProfileScreen() {
                 {rating !== null ? (
                   <View style={[styles.chip, { backgroundColor: colors.tone.warning.bg }]}>
                     <Star size={14} color={colors.tone.warning.fg} strokeWidth={2} />
-                    <Text style={[styles.chipText, { color: colors.tone.warning.text }]}>
+                    <PillText style={[styles.chipText, { color: colors.tone.warning.text }]}>
                       {formatRating(rating)}
-                    </Text>
+                    </PillText>
                   </View>
                 ) : (
                   <View style={[styles.chip, { backgroundColor: colors.background }]}>
-                    <Text style={[styles.chipText, { color: colors.textSecondary }]}>{NO_RATING_TEXT}</Text>
+                    <PillText style={[styles.chipText, { color: colors.textSecondary }]}>{NO_RATING_TEXT}</PillText>
                   </View>
                 )}
                 {technicianProfile.reliabilityScore !== null && (
                   <View style={[styles.chip, { backgroundColor: colors.tone.success.bg }]}>
-                    <Text style={[styles.chipText, { color: colors.tone.success.text }]}>
+                    <PillText style={[styles.chipText, { color: colors.tone.success.text }]}>
                       Độ tin cậy {technicianProfile.reliabilityScore}%
-                    </Text>
+                    </PillText>
                   </View>
                 )}
               </View>
@@ -637,7 +641,7 @@ export default function TechnicianProfileScreen() {
       </ScrollView>
 
       {/* Skills sheet */}
-      <BottomSheetModal
+      <BackClosableBottomSheetModal
         ref={skillsSheetRef}
         snapPoints={wideSnapPoints}
         backdropComponent={renderBackdrop}
@@ -718,8 +722,9 @@ export default function TechnicianProfileScreen() {
                           <Text style={styles.fieldLabel}>Giá công (₫)</Text>
                           <BottomSheetTextInput
                             value={draft.listedLaborPrice}
-                            onChangeText={(v) => setDraft({ listedLaborPrice: v })}
-                            keyboardType="numeric"
+                            onChangeText={(v) => setDraft({ listedLaborPrice: skillDigitsOnly(v) })}
+                            keyboardType="number-pad"
+                            maxLength={10}
                             placeholder="Nhập giá công"
                             placeholderTextColor={colors.textSecondary}
                             accessibilityLabel={`Giá công ${service.name}`}
@@ -731,8 +736,9 @@ export default function TechnicianProfileScreen() {
                         <Text style={styles.fieldLabel}>Bảo hành (ngày)</Text>
                         <BottomSheetTextInput
                           value={draft.typicalWarrantyDays}
-                          onChangeText={(v) => setDraft({ typicalWarrantyDays: v })}
-                          keyboardType="numeric"
+                          onChangeText={(v) => setDraft({ typicalWarrantyDays: skillDigitsOnly(v) })}
+                          keyboardType="number-pad"
+                          maxLength={4}
                           placeholder="Số ngày"
                           placeholderTextColor={colors.textSecondary}
                           accessibilityLabel={`Bảo hành ${service.name}`}
@@ -765,7 +771,7 @@ export default function TechnicianProfileScreen() {
               : undefined}
           />
         )}
-      </BottomSheetModal>
+      </BackClosableBottomSheetModal>
 
       <Modal visible={isAvatarModalVisible} transparent={true} animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={() => setAvatarModalVisible(false)}>
         <View style={styles.avatarModalContainer}>

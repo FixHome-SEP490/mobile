@@ -56,6 +56,20 @@ it('locks the prepared review draft and exposes an explicit edit action', async 
   await act(async () => renderer.unmount());
 });
 
+it('shows a sent review read-only, without the draft actions in the footer', async () => {
+  mockState = { ...mockState, review: { status: 'ready', data: { id: 'r1', rating: 5, comment: 'Tốt', createdAt: '2026-11-12T06:54:15.489Z' } } };
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><CustomerReviewScreen /></SafeAreaProvider>); });
+  const texts = renderer.root.findAllByType(Text).map(text => text.props.children);
+  expect(texts).toContain('Bạn đã gửi đánh giá cho đơn này.');
+  expect(texts).not.toContain('Chuẩn bị gửi đánh giá');
+  expect(texts).not.toContain('Để sau');
+  pressByText(renderer, 'Quay lại');
+  expect(mockGoBack).toHaveBeenCalledTimes(1);
+  expect(mockController.prepareReview).not.toHaveBeenCalled();
+  await act(async () => renderer.unmount());
+});
+
 it('clears the warranty claim draft when its coverage target changes', async () => {
   mockRoute.params = { coverageId: 'coverage-one' };
   mockState.coverages = { status: 'ready', data: [{ id: 'coverage-one', status: 'active', note: 'First' }, { id: 'coverage-two', status: 'active', note: 'Second' }] };
@@ -118,5 +132,26 @@ it('shows each item with its own term and caps a long order at three items plus 
   expect(texts).toContain('#FH-01 · Sửa máy giặt');
   expect(texts.some(text => text.includes('Linh kiện 4'))).toBe(false);
   expect(joined).toContain('hạng mục khác');
+  await act(async () => renderer.unmount());
+});
+
+it('an empty claim form asks for a 10-character description, not to refresh the coverage (M-26)', async () => {
+  mockRoute.params = { coverageId: 'c0' };
+  mockState.coverages = { status: 'ready', data: [{ id: 'c0', status: 'active', itemDescription: 'Công sửa' }] };
+  mockState.claims = { status: 'ready', data: [] };
+  mockController.canClaim.mockReturnValue(true);
+  const wrap = () => <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><WarrantyClaimCreateScreen /></SafeAreaProvider>;
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(wrap()); });
+  const joined = () => renderer.root.findAllByType(Text).map(text => String(text.props.children)).join('|');
+  expect(joined()).toContain('Nhập mô tả sự cố từ 10 ký tự');
+  expect(joined()).not.toContain('Chưa thể tạo yêu cầu');
+  act(() => renderer.root.findByType(TextInput).props.onChangeText('Máy vẫn kêu to khi chạy'));
+  expect(joined()).not.toContain('Nhập mô tả sự cố từ 10 ký tự');
+  expect(joined()).not.toContain('Chưa thể tạo yêu cầu');
+  // A real refusal (open claim, not ready) still says so once the description is long enough.
+  mockController.canClaim.mockReturnValue(false);
+  await act(async () => renderer.update(wrap()));
+  expect(joined()).toContain('Chưa thể tạo yêu cầu');
   await act(async () => renderer.unmount());
 });

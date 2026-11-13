@@ -142,3 +142,20 @@ it('live refresh is quiet: ready data stays visible while reading and survives a
   fail = true; await c.refreshOrderSession(key, 'live');
   expect(c.getSnapshot()?.order.status).toBe('ready'); expect(c.getSnapshot()?.resources.evidence.status).toBe('ready');
 });
+it('a push that lands while a read is in flight reads once more, so a status the server set just after (auto-start) is not lost', async () => {
+  const reads = [deferred<unknown>(), deferred<unknown>(), deferred<unknown>()]; let calls = 0;
+  const c = createOrderReadCoordinator({ readOrder: async () => reads[calls++].promise, readResource: async () => [] });
+  c.activate(key); const first = c.refreshOrderSession(key, 'focus'); reads[0].resolve(row); await first;
+  // Approval push: the read is sent while the server still has EN_ROUTE.
+  const approved = c.refreshOrderSession(key, 'live');
+  // The auto-start push lands during that read; a third push in the same window shares the follow-up read.
+  const started = c.refreshOrderSession(key, 'live'); const again = c.refreshOrderSession(key, 'live');
+  expect(calls).toBe(2);
+  reads[1].resolve(row); await approved;
+  await Promise.resolve(); await Promise.resolve();
+  expect(calls).toBe(3);
+  reads[2].resolve({ ...row, status: 'UNDER_REPAIR' }); await Promise.all([started, again]);
+  const snap = c.getSnapshot();
+  expect(snap?.order.status === 'ready' && snap.order.data.status).toBe('UNDER_REPAIR');
+  expect(calls).toBe(3);
+});

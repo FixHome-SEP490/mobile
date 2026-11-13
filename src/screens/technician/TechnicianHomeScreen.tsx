@@ -53,6 +53,7 @@ import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import StatusBadge from '../../components/StatusBadge';
 
 import { vnDateTimeString, vnDateString } from '../../utils/vn-time';
+import PillText from '../../components/PillText';
 
 const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 const VN_DATE = { day: '2-digit', month: '2-digit', year: 'numeric' } as const;
@@ -243,7 +244,7 @@ export default function TechnicianHomeScreen() {
             <MessageCircle size={22} color={colors.text} strokeWidth={1.75} />
             {chatUnread > 0 && (
               <View style={styles.chatBadge}>
-                <Text style={styles.chatBadgeText}>{chatUnread > 9 ? '9+' : chatUnread}</Text>
+                <PillText style={styles.chatBadgeText}>{chatUnread > 9 ? '9+' : chatUnread}</PillText>
               </View>
             )}
           </TouchableOpacity>
@@ -258,7 +259,7 @@ export default function TechnicianHomeScreen() {
             <Bell size={22} color={colors.text} strokeWidth={1.75} />
             {notificationUnread > 0 && (
               <View style={styles.chatBadge}>
-                <Text style={styles.chatBadgeText}>{notificationUnread > 9 ? '9+' : notificationUnread}</Text>
+                <PillText style={styles.chatBadgeText}>{notificationUnread > 9 ? '9+' : notificationUnread}</PillText>
               </View>
             )}
           </TouchableOpacity>

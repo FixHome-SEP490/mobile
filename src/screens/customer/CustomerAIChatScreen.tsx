@@ -70,6 +70,7 @@ import {
   videoMimeType,
   videoProblem,
   wordsForDescription,
+  manualBookingCarry,
   type AttachedVideo,
 } from './ai-chat-logic';
 import { AI_CHAT_MAX_IMAGES, ATTACHMENT_LIMIT_TEXT, ChatUploadQueue, type ChatUpload } from './chat-upload-queue';
@@ -81,6 +82,7 @@ import {
   showDescriptionHint,
 } from './ai-diagnosis-input';
 import BackButton from '../../components/BackButton';
+import PillText from '../../components/PillText';
 
 /** The AI drops a session after an hour of silence. Told, not discovered. */
 const SESSION_IDLE_MINUTES = 60;
@@ -829,7 +831,7 @@ export default function CustomerAIChatScreen() {
               style={styles.pinnedBtn}
               accessibilityRole="button"
               testID="ai-book-manual"
-              onPress={() => navigation.navigate('CustomerServices')}
+              onPress={() => navigation.navigate('CustomerServices', { carry: manualBookingCarry(lastCustomerWords.current, sessionId.current, queue.uploadIds()) })}
             >
               <Text style={styles.pinnedBtnText}>Chọn dịch vụ</Text>
             </TouchableOpacity>
@@ -1064,7 +1066,7 @@ function DiagnosisCard({ reply }: { reply: AiReply }) {
         <View style={styles.chipRow}>
           <View style={styles.deviceChip}>
             <Ionicons name="cube-outline" size={13} color={colors.text} />
-            <Text style={styles.deviceChipText}>{reply.device.nameVi}</Text>
+            <PillText style={styles.deviceChipText}>{reply.device.nameVi}</PillText>
           </View>
         </View>
       )}

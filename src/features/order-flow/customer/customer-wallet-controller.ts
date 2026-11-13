@@ -27,7 +27,8 @@ export function createCustomerWalletController(deps: CustomerWalletDependencies)
     const resolved = marker?.status === 'resolved', pending = marker?.status === 'unknown' && redirect?.stableKey === marker.stableKey && !redirect.failed;
     if (resolved) redirect = null;
     publish({ phase: resolved ? 'resolved' : marker?.status === 'failed-known' ? 'failed-known' : pending ? 'pending' : marker ? 'unknown' : 'idle',
-      confirmation: null, urlReady: !!pending && !redirect?.opened, message: marker?.status === 'unknown' ? FINANCIAL_UNKNOWN : null });
+      // A payment link that is ready and not opened yet is the next step, not an unknown result.
+      confirmation: null, urlReady: !!pending && !redirect?.opened, message: marker?.status === 'unknown' && !(pending && !redirect?.opened) ? FINANCIAL_UNKNOWN : null });
   }
   async function read(owner: CustomerWalletOwner, page: number) {
     const seq = ++readSeq; publish({ summary: { status: 'loading', requestSeq: seq } });

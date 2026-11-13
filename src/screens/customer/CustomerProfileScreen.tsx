@@ -42,7 +42,7 @@ import { confirmedCustomerAddressWrite, customerProfileAddressWrites } from './c
 import { mediaApi } from '../../api/media.api';
 import { geoApi, type PlaceSuggestion } from '../../api/geo.api';
 import { useAppTheme } from '../../constants/theme';
-import { extractApiErrorMessage } from '../../utils/input-validation';
+import { extractApiErrorMessage, validateFullName, validatePhoneNumber } from '../../utils/input-validation';
 import { persistCustomerAvatar } from './customer-avatar-upload';
 import { avatarErrorMessage, withPersistedAvatar } from '../../services/avatar-upload';
 import AccountLogoutAction from '../../components/account/AccountLogoutAction';
@@ -59,6 +59,8 @@ import {
   type ExactPinCoordinates,
   type ExactPinState,
 } from './customer-exact-pin';
+import BackClosableBottomSheetModal from '../../components/BackClosableBottomSheetModal';
+import PillText from '../../components/PillText';
 
 export default function CustomerProfileScreen() {
   const { user, sessionGeneration, setAuth, logout } = useAuthStore();
@@ -393,8 +395,11 @@ export default function CustomerProfileScreen() {
   const handleSaveProfile = async () => {
     const session = useAuthStore.getState();
     if (!isProfileSessionCurrent(session.user?.id, session.sessionGeneration)) return;
-    if (!editName.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập họ và tên.');
+    // Same rules as the web profile and the backend DTO, so the person reads a
+    // Vietnamese reason instead of the backend's English validation sentence.
+    const profileIssue = validateFullName(editName) || validatePhoneNumber(editPhone);
+    if (profileIssue) {
+      Alert.alert('Lỗi', profileIssue);
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -484,7 +489,7 @@ export default function CustomerProfileScreen() {
       return;
     }
     if (!addressName.trim() || !addressDetail.trim()) {
-      Alert.alert('Chưa thể thêm địa chỉ', !addressName.trim() ? 'Vui lòng nhập tên gợi nhớ (ví dụ: Nhà riêng).' : 'Vui lòng nhập địa chỉ chi tiết.');
+      Alert.alert(editAddressId ? 'Chưa thể cập nhật địa chỉ' : 'Chưa thể thêm địa chỉ', !addressName.trim() ? 'Vui lòng nhập tên gợi nhớ (ví dụ: Nhà riêng).' : 'Vui lòng nhập địa chỉ chi tiết.');
       return;
     }
 
@@ -505,7 +510,7 @@ export default function CustomerProfileScreen() {
           ? 'Ghim đỏ chỉ là gợi ý. Chạm lên bản đồ đúng điểm cần sửa, rồi bấm “Xác nhận vị trí”.'
           : 'Hãy chọn vị trí chính xác trên bản đồ rồi xác nhận trước khi lưu.';
       setAddressPinMessage(hint);
-      Alert.alert('Chưa thể thêm địa chỉ', hint);
+      Alert.alert(editAddressId ? 'Chưa thể cập nhật địa chỉ' : 'Chưa thể thêm địa chỉ', hint);
       return;
     }
 
@@ -1103,7 +1108,7 @@ export default function CustomerProfileScreen() {
       </Modal>
 
       {/* Profile Edit Sheet */}
-      <BottomSheetModal
+      <BackClosableBottomSheetModal
         ref={profileSheetRef}
         enableDynamicSizing
         keyboardBehavior="interactive"
@@ -1247,10 +1252,10 @@ export default function CustomerProfileScreen() {
             </TouchableOpacity>
           </View>
         </BottomSheetView>
-      </BottomSheetModal>
+      </BackClosableBottomSheetModal>
 
       {/* Address Edit Sheet (Logic bản thường với Empty State tốt hơn) */}
-      <BottomSheetModal
+      <BackClosableBottomSheetModal
         ref={addressSheetRef}
         snapPoints={addressSnapPoints}
         keyboardBehavior="interactive"
@@ -1305,7 +1310,7 @@ export default function CustomerProfileScreen() {
                         {addr.isDefault && (
                           <View style={styles.defaultBadge}>
                             <Ionicons name="checkmark-circle" size={12} color={colors.primary} />
-                            <Text style={styles.defaultBadgeText}>Mặc định</Text>
+                            <PillText style={styles.defaultBadgeText}>Mặc định</PillText>
                           </View>
                         )}
                       </View>
@@ -1348,7 +1353,7 @@ export default function CustomerProfileScreen() {
                         style={styles.setDefaultBtn}
                       >
                         <Ionicons name="checkmark-circle-outline" size={16} color={colors.primary} />
-                        <Text style={styles.defaultBadgeText}>Đặt mặc định</Text>
+                        <PillText style={styles.defaultBadgeText}>Đặt mặc định</PillText>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1608,7 +1613,7 @@ export default function CustomerProfileScreen() {
             </TouchableOpacity>
           </View>
         </BottomSheetScrollView>
-      </BottomSheetModal>
+      </BackClosableBottomSheetModal>
     </SafeAreaView>
   );
 }

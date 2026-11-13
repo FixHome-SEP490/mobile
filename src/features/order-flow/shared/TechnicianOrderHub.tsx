@@ -1,4 +1,6 @@
 import React from 'react';
+import TechnicianIssueReport from '../technician/TechnicianIssueReport';
+import { canReportTechnicianIssue } from '../technician/technician-report';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import {
@@ -11,6 +13,7 @@ import { useLoadUnloadedResources } from './useLoadUnloadedResources';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import VisitTechnicianPanel from '../technician/VisitTechnicianPanel';
 import { useReleasableOrders } from '../technician/useReleasableOrders';
+import PillText from '../../../components/PillText';
 
 type HubScreen = 'PartsLifecycle' | 'OrderInformation' | 'PersonalOrderNotes' | 'OrderProgressHistory'
   | 'AfterEvidence' | 'CompletionRequest' | 'CashDeclaration' | 'ExtraProposal' | 'DelayReport';
@@ -55,7 +58,7 @@ function Row({ screen, label, Icon, hint, disabled, last, onPress, testID, sub, 
         <Text style={styles.label}>{label}</Text>
         {sub ? <Text style={styles.sub}>{sub}</Text> : null}
       </View>
-      {hint ? <View style={[styles.badge, { backgroundColor: tone.bg }]}><Text style={[styles.badgeText, { color: tone.text }]}>{hint}</Text></View> : null}
+      {hint ? <View style={[styles.badge, { backgroundColor: tone.bg }]}><PillText style={[styles.badgeText, { color: tone.text }]}>{hint}</PillText></View> : null}
       <ChevronRight size={20} strokeWidth={1.75} color={colors.muted} />
     </Pressable>
   );
@@ -111,6 +114,7 @@ export default function TechnicianOrderHub() {
         <View style={styles.titleRow}><Wrench size={16} strokeWidth={1.75} color={colors.textSecondary} /><Text accessibilityRole="header" style={styles.title}>Bước sửa chữa</Text></View>
         <View style={styles.card}>{render(manage(REPAIR))}</View>
       </>}
+      {!revoked && order && canReportTechnicianIssue(order) && <TechnicianIssueReport orderId={order.id} />}
       <Text accessibilityRole="header" style={styles.title}>Quản lý đơn</Text>
       <View style={styles.card}>{render(nextOrders > 0 ? [...MANAGE, NEXT_ORDERS] : MANAGE)}</View>
     </View>

@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChevronRight, type LucideIcon } from 'lucide-react-native';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
+import PillText from '../../../components/PillText';
 
 /** A row of the "devices in the visit" panels, in the same look as the order hub rows: icon tile, label, optional sub line and badge, chevron. */
 export function PanelRow({ Icon, label, sub, subTestID, value, badge, selected, danger, disabled, readOnly, chevron, toggle, expanded, onPress, testID, accessibilityLabel }: {
@@ -28,7 +29,7 @@ export function PanelRow({ Icon, label, sub, subTestID, value, badge, selected, 
         {sub ? <Text style={styles.rowSub} testID={subTestID}>{sub}</Text> : null}
       </View>
       {value ? <Text style={styles.rowValue}>{value}</Text> : null}
-      {badge ? <View style={[styles.badge, { backgroundColor: colors.primarySoft }]}><Text style={[styles.badgeText, { color: colors.primaryStrong }]}>{badge}</Text></View> : null}
+      {badge ? <View style={[styles.badge, { backgroundColor: colors.primarySoft }]}><PillText style={[styles.badgeText, { color: colors.primaryStrong }]}>{badge}</PillText></View> : null}
       {Trailing ? <Trailing size={20} strokeWidth={1.75} color={colors.muted} /> : null}
     </Pressable>
   );

@@ -27,6 +27,11 @@ describe('publicOrderTrackingApi', () => {
     api = createPublicOrderTrackingApi({ post } as never, () => now);
   });
 
+  it('finds an order whose code was typed in lower case (M-27)', async () => {
+    await api.lookup({ orderCode: ' fh-20261112-7abff410 ', phone: '0904000003' });
+    expect(post).toHaveBeenCalledWith('/service-orders/public/track', { orderCode: 'FH-20261112-7ABFF410', phone: '0904000003' });
+  });
+
   it('uses the public route and returns only approved tracking fields', async () => {
     const tracked = await api.lookup(request);
     expect(post).toHaveBeenCalledWith('/service-orders/public/track', { orderCode: 'FH-20261017-AB12CD34', phone: '0900000000' });

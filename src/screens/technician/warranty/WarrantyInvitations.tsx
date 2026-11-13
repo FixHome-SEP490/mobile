@@ -7,13 +7,14 @@ import { useWarrantyClaims } from '../../../hooks/useWarrantyClaims';
 import { useBadgeStore } from '../../../store/badge.store';
 import { lightTheme as colors } from '../../../constants/theme';
 import { vnDateString } from '../../../utils/vn-time';
+import PillText from '../../../components/PillText';
 
 /** A warranty claim waiting for the technician: what, for whom, where, and the two answers. Both open the claim, which asks to confirm. */
 export function WarrantyInvitationCard({ claim, onOpen }: { claim: TechnicianWarrantyClaim; onOpen: () => void }) {
   return <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={`Xem chi tiết bảo hành #${claim.order.code}`} onPress={onOpen} style={styles.card} testID={`warranty-invitation-${claim.id}`}>
     <View style={styles.top}>
       <Text style={styles.code}>#{claim.order.code}</Text>
-      <View style={styles.pill}><Text style={styles.pillText}>Chờ bạn nhận</Text></View>
+      <View style={styles.pill}><PillText style={styles.pillText}>Chờ bạn nhận</PillText></View>
       <Text style={styles.date}>{vnDateString(claim.submittedAt)}</Text>
     </View>
     <Text style={styles.title}>{claim.order.serviceName || 'Bảo hành dịch vụ'}</Text>

@@ -13,6 +13,7 @@ import DelayNoticeCard from './DelayNoticeCard';
 import { findChatForBooking } from '../../../screens/technician/technician-chat-shortcut';
 import { sessionLabel } from '../../../utils/booking-session';
 import { formatVnd } from '../../../utils/format';
+import { parseSafeIntegerMoney } from './customer-quotation-controller';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 
@@ -98,7 +99,7 @@ function CustomerOrderSummary() {
     <DelayNoticeCard order={order} />
     {!!quote && !!quoteLabel && <TouchableOpacity testID="order-quote-chip" accessibilityRole="button" onPress={() => setSheet('detail')} style={styles.quote}>
       <Text numberOfLines={1} style={styles.quoteText}>
-        Báo giá {formatVnd((quote.laborTotal ?? 0) + (quote.partsTotal ?? 0))} · {quoteLabel}
+        Báo giá {quoteTotalText(quote.laborTotal, quote.partsTotal)} · {quoteLabel}
       </Text>
     </TouchableOpacity>}
     <View style={styles.shortcuts}>
@@ -116,6 +117,12 @@ function CustomerOrderSummary() {
 }
 
 const slot = { Stepper: CustomerOrderStepper, Summary: CustomerOrderSummary };
+/** The order's quotation arrives with money as decimal strings ("100000"); adding them as-is joined the text instead of summing. */
+function quoteTotalText(labor: unknown, parts: unknown): string {
+  const l = parseSafeIntegerMoney(labor ?? 0), p = parseSafeIntegerMoney(parts ?? 0);
+  return l === null || p === null ? '—' : formatVnd(l + p);
+}
+
 export function CustomerOrderContextProvider({ children }: { children: React.ReactNode }) {
   return <OrderContextSlot.Provider value={slot}>{children}</OrderContextSlot.Provider>;
 }

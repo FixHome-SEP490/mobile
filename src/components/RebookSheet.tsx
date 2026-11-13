@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { bookingsApi, type SessionOption } from '../api/bookings.api';
 import { useAppTheme } from '../constants/theme';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { extractApiErrorMessage } from '../utils/input-validation';
+import { KEYBOARD_AVOIDING_BEHAVIOR } from '../constants/keyboard';
 
 /**
  * "Đặt lại thợ": new booking with the same service and address from a finished
@@ -59,7 +60,7 @@ export default function RebookSheet({ bookingId, visible, onClose }: { bookingId
 
   return (
     <Modal visible={visible} transparent animationType={reduceMotion ? 'none' : 'slide'} onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.backdrop}>
+      <KeyboardAvoidingView behavior={KEYBOARD_AVOIDING_BEHAVIOR} style={styles.backdrop}>
         <View style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: 20 + insets.bottom }]}>
           <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>Đặt lại thợ</Text>
           <Text style={[styles.hint, { color: colors.textSecondary }]}>

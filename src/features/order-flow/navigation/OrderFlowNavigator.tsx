@@ -4,6 +4,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useReduceMotion } from '../../../hooks/useReduceMotion';
 import { useLiveRefresh } from '../../../hooks/useLiveRefresh';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
+import { clearApiCache } from '../../../api/client';
+import { AWAITING_DECISION_POLL_MS, awaitingAutoStart } from './awaiting-auto-start';
 import type { CustomerOrderFlowParamList, TechnicianOrderFlowParamList } from './order-flow-navigation.types';
 import OrderTaskScreen from '../shared/OrderTaskScreen';
 import { CustomerOrderContextProvider } from '../customer/CustomerOrderContext';
@@ -100,6 +102,17 @@ function LiveOrderRefresh() {
   useLiveRefresh(['order:updated'], () => {
     if (pendingRef.current) missed.current = true; else void refresh('live');
   }, event => !event.payload.serviceOrderId || event.payload.serviceOrderId === key?.serviceOrderId, { pollMs: 15_000 });
+  // M-11: waiting on site for the quotation decision; read the order again on a short interval, past the 30 s GET cache.
+  const waitingStart = awaitingAutoStart(snapshot);
+  useEffect(() => {
+    if (!waitingStart) return;
+    const timer = setInterval(() => {
+      if (pendingRef.current) return;
+      clearApiCache();
+      void refreshRef.current('live');
+    }, AWAITING_DECISION_POLL_MS);
+    return () => clearInterval(timer);
+  }, [waitingStart, key?.serviceOrderId]);
   return null;
 }
 

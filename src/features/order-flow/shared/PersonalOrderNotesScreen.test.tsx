@@ -11,10 +11,11 @@ let mockSaveNote: jest.Mock<Promise<boolean>, [string, string, string]>;
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
 
 jest.mock('../runtime/OrderSessionProvider', () => ({ useOptionalOrderSession: () => null, useOrderSession: () => ({ key: mockSnapshot.key, snapshot: mockSnapshot }) }));
-jest.mock('../../../screens/technician/technician-notes', () => ({
-  NOTE_MAX_LENGTH: 2000,
-  loadNote: (...args: [string, string]) => mockLoadNote(...args),
-  saveNote: (...args: [string, string, string]) => mockSaveNote(...args),
+jest.mock('../../../screens/technician/technician-notes', () => ({ NOTE_MAX_LENGTH: 2000 }));
+// TECH 42: the screen reads and saves through the server-synced note.
+jest.mock('../../../screens/technician/technician-notes-sync', () => ({
+  loadSyncedNote: (...args: [string, string]) => Promise.resolve(mockLoadNote(...args)).then((note: string) => ({ note, ok: true })),
+  saveSyncedNote: (...args: [string, string, string]) => Promise.resolve(mockSaveNote(...args)).then((ok: boolean) => (ok ? { note: args[2].trim() } : null)),
 }));
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn() }) }));
 jest.mock('react-native-safe-area-context', () => {
@@ -57,7 +58,7 @@ it('does not replace a newer draft when a deferred save resolves', async () => {
   await act(async () => { save.resolve(true); await save.promise; });
   expect(input(renderer).props.value).toBe('new draft');
   expect(saveButton(renderer).props.disabled).toBe(false);
-  expect(renderer.root.findAllByType(Text).some(node => node.props.children === 'Đã lưu trên thiết bị.')).toBe(false);
+  expect(renderer.root.findAllByType(Text).some(node => node.props.children === 'Đã lưu ghi chú.')).toBe(false);
   await act(async () => renderer.unmount());
 });
 
@@ -92,7 +93,7 @@ it('ignores an old-order save completion after the provider identity changes', a
   await act(async () => { save.resolve(true); await save.promise; });
   expect(input(renderer).props.value).toBe('new order note');
   expect(saveButton(renderer).props.disabled).toBe(false);
-  expect(renderer.root.findAllByType(Text).some(node => node.props.children === 'Đã lưu trên thiết bị.')).toBe(false);
+  expect(renderer.root.findAllByType(Text).some(node => node.props.children === 'Đã lưu ghi chú.')).toBe(false);
   await act(async () => renderer.unmount());
 });
 

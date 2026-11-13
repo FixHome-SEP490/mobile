@@ -30,6 +30,12 @@ export function createCustomerAftercareController(deps: CustomerAftercareDepende
   const same = (key: OrderSessionKey) => deps.isActive() && key.role === 'customer' && sameOrderSession(deps.getKey(), key) && sameOrderSession(deps.coordinator.getSnapshot()?.key ?? null, key);
   const owned = (key: OrderSessionKey) => same(key) && !!m6Order(deps.coordinator.getSnapshot(), key);
   function purge() { epoch++; seq++; presentationKey = null; uploaded = []; state = empty(); publish({ phase: 'denied', message: 'Bạn không còn quyền xem nội dung này.' }); }
+  const orderNotYetRead = (key: OrderSessionKey) => {
+    const s = deps.coordinator.getSnapshot();
+    return !!s && sameOrderSession(s.key, key) && (s.access === 'current' || s.access === 'unverified') && s.order.status !== 'ready';
+  };
+  /** The flag lives outside the published state: publish once it drops, so can* answers are read again (a stale "busy" kept the claim form refusing until the next keystroke). */
+  const settle = () => { busy = false; publish({}); };
   const completed = (key: OrderSessionKey) => owned(key) && m6Order(deps.coordinator.getSnapshot(), key)?.status === 'COMPLETED';
   const markers = (key: OrderSessionKey) => deps.journal.list(key.userId).filter(m => m.role === 'customer' && m.serviceOrderId === key.serviceOrderId && operations.includes(m.operation) && !['resolved', 'failed-known'].includes(m.status));
   const refs = () => {
@@ -67,7 +73,13 @@ export function createCustomerAftercareController(deps: CustomerAftercareDepende
     } catch { /* journal not readable yet: the lock stays, which is the safe side */ }
   }
   async function refresh(key: OrderSessionKey, kind: 'review' | 'warranty' | 'claims') {
-    await deps.coordinator.refreshOrderSession(key, 'aftercare-readback'); if (!owned(key)) { if (same(key)) purge(); return; }
+    await deps.coordinator.refreshOrderSession(key, 'aftercare-readback');
+    if (!owned(key)) {
+      // Only a known loss of access hides the content. An order of this session that is still loading, or whose read lost to
+      // a newer one, is not a refusal: "Bạn không còn quyền xem nội dung này" used to flash under "Đang tải dữ liệu…".
+      if (same(key) && !orderNotYetRead(key)) purge();
+      return;
+    }
     await settleLeftovers(key);
     if (kind === 'warranty') { await read(key, 'coverages'); if (owned(key)) await read(key, 'claims'); }
     else await read(key, kind);
@@ -107,13 +119,14 @@ export function createCustomerAftercareController(deps: CustomerAftercareDepende
       await deps.journal.restore(); if (!same(key) || generation !== epoch) return;
       if (deps.journal.hasUnresolved(key)) { finish(key, markers(key)[0]); return; }
       await refresh(key, operation === 'review-create' ? 'review' : operation === 'warranty-create' ? 'warranty' : 'claims');
-      if (!owned(key) || generation !== epoch) return;
+      if (!owned(key)) { if (same(key) && generation === epoch && state.phase === 'verifying') publish({ phase: 'idle', message: 'Chưa tải xong thông tin đơn. Vui lòng thử lại.' }); return; }
+      if (generation !== epoch) return;
       const sig = signature(key, operation, id); if (!sig) { publish({ phase: 'denied', message: 'Điều kiện hiện tại chưa cho phép gửi nội dung này.' }); return; }
       const dto = operation === 'review-create' ? reviewPayload(input) : operation === 'warranty-create' ? claimPayload(input, refs()) : responsePayload(input);
       if ('evidenceRefs' in dto && dto.evidenceRefs) Object.freeze(dto.evidenceRefs);
       publish({ phase: 'confirming', message: null, confirmation: Object.freeze({ key: Object.freeze({ ...key }), operation, entityId: id, signature: sig, dto: Object.freeze(dto) }) as Confirmation });
     } catch { if (same(key)) publish({ phase: 'denied', confirmation: null, message: 'Hãy kiểm tra dữ liệu và nội dung trước khi xác nhận.' }); }
-    finally { busy = false; }
+    finally { settle(); }
   }
   return {
     getState: () => state, subscribe(fn: () => void) { listeners.add(fn); return () => { listeners.delete(fn); }; },
@@ -125,12 +138,18 @@ export function createCustomerAftercareController(deps: CustomerAftercareDepende
     invalidatePresentation: purge,
     revalidateConfirmation() {
       const key = deps.getKey(), s = deps.coordinator.getSnapshot();
+      // M-25: nothing of this order has been shown yet and its session is still opening (no snapshot, or the previous
+      // order's). That is loading, not a lost permission, so "Bạn không còn quyền xem nội dung này" must not appear.
+      if (key && key.role === 'customer' && !presentationKey && (!s || !sameOrderSession(s.key, key))) {
+        if (state.confirmation) { epoch++; publish({ confirmation: null, ...(busy ? {} : { phase: 'idle' as const }) }); }
+        return;
+      }
       if (!key || key.role !== 'customer' || !s || !sameOrderSession(s.key, key) || ['historical', 'revoked'].includes(s.access)
         || (presentationKey && !sameOrderSession(key, presentationKey))) { purge(); return; }
       if (state.confirmation && !matches(state.confirmation)) { epoch++; publish({ confirmation: null, ...(busy ? {} : { phase: 'idle' as const }) }); }
     },
-    async loadReview() { const key = deps.getKey(); if (key && same(key) && !busy) { busy = true; try { await refresh(key, 'review'); } finally { busy = false; publish({}); } } },
-    async loadWarranty() { const key = deps.getKey(); if (key && same(key) && !busy) { busy = true; try { await refresh(key, 'warranty'); } finally { busy = false; publish({}); } } },
+    async loadReview() { const key = deps.getKey(); if (key && same(key) && !busy) { busy = true; try { await refresh(key, 'review'); } finally { settle(); } } },
+    async loadWarranty() { const key = deps.getKey(); if (key && same(key) && !busy) { busy = true; try { await refresh(key, 'warranty'); } finally { settle(); } } },
     async restoredMarkers() { const key = deps.getKey(); if (!key || !same(key)) return []; await deps.journal.restore(); return same(key) ? markers(key) : []; },
     async submitConfirmation() {
       const t = state.confirmation; if (!t || busy || state.phase !== 'confirming' || !matches(t)) return;
@@ -148,7 +167,7 @@ export function createCustomerAftercareController(deps: CustomerAftercareDepende
         if (!sent) { const m = deps.journal.list(key.userId).find(m => m.intentId === intentId); if (m) await deps.journal.mark(key.userId, intentId, 'failed-known'); }
         finish(key, deps.journal.list(key.userId).find(m => m.intentId === intentId));
       } catch { if (same(key)) publish({ phase: intentId ? 'unknown' : 'failed-known', confirmation: null, message: intentId ? FINANCIAL_UNKNOWN : 'Chưa gửi được nội dung. Hãy xác nhận lại để tiếp tục.' }); }
-      finally { busy = false; }
+      finally { settle(); }
     },
     async verify() {
       const key = deps.getKey(); if (!key || !same(key) || busy) return;
@@ -156,14 +175,14 @@ export function createCustomerAftercareController(deps: CustomerAftercareDepende
       try {
         await deps.journal.restore(); if (!same(key)) return; const pending = markers(key);
         if (!pending.length) { publish({ phase: deps.journal.hasUnresolved(key) ? 'unknown' : 'idle' }); return; }
-        await deps.coordinator.refreshOrderSession(key, 'aftercare-recovery'); if (!owned(key)) return;
+        await deps.coordinator.refreshOrderSession(key, 'aftercare-recovery'); if (!owned(key)) { if (same(key)) publish({ phase: 'idle' }); return; }
         if (pending.some(m => m.operation === 'review-create')) await read(key, 'review');
         if (owned(key) && pending.some(m => m.operation !== 'review-create')) await read(key, 'claims');
         const adapter = createOrderCommandAdapter(deps.journal, { isCurrent: owned, refresh: async () => {} });
         for (const m of pending) await adapter.verify(key, m.intentId, () => verdict(key, m));
         finish(key, deps.journal.list(key.userId).find(m => m.intentId === pending[0].intentId));
       } catch { if (same(key)) publish({ phase: 'unknown', message: FINANCIAL_UNKNOWN }); }
-      finally { busy = false; }
+      finally { settle(); }
     },
     authorizedEvidenceRefs: refs,
     canSubmitReview() { const key = deps.getKey(); return !!key && !busy && !deps.journal.hasUnresolved(key) && !!signature(key, 'review-create', key.serviceOrderId); },

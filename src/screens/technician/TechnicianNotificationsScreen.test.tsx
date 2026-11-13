@@ -642,6 +642,15 @@ describe('technician notifications real UI (T-RUI5)', () => {
     await act(async () => renderer.unmount());
   });
 
+  it('opens the Invitations tab from a new-invitation notice instead of staying on the list', async () => {
+    mockNotificationsPage([{ ...unreadItem, title: 'Lời mời nhận việc mới!', type: 'BOOKING_INVITATION', referenceType: 'BOOKING', referenceId: '550e8400-e29b-41d4-a716-446655440001' }], 1);
+    const renderer = await renderNotifications();
+    const row = inboxButton(renderer, 'Chưa đọc. Lời mời nhận việc mới!. Nội dung');
+    await act(async () => { row.props.onPress(); });
+    expect(mockNavigate).toHaveBeenLastCalledWith('TechnicianMain', { screen: 'Invitations' });
+    await act(async () => renderer.unmount());
+  });
+
   it('shows loading copy with no fake rows while fetching', async () => {
     (mockNotificationsApi.getNotifications as jest.Mock).mockImplementation(
       () => new Promise(() => undefined),

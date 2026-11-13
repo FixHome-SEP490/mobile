@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, AppState, Image, Linking, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { X } from 'lucide-react-native';
 import type { CameraOrderAsset } from './arrival-proof-controller';
@@ -43,7 +43,16 @@ export default function FaceLivenessCamera({
   onDone: (result: FaceCameraResult) => void;
   onCancel: () => void;
 }) {
-  const [permission, requestPermission] = useCameraPermissions();
+  const [permission, requestPermission, getPermission] = useCameraPermissions();
+  // Read where this screen sits, outside the Modal: inside its own window the safe-area view reports no
+  // insets on Android, which left the close button under the status bar where a tap on it did nothing.
+  const insets = useSafeAreaInsets();
+  // Once Android stops asking, the only way back is the app settings; read the permission again when the person returns from there.
+  const blocked = permission?.granted === false && permission?.canAskAgain === false;
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => { if (next === 'active') void getPermission(); });
+    return () => sub.remove();
+  }, [getPermission]);
   const camera = useRef<InstanceType<typeof CameraView>>(null);
   const [first, setFirst] = useState<CameraOrderAsset | null>(null);
   const [busy, setBusy] = useState(false);
@@ -89,16 +98,15 @@ export default function FaceLivenessCamera({
             <TouchableOpacity
               testID="face-live-permission"
               accessibilityRole="button"
-              disabled={permission?.canAskAgain === false}
-              onPress={() => { void requestPermission(); }}
+              onPress={() => { void (blocked ? Linking.openSettings() : requestPermission()); }}
               style={styles.permission}
             >
-              <Text style={styles.permissionText}>{permission?.canAskAgain === false ? 'Hãy cấp quyền camera trong Cài đặt' : 'Cho phép camera'}</Text>
+              <Text style={styles.permissionText}>{blocked ? 'Mở Cài đặt để cấp quyền camera' : 'Cho phép camera'}</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        <View style={styles.top} pointerEvents="box-none">
+        <View testID="face-live-top" style={[styles.top, { paddingTop: 16 + insets.top }]} pointerEvents="box-none">
           <TouchableOpacity accessibilityRole="button" accessibilityLabel="Đóng camera" onPress={onCancel} style={styles.close}>
             <X size={24} color="#FFFFFF" />
           </TouchableOpacity>
@@ -110,7 +118,7 @@ export default function FaceLivenessCamera({
 
         <View style={styles.guide} pointerEvents="none" />
 
-        <View style={styles.bottom}>
+        <View style={[styles.bottom, { paddingBottom: 24 + insets.bottom }]}>
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
           <View style={styles.row}>
             <View style={styles.thumbSlot}>

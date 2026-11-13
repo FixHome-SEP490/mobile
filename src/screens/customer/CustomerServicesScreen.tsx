@@ -227,6 +227,9 @@ export default function CustomerServicesScreen() {
 
   const openService = (service: ServiceItem) => {
     Haptics.selectionAsync();
+    // What the customer already told the assistant goes on to the booking form (M-19).
+    const carry = route.params?.carry;
+    if (carry) { navigation.navigate('CustomerServiceDetail', { serviceId: service.id, carry }); return; }
     navigation.navigate('CustomerServiceDetail', { serviceId: service.id });
   };
 

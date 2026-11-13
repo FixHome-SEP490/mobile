@@ -227,6 +227,29 @@ it('does not duplicate EnRoute on rapid taps or ambiguous failure after re-entry
   expect(h.enRoute).toHaveBeenCalledTimes(1);
 });
 
+it('shows the server reason and unlocks when EnRoute is refused before the allowed time', async () => {
+  const h = setup();
+  h.get.mockResolvedValue([order]);
+  await h.loader.focus();
+  h.enRoute.mockRejectedValueOnce({ response: { status: 409, data: { error: { code: 'ORDER_INVALID_TRANSITION', message: 'Chỉ xuất phát được từ 60 phút trước giờ hẹn' } } } });
+  await h.loader.handleEnRoute(order.id);
+  expect(h.notify).toHaveBeenCalledWith('Chưa thể bắt đầu di chuyển', 'Chỉ xuất phát được từ 60 phút trước giờ hẹn');
+  expect(h.state().blockedOrderIds).toEqual([]);
+  expect(h.state().actionLoading).toBeNull();
+  await h.loader.handleEnRoute(order.id);
+  expect(h.enRoute).toHaveBeenCalledTimes(2);
+});
+it.each([undefined, 408, 502])('keeps the unknown-outcome lock when EnRoute gets no answer, a timeout or a 5xx (%p)', async status => {
+  const h = setup();
+  h.get.mockResolvedValue([order]);
+  await h.loader.focus();
+  h.enRoute.mockRejectedValueOnce(status ? { response: { status } } : new Error('Network Error'));
+  await h.loader.handleEnRoute(order.id);
+  expect(h.notify).toHaveBeenCalledWith('Chưa xác nhận trạng thái', expect.any(String));
+  expect(h.state().blockedOrderIds).toEqual([order.id]);
+  await h.loader.handleEnRoute(order.id);
+  expect(h.enRoute).toHaveBeenCalledTimes(1);
+});
 it.each([UserRole.CUSTOMER, UserRole.ADMIN, UserRole.SERVICE_MANAGER])('production session selector rejects role %s before any GET/POST', async role => {
   const user = { id: 'user-1', role } as UserInfo;
   const h = setup();

@@ -114,3 +114,21 @@ it('names the faulty part lines for a part fault and keeps the proposal disabled
   mockState.claim.data.order.partLines = undefined;
   await act(async () => renderer.unmount());
 });
+
+it('confirming acceptance says it accepts and does not show a decline reason as chosen (M-30)', async () => {
+  mockState.task = 'TW02'; mockState.phase = 'confirming'; mockState.confirmation = { operation: 'accept' }; mockController.availableCommands.mockReturnValue(['accept', 'decline']);
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><TechnicianWarrantyTaskScreen /></SafeAreaProvider>); });
+  const primary = renderer.root.findByProps({ testID: 'technician-warranty-primary-action' });
+  expect(primary.findAllByType(Text).map(text => text.props.children)).toContain('Xác nhận nhận bảo hành');
+  expect(renderer.root.findAllByType(Text).some(text => text.props.children === 'Xác nhận thao tác')).toBe(false);
+  expect(renderer.root.findAllByType(Text).some(text => String(text.props.children).includes('Nếu từ chối'))).toBe(false);
+  const declineReasons = ['Đang bận', 'Đang nghỉ', 'Ngoài khu vực', 'Lý do khác'];
+  expect(renderer.root.findAllByType(Text).filter(text => declineReasons.includes(String(text.props.children)))).toHaveLength(0);
+  await act(async () => renderer.unmount());
+
+  mockState.confirmation = { operation: 'decline' };
+  await act(async () => { renderer = create(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><TechnicianWarrantyTaskScreen /></SafeAreaProvider>); });
+  expect(renderer.root.findByProps({ testID: 'technician-warranty-primary-action' }).findAllByType(Text).map(text => text.props.children)).toContain('Xác nhận từ chối phân công');
+  await act(async () => renderer.unmount());
+});

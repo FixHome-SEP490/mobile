@@ -65,3 +65,11 @@ it('stale wallet GET cannot replace renewed session and a failed GET is unavaila
   const pending = f.c.refresh(); f.renew(); gate.resolve(walletSummary(99999)); await pending; expect(f.c.getState().summary.status).not.toBe('ready');
   const error = setup(); error.transport.readSummary.mockRejectedValue(Error('offline')); await error.c.refresh(); expect(error.c.getState().summary.status).toBe('error');
 });
+it('a ready, unopened payment link is the next step, not an unknown result (M-23)', async () => {
+  const f = setup(); await initiate(f);
+  expect(f.c.getState()).toMatchObject({ phase: 'pending', urlReady: true, message: null });
+  await f.c.openPaymentUrl();
+  // After the gateway was opened and nothing is credited yet, the result is honestly unconfirmed.
+  expect(f.c.getState()).toMatchObject({ urlReady: false, message: expect.stringContaining('Chưa xác nhận được kết quả') });
+  expect(f.transport.openUrl).toHaveBeenCalledTimes(1);
+});

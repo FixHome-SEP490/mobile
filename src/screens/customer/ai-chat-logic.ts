@@ -253,3 +253,20 @@ export function wordsForDescription(text: string, reply: Pick<AiReply, 'customer
   const disagreed = reply?.customerDisagreed;
   return disagreed ? (disagreed.restVi ?? text) : text;
 }
+
+/**
+ * What "Chọn dịch vụ" carries when the assistant could not help: the customer's own words, the session and the
+ * photos already uploaded, so the booking form of the service picked by hand is not empty (as "Tiếp tục chọn lịch" is not).
+ */
+export function manualBookingCarry(
+  description: string | null | undefined,
+  aiSessionId: string | null | undefined,
+  uploads: { uploadId: string; kind: 'image' | 'video'; previewUri?: string }[] | null | undefined,
+): { description?: string; aiSessionId?: string; attachmentUploadIds?: { uploadId: string; kind: 'image' | 'video'; previewUri?: string }[] } {
+  const words = description?.trim();
+  return {
+    ...(words ? { description: words } : {}),
+    ...(aiSessionId ? { aiSessionId } : {}),
+    ...(uploads?.length ? { attachmentUploadIds: uploads } : {}),
+  };
+}

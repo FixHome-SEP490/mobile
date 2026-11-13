@@ -1,3 +1,6 @@
+import TechnicianDeliverySection from './TechnicianDeliverySection';
+import WarehouseAllocationCard, { useWarehouseAllocations } from './WarehouseAllocationCard';
+import { canReceivePickup, displayPartRequestStatus } from '../../../api/part-requests.api';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AppState, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
@@ -17,6 +20,7 @@ import { approvedQuoteQty, approvedUsageCap } from './held-parts';
 import { usePartReturns } from './usePartReturns';
 import { lightTheme as colors, spacing, type ToneName } from '../../../constants/theme';
 import { backFromParts } from '../navigation/resume-order';
+import PillText from '../../../components/PillText';
 
 interface QrReceiveModalState {
   requestId: string;
@@ -62,6 +66,7 @@ export default function PartsLifecycleScreen() {
     return line?.usageStatus === 'used' ? line.quantity : 0;
   };
   const blockers = key ? partsBlockers(partsList, key.userId) : { open: 0, unsettled: 0 };
+  const allocations = useWarehouseAllocations(partsList, partsResource?.status === 'ready' ? partsResource.requestSeq : 0);
   const [qrModal, setQrModal] = useState<QrReceiveModalState | null>(null);
   const [cancelModal, setCancelModal] = useState<CancelModalState | null>(null);
 
@@ -87,7 +92,12 @@ export default function PartsLifecycleScreen() {
   }, []);
   const latest = useRef({ key, current, frozen, partsList, isUnderRepair, qrModal, cancelModal, usageModal });
   useLayoutEffect(() => { latest.current = { key, current, frozen, partsList, isUnderRepair, qrModal, cancelModal, usageModal }; });
-  const receiveEligible = (pr: OrderPartReadModel) => (pr.fulfillmentMethod === 'pickup' && pr.status === 'ready') || (pr.fulfillmentMethod === 'delivery' && pr.status === 'delivering');
+  // W2 pickup: the receipt code only after the SM's physical handover; a W3 delivery is received in the delivery section.
+  const receiveEligible = (pr: OrderPartReadModel) => {
+    const a = allocations[pr.id];
+    return (pr.fulfillmentMethod === 'pickup' && canReceivePickup({ fulfillmentMethod: 'pickup', status: pr.status }, a && a !== 'error' ? a : null))
+      || (pr.fulfillmentMethod === 'delivery' && pr.status === 'delivering' && !pr.w3DeliveryStage);
+  };
   const onOpenReceive = (pr: OrderPartReadModel) => {
     if (!key || !current || frozen || !latest.current.current || latest.current.frozen || !sameOrderSession(latest.current.key, key) || !receiveEligible(pr)) return;
     setCancelModal(null); setUsageModal(null);
@@ -183,7 +193,8 @@ export default function PartsLifecycleScreen() {
     const canReceive = receiveEligible(req);
     const canCancel = req.status === 'requested';
     const isReceived = req.status === 'received';
-    const tone = colors.tone[statusTone(req.status)];
+    const shown = displayPartRequestStatus({ status: req.status, w3DeliveryStage: req.w3DeliveryStage });
+    const tone = colors.tone[statusTone(shown)];
     const method = req.fulfillmentMethod === 'delivery' ? 'Giao tận nơi' : req.fulfillmentMethod === 'pickup' ? 'Tự lấy tại kho' : 'Chưa có hình thức nhận';
     return (
       <View key={req.id} style={styles.requestCard} testID={`parts-request-${req.id}`}>
@@ -192,11 +203,12 @@ export default function PartsLifecycleScreen() {
             <Text style={styles.requestTitle}>{count > 1 ? `Lần ${index + 1} · ${method}` : method}</Text>
             <Text style={styles.requestMeta}>{`Mã #${String(req.id).slice(-6).toUpperCase()}`}</Text>
           </View>
-          <View accessible accessibilityLabel={`Trạng thái: ${statusLabel(req.status)}`} style={[styles.statusBadge, { backgroundColor: tone.bg }]}>
-            <Text style={[styles.statusText, { color: tone.text }]}>{statusLabel(req.status)}</Text>
+          <View accessible accessibilityLabel={`Trạng thái: ${statusLabel(shown)}`} style={[styles.statusBadge, { backgroundColor: tone.bg }]}>
+            <PillText style={[styles.statusText, { color: tone.text }]}>{statusLabel(shown)}</PillText>
           </View>
         </View>
 
+        {req.fulfillmentMethod === 'pickup' && <WarehouseAllocationCard allocation={allocations[req.id]} requestId={req.id} />}
         {(req.items ?? []).map(it => (
           <PartItemRow
             key={it.id}
@@ -277,7 +289,7 @@ export default function PartsLifecycleScreen() {
         const handover = isUnderRepair && partsList.length > 0;
         const lines = [
           handover && blockers.unsettled > 0 ? `${blockers.unsettled} linh kiện chưa ghi dùng hoặc trả.` : '',
-          handover && blockers.open > 0 ? `${blockers.open} yêu cầu chưa nhận (nhận bằng QR hoặc hủy yêu cầu).` : '',
+          handover && blockers.open > 0 ? `${blockers.open} yêu cầu chưa nhận (nhận bằng mã/QR, xác nhận giao hàng ở mục Giao linh kiện, hoặc hủy yêu cầu).` : '',
           Object.values(returns.records).some(r => r.blocksNewWork) ? 'Chưa trả đủ linh kiện nên chưa nhận được việc mới.' : '',
         ].filter(Boolean);
         if (lines.length) return <ReadOnlyNotice tone="warning">{[handover && blockers.open + blockers.unsettled > 0 ? 'Chưa thể gửi bàn giao:' : 'Cần xử lý:', ...lines.map(l => `• ${l}`)].join('\n')}</ReadOnlyNotice>;
@@ -356,6 +368,7 @@ export default function PartsLifecycleScreen() {
       )}
       {partsResource?.status === 'error' && <ReadOnlyNotice tone="error">Không tải được yêu cầu linh kiện. Hãy làm mới dữ liệu.</ReadOnlyNotice>}
       {partsResource?.status === 'loading' && <ReadOnlyNotice>Đang tải yêu cầu linh kiện…</ReadOnlyNotice>}
+      {<TechnicianDeliverySection orderId={order.id} refreshKey={partsResource?.status === 'ready' ? partsResource.requestSeq : 0} onChanged={() => void refresh('manual')} />}
       {partsList.length > 0 ? (
         groups.map(group => (
             <View key={group.type} style={styles.group} testID={`parts-group-${group.type}`}>

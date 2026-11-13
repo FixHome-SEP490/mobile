@@ -50,6 +50,7 @@ import CustomerMatchingAcceptedScene from './CustomerMatchingAcceptedScene';
 import BackButton from '../../components/BackButton';
 import CustomerMatchingRadar from './CustomerMatchingRadar';
 import { canShowCustomerMatchingRadar } from './customer-matching-radar-state';
+import PillText from '../../components/PillText';
 // A multi-device visit lists candidates and takes the shortlist on the visit; its lead booking carries everything else.
 const readCandidates = (bookingId: string, visitGroupId?: string) =>
   visitGroupId ? visitGroupsApi.getCandidates(visitGroupId) : bookingsApi.getCandidates(bookingId);
@@ -1064,9 +1065,9 @@ export default function CustomerMatchingScreen() {
                     <View style={[styles.acceptedMark, { backgroundColor: colors.tone.success.bg }]}>
                       <Ionicons name="checkmark-circle-outline" size={56} color={colors.tone.success.text} />
                     </View>
-                    <Text style={[styles.statusPill, { backgroundColor: colors.tone.success.bg, color: colors.tone.success.text }]}>
+                    <PillText style={[styles.statusPill, { backgroundColor: colors.tone.success.bg, color: colors.tone.success.text }]}>
                       Kỹ thuật viên đã nhận đơn
-                    </Text>
+                    </PillText>
                     <Text style={[styles.serviceTitle, { color: colors.text }]}>{booking.serviceName || 'Yêu cầu dịch vụ'}</Text>
                     <Text style={[styles.note, { color: colors.textSecondary }]}>Đơn sửa chữa đã được xác nhận trên hệ thống.</Text>
                   </View>
@@ -1076,10 +1077,10 @@ export default function CustomerMatchingScreen() {
                       ? <CustomerMatchingRadar active />
                       : <Image source={CUSTOMER_UI_ARTWORK.technicianMatch} style={{ width: 64, height: 64 }} resizeMode="contain" accessible={false} testID="matching-status-art" />}
                     <View style={styles.visualCopy}>
-                      <Text style={[styles.statusPill, { backgroundColor: colors.primarySoft, color: colors.primaryStrong }]}>
+                      <PillText style={[styles.statusPill, { backgroundColor: colors.primarySoft, color: colors.primaryStrong }]}>
                         {booking.status === 'MATCHING' && booking.invitations?.some((invite) => invite.status === 'PENDING')
                           ? 'Đã gửi lời mời · Chờ phản hồi' : bookingStatusLabel(booking.status)}
-                      </Text>
+                      </PillText>
                       <Text style={[styles.serviceTitle, { color: colors.text }]}>{booking.serviceName || 'Yêu cầu dịch vụ'}</Text>
                       {!!booking.preferredStartAt && Number.isFinite(Date.parse(booking.preferredStartAt)) && (
                         <View style={styles.infoRow}>

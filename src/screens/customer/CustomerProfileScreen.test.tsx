@@ -750,3 +750,50 @@ describe('Customer logout', () => {
     expect(mockNavigate).toHaveBeenCalledWith('CustomerWallet');
   });
 });
+
+describe('Customer profile and address validation messages', () => {
+  it('stops an invalid phone number before the request and explains it in Vietnamese', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const tree = await mountScreen();
+    await act(async () => { findButton(tree, 'Chỉnh sửa hồ sơ')!.props.onPress(); });
+    await act(async () => { findTextInput(tree, 'Số điện thoại')!.props.onChangeText('-12.5e9'); });
+    const save = tree.root.findAllByType(TouchableOpacity).find((node) =>
+      node.findAllByType(Text).some((text) => text.props.children === 'Lưu thay đổi'));
+    await act(async () => { save!.props.onPress(); await flushPromises(); });
+    expect(mockUpdateProfile).not.toHaveBeenCalled();
+    expect(alert).toHaveBeenCalledWith('Lỗi', 'SĐT không hợp lệ (VD: 0901234567)');
+    alert.mockRestore();
+  });
+
+  it('stops a name with digits before the request, as the backend would reject it', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const tree = await mountScreen();
+    await act(async () => { findButton(tree, 'Chỉnh sửa hồ sơ')!.props.onPress(); });
+    await act(async () => { findTextInput(tree, 'Họ và tên')!.props.onChangeText('Khach Hang 3'); });
+    const save = tree.root.findAllByType(TouchableOpacity).find((node) =>
+      node.findAllByType(Text).some((text) => text.props.children === 'Lưu thay đổi'));
+    await act(async () => { save!.props.onPress(); await flushPromises(); });
+    expect(mockUpdateProfile).not.toHaveBeenCalled();
+    expect(alert).toHaveBeenCalledWith('Lỗi', 'Họ tên chỉ gồm chữ cái, khoảng trắng, dấu nháy, gạch nối và dấu chấm');
+    alert.mockRestore();
+  });
+
+  it('titles the address check as an update when an existing address is being edited', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockGetAddresses.mockResolvedValue([{
+      id: 'address-1', userId: mockCustomer.id, label: 'Nhà', line1: 'Địa chỉ đã lưu', ward: 'Phường An Bình',
+      district: 'Quận Bình An', province: 'Tỉnh Bình Dương', provinceCode: '74', districtCode: '741', lat: 10, lng: 106, isDefault: true,
+    }]);
+    const tree = await mountScreen();
+    await act(async () => { await flushPromises(); });
+    const addressMenu = tree.root.findAllByType(TouchableOpacity).find((node) =>
+      node.findAllByType(Text).some((text) => text.props.children === 'Địa chỉ sửa chữa'));
+    act(() => addressMenu?.props.onPress());
+    act(() => findButton(tree, 'Sửa địa chỉ Nhà')?.props.onPress());
+    act(() => findTextInput(tree, 'Tên gợi nhớ')?.props.onChangeText('  '));
+    await act(async () => { findButton(tree, 'Cập nhật địa chỉ')?.props.onPress(); await flushPromises(); });
+    expect(mockUpdateAddress).not.toHaveBeenCalled();
+    expect(alert).toHaveBeenCalledWith('Chưa thể cập nhật địa chỉ', 'Vui lòng nhập tên gợi nhớ (ví dụ: Nhà riêng).');
+    alert.mockRestore();
+  });
+});

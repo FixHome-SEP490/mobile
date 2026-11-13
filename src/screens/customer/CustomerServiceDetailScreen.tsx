@@ -16,7 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../../types';
+import { useOpenOnce } from '../../hooks/useOpenOnce';
+import type { BookingCarry, RootStackParamList } from '../../types';
 import * as Haptics from 'expo-haptics';
 import { servicesApi } from '../../api/services.api';
 import {
@@ -28,8 +29,23 @@ import {
 import { getServicePresentation } from '../../constants/service-presentation';
 import { useAuthStore } from '../../store/auth.store';
 import BackButton from '../../components/BackButton';
+import PillText from '../../components/PillText';
 
 type DetailRoute = RouteProp<RootStackParamList, 'CustomerServiceDetail'>;
+
+/** Adds the description, session and photos the assistant already had, when the customer picked this service by hand after it failed (M-19). */
+function withCarry<P extends { prefill: { serviceId: string; serviceName: string } }>(params: P, carry: BookingCarry | undefined): P {
+  if (!carry) return params;
+  return {
+    ...params,
+    prefill: {
+      ...params.prefill,
+      ...(carry.description ? { description: carry.description } : {}),
+      ...(carry.aiSessionId ? { aiSessionId: carry.aiSessionId } : {}),
+      ...(carry.attachmentUploadIds?.length ? { attachmentUploadIds: carry.attachmentUploadIds } : {}),
+    },
+  };
+}
 
 export default function CustomerServiceDetailScreen() {
   const { colors, spacing, fontSize, isDark } = useAppTheme();
@@ -53,12 +69,15 @@ export default function CustomerServiceDetailScreen() {
   }, [loader, serviceId]));
 
   const onRetry = () => { void loader.focus(serviceId); };
+  const openOnce = useOpenOnce();
   const onBook = () => {
     if (!service) return;
     if (!useAuthStore.getState().isAuthenticated) { navigation.navigate('Auth'); return; }
-    Haptics.selectionAsync();
-    navigation.push('CustomerBookingCreate', {
-      prefill: { serviceId: service.id, serviceName: service.name },
+    openOnce(() => {
+      Haptics.selectionAsync();
+      navigation.push('CustomerBookingCreate', withCarry({
+        prefill: { serviceId: service.id, serviceName: service.name },
+      }, route.params?.carry));
     });
   };
 
@@ -127,7 +146,7 @@ export default function CustomerServiceDetailScreen() {
             </View>
             {/* Source-backed pricing semantics: no inspection promise for fixed-price services. */}
             <View style={styles.artPill}>
-              <Text style={styles.artPillText}>{pricingBadge}</Text>
+              <PillText style={styles.artPillText}>{pricingBadge}</PillText>
             </View>
           </View>
 
@@ -149,7 +168,7 @@ export default function CustomerServiceDetailScreen() {
 
           {/* Category name */}
           {!!service.categoryName?.trim() && (
-            <Text style={styles.categoryBadge}>{service.categoryName}</Text>
+            <PillText style={styles.categoryBadge}>{service.categoryName}</PillText>
           )}
 
           {/* Description */}

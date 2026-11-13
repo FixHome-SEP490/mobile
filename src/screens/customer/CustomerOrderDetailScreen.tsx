@@ -14,6 +14,7 @@ import { useAppTheme } from '../../constants/theme';
 import { OrderWarrantyClaims } from './OrderWarrantyClaims';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import CustomerSupportCasesSection from './CustomerSupportCasesSection';
+import CustomerDeliverySection from '../../features/order-flow/customer/CustomerDeliverySection';
 import { useAuthStore } from '../../store/auth.store';
 import { ordersApi, type CanonicalOrderStatus } from '../../api/orders.api';
 import { customerBookingsUserId } from './customer-bookings-history';
@@ -89,6 +90,8 @@ import { findChatForBooking } from '../technician/technician-chat-shortcut';
 import CustomerOrderTimeline from './CustomerOrderTimeline';
 import { actionDetailSection, customerActiveOrderSection, customerOrderTimeline, type OrderDetailSection } from './customer-order-timeline';
 import BackButton from '../../components/BackButton';
+import PillText from '../../components/PillText';
+import PartsSourcingNote from '../../components/PartsSourcingNote';
 
 type DetailRoute = RouteProp<RootStackParamList, 'CustomerOrderDetail'>;
 
@@ -938,9 +941,9 @@ export default function CustomerOrderDetailScreen() {
 
           <View style={styles.card}>
             <View style={[styles.badge, { backgroundColor: getStatusBadge(order.status).bg }]}>
-              <Text style={[styles.badgeText, { color: getStatusBadge(order.status).color }]}>
+              <PillText style={[styles.badgeText, { color: getStatusBadge(order.status).color }]}>
                 {getStatusBadge(order.status).label}
-              </Text>
+              </PillText>
             </View>
             <Text style={styles.title} accessibilityRole="header">{order.serviceName || 'Dịch vụ sửa chữa'}</Text>
             <Text style={styles.meta}>Đơn #{order.code || order.id.slice(0, 8)}</Text>
@@ -1160,6 +1163,7 @@ export default function CustomerOrderDetailScreen() {
                   </View>
                 ))
               )}
+              {canDecideQuote && <PartsSourcingNote quote={order.quotation} audience="customer" refreshKey={decisionState.error} />}
               {sections.quoteAwaitingDecision && !canDecideQuote && !decisionState.decided && (
                 <Text style={styles.meta}>
                   Báo giá đang chờ quyết định nhưng đơn không còn ở trạng thái di chuyển.
@@ -1372,7 +1376,7 @@ export default function CustomerOrderDetailScreen() {
                           : styles.statusChipUnknown,
                   ]}
                 >
-                  <Text style={[
+                  <PillText style={[
                     styles.statusChipText,
                     invoiceState.invoice.paymentStatus === 'PAID'
                       ? styles.statusChipTextPaid
@@ -1383,7 +1387,7 @@ export default function CustomerOrderDetailScreen() {
                           : styles.statusChipTextUnknown,
                   ]}>
                     {invoicePaymentLabel(invoiceState.invoice.paymentStatus)}
-                  </Text>
+                  </PillText>
                 </View>
               )}
             </View>
@@ -1408,6 +1412,22 @@ export default function CustomerOrderDetailScreen() {
                     <View style={styles.invoiceRow}>
                       <Text style={styles.invoiceItemLabel}>Vật tư</Text>
                       <Text style={styles.invoiceItemValue}>{invoiceState.invoice.partsText}</Text>
+                    </View>
+                  )}
+                  {invoiceState.invoice.shipping && (
+                    <View testID="invoice-shipping">
+                      <View style={styles.invoiceRow}>
+                        <Text style={styles.invoiceItemLabel}>Phí giao linh kiện</Text>
+                        <Text style={styles.invoiceItemValue}>{invoiceState.invoice.shipping.feeText}</Text>
+                      </View>
+                      <View style={styles.invoiceRow}>
+                        <Text style={styles.invoiceItemLabel}>Bạn trả (70%)</Text>
+                        <Text style={styles.invoiceItemValue}>{invoiceState.invoice.shipping.customerShareText}</Text>
+                      </View>
+                      <View style={styles.invoiceRow}>
+                        <Text style={styles.invoiceItemLabel}>Kỹ thuật viên chịu (30%)</Text>
+                        <Text style={styles.invoiceItemValue}>{invoiceState.invoice.shipping.technicianShareText}</Text>
+                      </View>
                     </View>
                   )}
                 </View>
@@ -1549,7 +1569,7 @@ export default function CustomerOrderDetailScreen() {
                   <Text style={styles.sectionTitle}>Thanh toán</Text>
                 </View>
                 <View style={[styles.statusChip, styles.statusChipInfo]}>
-                  <Text style={[styles.statusChipText, styles.statusChipTextInfo]}>Bước riêng</Text>
+                  <PillText style={[styles.statusChipText, styles.statusChipTextInfo]}>Bước riêng</PillText>
                 </View>
               </View>
               <Text style={styles.meta}>
@@ -1567,7 +1587,7 @@ export default function CustomerOrderDetailScreen() {
                     accessibilityLabel="Đối soát tiền mặt: Chờ khách xác nhận"
                     style={[styles.statusChip, styles.statusChipUnpaid]}
                   >
-                    <Text style={[styles.statusChipText, styles.statusChipTextUnpaid]}>Chờ khách xác nhận</Text>
+                    <PillText style={[styles.statusChipText, styles.statusChipTextUnpaid]}>Chờ khách xác nhận</PillText>
                   </View>
                   <Text style={styles.meta}>
                     Kỹ thuật viên khai báo đã nhận {paymentState.settlement.declaredAmount.toLocaleString('vi-VN')}đ tiền mặt. Hãy đối chiếu trước khi xác nhận.
@@ -1607,7 +1627,7 @@ export default function CustomerOrderDetailScreen() {
                     accessibilityLabel="Đối soát tiền mặt: Đang tranh chấp"
                     style={[styles.statusChip, styles.statusChipDanger]}
                   >
-                    <Text style={[styles.statusChipText, styles.statusChipTextDanger]}>Đang tranh chấp</Text>
+                    <PillText style={[styles.statusChipText, styles.statusChipTextDanger]}>Đang tranh chấp</PillText>
                   </View>
                   <Text style={styles.meta}>
                     Đối soát tiền mặt đang tranh chấp và cần xử lý. Hóa đơn chưa được coi là đã thanh toán.
@@ -1622,7 +1642,7 @@ export default function CustomerOrderDetailScreen() {
                     accessibilityLabel="Đối soát tiền mặt: Đã xác nhận"
                     style={[styles.statusChip, styles.statusChipPaid]}
                   >
-                    <Text style={[styles.statusChipText, styles.statusChipTextPaid]}>Đã xác nhận đối soát</Text>
+                    <PillText style={[styles.statusChipText, styles.statusChipTextPaid]}>Đã xác nhận đối soát</PillText>
                   </View>
                   <Text style={styles.meta}>
                     Hệ thống đã xác nhận đối soát tiền mặt. Trạng thái hóa đơn được hiển thị riêng theo dữ liệu hệ thống.
@@ -1674,7 +1694,7 @@ export default function CustomerOrderDetailScreen() {
                       accessibilityLabel="Trạng thái VNPay: Chờ hệ thống xác nhận"
                       style={[styles.statusChip, styles.statusChipInfo]}
                     >
-                      <Text style={[styles.statusChipText, styles.statusChipTextInfo]}>Chờ hệ thống xác nhận</Text>
+                      <PillText style={[styles.statusChipText, styles.statusChipTextInfo]}>Chờ hệ thống xác nhận</PillText>
                     </View>
                     <Text style={styles.meta}>
                       Đã tạo hoặc mở một lần thanh toán VNPay. Quay lại ứng dụng không đồng nghĩa đã thanh toán thành công. Hãy kiểm tra trạng thái với hệ thống.
@@ -1933,6 +1953,10 @@ export default function CustomerOrderDetailScreen() {
                 </TouchableOpacity>
               </View>
             )}
+          </View>
+
+          <View style={detailView?.orderId === serviceOrderId ? detailSectionStyle('cost') : undefined}>
+            <CustomerDeliverySection orderId={serviceOrderId} refreshKey={order.status} />
           </View>
 
           <View style={detailSectionStyle('support')}>

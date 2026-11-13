@@ -29,6 +29,7 @@ import { AddRow, EarlierPartCard, GroupLabel, LaborCard, LinkRow, PartLineCard, 
 import { formatVnd } from '../../../utils/format';
 import { lightTheme as colors, spacing, type ToneName } from '../../../constants/theme';
 import { backFromFlow } from '../navigation/resume-order';
+import BackClosableBottomSheetModal from '../../../components/BackClosableBottomSheetModal';
 
 const EARLIER_STATUS: Record<string, { label: string; tone: ToneName }> = {
   requested: { label: 'Đã gửi yêu cầu', tone: 'neutral' },
@@ -522,7 +523,7 @@ export default function QuotationFormScreen() {
       </Section>
 
       {canEdit && (
-        <BottomSheetModal
+        <BackClosableBottomSheetModal
           ref={sheetRef}
           snapPoints={['90%']}
           enableDynamicSizing={false}
@@ -545,7 +546,7 @@ export default function QuotationFormScreen() {
             onClose={() => sheetRef.current?.dismiss()}
             onLoadCatalog={search => loadCatalog(search)}
           />
-        </BottomSheetModal>
+        </BackClosableBottomSheetModal>
       )}
       <VisitTechnicianPanel section="devices" />
     </TaskScreenShell>

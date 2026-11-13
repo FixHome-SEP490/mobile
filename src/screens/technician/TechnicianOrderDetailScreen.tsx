@@ -99,6 +99,9 @@ import {
 } from './technician-request-completion';
 import { createTechOrderDetailLoader } from './technician-order-detail';
 import TechnicianPartsSection from './technician-parts-section';
+import TechnicianDeliverySection from '../../features/order-flow/technician/TechnicianDeliverySection';
+import PartsSourcingNote from '../../components/PartsSourcingNote';
+import { canReviseUnsourcedQuote, type PartsSourcing } from '../../api/parts-sourcing.api';
 import {
   selectTechnicianWorkOrderHierarchy,
   selectEvidenceDisplayPriority,
@@ -121,6 +124,9 @@ import {
 } from './technician-cash-settlement';
 import { vnDateTimeString } from '../../utils/vn-time';
 import BackButton from '../../components/BackButton';
+import TechnicianIssueReport from '../../features/order-flow/technician/TechnicianIssueReport';
+import { canReportTechnicianIssue } from '../../features/order-flow/technician/technician-report';
+import PillText from '../../components/PillText';
 
 const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
 type DetailRoute = RouteProp<RootStackParamList, 'TechnicianOrderDetail'>;
@@ -746,6 +752,9 @@ export default function TechnicianOrderDetailScreen() {
   // PO 18/10/2026: this order changed on the server (customer decision, payment, warranty): read it again, quietly.
   // Only the part the push says it touched is read again (photos, invoice, costs, parts, the order itself).
   const [partsRefreshKey, setPartsRefreshKey] = useState(0);
+  const [reviseQuote, setReviseQuote] = useState(false);
+  const [quoteUnsourced, setQuoteUnsourcedState] = useState<PartsSourcing | null>(null);
+  const setQuoteUnsourced = useCallback((value: PartsSourcing | null) => setQuoteUnsourcedState(value), []);
   useLiveRefresh(['order:updated'], (batch) => {
     const parts = orderPartsFor(batch.kinds);
     if (parts.detail) void loaderRef.current?.refresh(true);
@@ -1077,7 +1086,9 @@ export default function TechnicianOrderDetailScreen() {
     String(order.status).toUpperCase() === 'EN_ROUTE' &&
     order.arrivalVerified === true &&
     String(order.pricingMode ?? '').toLowerCase() === 'inspection_required' &&
-    existingQuoteStatus !== 'SENT' &&
+    // F3 recovery (TECHNICIAN 66): a SENT quote no warehouse can supply may be replaced by a new one
+    // (the backend supersedes the SENT quote), only after the technician chose "Gửi lại báo giá khác".
+    (existingQuoteStatus !== 'SENT' || canReviseUnsourcedQuote(reviseQuote, quoteUnsourced)) &&
     existingQuoteStatus !== 'APPROVED';
   // P3B9 start-repair visibility mirrors the controller gate; the Backend
   // POST remains the final validator.
@@ -1815,6 +1826,7 @@ export default function TechnicianOrderDetailScreen() {
           )}
 </View>
 
+          {stageVisible('repair') && !error && order.id === serviceOrderId && canReportTechnicianIssue(order) && <TechnicianIssueReport orderId={serviceOrderId} />}
           <View style={!(stageVisible('repair')) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(stageVisible('repair'))} importantForAccessibility={!(stageVisible('repair')) ? 'no-hide-descendants' : 'auto'}>
 {st === 'UNDER_REPAIR' && !error && order.historical !== true && order.id === serviceOrderId && (
             <View testID="repair-overview" style={styles.repairOverview}>
@@ -2132,6 +2144,9 @@ export default function TechnicianOrderDetailScreen() {
 {order.historical !== true && (
             <TechnicianPartsSection orderId={order.id} orderStatus={order.status} refreshKey={partsRefreshKey} />
           )}
+{order.historical !== true && (
+            <TechnicianDeliverySection orderId={order.id} refreshKey={partsRefreshKey} onChanged={() => setPartsRefreshKey((key) => key + 1)} />
+          )}
 </View>
 
           <View style={!(showAll) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(showAll)} importantForAccessibility={!(showAll) ? 'no-hide-descendants' : 'auto'}>
@@ -2274,14 +2289,14 @@ export default function TechnicianOrderDetailScreen() {
                     <View key={row.key} style={styles.acItemCard}>
                       <View style={styles.acItemBadgeRow}>
                         <View style={row.kind === 'labor' ? styles.acBadgeLabor : styles.acBadgeParts}>
-                          <Text style={styles.acBadgeText}>
+                          <PillText style={styles.acBadgeText}>
                             {row.kind === 'labor' ? `CÔNG THỢ ${index + 1}` : `LINH KIỆN ${index + 1}`}
-                          </Text>
+                          </PillText>
                         </View>
                         {row.kind === 'part' && row.warrantyOption === 'paid_warranty' && !!row.warrantyTermDays && (
                           <View style={styles.acWarrantyBadge}>
                             <ShieldCheck size={12} color={colors.tone.success.fg} strokeWidth={2} />
-                            <Text style={styles.acWarrantyBadgeText}>{row.warrantyTermDays} ngày</Text>
+                            <PillText style={styles.acWarrantyBadgeText}>{row.warrantyTermDays} ngày</PillText>
                           </View>
                         )}
                         {quoteState.rows.length > 1 && (
@@ -2591,7 +2606,7 @@ export default function TechnicianOrderDetailScreen() {
                 <View style={styles.acItemCard}>
                   <View style={styles.acItemBadgeRow}>
                     <View style={styles.acBadgeLabor}>
-                      <Text style={styles.acBadgeText}>CÔNG THỢ</Text>
+                      <PillText style={styles.acBadgeText}>CÔNG THỢ</PillText>
                     </View>
                   </View>
                   <TextInput
@@ -2629,12 +2644,12 @@ export default function TechnicianOrderDetailScreen() {
                   <View key={item.partCatalogId} style={styles.acItemCard}>
                     <View style={styles.acItemBadgeRow}>
                       <View style={styles.acBadgeParts}>
-                        <Text style={styles.acBadgeText}>LK FIXHOME</Text>
+                        <PillText style={styles.acBadgeText}>LK FIXHOME</PillText>
                       </View>
                       {!!item.warrantyDays && (
                         <View style={styles.acWarrantyBadge}>
                           <ShieldCheck size={12} color={colors.tone.success.fg} strokeWidth={2} />
-                          <Text style={styles.acWarrantyBadgeText}>{item.warrantyDays} ngày</Text>
+                          <PillText style={styles.acWarrantyBadgeText}>{item.warrantyDays} ngày</PillText>
                         </View>
                       )}
                       <TouchableOpacity
@@ -2996,6 +3011,11 @@ export default function TechnicianOrderDetailScreen() {
                   Báo giá đang chờ khách quyết định. Không thao tác tại đây.
                 </Text>
               )}
+              {order.historical !== true && (
+                <PartsSourcingNote quote={order.quotation} audience="technician" refreshKey={partsRefreshKey}
+                  onSourcing={setQuoteUnsourced}
+                  onRevise={String(order.status).toUpperCase() === 'EN_ROUTE' && order.arrivalVerified === true ? () => setReviseQuote(true) : undefined} />
+              )}
             </View>
           )}
 </View>
@@ -3104,6 +3124,22 @@ export default function TechnicianOrderDetailScreen() {
                   <View style={styles.row}>
                     <Text style={styles.jobMeta}>Vật tư</Text>
                     <Text style={styles.jobMeta}>{vndText(invoiceState.invoice.partsText)}</Text>
+                  </View>
+                )}
+                {invoiceState.invoice.shipping && (
+                  <View testID="technician-invoice-shipping">
+                    <View style={styles.row}>
+                      <Text style={styles.jobMeta}>Phí giao linh kiện</Text>
+                      <Text style={styles.jobMeta}>{invoiceState.invoice.shipping.feeText}</Text>
+                    </View>
+                    <View style={styles.row}>
+                      <Text style={styles.jobMeta}>Khách trả (70%)</Text>
+                      <Text style={styles.jobMeta}>{invoiceState.invoice.shipping.customerShareText}</Text>
+                    </View>
+                    <View style={styles.row}>
+                      <Text style={styles.jobMeta}>Bạn chịu (30%)</Text>
+                      <Text style={styles.jobMeta}>{invoiceState.invoice.shipping.technicianShareText}</Text>
+                    </View>
                   </View>
                 )}
                 {invoiceState.invoice.totalText !== null ? (
