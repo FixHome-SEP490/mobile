@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-13 00:42 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: feat/tech-note-sync-1211
+> Cập nhật lần cuối: 2026-11-13 11:38 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: feat/customer-w3-delivery-1311
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -420,6 +420,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-13 11:38 (UTC+7) | ToanAltF4 | feat/customer-w3-delivery-1311 | Khách: mục Giao linh kiện (W3) ở chi tiết đơn (xem chia phí 100/0 hoặc 70/30, 4 mức trần, đồng ý điều khoản 0đ và có phí, tiến trình giao), hoá đơn hiện phí giao 70/30; thợ: Báo sự cố có phân loại (REPORT_ONLY)
 - 2026-11-13 00:42 (UTC+7) | ToanAltF4 | feat/tech-note-sync-1211 | TECH 42: ghi chú riêng theo đơn lưu trên server (GET/PUT /service-orders/:id/my-note), đồng bộ với web; ghi chú cũ trên máy chuyển lên server lần đầu rồi xoá bản trên máy
 - 2026-11-13 00:02 (UTC+7) | ToanAltF4 | fix/mobile-bugs-1211 | Mobile 12/11 device-sweep fixes (M-3..M-30 except M-20): shared keyboard behaviour, PillText one-line pills, Back closes bottom sheets, live order re-read after a push during a read, activity counts exclude visit groups, tracking code upper-cased, aftercare busy/denied fixes
 - 2026-11-12 17:20 (UTC+7) | ToanAltF4 | fix/mobile-customer-sweep-1211 | Sửa lỗi khách hàng phát hiện khi test thiết bị 12/11: tổng báo giá trên thẻ đơn, bấm đôi mở hai màn đặt lịch, kiểm tra họ tên và số điện thoại trước khi lưu hồ sơ, lỗi validation tiếng Anh không còn hiện ra, tiêu đề cảnh báo khi sửa địa chỉ, nút cuối màn đánh giá đã gửi
@@ -460,7 +461,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-31 12:11 (UTC+7) | Hgnv11 | dev | Thợ: báo trễ hoặc nhả đơn kế tiếp bằng biểu mẫu có lý do, 1-3 ảnh và xác nhận (không còn nhả một chạm), nối delay-notice và overrun-release mới; tab Không kịp tới mở đơn đang làm; chưa làm phía khách, chưa kiểm chứng với Backend thật và thiết bị.
 - 2026-10-30 17:58 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Hai tab đơn của khách đổi nhãn thành Đơn 1 thiết bị và Đơn nhiều thiết bị (Hoạt động, Lịch sử sửa chữa); header Ví FixHome của khách theo header chuẩn, bỏ dòng Ví của tôi; chỉ đổi giao diện, chưa kiểm chứng trên máy thật.
 - 2026-10-30 17:45 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Màn Lịch sử sửa chữa của khách đổi giao diện theo token: thẻ có ô biểu tượng, tab chuyển dạng segmented, tiêu đề nhóm có biểu tượng, lỗi dùng tông đỏ, nút Tải thêm có viền; chỉ đổi giao diện, chưa kiểm chứng trên máy thật.
-- 2026-10-30 15:45 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | `npm test` chạy thêm script hợp đồng cấu hình Android Maps; Jest bỏ qua file `.cjs` để không coi script độc lập là suite rỗng trên Jest 30.
 
 ### Lịch sử giữ lại khi tích hợp
 

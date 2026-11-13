@@ -14,6 +14,7 @@ import { useAppTheme } from '../../constants/theme';
 import { OrderWarrantyClaims } from './OrderWarrantyClaims';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import CustomerSupportCasesSection from './CustomerSupportCasesSection';
+import CustomerDeliverySection from '../../features/order-flow/customer/CustomerDeliverySection';
 import { useAuthStore } from '../../store/auth.store';
 import { ordersApi, type CanonicalOrderStatus } from '../../api/orders.api';
 import { customerBookingsUserId } from './customer-bookings-history';
@@ -1411,6 +1412,22 @@ export default function CustomerOrderDetailScreen() {
                       <Text style={styles.invoiceItemValue}>{invoiceState.invoice.partsText}</Text>
                     </View>
                   )}
+                  {invoiceState.invoice.shipping && (
+                    <View testID="invoice-shipping">
+                      <View style={styles.invoiceRow}>
+                        <Text style={styles.invoiceItemLabel}>Phí giao linh kiện</Text>
+                        <Text style={styles.invoiceItemValue}>{invoiceState.invoice.shipping.feeText}</Text>
+                      </View>
+                      <View style={styles.invoiceRow}>
+                        <Text style={styles.invoiceItemLabel}>Bạn trả (70%)</Text>
+                        <Text style={styles.invoiceItemValue}>{invoiceState.invoice.shipping.customerShareText}</Text>
+                      </View>
+                      <View style={styles.invoiceRow}>
+                        <Text style={styles.invoiceItemLabel}>Kỹ thuật viên chịu (30%)</Text>
+                        <Text style={styles.invoiceItemValue}>{invoiceState.invoice.shipping.technicianShareText}</Text>
+                      </View>
+                    </View>
+                  )}
                 </View>
                 {invoiceState.invoice.totalText !== null ? (
                   <View testID="invoice-total" style={styles.invoiceTotalRow}>
@@ -1934,6 +1951,10 @@ export default function CustomerOrderDetailScreen() {
                 </TouchableOpacity>
               </View>
             )}
+          </View>
+
+          <View style={detailView?.orderId === serviceOrderId ? detailSectionStyle('cost') : undefined}>
+            <CustomerDeliverySection orderId={serviceOrderId} refreshKey={order.status} />
           </View>
 
           <View style={detailSectionStyle('support')}>

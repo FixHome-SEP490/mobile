@@ -207,6 +207,13 @@ export const supportCasesApi = {
     await apiClient.post(`/service-orders/${encodeURIComponent(serviceOrderId)}/stop-replace-request`, { reason: reason.trim() });
   },
 
+  /** Technician typed report for manager review (REPORT_ONLY: never stops or cancels the order). */
+  async createTechnicianReport(payload: {
+    intent: 'REPORT_ONLY'; serviceOrderId: string; reasonClass: string; reasonCode: string; reason: string;
+  }): Promise<void> {
+    await apiClient.post('/support/cases/technician-report', payload);
+  },
+
   async createCase(payload: CreateSupportCasePayload): Promise<MySupportCase> {
     const response = await apiClient.post('/support/cases', payload);
     return normalizeMine(response.data);

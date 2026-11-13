@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import CustomerDeliverySection from './CustomerDeliverySection';
 
 /**
  * C03, C04 and C06 share one read-only body: the order frame above already shows the technician, appointment and
@@ -28,6 +29,8 @@ export default function StatusStepScreen({ title, stage, message }: { title: str
       ) : (
         <ReadOnlyNotice>{message}</ReadOnlyNotice>
       )}
+      {/* W3 part delivery: consent and progress happen while the repair is running. */}
+      {!revoked && stage === 3 && <CustomerDeliverySection orderId={order.id} refreshKey={order.status} />}
     </TaskScreenShell>
   );
 }
