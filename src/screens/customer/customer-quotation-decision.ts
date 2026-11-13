@@ -1,4 +1,6 @@
 import { orderDetailTarget } from './customer-order-detail';
+import { isPartsSourceUnavailable } from '../../api/parts-sourcing.api';
+import { extractApiErrorMessage } from '../../utils/input-validation';
 
 /**
  * P3B7 bounded CUSTOMER quotation APPROVE/REJECT with paid-warranty opt-in.
@@ -236,6 +238,17 @@ export function createQuotationDecisionController(
         reset();
         deps.onAccessDenied();
         deps.notify('Phiên đăng nhập đã hết', 'Vui lòng đăng nhập lại để tiếp tục.');
+        return;
+      }
+      if (isPartsSourceUnavailable(error)) {
+        // F3 (CUSTOMER 72): a definite refusal, nothing was approved and the quote still waits.
+        publish({
+          busy: false,
+          confirming: null,
+          error: extractApiErrorMessage(error, 'Chưa có kho FixHome nào đủ linh kiện nên chưa duyệt được báo giá.')
+            + ' Báo giá vẫn đang chờ. Kỹ thuật viên sẽ gửi báo giá khác hoặc chờ kho bổ sung.',
+        });
+        await deps.refreshDetail();
         return;
       }
       if (status === 409 || status === 422) {

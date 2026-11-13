@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-13 13:02 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: fix/mobile-verify-1311
+> Cập nhật lần cuối: 2026-11-13 18:15 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: feat/mobile-w3-tech-1311
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -420,6 +420,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-13 18:15 (UTC+7) | ToanAltF4 | feat/mobile-w3-tech-1311 | Thợ: giao linh kiện W3 (đồng ý theo phiên bản báo giá, giữ hàng, ảnh nhận), kho W2 được phân bổ + km + không kho nào đủ, phần phí thợ chịu trên hoá đơn; khách/thợ: ghi chú linh kiện chưa có nguồn khi duyệt báo giá (409 PARTS_SOURCE_UNAVAILABLE), thợ gửi lại báo giá khác
 - 2026-11-13 13:02 (UTC+7) | ToanAltF4 | fix/mobile-verify-1311 | M-11 thợ chờ duyệt báo giá tự đọc lại đơn mỗi 8 giây; M-25 không báo mất quyền khi phiên bảo hành đang mở; bàn phím không che nút Gửi báo cáo (báo sự cố)
 - 2026-11-13 11:38 (UTC+7) | ToanAltF4 | feat/customer-w3-delivery-1311 | Khách: mục Giao linh kiện (W3) ở chi tiết đơn (xem chia phí 100/0 hoặc 70/30, 4 mức trần, đồng ý điều khoản 0đ và có phí, tiến trình giao), hoá đơn hiện phí giao 70/30; thợ: Báo sự cố có phân loại (REPORT_ONLY)
 - 2026-11-13 00:42 (UTC+7) | ToanAltF4 | feat/tech-note-sync-1211 | TECH 42: ghi chú riêng theo đơn lưu trên server (GET/PUT /service-orders/:id/my-note), đồng bộ với web; ghi chú cũ trên máy chuyển lên server lần đầu rồi xoá bản trên máy
@@ -460,7 +461,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-31 14:25 (UTC+7) | Hgnv11 | dev | Thợ: trang báo trễ đơn kế tiếp làm lại theo 4 bước, lỗi hiện dưới từng ô, lưới ảnh có xóa từng ảnh; bỏ hẳn nhả đơn trong app (khách quyết định); chưa kiểm chứng với Backend thật và thiết bị.
 
 - 2026-10-31 12:11 (UTC+7) | Hgnv11 | dev | Thợ: báo trễ hoặc nhả đơn kế tiếp bằng biểu mẫu có lý do, 1-3 ảnh và xác nhận (không còn nhả một chạm), nối delay-notice và overrun-release mới; tab Không kịp tới mở đơn đang làm; chưa làm phía khách, chưa kiểm chứng với Backend thật và thiết bị.
-- 2026-10-30 17:58 (UTC+7) | Hgnv11 | feat/web-be-sync-20261026 | Hai tab đơn của khách đổi nhãn thành Đơn 1 thiết bị và Đơn nhiều thiết bị (Hoạt động, Lịch sử sửa chữa); header Ví FixHome của khách theo header chuẩn, bỏ dòng Ví của tôi; chỉ đổi giao diện, chưa kiểm chứng trên máy thật.
 
 ### Lịch sử giữ lại khi tích hợp
 

@@ -90,6 +90,8 @@ export interface OrderPartReadModel {
   quotationId?: string | null;
   additionalCostId?: string | null;
   receivedAt?: string | null;
+  /** W3 delivery path: latest warehouse delivery event. */
+  w3DeliveryStage?: string | null;
   items: (Pick<PartRequestItem, 'id' | 'partNameSnapshot' | 'quantity' | 'usageStatus'> & Partial<Pick<PartRequestItem, 'partCatalogId' | 'partSource'>>)[];
 }
 export interface OrderResourceData {

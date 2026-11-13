@@ -42,6 +42,66 @@ export interface PartRequest {
   createdAt: string;
   updatedAt: string;
   items: PartRequestItem[];
+  /** W3 delivery path: latest warehouse delivery event (the request keeps status 'requested'). */
+  w3DeliveryStage?: string | null;
+}
+
+export type WarehouseAllocationStatus = 'manual_assistance' | 'stock_unavailable' | 'reserved' | 'ready' | 'handed_over' | 'received' | 'released' | null;
+export interface WarehouseAllocation {
+  partRequestId: string;
+  mode: 'warehouse' | 'legacy';
+  status: WarehouseAllocationStatus;
+  warehouseId?: string | null;
+  warehouseName?: string | null;
+  warehouseAddress?: string | null;
+  estimatedStraightLineKm?: number | null;
+  distanceReference?: 'booking_snapshot' | null;
+  reviewRequired?: boolean;
+  stockUnavailable?: boolean;
+  handedOverAt?: string | null;
+  receivedAt?: string | null;
+}
+
+const W3_STAGE_STATUS: Record<string, PartRequestStatus> = {
+  RESERVED: 'ready', ISSUED_TO_COURIER: 'delivering', DISPATCH_RECORDED: 'delivering', TECHNICIAN_RECEIVED: 'received',
+};
+/** Status as shown: a received W3 delivery reads as received (usage + completion unlock). */
+export function readW3Received(request: PartRequest): PartRequest {
+  return request.status === 'requested' && request.w3DeliveryStage === 'TECHNICIAN_RECEIVED'
+    ? { ...request, status: 'received' } : request;
+}
+/** Label status of a request on the W3 path (web w3-delivery-stage.ts). */
+export function displayPartRequestStatus(request: Pick<PartRequest, 'status' | 'w3DeliveryStage'>): PartRequestStatus {
+  if (!request.w3DeliveryStage || request.status !== 'requested') return request.status;
+  return W3_STAGE_STATUS[request.w3DeliveryStage] ?? 'requested';
+}
+
+/** W2 PICKUP: may the technician enter the receipt code? Warehouse path only after the SM's physical handover. */
+export function canReceivePickup(request: Pick<PartRequest, 'fulfillmentMethod' | 'status'>, allocation: WarehouseAllocation | null | undefined): boolean {
+  if (request.fulfillmentMethod !== 'pickup' || !allocation) return false;
+  if (allocation.mode === 'warehouse') return allocation.status === 'handed_over';
+  return request.status === 'ready';
+}
+
+/** Straight-line km line for the allocated warehouse; never a road distance or ETA. */
+export function warehouseDistanceText(allocation: WarehouseAllocation | null | undefined): string | null {
+  if (!allocation || allocation.mode !== 'warehouse') return null;
+  if (allocation.distanceReference === 'booking_snapshot' && typeof allocation.estimatedStraightLineKm === 'number'
+    && Number.isFinite(allocation.estimatedStraightLineKm)) {
+    return `Khoảng cách đường thẳng ước tính từ vị trí đặt lịch: ~${allocation.estimatedStraightLineKm.toFixed(1)} km (chưa tính đường đi).`;
+  }
+  return allocation.warehouseId ? 'Chưa xác minh khoảng cách tới kho.' : null;
+}
+
+export function warehouseStatusText(allocation: WarehouseAllocation | null | undefined): string | null {
+  switch (allocation?.mode === 'warehouse' ? allocation.status : null) {
+    case 'stock_unavailable': return 'Không có kho FixHome nào đủ toàn bộ linh kiện yêu cầu. Bạn tự chuẩn bị linh kiện; hệ thống không tự tính phí linh kiện tự mua.';
+    case 'reserved': case 'ready': return 'Kho đã giữ linh kiện. Đang chờ quản lý bàn giao trực tiếp tại kho.';
+    case 'handed_over': return 'Quản lý đã bàn giao. Nhập hoặc quét mã nhận do quản lý đưa (hiệu lực 48 giờ) để xác nhận đã nhận.';
+    case 'received': return 'Đã xác nhận nhận linh kiện tại kho.';
+    case 'released': return 'Kho đã bỏ giữ linh kiện cho yêu cầu này.';
+    default: return null;
+  }
 }
 
 export interface CreatePartRequestPayload {
@@ -79,7 +139,15 @@ export const partRequestsApi = {
       `/service-orders/${orderId}/part-requests`,
     );
     const result = unwrap(res.data);
-    return Array.isArray(result) ? result : [];
+    // A W3 delivery the technician has received stays 'requested' in storage; the backend reads it
+    // as received for completion, so the order screens do the same (web part-requests.api.ts).
+    return Array.isArray(result) ? result.map(readW3Received) : [];
+  },
+
+  /** W2: the warehouse a PICKUP request is allocated to (name, address, straight-line km, stock). */
+  async getWarehouseAllocation(requestId: string): Promise<WarehouseAllocation> {
+    const res = await apiClient.get<{ data: WarehouseAllocation } | WarehouseAllocation>(`/part-requests/${requestId}/warehouse-allocation`);
+    return unwrap(res.data);
   },
 
   async getById(requestId: string): Promise<PartRequest> {
