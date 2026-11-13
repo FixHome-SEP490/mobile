@@ -121,6 +121,8 @@ import {
 } from './technician-cash-settlement';
 import { vnDateTimeString } from '../../utils/vn-time';
 import BackButton from '../../components/BackButton';
+import TechnicianIssueReport from '../../features/order-flow/technician/TechnicianIssueReport';
+import { canReportTechnicianIssue } from '../../features/order-flow/technician/technician-report';
 import PillText from '../../components/PillText';
 
 const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
@@ -1816,6 +1818,7 @@ export default function TechnicianOrderDetailScreen() {
           )}
 </View>
 
+          {stageVisible('repair') && !error && order.id === serviceOrderId && canReportTechnicianIssue(order) && <TechnicianIssueReport orderId={serviceOrderId} />}
           <View style={!(stageVisible('repair')) ? styles.sceneHidden : undefined} accessibilityElementsHidden={!(stageVisible('repair'))} importantForAccessibility={!(stageVisible('repair')) ? 'no-hide-descendants' : 'auto'}>
 {st === 'UNDER_REPAIR' && !error && order.historical !== true && order.id === serviceOrderId && (
             <View testID="repair-overview" style={styles.repairOverview}>

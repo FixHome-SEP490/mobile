@@ -22,6 +22,8 @@ export interface InvoiceView {
   laborText: string | null;
   partsText: string | null;
   totalText: string | null;
+  /** W3 delivery fee on the invoice: shown only when the server sent a positive fee and both shares. */
+  shipping: { feeText: string; customerShareText: string; technicianShareText: string } | null;
   issuedText: string | null;
   paidText: string | null;
   items: InvoiceItemView[];
@@ -114,6 +116,18 @@ function itemsList(value: unknown): InvoiceItemView[] {
  * (wrong order, blank id); only allowlisted display fields enter the view, so
  * commission/provider internals can never leak into state, logs, or UI.
  */
+/** Server snapshot only (shippingFee = customer + technician share); never derived on the client. */
+export function shippingOf(record: Record<string, unknown>): InvoiceView['shipping'] {
+  const fee = record.shippingFee;
+  const customer = record.customerShippingShare;
+  const technician = record.technicianShippingShare;
+  if (typeof fee !== 'number' || !Number.isSafeInteger(fee) || fee <= 0) return null;
+  if (typeof customer !== 'number' || !Number.isSafeInteger(customer) || customer < 0) return null;
+  if (typeof technician !== 'number' || !Number.isSafeInteger(technician) || technician < 0) return null;
+  if (customer + technician !== fee) return null;
+  return { feeText: moneyText(fee)!, customerShareText: moneyText(customer)!, technicianShareText: moneyText(technician)! };
+}
+
 export function sanitizeInvoice(
   serviceOrderId: string,
   payload: unknown,
@@ -130,6 +144,7 @@ export function sanitizeInvoice(
     laborText: moneyText(record.laborTotal),
     partsText: moneyText(record.partsTotal),
     totalText: moneyText(record.grandTotal),
+    shipping: shippingOf(record),
     issuedText: dateText(record.issuedAt),
     paidText: dateText(record.paidAt),
     items: itemsList(record.items),

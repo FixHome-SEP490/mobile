@@ -1,4 +1,6 @@
 import React from 'react';
+import TechnicianIssueReport from '../technician/TechnicianIssueReport';
+import { canReportTechnicianIssue } from '../technician/technician-report';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import {
@@ -112,6 +114,7 @@ export default function TechnicianOrderHub() {
         <View style={styles.titleRow}><Wrench size={16} strokeWidth={1.75} color={colors.textSecondary} /><Text accessibilityRole="header" style={styles.title}>Bước sửa chữa</Text></View>
         <View style={styles.card}>{render(manage(REPAIR))}</View>
       </>}
+      {!revoked && order && canReportTechnicianIssue(order) && <TechnicianIssueReport orderId={order.id} />}
       <Text accessibilityRole="header" style={styles.title}>Quản lý đơn</Text>
       <View style={styles.card}>{render(nextOrders > 0 ? [...MANAGE, NEXT_ORDERS] : MANAGE)}</View>
     </View>
