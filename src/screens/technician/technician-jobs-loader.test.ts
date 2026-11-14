@@ -221,10 +221,35 @@ it('does not duplicate EnRoute on rapid taps or ambiguous failure after re-entry
   expect(h.enRoute).toHaveBeenCalledTimes(1);
   post.reject(new Error('timeout'));
   await Promise.all([first, second]);
+  await h.loader.handleEnRoute(order.id);
+  expect(h.enRoute).toHaveBeenCalledTimes(1);
   h.loader.blur();
+  h.get.mockResolvedValue([{ ...order, status: 'EN_ROUTE' }]); // The lost POST did land.
   await h.loader.focus();
   await h.loader.handleEnRoute(order.id);
   expect(h.enRoute).toHaveBeenCalledTimes(1);
+});
+it('BUG 155: a pull after a lost EnRoute unlocks the button while the server still says ACCEPTED', async () => {
+  const h = setup();
+  h.get.mockResolvedValue([order]);
+  await h.loader.focus();
+  h.enRoute.mockRejectedValueOnce(new Error('Network Error'));
+  await h.loader.handleEnRoute(order.id);
+  expect(h.state().blockedOrderIds).toEqual([order.id]); // The automatic read right after the failure keeps the lock.
+  await h.loader.refresh();
+  expect(h.state().blockedOrderIds).toEqual([]);
+  await h.loader.handleEnRoute(order.id);
+  expect(h.enRoute).toHaveBeenCalledTimes(2);
+});
+it('BUG 155: a failed pull keeps the lock', async () => {
+  const h = setup();
+  h.get.mockResolvedValue([order]);
+  await h.loader.focus();
+  h.enRoute.mockRejectedValueOnce(new Error('Network Error'));
+  await h.loader.handleEnRoute(order.id);
+  h.get.mockRejectedValueOnce(new Error('Network Error'));
+  await h.loader.refresh();
+  expect(h.state().blockedOrderIds).toEqual([order.id]);
 });
 
 it('shows the server reason and unlocks when EnRoute is refused before the allowed time', async () => {
@@ -296,13 +321,14 @@ it('account switch invalidates a GET and hides the previous account cache', asyn
   await request;
   expect(h.write).not.toHaveBeenCalled();
 });
-it('ambiguous EnRoute stays locked in a new controller for the same user', async () => {
+it('ambiguous EnRoute stays locked in a new controller for the same user until a read settles it', async () => {
   const h = setup();
   h.get.mockResolvedValue([order]);
   await h.loader.focus();
   h.enRoute.mockRejectedValue(new Error('timeout'));
   await h.loader.handleEnRoute(order.id);
   h.loader.blur();
+  h.get.mockRejectedValue(new Error('offline'));
   const next = createJobsLoader(h.get, h.write, h.enRoute, h.session, h.notify);
   await next.focus();
   await next.handleEnRoute(order.id);
