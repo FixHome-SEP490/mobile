@@ -13,3 +13,14 @@ it('Home sets light status bar icons only while it is in front, and gives them b
   expect(pop).toHaveBeenCalledWith(entry);
   push.mockRestore(); pop.mockRestore();
 });
+
+it('Home does not crash on the web build, where react-native-web has no status bar stack (14/11)', () => {
+  const original = StatusBar.pushStackEntry;
+  (StatusBar as unknown as { pushStackEntry: unknown }).pushStackEntry = undefined;
+  try {
+    const undo = homeStatusBar();
+    expect(() => undo()).not.toThrow();
+  } finally {
+    (StatusBar as unknown as { pushStackEntry: unknown }).pushStackEntry = original;
+  }
+});
