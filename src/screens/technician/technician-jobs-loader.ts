@@ -128,7 +128,8 @@ export function createJobsLoader(
     loaded = false;
     publish({ ...initialJobsState, loading: false, error: deniedMessage });
   }
-  function refresh(force = false): Promise<void> {
+  /** `settle`: a read the technician asked for (pull, focus) may unlock an unknown EnRoute outcome. */
+  function refresh(force = false, settle = true): Promise<void> {
     if (!active || !authorized()) return Promise.resolve();
     if (inFlight && !force) return inFlight;
     const generation = ++requestGeneration;
@@ -153,7 +154,11 @@ export function createJobsLoader(
         }
         loaded = true;
         const merged = mergeJobsPage([], outcome.rows, outcome.total, 1);
-        publish({ jobs: merged.jobs, jobsTotal: merged.jobsTotal, jobsPage: merged.jobsPage, error: null });
+        // BUG DETECTOR 155: a fresh read settles an unknown outcome. Once no POST is in flight, the row
+        // the server returned is the truth: still ACCEPTED unlocks the button, a later status hides it.
+        const ids = submissions(ownerId!);
+        if (settle) for (const job of outcome.rows) if (job.id !== state.actionLoading) ids.delete(job.id);
+        publish({ jobs: merged.jobs, jobsTotal: merged.jobsTotal, jobsPage: merged.jobsPage, error: null, blockedOrderIds: [...ids] });
       } catch (error) {
         if (!valid()) return;
         if (accessDenied(error)) denyAccess();
@@ -226,7 +231,7 @@ export function createJobsLoader(
         await refresh(true);
       } else {
         if (isCurrent()) notify('Chưa xác nhận trạng thái', 'Không rõ yêu cầu đã được xử lý hay chưa. Vui lòng làm mới; không gửi lại thao tác.');
-        await refresh(true); // GET reconciliation only, never another POST.
+        await refresh(true, false); // GET reconciliation only, never another POST; the next pull or focus settles it.
       }
     } finally {
       if (sameAccount()) publish({ actionLoading: null });
