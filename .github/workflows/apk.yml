@@ -1,0 +1,73 @@
+name: APK
+
+# Every merge into dev builds a release APK that talks to https://api.fixhome.sbs and
+# replaces the "apk-dev" release, so the newest build is always at
+# https://github.com/FixHome-SEP490/mobile/releases/tag/apk-dev
+# A pull request that changes this workflow only builds, it does not publish.
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+    paths: ['.github/workflows/apk.yml', 'app.json', 'app.config.js', 'package.json', 'package-lock.json']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: Build APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      EXPO_PUBLIC_API_BASE_URL: https://api.fixhome.sbs/api/v1
+      EXPO_PUBLIC_APP_NAME: FixHome
+      # Optional: without this secret the map screens show their placeholder.
+      FIXHOME_ANDROID_MAPS_API_KEY: ${{ secrets.FIXHOME_ANDROID_MAPS_API_KEY }}
+      NODE_ENV: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate the Android project
+        run: npx expo prebuild --platform android --no-install --clean
+      - name: Build the release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+      - name: Name the APK
+        run: |
+          SHORT=$(git rev-parse --short HEAD)
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk "dist/FixHome-dev-${SHORT}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk dist/FixHome-dev-latest.apk
+          ls -la dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FixHome-apk
+          path: dist/FixHome-dev-latest.apk
+          retention-days: 7
+      - name: Publish the apk-dev release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHORT=$(git rev-parse --short HEAD)
+          gh release delete apk-dev --cleanup-tag --yes || true
+          gh release create apk-dev dist/FixHome-dev-latest.apk "dist/FixHome-dev-${SHORT}.apk" \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "FixHome APK (dev ${SHORT})" \
+            --notes "Built from dev at ${SHORT} on $(date -u '+%Y-%m-%d %H:%M UTC'). Server: https://api.fixhome.sbs. Download FixHome-dev-latest.apk and install it on an Android phone (allow installing from unknown sources)."
