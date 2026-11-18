@@ -3,8 +3,8 @@
 // The call screen (PO 18/10/2026), mounted once at the root so a call survives
 // moving between screens. Same buttons as the web: answer or decline a ringing
 // call; mute, speaker and hang up during one; close or call back after it. The
-// speaker button switches between the earpiece ("Loa nhỏ") and the loudspeaker
-// ("Loa to").
+// speaker button "Loa" works like a phone's: lit means the loudspeaker ("loa
+// to"), unlit means the earpiece ("loa nhỏ") (PO 18/11/2026).
 
 import React, { useEffect } from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -128,11 +128,11 @@ export default function CallOverlay() {
               />
               <RoundButton
                 testID="call-speaker"
-                icon={isLoudspeaker ? 'volume-high' : 'volume-low'}
+                icon="volume-high"
                 label={isLoudspeaker ? 'Đang bật loa to, chạm để chuyển loa nhỏ' : 'Đang bật loa nhỏ, chạm để chuyển loa to'}
-                caption={isLoudspeaker ? 'Loa to' : 'Loa nhỏ'}
-                background={isLoudspeaker ? colors.primaryStrong : '#334155'}
-                color="#FFFFFF"
+                caption="Loa"
+                background={isLoudspeaker ? '#FFFFFF' : '#334155'}
+                color={isLoudspeaker ? colors.text : '#FFFFFF'}
                 pressed={isLoudspeaker}
                 onPress={state.toggleLoudspeaker}
               />
