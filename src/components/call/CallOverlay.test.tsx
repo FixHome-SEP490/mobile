@@ -91,17 +91,19 @@ describe('CallOverlay', () => {
       await act(async () => { useCallStore.setState({ status: 'connected', callId: 'call-1', conversationId: 'conv-1', role: 'caller', peer: PEER }); });
       const speaker = () => byId(tree, 'call-speaker')!;
       expect(speaker().props.accessibilityLabel).toBe('Đang bật loa nhỏ, chạm để chuyển loa to');
-      expect(texts(tree)).toContain('Loa nhỏ');
+      expect(speaker().props.accessibilityState.selected).toBe(false);
+      expect(texts(tree)).toContain('Loa');
+      expect(texts(tree)).not.toContain('Loa nhỏ');
 
       await act(async () => { speaker().props.onPress(); });
       expect(mockAudio.setLoudspeaker).toHaveBeenLastCalledWith(true);
       expect(speaker().props.accessibilityLabel).toBe('Đang bật loa to, chạm để chuyển loa nhỏ');
       expect(speaker().props.accessibilityState.selected).toBe(true);
-      expect(texts(tree)).toContain('Loa to');
+      expect(texts(tree)).not.toContain('Loa to');
 
       await act(async () => { speaker().props.onPress(); });
       expect(mockAudio.setLoudspeaker).toHaveBeenLastCalledWith(false);
-      expect(texts(tree)).toContain('Loa nhỏ');
+      expect(speaker().props.accessibilityState.selected).toBe(false);
     } finally { act(() => tree.unmount()); }
   });
 
