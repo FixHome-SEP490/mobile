@@ -261,7 +261,8 @@ export function resumeTargetFor(booking: BookingItem, ordersUnknown: boolean): s
 }
 
 export type HomeResumeItem =
-  | { kind: 'order'; orderId: string; title: string; detail: string }
+  // visitGroupId (bug 182): a device of a multi-device visit resumes on its visit, not as a lone order.
+  | { kind: 'order'; orderId: string; visitGroupId?: string; title: string; detail: string }
   | { kind: 'booking'; bookingId: string; title: string; detail: string };
 
 const HOME_ACTIVE_ORDER_STATUSES = new Set(['ACCEPTED', 'EN_ROUTE', 'UNDER_REPAIR', 'IN_PROGRESS']);
@@ -295,7 +296,10 @@ export function homeResumeTarget(
     activeOrders.sort((a, b) => createdAtTime(b.createdAt) - createdAtTime(a.createdAt));
     const order = activeOrders[0];
     const status = String(order.status).toUpperCase();
-    const title = status === 'EN_ROUTE'
+    // One check-in covers a visit while each device stays EN_ROUTE until its repair starts.
+    const title = status === 'EN_ROUTE' && order.arrivalVerified
+      ? 'Kỹ thuật viên đã đến'
+      : status === 'EN_ROUTE'
       ? 'Kỹ thuật viên đang đến'
       : status === 'UNDER_REPAIR' || status === 'IN_PROGRESS'
         ? 'Đơn đang sửa chữa'
@@ -303,6 +307,7 @@ export function homeResumeTarget(
     return {
       kind: 'order',
       orderId: order.id,
+      ...(order.visitGroupId ? { visitGroupId: order.visitGroupId } : {}),
       title,
       detail: order.serviceName || 'Đơn sửa chữa của bạn',
     };

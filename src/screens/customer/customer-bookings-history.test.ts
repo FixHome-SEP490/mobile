@@ -635,6 +635,15 @@ describe('homeResumeTarget', () => {
     });
   });
 
+  it('resumes a visit device on its visit and says the technician arrived (bug 182)', () => {
+    const resume = homeResumeTarget([], [
+      order({ id: 'order-2', bookingId: 'booking-2', status: 'EN_ROUTE', arrivalVerified: true, visitGroupId: 'group-1', serviceName: 'AC fix' }),
+    ]);
+    expect(resume).toEqual({
+      kind: 'order', orderId: 'order-2', visitGroupId: 'group-1', title: 'Kỹ thuật viên đã đến', detail: 'AC fix',
+    });
+  });
+
   it('routes a resumable unlinked booking to technician selection', () => {
     const resume = homeResumeTarget(
       [booking({ id: 'booking-resume', status: 'SUBMITTED', serviceName: 'Tap repair', serviceOrderId: undefined })],

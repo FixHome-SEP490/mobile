@@ -149,7 +149,9 @@ export default function CustomerHomeScreen() {
   const openResume = useCallback(() => {
     if (!resume) return;
     Haptics.selectionAsync();
-    if (resume.kind === 'order') {
+    if (resume.kind === 'order' && resume.visitGroupId) {
+      navigation.navigate('CustomerVisit', { visitGroupId: resume.visitGroupId });
+    } else if (resume.kind === 'order') {
       const target = orderDetailTarget(resume.orderId);
       if (target) navigation.navigate('CustomerOrderDetail', { serviceOrderId: target });
     } else {
