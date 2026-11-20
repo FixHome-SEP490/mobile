@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import MapView, { Marker, type Region } from 'react-native-maps';
+import MapView, { Marker, type MapRegion as Region } from '../../components/AddressMap';
 import { lightTheme as colors } from '../../constants/theme';
 import { isNativeMapAvailable, MAP_UNAVAILABLE_TITLE } from '../../components/map-availability';
 

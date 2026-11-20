@@ -60,7 +60,8 @@
             "extraProguardRules": "-keep class * extends androidx.room.RoomDatabase { <init>(); }\n-keep class androidx.work.impl.WorkDatabase_Impl { *; }"
           }
         }
-      ]
+      ],
+      "@maplibre/maplibre-react-native"
     ]
   }
 }

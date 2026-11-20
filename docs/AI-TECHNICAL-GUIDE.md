@@ -24,7 +24,7 @@ console (`web`), not the mobile app.
 - React Navigation 7 native stack and bottom tabs
 - Zustand 5 for client state
 - Axios for Backend requests; `socket.io-client` for chat realtime
-- `react-native-maps` for maps
+- `@maplibre/maplibre-react-native` with the MapTiler streets style for maps (key `EXPO_PUBLIC_MAPTILER_KEY`, missing key shows a placeholder)
 - `expo-secure-store` for credentials
 - Light-only UI (`userInterfaceStyle: "light"`)
 - Expo ESLint flat configuration
