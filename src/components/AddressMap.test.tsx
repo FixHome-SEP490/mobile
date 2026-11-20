@@ -63,4 +63,21 @@ describe('AddressMap', () => {
     expect(tree.root.findAllByProps({ testID: 'native-marker' })[0].props.lngLat).toEqual([106.7, 10.77]);
     await act(async () => tree.unmount());
   });
+
+  it('keeps the marker id when the pin moves (MapLibre throws when a marker id changes)', async () => {
+    mockAvailable = true;
+    const view = (lat: number) => (
+      <AddressMap initialRegion={{ latitude: 10.77, longitude: 106.7, latitudeDelta: 0.02, longitudeDelta: 0.02 }}>
+        <Marker coordinate={{ latitude: lat, longitude: 106.7 }} />
+      </AddressMap>
+    );
+    let tree!: ReturnType<typeof create>;
+    await act(async () => { tree = create(view(10.77)); });
+    const before = tree.root.findAllByProps({ testID: 'native-marker' })[0].props.markerId;
+    await act(async () => { tree.update(view(10.79)); });
+    const after = tree.root.findAllByProps({ testID: 'native-marker' })[0];
+    expect(after.props.lngLat).toEqual([106.7, 10.79]);
+    expect(after.props.markerId).toBe(before);
+    await act(async () => tree.unmount());
+  });
 });

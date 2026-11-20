@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Camera, Map, Marker as MapLibreMarker } from '@maplibre/maplibre-react-native';
 import { lightTheme as colors } from '../constants/theme';
@@ -61,9 +61,11 @@ export default function AddressMap({ style, testID, initialRegion, region, onPre
 }
 
 export function Marker({ coordinate, title, pinColor = colors.primaryStrong, testID }: MarkerProps) {
+  // MapLibre refuses a marker whose id changes, and the pin moves on every tap: the id must not follow the coordinate.
+  const autoId = useId();
   if (!isNativeMapAvailable()) return null;
   return (
-    <MapLibreMarker id={testID ?? `${coordinate.latitude},${coordinate.longitude}`} lngLat={[coordinate.longitude, coordinate.latitude]} anchor="bottom">
+    <MapLibreMarker id={testID ?? autoId} lngLat={[coordinate.longitude, coordinate.latitude]} anchor="bottom">
       <View testID={testID} accessible accessibilityLabel={title} style={styles.pinWrap}>
         <View style={[styles.pinHead, { backgroundColor: pinColor }]} />
         <View style={[styles.pinTail, { borderTopColor: pinColor }]} />
