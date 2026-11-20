@@ -85,7 +85,7 @@ describe('sending a photo or video', () => {
     expect(r.root.findAllByProps({ testID: 'chat-attach' }).length).toBeGreaterThan(0);
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     await act(async () => { r.root.findAllByProps({ testID: 'chat-attach' })[0].props.onPress(); });
-    expect(alert).toHaveBeenCalledWith('Gửi ảnh hoặc video', expect.any(String), expect.arrayContaining([expect.objectContaining({ text: 'Thư viện' })]));
+    expect(alert).toHaveBeenCalledWith('Gửi ảnh hoặc video', expect.any(String), expect.arrayContaining([expect.objectContaining({ text: 'Thư viện' })]), { cancelable: true }); // Back closes it on Android
   });
 });
 

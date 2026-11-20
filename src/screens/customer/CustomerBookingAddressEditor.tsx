@@ -28,6 +28,9 @@ import {
   type ExactPinState,
 } from './customer-exact-pin';
 
+// Before any pin the map opens on Ho Chi Minh City (MapTiler opened 0,0 in the Gulf of Guinea).
+const DEFAULT_MAP_CENTER = { lat: 10.7769, lng: 106.7009 };
+
 export type BookingAddressCreateAttempt = {
   payload: CreateAddressRequest;
   baselineIds: string[];
@@ -479,8 +482,8 @@ export default function CustomerBookingAddressEditor({
       ))}
       <View style={[styles.mapWrap, { borderColor: colors.border }]}>
         <MapView key={cameraVersion} style={styles.map} initialRegion={{
-          latitude: coordinates?.lat ?? 0, longitude: coordinates?.lng ?? 0,
-          latitudeDelta: coordinates ? 0.02 : 100, longitudeDelta: coordinates ? 0.02 : 100,
+          latitude: coordinates?.lat ?? DEFAULT_MAP_CENTER.lat, longitude: coordinates?.lng ?? DEFAULT_MAP_CENTER.lng,
+          latitudeDelta: coordinates ? 0.02 : 0.2, longitudeDelta: coordinates ? 0.02 : 0.2,
         }} onPress={(e: { nativeEvent: { coordinate: { latitude: number; longitude: number } } }) =>
           Platform.OS !== 'web' && placePin({
             lat: e.nativeEvent.coordinate.latitude, lng: e.nativeEvent.coordinate.longitude,

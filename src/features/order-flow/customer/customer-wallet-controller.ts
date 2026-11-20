@@ -3,6 +3,7 @@ import { financialRecord, normalizeCustomerWalletSummary, paymentHttpsUrl, valid
 import type { Resource } from '../domain/order-session.types';
 import { FINANCIAL_UNKNOWN, type M6Phase } from './payment-facts';
 import type { WalletTopUpJournal, WalletTopUpMarker } from './wallet-top-up-journal';
+export const TOP_UP_LINK_DEAD_MS = 30 * 60_000; // VNPay link expiry (15 min) plus a margin for a late return
 export interface CustomerWalletOwner { userId: string; role: 'customer'; sessionGeneration: number }
 export interface CustomerWalletDependencies {
   journal: WalletTopUpJournal; getOwner: () => CustomerWalletOwner | null; isActive: () => boolean; newKey: () => string; now?: () => number;
@@ -43,6 +44,10 @@ export function createCustomerWalletController(deps: CustomerWalletDependencies)
     const marker = deps.journal.get(owner.userId);
     if (marker?.status === 'unknown' && marker.paymentId && summary?.transactions.some(t => t.type === 'top_up' && t.referenceType === 'PAYMENT' && t.referenceId === marker.paymentId)) {
       await deps.journal.mark(owner.userId, marker.stableKey, 'resolved');
+    } else if (marker?.status === 'unknown' && summary && page === 1 && (deps.now ?? Date.now)() - marker.dispatchedAt > TOP_UP_LINK_DEAD_MS) {
+      // The VNPay link lives 15 minutes. Long after that with no credit in the ledger the attempt can no
+      // longer be paid, so it must not lock the top-up form for good (a late credit still shows in the ledger).
+      await deps.journal.mark(owner.userId, marker.stableKey, 'failed-known');
     }
     finish(owner, deps.journal.get(owner.userId));
   }

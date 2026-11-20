@@ -1453,10 +1453,10 @@ export default function CustomerProfileScreen() {
               key={mapCameraVersion}
               style={{ width: '100%', height: '100%' }}
               initialRegion={{
-                latitude: mapCoordinates?.lat ?? 0,
-                longitude: mapCoordinates?.lng ?? 0,
-                latitudeDelta: mapCoordinates ? 0.02 : 100,
-                longitudeDelta: mapCoordinates ? 0.02 : 100,
+                latitude: mapCoordinates?.lat ?? 10.7769,
+                longitude: mapCoordinates?.lng ?? 106.7009,
+                latitudeDelta: mapCoordinates ? 0.02 : 0.2,
+                longitudeDelta: mapCoordinates ? 0.02 : 0.2,
               }}
               onPress={handleMapPress}
             >
