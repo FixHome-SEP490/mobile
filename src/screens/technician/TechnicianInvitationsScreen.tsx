@@ -342,7 +342,7 @@ export default function TechnicianInvitationsScreen() {
                 <Clock size={iconSize.sm} color={colors.textSecondary} strokeWidth={iconStroke} style={styles.rowIcon} />
                 <Text style={styles.metaText}>{timeWindow || 'Khung giờ chưa xác định'}</Text>
               </View>
-              {!devices && b?.quantity != null ? <Text style={styles.fieldValue}>{`Số lượng: SL ${b.quantity}`}</Text> : null}
+              {!devices && b?.quantity != null ? <Text style={styles.fieldValue}>{`Số lượng: ${b.quantity}`}</Text> : null}
               {!devices && (
               <View style={styles.badgeRow}>
                 {b?.urgency ? <StatusBadge view={urgencyView(b.urgency)} /> : null}

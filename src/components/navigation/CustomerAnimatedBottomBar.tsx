@@ -285,10 +285,12 @@ export default function CustomerAnimatedBottomBar(props: CustomerAnimatedBottomB
             <View style={styles.iconSlot}>
               {tab.icon}
               {tab.badgeCount ? (
-                <View accessible={false} style={styles.badge}>
-                  <PillText allowFontScaling={false} style={styles.badgeText}>
-                    {tab.badgeCount > 99 ? '99+' : tab.badgeCount}
-                  </PillText>
+                <View accessible={false} pointerEvents="none" style={styles.badgeAnchor}>
+                  <View style={styles.badge}>
+                    <PillText allowFontScaling={false} style={styles.badgeText}>
+                      {tab.badgeCount > 99 ? '99+' : tab.badgeCount}
+                    </PillText>
+                  </View>
                 </View>
               ) : null}
             </View>
@@ -311,10 +313,12 @@ export default function CustomerAnimatedBottomBar(props: CustomerAnimatedBottomB
             <View style={styles.iconSlot}>
               {tab.icon}
               {tab.badgeCount ? (
-                <View accessible={false} style={[styles.badge, { backgroundColor: colors.error }]}>
-                  <PillText allowFontScaling={false} style={styles.badgeText}>
-                    {tab.badgeCount > 99 ? '99+' : tab.badgeCount}
-                  </PillText>
+                <View accessible={false} pointerEvents="none" style={styles.badgeAnchor}>
+                  <View style={[styles.badge, { backgroundColor: colors.error }]}>
+                    <PillText allowFontScaling={false} style={styles.badgeText}>
+                      {tab.badgeCount > 99 ? '99+' : tab.badgeCount}
+                    </PillText>
+                  </View>
                 </View>
               ) : null}
             </View>
@@ -485,10 +489,15 @@ function createStyles(
       alignItems: 'center',
       justifyContent: 'center',
     },
-    badge: {
+    // The badge sits in this wider box: measured against the 28px icon slot, "99+" was cut to "9…" on Android.
+    badgeAnchor: {
       position: 'absolute',
       top: -3,
       right: -5,
+      width: 44,
+      alignItems: 'flex-end',
+    },
+    badge: {
       minWidth: 17,
       height: 17,
       borderRadius: 9,

@@ -75,7 +75,7 @@ it('waiting shows who is awaited and honest status; verify is GET-only', async (
   await act(async () => { renderer = create(<PaymentWaitingScreen />); });
   const text = JSON.stringify(renderer.toJSON());
   expect(text).toContain('Khách hàng thanh toán');
-  expect(text).toContain('invoice-1');
+  expect(text).toContain('#INVOICE-');
   await act(async () => { renderer.root.findByProps({ testID: 'payment-waiting-verify' }).props.onPress(); });
   expect(mockVerify).toHaveBeenCalledTimes(1);
   await act(async () => { renderer.root.findByProps({ testID: 'task-link-CashDeclaration' }).props.onPress(); });

@@ -166,6 +166,9 @@ export default function FaceCheckInScreen() {
       ) : (
         <ReadOnlyNotice>Hãy chụp ảnh khuôn mặt của bạn bằng camera để máy chủ xác minh. Ảnh chỉ xem trước trên máy trước khi bạn nhấn gửi. Camera sẽ hướng dẫn từng bước: ảnh đầu nhìn thẳng, ảnh sau quay đầu hoặc mỉm cười để xác nhận bạn đang có mặt.</ReadOnlyNotice>
       )}
+      {/* Above the previews: below them the server answer (no face found...) was off screen after Gửi ảnh. */}
+      {captureError ? <ReadOnlyNotice>{captureError}</ReadOnlyNotice> : null}
+      {state.phase === 'denied' && state.message ? <ReadOnlyNotice>{state.message}</ReadOnlyNotice> : null}
       {asset && !hasOwnFace ? (
         <View style={{ backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md, gap: 12 }}>
           <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>Đã chụp xong. Kiểm tra kỹ rồi mới gửi.</Text>
@@ -246,8 +249,6 @@ export default function FaceCheckInScreen() {
           <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: 14, lineHeight: 20 }}>Bỏ qua chụp ảnh mặt (chỉ bản dev)</Text>
         </TouchableOpacity>
       ) : null}
-      {captureError ? <ReadOnlyNotice>{captureError}</ReadOnlyNotice> : null}
-      {state.phase === 'denied' && state.message ? <ReadOnlyNotice>{state.message}</ReadOnlyNotice> : null}
       {isUnresolved ? (
         <ReadOnlyNotice>Chưa xác nhận được kết quả hoặc có thao tác đang chờ đối chiếu. Không gửi lại; hãy kiểm tra từ hệ thống trước khi thử lại.</ReadOnlyNotice>
       ) : null}
