@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, type ViewStyle } from 'react-native';
+import { Alert, StyleSheet, Text, TouchableOpacity, type ViewStyle } from 'react-native';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
 const BOOKING_ID = '11111111-1111-4111-8111-111111111111';
@@ -8,6 +8,7 @@ const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
 let mockRouteParams: Record<string, unknown> = { bookingId: BOOKING_ID };
 const mockGetBooking = jest.fn();
+const mockCancelBooking = jest.fn();
 const mockState: { booking: Record<string, unknown> | null; loading: boolean; refreshing: boolean; error: string | null } = {
   booking: null, loading: false, refreshing: false, error: 'Không thể tải chi tiết yêu cầu đặt lịch.',
 };
@@ -47,13 +48,14 @@ jest.mock('../../constants/theme', () => ({
 jest.mock('../../components/customer/CustomerSkeleton', () => () => null);
 jest.mock('../../store/auth.store', () => ({
   useAuthStore: {
-    getState: () => ({ user: { id: 'customer-1' } }),
+    getState: () => ({ isAuthenticated: true, user: { id: 'customer-1', role: 'customer' } }),
     subscribe: () => () => undefined,
   },
 }));
 jest.mock('../../api/bookings.api', () => ({
   bookingsApi: {
     getBooking: (...args: unknown[]) => mockGetBooking(...args),
+    cancelBooking: (...args: unknown[]) => mockCancelBooking(...args),
   },
 }));
 jest.mock('./customer-booking-detail', () => {
@@ -192,6 +194,37 @@ describe('CustomerBookingDetail REAL read-only presentation', () => {
       expect(labels).not.toContain('Kỹ thuật viên đã nhận đơn');
       expect(mockGetBooking).not.toHaveBeenCalled();
     } finally { act(() => tree.unmount()); }
+  });
+
+  it('lets the customer cancel a request nobody took from its own page (bug 169)', async () => {
+    const booking = {
+      id: BOOKING_ID, customerId: 'customer-1', serviceName: 'Sửa điều hòa',
+      status: 'CLOSED', urgency: 'NORMAL', createdAt: '2030-10-20T08:00:00.000Z',
+    };
+    Object.assign(mockState, { booking, error: null });
+    mockCancelBooking.mockResolvedValue({ ...booking, status: 'CANCELLED' });
+    mockGetBooking.mockResolvedValue({ ...booking, status: 'CANCELLED' });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const tree = await mount();
+    try {
+      const cancel = touch(tree, 'Hủy yêu cầu');
+      expect(cancel).toBeDefined();
+      act(() => cancel?.props.onPress());
+      expect(mockCancelBooking).not.toHaveBeenCalled();
+      const buttons = alert.mock.calls[0][2] as { text: string; onPress?: () => Promise<void> }[];
+      await act(async () => { await buttons.find((b) => b.text === 'Hủy yêu cầu')?.onPress?.(); });
+      expect(mockCancelBooking).toHaveBeenCalledWith(BOOKING_ID, 'Khách hủy yêu cầu');
+      expect(alert).toHaveBeenCalledTimes(1);
+    } finally { act(() => tree.unmount()); alert.mockRestore(); }
+  });
+
+  it('does not offer cancelling a request once a repair order exists', async () => {
+    Object.assign(mockState, {
+      booking: { id: BOOKING_ID, customerId: 'customer-1', serviceName: 'Sửa điều hòa', status: 'CLOSED', urgency: 'NORMAL', serviceOrderId: ORDER_ID },
+      error: null,
+    });
+    const tree = await mount();
+    try { expect(touch(tree, 'Hủy yêu cầu')).toBeUndefined(); } finally { act(() => tree.unmount()); }
   });
 
   it('keeps CLOSED Booking and linked ServiceOrder as distinct navigation targets', async () => {

@@ -73,3 +73,11 @@ it('a ready, unopened payment link is the next step, not an unknown result (M-23
   expect(f.c.getState()).toMatchObject({ urlReady: false, message: expect.stringContaining('Chưa xác nhận được kết quả') });
   expect(f.transport.openUrl).toHaveBeenCalledTimes(1);
 });
+it('an attempt never paid stops locking the top-up form once its VNPay link is long dead', async () => {
+  const f = setup(); await initiate(f); f.summary(walletSummary(0, [tx('unrelated')]));
+  let now = 1000 + 10 * 60_000;
+  const c = createCustomerWalletController({ ...f.deps, now: () => now, newKey: () => 'second_key', journal: createWalletTopUpJournal(f.storage) });
+  await c.verify(); expect(c.getState().phase).toBe('unknown');
+  now = 1000 + 31 * 60_000; await c.verify(); expect(c.getState().phase).toBe('failed-known');
+  await c.requestTopUp(20000); await c.submitConfirmation(); expect(f.transport.topUp).toHaveBeenCalledTimes(2);
+});

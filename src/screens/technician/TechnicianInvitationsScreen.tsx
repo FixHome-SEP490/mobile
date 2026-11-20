@@ -277,7 +277,7 @@ export default function TechnicianInvitationsScreen() {
                 <View style={[styles.infoTile, styles.tileHalf]}>
                   <View style={styles.tileBody}>
                     <Text style={styles.fieldLabel}>Số lượng</Text>
-                    <Text style={styles.fieldValue}>{b?.quantity != null ? `SL ${b.quantity}` : 'Chưa xác định'}</Text>
+                    <Text style={styles.fieldValue}>{b?.quantity != null ? String(b.quantity) : 'Chưa xác định'}</Text>
                   </View>
                 </View>
                 )}

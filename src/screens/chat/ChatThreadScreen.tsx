@@ -378,7 +378,8 @@ export default function ChatThreadScreen() {
       { text: 'Thư viện', onPress: () => void choosePick('library') },
       { text: 'Chụp ảnh', onPress: () => void choosePick('camera-photo') },
       { text: 'Quay video', onPress: () => void choosePick('camera-video') },
-    ]);
+      // Android shows at most three buttons, so there is no Hủy: Back or a tap outside closes it.
+    ], { cancelable: true });
   }, [choosePick]);
 
 

@@ -146,7 +146,7 @@ it('opens spacious T03 inside the same screen with only preview metadata and no 
   expect(text()).toContain('Khu vực được phép xem');
   expect(text()).toContain('Khung giờ mong muốn');
   expect(text()).toContain('Số lượng');
-  expect(text()).toContain('SL 3');
+  expect(text()).not.toContain('SL 3'); // bug 190: the label already says Số lượng
   expect(text()).toContain('Mức độ khẩn');
   expect(buttons('Nhận việc Kiểm tra bơm (fixture)')).toHaveLength(1);
   expect(buttons('Từ chối lời mời Kiểm tra bơm (fixture)')).toHaveLength(1);

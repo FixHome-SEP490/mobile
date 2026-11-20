@@ -32,6 +32,7 @@ import RebookSheet from '../../components/RebookSheet';
 import { useRebookAction } from '../../hooks/useRebookAction';
 import { sessionLabel } from '../../utils/booking-session';
 import PillText from '../../components/PillText';
+import { canCancelBookingConservative, cancelBookingConservative } from './customer-booking-manage';
 
 const MATCH_POLL_MS = 5000;
 
@@ -120,6 +121,39 @@ export default function CustomerBookingDetailScreen() {
             Alert.alert('Chưa gia hạn được', 'Lời mời có thể đã hết hạn hoặc đã có kỹ thuật viên nhận. Kéo xuống để tải lại.');
           } finally {
             setExtending(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  // A request nobody took yet (or whose invitations ended) can be dropped from its own page too,
+  // not only from the list (bug 169 on web).
+  const [cancelling, setCancelling] = useState(false);
+  const cancelRequest = () => {
+    if (!booking || cancelling) return;
+    Alert.alert('Hủy yêu cầu đặt lịch', 'Yêu cầu sẽ dừng tìm kỹ thuật viên. Bạn có thể đặt lại sau.', [
+      { text: 'Giữ lại', style: 'cancel' },
+      {
+        text: 'Hủy yêu cầu',
+        style: 'destructive',
+        onPress: async () => {
+          setCancelling(true);
+          try {
+            const result = await cancelBookingConservative({
+              getCustomerId: () => customerBookingsUserId(useAuthStore.getState()),
+              getBooking: bookingsApi.getBooking,
+              cancelBooking: (id, reason) => bookingsApi.cancelBooking(id, reason),
+              reschedule: () => Promise.reject(new Error('unused')),
+            }, booking, 'Khách hủy yêu cầu');
+            if (result.kind !== 'cancelled') {
+              Alert.alert('Chưa hủy được', result.kind === 'linked'
+                ? 'Kỹ thuật viên vừa nhận việc. Bạn xem đơn sửa chữa để hủy nếu cần.'
+                : 'Bạn kéo xuống để tải lại rồi thử lại.');
+            }
+            void loader.refresh(true);
+          } finally {
+            setCancelling(false);
           }
         },
       },
@@ -327,6 +361,19 @@ export default function CustomerBookingDetailScreen() {
             </TouchableOpacity>
           )}
           {!!extensionNotice && <Text style={styles.actionDetail}>{extensionNotice}</Text>}
+          {canCancelBookingConservative(booking) && (
+            <TouchableOpacity
+              testID="booking-detail-cancel"
+              onPress={cancelRequest}
+              disabled={cancelling}
+              accessibilityRole="button"
+              accessibilityLabel="Hủy yêu cầu"
+              accessibilityState={{ disabled: cancelling }}
+              style={[styles.secondaryButton, { borderColor: colors.error }, cancelling && { opacity: 0.5 }]}
+            >
+              <Text style={[styles.secondaryButtonText, { color: colors.error }]}>{cancelling ? 'Đang hủy…' : 'Hủy yêu cầu'}</Text>
+            </TouchableOpacity>
+          )}
           {route.params.rebooked === 'invited' && (
             <Text testID="booking-rebooked-notice" accessibilityRole="alert" style={styles.actionDetail}>
               Đã gửi lời mời cho thợ cũ cho buổi bạn chọn, đang chờ thợ xác nhận.
