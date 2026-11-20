@@ -119,6 +119,8 @@ export interface ServiceOrderItem {
   completionRequestedAt?: string;
   customerConfirmed?: boolean;
   arrivalVerified?: boolean;
+  /** The technician's check-in face while it waits for, or was refused by, a service manager (PO 20/11/2026); absent or null when no review applies. */
+  checkinFaceReview?: { status: 'pending' | 'approved' | 'rejected'; note: string | null } | null;
   beforeEvidenceCount?: number;
   afterEvidenceCount?: number;
   status: CanonicalOrderStatus;

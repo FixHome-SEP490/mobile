@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-20 17:49 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: feat/mobile-maptiler-map
+> Cập nhật lần cuối: 2026-11-20 23:31 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -323,6 +323,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - Màn Đang sửa chữa (`RepairWorkspaceScreen`, T09): đã có ảnh sau sửa chữa được máy chủ xác nhận (và đạt `afterMinimum` nếu đã biết) thì nút chính là "Bàn giao" mở thẳng `CompletionRequest`, nút phụ "Xem ảnh" mở `EvidenceGallery` (ảnh trước, ảnh sau và ảnh khuôn mặt); chưa có ảnh thì nút chính là "Chụp ảnh sau sửa chữa". Áp dụng cả đơn thường và đơn trong lượt nhiều thiết bị.
 - Ảnh sau sửa chữa (`AfterEvidenceScreen`): chụp tối đa 5 ảnh rồi gửi một lần, gửi lần lượt từng ảnh qua `uploadAfter` và dừng ở ảnh đầu tiên chưa được máy chủ xác nhận, như ảnh trước sửa chữa; chưa kiểm chứng trên máy thật.
 - Màn tổng "Quản lý đơn" (`TechnicianOrderHub`, 22/10/2026, CHƯA KIỂM CHỨNG trên máy thật): dưới nút bước hiện tại của T02, T03, T05, T06, T08 và thay danh sách lối tắt cũ của T09, thợ luôn thấy Linh kiện (vào `PartsLifecycle` để nhận bằng QR ở mọi bước; huy hiệu "N chờ nhận" đếm linh kiện lấy tại kho `ready` hoặc giao tận nơi `delivering`), Phạm vi và báo giá, Thông tin đơn, Ghi chú riêng, Tiến độ; nhóm "Bước sửa chữa" (phát sinh, ảnh sau, bàn giao, tiền mặt) chỉ hiện khi `UNDER_REPAIR`. Chỉ điều hướng: không đổi `order-task-resolver`, API, enum hay quyền; Backend vẫn quyết định mọi thao tác.
+- Khuôn mặt check-in lệch ảnh đăng ký (PO 20/11/2026, backend cờ `FACE_CHECKIN_REVIEW_ENABLED`): order trả `checkinFaceReview: { status, note } | null`. `pending` thì `resolveTechnicianTask` ra task `T05W` (`FaceReviewWaitingScreen`, chờ quản lý dịch vụ xác nhận, `OrderFlowNavigator` đọc lại đơn mỗi `AWAITING_DECISION_POLL_MS`); `rejected` thì quay lại `T05` kèm lý do để chụp lại (`arrival-proof-controller` cho gửi lại ảnh mặt dù đã có `CHECKIN_FACE`); ảnh BEFORE bị khóa khi chưa `approved`. Lỗi chụp lại lần đầu là 400 có câu tiếng Việt, hiện qua `serverReason`. Thông báo `CHECKIN_FACE_APPROVED` và `CHECKIN_FACE_REJECTED` mở đơn. Chạy thật trên thiết bị và với backend CHƯA KIỂM CHỨNG.
 - Giao diện chuẩn bị linh kiện (`AcceptedPartsScreen`), đề xuất chi phí phát sinh (`ExtraProposalScreen`) và quản lý linh kiện (`PartsLifecycleScreen`) làm lại theo ui-ux-pro-max (CHƯA KIỂM CHỨNG trên máy thật): màn chuẩn bị dùng `PartPickerRow` (chọn danh mục, số lượng bấm +/−, ghi chú cho kho; ghi chú là `note`, không còn bị tên linh kiện ghi đè) thay cho `CostItemEditor`; `CatalogPicker` dùng chung tự tải danh mục khi mở hàng, có nút Tìm, phân trang "Xem thêm" thay cho khung cuộn lồng; `FulfillmentMethodPicker` có trạng thái chọn nhìn thấy được ở cả hai màn; `ConfirmSummary` liệt kê từng dòng trước khi gửi và thay form khi xác nhận; lỗi theo ô (`validateCostItemRows`) và lỗi lý do hiện ngay tại ô; `ReadOnlyNotice` có `tone` (lỗi là `alert`); `TaskScreenShell` có `summary` (tổng ước tính cố định cạnh nút) và footer chia hàng 1:2; ảnh bằng chứng dạng ảnh nhỏ; màn bổ sung có hai nút thêm riêng "linh kiện" và "tiền công"; mã QR nhận hàng mặc định ẩn, có nút "Hiện mã để kiểm tra". Không đổi API, enum hay quyền.
 - Chưa làm: bảng tổng hợp thanh toán của đơn trên màn khách như web (`order-billing.ts`, gồm cảnh báo hóa đơn 0 ₫ lệch với báo giá; backend vẫn chặn bằng `CONFLICT`). CHƯA KIỂM CHỨNG với backend thật.
 
@@ -420,6 +421,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-20 23:31 (UTC+7) | Hgnv11 | dev | Thêm màn chờ quản lý dịch vụ xác nhận khuôn mặt check-in (task T05W), chụp lại khi bị từ chối, khóa ảnh trước sửa chữa khi chưa xác nhận
 - 2026-11-20 17:49 (UTC+7) | ToanAltF4 | feat/mobile-maptiler-map | Bản đồ chuyển sang MapTiler (MapLibre) như web, khoá EXPO_PUBLIC_MAPTILER_KEY, bỏ react-native-maps và khoá Google Maps; thiếu khoá thì hiện khung chờ
 - 2026-11-20 15:18 (UTC+7) | ToanAltF4 | fix/mobile-ai-chat-2011 | Chat AI của khách: mỗi máy trong lượt nhiều thiết bị đều có nút Chỉ đặt riêng, ô nhắn giới hạn 1000 ký tự như máy chủ
 - 2026-11-20 12:36 (UTC+7) | ToanAltF4 | fix/mobile-qa-2011b | Sửa lỗi giao diện tìm thấy khi test APK trên Android: badge 99+, mã đơn xuống dòng, ghi chú cho thợ ở bước kiểm tra, Dự kiến thu 0 đ, thông báo vị trí, lỗi ảnh khuôn mặt, mã hoá đơn
@@ -459,7 +461,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-31 17:26 (UTC+7) | Hgnv11 | dev | Nối luồng tiền mặt trước (web #184): khách yêu cầu, hủy, cảnh báo đối soát khi 409; kỹ thuật viên xác nhận đã nhận; cho đơn lẻ và lượt; chưa kiểm chứng với backend bật cờ.
 - 2026-10-31 16:15 (UTC+7) | Hgnv11 | dev | Thợ: màn Thông tin đơn hiện thêm mục Khách mô tả (điều khách ghi lúc đặt) và màn Đã nhận việc, Di chuyển có thẻ xem nhanh dẫn tới đó; ảnh/video khách gửi lúc đặt cũng xem được ở đó (Backend trả thêm bookingMedia trong đơn), tóm tắt AI chưa có; chưa kiểm chứng trên thiết bị.
 - 2026-10-31 15:42 (UTC+7) | Hgnv11 | dev | Khách: Hủy lượt sửa nhiều thiết bị hỏi xác nhận được trên web (confirmAction), không còn bấm mà không có gì xảy ra; chưa kiểm chứng trên trình duyệt.
-- 2026-10-31 15:35 (UTC+7) | Hgnv11 | dev | Chi tiết lời mời nhiều thiết bị: mỗi máy thu gọn, chạm mới hiện chi tiết; chưa kiểm chứng trên thiết bị.
 
 
 ### Lịch sử giữ lại khi tích hợp

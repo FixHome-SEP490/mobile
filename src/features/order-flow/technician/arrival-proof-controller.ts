@@ -87,8 +87,8 @@ export function createArrivalProofController(deps: ArrivalProofDependencies) {
     }
     if (operation === 'check-in') return order.status === 'EN_ROUTE';
     const proof = ownedEvidence(key);
-    if (operation === 'face-upload') return order.status === 'EN_ROUTE' && order.arrivalVerified === true && proof !== null && !proof.some(e => e.type === 'CHECKIN_FACE');
-    if (operation === 'before-upload') return order.status === 'EN_ROUTE' && order.arrivalVerified === true && !!proof?.some(e => e.type === 'CHECKIN_FACE');
+    if (operation === 'face-upload') return order.status === 'EN_ROUTE' && order.arrivalVerified === true && proof !== null && (!proof.some(e => e.type === 'CHECKIN_FACE') || order.checkinFaceReview?.status === 'rejected');
+    if (operation === 'before-upload') return order.status === 'EN_ROUTE' && order.arrivalVerified === true && !!proof?.some(e => e.type === 'CHECKIN_FACE') && (!order.checkinFaceReview || order.checkinFaceReview.status === 'approved');
     if (operation === 'evidence-delete') return order.status === 'EN_ROUTE' && !!proof?.some(e => e.id === entityId && e.type === 'BEFORE');
     if (operation === 'repair-recovery') {
       const s = deps.coordinator.getSnapshot();

@@ -48,6 +48,9 @@ const TYPE_VIEW: Record<string, { tone: ToneName; Icon: typeof Bell }> = {
   OFFICE_VISIT_RESET: { tone: 'info', Icon: Bell },
   OFFICE_VISIT_ATTENDED: { tone: 'info', Icon: Bell },
   PROFILE_REJECTED: { tone: 'danger', Icon: AlertTriangle },
+  // Quản lý dịch vụ xác nhận hoặc từ chối khuôn mặt check-in: chạm để mở đơn.
+  CHECKIN_FACE_APPROVED: { tone: 'success', Icon: Bell },
+  CHECKIN_FACE_REJECTED: { tone: 'danger', Icon: AlertTriangle },
 };
 
 /** Thông báo onboarding -> màn xử lý tiếp. */

@@ -54,7 +54,8 @@ export default function FaceCheckInScreen() {
   const hasPendingIntent = snapshot?.pendingIntent === true;
   const isUnresolved = state.phase === 'unknown' || hasPendingIntent;
   const canVerify = !revoked && !busy && isUnresolved;
-  const canCapture = !revoked && !busy && !isUnresolved && !!evidenceReady && !hasOwnFace && order?.arrivalVerified === true && order?.status === 'EN_ROUTE';
+  const refused = order?.checkinFaceReview?.status === 'rejected';
+  const canCapture = !revoked && !busy && !isUnresolved && !!evidenceReady && (!hasOwnFace || refused) && order?.arrivalVerified === true && order?.status === 'EN_ROUTE';
   const challenge = !revoked && draft.owner === owner ? draft.challenge ?? null : null;
   const second = !revoked && draft.owner === owner ? draft.second ?? null : null;
   const canSend = canCapture && !!asset && (!challenge?.challenge || !!second);
@@ -155,12 +156,14 @@ export default function FaceCheckInScreen() {
       <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }}>
         <DetailRow label="Mã đơn" value={order?.code} />
         <DetailRow label="Địa chỉ" value={order?.addressSummary} />
-        <DetailRow label="Ảnh khuôn mặt" value={hasOwnFace ? 'Máy chủ đã xác nhận' : 'Chưa có ảnh được xác nhận'} />
+        <DetailRow label="Ảnh khuôn mặt" value={refused ? 'Chưa được xác nhận' : hasOwnFace ? 'Máy chủ đã xác nhận' : 'Chưa có ảnh được xác nhận'} />
       </View>
       {revoked ? (
         <ReadOnlyNotice>Quyền xem đơn đã thay đổi hoặc phân công không còn thuộc về bạn. Bản nháp ảnh đã được xóa; không có thao tác nào được gửi.</ReadOnlyNotice>
       ) : !evidenceReady ? (
         <ReadOnlyNotice>Đang tải danh sách ảnh từ máy chủ. Mọi thao tác chụp và gửi đều khóa cho đến khi dữ liệu ảnh đầy đủ.</ReadOnlyNotice>
+      ) : refused ? (
+        <ReadOnlyNotice>{`Quản lý dịch vụ chưa xác nhận khuôn mặt của bạn${order?.checkinFaceReview?.note ? `: ${order.checkinFaceReview.note}` : ''}. Hãy chụp lại ảnh khuôn mặt ở nơi đủ sáng, nhìn thẳng vào camera.`}</ReadOnlyNotice>
       ) : hasOwnFace ? (
         <ReadOnlyNotice>Ảnh xác minh đã được máy chủ xác nhận. Đang tải trạng thái mới; không cần gửi lại.</ReadOnlyNotice>
       ) : (
@@ -169,7 +172,7 @@ export default function FaceCheckInScreen() {
       {/* Above the previews: below them the server answer (no face found...) was off screen after Gửi ảnh. */}
       {captureError ? <ReadOnlyNotice>{captureError}</ReadOnlyNotice> : null}
       {state.phase === 'denied' && state.message ? <ReadOnlyNotice>{state.message}</ReadOnlyNotice> : null}
-      {asset && !hasOwnFace ? (
+      {asset && (!hasOwnFace || refused) ? (
         <View style={{ backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md, gap: 12 }}>
           <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>Đã chụp xong. Kiểm tra kỹ rồi mới gửi.</Text>
           {challenge?.challenge && second ? (

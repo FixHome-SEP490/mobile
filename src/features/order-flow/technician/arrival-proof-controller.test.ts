@@ -181,3 +181,21 @@ it('verify keeps a failed BEFORE upload locked when the server shows a photo fro
   const c = createArrivalProofController(f.deps); await c.uploadBefore(asset); await c.verify();
   expect(f.journal.list('tech')[0].status).toBe('unknown'); expect(c.getState().phase).toBe('unknown');
 });
+it('a check-in face a service manager refused can be sent again, though one is already stored', async () => {
+  const f = fixture(); (f.server.order as any).checkinFaceReview = { status: 'rejected', note: 'Không giống ảnh đăng ký' };
+  f.server.evidence.push(evidence('uploaded', 'CHECKIN_FACE'));
+  const c = createArrivalProofController(f.deps); await c.uploadFace(asset);
+  expect(f.transport.uploadFace).toHaveBeenCalledTimes(1);
+});
+it('a stored face blocks a second upload while it is approved or has no review', async () => {
+  for (const review of [undefined, { status: 'approved', note: null }]) {
+    const f = fixture(); (f.server.order as any).checkinFaceReview = review;
+    const c = createArrivalProofController(f.deps); await c.uploadFace(asset);
+    expect(f.transport.uploadFace).not.toHaveBeenCalled();
+  }
+});
+it.each(['pending', 'rejected'])('BEFORE photos wait while the check-in face is %s', async status => {
+  const f = fixture(); (f.server.order as any).checkinFaceReview = { status, note: null };
+  const c = createArrivalProofController(f.deps); await c.uploadBefore(asset);
+  expect(f.transport.uploadBefore).not.toHaveBeenCalled(); expect(c.getState().phase).toBe('denied');
+});

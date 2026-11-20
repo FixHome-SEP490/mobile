@@ -26,6 +26,7 @@ import TravelScreen from '../technician/TravelScreen';
 import FaceCheckInScreen from '../technician/FaceCheckInScreen';
 import BeforeEvidenceScreen from '../technician/BeforeEvidenceScreen';
 import QuotationFormScreen from '../technician/QuotationFormScreen';
+import FaceReviewWaitingScreen from '../technician/FaceReviewWaitingScreen';
 import QuotationWaitingScreen from '../technician/QuotationWaitingScreen';
 import RepairRecoveryScreen from '../technician/RepairRecoveryScreen';
 import RepairWorkspaceScreen from '../technician/RepairWorkspaceScreen';
@@ -214,6 +215,7 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
     if (resolution.taskId === 'T02') return <AcceptedJobScreen />;
     if (resolution.taskId === 'T03') return <TravelScreen />;
     if (resolution.taskId === 'T05') return <FaceCheckInScreen />;
+    if (resolution.taskId === 'T05W') return <FaceReviewWaitingScreen />;
     if (resolution.taskId === 'T06') return <BeforeEvidenceScreen />;
     if (resolution.taskId === 'T07') return <QuotationFormScreen />;
     if (resolution.taskId === 'T08') return <QuotationWaitingScreen />;
