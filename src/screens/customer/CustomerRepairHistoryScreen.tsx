@@ -277,7 +277,7 @@ export default function CustomerRepairHistoryScreen() {
                     <View style={styles.cardBottom}>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.referenceLabel}>Mã đơn</Text>
-                        <Text style={styles.referenceText}>{item.code || 'Chưa có mã đơn'}</Text>
+                        <Text style={styles.referenceText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{item.code || 'Chưa có mã đơn'}</Text>
                         {item.code ? (
                           <TouchableOpacity
                             testID={`repair-history-copy-code-${item.orderId}`}

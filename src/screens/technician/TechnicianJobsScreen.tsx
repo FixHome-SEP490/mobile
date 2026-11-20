@@ -562,7 +562,7 @@ export default function TechnicianJobsScreen() {
                           <Text style={styles.jobMeta}>{vnDateTimeString(job.scheduledAt, VN_DATETIME)}</Text>
                         </View>
                       )}
-                      {typeof job.grandTotal === 'number' && s !== 'CANCELLED' && (
+                      {typeof job.grandTotal === 'number' && s !== 'CANCELLED' && (s === 'COMPLETED' || job.grandTotal > 0) && (
                         <Text style={styles.jobAmount}>{s === 'COMPLETED' ? 'Tổng thu' : 'Dự kiến thu'}: {formatVnd(job.grandTotal)}</Text>
                       )}
                     </View>

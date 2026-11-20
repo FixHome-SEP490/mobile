@@ -115,7 +115,7 @@ export default function ArrivalCheckInScreen() {
       {state.phase === 'unknown' ? (
         <ReadOnlyNotice>Chưa xác nhận được kết quả. Không gửi lại; hãy kiểm tra từ hệ thống trước khi thử lại.</ReadOnlyNotice>
       ) : null}
-      {state.phase === 'resolved' ? (
+      {state.phase === 'resolved' && !alreadyVerified ? (
         <ReadOnlyNotice>Đã ghi nhận vị trí. Đang chờ máy chủ xác minh; trạng thái mới sẽ tự cập nhật sau khi làm mới.</ReadOnlyNotice>
       ) : null}
       <View style={{ flexDirection: 'row', gap: 8 }}>

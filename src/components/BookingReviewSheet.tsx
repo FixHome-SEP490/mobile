@@ -5,7 +5,7 @@ import {
   BottomSheetModal,
   BottomSheetScrollView,
 } from '@gorhom/bottom-sheet';
-import { CalendarDays, FileText, MapPin, PackageCheck, Wrench } from 'lucide-react-native';
+import { CalendarDays, FileText, MapPin, MessageSquareText, PackageCheck, Wrench } from 'lucide-react-native';
 import type { BookingReviewSnapshot } from '../screens/customer/customer-booking-review';
 import BackClosableBottomSheetModal from './BackClosableBottomSheetModal';
 
@@ -70,6 +70,14 @@ export function BookingReviewSummary({
         value={snapshot.scheduleLabel}
         colors={colors}
       />
+      {snapshot.request.customerNote?.trim() ? (
+        <SummaryRow
+          icon={<MessageSquareText color={colors.primary} size={18} />}
+          label="Ghi chú cho thợ"
+          value={snapshot.request.customerNote.trim()}
+          colors={colors}
+        />
+      ) : null}
       <SummaryRow
         icon={<PackageCheck color={colors.primary} size={18} />}
         label="Giá dịch vụ"
