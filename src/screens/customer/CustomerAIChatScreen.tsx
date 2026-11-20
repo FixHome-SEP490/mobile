@@ -83,6 +83,8 @@ import {
 } from './ai-diagnosis-input';
 import BackButton from '../../components/BackButton';
 import PillText from '../../components/PillText';
+/** Longest message the assistant accepts: the question route is capped at 1000 characters on the server. */
+export const AI_CHAT_MAX_MESSAGE = 1000;
 
 /** The AI drops a session after an hour of silence. Told, not discovered. */
 const SESSION_IDLE_MINUTES = 60;
@@ -802,11 +804,13 @@ export default function CustomerAIChatScreen() {
                 <Text key={d.deviceType} style={styles.pinnedValue} numberOfLines={1} testID="ai-visit-bar-service">{`${d.nameVi}: ${d.service?.nameVi ?? ''}`}</Text>
               ))}
               <Text style={styles.pinnedHint}>Đổi dịch vụ từng máy ở bước sau</Text>
-              {pinnedDevices[0]?.service && (
-                <TouchableOpacity accessibilityRole="button" onPress={() => goToBooking(pinnedDevices[0].service!)} testID="ai-book-single">
-                  <Text style={styles.pinnedHint}>{`Chỉ đặt ${pinnedDevices[0].nameVi.toLowerCase()}`}</Text>
+              {/* One link per device: with only the first one, a customer whose real fault was the second
+                  device (or who said the first was a misread) could not book that device alone. */}
+              {pinnedDevices.map((d, i) => d.service ? (
+                <TouchableOpacity key={`single-${d.deviceType}`} accessibilityRole="button" onPress={() => goToBooking(d.service!)} testID={i === 0 ? 'ai-book-single' : `ai-book-single-${i}`}>
+                  <Text style={styles.pinnedHint}>{`Chỉ đặt ${d.nameVi.toLowerCase()}`}</Text>
                 </TouchableOpacity>
-              )}
+              ) : null)}
             </View>
             <TouchableOpacity
               style={styles.pinnedBtn}
@@ -972,6 +976,9 @@ export default function CustomerAIChatScreen() {
             accessibilityHint="Mô tả thiết bị hoặc hiện tượng cần tư vấn trước khi gửi"
             value={input}
             onChangeText={setInput}
+            // The question route takes at most 1000 characters (AI_MAX_QUESTION on the server); a longer
+            // message came back as "Mô tả chưa hợp lệ" and the typed text was gone.
+            maxLength={AI_CHAT_MAX_MESSAGE}
             multiline
           />
           <TouchableOpacity
