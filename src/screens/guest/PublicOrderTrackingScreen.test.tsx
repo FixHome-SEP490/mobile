@@ -35,7 +35,8 @@ jest.mock('@react-navigation/native', () => {
     }, [callback, mockIsFocused]),
   };
 });
-jest.mock('react-native-maps', () => {
+jest.mock('../../components/map-availability', () => ({ ...jest.requireActual('../../components/map-availability'), isNativeMapAvailable: () => true }));
+jest.mock('../../components/AddressMap', () => {
   const ReactActual = jest.requireActual('react');
   const Native = jest.requireActual('react-native');
   const MapView = ({ children, ...props }: { children?: React.ReactNode; [key: string]: unknown }) => ReactActual.createElement(Native.View, { ...props, testID: 'public-tracking-native-map' }, children);

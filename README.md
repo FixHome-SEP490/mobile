@@ -23,7 +23,7 @@ The app serves the Customer and Technician roles. Service Manager and Admin use 
 | State | Zustand 5 |
 | Navigation | React Navigation 7 |
 | Networking | axios (REST), socket.io-client (chat realtime) |
-| Maps | react-native-maps |
+| Maps | MapTiler (MapLibre, @maplibre/maplibre-react-native), key EXPO_PUBLIC_MAPTILER_KEY |
 | Secure storage | expo-secure-store |
 | Tests | Jest (`jest-expo`) |
 
