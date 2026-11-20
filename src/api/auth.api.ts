@@ -81,6 +81,17 @@ export const authApi = {
     return unwrap(res.data);
   },
 
+  async checkAvailability(params: {
+    email?: string;
+    phoneNumber?: string;
+  }): Promise<{ emailTaken: boolean; emailPending: boolean; phoneTaken: boolean }> {
+    const res = await apiClient.get<
+      | { data: { emailTaken: boolean; emailPending: boolean; phoneTaken: boolean } }
+      | { emailTaken: boolean; emailPending: boolean; phoneTaken: boolean }
+    >('/auth/availability', { params });
+    return unwrap(res.data);
+  },
+
   async verifyRegisterOtp(email: string, otp: string): Promise<AuthResponse> {
     useAuthStore.getState().beginSessionTransition();
     const res = await apiClient.post<{ data: AuthResponse } | AuthResponse>(

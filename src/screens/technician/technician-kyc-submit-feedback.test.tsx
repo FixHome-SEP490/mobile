@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { technicianVerificationApi } from '../../api/technician-verification.api';
 import TechnicianKycScreen from './TechnicianKycScreen';
 
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn() }) }));
+jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn() }), useRoute: () => ({ params: undefined }) }));
 jest.mock('react-native-safe-area-context', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
   return { SafeAreaView: View };

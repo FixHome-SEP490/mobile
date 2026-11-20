@@ -101,7 +101,8 @@ export type RootStackParamList = {
   TechnicianWarrantyDevPreview: { claimId?: string };
   TechnicianWarrantyInbox: undefined;
   TechnicianWarrantyTask: { claimId: string };
-  TechnicianKyc: undefined;
+  /** `fromOnboarding`: opened from step 2 of the registration wizard, so the header shows the step. */
+  TechnicianKyc: { fromOnboarding?: boolean } | undefined;
   TechnicianOnboarding: undefined;
   TechnicianOfficeVisit: undefined;
   TechnicianWallet: undefined;
