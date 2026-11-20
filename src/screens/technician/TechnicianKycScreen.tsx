@@ -217,21 +217,30 @@ export default function TechnicianKycScreen() {
 
   const resetSlots = () => { setSlots(INITIAL_SLOTS); setCertificates([]); };
 
-  const uploadSlot = async (slot: KycSlot): Promise<SubmitDocumentPayload> => {
+  // Ảnh đã lên Storage thì dùng lại khi nộp lại, tránh để file mồ côi.
+  const uploadedRef = useRef(new Map<string, SubmitDocumentPayload>());
+  const uploadOnce = async (cacheKey: string, upload: () => Promise<SubmitDocumentPayload>) => {
+    const hit = uploadedRef.current.get(cacheKey);
+    if (hit) return hit;
+    const doc = await upload();
+    uploadedRef.current.set(cacheKey, doc);
+    return doc;
+  };
+
+  const uploadSlot = (slot: KycSlot): Promise<SubmitDocumentPayload> => {
     if (!slot.asset || !slot.mimeType) throw new Error(`Thiếu ảnh cho ${slot.label}`);
-    const { storageObjectPath, uploadUrl } = await technicianVerificationApi.requestUploadUrl(
-      slot.mimeType,
-    );
-    await technicianVerificationApi.uploadToSignedUrl(uploadUrl, slot.mimeType, {
-      uri: slot.asset.uri,
+    const { asset, mimeType } = slot;
+    return uploadOnce(`${slot.key}|${asset.uri}`, async () => {
+      const { storageObjectPath, uploadUrl } = await technicianVerificationApi.requestUploadUrl(mimeType);
+      await technicianVerificationApi.uploadToSignedUrl(uploadUrl, mimeType, { uri: asset.uri });
+      return {
+        documentType: slot.documentType,
+        storageObjectPath,
+        fileName: `${slot.key}.${MIME_EXTENSIONS[mimeType]}`,
+        fileSize: asset.fileSize ?? 0,
+        mimeType,
+      };
     });
-    return {
-      documentType: slot.documentType,
-      storageObjectPath,
-      fileName: `${slot.key}.${MIME_EXTENSIONS[slot.mimeType]}`,
-      fileSize: slot.asset.fileSize ?? 0,
-      mimeType: slot.mimeType,
-    };
   };
 
   const handleSubmit = async () => {
@@ -241,17 +250,18 @@ export default function TechnicianKycScreen() {
     setSubmitting(true);
     try {
       const documents = await Promise.all(slots.map(uploadSlot));
-      const certificateDocuments = await Promise.all(certificates.map(async (cert, index): Promise<SubmitDocumentPayload> => {
-        const { storageObjectPath, uploadUrl } = await technicianVerificationApi.requestUploadUrl(cert.mimeType);
-        await technicianVerificationApi.uploadToSignedUrl(uploadUrl, cert.mimeType, { uri: cert.asset.uri });
-        return {
-          documentType: 'certificate',
-          storageObjectPath,
-          fileName: `certificate-${index + 1}.${MIME_EXTENSIONS[cert.mimeType]}`,
-          fileSize: cert.asset.fileSize ?? 0,
-          mimeType: cert.mimeType,
-        };
-      }));
+      const certificateDocuments = await Promise.all(certificates.map((cert, index) =>
+        uploadOnce(`certificate-${index}|${cert.asset.uri}`, async (): Promise<SubmitDocumentPayload> => {
+          const { storageObjectPath, uploadUrl } = await technicianVerificationApi.requestUploadUrl(cert.mimeType);
+          await technicianVerificationApi.uploadToSignedUrl(uploadUrl, cert.mimeType, { uri: cert.asset.uri });
+          return {
+            documentType: 'certificate',
+            storageObjectPath,
+            fileName: `certificate-${index + 1}.${MIME_EXTENSIONS[cert.mimeType]}`,
+            fileSize: cert.asset.fileSize ?? 0,
+            mimeType: cert.mimeType,
+          };
+        })));
       setPhase('checking');
       const result = await technicianVerificationApi.submit([...documents, ...certificateDocuments]);
       setVerification(result);
