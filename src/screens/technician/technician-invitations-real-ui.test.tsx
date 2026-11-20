@@ -241,7 +241,8 @@ describe('TechnicianInvitationsScreen real-UI presentation (T-RUI3)', () => {
     expect(text).not.toContain('Đọc phạm vi và khung giờ trước khi quyết định.');
     expect(text).toContain('1 lời mời chờ xác nhận');
     expect(text).toContain('Sửa điều hòa');
-    expect(text).toContain('SL 2');
+    expect(text).toContain('Số lượng: 2');
+    expect(text).not.toContain('SL 2');
     expect(text).toContain('Quận 1, TP. Hồ Chí Minh');
     expect(text).toContain('Khẩn cấp');
     expect(text).toMatch(/Còn \d+/);

@@ -155,7 +155,7 @@ export default function CashDeclarationScreen() {
       }
     >
       <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }}>
-        <DetailRow label="Mã hóa đơn" value={invoice?.id} />
+        <DetailRow label="Mã hóa đơn" value={invoice ? `#${invoice.id.slice(0, 8).toUpperCase()}` : undefined} />
         <DetailRow label="Tổng hóa đơn (tham khảo)" value={invoice ? quoteMoneyText(invoice.grandTotal) : 'Chưa có dữ liệu'} />
         {existingCash ? (
           <DetailRow label="Đối soát hiện có" value={`${cash?.id} · ${String(cash?.status)}`} />
@@ -226,7 +226,7 @@ export default function CashDeclarationScreen() {
       {sheetValid && state.confirmation ? (
         <View style={{ backgroundColor: colors.tone.warning.bg, borderColor: colors.tone.warning.fg, borderWidth: 1, borderRadius: 12, padding: spacing.md }} testID="cash-declare-sheet">
           <Text style={{ fontSize: 16, fontWeight: '700', color: colors.tone.warning.text }}>Xác nhận đã nhận tiền mặt</Text>
-          <DetailRow label="Mã hóa đơn" value={state.confirmation.invoiceId} />
+          <DetailRow label="Mã hóa đơn" value={`#${state.confirmation.invoiceId.slice(0, 8).toUpperCase()}`} />
           <DetailRow label="Số tiền thực nhận" value={state.confirmation.dto.declaredAmount} />
           {state.confirmation.dto.technicianNotes ? <DetailRow label="Ghi chú" value={state.confirmation.dto.technicianNotes} /> : null}
         </View>

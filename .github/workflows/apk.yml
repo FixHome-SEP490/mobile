@@ -27,8 +27,8 @@ jobs:
     env:
       EXPO_PUBLIC_API_BASE_URL: https://api.fixhome.sbs/api/v1
       EXPO_PUBLIC_APP_NAME: FixHome
-      # Optional: without this secret the map screens show their placeholder.
-      FIXHOME_ANDROID_MAPS_API_KEY: ${{ secrets.FIXHOME_ANDROID_MAPS_API_KEY }}
+      # MapTiler key for the maps (same key as web/backend). Without it the map screens show their placeholder.
+      EXPO_PUBLIC_MAPTILER_KEY: ${{ secrets.EXPO_PUBLIC_MAPTILER_KEY }}
       NODE_ENV: production
     steps:
       - uses: actions/checkout@v4

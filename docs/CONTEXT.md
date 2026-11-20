@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-15 02:21 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: fix/start-travel-offline
+> Cập nhật lần cuối: 2026-11-20 17:49 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: feat/mobile-maptiler-map
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -420,6 +420,10 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-20 17:49 (UTC+7) | ToanAltF4 | feat/mobile-maptiler-map | Bản đồ chuyển sang MapTiler (MapLibre) như web, khoá EXPO_PUBLIC_MAPTILER_KEY, bỏ react-native-maps và khoá Google Maps; thiếu khoá thì hiện khung chờ
+- 2026-11-20 15:18 (UTC+7) | ToanAltF4 | fix/mobile-ai-chat-2011 | Chat AI của khách: mỗi máy trong lượt nhiều thiết bị đều có nút Chỉ đặt riêng, ô nhắn giới hạn 1000 ký tự như máy chủ
+- 2026-11-20 12:36 (UTC+7) | ToanAltF4 | fix/mobile-qa-2011b | Sửa lỗi giao diện tìm thấy khi test APK trên Android: badge 99+, mã đơn xuống dòng, ghi chú cho thợ ở bước kiểm tra, Dự kiến thu 0 đ, thông báo vị trí, lỗi ảnh khuôn mặt, mã hoá đơn
+- 2026-11-20 11:07 (UTC+7) | ToanAltF4 | fix/mobile-qa-2011 | Giữ lớp Room của WorkManager khi R8 rút gọn bản release, APK dev mở lên bị văng ngay
 - 2026-11-15 02:21 (UTC+7) | ToanAltF4 | fix/start-travel-offline | BUG 155: pull/focus after a lost Start travel POST unlocks the button when the order is still accepted
 - 2026-11-14 12:27 (UTC+7) | ToanAltF4 | fix/web-status-bar | Màn chủ khách không còn sập khi chạy bản web (react-native-web không có StatusBar.pushStackEntry)
 - 2026-11-13 18:15 (UTC+7) | ToanAltF4 | feat/mobile-w3-tech-1311 | Thợ: giao linh kiện W3 (đồng ý theo phiên bản báo giá, giữ hàng, ảnh nhận), kho W2 được phân bổ + km + không kho nào đủ, phần phí thợ chịu trên hoá đơn; khách/thợ: ghi chú linh kiện chưa có nguồn khi duyệt báo giá (409 PARTS_SOURCE_UNAVAILABLE), thợ gửi lại báo giá khác
@@ -456,10 +460,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-10-31 16:15 (UTC+7) | Hgnv11 | dev | Thợ: màn Thông tin đơn hiện thêm mục Khách mô tả (điều khách ghi lúc đặt) và màn Đã nhận việc, Di chuyển có thẻ xem nhanh dẫn tới đó; ảnh/video khách gửi lúc đặt cũng xem được ở đó (Backend trả thêm bookingMedia trong đơn), tóm tắt AI chưa có; chưa kiểm chứng trên thiết bị.
 - 2026-10-31 15:42 (UTC+7) | Hgnv11 | dev | Khách: Hủy lượt sửa nhiều thiết bị hỏi xác nhận được trên web (confirmAction), không còn bấm mà không có gì xảy ra; chưa kiểm chứng trên trình duyệt.
 - 2026-10-31 15:35 (UTC+7) | Hgnv11 | dev | Chi tiết lời mời nhiều thiết bị: mỗi máy thu gọn, chạm mới hiện chi tiết; chưa kiểm chứng trên thiết bị.
-- 2026-10-31 15:12 (UTC+7) | Hgnv11 | dev | Thẻ lượt nhiều thiết bị hiện Chờ thanh toán khi mọi thiết bị đã bàn giao, không còn Đang sửa chữa; chưa kiểm chứng trên thiết bị.
-- 2026-10-31 14:50 (UTC+7) | Hgnv11 | dev | Thợ mở đơn đã bị hủy hoặc không còn của mình từ thông báo thì thấy tóm tắt đơn, không còn kẹt ở Đang xác minh quyền truy cập; chưa kiểm chứng trên thiết bị.
-- 2026-10-31 14:40 (UTC+7) | Hgnv11 | dev | Thợ: trang báo trễ tải nhanh hơn, chỉ hỏi đơn đang chờ (statuses=accepted,en_route) và dùng chung kết quả giữa hub và trang; chưa kiểm chứng trên thiết bị.
-- 2026-10-31 14:32 (UTC+7) | Hgnv11 | dev | Thợ: gửi báo trễ xong thì trang hiện báo cáo đã gửi (số phút, lý do, mô tả, ảnh, trạng thái chờ khách) thay vì biểu mẫu trống; chưa kiểm chứng với Backend thật và thiết bị.
 
 
 ### Lịch sử giữ lại khi tích hợp

@@ -92,7 +92,7 @@ export default function PaymentWaitingScreen() {
       <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }}>
         <DetailRow label="Mã đơn" value={order.code} />
         <DetailRow label="Đang chờ" value="Khách hàng thanh toán" />
-        <DetailRow label="Mã hóa đơn" value={invoice?.id} />
+        <DetailRow label="Mã hóa đơn" value={invoice ? `#${invoice.id.slice(0, 8).toUpperCase()}` : undefined} />
         <DetailRow label="Tổng tiền" value={invoice ? quoteMoneyText(invoice.grandTotal) : 'Chưa có dữ liệu'} />
         <DetailRow
           label="Trạng thái thanh toán"

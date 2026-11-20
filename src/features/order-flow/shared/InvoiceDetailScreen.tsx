@@ -35,7 +35,7 @@ export default function InvoiceDetailScreen() {
     {state?.kind === 'absent' && <ReadOnlyNotice>Máy chủ xác nhận đơn hiện chưa có hóa đơn.</ReadOnlyNotice>}
     {state?.kind === 'invoice' && <>
       <Section title="Hóa đơn">
-        <DetailRow label="Mã hóa đơn" value={state.invoice.id} />
+        <DetailRow label="Mã hóa đơn" value={`#${state.invoice.id.slice(0, 8).toUpperCase()}`} />
         <DetailRow label="Tổng tiền do máy chủ trả về" value={money(state.total)} />
         <DetailRow label="Trạng thái thanh toán" value={paymentStatusLabel(state.paymentStatus)} />
       </Section>
