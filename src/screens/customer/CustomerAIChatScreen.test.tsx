@@ -95,6 +95,8 @@ describe('CustomerAIChatScreen REAL presentation', () => {
       const input = tree.root.findByType(TextInput);
       expect(input.props.accessibilityLabel).toBe('Nhắn tin cho trợ lý FixHome');
       expect(input.props.placeholderTextColor).toBe('#94A3B8');
+      // The server takes at most 1000 characters per message; longer text used to be rejected after sending.
+      expect(input.props.maxLength).toBe(1000);
       for (const label of ['Quay lại', 'Bắt đầu phiên chat mới', 'Chọn ảnh từ thư viện', 'Chụp ảnh', 'Gửi tin nhắn cho trợ lý']) {
         const el = button(tree, label);
         expect(el).toBeDefined();
@@ -140,6 +142,26 @@ describe('CustomerAIChatScreen REAL presentation', () => {
       expect(mockNavigate).not.toHaveBeenCalled();
       expect(alertSpy).not.toHaveBeenCalled();
       alertSpy.mockRestore();
+    } finally { act(() => tree.unmount()); }
+  });
+
+  it('offers booking each suggested device on its own, not only the first one', async () => {
+    mockAnalyze.mockResolvedValue({
+      sessionId: 'sess-1', kind: 'diagnosis', messageVi: 'Em xem rồi ạ.',
+      devices: [
+        { deviceType: 'den', nameVi: 'Bóng đèn', service: { serviceId: 'svc-den', nameVi: 'Lắp hoặc thay đèn' } },
+        { deviceType: 'dieu_hoa', nameVi: 'Máy lạnh', service: { serviceId: 'svc-ac', nameVi: 'Sửa điều hòa' } },
+      ],
+    });
+    const tree = await mountScreen();
+    try {
+      await act(async () => { tree.root.findByType(TextInput).props.onChangeText('Máy lạnh chạy một lúc là hết lạnh'); });
+      await act(async () => { button(tree, 'Gửi tin nhắn cho trợ lý')?.props.onPress(); });
+      await act(async () => { await new Promise((r) => setTimeout(r, 1200)); });
+      const texts = textValues(tree);
+      expect(texts).toContain('Chỉ đặt bóng đèn');
+      expect(texts).toContain('Chỉ đặt máy lạnh');
+      expect(tree.root.findAll((n) => n.props.testID === 'ai-book-single-1').length).toBeGreaterThan(0);
     } finally { act(() => tree.unmount()); }
   });
 });
