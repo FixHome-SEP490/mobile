@@ -47,6 +47,7 @@ const TYPE_VIEW: Record<string, { tone: ToneName; Icon: typeof Bell }> = {
   OFFICE_VISIT_BLOCKED: { tone: 'danger', Icon: AlertTriangle },
   OFFICE_VISIT_RESET: { tone: 'info', Icon: Bell },
   OFFICE_VISIT_ATTENDED: { tone: 'info', Icon: Bell },
+  OFFICE_VISIT_REMINDER: { tone: 'info', Icon: Bell },
   PROFILE_REJECTED: { tone: 'danger', Icon: AlertTriangle },
   // Quản lý dịch vụ xác nhận hoặc từ chối khuôn mặt check-in: chạm để mở đơn.
   CHECKIN_FACE_APPROVED: { tone: 'success', Icon: Bell },
@@ -60,6 +61,7 @@ const ONBOARDING_TARGET: Record<string, 'TechnicianOfficeVisit' | 'TechnicianOnb
   OFFICE_VISIT_BLOCKED: 'TechnicianOnboarding',
   OFFICE_VISIT_RESET: 'TechnicianOfficeVisit',
   OFFICE_VISIT_ATTENDED: 'TechnicianOnboarding',
+  OFFICE_VISIT_REMINDER: 'TechnicianOfficeVisit',
   PROFILE_REJECTED: 'TechnicianOnboarding',
 };
 const DEFAULT_VIEW = { tone: 'info' as ToneName, Icon: Bell };
