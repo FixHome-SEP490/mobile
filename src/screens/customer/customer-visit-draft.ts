@@ -56,7 +56,7 @@ export function duplicatePhoto(devices: Pick<VisitDeviceDraft, 'photos'>[]): boo
 
 /** Why the visit cannot be sent yet, or null. A single device goes as a normal booking, so a visit needs 2 or more. */
 export function visitProblem(devices: VisitDeviceDraft[], addressReady: boolean, schedule: BookingSchedule | null): string | null {
-  if (devices.length < 2) return 'Lượt sửa cần từ 2 đến 3 thiết bị.';
+  if (devices.length < 2) return `Lượt sửa cần từ 2 đến ${VISIT_DEVICE_LIMIT} thiết bị.`;
   if (devices.length > VISIT_DEVICE_LIMIT) return `Mỗi lượt chỉ nhận tối đa ${VISIT_DEVICE_LIMIT} thiết bị.`;
   for (const [i, d] of devices.entries()) {
     const bad = deviceProblem(d) ?? (d.unconfirmed ? 'Kiểm tra và xác nhận thiết bị trợ lý AI gợi ý.' : null);

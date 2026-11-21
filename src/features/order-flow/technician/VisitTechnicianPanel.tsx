@@ -11,7 +11,7 @@ import { useLiveRefresh } from '../../../hooks/useLiveRefresh';
 import { formatVnd } from '../../../utils/format';
 import { extractApiErrorMessage } from '../../../utils/input-validation';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
-import { rememberVisitDevice, useRegisterVisitDevices, visitDeviceTabName } from '../navigation/visit-device-tabs';
+import { rememberedVisitGroup, rememberVisitDevice, useRegisterVisitDevices, visitDeviceTabName } from '../navigation/visit-device-tabs';
 import { PanelRow } from '../shared/VisitPanelRow';
 import { CASH_VOUCHER_UNCHECKED } from './technician-cash-controller';
 import { useCashIntent } from '../customer/useCashIntent';
@@ -33,7 +33,8 @@ export default function VisitTechnicianPanel({ section }: { section: 'devices' |
   const { snapshot } = useOrderSession();
   const value = snapshot?.order.status === 'ready' ? snapshot.order.data : null;
   // Only a device of a visit mounts the panel's hooks (socket, reads).
-  return value && !isHistoricalOrder(value) && value.visitGroupId ? <VisitPanelBody section={section} /> : null;
+  // A cancelled order is only a summary with no visit: the body looks its visit up.
+  return value && (isHistoricalOrder(value) || value.visitGroupId) ? <VisitPanelBody section={section} /> : null;
 }
 
 // The service names the device; the stored label ("Máy 1") only repeats the number the row already shows.
@@ -43,8 +44,22 @@ function VisitPanelBody({ section }: { section: 'devices' | 'cash' }) {
   const { key, snapshot, refresh } = useOrderSession();
   const navigation = useNavigation<any>();
   const orderValue = snapshot?.order.status === 'ready' ? snapshot.order.data : null;
-  const order = orderValue && !isHistoricalOrder(orderValue) ? orderValue : null;
-  const groupId = order?.visitGroupId ?? null;
+  const live = orderValue && !isHistoricalOrder(orderValue) ? orderValue : null;
+  // A cancelled order (quote refused) is only a summary: its visit comes from what the panel remembered while the order was live.
+  const order = orderValue;
+  const [foundGroup, setFoundGroup] = useState<string | null>(null);
+  const summaryId = !live && order ? order.id : null;
+  const groupId = live?.visitGroupId ?? (summaryId ? rememberedVisitGroup(summaryId) ?? foundGroup : null);
+  // Not remembered (the app was reopened): find the visit among the technician's own.
+  useEffect(() => {
+    if (!summaryId || rememberedVisitGroup(summaryId)) return;
+    let alive = true;
+    visitGroupsApi.getAssignedPage(1, 100).then((page) => {
+      const hit = page.data.find((g) => g.items.some((i) => i.orderId === summaryId));
+      if (alive && hit) setFoundGroup(hit.id);
+    }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [summaryId]);
   const [checkout, setCheckout] = useState<VisitCheckout | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -240,7 +255,7 @@ function VisitPanelBody({ section }: { section: 'devices' | 'cash' }) {
   if (next) {
     rows.push(<PanelRow key="next" testID="visit-next-device" Icon={ArrowRight} label={`Xử lý tiếp: Máy ${next.sequence}`} chevron onPress={() => goDevice(next.serviceOrderId!)} />);
   }
-  if (repairFailedAllowed(order)) {
+  if (live && repairFailedAllowed(live)) {
     rows.push(<PanelRow key="failed" testID="visit-repair-failed" Icon={AlertTriangle} label="Không sửa được" disabled={busy} chevron onPress={() => setFailedOpen(true)} />);
   }
   if (order.status !== 'UNDER_REPAIR' && order.status !== 'COMPLETED' && order.status !== 'CANCELLED') {

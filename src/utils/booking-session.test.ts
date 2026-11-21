@@ -1,7 +1,7 @@
 import { buildScheduleWindow, canDepartNow, scheduleSummary, sessionDayLabel, sessionLabel, upcomingSessions } from './booking-session';
 
 test('names the session, urgent bookings and older bookings', () => {
-  expect(sessionLabel({ bookingMode: 'scheduled', slot: 'morning', start: '2026-10-12T01:00:00Z' })).toBe('Buổi sáng (8:00 - 12:00), 12/10/2026');
+  expect(sessionLabel({ bookingMode: 'scheduled', slot: 'morning', start: '2026-10-12T01:00:00Z' })).toBe('8:00 - 12:00, 12/10/2026');
   expect(sessionLabel({ bookingMode: 'urgent', start: '2026-10-12T06:00:00Z' })).toBe('Tới ngay');
   expect(sessionLabel({ start: null })).toBe('Chưa có lịch hẹn');
 });
@@ -32,12 +32,12 @@ describe('session scheduling helpers', () => {
       preferredStartAt: '2026-10-15T13:30:00.000Z', preferredEndAt: '2026-10-15T16:00:00.000Z',
     });
     expect(buildScheduleWindow({ mode: 'scheduled', date: '2026-10-16', slot: 'evening' }, now).preferredStartAt).toBe('2026-10-16T11:00:00.000Z');
-    expect(sessionLabel({ bookingMode: 'scheduled', slot: 'evening', start: '2026-10-15T11:00:00Z' })).toBe('Buổi tối (18:00 - 23:00), 15/10/2026');
+    expect(sessionLabel({ bookingMode: 'scheduled', slot: 'evening', start: '2026-10-15T11:00:00Z' })).toBe('18:00 - 23:00, 15/10/2026');
   });
 
   it('labels days and summarises the schedule', () => {
     expect(sessionDayLabel('2026-10-15')).toBe('Thứ 5, 15/10');
-    expect(scheduleSummary({ mode: 'scheduled', date: '2026-10-16', slot: 'morning' })).toBe('Thứ 6, 16/10 · Sáng 8:00 - 12:00');
+    expect(scheduleSummary({ mode: 'scheduled', date: '2026-10-16', slot: 'morning' })).toBe('Thứ 6, 16/10 · 8:00 - 12:00');
     expect(scheduleSummary({ mode: 'urgent' })).toContain('Tới ngay');
   });
 

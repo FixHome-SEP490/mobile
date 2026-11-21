@@ -1,5 +1,5 @@
 // src/api/visit-groups.api.ts
-// Up to three devices in one visit (PO 21/10/2026): one technician with every
+// Up to five devices in one visit (PO 29/10/2026): one technician with every
 // skill takes them all and the customer pays once for the devices repaired.
 import apiClient from './client';
 import { CANDIDATES_TIMEOUT_MS } from '../constants/config';
@@ -8,7 +8,7 @@ import { normalizeBooking, USER_UUID_REGEX } from './bookings.api';
 import type { BookingItem, BookingSlot, SessionOption, TechnicianCandidate } from './bookings.api';
 
 /** The most devices one visit takes; the form locks "Thêm thiết bị" at this count. */
-export const VISIT_DEVICE_LIMIT = 3;
+export const VISIT_DEVICE_LIMIT = 5;
 
 export type VisitBookingMode = 'scheduled' | 'urgent';
 
@@ -159,7 +159,7 @@ export const visitGroupsApi = {
   async contact(): Promise<{ enabled: boolean; deviceLimit: number; hotline: string | null }> {
     const data = unwrap<{ enabled?: boolean; deviceLimit?: number; hotline?: string | null } | undefined>((await apiClient.get('/visit-groups/contact')).data);
     const hotline = typeof data?.hotline === 'string' ? data.hotline.trim() : '';
-    return { enabled: data?.enabled === true, deviceLimit: Number(data?.deviceLimit) || VISIT_DEVICE_LIMIT, hotline: hotline || null };
+    return { enabled: data?.enabled === true, deviceLimit: Number.isInteger(data?.deviceLimit) && Number(data?.deviceLimit) >= 1 && Number(data?.deviceLimit) <= VISIT_DEVICE_LIMIT ? Number(data?.deviceLimit) : 3, hotline: hotline || null };
   },
 
   async consultation(dto: { message: string; devices?: string[] }): Promise<void> {

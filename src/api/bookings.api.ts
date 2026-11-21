@@ -16,6 +16,8 @@ function unwrap<T>(payload: { data: T } | T): T {
 export interface CustomerBookingInvitation {
   id: string;
   bookingId: string;
+  /** User id of the invited technician (matches TechnicianCandidate.userId). */
+  technicianId?: string;
   priorityOrder: number;
   status: 'PENDING' | 'STANDBY' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED' | 'CANCELLED';
   invitedAt: string;

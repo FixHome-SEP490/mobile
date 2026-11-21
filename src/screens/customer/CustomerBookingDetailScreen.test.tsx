@@ -171,7 +171,7 @@ describe('CustomerBookingDetail REAL read-only presentation', () => {
     });
     const tree = await mount();
     try {
-      expect(textValues(tree).some((t) => t.startsWith('Buổi sáng (8:00 - 12:00), '))).toBe(true);
+      expect(textValues(tree).some((t) => t.startsWith('8:00 - 12:00, '))).toBe(true);
       expect(textValues(tree)).toContain('Ghi chú cho thợ: Gọi trước 15 phút');
     } finally { act(() => tree.unmount()); }
   });

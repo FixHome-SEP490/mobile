@@ -16,7 +16,6 @@ export interface InvitationDecisionViewProps {
   /** Called only after the separate explicit decline confirm below. */
   onDecline: () => void;
   /** GET-only inbox reload. */
-  onRefresh: () => void;
 }
 
 /**
@@ -34,7 +33,6 @@ export default function InvitationDecisionView({
   inFlight,
   onAccept,
   onDecline,
-  onRefresh,
 }: InvitationDecisionViewProps) {
   const [confirmingDecline, setConfirmingDecline] = useState(false);
   const booking = invitation.booking;
@@ -148,17 +146,6 @@ export default function InvitationDecisionView({
           )}
         </View>
       )}
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <TouchableOpacity
-          testID="invitation-refresh"
-          accessibilityRole="button"
-          accessibilityLabel="Làm mới lời mời"
-          onPress={onRefresh}
-          style={{ flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Text style={{ color: colors.primaryStrong, fontWeight: '600', fontSize: 14, lineHeight: 20 }}>Làm mới</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }

@@ -10,7 +10,7 @@ import ToneNote from '../../components/ToneNote';
 import { AlertCircle, CalendarOff, ChevronDown, ChevronUp, Clock, Plus, Trash2 } from 'lucide-react-native';
 
 const DAYS = [{ day: 1, label: 'T2' }, { day: 2, label: 'T3' }, { day: 3, label: 'T4' }, { day: 4, label: 'T5' }, { day: 5, label: 'T6' }, { day: 6, label: 'T7' }, { day: 0, label: 'CN' }];
-const PRESETS = [{ label: 'Sáng', startTime: '08:00', endTime: '12:00' }, { label: 'Chiều', startTime: '13:00', endTime: '18:00' }, { label: 'Cả ngày', startTime: '08:00', endTime: '18:00' }];
+const PRESETS = [{ startTime: '08:00', endTime: '12:00' }, { startTime: '13:00', endTime: '18:00' }, { startTime: '08:00', endTime: '18:00' }].map(p => ({ ...p, label: `${p.startTime} – ${p.endTime}` }));
 
 /** Gõ 0800 hoặc 800 thì tự thành 08:00; ô vẫn nhận HH:mm đầy đủ. */
 const formatTime = (text: string) => {
@@ -91,7 +91,7 @@ export default function TechnicianAvailabilityEditor({ onChanged }: { onChanged:
           {item.day === day && <View style={styles.editor}>
             <Text style={styles.editorTitle}>Chỉnh sửa {item.label}</Text>
             <Text style={styles.hint}>Gợi ý khung giờ</Text>
-            <View style={styles.row}>{PRESETS.map(preset => <TouchableOpacity key={preset.label} style={styles.secondary} disabled={busy} accessibilityRole="button" accessibilityLabel={`${preset.label} ${preset.startTime}–${preset.endTime}`} onPress={() => editDay([{ startTime: preset.startTime, endTime: preset.endTime }])}><Clock size={16} color={colors.primaryStrong} /><Text style={styles.link}>{preset.label}</Text></TouchableOpacity>)}</View>
+            <View style={styles.row}>{PRESETS.map(preset => <TouchableOpacity key={preset.label} style={styles.secondary} disabled={busy} accessibilityRole="button" accessibilityLabel={preset.label} onPress={() => editDay([{ startTime: preset.startTime, endTime: preset.endTime }])}><Clock size={16} color={colors.primaryStrong} /><Text style={styles.link}>{preset.label}</Text></TouchableOpacity>)}</View>
             <Text style={styles.hint}>Tùy chỉnh giờ (HH:mm)</Text>
             {selected.map((slot, index) => <View key={index} style={styles.interval}>
               <View style={styles.row}>

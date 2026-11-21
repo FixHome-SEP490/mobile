@@ -377,7 +377,7 @@ it('requires a selected date and time before opening review', async () => {
       (bookingAction(renderer, 'Xem lại yêu cầu')?.props.onPress as () => void)();
       await flushPromises();
     });
-    expect(textContent(renderer.root)).toContain('Chọn ngày và buổi');
+    expect(textContent(renderer.root)).toContain('Chọn ngày và khung giờ');
     expect(renderer.root.findAll((node) => node.props.testID === 'booking-review-full-screen')).toHaveLength(0);
     expect(mockCreateBooking).not.toHaveBeenCalled();
     expect(mockUploadBookingPhoto).not.toHaveBeenCalled();

@@ -9,9 +9,9 @@ export const BOOKING_SLOTS = ['morning', 'afternoon', 'evening'] as const;
 export type BookingSlot = typeof BOOKING_SLOTS[number];
 
 export const SLOT_LABELS: Record<BookingSlot, string> = {
-  morning: 'Buổi sáng (8:00 - 12:00)',
-  afternoon: 'Buổi chiều (13:00 - 18:00)',
-  evening: 'Buổi tối (18:00 - 23:00)',
+  morning: '8:00 - 12:00',
+  afternoon: '13:00 - 18:00',
+  evening: '18:00 - 23:00',
 };
 
 export function sessionLabel(input: { bookingMode?: string | null; slot?: string | null; start?: string | Date | null }): string {
@@ -30,7 +30,7 @@ export function canDepartNow(departAvailableAt: string | null | undefined, now: 
   return !Number.isFinite(at) || now >= at;
 }
 
-export const SLOT_SHORT: Record<BookingSlot, string> = { morning: 'Sáng 8:00 - 12:00', afternoon: 'Chiều 13:00 - 18:00', evening: 'Tối 18:00 - 23:00' };
+export const SLOT_SHORT: Record<BookingSlot, string> = SLOT_LABELS;
 const SLOT_HOURS: Record<BookingSlot, [number, number]> = { morning: [8, 12], afternoon: [13, 18], evening: [18, 23] };
 /** Length of the "tới ngay" window; the backend applies its own configured value (default 120). */
 export const URGENT_WINDOW_MIN = 120;

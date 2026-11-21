@@ -29,6 +29,7 @@ import QuotationFormScreen from '../technician/QuotationFormScreen';
 import FaceReviewWaitingScreen from '../technician/FaceReviewWaitingScreen';
 import QuotationWaitingScreen from '../technician/QuotationWaitingScreen';
 import RepairRecoveryScreen from '../technician/RepairRecoveryScreen';
+import VisitTechnicianPanel from '../technician/VisitTechnicianPanel';
 import RepairWorkspaceScreen from '../technician/RepairWorkspaceScreen';
 import ExtraDecisionScreen from '../customer/ExtraDecisionScreen';
 import ExtraWaitingScreen from '../technician/ExtraWaitingScreen';
@@ -163,6 +164,7 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
         <ReadOnlyNotice tone={cancelled ? 'warning' : 'info'}>
           {cancelled ? `Đơn #${gone.code} đã bị hủy nên không còn bước nào cần bạn làm.` : `Đơn #${gone.code} không còn do bạn phụ trách.`}
         </ReadOnlyNotice>
+        <VisitTechnicianPanel section="devices" />
         <Section title="Thông tin đơn">
           <DetailRow label="Mã đơn" value={gone.code} />
           <DetailRow label="Trạng thái" value={serviceOrderStatusView(gone.status).label} />
@@ -265,9 +267,10 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
 
   // A cancelled order (including one cancelled by rejecting its quotation) is not a dead end: say so and give the way out.
   const cancelled = role === 'customer' && snapshot.order.status === 'ready' && !isHistoricalOrder(snapshot.order.data) && snapshot.order.data.status === 'CANCELLED';
+  const technicianCancelled = role === 'technician' && snapshot.order.status === 'ready' && !isHistoricalOrder(snapshot.order.data) && snapshot.order.data.status === 'CANCELLED';
   return (
     <TaskScreenShell
-      title={cancelled ? 'Đơn đã hủy' : 'Đơn sửa chữa'}
+      title={cancelled || technicianCancelled ? 'Đơn đã hủy' : 'Đơn sửa chữa'}
       stage={resolution.stage}
       onBack={() => backFromFlow(navigation)}
       primary={role === 'customer' ? { label: 'Về trang chủ', testID: 'task-go-home', onPress: goHome } : undefined}
@@ -276,8 +279,11 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
       <ReadOnlyNotice>
         {cancelled
           ? 'Đơn này đã được hủy nên không còn bước nào cần bạn làm. Bạn có thể đặt lịch mới hoặc gửi yêu cầu hỗ trợ nếu cần.'
-          : 'Đơn đang được cập nhật. Dữ liệu đơn vẫn an toàn; bạn có thể xem Chi tiết đơn hoặc Tiến độ.'}
+          : technicianCancelled
+            ? 'Đơn này đã hủy, không còn bước nào cần làm. Nếu lượt còn máy khác, chọn máy đó ở mục bên dưới để tiếp tục.'
+            : 'Đơn đang được cập nhật. Dữ liệu đơn vẫn an toàn; bạn có thể xem Chi tiết đơn hoặc Tiến độ.'}
       </ReadOnlyNotice>
+      {role === 'technician' && <VisitTechnicianPanel section="devices" />}
     </TaskScreenShell>
   );
 }

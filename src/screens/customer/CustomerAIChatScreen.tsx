@@ -64,7 +64,7 @@ import {
   nextPinnedService,
   photoLabel,
   priceBreakdown,
-  quickReplies,
+  answerChoices,
   revealSteps,
   videoDuration,
   videoMimeType,
@@ -220,6 +220,8 @@ export default function CustomerAIChatScreen() {
    * clients that both made one up would share a conversation.
    */
   const sessionId = useRef<string | null>(null);
+  /** Bumped by startOver; a turn sent before it must not write into the new conversation (as on the web). */
+  const generation = useRef(0);
   /**
    * What the customer actually typed, carried into the booking form. The
    * assistant's own reply was the obvious thing to send and the wrong one: the
@@ -281,6 +283,7 @@ export default function CustomerAIChatScreen() {
     async (text: string, images: PickedImage[], isQuestion: boolean) => {
       // The acknowledgement is already on screen; the answer waits for both the
       // model and a beat of reading time, so the two do not arrive together.
+      const mine = generation.current;
       const wordsBefore = lastCustomerWords.current;
       lastCustomerWords.current = appendCustomerWords(wordsBefore, text);
 
@@ -317,6 +320,9 @@ export default function CustomerAIChatScreen() {
         }
       }
 
+      // Started over while this turn was out: its answer belongs to a conversation that is gone.
+      if (mine !== generation.current) return;
+
       // A turn that only told the assistant it was wrong keeps its "sai rồi" out of the booking description.
       if (reply.customerDisagreed) lastCustomerWords.current = appendCustomerWords(wordsBefore, wordsForDescription(text, reply));
 
@@ -342,10 +348,12 @@ export default function CustomerAIChatScreen() {
         const id = nextId();
         setMessages((prev) => [...prev, { id, sender: 'bot', text: '' }]);
         for (const step of steps) {
+          if (mine !== generation.current) return;
           setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: step } : m)));
           scrollToEnd();
           if (step !== prose) await new Promise((resolve) => setTimeout(resolve, pace));
         }
+        if (mine !== generation.current) return;
         setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text: prose, reply } : m)));
       }
       setIsThinking(false);
@@ -511,6 +519,8 @@ export default function CustomerAIChatScreen() {
           style: 'destructive',
           onPress: () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            generation.current += 1;
+            setIsThinking(false);
             sessionId.current = null;
             lastCustomerWords.current = '';
             setPinnedService(null);
@@ -686,8 +696,7 @@ export default function CustomerAIChatScreen() {
       }
 
       const isLatest = item.id === latestReplyId && !isThinking;
-      const lastQuestion = item.reply?.clarification?.questionsVi?.slice(-1)[0];
-      const choices = isLatest ? quickReplies(lastQuestion) : [];
+      const choices = isLatest ? answerChoices(item.reply?.clarification) : [];
 
       return (
         <View style={styles.botRow}>

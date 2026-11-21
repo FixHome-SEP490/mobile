@@ -34,7 +34,7 @@ test('Sunday remains day 0 and exact Wednesday intervals survive another day edi
   const tree = await render();
   await act(async () => button(tree, 'Khung giờ CN').props.onPress());
   expect(tree.root.findByProps({ accessibilityLabel: 'Giờ bắt đầu khung 1' }).props.value).toBe('07:15');
-  await act(async () => button(tree, 'Sáng 08:00–12:00').props.onPress());
+  await act(async () => button(tree, '08:00 – 12:00').props.onPress());
   expect(api.updateMySchedule).not.toHaveBeenCalled();
   await act(async () => button(tree, 'Lưu khung giờ').props.onPress());
   expect(api.updateMySchedule).toHaveBeenCalledWith([saved[1], { dayOfWeek: 0, startTime: '08:00', endTime: '12:00' }]);
@@ -98,7 +98,7 @@ test('weekday copy is previewed, changes only the draft and preserves both weeke
   api.getMySchedule.mockResolvedValue(weekend);
   const tree = await render();
   await act(async () => button(tree, 'Khung giờ T2').props.onPress());
-  await act(async () => button(tree, 'Sáng 08:00–12:00').props.onPress());
+  await act(async () => button(tree, '08:00 – 12:00').props.onPress());
   await act(async () => button(tree, 'Áp dụng T2–T6').props.onPress());
   expect(text(tree)).toContain('Bản xem trước T2–T6');
   expect(api.updateMySchedule).not.toHaveBeenCalled();

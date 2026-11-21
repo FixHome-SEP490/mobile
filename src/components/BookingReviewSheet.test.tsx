@@ -17,7 +17,7 @@ function snapshot(customerNote?: string): BookingReviewSnapshot {
     serviceName: 'Sửa điều hòa',
     addressLabel: 'Nhà riêng',
     addressDescription: '',
-    scheduleLabel: 'Thứ 6, 20/11 · Tối 18:00 - 23:00',
+    scheduleLabel: 'Thứ 6, 20/11 · 18:00 - 23:00',
     pricingLabel: 'Tham khảo 249.000 ₫',
     photos: [],
     hasAiSummary: false,

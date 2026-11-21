@@ -11,8 +11,8 @@ import apiClient from './client';
 export const AI_MAX_IMAGES = 3;
 
 /** Its ceiling is 8 MiB per image once decoded. We aim well under it. */
-export const AI_IMAGE_MAX_WIDTH = 1280;
-export const AI_IMAGE_QUALITY = 0.7;
+export const AI_IMAGE_MAX_WIDTH = 1024;
+export const AI_IMAGE_QUALITY = 0.8;
 
 /**
  * The model's own budget is eight seconds and measured round trips are 0.3 to
@@ -20,13 +20,15 @@ export const AI_IMAGE_QUALITY = 0.7;
  * continent. The shared client timeout of 15s is too tight for a cold first
  * call, so these requests carry their own.
  */
-const AI_REQUEST_TIMEOUT = 30000;
+const AI_REQUEST_TIMEOUT = 45000;
 
 export interface DetectedDevice {
   deviceType: string;
   nameVi: string;
   confidence: number;
   source?: string | null;
+  /** A guess from a photograph nobody was sure of; the customer can correct it. */
+  uncertain?: boolean;
 }
 
 export interface SuspectedFault {
@@ -41,6 +43,8 @@ export interface RecommendedService {
   nameVi: string;
   /** Added by our backend from the catalogue. Null if the code is unknown. */
   serviceId?: string | null;
+  /** Which appliance it is for, when the reply covers more than one. */
+  deviceType?: string | null;
 }
 
 /**
@@ -58,6 +62,8 @@ export interface AiDeviceSuggestion {
   descriptionVi?: string | null;
   /** Why there is no service, e.g. FixHome does not repair it yet. */
   noteVi?: string | null;
+  /** The appliance of this photograph is a guess. */
+  uncertain?: boolean;
 }
 
 export interface PriceEstimate {
@@ -96,6 +102,8 @@ export interface AiDisagreement {
 export interface Clarification {
   questionsVi: string[];
   serviceGroupCodes?: string[] | null;
+  /** Short answers the assistant offers for the first question, shown as buttons. */
+  answerOptionsVi?: string[] | null;
 }
 
 export interface Citation {

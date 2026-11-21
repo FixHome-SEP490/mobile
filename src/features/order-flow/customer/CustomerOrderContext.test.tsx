@@ -96,17 +96,24 @@ it('shows the quotation total and state on the order, and nothing for a technici
 });
 
 it('sums a quotation whose totals arrive as decimal strings, as the order API sends them', async () => {
-  mockSnapshot = snapshotFor('customer', 'UNDER_REPAIR', { id: 'q1', status: 'APPROVED', laborTotal: '100000', partsTotal: '50000', items: [] });
+  mockSnapshot = snapshotFor('customer', 'UNDER_REPAIR', { id: 'q1', status: 'SENT', laborTotal: '100000', partsTotal: '50000', items: [] });
   const r = await mount();
   const chip = r.root.findAllByType(Text).map(n => [n.props.children].flat().join('')).find(t => t.startsWith('Báo giá'));
-  expect(chip).toBe('Báo giá 150.000 ₫ · Đã duyệt');
+  expect(chip).toBe('Báo giá 150.000 ₫ · Chờ duyệt');
   await act(async () => r.unmount());
 });
 
 it('shows a dash instead of a wrong sum when a quotation total is not money', async () => {
-  mockSnapshot = snapshotFor('customer', 'UNDER_REPAIR', { id: 'q1', status: 'APPROVED', laborTotal: 'abc', partsTotal: '0', items: [] });
+  mockSnapshot = snapshotFor('customer', 'UNDER_REPAIR', { id: 'q1', status: 'SENT', laborTotal: 'abc', partsTotal: '0', items: [] });
   const r = await mount();
   const chip = r.root.findAllByType(Text).map(n => [n.props.children].flat().join('')).find(t => t.startsWith('Báo giá'));
-  expect(chip).toBe('Báo giá — · Đã duyệt');
+  expect(chip).toBe('Báo giá — · Chờ duyệt');
+  await act(async () => r.unmount());
+});
+
+it('shows no quotation chip once the customer approved it', async () => {
+  mockSnapshot = snapshotFor('customer', 'UNDER_REPAIR', { id: 'q1', status: 'APPROVED', laborTotal: '100000', partsTotal: '50000', items: [] });
+  const r = await mount();
+  expect(byId(r, 'order-quote-chip')).toHaveLength(0);
   await act(async () => r.unmount());
 });

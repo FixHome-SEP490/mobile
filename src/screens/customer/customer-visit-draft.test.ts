@@ -4,9 +4,9 @@ const dev = (key: string, over: Partial<VisitDeviceDraft> = {}): VisitDeviceDraf
 const photo = (uri: string, uploadId?: string) => ({ uri, name: 'p.jpg', type: 'image/jpeg' as const, uploadId });
 const schedule = { mode: 'scheduled', date: '2026-10-27', slot: 'morning' } as const;
 
-it('locks the list at three devices', () => {
-  const three = ['1', '2', '3'].reduce<VisitDeviceDraft[]>((list, k) => addDevice(list, dev(k)), []);
-  expect(addDevice(three, dev('4'))).toHaveLength(3);
+it('locks the list at five devices', () => {
+  const three = ['1', '2', '3', '4', '5'].reduce<VisitDeviceDraft[]>((list, k) => addDevice(list, dev(k)), []);
+  expect(addDevice(three, dev('6'))).toHaveLength(5);
 });
 it('needs a service and a description for each device', () => {
   expect(deviceProblem({ serviceId: '', description: 'x' })).toMatch(/dịch vụ/);
@@ -24,7 +24,7 @@ it('treats the same library photo picked twice (new uri each time) as one photo'
   expect(duplicatePhoto([{ photos: [{ ...photo('file:///cache/1.jpg'), name: 'IMG_1.JPG', sizeBytes: 900 }] }, { photos: [{ ...photo('file:///cache/2.jpg'), name: 'IMG_2.JPG', sizeBytes: 900 }] }])).toBe(false);
 });
 it('sends only a complete visit of 2-3 devices', () => {
-  expect(visitProblem([dev('1')], true, schedule)).toMatch(/2 đến 3/);
+  expect(visitProblem([dev('1')], true, schedule)).toMatch(/2 đến 5/);
   expect(visitProblem([dev('1'), dev('2')], false, schedule)).toMatch(/địa chỉ/);
   expect(visitProblem([dev('1'), dev('2')], true, null)).toMatch(/thời gian/);
   expect(visitProblem([dev('1'), dev('2', { description: '' })], true, schedule)).toMatch(/Mô tả/);

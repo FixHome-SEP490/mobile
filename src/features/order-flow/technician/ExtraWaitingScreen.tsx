@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Clock } from 'lucide-react-native';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { TechnicianOrderFlowParamList } from '../navigation/order-flow-navigation.types';
@@ -9,10 +10,12 @@ import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { useTechnicianExtraCost } from './useTechnicianExtraCost';
 import { getRestoredExtraRecovery } from '../domain/extra-and-parts-recovery';
 import { isCostDecisionBlocked } from '../../../screens/customer/customer-additional-cost-decision';
-import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import { ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
+import PillText from '../../../components/PillText';
 import VisitTechnicianPanel from './VisitTechnicianPanel';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { formatVnd } from '../../../utils/format';
+import { quoteMoneyText } from '../shared/DecisionSummary';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { backFromFlow } from '../navigation/resume-order';
@@ -140,32 +143,38 @@ export default function ExtraWaitingScreen() {
         {ownPending.map((cost, index) => <TouchableOpacity key={cost.id} testID={`waiting-select-${cost.id}`} accessibilityRole="radio" accessibilityState={{ selected: latestCost?.id === cost.id, disabled: busy || showRecovery || state.phase === 'unknown' }} disabled={busy || showRecovery || state.phase === 'unknown'} style={{ minHeight: 48, justifyContent: 'center' }} onPress={() => { if (!busy && !showRecovery && state.phase !== 'unknown') setSelection({ key, id: cost.id }); }}><Text>Đề xuất {index + 1} · {cost.reason}</Text></TouchableOpacity>)}
       </View>}
 
-      <View style={styles.card}>
-        <DetailRow label="Người duyệt" value={customerName} />
-        <DetailRow label="Trạng thái" value="Đang chờ khách duyệt" />
-        {latestCost ? (
-          <>
-            <DetailRow label="Mã đề xuất" value={latestCost.id} />
-            <DetailRow label="Lý do phát sinh" value={latestCost.reason} />
-            <DetailRow label="Tổng đề xuất" value={formatVnd(totalAmount)} />
-            {latestCost.expiresAt ? (
-              <DetailRow
-                label="Hạn duyệt (máy chủ)"
-                value={`${vnDateTimeString(latestCost.expiresAt)}${isExpired ? ' (Đã hết hạn)' : ''}`}
-              />
-            ) : null}
-          </>
-        ) : null}
-      </View>
-
-      {isExpired ? (
-        <ReadOnlyNotice>
-          Đề xuất chi phí phát sinh đã hết hạn duyệt. Khách hàng không thể duyệt đề xuất này nữa. Bạn có thể tạo đề xuất mới hoặc tiếp tục sửa chữa theo phạm vi ban đầu.
-        </ReadOnlyNotice>
+      {latestCost ? (
+        <View style={styles.proposalCard}>
+          <View style={styles.head}>
+            <Text accessibilityRole="header" style={styles.title}>Đề xuất phát sinh</Text>
+            <View style={[styles.chip, { backgroundColor: isExpired ? colors.tone.danger.bg : colors.tone.warning.bg }]}>
+              <PillText style={[styles.chipText, { color: isExpired ? colors.tone.danger.text : colors.tone.warning.text }]}>{isExpired ? 'Đã hết hạn' : 'Chờ duyệt'}</PillText>
+            </View>
+          </View>
+          {latestCost.createdAt ? <Text style={styles.meta}>Gửi lúc {vnDateTimeString(latestCost.createdAt)}</Text> : null}
+          {latestCost.reason ? <Text style={styles.reason}>{latestCost.reason}</Text> : null}
+          <View style={[styles.banner, { backgroundColor: isExpired ? colors.tone.warning.bg : colors.tone.info.bg }]}>
+            <Clock size={20} strokeWidth={1.75} color={isExpired ? colors.tone.warning.fg : colors.tone.info.fg} />
+            <View style={styles.bannerText}>
+              <Text style={[styles.bannerTitle, { color: isExpired ? colors.tone.warning.text : colors.tone.info.text }]}>
+                {isExpired ? 'Đề xuất đã hết hạn duyệt' : `Đang chờ ${customerName} duyệt`}
+              </Text>
+              <Text style={styles.meta}>
+                {isExpired
+                  ? 'Khách không duyệt được nữa. Bạn có thể tạo đề xuất mới hoặc tiếp tục phạm vi ban đầu.'
+                  : `Sau khi khách duyệt bạn sửa thêm phần phát sinh.${latestCost.expiresAt ? ` Hạn duyệt ${vnDateTimeString(latestCost.expiresAt)}.` : ''}`}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.totals}>
+            <View style={styles.row}><Text style={styles.label}>Tiền công</Text><Text style={styles.value}>{quoteMoneyText(latestCost.totalLaborDelta ?? 0)}</Text></View>
+            <View style={styles.row}><Text style={styles.label}>Linh kiện</Text><Text style={styles.value}>{quoteMoneyText(latestCost.totalPartsDelta ?? 0)}</Text></View>
+            {latestCost.shippingFee ? <View style={styles.row}><Text style={styles.label}>Phí giao hàng</Text><Text style={styles.value}>{quoteMoneyText(latestCost.shippingFee)}</Text></View> : null}
+            <View style={styles.row}><Text style={styles.totalLabel}>Tổng đề xuất</Text><Text style={styles.totalValue}>{formatVnd(totalAmount)}</Text></View>
+          </View>
+        </View>
       ) : (
-        <ReadOnlyNotice>
-          Đang chờ khách hàng phản hồi đề xuất phát sinh. Trong lúc chờ, bạn có thể tiếp tục các phần việc thuộc phạm vi sửa chữa ban đầu.
-        </ReadOnlyNotice>
+        <ReadOnlyNotice>Chưa có đề xuất phát sinh nào đang chờ duyệt cho đơn này.</ReadOnlyNotice>
       )}
 
       {canRevise && (
@@ -181,6 +190,22 @@ export default function ExtraWaitingScreen() {
 }
 
 const styles = StyleSheet.create({
+  proposalCard: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, padding: spacing.md, gap: spacing.sm, marginBottom: spacing.sm },
+  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' },
+  title: { color: colors.text, fontSize: 20, lineHeight: 28, fontWeight: '600' },
+  chip: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, minHeight: 24, justifyContent: 'center' },
+  chipText: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
+  meta: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
+  reason: { color: colors.text, fontSize: 14, lineHeight: 20 },
+  banner: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderRadius: 12, padding: spacing.md },
+  bannerText: { flex: 1, minWidth: 0, gap: 2 },
+  bannerTitle: { fontSize: 15, lineHeight: 22, fontWeight: '600' },
+  totals: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 12, gap: 6 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 },
+  label: { color: colors.textSecondary, fontSize: 14, lineHeight: 20 },
+  value: { color: colors.text, fontSize: 14, lineHeight: 20, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  totalLabel: { color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '600' },
+  totalValue: { color: colors.text, fontSize: 16, lineHeight: 24, fontWeight: '700', fontVariant: ['tabular-nums'] },
   card: {
     backgroundColor: colors.surface,
     borderRadius: 14,

@@ -46,7 +46,7 @@ describe('OrderInformationScreen content', () => {
     const out = render('customer');
     expect(out).toContain('Đang sửa chữa');
     expect(out).not.toContain('UNDER_REPAIR');
-    expect(out).toContain('Buổi sáng (8:00 - 12:00)');
+    expect(out).toContain('8:00 - 12:00');
     expect(out).toContain('Ghi chú của khách');
     expect(out).toContain('Báo giá sau khi kiểm tra');
     expect(out).toContain('90 ngày');

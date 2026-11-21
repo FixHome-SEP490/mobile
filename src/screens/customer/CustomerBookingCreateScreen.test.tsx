@@ -467,7 +467,7 @@ it('keeps review local, then creates exactly the immutable reviewed request on c
   expect(textContent(renderer.root)).toContain('Sửa máy lạnh');
   expect(textContent(renderer.root)).toContain('Nhà riêng');
   expect(textContent(renderer.root)).toContain('Máy lạnh chảy nước');
-  expect(textContent(renderer.root)).toContain('Chiều 13:00 - 18:00');
+  expect(textContent(renderer.root)).toContain('13:00 - 18:00');
   expect(textContent(renderer.root)).toContain('Số lượng: 1');
 
   // The wizard hides Intake while reviewing: there is no background editable
@@ -503,7 +503,7 @@ it('keeps review local, then creates exactly the immutable reviewed request on c
   const receipt = renderer.root.findByProps({ testID: 'booking-submitted-receipt' });
   expect(textContent(receipt)).toContain('Sửa máy lạnh');
   expect(textContent(receipt)).toContain('Máy lạnh chảy nước');
-  expect(textContent(receipt)).toContain('Chiều 13:00 - 18:00');
+  expect(textContent(receipt)).toContain('13:00 - 18:00');
   expect(textContent(receipt)).toContain('12 Đường Hoa');
   expect(textContent(receipt)).toContain('Giá cố định:');
   expect(textContent(receipt)).toContain('Số lượng: 1');
@@ -974,7 +974,7 @@ it('shows a started session inline and allows choosing a later session before re
   await act(async () => { press('session-day-2026-09-28')(); });
   await act(async () => { press('session-slot-morning')(); });
   await act(async () => { (findActions(tree, 'Xem lại yêu cầu')[0].props.onPress as () => void)(); });
-  expect(textContent(tree.root)).toContain('Sáng 8:00 - 12:00');
+  expect(textContent(tree.root)).toContain('8:00 - 12:00');
   expect(findActions(tree, 'Xác nhận đặt lịch')[0].props.disabled).toBe(false);
   expect(mockUploadBookingPhoto).not.toHaveBeenCalled();
   expect(mockCreateBooking).not.toHaveBeenCalled();
