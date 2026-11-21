@@ -8,7 +8,7 @@ import { normalizeBooking, USER_UUID_REGEX } from './bookings.api';
 import type { BookingItem, BookingSlot, SessionOption, TechnicianCandidate } from './bookings.api';
 
 /** The most devices one visit takes; the form locks "Thêm thiết bị" at this count. */
-export const VISIT_DEVICE_LIMIT = 3;
+export const VISIT_DEVICE_LIMIT = 5;
 
 export type VisitBookingMode = 'scheduled' | 'urgent';
 
