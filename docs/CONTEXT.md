@@ -422,6 +422,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 - 2026-11-21 16:17 (UTC+7) | ToanAltF4 | fix/mobile-api-audit-2111 | Lượt nhiều máy nhận tối đa 5 thiết bị như backend (trước giữ 3)
+- 2026-11-21 16:13 (UTC+7) | Hgnv11 | dev | Hồ sơ kỹ thuật viên: bỏ nhãn xác minh danh tính lặp ở dòng Kỹ năng, nhãn đặt ngay dưới tiêu đề dòng Xác minh danh tính (bỏ mô tả trùng); hai ô Giá công và Bảo hành chia đều
 - 2026-11-21 15:10 (UTC+7) | Hgnv11 | dev | Thông báo OFFICE_VISIT_REMINDER (nhắc lịch lên trụ sở) mở màn đặt lịch; hồ sơ bị từ chối được admin mở lại thì thợ nhận OFFICE_VISIT_RESET và đặt lịch gặp lại
 - 2026-11-21 13:20 (UTC+7) | Hgnv11 | fix/mobile-technician-kyc-face-picker | Merge origin/dev (a5d34d1, #98 Expo Go không nạp MapLibre) vào nhánh; giữ cả hai nhật ký
 - 2026-11-21 12:58 (UTC+7) | Hgnv11 | fix/mobile-technician-kyc-face-picker | Ô ảnh chân dung trong Xác minh danh tính thợ mở hộp chọn Thư viện ảnh / Chụp ảnh thay vì mở camera ngay
@@ -460,7 +461,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-11-05 18:25 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Mobile thêm lối vào bảo hành ở Hồ sơ thợ, nút Nhắn tin và Xem đơn gốc; trường bảo hành mới, ảnh cho lỗi linh kiện, kết cục hoàn tiền ở màn thợ
 - 2026-11-04 12:10 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Ghi việc yêu cầu linh kiện bảo hành chờ SM kiểm tra linh kiện hỏng trước khi có QR; không đổi mã.
 - 2026-11-04 11:30 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Ghi hợp đồng bảo hành mới của Backend (trường thêm, lý do không bảo hành mới, ảnh bắt buộc cho lỗi linh kiện) và việc Mobile còn dở; không đổi mã.
-- 2026-11-03 12:06 (UTC+7) | Hgnv11 | dev | Chọn dịch vụ ở trang đặt lịch: sheet co theo số dịch vụ (tối đa 480px), tiêu đề, tab danh mục và ô tìm kiếm ghim cố định, cuộn được ở mọi tab; chưa kiểm chứng trên thiết bị.
 
 
 ### Lịch sử giữ lại khi tích hợp
