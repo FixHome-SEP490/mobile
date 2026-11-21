@@ -1,7 +1,7 @@
 import React from 'react';
 import { Text, TextInput, TouchableOpacity } from 'react-native';
 import { act, create } from 'react-test-renderer';
-import ChatListScreen, { chatReadOnlyTag } from './ChatListScreen';
+import ChatListScreen, { chatReadOnlyTag, initialsOf } from './ChatListScreen';
 import ChatThreadScreen from './ChatThreadScreen';
 import { messagingApi } from '../../api/messaging.api';
 
@@ -279,6 +279,13 @@ describe('chat list read-only reason', () => {
     id: 'conv-9', bookingId: 'booking-9', serviceOrderId: 'order-9', status: 'closed', serviceName: 'Sửa điều hòa', orderCode: 'FH-20261031-6DFAA600',
     counterpart: { id: 'user-2', fullName: 'Khách', avatarUrl: null, role: 'customer' }, lastMessageAt: null, lastMessagePreview: 'Cảm ơn', unreadCount: 0,
   };
+  it('takes the avatar letter from the given name, not from a note in brackets or a number', () => {
+    expect(initialsOf('Trần Quốc Việt (kiểm thử 103)')).toBe('V');
+    expect(initialsOf('Khach Hang 3')).toBe('H');
+    expect(initialsOf('  ')).toBe('?');
+    expect(initialsOf('123')).toBe('?');
+  });
+
   it('says the order is finished when the server closed the chat for that, never "another technician"', async () => {
     expect(chatReadOnlyTag({ canSend: false, closedReason: 'order_completed' })).toBe('Chỉ xem lại — đơn đã hoàn tất');
     expect(chatReadOnlyTag({ canSend: false, closedReason: null })).toBe('Chỉ xem lại');
