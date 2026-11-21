@@ -139,6 +139,13 @@ describe('validateBankAccount', () => {
     expect(validateBankAccount(dto)).toBeNull();
   });
 
+  it('rejects a holder name Backend IsPersonName refuses, and one over 128 characters', () => {
+    expect(validateBankAccount({ ...dto, accountName: 'NGUYEN VAN 2' })).toMatch(/chữ cái/);
+    expect(validateBankAccount({ ...dto, accountName: 'A@B' })).toMatch(/chữ cái/);
+    expect(validateBankAccount({ ...dto, accountName: 'A'.repeat(129) })).toMatch(/128/);
+    expect(validateBankAccount({ ...dto, accountName: "NGUYEN VAN O'NEIL-TRAN" })).toBeNull();
+  });
+
   it('requires a bank', () => {
     expect(validateBankAccount({ ...dto, bankBin: '' })).not.toBeNull();
   });

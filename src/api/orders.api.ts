@@ -448,16 +448,19 @@ const del = async (url: string): Promise<void> => {
   await apiClient.delete(url);
 };
 
+/** The largest page /service-orders/my returns (Backend caps pageSize at 100). */
+export const UNPAGED_ORDER_LIMIT = 100;
+
 export const ordersApi = {
   /** `statuses` lets Backend filter before it builds each order (lowercase, comma separated on the wire); without it every order the technician ever held is built. */
   async getTechnicianJobs(options: { excludeVisitGroups?: boolean; statuses?: string[] } = {}): Promise<TechnicianOrderItem[]> {
+    // Backend pages /service-orders/my (20 by default); ask for its largest page so older open jobs are not cut off.
     const params = {
+      pageSize: UNPAGED_ORDER_LIMIT,
       ...(options.excludeVisitGroups ? { excludeVisitGroups: 'true' } : {}),
       ...(options.statuses?.length ? { statuses: options.statuses.join(',') } : {}),
     };
-    const rows = Object.keys(params).length
-      ? unwrap<TechnicianOrderItem[]>((await apiClient.get('/service-orders/my', { params })).data)
-      : await get<TechnicianOrderItem[]>('/service-orders/my');
+    const rows = unwrap<TechnicianOrderItem[]>((await apiClient.get('/service-orders/my', { params })).data);
     return rows.map(normalizeTechnicianOrder);
   },
 
@@ -484,9 +487,8 @@ export const ordersApi = {
 
 
   async getMyOrders(options: { excludeVisitGroups?: boolean } = {}): Promise<ServiceOrderItem[]> {
-    const rows = options.excludeVisitGroups
-      ? unwrap<ServiceOrderItem[]>((await apiClient.get('/service-orders/my', { params: { excludeVisitGroups: 'true' } })).data)
-      : await get<ServiceOrderItem[]>('/service-orders/my');
+    const params = { pageSize: UNPAGED_ORDER_LIMIT, ...(options.excludeVisitGroups ? { excludeVisitGroups: 'true' } : {}) };
+    const rows = unwrap<ServiceOrderItem[]>((await apiClient.get('/service-orders/my', { params })).data);
     return rows.map(normalizeOrder);
   },
 

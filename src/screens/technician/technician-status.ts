@@ -58,6 +58,7 @@ export function bookingStatusView(status: unknown): StatusView {
 
 const URGENCY: Record<string, StatusView> = {
   EMERGENCY: { label: 'Khẩn cấp', tone: 'danger', icon: 'AlertTriangle' },
+  CRITICAL: { label: 'Khẩn cấp', tone: 'danger', icon: 'AlertTriangle' },
   HIGH: { label: 'Cao', tone: 'warning', icon: 'AlertTriangle' },
   NORMAL: { label: 'Bình thường', tone: 'info', icon: 'Minus' },
   MEDIUM: { label: 'Bình thường', tone: 'info', icon: 'Minus' },

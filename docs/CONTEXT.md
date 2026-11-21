@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-21 16:17 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: fix/mobile-api-audit-2111
+> Cập nhật lần cuối: 2026-11-21 17:38 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: fix/mobile-contract-audit-2111
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -421,6 +421,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-21 17:38 (UTC+7) | ToanAltF4 | fix/mobile-contract-audit-2111 | Rà hợp đồng API và validation với backend: mức khẩn critical, danh sách đơn đủ 100, địa chỉ đổi phải có ghim, mật khẩu đặt lại 72 byte, tên chủ tài khoản, lý do ngày nghỉ 500 ký tự
 - 2026-11-21 16:17 (UTC+7) | ToanAltF4 | fix/mobile-api-audit-2111 | Lượt nhiều máy nhận tối đa 5 thiết bị như backend (trước giữ 3)
 - 2026-11-21 16:13 (UTC+7) | Hgnv11 | dev | Hồ sơ kỹ thuật viên: bỏ nhãn xác minh danh tính lặp ở dòng Kỹ năng, nhãn đặt ngay dưới tiêu đề dòng Xác minh danh tính (bỏ mô tả trùng); hai ô Giá công và Bảo hành chia đều
 - 2026-11-21 15:10 (UTC+7) | Hgnv11 | dev | Thông báo OFFICE_VISIT_REMINDER (nhắc lịch lên trụ sở) mở màn đặt lịch; hồ sơ bị từ chối được admin mở lại thì thợ nhận OFFICE_VISIT_RESET và đặt lịch gặp lại
@@ -460,7 +461,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-11-06 03:05 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Mobile thợ chọn linh kiện hỏng khi đề xuất lỗi linh kiện, hiện hạn nộp và nút nộp linh kiện hỏng về kho; sửa giờ hai dòng nhật ký 05/11
 - 2026-11-05 18:25 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Mobile thêm lối vào bảo hành ở Hồ sơ thợ, nút Nhắn tin và Xem đơn gốc; trường bảo hành mới, ảnh cho lỗi linh kiện, kết cục hoàn tiền ở màn thợ
 - 2026-11-04 12:10 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Ghi việc yêu cầu linh kiện bảo hành chờ SM kiểm tra linh kiện hỏng trước khi có QR; không đổi mã.
-- 2026-11-04 11:30 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Ghi hợp đồng bảo hành mới của Backend (trường thêm, lý do không bảo hành mới, ảnh bắt buộc cho lỗi linh kiện) và việc Mobile còn dở; không đổi mã.
 
 
 ### Lịch sử giữ lại khi tích hợp
