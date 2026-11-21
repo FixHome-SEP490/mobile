@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-21 03:39 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: fix/mobile-map-default-2111
+> Cập nhật lần cuối: 2026-11-21 12:58 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: fix/mobile-technician-kyc-face-picker
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -159,7 +159,7 @@ Trạng thái báo giá hiện bằng chữ ở cả màn đơn của khách và
 
 ### Chứng chỉ khi đăng ký thợ (08/10/2026, nhánh `feat/technician-certificates`)
 
-- Màn Xác minh danh tính (`TechnicianKycScreen`): phần "Chứng chỉ nghề" không bắt buộc, tối đa 5 ảnh, ghi chú "bản đã công chứng"; gửi kèm hồ sơ với `documentType: certificate`. Khi bấm nộp, nút và khối thông báo báo hai giai đoạn: "Đang tải ảnh lên…" rồi "Đang kiểm tra khuôn mặt…" (backend so khớp CCCD với ảnh chân dung); lỗi không khớp hiện đúng câu của backend và giữ ảnh đã chọn để chụp lại.
+- Màn Xác minh danh tính (`TechnicianKycScreen`): phần "Chứng chỉ nghề" không bắt buộc, tối đa 5 ảnh, ghi chú "bản đã công chứng"; gửi kèm hồ sơ với `documentType: certificate`. Khi bấm nộp, nút và khối thông báo báo hai giai đoạn: "Đang tải ảnh lên…" rồi "Đang kiểm tra khuôn mặt…" (backend so khớp CCCD với ảnh chân dung); lỗi không khớp hiện đúng câu của backend và giữ ảnh đã chọn để chụp lại. Ô "Ảnh chân dung" (`face`) mở hộp chọn "Thư viện ảnh / Chụp ảnh" như ô CCCD, chụp bằng camera trước.
 - Sau khi nộp và ở trạng thái chờ duyệt (cả màn onboarding): "Vui lòng đến trụ sở trong thời gian sớm nhất để tiến hành xác minh thông tin và bắt đầu công việc." (`OFFICE_VISIT_NOTE`); bỏ câu hứa duyệt trong 24 giờ.
 
 ### Nhóm B SEP-139: đối chiếu web (16/10/2026, nhánh `feat/sep139-group-b`)
@@ -421,6 +421,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-21 12:58 (UTC+7) | Hgnv11 | fix/mobile-technician-kyc-face-picker | Ô ảnh chân dung trong Xác minh danh tính thợ mở hộp chọn Thư viện ảnh / Chụp ảnh thay vì mở camera ngay
 - 2026-11-21 03:39 (UTC+7) | ToanAltF4 | fix/mobile-map-default-2111 | Khung chọn ảnh/video trong chat đóng được bằng nút Back
 - 2026-11-21 03:03 (UTC+7) | ToanAltF4 | fix/mobile-map-default-2111 | Sửa lỗi test máy ảo 21/11: bản đồ thêm địa chỉ mở ở TP.HCM thay vì toạ độ 0,0; chi tiết yêu cầu đặt lịch có nút Hủy yêu cầu (khi chưa có đơn sửa chữa); lời mời ghi số lượng không còn chữ SL thừa; ví khách: lần nạp chưa thanh toán quá 30 phút (link VNPay hết hạn 15 phút) không còn khoá ô nạp tiền
 - 2026-11-21 00:38 (UTC+7) | ToanAltF4 | fix/home-visit-resume-182 | Bug 182: thẻ tiếp tục ở trang chủ khách mở thiết bị của lượt nhiều máy về màn lượt, ghi Kỹ thuật viên đã đến khi đã check-in
@@ -460,7 +461,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-11-01 19:20 (UTC+7) | ToanAltF4 | fix/android-map-fallback | Bản đồ Android không còn màn lỗi đỏ khi bản build thiếu khóa Google Maps (bug 44): app.config.js ghi extra.androidMapsConfigured, AddressMap và PublicOrderTrackingMap hiện khung thay thế dễ đọc khi chưa có khóa.
 - 2026-11-01 18:39 (UTC+7) | ToanAltF4 | fix/customer-kyc-gender | Xác minh danh tính khách (bug 50): giới tính gửi theo enum backend male, female, other thay cho MALE, FEMALE, OTHER (trước đây backend trả 400); đọc lại hồ sơ có giới tính chữ thường; mở thư viện ảnh hoặc camera không còn xoá nháp và ảnh mặt kia.
 - 2026-11-01 13:14 (UTC+7) | Hgnv11 | dev | Nhiều thiết bị từ AI vào trang đặt lịch, ảnh chat vào lưới ảnh, tóm tắt AI cho thợ, PlainTabs thay bottom-tabs ở chi tiết đơn, nâng gói Expo 58.0.22; chưa kiểm chứng trên thiết bị.
-- 2026-11-01 11:07 (UTC+7) | Hgnv11 | dev | Trợ lý AI: nối failureReason, ảnh theo máy, thanh Chọn dịch vụ; Đặt thợ đi thẳng form đặt lịch; chi tiết lời mời cho thợ mở sẵn nhận định AI; chưa kiểm chứng trên thiết bị.
 
 
 ### Lịch sử giữ lại khi tích hợp

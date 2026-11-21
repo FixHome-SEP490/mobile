@@ -150,7 +150,7 @@ export default function TechnicianKycScreen() {
     );
   };
 
-  const pickFromLibrary = async (key: 'front' | 'back') => {
+  const pickFromLibrary = async (key: KycSlot['key']) => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       Alert.alert(
@@ -178,15 +178,11 @@ export default function TechnicianKycScreen() {
   };
 
   const handleSlotPress = (slot: KycSlot) => {
-    if (slot.key === 'face') {
-      pickFromCamera('face', true);
-      return;
-    }
     const key = slot.key;
-    Alert.alert('Ảnh CCCD/CMND', 'Chọn nguồn ảnh', [
+    Alert.alert(key === 'face' ? 'Ảnh chân dung' : 'Ảnh CCCD/CMND', 'Chọn nguồn ảnh', [
       { text: 'Hủy', style: 'cancel' },
       { text: 'Thư viện ảnh', onPress: () => pickFromLibrary(key) },
-      { text: 'Chụp ảnh', onPress: () => pickFromCamera(key, false) },
+      { text: 'Chụp ảnh', onPress: () => pickFromCamera(key, key === 'face') },
     ]);
   };
 
@@ -364,7 +360,7 @@ export default function TechnicianKycScreen() {
                     : slot.key === 'back'
                       ? 'CCCD mặt sau'
                       : 'Ảnh chân dung';
-                  const displayHint = slot.key === 'face' ? 'Chụp ảnh chân dung tĩnh' : 'Chọn ảnh có sẵn hoặc chụp mới';
+                  const displayHint = slot.key === 'face' ? 'Chọn ảnh chân dung có sẵn hoặc chụp mới' :'Chọn ảnh có sẵn hoặc chụp mới';
 
                   return (
                     <TouchableOpacity
