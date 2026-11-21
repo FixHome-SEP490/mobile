@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, type MapRegion as Region } from '../../components/AddressMap';
 import { lightTheme as colors } from '../../constants/theme';
-import { isNativeMapAvailable, MAP_UNAVAILABLE_TITLE } from '../../components/map-availability';
+import { isNativeMapAvailable, mapUnavailableTitle } from '../../components/map-availability';
 
 type Coordinates = { lat: number; lng: number };
 
@@ -27,7 +27,7 @@ export default function PublicOrderTrackingMap({ technicianLocation, destination
   if (!isNativeMapAvailable()) {
     return (
       <View testID="public-tracking-map-unavailable" style={styles.fallback}>
-        <Text style={styles.fallbackText}>{MAP_UNAVAILABLE_TITLE}.</Text>
+        <Text style={styles.fallbackText}>{mapUnavailableTitle()}.</Text>
       </View>
     );
   }

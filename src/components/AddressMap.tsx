@@ -1,8 +1,25 @@
 import React, { useId } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { Camera, Map, Marker as MapLibreMarker } from '@maplibre/maplibre-react-native';
 import { lightTheme as colors } from '../constants/theme';
-import { isNativeMapAvailable, MAP_UNAVAILABLE_BODY, MAP_UNAVAILABLE_TITLE, mapTilerStyleUrl, zoomForDelta } from './map-availability';
+import { isNativeMapAvailable, MAP_UNAVAILABLE_BODY, mapTilerStyleUrl, mapUnavailableTitle, zoomForDelta } from './map-availability';
+
+type MapLibre = typeof import('@maplibre/maplibre-react-native');
+let mapLibre: MapLibre | null | undefined;
+/**
+ * MapLibre is loaded only when a map is really drawn. A static import ran its native module
+ * lookup at start-up, which Expo Go does not have (BUG DETECTOR 211); the APK still loads it.
+ */
+export function loadMapLibre(): MapLibre | null {
+  if (mapLibre !== undefined) return mapLibre;
+  if (!isNativeMapAvailable()) return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    mapLibre = require('@maplibre/maplibre-react-native') as MapLibre;
+  } catch {
+    mapLibre = null;
+  }
+  return mapLibre;
+}
 
 export type MapCoordinate = { latitude: number; longitude: number };
 export type MapRegion = MapCoordinate & { latitudeDelta: number; longitudeDelta: number };
@@ -27,8 +44,8 @@ export type MarkerProps = {
 
 export function MapUnavailable({ style }: { style?: StyleProp<ViewStyle> }) {
   return (
-    <View testID="map-unavailable" style={[styles.placeholder, style]} accessible accessibilityLabel={`${MAP_UNAVAILABLE_TITLE}. ${MAP_UNAVAILABLE_BODY}`}>
-      <Text style={styles.title}>{MAP_UNAVAILABLE_TITLE}</Text>
+    <View testID="map-unavailable" style={[styles.placeholder, style]} accessible accessibilityLabel={`${mapUnavailableTitle()}. ${MAP_UNAVAILABLE_BODY}`}>
+      <Text style={styles.title}>{mapUnavailableTitle()}</Text>
       <Text style={styles.body}>{MAP_UNAVAILABLE_BODY}</Text>
     </View>
   );
@@ -36,7 +53,9 @@ export function MapUnavailable({ style }: { style?: StyleProp<ViewStyle> }) {
 
 /** MapTiler map (MapLibre) when the build has its key, otherwise a readable placeholder. */
 export default function AddressMap({ style, testID, initialRegion, region, onPress, children }: AddressMapProps) {
-  if (!isNativeMapAvailable()) return <MapUnavailable style={style} />;
+  const native = loadMapLibre();
+  if (!native) return <MapUnavailable style={style} />;
+  const { Map, Camera } = native;
   const view = region ?? initialRegion;
   const center: [number, number] | undefined = view ? [view.longitude, view.latitude] : undefined;
   const zoom = view ? zoomForDelta(Math.max(view.latitudeDelta, view.longitudeDelta)) : 1;
@@ -63,7 +82,9 @@ export default function AddressMap({ style, testID, initialRegion, region, onPre
 export function Marker({ coordinate, title, pinColor = colors.primaryStrong, testID }: MarkerProps) {
   // MapLibre refuses a marker whose id changes, and the pin moves on every tap: the id must not follow the coordinate.
   const autoId = useId();
-  if (!isNativeMapAvailable()) return null;
+  const native = loadMapLibre();
+  if (!native) return null;
+  const MapLibreMarker = native.Marker;
   return (
     <MapLibreMarker id={testID ?? autoId} lngLat={[coordinate.longitude, coordinate.latitude]} anchor="bottom">
       <View testID={testID} accessible accessibilityLabel={title} style={styles.pinWrap}>
