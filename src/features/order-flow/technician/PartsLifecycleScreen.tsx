@@ -55,6 +55,8 @@ export default function PartsLifecycleScreen() {
   const partsList: OrderPartReadModel[] = partsResource?.status === 'ready' && Array.isArray(partsResource.data)
     ? partsResource.data.filter(pr => pr.serviceOrderId === key?.serviceOrderId && pr.technicianId === key?.userId)
     : [];
+  // A warranty part is declared after the original order completed, so it does not wait for UNDER_REPAIR.
+  const canUse = isUnderRepair || (fromWarranty && partsList.some(pr => pr.requestType === 'warranty'));
 
   const quotationsResource = snapshot?.resources.quotations;
   const quotationsList = quotationsResource?.status === 'ready' ? quotationsResource.data : null;
@@ -90,8 +92,8 @@ export default function PartsLifecycleScreen() {
     const subscription = AppState.addEventListener('change', status => { if (status !== 'active') { setQrModal(null); setCancelModal(null); setUsageModal(null); } });
     return () => subscription.remove();
   }, []);
-  const latest = useRef({ key, current, frozen, partsList, isUnderRepair, qrModal, cancelModal, usageModal });
-  useLayoutEffect(() => { latest.current = { key, current, frozen, partsList, isUnderRepair, qrModal, cancelModal, usageModal }; });
+  const latest = useRef({ key, current, frozen, partsList, canUse, qrModal, cancelModal, usageModal });
+  useLayoutEffect(() => { latest.current = { key, current, frozen, partsList, canUse, qrModal, cancelModal, usageModal }; });
   // W2 pickup: the receipt code only after the SM's physical handover; a W3 delivery is received in the delivery section.
   const receiveEligible = (pr: OrderPartReadModel) => {
     const a = allocations[pr.id];
@@ -126,7 +128,7 @@ export default function PartsLifecycleScreen() {
     void controller.cancelPartRequest(key, request.id, cancelModal.reason.trim() || undefined);
   };
   const onUpdateUsage = (requestId: string, itemId: string, usageStatus: 'used' | 'returned') => {
-    if (!key || !current || frozen || !latest.current.current || latest.current.frozen || !sameOrderSession(latest.current.key, key) || !isUnderRepair) return;
+    if (!key || !current || frozen || !latest.current.current || latest.current.frozen || !sameOrderSession(latest.current.key, key) || !canUse) return;
     const request = partsList.find(pr => pr.id === requestId && pr.status === 'received');
     if (!request?.items.some(item => item.id === itemId)) return;
     setQrModal(null); setCancelModal(null); setUsageModal({ requestId, itemId, status: usageStatus });
@@ -134,7 +136,7 @@ export default function PartsLifecycleScreen() {
   const onSubmitUsage = () => {
     const live = latest.current;
     const request = live.partsList.find(pr => pr.id === usageModal?.requestId && pr.status === 'received');
-    if (!usageModal || live.usageModal !== usageModal || !live.current || live.frozen || !live.isUnderRepair || (!key || !sameOrderSession(live.key, key)) || !key || !request?.items.some(item => item.id === usageModal.itemId)) return;
+    if (!usageModal || live.usageModal !== usageModal || !live.current || live.frozen || !live.canUse || (!key || !sameOrderSession(live.key, key)) || !key || !request?.items.some(item => item.id === usageModal.itemId)) return;
     latest.current = { ...live, usageModal: null };
     setUsageModal(null);
     void controller.updateItemUsage(key, request.id, usageModal.itemId, usageModal.status);
@@ -214,7 +216,7 @@ export default function PartsLifecycleScreen() {
             key={it.id}
             item={it}
             received={isReceived}
-            canMarkUsage={isUnderRepair}
+            canMarkUsage={canUse}
             frozen={frozen}
             record={returns.records[it.id]}
             busy={returns.busy}
@@ -288,6 +290,7 @@ export default function PartsLifecycleScreen() {
       {!focusedRequestId && (() => {
         const handover = isUnderRepair && partsList.length > 0;
         const lines = [
+          fromWarranty && !isUnderRepair && blockers.unsettled > 0 ? `${blockers.unsettled} linh kiện chưa khai dùng. Khai xong mới báo được bảo hành xong.` : '',
           handover && blockers.unsettled > 0 ? `${blockers.unsettled} linh kiện chưa ghi dùng hoặc trả.` : '',
           handover && blockers.open > 0 ? `${blockers.open} yêu cầu chưa nhận (nhận bằng mã/QR, xác nhận giao hàng ở mục Giao linh kiện, hoặc hủy yêu cầu).` : '',
           Object.values(returns.records).some(r => r.blocksNewWork) ? 'Chưa trả đủ linh kiện nên chưa nhận được việc mới.' : '',

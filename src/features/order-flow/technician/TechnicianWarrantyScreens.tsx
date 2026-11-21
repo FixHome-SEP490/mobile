@@ -70,7 +70,9 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
   const partLines = claim?.order.partLines ?? [];
   const part = claim?.partRequest && ['received', 'completed'].includes(claim.partRequest.status.toLowerCase()) ? claim.partRequest : null;
   const incoming = claim?.partRequest && ['requested', 'ready', 'delivering'].includes(claim.partRequest.status.toLowerCase()) ? claim.partRequest : null;
-  const partOverdue = !!part && !part.faultyReturnedAt && !!part.faultyReturnDueAt && Date.parse(part.faultyReturnDueAt) < openedAt;
+  // Declaring the replacement part as fitted (or returned) comes before reporting the warranty done; the faulty part can follow.
+  const partsPending = !!claim?.partRequest && claim.partRequest.status.toLowerCase() !== 'cancelled' && (!part || !!part.items?.some(item => item.usageStatus === 'pending'));
+  const partOverdue =!!part && !part.faultyReturnedAt && !!part.faultyReturnDueAt && Date.parse(part.faultyReturnDueAt) < openedAt;
   const returnFaulty = async () => {
     if (!part || returning) return;
     setReturning(true); setReturnError(null);
@@ -117,7 +119,7 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
       : task === 'TW02' ? { label: 'Nhận yêu cầu bảo hành', disabled: locked || !commands.includes('accept') || !slot, testID: 'technician-warranty-primary-action', onPress: () => prepare('accept') }
         : task === 'TW03' ? { label: 'Xác nhận đã đến kiểm tra', disabled: locked || !commands.includes('check-in'), testID: 'technician-warranty-primary-action', onPress: () => prepare('check-in') }
           : task === 'TW04' ? { label: 'Đề xuất kết quả kiểm tra', disabled: locked || !commands.includes('propose') || !result || findings.trim().length < 10 || (result === 'covered_part' && faultyIds.length === 0) || ((result === 'not_covered' || result === 'covered_part') && photos.length === 0) || (result === 'not_covered' && !notCoveredReasonCode), testID: 'technician-warranty-primary-action', onPress: () => prepare('propose') }
-            : task === 'TW05' ? { label: 'Đề xuất hoàn tất bảo hành', disabled: locked || !commands.includes('complete') || note.trim().length < 10, testID: 'technician-warranty-primary-action', onPress: () => prepare('complete') }
+            : task === 'TW05' ? { label: 'Đề xuất hoàn tất bảo hành', disabled: locked || !commands.includes('complete') || note.trim().length < 10 || partsPending, testID: 'technician-warranty-primary-action', onPress: () => prepare('complete') }
               : undefined;
   const secondary = confirmed
     ? { label: 'Sửa nội dung', disabled: busy, testID: 'technician-warranty-secondary-action', onPress: () => { controller.cancelConfirmation(); } }
@@ -175,6 +177,7 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
         </View>)}
         <Pressable accessibilityRole="button" accessibilityLabel="Mở màn linh kiện" onPress={() => navigation.push('TechnicianOrderDetail', { serviceOrderId: claim.order.id, screen: 'PartsLifecycle', params: { from: 'warranty' } })} style={[choice, { alignItems: 'center' }]}><Text style={{ ...choiceText, fontWeight: '700' }}>Mở màn linh kiện</Text></Pressable>
       </Card> : null}
+      {task === 'TW05' && partsPending ? <ReadOnlyNotice tone="warning">Hãy nhận linh kiện thay thế và khai đã lắp hoặc trả lại trước khi báo bảo hành xong.</ReadOnlyNotice> : null}
       {part ? <Card title="Nộp linh kiện hỏng về kho">
         {part.faultyReturnedAt ? <ReadOnlyNotice>Đã nộp lúc {vnDateTimeString(part.faultyReturnedAt)}. {part.faultyInspectionResult ? 'Quản lý dịch vụ đã kiểm tra.' : 'Chờ quản lý dịch vụ kiểm tra.'}</ReadOnlyNotice>
           : <>

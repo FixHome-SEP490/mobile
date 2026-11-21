@@ -494,7 +494,9 @@ export function createTechnicianPartsController(deps: TechnicianPartsControllerD
       publish({ phase: 'denied', operation: 'parts-usage', targetId: itemId, error: 'Chỉ kỹ thuật viên phụ trách mới có quyền cập nhật linh kiện.', actionSuccess: null });
       return;
     }
-    if (String(order.status).toUpperCase() !== 'UNDER_REPAIR' || !!order.completionRequestedAt) {
+    // A warranty part is used after the original order completed, so the repair state does not apply to it.
+    const warranty = currentParts(deps.readCoordinator, key)?.find((p) => p.id === requestId)?.requestType === 'warranty';
+    if (!warranty && (String(order.status).toUpperCase() !== 'UNDER_REPAIR' || !!order.completionRequestedAt)) {
       publish({ phase: 'denied', operation: 'parts-usage', targetId: itemId, error: 'Ghi nhận linh kiện yêu cầu đơn ở trạng thái ĐANG SỬA (UNDER_REPAIR) trước khi yêu cầu hoàn tất.', actionSuccess: null });
       return;
     }
@@ -537,11 +539,11 @@ export function createTechnicianPartsController(deps: TechnicianPartsControllerD
       },
       async () => {
         const liveOrder = currentOrder(deps.readCoordinator, key);
-        if (!deps.isCurrent(key) || !liveOrder || String(liveOrder.status).toUpperCase() !== 'UNDER_REPAIR' || !!liveOrder.completionRequestedAt || liveOrder.technician?.id !== key.userId) {
-          throw new Error('Order status or technician changed before updateItemUsage dispatch.');
-        }
         const liveParts = currentParts(deps.readCoordinator, key);
         const liveReq = liveParts?.find((p) => p.id === requestId);
+        if (!deps.isCurrent(key) || !liveOrder || (liveReq?.requestType !== 'warranty' && (String(liveOrder.status).toUpperCase() !== 'UNDER_REPAIR' || !!liveOrder.completionRequestedAt)) || liveOrder.technician?.id !== key.userId) {
+          throw new Error('Order status or technician changed before updateItemUsage dispatch.');
+        }
         if (!liveReq || liveReq.technicianId !== key.userId || liveReq.status !== 'received') {
           throw new Error('Target request invalid or not received before updateItemUsage dispatch.');
         }
