@@ -48,7 +48,7 @@ export function nextPinnedService(
 }
 
 /** The most appliances one visit takes; the chat offers them only from two. */
-export const AI_VISIT_DEVICE_LIMIT = 3;
+export const AI_VISIT_DEVICE_LIMIT = 5;
 
 /** The appliances of a reply that can be booked now, in the order the assistant gave them. */
 export function bookableDevices(reply: { devices?: AiDeviceSuggestion[] } | null | undefined): AiDeviceSuggestion[] {
