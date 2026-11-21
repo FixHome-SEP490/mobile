@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-22 00:40 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
+> Cập nhật lần cuối: 2026-11-22 00:47 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -422,8 +422,11 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
-- 2026-11-22 00:40 (UTC+7) | Hgnv11 | dev | Thợ khai dùng linh kiện bảo hành ở màn Quản lý linh kiện dù đơn gốc đã hoàn tất; nút Đề xuất hoàn tất bảo hành khoá khi linh kiện thay thế chưa nhận hoặc chưa khai
+- 2026-11-22 00:47 (UTC+7) | Hgnv11 | dev | Thợ khai dùng linh kiện bảo hành ở màn Quản lý linh kiện dù đơn gốc đã hoàn tất; nút Đề xuất hoàn tất bảo hành khoá khi linh kiện thay thế chưa nhận hoặc chưa khai
 - 2026-11-21 20:36 (UTC+7) | Hgnv11 | dev | Chat AI đồng bộ web: nút trả lời nhanh `answerOptionsVi`, lượt nhiều thiết bị tối đa 5, bỏ reply trễ sau phiên mới, timeout 45 giây, ảnh gửi AI 1024 px
+- 2026-11-21 18:25 (UTC+7) | ToanAltF4 | fix/mobile-chat-initials-2111 | Chữ cái ảnh đại diện trong danh sách tin nhắn lấy theo tên, bỏ phần ghi chú trong ngoặc và số
+- 2026-11-21 17:38 (UTC+7) | ToanAltF4 | fix/mobile-contract-audit-2111 | Rà hợp đồng API và validation với backend: mức khẩn critical, danh sách đơn đủ 100, địa chỉ đổi phải có ghim, mật khẩu đặt lại 72 byte, tên chủ tài khoản, lý do ngày nghỉ 500 ký tự
+- 2026-11-21 16:17 (UTC+7) | ToanAltF4 | fix/mobile-api-audit-2111 | Lượt nhiều máy nhận tối đa 5 thiết bị như backend (trước giữ 3)
 - 2026-11-21 16:13 (UTC+7) | Hgnv11 | dev | Hồ sơ kỹ thuật viên: bỏ nhãn xác minh danh tính lặp ở dòng Kỹ năng, nhãn đặt ngay dưới tiêu đề dòng Xác minh danh tính (bỏ mô tả trùng); hai ô Giá công và Bảo hành chia đều
 - 2026-11-21 15:10 (UTC+7) | Hgnv11 | dev | Thông báo OFFICE_VISIT_REMINDER (nhắc lịch lên trụ sở) mở màn đặt lịch; hồ sơ bị từ chối được admin mở lại thì thợ nhận OFFICE_VISIT_RESET và đặt lịch gặp lại
 - 2026-11-21 13:20 (UTC+7) | Hgnv11 | fix/mobile-technician-kyc-face-picker | Merge origin/dev (a5d34d1, #98 Expo Go không nạp MapLibre) vào nhánh; giữ cả hai nhật ký
@@ -459,9 +462,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-11-07 00:25 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Bảo hành: thợ chọn số cái hỏng khi dòng linh kiện từ 2 cái; khách: trang Bảo hành gọn, thẻ yêu cầu và phản hồi một nút, thông báo mở trang Bảo hành; thợ: lời mời bấm được, tiêu đề theo tên dịch vụ; sửa nút bị khóa sau khi nhận
 - 2026-11-06 21:45 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Làm lại quản lý bảo hành của thợ như web: phần Bảo hành trong tab Công việc, lời mời bảo hành ở tab Lời mời và badge, thông báo và Hồ sơ mở đúng chỗ, chi tiết dựng lại thành các thẻ
 - 2026-11-06 18:25 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Mở tải ảnh cho bảo hành (khách tạo yêu cầu, thợ đề xuất và hoàn tất) qua đường media công khai như web, theo yêu cầu; đổi quyết định chặn upload ảnh bảo hành
-- 2026-11-06 03:05 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Mobile thợ chọn linh kiện hỏng khi đề xuất lỗi linh kiện, hiện hạn nộp và nút nộp linh kiện hỏng về kho; sửa giờ hai dòng nhật ký 05/11
-- 2026-11-05 18:25 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Mobile thêm lối vào bảo hành ở Hồ sơ thợ, nút Nhắn tin và Xem đơn gốc; trường bảo hành mới, ảnh cho lỗi linh kiện, kết cục hoàn tiền ở màn thợ
-- 2026-11-04 12:10 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Ghi việc yêu cầu linh kiện bảo hành chờ SM kiểm tra linh kiện hỏng trước khi có QR; không đổi mã.
 
 
 ### Lịch sử giữ lại khi tích hợp

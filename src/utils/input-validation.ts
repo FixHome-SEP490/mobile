@@ -19,6 +19,11 @@ const INVISIBLE_CHARS =
 /** Chữ cái mọi hệ chữ, dấu phụ, khoảng trắng, nháy đơn, gạch nối, dấu chấm. */
 const PERSON_NAME_ALLOWED = /^[\p{L}\p{M}][\p{L}\p{M} '’.-]*$/u;
 
+/** Tên người (họ tên, chủ tài khoản ngân hàng): giống `IsPersonName` ở backend. */
+export function isPersonName(value: string): boolean {
+  return !containsUnsafeText(value) && PERSON_NAME_ALLOWED.test(value);
+}
+
 export function containsUnsafeText(value: string): boolean {
   return CONTROL_CHARS.test(value) || INVISIBLE_CHARS.test(value);
 }

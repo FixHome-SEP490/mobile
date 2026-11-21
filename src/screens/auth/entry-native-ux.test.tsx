@@ -158,6 +158,16 @@ it('shows and hides reset passwords without sending a request and rejects missin
   expect(tree.root.findAllByType(TextInput)).toHaveLength(3);
 });
 
+it('blocks a new password over 72 bytes before calling the server (Backend IsByteLength 0-72)', async () => {
+  await render(<ResetPasswordScreen />);
+  const long = 'Aa1!' + 'ể'.repeat(30);
+  await fill('Mã OTP gồm 6 số', '123456');
+  await fill('Mật khẩu mới', long);
+  await fill('Xác nhận mật khẩu mới', long);
+  await press('Đặt lại mật khẩu');
+  expect(mockApi.resetPassword).not.toHaveBeenCalled();
+});
+
 it('resets through the real OTP contract and waits for success before the login handoff', async () => {
   mockApi.resetPassword.mockResolvedValue({});
   await render(<ResetPasswordScreen />);

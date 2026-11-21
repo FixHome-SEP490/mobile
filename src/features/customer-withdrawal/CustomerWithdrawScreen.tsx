@@ -31,6 +31,7 @@ import { wholeVnd } from '../../api/customer-wallet.api';
 import { parseWholeVndInput } from '../order-flow/shared/m6-amount-input';
 import { findNewCustomerWithdrawal } from './customer-withdrawal.workflow';
 import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
+import { isPersonName } from '../../utils/input-validation';
 
 const PAGE_LIMIT = 20;
 type PreparedWithdrawal = {
@@ -203,6 +204,10 @@ export default function CustomerWithdrawScreen() {
   const saveBank = async () => {
     if (savingBank || posting || unknownAck || !selectedBank) return;
     const dto = { bankBin: selectedBank.bin, accountNumber: accountNumber.trim(), accountName: accountName.trim() };
+    if (dto.accountName && !isPersonName(dto.accountName)) {
+      setMessage('Tên chủ tài khoản chỉ gồm chữ cái, khoảng trắng, dấu chấm, nháy đơn hoặc gạch nối.');
+      return;
+    }
     if (!/^\d{6,19}$/.test(dto.accountNumber) || dto.accountName.length < 1 || dto.accountName.length > 128) {
       setMessage('Kiểm tra số tài khoản từ 6 đến 19 chữ số và tên chủ tài khoản.');
       return;

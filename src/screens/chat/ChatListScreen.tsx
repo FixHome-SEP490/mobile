@@ -36,8 +36,9 @@ export function chatReadOnlyTag(item: Pick<ConversationItem, 'canSend' | 'closed
   return item.closedReason === 'order_completed' ? 'Chỉ xem lại — đơn đã hoàn tất' : 'Chỉ xem lại';
 }
 
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
+/** Letter of the given name: skips a note in brackets and tokens that do not start with a letter ("Trần Quốc Việt (kiểm thử 103)" gives "V"). */
+export function initialsOf(name: string): string {
+  const parts = name.replace(/\([^)]*\)/g, ' ').trim().split(/\s+/).filter((part) => /^\p{L}/u.test(part));
   if (parts.length === 0) return '?';
   return parts[parts.length - 1][0].toUpperCase();
 }

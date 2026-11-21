@@ -113,7 +113,7 @@ export default function CustomerVisitCreateScreen() {
   const matches = (q ? services.filter((s) => s.name.toLowerCase().includes(q)) : services).slice(0, 8);
   const total = summarizeVisitDevicePrices(devices.map((d) => devicePrice(d.priceSummary)));
   const readyAddresses = addresses.filter(addressReadyForBooking);
-  const problem = visitProblem(devices, readyAddresses.some((a) => a.id === addressId), schedule);
+  const problem = visitProblem(devices, readyAddresses.some((a) => a.id === addressId), schedule, limit);
   const unconfirmedCount = devices.filter((d) => d.unconfirmed).length;
 
   const patch = (key: string, change: Partial<VisitDeviceDraft>) => setDevices((list) => list.map((d) => (d.key === key ? { ...d, ...change } : d)));

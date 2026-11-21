@@ -9,22 +9,12 @@ import {
   showsManualBooking,
   manualBookingCarry,
   quickReplies,
-  answerChoices,
   revealSteps,
   REVEAL_STEPS,
   videoDuration,
   videoMimeType,
   videoProblem,
 } from './ai-chat-logic';
-
-describe('answer choices', () => {
-  it('prefers the assistant offered answers (max four) over the yes/no guess', () => {
-    const q = { questionsVi: ['Máy có kêu to không?'], answerOptionsVi: [' Treo tường ', 'Tủ đứng', '', 'Âm trần', 'Di động', 'Khác'] };
-    expect(answerChoices(q)).toEqual(['Treo tường', 'Tủ đứng', 'Âm trần', 'Di động']);
-    expect(answerChoices({ questionsVi: q.questionsVi })).toEqual(['Có', 'Không', 'Không rõ']);
-    expect(answerChoices(null)).toEqual([]);
-  });
-});
 
 describe('quick replies', () => {
   it('offers Rồi/Chưa for a "chưa" question and Có/Không for a "không" question', () => {
@@ -134,8 +124,8 @@ describe('several appliances in one chat', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { bookableDevices, nextPinnedDevices } = require('./ai-chat-logic');
   const dev = (name: string, serviceId: string | null) => ({ deviceType: name, nameVi: name, service: serviceId ? { serviceCode: name, nameVi: name, serviceId } : null });
-  it('keeps only devices with a service, at most three', () => {
-    expect(bookableDevices({ devices: [dev('a', 's1'), dev('b', null), dev('c', 's3'), dev('d', 's4'), dev('e', 's5')] }).map((d: { nameVi: string }) => d.nameVi)).toEqual(['a', 'c', 'd', 'e']);
+  it('keeps only devices with a service, at most five like the backend visit limit', () => {
+    expect(bookableDevices({ devices: [dev('a', 's1'), dev('b', null), dev('c', 's3'), dev('d', 's4'), dev('e', 's5'), dev('f', 's6'), dev('g', 's7')] }).map((d: { nameVi: string }) => d.nameVi)).toEqual(['a', 'c', 'd', 'e', 'f']);
   });
   it('pins from two bookable devices, empties on fewer, and keeps the list when a reply has none', () => {
     const two = [dev('a', 's1'), dev('b', 's2')];

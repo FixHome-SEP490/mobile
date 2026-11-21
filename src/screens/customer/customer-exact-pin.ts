@@ -97,9 +97,7 @@ export function isCurrentAddressAsyncResult(
 export type AddressSaveLocationDecision =
   | { kind: 'blocked'; reason: 'pin-confirmation' | 'administrative-area' }
   | { kind: 'confirmed'; coordinates: ExactPinCoordinates }
-  | { kind: 'preserve-legacy'; coordinates?: ExactPinCoordinates }
-  | { kind: 'candidate-text-only' }
-  | { kind: 'legacy-text-only' };
+  | { kind: 'preserve-legacy'; coordinates?: ExactPinCoordinates };
 
 export function resolveAddressSaveLocation(input: {
   isCreating: boolean;
@@ -137,24 +135,8 @@ export function resolveAddressSaveLocation(input: {
       : { kind: 'preserve-legacy' };
   }
 
-  if (!input.isCreating
-    && input.pin.status === 'candidate'
-    && input.legacyAddress
-    && input.addressText !== input.legacyAddress.line1
-    && input.province.trim()
-    && input.district.trim()
-    && sameAdministrativeArea(input.province, input.legacyAddress.province)
-    && sameAdministrativeArea(input.district, input.legacyAddress.district)) {
-    return { kind: 'candidate-text-only' };
-  }
-
-  if (!input.isCreating
-    && input.pin.status === 'none'
-    && input.legacyAddress
-    && input.addressText !== input.legacyAddress.line1) {
-    return { kind: 'legacy-text-only' };
-  }
-
+  // Backend rejects a changed address without a full lat/lng pair (ADDRESS_LOCATION_REQUIRED),
+  // so a new text always needs a confirmed pin.
   return { kind: 'blocked', reason: 'pin-confirmation' };
 }
 

@@ -25,6 +25,8 @@ describe('urgencyView', () => {
     expect(urgencyView('emergency')).toMatchObject({ label: 'Khẩn cấp', tone: 'danger' });
     expect(urgencyView('NORMAL')).toMatchObject({ label: 'Bình thường', tone: 'info' });
     expect(urgencyView('MEDIUM').label).toBe('Bình thường');
+    // Backend UrgencyLevel emits critical, never emergency.
+    expect(urgencyView('critical')).toMatchObject({ label: 'Khẩn cấp', tone: 'danger' });
   });
 
   it('keeps unknown server text neutral', () => {

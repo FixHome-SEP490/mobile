@@ -9,7 +9,7 @@ import type {
   WithdrawalDecision,
   WithdrawalRequest,
 } from '../../types/wallet.types';
-import { extractApiErrorMessage } from '../../utils/input-validation';
+import { extractApiErrorMessage, isPersonName } from '../../utils/input-validation';
 
 export const MIN_TOP_UP = 10_000;
 export const MAX_TOP_UP = 50_000_000;
@@ -143,7 +143,10 @@ export function validateBankAccount(dto: BankAccountInput): string | null {
   if (!/^\d{6,19}$/.test(dto.accountNumber.trim())) {
     return 'Số tài khoản chỉ gồm chữ số, từ 6 đến 19 số';
   }
-  if (!dto.accountName.trim()) return 'Vui lòng nhập tên chủ tài khoản';
+  const name = dto.accountName.trim();
+  if (!name) return 'Vui lòng nhập tên chủ tài khoản';
+  if (name.length > 128) return 'Tên chủ tài khoản tối đa 128 ký tự';
+  if (!isPersonName(name)) return 'Tên chủ tài khoản chỉ gồm chữ cái, khoảng trắng, dấu chấm, nháy đơn hoặc gạch nối';
   return null;
 }
 
