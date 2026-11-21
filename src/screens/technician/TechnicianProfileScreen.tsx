@@ -94,12 +94,14 @@ const renderBackdrop = (props: BottomSheetBackdropProps) => (
 
 type ProfileStyles = ReturnType<typeof getStyles>;
 
-function MenuRow({ styles, colors, Icon, title, desc, onPress }: {
+function MenuRow({ styles, colors, Icon, title, desc, badge, onPress }: {
   styles: ProfileStyles;
   colors: ReturnType<typeof useAppTheme>['colors'];
   Icon: LucideIcon;
   title: string;
   desc?: string;
+  /** Nhãn trạng thái đặt ngay dưới tiêu đề, trong cùng khối chữ. */
+  badge?: React.ReactNode;
   onPress: () => void;
 }) {
   return (
@@ -110,6 +112,7 @@ function MenuRow({ styles, colors, Icon, title, desc, onPress }: {
       <View style={styles.menuContent}>
         <Text style={styles.menuTitle}>{title}</Text>
         {!!desc && <Text style={styles.menuDesc} numberOfLines={1}>{desc}</Text>}
+        {!!badge && <View style={styles.menuBadge}>{badge}</View>}
       </View>
       <ChevronRight size={20} color={colors.muted} strokeWidth={1.75} />
     </TouchableOpacity>
@@ -583,11 +586,6 @@ export default function TechnicianProfileScreen() {
             desc={skillDesc}
             onPress={openSkillsSheet}
           />
-          {verification !== null && (
-            <View style={styles.kycBadgeRow}>
-              <StatusBadge view={KYC_VIEW[verification.status]} />
-            </View>
-          )}
           <View style={styles.divider} />
           <MenuRow
             styles={styles}
@@ -626,14 +624,11 @@ export default function TechnicianProfileScreen() {
             colors={colors}
             Icon={ShieldCheck}
             title="Xác minh danh tính"
-            desc={kycDesc}
+            // Nhãn màu đã nói trạng thái; chỉ giữ dòng mô tả khi nó thêm thông tin (đang tải, lý do từ chối...).
+            desc={verification !== null && kycDesc === KYC_VIEW[verification.status].label ? undefined : kycDesc}
+            badge={verification !== null ? <StatusBadge view={KYC_VIEW[verification.status]} /> : undefined}
             onPress={() => navigation.navigate('TechnicianKyc')}
           />
-          {verification !== null && (
-            <View style={styles.kycBadgeRow}>
-              <StatusBadge view={KYC_VIEW[verification.status]} />
-            </View>
-          )}
         </View>
 
         <View style={styles.logoutSpacer} />
@@ -830,7 +825,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   logoutSpacer: { flexGrow: 1, minHeight: 12 },
   cameraTouch: { position: 'absolute', bottom: -8, right: -8, width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   cameraIconBadge: { backgroundColor: colors.primaryStrong, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: colors.background },
-  kycBadgeRow: { paddingHorizontal: 16, paddingBottom: 12 },
+  menuBadge: { alignSelf: 'flex-start', marginTop: 6 },
   avatarModalContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
   closeAvatarModalBtn: { position: 'absolute', top: 50, right: 12, zIndex: 10, width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   fullAvatarImage: { width: '100%', height: 400 },
@@ -863,7 +858,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   skillSaveBtnText: { color: colors.surface, fontWeight: '600', fontSize: 14, lineHeight: 20 },
   skillFieldsRow: { flexDirection: 'row', gap: 12 },
   skillField: { flex: 1, minWidth: 0 },
-  skillFieldWide: { flex: 1.4, minWidth: 0 },
+  skillFieldWide: { flex: 1, minWidth: 0 },
   skillFieldInput: { minHeight: 44, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.textSecondary, borderRadius: 14, color: colors.text, fontSize: 16, backgroundColor: colors.surface },
 
 

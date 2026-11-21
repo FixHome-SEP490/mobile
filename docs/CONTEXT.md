@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-21 15:10 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
+> Cập nhật lần cuối: 2026-11-21 16:13 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -421,6 +421,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-21 16:13 (UTC+7) | Hgnv11 | dev | Hồ sơ kỹ thuật viên: bỏ nhãn xác minh danh tính lặp ở dòng Kỹ năng, nhãn đặt ngay dưới tiêu đề dòng Xác minh danh tính (bỏ mô tả trùng); hai ô Giá công và Bảo hành chia đều
 - 2026-11-21 15:10 (UTC+7) | Hgnv11 | dev | Thông báo OFFICE_VISIT_REMINDER (nhắc lịch lên trụ sở) mở màn đặt lịch; hồ sơ bị từ chối được admin mở lại thì thợ nhận OFFICE_VISIT_RESET và đặt lịch gặp lại
 - 2026-11-21 13:20 (UTC+7) | Hgnv11 | fix/mobile-technician-kyc-face-picker | Merge origin/dev (a5d34d1, #98 Expo Go không nạp MapLibre) vào nhánh; giữ cả hai nhật ký
 - 2026-11-21 12:58 (UTC+7) | Hgnv11 | fix/mobile-technician-kyc-face-picker | Ô ảnh chân dung trong Xác minh danh tính thợ mở hộp chọn Thư viện ảnh / Chụp ảnh thay vì mở camera ngay
@@ -460,7 +461,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-11-04 12:10 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Ghi việc yêu cầu linh kiện bảo hành chờ SM kiểm tra linh kiện hỏng trước khi có QR; không đổi mã.
 - 2026-11-04 11:30 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Ghi hợp đồng bảo hành mới của Backend (trường thêm, lý do không bảo hành mới, ảnh bắt buộc cho lỗi linh kiện) và việc Mobile còn dở; không đổi mã.
 - 2026-11-03 12:06 (UTC+7) | Hgnv11 | dev | Chọn dịch vụ ở trang đặt lịch: sheet co theo số dịch vụ (tối đa 480px), tiêu đề, tab danh mục và ô tìm kiếm ghim cố định, cuộn được ở mọi tab; chưa kiểm chứng trên thiết bị.
-- 2026-11-01 19:29 (UTC+7) | ToanAltF4 | fix/technician-reviews-route | Màn Đánh giá từ khách hàng của thợ đọc GET /technicians/{id người dùng}/reviews thay cho /technicians/me/reviews (backend không có route me, trả 400, bug 51); mã đơn và tên dịch vụ để trống vì API chưa trả.
 
 
 ### Lịch sử giữ lại khi tích hợp
