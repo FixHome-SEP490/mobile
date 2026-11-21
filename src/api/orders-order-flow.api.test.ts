@@ -95,7 +95,9 @@ it('an ADDITIONAL photo upload returns the evidence id and refuses a reply witho
 it('asks Backend to filter the technician list by status before it builds each order', async () => {
   api.get.mockResolvedValue({ data: { data: [] } });
   await ordersApi.getTechnicianJobs({ excludeVisitGroups: true, statuses: ['accepted', 'en_route'] });
-  expect(api.get).toHaveBeenLastCalledWith('/service-orders/my', { params: { excludeVisitGroups: 'true', statuses: 'accepted,en_route' } });
+  expect(api.get).toHaveBeenLastCalledWith('/service-orders/my', { params: { pageSize: 100, excludeVisitGroups: 'true', statuses: 'accepted,en_route' } });
   await ordersApi.getTechnicianJobs({ excludeVisitGroups: true });
-  expect(api.get).toHaveBeenLastCalledWith('/service-orders/my', { params: { excludeVisitGroups: 'true' } });
+  expect(api.get).toHaveBeenLastCalledWith('/service-orders/my', { params: { pageSize: 100, excludeVisitGroups: 'true' } });
+  await ordersApi.getTechnicianJobs();
+  expect(api.get).toHaveBeenLastCalledWith('/service-orders/my', { params: { pageSize: 100 } });
 });

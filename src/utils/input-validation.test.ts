@@ -1,5 +1,6 @@
 import {
   extractApiErrorMessage,
+  isPersonName,
   utf8ByteLength,
   validateEmail,
   validateFullName,
@@ -164,5 +165,17 @@ describe('extractApiErrorMessage — câu tiếng Anh của backend', () => {
   it('câu tiếng Anh lạ rơi về câu dự phòng, câu tiếng Việt được giữ', () => {
     expect(extractApiErrorMessage(fail('Something odd happened'), 'du phong')).toBe('du phong')
     expect(extractApiErrorMessage(fail('Không đủ số dư.'), 'du phong')).toBe('Không đủ số dư.')
+  })
+})
+
+describe('isPersonName (Backend IsPersonName)', () => {
+  it('accepts letters with accents, spaces, apostrophes, hyphens and periods', () => {
+    expect(isPersonName('Phạm Đức Toàn')).toBe(true)
+    expect(isPersonName("NGUYEN VAN O'NEIL-TRAN JR.")).toBe(true)
+  })
+  it('rejects digits, symbols and invisible characters', () => {
+    expect(isPersonName('NGUYEN VAN 2')).toBe(false)
+    expect(isPersonName('A@B')).toBe(false)
+    expect(isPersonName('An​h')).toBe(false)
   })
 })
