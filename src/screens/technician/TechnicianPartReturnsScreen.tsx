@@ -26,6 +26,14 @@ const FILTERS: { key: PartReturnFilter; label: string }[] = [
   { key: 'waiting', label: 'Chờ quản lý nhận' },
 ];
 
+/** When a faulty warranty part is due back, read once when loaded so rendering stays pure. */
+function faultyDue(claim: TechnicianWarrantyClaim, now: number) {
+  const request = claim.partRequest, due = request?.faultyReturnDueAt;
+  if (request?.faultyReturnChargedAt) return { text: 'Quá hạn, đã bị trừ ví', late: true };
+  if (due && Date.parse(due) < now) return { text: 'Đã quá hạn nộp', late: true };
+  return { text: due ? `Hạn nộp ${vnDateTimeString(due)}` : 'Chưa có hạn nộp', late: false };
+}
+
 /** Every FixHome part the technician still owes back, one compact card per order, so none is forgotten. */
 export default function TechnicianPartReturnsScreen() {
   const { colors, isDark } = useAppTheme();
@@ -48,25 +56,21 @@ export default function TechnicianPartReturnsScreen() {
     }
   }, []);
   // Faulty parts of warranty claims are not in the custody ledger, so they are listed here too; handing one in is done on the claim.
-  const [faulty, setFaulty] = useState<TechnicianWarrantyClaim[]>([]);
+  const [faulty, setFaulty] = useState<{ claim: TechnicianWarrantyClaim; due: { text: string; late: boolean } }[]>([]);
   const loadFaulty = useCallback(async () => {
     try {
       const { data } = await technicianWarrantyApi.listMine({ pageSize: 100 });
+      const now = Date.now();
       setFaulty(data
         .filter(c => c.partRequest && ['received', 'completed'].includes(String(c.partRequest.status).toLowerCase()) && !c.partRequest.faultyReturnedAt)
-        .sort((a, b) => (a.partRequest?.faultyReturnDueAt ?? '9').localeCompare(b.partRequest?.faultyReturnDueAt ?? '9')));
+        .sort((x, y) => (x.partRequest?.faultyReturnDueAt ?? '9').localeCompare(y.partRequest?.faultyReturnDueAt ?? '9'))
+        .map(claim => ({ claim, due: faultyDue(claim, now) })));
     } catch { /* the ledger still works; the next visit or change reads again */ }
   }, []);
   useFocusEffect(useCallback(() => { void load(); void loadFaulty(); }, [load, loadFaulty]));
   useLiveRefresh(['order:updated'], () => { void loadFaulty(); }, undefined, { pollMs: 60_000 });
   // The manager received a return or a part moved: the list follows without a pull (PO 22/11/2026).
   useLiveRefresh(['order:updated'], (batch) => { if (batch.resync || !batch.kinds || batch.kinds.includes('part')) void load(); });
-  const faultyDue = (claim: TechnicianWarrantyClaim) => {
-    const request = claim.partRequest, due = request?.faultyReturnDueAt;
-    if (request?.faultyReturnChargedAt) return { text: 'Quá hạn, đã bị trừ ví', late: true };
-    if (due && Date.parse(due) < Date.now()) return { text: 'Đã quá hạn nộp', late: true };
-    return { text: due ? `Hạn nộp ${vnDateTimeString(due)}` : 'Chưa có hạn nộp', late: false };
-  };
 
   const groups = useMemo(() => groupPartReturns(records), [records]);
   const shown = useMemo(() => filterPartReturns(groups, filter), [groups, filter]);
@@ -152,8 +156,7 @@ export default function TechnicianPartReturnsScreen() {
           {faulty.length > 0 && (
             <View style={styles.faultyBox} testID="faulty-warranty-returns">
               <Text style={styles.faultyTitle} accessibilityRole="header">{`Linh kiện hỏng cần nộp (bảo hành) · ${faulty.length}`}</Text>
-              {faulty.map(claim => {
-                const due = faultyDue(claim);
+              {faulty.map(({ claim, due }) => {
                 return (
                   <TouchableOpacity
                     key={claim.id}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect as mockUseEffect } from 'react';
 import { act, create } from 'react-test-renderer';
 import { Text, TouchableOpacity } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -6,10 +6,11 @@ import TechnicianPartReturnsScreen from './TechnicianPartReturnsScreen';
 
 const mockNavigate = jest.fn();
 const mockListMine = jest.fn();
-jest.mock('@react-navigation/native', () => {
-  const React = require('react');
-  return { useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }), useFocusEffect: (cb: () => void) => { React.useEffect(cb, []); } };
-});
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }),
+  // The screen's callback is stable (useCallback), so running it per change of identity is a single focus.
+  useFocusEffect: (cb: () => void) => { mockUseEffect(() => { cb(); }, [cb]); },
+}));
 jest.mock('../../hooks/useLiveRefresh', () => ({ useLiveRefresh: jest.fn() }));
 jest.mock('../../components/customer/CustomerSkeleton', () => ({ __esModule: true, default: () => null }));
 jest.mock('../../components/BackButton', () => ({ __esModule: true, default: () => null }));
