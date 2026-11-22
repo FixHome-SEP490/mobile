@@ -32,7 +32,7 @@ import { useLiveRefresh } from '../../hooks/useLiveRefresh';
 import { useBadgeStore } from '../../store/badge.store';
 import { createInvitationInbox, initialInboxState, isActionable } from './invitation-inbox';
 import { invitationClosedLabel, invitationCountdown, invitationDistanceText, sortInvitationsForDisplay } from './invitation-view';
-import { urgencyView, type StatusView } from './technician-status';
+import { type StatusView } from './technician-status';
 import { bookingsApi, type InvitationItem } from '../../api/bookings.api';
 import { ordersApi } from '../../api/orders.api';
 import { iconSize, iconStroke, useAppTheme } from '../../constants/theme';
@@ -277,16 +277,10 @@ export default function TechnicianInvitationsScreen() {
                 <View style={[styles.infoTile, styles.tileHalf]}>
                   <View style={styles.tileBody}>
                     <Text style={styles.fieldLabel}>Số lượng</Text>
-                    <Text style={styles.fieldValue}>{b?.quantity != null ? `SL ${b.quantity}` : 'Chưa xác định'}</Text>
+                    <Text style={styles.fieldValue}>{b?.quantity != null ? String(b.quantity) : 'Chưa xác định'}</Text>
                   </View>
                 </View>
                 )}
-                <View style={[styles.infoTile, styles.tileHalf]}>
-                  <View style={styles.tileBody}>
-                    <Text style={styles.fieldLabel}>Mức độ khẩn</Text>
-                    {b?.urgency ? <View style={styles.badgeRow}><StatusBadge view={urgencyView(b.urgency)} /></View> : <Text style={styles.fieldValue}>Chưa xác định</Text>}
-                  </View>
-                </View>
               </View>
               {devices
                 ? (
@@ -319,12 +313,9 @@ export default function TechnicianInvitationsScreen() {
                         </View>
                       );
                     })}
-                    <Text style={styles.visitPrivacy} testID="invitation-privacy-note">
-                      Địa chỉ cụ thể, số điện thoại và ghi chú riêng của khách hiện sau khi bạn nhận đơn.
-                    </Text>
                   </>
                 )
-                : b ? <InvitationJobDetails booking={b} /> : null}
+                : b ? <InvitationJobDetails booking={b} hidePrivacyNote /> : null}
             </View>
           ) : (
             <>
@@ -345,7 +336,6 @@ export default function TechnicianInvitationsScreen() {
               {!devices && b?.quantity != null ? <Text style={styles.fieldValue}>{`Số lượng: ${b.quantity}`}</Text> : null}
               {!devices && (
               <View style={styles.badgeRow}>
-                {b?.urgency ? <StatusBadge view={urgencyView(b.urgency)} /> : null}
                 {b?.media?.length ? (
                   <View style={styles.mediaChip} testID="invitation-media-chip">
                     <ImageIcon size={14} color={colors.primaryStrong} strokeWidth={1.75} />
@@ -389,7 +379,6 @@ export default function TechnicianInvitationsScreen() {
               inFlight={inFlight ?? null}
               onAccept={() => respond(inv, 'ACCEPT')}
               onDecline={() => respond(inv, 'DECLINE')}
-              onRefresh={onRefresh}
             />
           )}
         </View>
@@ -489,7 +478,7 @@ export default function TechnicianInvitationsScreen() {
                 <View style={[styles.banner, { backgroundColor: colors.tone.warning.bg }]} accessibilityLiveRegion="polite">
                   <RefreshCw size={18} color={colors.tone.warning.fg} strokeWidth={1.75} />
                   <Text style={[styles.bannerText, { color: colors.tone.warning.text }]}>
-                    Kết quả nhận việc chưa xác định. Không gửi lại để tránh nhận trùng. Kéo xuống làm mới khi có mạng để ứng dụng đối chiếu phân công trên máy chủ.
+                    Kết quả nhận việc chưa xác định. Kéo xuống làm mới khi có mạng, không cần nhận lại.
                   </Text>
                 </View>
               ) : null}
@@ -566,7 +555,7 @@ export default function TechnicianInvitationsScreen() {
               <View style={[styles.banner, { backgroundColor: colors.tone.warning.bg }]} accessibilityLiveRegion="polite">
                 <RefreshCw size={18} color={colors.tone.warning.fg} strokeWidth={1.75} />
                 <Text style={[styles.bannerText, { color: colors.tone.warning.text }]}>
-                  Kết quả nhận việc chưa xác định. Không gửi lại để tránh nhận trùng. Kéo xuống làm mới khi có mạng để ứng dụng đối chiếu phân công trên máy chủ.
+                  Kết quả nhận việc chưa xác định. Kéo xuống làm mới khi có mạng, không cần nhận lại.
                 </Text>
               </View>
             ) : null}
@@ -620,7 +609,7 @@ export default function TechnicianInvitationsScreen() {
             </TouchableOpacity>
           </View>
         )}
-        ListFooterComponent={!loading && !error ? (
+        ListFooterComponent={!loading && !error && !isFocused ? (
           <View style={styles.privacyNotice}>
             <Info size={18} color={colors.tone.info.fg} strokeWidth={1.75} />
             <Text style={styles.privacyText}>
@@ -724,7 +713,6 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   deviceHead: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 16, paddingVertical: 10 },
   deviceBody: { paddingHorizontal: 16, paddingBottom: 16, gap: 4 },
   deviceHeading: { flex: 1, fontSize: 16, lineHeight: 24, fontWeight: '700', color: colors.text },
-  visitPrivacy: { fontSize: 14, lineHeight: 22, color: colors.tone.warning.text, backgroundColor: colors.tone.warning.bg, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
   fieldLabel: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
   fieldValue: { fontSize: 14, lineHeight: 22, color: colors.text },
   reviewSurface: { marginTop: 8, gap: 12 },

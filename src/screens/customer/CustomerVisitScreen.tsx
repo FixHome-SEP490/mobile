@@ -5,7 +5,7 @@ import { CheckCircle2, Clock, MapPin, MessageCircle, Phone, User } from 'lucide-
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as WebBrowser from 'expo-web-browser';
-import BackButton, { HomeButton } from '../../components/BackButton';
+import BackButton, { HomeButton, goHome } from '../../components/BackButton';
 import OrderStepBar from '../../features/order-flow/customer/OrderStepBar';
 import { findChatForBooking } from '../technician/technician-chat-shortcut';
 import BookingRescheduleSheet from '../../components/BookingRescheduleSheet';
@@ -277,7 +277,8 @@ export default function CustomerVisitScreen() {
           label: busy ? 'Đang xử lý…' : fullyFunded ? 'Xác nhận thanh toán 0 ₫' : method === 'cash' ? 'Yêu cầu trả tiền mặt' : method === 'vnpay' ? 'Thanh toán qua VNPay' : `Thanh toán ${formatVnd(payable)}`,
           testID: 'visit-pay-submit', disabled: busy || cashIntent.busy || payState === 'wallet_short', onPress: pay,
         }
-          : undefined;
+          : checkout && (payState === 'paid' || payState === 'zero_due') ? { label: 'Về trang chủ', testID: 'visit-go-home', onPress: goHome }
+            : undefined;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>

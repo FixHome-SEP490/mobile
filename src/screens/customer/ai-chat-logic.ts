@@ -19,6 +19,15 @@ export function quickReplies(question: string | undefined | null): string[] {
   return [];
 }
 
+/**
+ * The buttons under the assistant's question: its own answers first (at most four), the yes/no guess from the
+ * first question's last word only when it sent none. Same as the web.
+ */
+export function answerChoices(clarification: { questionsVi?: string[]; answerOptionsVi?: string[] | null } | null | undefined): string[] {
+  const offered = (clarification?.answerOptionsVi ?? []).map((o) => o.trim()).filter(Boolean);
+  return offered.length ? offered.slice(0, 4) : quickReplies(clarification?.questionsVi?.[0]);
+}
+
 /** A reply is written out in at most this many steps, so a long one still takes about a second. */
 export const REVEAL_STEPS = 40;
 export const REVEAL_MS = 28;
@@ -35,7 +44,7 @@ export function revealSteps(text: string): string[] {
 }
 
 /** Catch-all services that must not replace a specific one the conversation already found. */
-export const FALLBACK_SERVICE_CODES = new Set(['KIEM_TRA_CHAN_DOAN_THIET_BI', 'DICH_VU_KHAC']);
+export const FALLBACK_SERVICE_CODES = new Set(['DICH_VU_KHAC']);
 
 /** The service to keep pinned after a reply: the new one, unless it is a catch-all replacing a specific one. */
 export function nextPinnedService(
@@ -48,7 +57,7 @@ export function nextPinnedService(
 }
 
 /** The most appliances one visit takes; the chat offers them only from two. */
-export const AI_VISIT_DEVICE_LIMIT = 3;
+export const AI_VISIT_DEVICE_LIMIT = 5;
 
 /** The appliances of a reply that can be booked now, in the order the assistant gave them. */
 export function bookableDevices(reply: { devices?: AiDeviceSuggestion[] } | null | undefined): AiDeviceSuggestion[] {

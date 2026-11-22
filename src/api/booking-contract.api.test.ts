@@ -1,5 +1,5 @@
 import apiClient from './client';
-import { bookingsApi } from './bookings.api';
+import { bookingsApi, toBookingUrgency } from './bookings.api';
 import { ordersApi } from './orders.api';
 
 jest.mock('./client', () => ({
@@ -139,6 +139,10 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
     ]);
   });
 
+  it('maps Backend urgency (low, medium, high, critical) to the labels the app shows', () => {
+    expect(['low', 'medium', 'high', 'critical'].map(toBookingUrgency)).toEqual(['LOW', 'NORMAL', 'HIGH', 'EMERGENCY']);
+  });
+
   it('preserves private photo upload IDs on Booking create and normalizes urgency', async () => {
     const privatePhotoId = '44444444-4444-4444-8444-444444444444';
     api.post.mockResolvedValue({ data: { data: {
@@ -218,13 +222,13 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
     expect(orders.reduce((sum, o) => sum + o.laborTotal, 0)).toBe(870000);
   });
 
-  it('clamps invalid order page bounds and keeps the legacy list call param-free', async () => {
+  it('clamps invalid order page bounds and asks the full list for the largest page (Backend defaults to 20)', async () => {
     api.get.mockResolvedValue({ data: { data: [], meta: { total: 0 } } });
     await ordersApi.getMyOrdersPage(0, 500);
     expect(api.get).toHaveBeenCalledWith('/service-orders/my', { params: { page: 1, pageSize: 100 } });
     api.get.mockResolvedValue({ data: { data: [] } });
     await ordersApi.getMyOrders();
-    expect(api.get).toHaveBeenCalledWith('/service-orders/my');
+    expect(api.get).toHaveBeenCalledWith('/service-orders/my', { params: { pageSize: 100 } });
   });
 
   it('fetches a Booking history page with pagination params and server total', async () => {

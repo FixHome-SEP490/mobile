@@ -1181,7 +1181,7 @@ export default function CustomerBookingCreateScreen() {
       setReviewError('Có ảnh chưa xác nhận được lượt tải. Hãy quay lại bước trước để chọn lại ảnh.');
       return;
     }
-    const problem = visitProblem(visitDevices(), selectedAddressReady, schedule);
+    const problem = visitProblem(visitDevices(), selectedAddressReady, schedule, deviceLimit);
     if (problem) { setReviewError(problem); return; }
     setReviewError('');
     void sendVisitNow();

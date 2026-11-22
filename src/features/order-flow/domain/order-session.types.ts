@@ -56,6 +56,9 @@ export interface OrderInvoice {
   partsTotal?: number | string;
   issuedAt?: string;
   paidAt?: string | null;
+  /** Voucher subsidy the server committed for this invoice and what the customer pays after it (PO 22/11/2026). */
+  voucherDiscount?: number;
+  amountDue?: number;
   /** Undefined for a legacy payload with no lines, never silently replaced by []. */
   items?: { id: string; description: string; quantity: number; lineTotal: number | string; sourceType?: string; sourceItemId?: string | null; type?: string }[];
 }
@@ -116,7 +119,7 @@ export interface OrderSessionSnapshot {
   proofPolicy?: { beforeMinimum: number; afterMinimum: number };
 }
 export type CustomerTaskId = 'C03' | 'C04' | 'C05' | 'C06' | 'C07' | 'C08' | 'C09' | 'C10' | 'C11' | 'C12' | 'CX';
-export type TechnicianTaskId = 'T02' | 'T03' | 'T05' | 'T06' | 'T07' | 'T08' | 'TR' | 'T09' | 'T11' | 'T15' | 'T16' | 'TH' | 'TX';
+export type TechnicianTaskId = 'T02' | 'T03' | 'T05' | 'T05W' | 'T06' | 'T07' | 'T08' | 'TR' | 'T09' | 'T11' | 'T15' | 'T16' | 'TH' | 'TX';
 /** Explicit navigation branches/forms. They do not imply a new order status or automatic step. */
 export type ManualOrderTaskId = 'C09a' | 'C13' | 'T02a' | 'T04' | 'T09a' | 'T10' | 'T12' | 'T13' | 'T14' | 'T15a';
 export type OrderTaskId = CustomerTaskId | TechnicianTaskId | ManualOrderTaskId;

@@ -37,8 +37,8 @@ jest.mock('../../components/AddressMap', () => {
   const Native = require('react-native');
   return {
     __esModule: true,
-    default: ({ children, onPress }: { children?: React.ReactNode; onPress?: (event: unknown) => void }) =>
-      ReactModule.createElement(Native.View, { testID: 'address-map', onPress }, children),
+    default: ({ children, onPress, initialRegion }: { children?: React.ReactNode; onPress?: (event: unknown) => void; initialRegion?: unknown }) =>
+      ReactModule.createElement(Native.View, { testID: 'address-map', onPress, initialRegion }, children),
     Marker: ({ title }: { title?: string }) => ReactModule.createElement(Native.Text, null, title),
   };
 });
@@ -181,6 +181,10 @@ it('uses canonical offline areas without calling the historical proxy', async ()
 it('starts with no confirmed pin and never calls write endpoints on mount or search', async () => {
   const tree = await render();
   expect(action(tree, 'Lưu địa chỉ mới').props.disabled).toBe(true);
+  // Before any pin the map opens on Ho Chi Minh City, not on 0,0.
+  const region = (tree.root as unknown as { findByProps: (p: object) => { props: { initialRegion: { latitudeDelta: number } } } }).findByProps({ testID: 'address-map' }).props.initialRegion;
+  expect(region).toMatchObject({ latitude: 10.7769, longitude: 106.7009 });
+  expect(region.latitudeDelta).toBeLessThan(1);
   await fillAndPick(tree);
   // A returned geocoder position is merely a suggestion.
   expect(action(tree, 'Lưu địa chỉ mới').props.disabled).toBe(true);

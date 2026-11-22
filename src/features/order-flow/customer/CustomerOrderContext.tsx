@@ -17,7 +17,8 @@ import { parseSafeIntegerMoney } from './customer-quotation-controller';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 
-const QUOTE_LABEL: Record<string, string> = { SENT: 'Chờ duyệt', APPROVED: 'Đã duyệt', REJECTED: 'Đã từ chối' };
+// An approved quotation needs no chip: it is settled, and the detail sheet still shows it.
+const QUOTE_LABEL: Record<string, string> = { SENT: 'Chờ duyệt', REJECTED: 'Đã từ chối' };
 
 function useCustomerOrder(): ServiceOrderItem | null {
   const session = useOptionalOrderSession();

@@ -371,7 +371,7 @@ describe('CustomerProfileScreen exact pin flow', () => {
     )).toBe(false);
   });
 
-  it('allows a manual legacy address text edit but clears the unconfirmed old pin', async () => {
+  it('blocks a manual address text edit without a confirmed pin (Backend requires lat/lng for a changed address)', async () => {
     const savedAddress = {
       id: 'address-manual-edit',
       userId: mockCustomer.id,
@@ -396,17 +396,12 @@ describe('CustomerProfileScreen exact pin flow', () => {
     act(() => findButton(tree, 'Sửa địa chỉ Nhà')?.props.onPress());
     act(() => findTextInput(tree, 'Địa chỉ chi tiết')?.props.onChangeText('Địa chỉ mới nhập tay'));
 
-    expect(findButton(tree, 'Cập nhật địa chỉ')?.props.accessibilityState.disabled).toBe(false);
     await act(async () => {
       findButton(tree, 'Cập nhật địa chỉ')?.props.onPress();
       await flushPromises();
     });
 
-    expect(mockUpdateAddress).toHaveBeenCalledWith('address-manual-edit', expect.objectContaining({
-      line1: 'Địa chỉ mới nhập tay',
-      lat: null,
-      lng: null,
-    }));
+    expect(mockUpdateAddress).not.toHaveBeenCalled();
   });
 
   it('keeps a chosen pin after reverse lookup fails and offers a retry without stale labels', async () => {

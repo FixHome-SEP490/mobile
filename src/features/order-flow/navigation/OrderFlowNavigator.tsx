@@ -5,6 +5,7 @@ import { useReduceMotion } from '../../../hooks/useReduceMotion';
 import { useLiveRefresh } from '../../../hooks/useLiveRefresh';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { clearApiCache } from '../../../api/client';
+import { isHistoricalOrder } from '../../../api/orders.api';
 import { AWAITING_DECISION_POLL_MS, awaitingAutoStart } from './awaiting-auto-start';
 import type { CustomerOrderFlowParamList, TechnicianOrderFlowParamList } from './order-flow-navigation.types';
 import OrderTaskScreen from '../shared/OrderTaskScreen';
@@ -113,6 +114,17 @@ function LiveOrderRefresh() {
     }, AWAITING_DECISION_POLL_MS);
     return () => clearInterval(timer);
   }, [waitingStart, key?.serviceOrderId]);
+  // PO 20/11/2026: the technician waits on site for a service manager to confirm the check-in face; read the order again on a short interval.
+  const waitingFace = snapshot?.order.status === 'ready' && !isHistoricalOrder(snapshot.order.data) && snapshot.order.data.checkinFaceReview?.status === 'pending';
+  useEffect(() => {
+    if (!waitingFace) return;
+    const timer = setInterval(() => {
+      if (pendingRef.current) return;
+      clearApiCache();
+      void refreshRef.current('live');
+    }, AWAITING_DECISION_POLL_MS);
+    return () => clearInterval(timer);
+  }, [waitingFace, key?.serviceOrderId]);
   return null;
 }
 

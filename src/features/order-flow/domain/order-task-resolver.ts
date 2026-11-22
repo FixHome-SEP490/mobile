@@ -92,6 +92,9 @@ export function resolveTechnicianTask(s: OrderSessionSnapshot): OrderTaskResolut
   if (s.resources.evidence.status !== 'ready') return result('TR', 2, true, ['resource']);
   const own = s.resources.evidence.data.filter(e => e.serviceOrderId === o.id && e.uploaderId === s.key.userId);
   if (!own.some(e => e.type === 'CHECKIN_FACE')) return result('T05', 2, false);
+  // A face that did not match the registered one waits for a service manager; a refused one is taken again.
+  if (o.checkinFaceReview?.status === 'pending') return result('T05W', 2);
+  if (o.checkinFaceReview?.status === 'rejected') return result('T05', 2, false);
   const beforeCount = own.filter(e => e.type === 'BEFORE').length;
   const minimum = s.proofPolicy?.beforeMinimum;
   if (!beforeCount || (minimum !== undefined && beforeCount < minimum)) return result('T06', 2, false);

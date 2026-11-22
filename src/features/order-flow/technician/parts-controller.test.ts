@@ -689,6 +689,27 @@ describe('createTechnicianPartsController', () => {
       expect(controller.getState().phase).toBe('denied');
       expect(controller.getState().error).toMatch(/hoàn tất/);
     });
+
+    it('lets a warranty part be declared used after the original order completed', async () => {
+      ((snapshot.order as any).data).status = 'COMPLETED';
+      (snapshot.resources.parts as any).data[0].requestType = 'warranty';
+      transport.getPartRequest.mockResolvedValueOnce({
+        id: 'req-1', serviceOrderId: 'order-1', technicianId: 'tech-1', status: 'received', items: [{ id: 'item-1', usageStatus: 'used' }],
+      } as any);
+
+      const controller = createTechnicianPartsController(deps);
+      await controller.updateItemUsage(key, 'req-1', 'item-1', 'used');
+
+      expect(transport.updateItemUsage).toHaveBeenCalledWith('req-1', 'item-1', 'used');
+    });
+
+    it('still denies a non-warranty part once the order completed', async () => {
+      ((snapshot.order as any).data).status = 'COMPLETED';
+      const controller = createTechnicianPartsController(deps);
+      await controller.updateItemUsage(key, 'req-1', 'item-1', 'used');
+
+      expect(transport.updateItemUsage).not.toHaveBeenCalled();
+    });
   });
 
   describe('cancelPartRequest', () => {

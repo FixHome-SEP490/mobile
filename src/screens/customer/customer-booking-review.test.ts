@@ -151,7 +151,7 @@ describe('session schedule', () => {
       mode: 'scheduled', date: '2026-10-16', slot: 'morning', customerNote: 'Gọi trước',
       preferredStartAt: '2026-10-16T01:00:00.000Z', preferredEndAt: '2026-10-16T05:00:00.000Z',
     });
-    expect(snap.scheduleLabel).toBe('Thứ 6, 16/10 · Sáng 8:00 - 12:00');
+    expect(snap.scheduleLabel).toBe('Thứ 6, 16/10 · 8:00 - 12:00');
   });
 
   it('builds an urgent request without date or slot', () => {

@@ -94,7 +94,7 @@ describe('customer exact pin decisions', () => {
     })).toEqual({ kind: 'preserve-legacy' });
   });
 
-  it('allows a text-only edit to a legacy address without preserving its old pin', () => {
+  it('blocks a text-only edit to a legacy address: Backend needs a lat/lng pin for a changed address', () => {
     expect(resolveAddressSaveLocation({
       isCreating: false,
       addressText: 'Địa chỉ đã sửa',
@@ -102,10 +102,10 @@ describe('customer exact pin decisions', () => {
       district: '',
       pin: { status: 'none' },
       legacyAddress: { line1: 'Địa chỉ cũ', lat: 10, lng: 106 },
-    })).toEqual({ kind: 'legacy-text-only' });
+    })).toEqual({ kind: 'blocked', reason: 'pin-confirmation' });
   });
 
-  it('allows a legacy address text update from a search candidate without persisting candidate coordinates', () => {
+  it('blocks a legacy address text update from an unconfirmed search candidate', () => {
     const candidate = makeCandidatePin({ lat: 12, lng: 108 });
 
     expect(resolveAddressSaveLocation({
@@ -121,7 +121,7 @@ describe('customer exact pin decisions', () => {
         province: 'Tỉnh mới',
         district: 'Huyện mới',
       },
-    })).toEqual({ kind: 'candidate-text-only' });
+    })).toEqual({ kind: 'blocked', reason: 'pin-confirmation' });
   });
 
   it('does not reuse legacy administrative codes for a different area without new codes', () => {

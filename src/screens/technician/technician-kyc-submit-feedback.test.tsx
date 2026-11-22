@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { technicianVerificationApi } from '../../api/technician-verification.api';
 import TechnicianKycScreen from './TechnicianKycScreen';
 
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn() }) }));
+jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn() }), useRoute: () => ({ params: undefined }) }));
 jest.mock('react-native-safe-area-context', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
   return { SafeAreaView: View };
@@ -42,10 +42,9 @@ const slots = () => buttons().filter((node) => labels.some((label) => node.props
 const submit = () => buttons().find((node) => node.props.accessibilityLabel === 'Nộp hồ sơ xác minh')!;
 async function select(index: number) {
   await act(async () => { slots()[index].props.onPress(); });
-  if (index !== 2) {
-    const actions = alertSpy.mock.calls.at(-1)?.[2] as { text: string; onPress?: () => Promise<void> }[];
-    await act(async () => { await actions.find((action) => action.text === 'Thư viện ảnh')!.onPress!(); });
-  }
+  const actions = alertSpy.mock.calls.at(-1)?.[2] as { text: string; onPress?: () => Promise<void> }[];
+  const source = index === 2 ? 'Chụp ảnh' : 'Thư viện ảnh';
+  await act(async () => { await actions.find((action) => action.text === source)!.onPress!(); });
 }
 
 beforeEach(() => {

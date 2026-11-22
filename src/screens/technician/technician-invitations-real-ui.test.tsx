@@ -230,7 +230,7 @@ describe('TechnicianInvitationsScreen real-UI presentation (T-RUI3)', () => {
     await act(async () => renderer.unmount());
   });
 
-  it('renders only the allowlisted preview with urgency and countdown badges', async () => {
+  it('renders only the allowlisted preview with the countdown badge', async () => {
     const invitation = liveInvitation();
     mockInboxState = loadedState(invitation);
     const renderer = await renderScreen();
@@ -244,7 +244,7 @@ describe('TechnicianInvitationsScreen real-UI presentation (T-RUI3)', () => {
     expect(text).toContain('Số lượng: 2');
     expect(text).not.toContain('SL 2');
     expect(text).toContain('Quận 1, TP. Hồ Chí Minh');
-    expect(text).toContain('Khẩn cấp');
+    expect(text).not.toContain('Khẩn cấp');
     expect(text).toMatch(/Còn \d+/);
     expect(text).toContain('Xem & quyết định');
     // No full address, phone number or private customer contact before accept.

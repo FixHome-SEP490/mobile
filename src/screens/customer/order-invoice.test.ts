@@ -4,6 +4,7 @@ import {
   invoicePaymentLabel,
   sanitizeInvoice,
   shippingOf,
+  voucherOf,
   type InvoiceState,
 } from './order-invoice';
 
@@ -259,7 +260,7 @@ describe('sanitizeInvoice (production helper)', () => {
     const view = sanitizeInvoice(ORDER_ID, payload());
     expect(view).not.toBeNull();
     expect(Object.keys(view ?? {}).sort()).toEqual(
-      ['id', 'issuedText', 'items', 'laborText', 'paidText', 'partsText', 'paymentStatus', 'shipping', 'totalText'].sort(),
+      ['id', 'issuedText', 'items', 'laborText', 'paidText', 'partsText', 'paymentStatus', 'shipping', 'totalText', 'voucher'].sort(),
     );
   });
 });
@@ -278,5 +279,15 @@ describe('invoice W3 shipping snapshot', () => {
     expect(shippingOf({ shippingFee: 30000 })).toBeNull();
     expect(shippingOf({ shippingFee: 30000, customerShippingShare: 21000, technicianShippingShare: 1 })).toBeNull();
     expect(shippingOf({ shippingFee: -5, customerShippingShare: -5, technicianShippingShare: 0 })).toBeNull();
+  });
+});
+
+describe('voucherOf (PO 22/11/2026)', () => {
+  it('shows the voucher discount and what was actually paid, from the server', () => {
+    expect(voucherOf({ grandTotal: 445000, voucherDiscount: 22250, amountDue: 422750 }))
+      .toEqual({ discountText: expect.stringContaining('22.250'), dueText: expect.stringContaining('422.750') });
+    expect(voucherOf({ grandTotal: 445000 })).toBeNull();
+    expect(voucherOf({ voucherDiscount: 0, amountDue: 1000 })).toBeNull();
+    expect(voucherOf({ voucherDiscount: 10, amountDue: -1 })).toBeNull();
   });
 });

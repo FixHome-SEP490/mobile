@@ -554,26 +554,6 @@ export default function CustomerProfileScreen() {
           payload.lat = null;
           payload.lng = null;
         }
-      } else if (decision.kind === 'candidate-text-only') {
-        Object.assign(payload, {
-          ward: addressWard,
-          district: addressDistrict,
-          province: addressProvince,
-          provinceCode: addressProvinceCode,
-          districtCode: addressDistrictCode,
-          // The Backend DTO accepts null for its nullable coordinate columns.
-          // Candidate coordinates are never sent as an exact saved pin.
-          lat: null,
-          lng: null,
-        });
-      } else {
-        Object.assign(payload, {
-          ward: null,
-          // A manual edit has no verified pin. Backend accepts null for nullable coordinates.
-          // Keep the existing required service-area fields because this API cannot clear them.
-          lat: null,
-          lng: null,
-        });
       }
 
       const attempt = { ownerId, payload: payload as Partial<CreateAddressRequest>, baselineIds: addresses.map(row => row.id), knownId: editAddressId, posting: true };
@@ -1453,10 +1433,10 @@ export default function CustomerProfileScreen() {
               key={mapCameraVersion}
               style={{ width: '100%', height: '100%' }}
               initialRegion={{
-                latitude: mapCoordinates?.lat ?? 0,
-                longitude: mapCoordinates?.lng ?? 0,
-                latitudeDelta: mapCoordinates ? 0.02 : 100,
-                longitudeDelta: mapCoordinates ? 0.02 : 100,
+                latitude: mapCoordinates?.lat ?? 10.7769,
+                longitude: mapCoordinates?.lng ?? 106.7009,
+                latitudeDelta: mapCoordinates ? 0.02 : 0.2,
+                longitudeDelta: mapCoordinates ? 0.02 : 0.2,
               }}
               onPress={handleMapPress}
             >
@@ -1575,16 +1555,6 @@ export default function CustomerProfileScreen() {
                     : editAddressId
                       ? 'Địa chỉ đã đổi. Chọn gợi ý, đặt ghim mới trên bản đồ rồi xác nhận.'
                       : 'Chọn gợi ý, đặt ghim chính xác trên bản đồ rồi xác nhận trước khi lưu.'}
-            </Text>
-          )}
-          {addressSaveLocation.kind === 'candidate-text-only' && (
-            <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17, alignSelf: 'stretch', marginBottom: 8 }}>
-              Lưu nội dung từ gợi ý sẽ bỏ ghim cũ; vị trí gợi ý chưa được lưu như ghim chính xác.
-            </Text>
-          )}
-          {addressSaveLocation.kind === 'legacy-text-only' && (
-            <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17, alignSelf: 'stretch', marginBottom: 8 }}>
-              Chỉ lưu nội dung địa chỉ; ghim cũ sẽ bị xóa và khu vực đã lưu trước đây được giữ lại. Dùng ứng dụng di động để cập nhật vị trí.
             </Text>
           )}
 

@@ -8,7 +8,8 @@ import { technicianVerificationApi, type MyVerification } from '../../api/techni
 import { lightTheme } from '../../constants/theme';
 import TechnicianKycScreen from './TechnicianKycScreen';
 
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn() }) }));
+let mockRouteParams: { fromOnboarding?: boolean } | undefined;
+jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn() }), useRoute: () => ({ params: mockRouteParams }) }));
 jest.mock('react-native-safe-area-context', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
   return { SafeAreaView: View };
@@ -56,14 +57,14 @@ async function render() {
 }
 async function select(index: number) {
   await act(async () => { slots()[index].props.onPress(); });
-  if (index !== 2) {
-    const actions = alertSpy.mock.calls.at(-1)?.[2] as { text: string; onPress?: () => Promise<void> }[];
-    await act(async () => { await actions.find((action) => action.text === 'Thư viện ảnh')!.onPress!(); });
-  }
+  const actions = alertSpy.mock.calls.at(-1)?.[2] as { text: string; onPress?: () => Promise<void> }[];
+  const source = index === 2 ? 'Chụp ảnh' : 'Thư viện ảnh';
+  await act(async () => { await actions.find((action) => action.text === source)!.onPress!(); });
 }
 
 beforeEach(() => {
   jest.resetAllMocks();
+  mockRouteParams = undefined;
   getVerification.mockResolvedValue(null);
   jest.mocked(ImagePicker.requestMediaLibraryPermissionsAsync).mockResolvedValue({ granted: true } as ImagePicker.MediaLibraryPermissionResponse);
   jest.mocked(ImagePicker.requestCameraPermissionsAsync).mockResolvedValue({ granted: true } as ImagePicker.CameraPermissionResponse);
@@ -243,4 +244,13 @@ describe('T13A Codex-inspired REAL three-image KYC static presentation', () => {
     expect(technicianVerificationApi.requestUploadUrl).not.toHaveBeenCalled();
     expect(technicianVerificationApi.submit).not.toHaveBeenCalled();
   });
+});
+
+test('the header names step 2 of 5 only when opened from the registration wizard', async () => {
+  await render();
+  expect(text()).not.toContain('Bước 2/5');
+  await act(async () => { screen.unmount(); });
+  mockRouteParams = { fromOnboarding: true };
+  await render();
+  expect(text()).toContain('Bước 2/5 · Xác minh danh tính');
 });

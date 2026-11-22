@@ -1,6 +1,6 @@
 import { useAppTheme } from '../../constants/theme';
 // src/screens/auth/RegisterScreen.tsx
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Alert, StatusBar, Image, TextInputInstance } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -74,9 +74,34 @@ export default function RegisterScreen() {
   const isPhoneValid = phoneIssue === '';
   const isFullNameValid = fullNameIssue === '';
 
-  const emailError = touchedEmail ? emailIssue : '';
+  // Kiểm tra trùng email/SĐT theo thời gian thực (debounce) để không báo trùng sau khi đã gửi.
+  // Kết quả gắn với giá trị đã kiểm tra, nên sửa lại ô nhập thì cờ trùng tự hết hiệu lực.
+  const [checked, setChecked] = useState({ email: '', phone: '', emailTaken: false, emailPending: false, phoneTaken: false });
+  const emailKey = isEmailValid ? email.trim() : '';
+  const phoneKey = isPhoneValid ? phone.trim() : '';
+  useEffect(() => {
+    if (!emailKey && !phoneKey) return;
+    let stale = false;
+    const timer = setTimeout(() => {
+      authApi
+        .checkAvailability({ email: emailKey || undefined, phoneNumber: phoneKey || undefined })
+        .then((r) => !stale && setChecked({ email: emailKey, phone: phoneKey, emailTaken: r.emailTaken, emailPending: r.emailPending, phoneTaken: r.phoneTaken }))
+        .catch(() => undefined); // lỗi mạng: để backend chặn lúc gửi
+    }, 500);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+  }, [emailKey, phoneKey]);
+  const emailPending = !!emailKey && checked.email === emailKey && checked.emailPending;
+  const taken = {
+    email: !!emailKey && checked.email === emailKey && checked.emailTaken,
+    phone: !!phoneKey && checked.phone === phoneKey && checked.phoneTaken,
+  };
+
+  const emailError = touchedEmail ? emailIssue || (taken.email ? 'Email này đã được đăng ký' : '') : '';
   const fullNameError = touchedFullName ? fullNameIssue : '';
-  const phoneError = touchedPhone ? phoneIssue : '';
+  const phoneError = touchedPhone ? phoneIssue || (taken.phone ? 'SĐT này đã được đăng ký' : '') : '';
   const confirmError = touchedConfirm ? (password !== confirmPassword ? 'Mật khẩu xác nhận không khớp' : '') : '';
 
   const passwordRules = useMemo(() => {
@@ -133,7 +158,7 @@ export default function RegisterScreen() {
     setTouchedPhone(true);
     setTouchedConfirm(true);
 
-    if (!email.trim() || !isEmailValid || !password || !isFullNameValid || !isPhoneValid || password !== confirmPassword) {
+    if (taken.email || taken.phone || !email.trim() || !isEmailValid || !password || !isFullNameValid || !isPhoneValid || password !== confirmPassword) {
       Alert.alert('Lỗi', 'Vui lòng kiểm tra lại thông tin.');
       return;
     }
@@ -219,7 +244,7 @@ export default function RegisterScreen() {
             <View style={styles.roleNotice}>
               <Ionicons name="shield-checkmark-outline" size={18} color={colors.primaryStrong} />
               <Text style={styles.roleNoticeText}>
-                Đăng ký kỹ thuật viên gồm 2 giai đoạn: (1) đăng ký và xác thực email bằng OTP; (2) điền thông tin cá nhân, nộp ảnh CCCD và ảnh chân dung, chọn kỹ năng và khu vực hoạt động để quản trị viên xét duyệt.
+                {'Đăng ký kỹ thuật viên gồm 2 bước:\n1. Đăng ký tài khoản và xác thực email bằng OTP\n2. Bổ sung hồ sơ để quản trị viên duyệt'}
               </Text>
             </View>
           )}
@@ -279,10 +304,10 @@ export default function RegisterScreen() {
                 {emailError ? (
                   <Ionicons name="alert-circle" size={20} color="#FF3B30" />
                 ) : (
-                  touchedEmail && isEmailValid ? <Ionicons name="checkmark-circle" size={20} color={colors.success} /> : null
+                  touchedEmail && isEmailValid && !taken.email ? <Ionicons name="checkmark-circle" size={20} color={colors.success} /> : null
                 )}
               </View>
-              {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+              {emailError ? <Text style={styles.errorText}>{emailError}</Text> : emailPending ? <Text style={styles.helperText}>Email này đã đăng ký nhưng chưa xác thực. Tiếp tục sẽ gửi lại mã OTP.</Text> : null}
             </View>
 
             <View style={styles.inputGroup}>

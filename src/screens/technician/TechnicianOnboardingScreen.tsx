@@ -634,7 +634,7 @@ export default function TechnicianOnboardingScreen() {
       {status?.kycSubmitted && !kycRejected ? (
         <TouchableOpacity
           style={styles.secondaryBtn}
-          onPress={() => navigation.navigate('TechnicianKyc')}
+          onPress={() => navigation.navigate('TechnicianKyc', { fromOnboarding: true })}
           accessibilityRole="button"
           accessibilityLabel="Xem trạng thái xác minh danh tính"
         >
@@ -971,7 +971,7 @@ export default function TechnicianOnboardingScreen() {
         : 'Tiếp tục'
     : ['Lưu và tiếp tục', '', 'Lưu và tiếp tục', 'Lưu và tiếp tục', 'Gửi hồ sơ xét duyệt'][step - 1];
   const onPrimary = step === 2 && kycNeedsUpdate
-    ? () => navigation.navigate('TechnicianKyc')
+    ? () => navigation.navigate('TechnicianKyc', { fromOnboarding: true })
     : [saveStep1, continueFromKyc, saveStep3, saveStep4, submit][step - 1];
 
   const renderRefreshError = () => error && status ? (
@@ -1040,7 +1040,7 @@ export default function TechnicianOnboardingScreen() {
         <View style={styles.stateActions}>
           <TouchableOpacity
             style={styles.primaryBtn}
-            onPress={() => navigation.navigate('TechnicianKyc')}
+            onPress={() => navigation.navigate('TechnicianKyc', { fromOnboarding: true })}
             accessibilityRole="button"
           >
             <Text style={styles.primaryBtnText}>Cập nhật hồ sơ xác minh</Text>

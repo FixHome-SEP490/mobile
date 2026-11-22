@@ -119,6 +119,8 @@ export interface ServiceOrderItem {
   completionRequestedAt?: string;
   customerConfirmed?: boolean;
   arrivalVerified?: boolean;
+  /** The technician's check-in face while it waits for, or was refused by, a service manager (PO 20/11/2026); absent or null when no review applies. */
+  checkinFaceReview?: { status: 'pending' | 'approved' | 'rejected'; note: string | null } | null;
   beforeEvidenceCount?: number;
   afterEvidenceCount?: number;
   status: CanonicalOrderStatus;
@@ -381,6 +383,21 @@ export interface WarrantyClaimView {
   technician: { id: string; fullName: string } | null;
   /** When the technician comes to inspect; null until the claim is accepted. */
   inspectionScheduledAt?: string | null;
+  /** The approved inspection result, once the service manager has decided. */
+  inspection?: WarrantyInspectionResult | null;
+  outcomeCode?: 'fixed' | 'unfixed' | 'rejected' | null;
+  /** Whole VND refunded to the wallet when the item could not be fixed. */
+  refundAmount?: number | null;
+}
+
+export interface WarrantyInspectionResult {
+  result: 'covered_workmanship' | 'covered_part' | 'not_covered' | string;
+  reasonCode: string | null;
+  findings: string | null;
+  evidenceRefs: string[] | null;
+  reServiceNotes: string | null;
+  reServiceEvidenceRefs: string[] | null;
+  completedAt: string | null;
 }
 
 export interface CreateWarrantyClaimPayload {
@@ -446,16 +463,19 @@ const del = async (url: string): Promise<void> => {
   await apiClient.delete(url);
 };
 
+/** The largest page /service-orders/my returns (Backend caps pageSize at 100). */
+export const UNPAGED_ORDER_LIMIT = 100;
+
 export const ordersApi = {
   /** `statuses` lets Backend filter before it builds each order (lowercase, comma separated on the wire); without it every order the technician ever held is built. */
   async getTechnicianJobs(options: { excludeVisitGroups?: boolean; statuses?: string[] } = {}): Promise<TechnicianOrderItem[]> {
+    // Backend pages /service-orders/my (20 by default); ask for its largest page so older open jobs are not cut off.
     const params = {
+      pageSize: UNPAGED_ORDER_LIMIT,
       ...(options.excludeVisitGroups ? { excludeVisitGroups: 'true' } : {}),
       ...(options.statuses?.length ? { statuses: options.statuses.join(',') } : {}),
     };
-    const rows = Object.keys(params).length
-      ? unwrap<TechnicianOrderItem[]>((await apiClient.get('/service-orders/my', { params })).data)
-      : await get<TechnicianOrderItem[]>('/service-orders/my');
+    const rows = unwrap<TechnicianOrderItem[]>((await apiClient.get('/service-orders/my', { params })).data);
     return rows.map(normalizeTechnicianOrder);
   },
 
@@ -482,9 +502,8 @@ export const ordersApi = {
 
 
   async getMyOrders(options: { excludeVisitGroups?: boolean } = {}): Promise<ServiceOrderItem[]> {
-    const rows = options.excludeVisitGroups
-      ? unwrap<ServiceOrderItem[]>((await apiClient.get('/service-orders/my', { params: { excludeVisitGroups: 'true' } })).data)
-      : await get<ServiceOrderItem[]>('/service-orders/my');
+    const params = { pageSize: UNPAGED_ORDER_LIMIT, ...(options.excludeVisitGroups ? { excludeVisitGroups: 'true' } : {}) };
+    const rows = unwrap<ServiceOrderItem[]>((await apiClient.get('/service-orders/my', { params })).data);
     return rows.map(normalizeOrder);
   },
 

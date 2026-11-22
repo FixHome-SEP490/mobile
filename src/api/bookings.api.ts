@@ -16,6 +16,8 @@ function unwrap<T>(payload: { data: T } | T): T {
 export interface CustomerBookingInvitation {
   id: string;
   bookingId: string;
+  /** User id of the invited technician (matches TechnicianCandidate.userId). */
+  technicianId?: string;
   priorityOrder: number;
   status: 'PENDING' | 'STANDBY' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED' | 'CANCELLED';
   invitedAt: string;
@@ -249,13 +251,21 @@ type RawBooking = BookingItem & {
   media?: { url: string }[];
 };
 
+/** Backend urgency is low | medium | high | critical; the app labels LOW | NORMAL | HIGH | EMERGENCY. */
+export const toBookingUrgency = (value: string | undefined): BookingItem['urgency'] => {
+  const upper = value?.toUpperCase();
+  if (upper === 'CRITICAL') return 'EMERGENCY';
+  if (upper === 'MEDIUM') return 'NORMAL';
+  return upper as BookingItem['urgency'];
+};
+
 export const normalizeBooking = (booking: RawBooking): BookingItem => ({
   ...booking,
   serviceName: booking.serviceNameSnapshot || booking.service?.name,
   addressSummary: booking.addressTextSnapshot,
   preferredAt: booking.preferredStartAt || booking.preferredAt,
   status: booking.status?.toUpperCase() as BookingItem['status'],
-  urgency: booking.urgency?.toUpperCase() as BookingItem['urgency'],
+  urgency: toBookingUrgency(booking.urgency),
   invitations: booking.invitations?.map((invitation) => ({
     ...invitation,
     status: invitation.status?.toUpperCase() as CustomerBookingInvitation['status'],

@@ -7,6 +7,7 @@ import axios, {
 import { APP_CONFIG } from '../constants';
 import { storageService } from '../services/storage.service';
 import { useAuthStore } from '../store/auth.store';
+import { userFacingRequestError } from '../utils/input-validation';
 
 interface AuthSessionSnapshot {
   generation: number;
@@ -234,6 +235,11 @@ apiClient.interceptors.response.use(
     return response;
   },
   async (error: AxiosError) => {
+    // Screens that show `err.message` never print "Request failed with status code 500",
+    // a code or an English sentence: only a Vietnamese one or the generic sentence (PO 22/11/2026).
+    if (error && typeof error === 'object') {
+      try { error.message = userFacingRequestError(error); } catch { /* keep the original */ }
+    }
     const originalRequest = error.config as SessionAwareRequestConfig | undefined;
 
     // A refused mutation may still have committed (e.g. a disputed cash confirm answers 409 after saving),

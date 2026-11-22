@@ -20,11 +20,11 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 /** The service refuses a fourth image. */
 export const AI_MAX_IMAGES = 3;
 
-/** Comfortably above what the detector can use, far below what a phone takes. */
-const TARGET_WIDTH = 1280;
+/** The AI service shrinks every photo to 1024px anyway, so more is bytes on the wire for nothing. */
+const TARGET_WIDTH = 1024;
 
 /** Visually indistinguishable at this size, and roughly a third of the bytes. */
-const JPEG_QUALITY = 0.7;
+const JPEG_QUALITY = 0.8;
 
 /**
  * The service's own ceiling is 8 MiB per image after decoding. Anything that

@@ -2,7 +2,7 @@
 import apiClient from './client';
 
 export type PartRequestStatus = 'requested' | 'ready' | 'delivering' | 'received' | 'completed' | 'cancelled';
-export type PartRequestType = 'pre_repair' | 'additional' | 'quotation';
+export type PartRequestType = 'pre_repair' | 'additional' | 'quotation' | 'warranty';
 export type FulfillmentMethod = 'pickup' | 'delivery';
 export type PartUsageStatus = 'pending' | 'used' | 'returned';
 export type PartSource = 'fixhome' | 'technician' | 'external';

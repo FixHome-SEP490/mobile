@@ -109,7 +109,7 @@ it('each toggle is a button with the device name, announcing whether it is open'
   expect(toggle.props.accessibilityState).toEqual({ expanded: false });
 });
 
-it('keeps the visit-wide privacy note and the accept and decline buttons whatever is open', () => {
-  expect(texts()).toContain('Địa chỉ cụ thể, số điện thoại và ghi chú riêng của khách hiện sau khi bạn nhận đơn.');
+it('keeps the accept and decline buttons whatever is open, without a duplicate privacy note', () => {
+  expect(texts()).not.toContain('Địa chỉ cụ thể, số điện thoại và ghi chú riêng của khách hiện sau khi bạn nhận đơn.');
   expect(byTestId('invitation-accept').length).toBeGreaterThan(0);
 });

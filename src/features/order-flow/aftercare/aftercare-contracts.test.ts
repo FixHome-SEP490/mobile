@@ -53,3 +53,17 @@ it('review and claim readmodels reject foreign IDs and drop private backend/staf
 it('unknown warranty operation cannot fall through into proposal DTO validation', () => {
   expect(() => warrantyCommandPayload('staff-approve' as never, { result: 'covered_workmanship', findings: 'Kiểm tra lỗi thực tế' }, [])).toThrow();
 });
+it('keeps the approved inspection result and outcome a customer may read, and ignores odd shapes', () => {
+  const row = { id: order, serviceOrderId: order, warrantyCoverageId: coverage, status: 'resolved', description: 'Lỗi vẫn còn xuất hiện', evidenceRefs: null, submittedAfterExpiry: false, customerResponse: null, awaitingPrompt: null, resolutionNotes: null, submittedAt: '2026-11-22T00:07:00.000Z', resolvedAt: '2026-11-22T03:00:00.000Z', technician: null };
+  const withResult = normalizeClaim({ ...row, outcomeCode: 'fixed', refundAmount: 0, inspection: { result: 'covered_part', reasonCode: null, findings: 'Van xả hỏng', evidenceRefs: ['https://cdn.test/a.jpg', 'javascript:1'], reServiceNotes: 'Đã thay van', reServiceEvidenceRefs: ['https://cdn.test/b.jpg'], completedAt: '2026-11-22T02:00:00.000Z', proposedResult: 'PRIVATE' } }, order);
+  expect(withResult.inspection).toMatchObject({ result: 'covered_part', findings: 'Van xả hỏng', evidenceRefs: null, reServiceNotes: 'Đã thay van', reServiceEvidenceRefs: ['https://cdn.test/b.jpg'] });
+  expect(withResult.outcomeCode).toBe('fixed');
+  expect(JSON.stringify(withResult)).not.toContain('PRIVATE');
+  expect(normalizeClaim(row, order)).not.toHaveProperty('inspection');
+  expect(normalizeClaim({ ...row, inspection: 'oops', outcomeCode: 'x' }, order).inspection).toBeNull();
+});
+it('reads a claim assigned to a seeded technician whose id is not a v4 UUID (customer warranty screen stayed in error)', () => {
+  const row = { id: order, serviceOrderId: order, warrantyCoverageId: coverage, status: 'awaiting_customer', description: 'Lỗi vẫn còn xuất hiện', evidenceRefs: null, submittedAfterExpiry: false, customerResponse: 'agreed', awaitingPrompt: 'completion', resolutionNotes: null, submittedAt: '2026-10-14T00:00:00Z', resolvedAt: null, technician: { id: 'c0000000-0000-0000-0000-000000000012', fullName: 'Tho Dien Lanh 12' } };
+  expect(normalizeClaim(row, order).technician).toEqual({ id: 'c0000000-0000-0000-0000-000000000012', fullName: 'Tho Dien Lanh 12' });
+  expect(() => normalizeClaim({ ...row, technician: { id: 'not-a-uuid', fullName: 'x' } }, order)).toThrow();
+});

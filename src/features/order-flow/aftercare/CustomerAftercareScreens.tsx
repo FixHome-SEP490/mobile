@@ -9,6 +9,9 @@ import { WarrantyPhotos } from './WarrantyPhotos';
 import { DetailRow, ReadOnlyNotice, Section, TaskScreenShell } from '../shared/TaskScreenShell';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { vnDateTimeString } from '../../../utils/vn-time';
+import { formatVnd } from '../../../utils/format';
+import type { WarrantyClaimView } from '../../../api/orders.api';
+import { validateDescriptionText } from '../../../utils/input-validation';
 
 const label = { color: colors.text, fontSize: 15, lineHeight: 22 };
 const coverageLabel: Record<string, string> = { active: 'Còn hiệu lực', expired: 'Đã hết hạn', voided: 'Đã hủy', pending: 'Đang chờ xác minh' };
@@ -157,7 +160,7 @@ function WarrantyClaimCreateForCoverage({ coverageId }: { coverageId?: string })
     const claim = state.claims.data.find((item: any) => item.warrantyCoverageId === coverageId && item.status === 'submitted');
     if (claim) navigation.replace('CustomerWarrantyClaim', { claimId: claim.id });
   }, [navigation, state.phase, state.claims, coverageId]);
-  return <TaskScreenShell hideVisitPanel title="Tạo yêu cầu bảo hành" onBack={() => { controller.cancelConfirmation(); navigation.goBack(); }} primary={confirmed ? { label: busy ? 'Đang gửi…' : 'Xác nhận gửi yêu cầu', disabled: busy || state.phase !== 'confirming', onPress: () => void controller.submitConfirmation() } : { label: busy ? 'Đang kiểm tra…' : 'Kiểm tra yêu cầu', disabled: locked || state.phase !== 'idle' || !can || description.trim().length < 10, accessibilityHint: !can ? 'Chưa xác minh phạm vi bảo hành hoặc không đủ điều kiện' : 'Kiểm tra điều kiện trước khi gửi', onPress: () => coverageId && void controller.prepareClaim({ warrantyCoverageId: coverageId, description: description.trim(), ...(photos.length ? { evidenceRefs: photos } : {}) }) }} secondary={{ label: confirmed ? 'Sửa nội dung' : 'Quay lại', disabled: busy, onPress: () => { if (confirmed) controller.cancelConfirmation(); else { controller.cancelConfirmation(); navigation.goBack(); } } }}>
+  return <TaskScreenShell hideVisitPanel title="Tạo yêu cầu bảo hành" onBack={() => { controller.cancelConfirmation(); navigation.goBack(); }} primary={confirmed ? { label: busy ? 'Đang gửi…' : 'Xác nhận gửi yêu cầu', disabled: busy || state.phase !== 'confirming', onPress: () => void controller.submitConfirmation() } : { label: busy ? 'Đang kiểm tra…' : 'Kiểm tra yêu cầu', disabled: locked || state.phase !== 'idle' || !can || description.trim().length < 10 || !!validateDescriptionText(description.trim()), accessibilityHint: !can ? 'Chưa xác minh phạm vi bảo hành hoặc không đủ điều kiện' : 'Kiểm tra điều kiện trước khi gửi', onPress: () => coverageId && void controller.prepareClaim({ warrantyCoverageId: coverageId, description: description.trim(), ...(photos.length ? { evidenceRefs: photos } : {}) }) }} secondary={{ label: confirmed ? 'Sửa nội dung' : 'Quay lại', disabled: busy, onPress: () => { if (confirmed) controller.cancelConfirmation(); else { controller.cancelConfirmation(); navigation.goBack(); } } }}>
     {!coverage ? <Loading>Đang xác minh phạm vi bảo hành…</Loading> : <>
       {order ? <DetailRow label="Đơn sửa chữa" value={`#${order.code} · ${order.serviceName}`} /> : null}
       <Section title="Được bảo hành">
@@ -173,6 +176,7 @@ function WarrantyClaimCreateForCoverage({ coverageId }: { coverageId?: string })
       <WarrantyPhotos urls={photos} onChange={setPhotos} onUploaded={urls => controller.registerUploadedPhotos(urls)} disabled={locked} />
       {confirmed || locked ? null : description.trim().length < 10
         ? <Status>Nhập mô tả sự cố từ 10 ký tự để kiểm tra và gửi yêu cầu.</Status>
+        : validateDescriptionText(description.trim()) ? <Status>{validateDescriptionText(description.trim())}</Status>
         : !can ? <Status>Chưa thể tạo yêu cầu. Hãy làm mới thông tin phạm vi hoặc kiểm tra yêu cầu đang mở.</Status> : null}
     </>}
     {confirmed ? <Status>Yêu cầu sẽ được gửi với phạm vi đã chọn và mô tả bạn vừa nhập.</Status> : null}{state.message ? <Status>{state.message}</Status> : null}
@@ -182,6 +186,29 @@ function WarrantyClaimCreateForCoverage({ coverageId }: { coverageId?: string })
 export function CustomerWarrantyClaimScreen() {
   const route = useRoute<any>(); const claimId = route.params?.claimId as string | undefined;
   return <CustomerWarrantyClaimForId key={claimId ?? 'missing'} claimId={claimId} />;
+}
+
+const inspectionResultLabel: Record<string, string> = { covered_workmanship: 'Được bảo hành: lỗi do công sửa chữa', covered_part: 'Được bảo hành: lỗi do linh kiện đã thay', not_covered: 'Không được bảo hành' };
+const notCoveredReasonLabel: Record<string, string> = { customer_misuse: 'Khách sử dụng sai cách', normal_wear: 'Hao mòn thông thường', other_component: 'Lỗi ở bộ phận khác, không phải linh kiện đã thay', not_workmanship_related: 'Không liên quan phần việc đã làm', expired: 'Đã hết hạn bảo hành', cannot_reproduce: 'Không tái hiện được lỗi', customer_unavailable: 'Khách vắng mặt hoặc không cho kiểm tra', third_party_repair: 'Người khác đã sửa hoặc vệ sinh sau đó', force_majeure: 'Thiên tai, cháy nổ, sét đánh', transport_damage: 'Hỏng khi vận chuyển', other: 'Lý do khác' };
+const outcomeLabel: Record<string, string> = { fixed: 'Đã khắc phục', unfixed: 'Không khắc phục được, đã hoàn tiền', rejected: 'Không được bảo hành' };
+function Photos({ urls, name }: { urls: string[] | null; name: string }) {
+  return urls?.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 8 }}>
+    {urls.map((url, index) => <Image key={url} source={{ uri: url }} accessibilityIgnoresInvertColors accessibilityLabel={`${name} ${index + 1}`} style={{ width: 72, height: 72, borderRadius: 10 }} />)}
+  </View> : null;
+}
+/** What the service manager approved and what the technician found and did; shown only once the claim is decided. */
+function InspectionResult({ claim }: { claim: WarrantyClaimView }) {
+  const i = claim.inspection; if (!i) return null;
+  return <Section title="Kết quả kiểm tra">
+    <DetailRow label="Kết luận" value={inspectionResultLabel[i.result] ?? 'Chưa xác định'} />
+    {i.result === 'not_covered' && i.reasonCode ? <DetailRow label="Lý do" value={notCoveredReasonLabel[i.reasonCode] ?? 'Lý do khác'} /> : null}
+    {i.findings ? <DetailRow label="Chẩn đoán của kỹ thuật viên" value={i.findings} /> : null}
+    <Photos urls={i.evidenceRefs} name="Ảnh kiểm tra" />
+    {i.reServiceNotes ? <DetailRow label="Đã xử lý" value={i.reServiceNotes} /> : null}
+    <Photos urls={i.reServiceEvidenceRefs} name="Ảnh sau xử lý" />
+    {claim.outcomeCode ? <DetailRow label="Kết cục" value={outcomeLabel[claim.outcomeCode]} /> : null}
+    {claim.outcomeCode === 'unfixed' && claim.refundAmount ? <DetailRow label="Đã hoàn vào ví" value={formatVnd(claim.refundAmount)} /> : null}
+  </Section>;
 }
 
 function CustomerWarrantyClaimForId({ claimId }: { claimId?: string }) {
@@ -208,6 +235,7 @@ function CustomerWarrantyClaimForId({ claimId }: { claimId?: string }) {
       {claim.evidenceRefs?.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 8 }}>
         {claim.evidenceRefs.map((url: string, index: number) => <Image key={url} source={{ uri: url }} accessibilityIgnoresInvertColors accessibilityLabel={`Ảnh đính kèm ${index + 1}`} style={{ width: 72, height: 72, borderRadius: 10 }} />)}
       </View> : null}
+      <InspectionResult claim={claim} />
       {claim.status === 'awaiting_customer' || claim.customerResponse ? <DetailRow label="Phản hồi của bạn" value={claim.customerResponse === 'agreed' ? 'Đã đồng ý' : claim.customerResponse === 'disputed' ? 'Đã gửi phản hồi vấn đề' : 'Chưa phản hồi'} /> : null}
       {claim.submittedAfterExpiry ? <Status>Yêu cầu được gửi sau khi phạm vi bảo hành hết hạn. Máy chủ quyết định việc tiếp nhận và xử lý.</Status> : null}
       {claim.status === 'awaiting_customer' && claim.customerResponse ? <Status>{claim.customerResponse === 'agreed' ? copy.agreed : 'Phản hồi của bạn đã được gửi. FixHome sẽ xem xét và liên hệ lại.'}</Status> : claim.status === 'awaiting_customer' ? <>

@@ -185,7 +185,7 @@ describe('Technician T03 focused invitation scene (FH-TECH-02 UX01A)', () => {
     review('Sửa bơm phục hồi (fixture)');
     await act(async () => { mockWrite({ ...mockState, recoveryPending: true }); });
     expect(visibleText()).toContain('Kéo xuống làm mới khi có mạng');
-    expect(visibleText()).toContain('Không gửi lại để tránh nhận trùng');
+    expect(visibleText()).toContain('không cần nhận lại');
     expect(mockRespond).not.toHaveBeenCalled();
   });
 

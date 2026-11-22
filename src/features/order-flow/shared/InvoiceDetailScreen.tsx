@@ -20,11 +20,14 @@ export default function InvoiceDetailScreen() {
   const canRefresh = snapshot?.access === 'current' && !!key;
   const refreshing = snapshot?.order.status === 'loading' || snapshot?.resources.invoice.status === 'loading';
   const current = snapshot?.access === 'current' && snapshot.order.status === 'ready' && !!key;
-  useLoadUnloadedResources(snapshot, ['invoice', 'quotations'], loadResource);
+  useLoadUnloadedResources(snapshot, ['invoice', 'quotations', 'extras'], loadResource);
   const history = snapshot?.access === 'historical' && key?.role === 'technician';
   const state = current && snapshot ? invoiceDisplayState(snapshot.resources.invoice) : null;
   const quotations = snapshot?.resources.quotations.status === 'ready' ? snapshot.resources.quotations.data : null;
   const vs = state?.kind === 'invoice' ? invoiceVsQuotation(state.invoice, quotations) : null;
+  // Quantity the customer approved on each additional-cost line, to set against what was really used.
+  const extras = snapshot?.resources.extras.status === 'ready' ? snapshot.resources.extras.data : [];
+  const approvedExtraQty = new Map(extras.filter(e => String(e.status).toUpperCase() === 'APPROVED').flatMap(e => e.items).map(i => [i.id, i.quantity]));
   return <TaskScreenShell title="Hóa đơn" onBack={() => backFromFlow(navigation)}
     secondary={{ label: 'Làm mới dữ liệu', testID: 'readonly-detail-refresh', disabled: !canRefresh || refreshing,
       onPress: () => { if (canRefresh && !refreshing) void refresh('manual'); } }}>
@@ -37,6 +40,10 @@ export default function InvoiceDetailScreen() {
       <Section title="Hóa đơn">
         <DetailRow label="Mã hóa đơn" value={`#${state.invoice.id.slice(0, 8).toUpperCase()}`} />
         <DetailRow label="Tổng tiền do máy chủ trả về" value={money(state.total)} />
+        {state.invoice.voucherDiscount !== undefined && state.invoice.amountDue !== undefined && <>
+          <DetailRow label="Giảm voucher" value={`-${formatVnd(state.invoice.voucherDiscount)}`} />
+          <DetailRow label={String(state.paymentStatus).toUpperCase() === 'PAID' ? 'Thực trả' : 'Cần trả'} value={formatVnd(state.invoice.amountDue)} />
+        </>}
         <DetailRow label="Trạng thái thanh toán" value={paymentStatusLabel(state.paymentStatus)} />
       </Section>
       {state.invoice.items === undefined && <Text style={{ color: colors.textSecondary, paddingVertical: spacing.md }}>Hóa đơn cũ chưa có danh sách dòng hàng.</Text>}
@@ -47,9 +54,11 @@ export default function InvoiceDetailScreen() {
         const parts = items.filter(item => !isLabor(item.type));
         const partRow = (item: (typeof items)[number], i: number, all: typeof items) => {
           const quoted = vs?.quotedQty.get(item.id);
-          const less = quoted !== undefined && quoted !== item.quantity;
+          const extra = item.sourceType === 'ADDITIONAL' ? approvedExtraQty.get(item.sourceItemId ?? '') : undefined;
+          const planned = quoted ?? extra;
+          const less = planned !== undefined && planned !== item.quantity;
           return <LineRow key={item.id} name={item.description} warn={less}
-            detail={quoted === undefined ? `Số lượng ${item.quantity}` : `Báo giá cần dùng ${quoted} · Thực dùng ${item.quantity}`}
+            detail={quoted !== undefined ? `Báo giá cần dùng ${quoted} · Thực dùng ${item.quantity}` : item.sourceType === 'ADDITIONAL' ? (extra !== undefined ? `Phát sinh cần dùng ${extra} · Thực dùng ${item.quantity}` : `Phát sinh · Thực dùng ${item.quantity}`) : `Số lượng ${item.quantity}`}
             value={money(item.lineTotal)} last={i === all.length - 1} />;
         };
         return <>

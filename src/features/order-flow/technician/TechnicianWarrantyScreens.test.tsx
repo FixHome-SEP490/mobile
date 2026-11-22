@@ -9,6 +9,8 @@ import { partRequestsApi } from '../../../api/part-requests.api';
 jest.mock('../../../api/technician-warranty.api', () => ({ technicianWarrantyApi: { returnFaultyPart: jest.fn().mockResolvedValue(undefined) } }));
 jest.mock('../../../api/part-requests.api', () => ({ partRequestsApi: { updateItemUsage: jest.fn().mockResolvedValue({}) } }));
 
+const mockLive: any = { refresh: null, matches: null };
+jest.mock('../../../hooks/useLiveRefresh', () => ({ useLiveRefresh: (_names: unknown, refresh: unknown, matches: unknown) => { mockLive.refresh = refresh; mockLive.matches = matches; } }));
 const mockRoute: any = { params: { claimId: 'assigned-claim-id' } };
 const mockController = { availableCommands: jest.fn((): string[] => []), authorizedEvidenceRefs: jest.fn(() => []), refreshClaim: jest.fn(), cancelConfirmation: jest.fn(), submitConfirmation: jest.fn(), prepare: jest.fn() };
 const mockState: any = { phase: 'idle', access: 'assigned', task: 'TW06', selectedClaimId: 'assigned-claim-id', confirmation: null, message: null, inbox: { status: 'unloaded' }, claim: { status: 'ready', data: { id: 'assigned-claim-id', status: 'resolved', description: 'Kiểm tra lại thiết bị', order: { id: 'order-id', code: 'FH-01', serviceName: 'Sửa máy', addressSummary: 'Quận 1', customerName: 'Khách hàng' }, coverage: null, visit: null } } };
@@ -130,5 +132,35 @@ it('confirming acceptance says it accepts and does not show a decline reason as 
   mockState.confirmation = { operation: 'decline' };
   await act(async () => { renderer = create(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><TechnicianWarrantyTaskScreen /></SafeAreaProvider>); });
   expect(renderer.root.findByProps({ testID: 'technician-warranty-primary-action' }).findAllByType(Text).map(text => text.props.children)).toContain('Xác nhận từ chối phân công');
+  await act(async () => renderer.unmount());
+});
+
+it('offers a way back to the home screen once nothing is left for the technician to do', async () => {
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><TechnicianWarrantyTaskScreen /></SafeAreaProvider>); });
+  const footer = renderer.root.findByProps({ testID: 'order-flow-fixed-footer' });
+  expect(footer.findAllByType(TouchableOpacity).some(button => button.props.testID === 'technician-warranty-home')).toBe(true);
+  expect(footer.findAllByType(Text).some(text => text.props.children === 'Về trang chủ')).toBe(true);
+  mockState.task = 'TW05'; mockController.availableCommands.mockReturnValue(['complete']);
+  await act(async () => renderer.update(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><TechnicianWarrantyTaskScreen /></SafeAreaProvider>));
+  expect(renderer.root.findAllByProps({ testID: 'technician-warranty-home' })).toHaveLength(0);
+  await act(async () => renderer.unmount());
+});
+
+it('follows the server live instead of offering a refresh button, and stays out of the way of an open command', async () => {
+  const frame = () => <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><TechnicianWarrantyTaskScreen /></SafeAreaProvider>;
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(frame()); });
+  expect(renderer.root.findAllByType(Text).some(text => /Làm mới/.test(String(text.props.children)))).toBe(false);
+  mockController.refreshClaim.mockClear();
+  mockLive.refresh({ events: [], kinds: ['warranty'], resync: false });
+  expect(mockController.refreshClaim).toHaveBeenCalledTimes(1);
+  expect(mockLive.matches({ name: 'order:updated', payload: { serviceOrderId: 'another-order' } })).toBe(false);
+  expect(mockLive.matches({ name: 'order:updated', payload: {} })).toBe(true);
+  mockState.phase = 'confirming'; mockState.confirmation = { operation: 'complete' };
+  await act(async () => renderer.update(frame()));
+  mockController.refreshClaim.mockClear();
+  mockLive.refresh({ events: [], kinds: ['warranty'], resync: false });
+  expect(mockController.refreshClaim).not.toHaveBeenCalled();
   await act(async () => renderer.unmount());
 });

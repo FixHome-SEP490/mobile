@@ -223,7 +223,7 @@ export default function BookingSessionPicker({
         >
           <CalendarDays size={16} color={colors.primaryStrong} strokeWidth={1.75} />
           <Text style={[styles.cardTitle, { color: colors.text }]}>Đặt trước theo buổi</Text>
-          <Text style={[styles.cardHint, { color: colors.textSecondary }]}>Chọn ngày và buổi sáng, chiều hoặc tối</Text>
+          <Text style={[styles.cardHint, { color: colors.textSecondary }]}>Chọn ngày và khung giờ</Text>
         </Pressable>
         {allowUrgent && (
           <Pressable
@@ -318,7 +318,7 @@ export default function BookingSessionPicker({
             })}
           </View>
           {!scheduled && (
-            <Text style={[styles.cardHint, { color: colors.textSecondary }]}>Chưa chọn buổi; lịch chỉ được xác nhận sau khi chọn buổi sáng, chiều hoặc tối.</Text>
+            <Text style={[styles.cardHint, { color: colors.textSecondary }]}>Chưa chọn khung giờ; lịch chỉ được xác nhận sau khi chọn khung giờ.</Text>
           )}
         </>
       )}

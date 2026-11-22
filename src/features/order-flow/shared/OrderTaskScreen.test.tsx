@@ -32,6 +32,7 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn(), setParams: (...args: unknown[]) => mockSetParams(...args) }),
   useRoute: () => ({ name: mockRouteName, params: mockParams }),
   useIsFocused: () => true,
+  useFocusEffect: () => undefined,
 }));
 jest.mock('react-native-safe-area-context', () => {
   const Native = jest.requireActual('react-native');

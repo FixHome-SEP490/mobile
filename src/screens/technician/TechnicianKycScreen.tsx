@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { useRoute, type RouteProp } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
@@ -22,6 +23,7 @@ import {
   type MyVerification,
   type SubmitDocumentPayload,
 } from '../../api/technician-verification.api';
+import type { RootStackParamList } from '../../types';
 import BackButton from '../../components/BackButton';
 import ToneNote from '../../components/ToneNote';
 import { extractApiErrorMessage } from '../../utils/input-validation';
@@ -86,6 +88,7 @@ const MAX_CERTIFICATES = 5;
 export const OFFICE_VISIT_NOTE = 'Vui lòng đến trụ sở trong thời gian sớm nhất để tiến hành xác minh thông tin và bắt đầu công việc.';
 
 export default function TechnicianKycScreen() {
+  const fromOnboarding = useRoute<RouteProp<RootStackParamList, 'TechnicianKyc'>>().params?.fromOnboarding;
   const { colors } = useAppTheme();
   const styles = getStyles(colors);
   const [loading, setLoading] = useState(true);
@@ -147,7 +150,7 @@ export default function TechnicianKycScreen() {
     );
   };
 
-  const pickFromLibrary = async (key: 'front' | 'back') => {
+  const pickFromLibrary = async (key: KycSlot['key']) => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       Alert.alert(
@@ -175,15 +178,11 @@ export default function TechnicianKycScreen() {
   };
 
   const handleSlotPress = (slot: KycSlot) => {
-    if (slot.key === 'face') {
-      pickFromCamera('face', true);
-      return;
-    }
     const key = slot.key;
-    Alert.alert('Ảnh CCCD/CMND', 'Chọn nguồn ảnh', [
+    Alert.alert(key === 'face' ? 'Ảnh chân dung' : 'Ảnh CCCD/CMND', 'Chọn nguồn ảnh', [
       { text: 'Hủy', style: 'cancel' },
       { text: 'Thư viện ảnh', onPress: () => pickFromLibrary(key) },
-      { text: 'Chụp ảnh', onPress: () => pickFromCamera(key, false) },
+      { text: 'Chụp ảnh', onPress: () => pickFromCamera(key, key === 'face') },
     ]);
   };
 
@@ -283,7 +282,7 @@ export default function TechnicianKycScreen() {
       <View style={styles.header}>
         <BackButton />
         <View style={styles.headerTitleGroup}>
-          <Text style={styles.headerEyebrow}>Xác minh danh tính</Text>
+          <Text style={styles.headerEyebrow}>{fromOnboarding ? 'Bước 2/5 · Xác minh danh tính' : 'Xác minh danh tính'}</Text>
           <Text style={styles.headerTitle} accessibilityRole="header">Hồ sơ rõ, việc vững</Text>
         </View>
         <View style={styles.backBtn} />
@@ -361,7 +360,7 @@ export default function TechnicianKycScreen() {
                     : slot.key === 'back'
                       ? 'CCCD mặt sau'
                       : 'Ảnh chân dung';
-                  const displayHint = slot.key === 'face' ? 'Chụp ảnh chân dung tĩnh' : 'Chọn ảnh có sẵn hoặc chụp mới';
+                  const displayHint = slot.key === 'face' ? 'Chọn ảnh chân dung có sẵn hoặc chụp mới' :'Chọn ảnh có sẵn hoặc chụp mới';
 
                   return (
                     <TouchableOpacity

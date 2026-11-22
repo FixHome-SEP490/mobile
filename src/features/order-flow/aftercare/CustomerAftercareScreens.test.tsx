@@ -155,3 +155,23 @@ it('an empty claim form asks for a 10-character description, not to refresh the 
   expect(joined()).toContain('Chưa thể tạo yêu cầu');
   await act(async () => renderer.unmount());
 });
+
+it('shows the customer what the technician found and did once the claim is decided', async () => {
+  mockRoute.params = { claimId: 'claim-done' };
+  mockState.claims = { status: 'ready', data: [{ id: 'claim-done', status: 'resolved', description: 'Vẫn bị như cũ', submittedAt: '2026-11-22T00:07:00.000Z', outcomeCode: 'fixed',
+    inspection: { result: 'covered_part', reasonCode: null, findings: 'Van xả bị hỏng', evidenceRefs: ['https://cdn.test/a.jpg'], reServiceNotes: 'Đã thay van mới', reServiceEvidenceRefs: null, completedAt: null } }] };
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><CustomerWarrantyClaimScreen /></SafeAreaProvider>); });
+  const text = JSON.stringify(renderer.toJSON());
+  for (const expected of ['Kết quả kiểm tra', 'Được bảo hành: lỗi do linh kiện đã thay', 'Van xả bị hỏng', 'Đã thay van mới', 'Đã khắc phục']) expect(text).toContain(expected);
+  await act(async () => renderer.unmount());
+});
+
+it('shows no result block while the claim has none', async () => {
+  mockRoute.params = { claimId: 'claim-open' };
+  mockState.claims = { status: 'ready', data: [{ id: 'claim-open', status: 'inspected', description: 'Vẫn bị như cũ', submittedAt: '2026-11-22T00:07:00.000Z' }] };
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><CustomerWarrantyClaimScreen /></SafeAreaProvider>); });
+  expect(JSON.stringify(renderer.toJSON())).not.toContain('Kết quả kiểm tra');
+  await act(async () => renderer.unmount());
+});

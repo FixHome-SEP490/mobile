@@ -128,6 +128,7 @@ export default function CustomerMatchingScreen() {
   const [booking, setBooking] = useState<BookingItem | null>(null);
   const [linkedOrder, setLinkedOrder] = useState<ServiceOrderItem | null>(null);
   const [candidates, setCandidates] = useState<TechnicianCandidate[]>([]);
+  const [techNames, setTechNames] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -163,6 +164,12 @@ export default function CustomerMatchingScreen() {
   }, []);
 
   const publishCandidates = useCallback((list: TechnicianCandidate[]) => {
+    // Invited technicians can drop out of the candidate list later; keep their names for the invitation status card.
+    setTechNames((previous) => {
+      const next = { ...previous };
+      for (const candidate of list) next[candidate.userId] = candidate.fullName;
+      return next;
+    });
     const available = list.filter((candidate) => candidate.isAvailable);
     const candidateIds = new Set(available.map((candidate) => candidate.userId));
     setCandidates(available);
@@ -1158,6 +1165,9 @@ export default function CustomerMatchingScreen() {
                           </View>
                           <View style={styles.visualCopy}>
                           <Text style={[styles.invitationText, { color: tone?.text ?? colors.text }]}>
+                            {(invitation.technicianId && techNames[invitation.technicianId]) || `Thợ ưu tiên ${invitation.priorityOrder}`}
+                          </Text>
+                          <Text style={[styles.note, { color: colors.textSecondary }]}>
                             Ưu tiên {invitation.priorityOrder}: {statusText}
                           </Text>
                           {Number.isFinite(expiresAt) && (

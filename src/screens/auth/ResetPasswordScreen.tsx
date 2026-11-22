@@ -10,7 +10,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { AuthStackParamList } from '../../types';
 import { authApi } from '../../api/auth.api';
-import { extractApiErrorMessage } from '../../utils/input-validation';
+import { extractApiErrorMessage, validatePassword } from '../../utils/input-validation';
 import BackButton from '../../components/BackButton';
 import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
 
@@ -52,6 +52,12 @@ export default function ResetPasswordScreen() {
     }
     if (newPassword.length < 8) {
       setError('Mật khẩu phải từ 8 ký tự trở lên.');
+      return;
+    }
+    // Backend: IsByteLength(0, 72) and no control characters.
+    const passwordIssue = validatePassword(newPassword);
+    if (passwordIssue) {
+      setError(passwordIssue + '.');
       return;
     }
     if (!PASSWORD_RULE_REGEX.test(newPassword)) {

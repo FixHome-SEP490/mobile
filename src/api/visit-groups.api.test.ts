@@ -15,11 +15,11 @@ const TECH_B = '22222222-2222-4222-8222-222222222222';
 beforeEach(() => jest.resetAllMocks());
 
 describe('visitGroupsApi', () => {
-  it('reads contact settings and falls back to the 3-device limit', async () => {
+  it('reads contact settings and falls back to the 5-device backend limit', async () => {
     api.get.mockResolvedValue({ data: { data: { enabled: true, hotline: ' 1900 ' } } });
-    await expect(visitGroupsApi.contact()).resolves.toEqual({ enabled: true, deviceLimit: 3, hotline: '1900' });
+    await expect(visitGroupsApi.contact()).resolves.toEqual({ enabled: true, deviceLimit: 5, hotline: '1900' });
     api.get.mockResolvedValue({ data: { data: {} } });
-    await expect(visitGroupsApi.contact()).resolves.toEqual({ enabled: false, deviceLimit: 3, hotline: null });
+    await expect(visitGroupsApi.contact()).resolves.toEqual({ enabled: false, deviceLimit: 5, hotline: null });
   });
 
   it('maps urgency and sends the idempotency key when creating a visit', async () => {

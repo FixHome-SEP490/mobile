@@ -4,6 +4,8 @@ import { allowedCustomerComplaintTypes } from '../../../screens/customer/custome
 import { validateWarrantyText } from '../../../screens/customer/customer-warranty';
 export const PRIVATE_ATTACHMENT_NOTICE = 'Đính kèm ảnh đang chờ hỗ trợ lưu trữ riêng tư.';
 export const uuid4 = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
+/** User ids: seeded accounts use fixed, non-v4 UUIDs (c0000000-…), so only the canonical shape is checked. */
+export const uuidAny = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 export const deniedRead = (error: unknown) => [401, 403, 404].includes(Number((error as { response?: { status?: number } })?.response?.status));
 export function record(value: unknown, fields?: readonly string[]): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error('Dữ liệu chưa xác định.');
@@ -77,6 +79,16 @@ export function responsePayload(value: unknown): ResponseDto {
 export const claimStatuses = ['submitted', 'accepted', 'inspected', 'in_progress', 'awaiting_customer', 'disputed', 'resolved', 'rejected'] as const;
 export const validTimestamp = (value: unknown): value is string => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value));
 function nullableText(v: unknown): string | null { if (v === null) return null; if (typeof v !== 'string') throw Error('Dữ liệu chưa xác định.'); return v; }
+const optText = (v: unknown) => (typeof v === 'string' && v.trim() ? v : null);
+const photoUrls = (v: unknown) => (Array.isArray(v) && v.length && v.every(x => typeof x === 'string' && /^https?:\/\//.test(x)) ? (v as string[]) : null);
+/** Read leniently: a missing or odd result only means the customer is shown none. */
+function inspectionOf(value: unknown): WarrantyClaimView['inspection'] {
+  if (!value || typeof value !== 'object') return null;
+  const i = value as Record<string, unknown>;
+  if (typeof i.result !== 'string') return null;
+  return { result: i.result, reasonCode: optText(i.reasonCode), findings: optText(i.findings), evidenceRefs: photoUrls(i.evidenceRefs),
+    reServiceNotes: optText(i.reServiceNotes), reServiceEvidenceRefs: photoUrls(i.reServiceEvidenceRefs), completedAt: validTimestamp(i.completedAt) ? i.completedAt : null };
+}
 export function normalizeClaim(value: unknown, orderId?: string): WarrantyClaimView {
   const r = record(value);
   if (!uuid4(r.id) || !uuid4(r.serviceOrderId) || !uuid4(r.warrantyCoverageId) || (orderId && r.serviceOrderId !== orderId)
@@ -86,13 +98,16 @@ export function normalizeClaim(value: unknown, orderId?: string): WarrantyClaimV
   const evidenceRefs = r.evidenceRefs === null ? null : existingRefs(r.evidenceRefs, Array.isArray(r.evidenceRefs) ? r.evidenceRefs : []);
   if (evidenceRefs === undefined) throw Error('Bằng chứng chưa xác định.');
   const tech = r.technician === null ? null : record(r.technician);
-  if (tech && (!uuid4(tech.id) || typeof tech.fullName !== 'string')) throw Error('Phân công chưa xác định.');
+  if (tech && (!uuidAny(tech.id) || typeof tech.fullName !== 'string')) throw Error('Phân công chưa xác định.');
   return { id: r.id, serviceOrderId: r.serviceOrderId, warrantyCoverageId: r.warrantyCoverageId, status: r.status as string,
     description: warrantyText(r.description), evidenceRefs, submittedAfterExpiry: r.submittedAfterExpiry,
     customerResponse: r.customerResponse as 'agreed' | 'disputed' | null, awaitingPrompt: r.awaitingPrompt as 'conclusion' | 'completion' | null,
     resolutionNotes: nullableText(r.resolutionNotes), submittedAt: r.submittedAt, resolvedAt: r.resolvedAt as string | null,
     technician: tech ? { id: tech.id as string, fullName: tech.fullName as string } : null,
-    ...(validTimestamp(r.inspectionScheduledAt) ? { inspectionScheduledAt: r.inspectionScheduledAt } : {}) };
+    ...(validTimestamp(r.inspectionScheduledAt) ? { inspectionScheduledAt: r.inspectionScheduledAt } : {}),
+    ...(r.inspection ? { inspection: inspectionOf(r.inspection) } : {}),
+    ...(['fixed', 'unfixed', 'rejected'].includes(r.outcomeCode as never) ? { outcomeCode: r.outcomeCode as 'fixed' | 'unfixed' | 'rejected' } : {}),
+    ...(typeof r.refundAmount === 'number' && Number.isFinite(r.refundAmount) ? { refundAmount: r.refundAmount } : {}) };
 }
 export function normalizeCoverage(value: unknown, orderId: string): WarrantyCoverageItem {
   const r = record(value);

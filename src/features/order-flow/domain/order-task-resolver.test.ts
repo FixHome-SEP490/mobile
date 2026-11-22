@@ -30,6 +30,12 @@ it('aggregate counters and another uploader never count as own face or BEFORE', 
   if (s.resources.evidence.status === 'ready') s.resources.evidence.data = s.resources.evidence.data.map(e => ({ ...e, uploaderId: 'old-tech' }));
   expect(resolveTechnicianTask(s).taskId).toBe('T05');
 });
+it('a check-in face held for a service manager waits (T05W); a refused one is taken again (T05); an approved one goes on', () => {
+  expect(resolveTechnicianTask(snapshot({ checkinFaceReview: { status: 'pending', note: null } })).taskId).toBe('T05W');
+  expect(resolveTechnicianTask(snapshot({ checkinFaceReview: { status: 'rejected', note: 'Không giống ảnh đăng ký' } })).taskId).toBe('T05');
+  expect(resolveTechnicianTask(snapshot({ checkinFaceReview: { status: 'rejected', note: null } })).readOnly).toBe(false);
+  expect(resolveTechnicianTask(snapshot({ checkinFaceReview: { status: 'approved', note: null } })).taskId).toBe('TR');
+});
 it('missing threshold cannot unlock recovery', () => {
   const s = snapshot(); s.proofPolicy = undefined;
   expect(resolveTechnicianTask(s).readOnly).toBe(true);
