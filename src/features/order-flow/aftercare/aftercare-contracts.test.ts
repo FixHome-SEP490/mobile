@@ -62,3 +62,8 @@ it('keeps the approved inspection result and outcome a customer may read, and ig
   expect(normalizeClaim(row, order)).not.toHaveProperty('inspection');
   expect(normalizeClaim({ ...row, inspection: 'oops', outcomeCode: 'x' }, order).inspection).toBeNull();
 });
+it('reads a claim assigned to a seeded technician whose id is not a v4 UUID (customer warranty screen stayed in error)', () => {
+  const row = { id: order, serviceOrderId: order, warrantyCoverageId: coverage, status: 'awaiting_customer', description: 'Lỗi vẫn còn xuất hiện', evidenceRefs: null, submittedAfterExpiry: false, customerResponse: 'agreed', awaitingPrompt: 'completion', resolutionNotes: null, submittedAt: '2026-10-14T00:00:00Z', resolvedAt: null, technician: { id: 'c0000000-0000-0000-0000-000000000012', fullName: 'Tho Dien Lanh 12' } };
+  expect(normalizeClaim(row, order).technician).toEqual({ id: 'c0000000-0000-0000-0000-000000000012', fullName: 'Tho Dien Lanh 12' });
+  expect(() => normalizeClaim({ ...row, technician: { id: 'not-a-uuid', fullName: 'x' } }, order)).toThrow();
+});

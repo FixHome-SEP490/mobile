@@ -9,8 +9,8 @@ import CalendarDateField from '../../components/CalendarDateField';
 import ToneNote from '../../components/ToneNote';
 import { AlertCircle, CalendarOff, ChevronDown, ChevronUp, Clock, Plus, Trash2 } from 'lucide-react-native';
 
-/** Backend availability.dto: reason MaxLength(500) and NoUnsafeText. */
-const TIME_OFF_REASON_MAX = 500;
+/** Backend availability.dto: reason MaxLength(255) (cột varchar 255) and NoUnsafeText. */
+const TIME_OFF_REASON_MAX = 255;
 
 const DAYS = [{ day: 1, label: 'T2' }, { day: 2, label: 'T3' }, { day: 3, label: 'T4' }, { day: 4, label: 'T5' }, { day: 5, label: 'T6' }, { day: 6, label: 'T7' }, { day: 0, label: 'CN' }];
 const PRESETS = [{ startTime: '08:00', endTime: '12:00' }, { startTime: '13:00', endTime: '18:00' }, { startTime: '08:00', endTime: '18:00' }].map(p => ({ ...p, label: `${p.startTime} – ${p.endTime}` }));

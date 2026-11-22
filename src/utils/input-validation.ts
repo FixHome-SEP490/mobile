@@ -99,7 +99,44 @@ export function validatePhoneNumber(value: string): string {
  * nên mọi lỗi validation đều rơi về câu chung chung và người dùng không biết
  * mình sai chỗ nào.
  */
+/** PO 22/11/2026: a system or unknown failure only ever reads this sentence. */
+export const GENERIC_ERROR = 'Có lỗi xảy ra, vui lòng thử lại sau.';
+export const NETWORK_ERROR = 'Không có kết nối mạng. Kiểm tra kết nối rồi thử lại.';
+
+/** Codes, HTTP statuses, stack frames and markup never reach the screen, even inside Vietnamese text. */
+const TECHNICAL = [
+  /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/,
+  /\bHTTP\s*\d{3}\b/i,
+  /status code/i,
+  /\bat \S+ \(/,
+  /[{}[\]<>]/,
+  /\b(TypeError|SyntaxError|ReferenceError|QueryFailedError)\b/,
+  /\b(backend|endpoint|token|jwt|payload|uuid|sql|undefined|null|NaN)\b/i,
+];
+/** 503s that are a known business state with a Vietnamese reason worth showing (gateway not switched on). */
+const KNOWN_UNAVAILABLE = new Set(['PAYMENT_PROVIDER_UNAVAILABLE']);
+const readable = (text: string, fallback: string) => (TECHNICAL.some((p) => p.test(text)) ? fallback : text);
+
+/**
+ * The message a person sees for any failed request: a Vietnamese sentence they can act on,
+ * or GENERIC_ERROR / NETWORK_ERROR. The API client stores it as `error.message`.
+ */
+export function userFacingRequestError(err: unknown): string {
+  const e = err as { response?: { status?: unknown }; request?: unknown; isAxiosError?: boolean } | null;
+  if (!e || typeof e !== 'object') return GENERIC_ERROR;
+  const status = typeof e.response?.status === 'number' ? e.response.status : undefined;
+  if (status === undefined) return e.isAxiosError || e.request !== undefined ? NETWORK_ERROR : GENERIC_ERROR;
+  return extractApiErrorMessage(err, GENERIC_ERROR);
+}
+
 export function extractApiErrorMessage(err: unknown, fallback: string): string {
+  const status = (err as { response?: { status?: unknown } } | null)?.response?.status;
+  const code = (err as { response?: { data?: { error?: { code?: unknown } } } } | null)?.response?.data?.error?.code;
+  if (typeof status === 'number' && status >= 500 && !(typeof code === 'string' && KNOWN_UNAVAILABLE.has(code))) return fallback || GENERIC_ERROR;
+  return readable(extractRawApiErrorMessage(err, fallback), fallback);
+}
+
+function extractRawApiErrorMessage(err: unknown, fallback: string): string {
   const response = (
     err as {
       response?: {
@@ -130,4 +167,13 @@ export function extractApiErrorMessage(err: unknown, fallback: string): string {
   }
 
   return fallback;
+}
+
+/** Bản sao `HasLetterOrDigit` + `NoUnsafeText` ở backend cho mô tả tự do. */
+const TEXT_HAS_LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+
+export function validateDescriptionText(value: string): string {
+  if (containsUnsafeText(value)) return 'Mô tả không được chứa ký tự điều khiển hay ký tự vô hình.';
+  if (!TEXT_HAS_LETTER_OR_DIGIT.test(value)) return 'Mô tả cần có chữ hoặc số, không chỉ emoji hay ký hiệu.';
+  return '';
 }

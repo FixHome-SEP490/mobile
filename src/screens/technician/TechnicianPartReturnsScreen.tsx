@@ -59,6 +59,8 @@ export default function TechnicianPartReturnsScreen() {
   }, []);
   useFocusEffect(useCallback(() => { void load(); void loadFaulty(); }, [load, loadFaulty]));
   useLiveRefresh(['order:updated'], () => { void loadFaulty(); }, undefined, { pollMs: 60_000 });
+  // The manager received a return or a part moved: the list follows without a pull (PO 22/11/2026).
+  useLiveRefresh(['order:updated'], (batch) => { if (batch.resync || !batch.kinds || batch.kinds.includes('part')) void load(); });
   const faultyDue = (claim: TechnicianWarrantyClaim) => {
     const request = claim.partRequest, due = request?.faultyReturnDueAt;
     if (request?.faultyReturnChargedAt) return { text: 'Quá hạn, đã bị trừ ví', late: true };

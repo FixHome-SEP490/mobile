@@ -163,6 +163,10 @@ export default function CompletedOrderScreen({ role }: { role: 'customer' | 'tec
           label="Tổng tiền"
           value={typeof order.grandTotal === 'number' ? formatVnd(order.grandTotal) : quoteMoneyText(order.grandTotal)}
         />
+        {invoice?.voucherDiscount !== undefined && invoice.amountDue !== undefined ? <>
+          <DetailRow label="Giảm voucher" value={`-${formatVnd(invoice.voucherDiscount)}`} />
+          <DetailRow label="Thực trả" value={formatVnd(invoice.amountDue)} />
+        </> : null}
         <DetailRow label="Thanh toán" value={invoice ? paymentStatusLabel(invoice.paymentStatus) : 'Chưa có dữ liệu'} />
       </View>
       {role === 'customer' ? (

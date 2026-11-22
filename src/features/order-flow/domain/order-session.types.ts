@@ -56,6 +56,9 @@ export interface OrderInvoice {
   partsTotal?: number | string;
   issuedAt?: string;
   paidAt?: string | null;
+  /** Voucher subsidy the server committed for this invoice and what the customer pays after it (PO 22/11/2026). */
+  voucherDiscount?: number;
+  amountDue?: number;
   /** Undefined for a legacy payload with no lines, never silently replaced by []. */
   items?: { id: string; description: string; quantity: number; lineTotal: number | string; sourceType?: string; sourceItemId?: string | null; type?: string }[];
 }

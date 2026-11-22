@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-22 16:12 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
+> Cập nhật lần cuối: 2026-11-22 16:18 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -422,7 +422,10 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
-- 2026-11-22 16:12 (UTC+7) | Hgnv11 | dev | Màn Linh kiện cần trả của thợ hiện linh kiện hỏng cần nộp của bảo hành
+- 2026-11-22 16:18 (UTC+7) | Hgnv11 | dev | Màn Linh kiện cần trả của thợ hiện linh kiện hỏng cần nộp của bảo hành
+- 2026-11-22 13:10 (UTC+7) | ToanAltF4 | fix/final-2211-mobile2 | Màn Hoá đơn và Đơn hoàn thành (order-flow) hiện Giảm voucher và Thực trả từ voucherDiscount/amountDue
+- 2026-11-22 11:39 (UTC+7) | ToanAltF4 | fix/final-2211 | Hoá đơn khách hiện Giảm voucher và Thực trả từ voucherDiscount/amountDue; mô tả bảo hành phải có chữ hoặc số; lỗi request qua interceptor chỉ còn câu tiếng Việt hoặc 'Có lỗi xảy ra, vui lòng thử lại sau.', 5xx bỏ câu máy chủ; Linh kiện cần trả tự làm mới theo sự kiện part
+- 2026-11-22 01:46 (UTC+7) | ToanAltF4 | fix/time-off-reason-255 | QA 22/11 console + form ngoài luồng đơn: sửa lỗi kiểm thật trên fixhome.sbs
 - 2026-11-22 01:21 (UTC+7) | Hgnv11 | dev | Khách xem kết quả kiểm tra và xử lý của thợ ở chi tiết yêu cầu bảo hành
 - 2026-11-22 01:14 (UTC+7) | Hgnv11 | dev | Màn chi tiết bảo hành của thợ bỏ nút Làm mới, cập nhật realtime theo đơn
 - 2026-11-22 01:11 (UTC+7) | Hgnv11 | dev | Màn chi tiết bảo hành của thợ thêm nút "Về trang chủ" khi không còn thao tác nào
@@ -459,9 +462,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-11-09 05:03 (UTC+7) | Hgnv11 | dev | Ảnh mặt check-in có liveness nhẹ: sau ảnh nhìn thẳng, app xin thử thách từ server (quay đầu hoặc mỉm cười), chụp ảnh thứ hai rồi gửi cả hai tới checkin-face; lý do từ chối của server hiện cho thợ; server không bật thì vẫn gửi một ảnh
 - 2026-11-09 04:48 (UTC+7) | Hgnv11 | dev | Sửa lỗi lưu lịch làm việc thợ bị backend từ chối (app gửi lại id/technicianId/createdAt/updatedAt; nay chỉ gửi dayOfWeek, startTime, endTime); làm lại giao diện trang Lịch làm việc; chọn nhanh dịch vụ và cấp độ ở bước 3 đăng ký; banner Home theo reviewStage và đọc lại realtime
 - 2026-11-09 02:58 (UTC+7) | Hgnv11 | dev | Onboarding thợ: chọn cấp độ tự khai ở bước 3, màn hẹn lên trụ sở, màn trạng thái theo reviewStage, thông báo mở đúng màn; approved chỉ khi onboardingStatus là approved
-- 2026-11-09 01:54 (UTC+7) | Hgnv11 | dev | Onboarding thợ bước 4: chọn địa chỉ có bản đồ giống Hồ sơ (tách `TechnicianAddressPicker` dùng chung); làm lại hiển thị 5 bước (`OnboardingStepper`), nút quay lại về trang chủ, bước 1 điền lại thông tin và khóa sau khi nộp giấy tờ; Xác minh danh tính báo đang tải ảnh rồi đang kiểm tra khuôn mặt; quét QR CCCD, giao diện theo design system (`ToneNote`)
-- 2026-11-08 22:53 (UTC+7) | Hgnv11 | dev | Đăng ký thợ bước 1: thêm quét mã QR trên CCCD để tự điền thông tin, chỉ xử lý trên máy; quyền camera dùng chung với quét linh kiện
-- 2026-11-08 11:36 (UTC+7) | Hgnv11 | dev | Thợ nhận linh kiện bằng mã: khi backend từ chối bằng 4xx (trừ 401, 408) và đọc lại thấy chưa đổi, hiện đúng thông báo của backend, mở lại nút nhận thay vì kẹt `unknown`
 
 
 ### Lịch sử giữ lại khi tích hợp
