@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-22 01:46 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: fix/time-off-reason-255
+> Cập nhật lần cuối: 2026-11-22 11:39 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: fix/final-2211
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -422,6 +422,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-22 11:39 (UTC+7) | ToanAltF4 | fix/final-2211 | Hoá đơn khách hiện Giảm voucher và Thực trả từ voucherDiscount/amountDue; mô tả bảo hành phải có chữ hoặc số; lỗi request qua interceptor chỉ còn câu tiếng Việt hoặc 'Có lỗi xảy ra, vui lòng thử lại sau.', 5xx bỏ câu máy chủ; Linh kiện cần trả tự làm mới theo sự kiện part
 - 2026-11-22 01:46 (UTC+7) | ToanAltF4 | fix/time-off-reason-255 | QA 22/11 console + form ngoài luồng đơn: sửa lỗi kiểm thật trên fixhome.sbs
 - 2026-11-22 00:47 (UTC+7) | Hgnv11 | dev | Thợ khai dùng linh kiện bảo hành ở màn Quản lý linh kiện dù đơn gốc đã hoàn tất; nút Đề xuất hoàn tất bảo hành khoá khi linh kiện thay thế chưa nhận hoặc chưa khai
 - 2026-11-21 20:36 (UTC+7) | Hgnv11 | dev | Chat AI đồng bộ web: nút trả lời nhanh `answerOptionsVi`, lượt nhiều thiết bị tối đa 5, bỏ reply trễ sau phiên mới, timeout 45 giây, ảnh gửi AI 1024 px
@@ -461,7 +462,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-11-07 13:32 (UTC+7) | Hgnv11 | dev | Bảo hành: các màn khách và thợ giữ dữ liệu cũ khi đọc lại, không còn tải lại cả trang hay nháy trạng thái rỗng
 - 2026-11-07 10:08 (UTC+7) | Hgnv11 | dev | Bảo hành: thợ chọn buổi kiểm tra bắt buộc và đổi lịch trước check-in, khách thấy lịch kiểm tra và lịch sử yêu cầu đã đóng, bấm thông báo mở đúng đơn, sửa kẹt `unknown`/`denied`, làm lại danh sách linh kiện hỏng
 - 2026-11-07 00:25 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Bảo hành: thợ chọn số cái hỏng khi dòng linh kiện từ 2 cái; khách: trang Bảo hành gọn, thẻ yêu cầu và phản hồi một nút, thông báo mở trang Bảo hành; thợ: lời mời bấm được, tiêu đề theo tên dịch vụ; sửa nút bị khóa sau khi nhận
-- 2026-11-06 21:45 (UTC+7) | Hgnv11 | warranty-cost-sla-20261104 | Làm lại quản lý bảo hành của thợ như web: phần Bảo hành trong tab Công việc, lời mời bảo hành ở tab Lời mời và badge, thông báo và Hồ sơ mở đúng chỗ, chi tiết dựng lại thành các thẻ
 
 
 ### Lịch sử giữ lại khi tích hợp

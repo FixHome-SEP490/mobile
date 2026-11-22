@@ -24,6 +24,8 @@ export interface InvoiceView {
   totalText: string | null;
   /** W3 delivery fee on the invoice: shown only when the server sent a positive fee and both shares. */
   shipping: { feeText: string; customerShareText: string; technicianShareText: string } | null;
+  /** Voucher discount the server committed and what the customer pays after it; null without a voucher. */
+  voucher: { discountText: string; dueText: string } | null;
   issuedText: string | null;
   paidText: string | null;
   items: InvoiceItemView[];
@@ -128,6 +130,15 @@ export function shippingOf(record: Record<string, unknown>): InvoiceView['shippi
   return { feeText: moneyText(fee)!, customerShareText: moneyText(customer)!, technicianShareText: moneyText(technician)! };
 }
 
+/** Server voucher lines (PO 22/11/2026: the bill showed 445.000 while the customer paid 422.750). */
+export function voucherOf(record: Record<string, unknown>): InvoiceView['voucher'] {
+  const discount = record.voucherDiscount;
+  const due = record.amountDue;
+  if (typeof discount !== 'number' || !Number.isSafeInteger(discount) || discount <= 0) return null;
+  if (typeof due !== 'number' || !Number.isSafeInteger(due) || due < 0) return null;
+  return { discountText: moneyText(discount)!, dueText: moneyText(due)! };
+}
+
 export function sanitizeInvoice(
   serviceOrderId: string,
   payload: unknown,
@@ -145,6 +156,7 @@ export function sanitizeInvoice(
     partsText: moneyText(record.partsTotal),
     totalText: moneyText(record.grandTotal),
     shipping: shippingOf(record),
+    voucher: voucherOf(record),
     issuedText: dateText(record.issuedAt),
     paidText: dateText(record.paidAt),
     items: itemsList(record.items),

@@ -1439,6 +1439,18 @@ export default function CustomerOrderDetailScreen() {
                 ) : (
                   <Text style={styles.invoiceUnknownTotal}>Chưa rõ tổng tiền.</Text>
                 )}
+                {invoiceState.invoice.voucher && (
+                  <View testID="invoice-voucher">
+                    <View style={styles.invoiceRow}>
+                      <Text style={styles.invoiceItemLabel}>Giảm voucher</Text>
+                      <Text style={styles.invoiceItemValue}>-{invoiceState.invoice.voucher.discountText}</Text>
+                    </View>
+                    <View style={styles.invoiceTotalRow}>
+                      <Text style={styles.totalLabel}>{invoiceState.invoice.paymentStatus === 'PAID' ? 'Thực trả' : 'Cần trả'}</Text>
+                      <Text style={styles.totalValue}>{invoiceState.invoice.voucher.dueText}</Text>
+                    </View>
+                  </View>
+                )}
                 {!!invoiceState.invoice.issuedText && (
                   <Text style={styles.meta}>Phát hành: {invoiceState.invoice.issuedText}</Text>
                 )}

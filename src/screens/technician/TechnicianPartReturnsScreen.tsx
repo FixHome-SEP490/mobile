@@ -13,6 +13,7 @@ import BackButton from '../../components/BackButton';
 import { vnDateString } from '../../utils/vn-time';
 import { filterPartReturns, groupPartReturns, type PartReturnFilter } from './technician-part-returns';
 import PillText from '../../components/PillText';
+import { useLiveRefresh } from '../../hooks/useLiveRefresh';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Load = 'loading' | 'ready' | 'error' | 'unavailable';
@@ -46,6 +47,8 @@ export default function TechnicianPartReturnsScreen() {
     }
   }, []);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
+  // The manager received a return or a part moved: the list follows without a pull (PO 22/11/2026).
+  useLiveRefresh(['order:updated'], (batch) => { if (batch.resync || !batch.kinds || batch.kinds.includes('part')) void load(); });
 
   const groups = useMemo(() => groupPartReturns(records), [records]);
   const shown = useMemo(() => filterPartReturns(groups, filter), [groups, filter]);
