@@ -7,10 +7,12 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { iconSize, iconStroke, useAppTheme } from '../../constants/theme';
 import { isPartReturnsUnavailableError, partReturnsApi, type PartCustodyReturnRecord } from '../../api/part-requests.api';
+import { technicianWarrantyApi, type TechnicianWarrantyClaim } from '../../api/technician-warranty.api';
+import { useLiveRefresh } from '../../hooks/useLiveRefresh';
 import { openOrResume } from '../../features/order-flow/navigation/resume-order';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
 import BackButton from '../../components/BackButton';
-import { vnDateString } from '../../utils/vn-time';
+import { vnDateString, vnDateTimeString } from '../../utils/vn-time';
 import { filterPartReturns, groupPartReturns, type PartReturnFilter } from './technician-part-returns';
 import PillText from '../../components/PillText';
 
@@ -45,13 +47,30 @@ export default function TechnicianPartReturnsScreen() {
       setRefreshing(false);
     }
   }, []);
-  useFocusEffect(useCallback(() => { void load(); }, [load]));
+  // Faulty parts of warranty claims are not in the custody ledger, so they are listed here too; handing one in is done on the claim.
+  const [faulty, setFaulty] = useState<TechnicianWarrantyClaim[]>([]);
+  const loadFaulty = useCallback(async () => {
+    try {
+      const { data } = await technicianWarrantyApi.listMine({ pageSize: 100 });
+      setFaulty(data
+        .filter(c => c.partRequest && ['received', 'completed'].includes(String(c.partRequest.status).toLowerCase()) && !c.partRequest.faultyReturnedAt)
+        .sort((a, b) => (a.partRequest?.faultyReturnDueAt ?? '9').localeCompare(b.partRequest?.faultyReturnDueAt ?? '9')));
+    } catch { /* the ledger still works; the next visit or change reads again */ }
+  }, []);
+  useFocusEffect(useCallback(() => { void load(); void loadFaulty(); }, [load, loadFaulty]));
+  useLiveRefresh(['order:updated'], () => { void loadFaulty(); }, undefined, { pollMs: 60_000 });
+  const faultyDue = (claim: TechnicianWarrantyClaim) => {
+    const request = claim.partRequest, due = request?.faultyReturnDueAt;
+    if (request?.faultyReturnChargedAt) return { text: 'Quá hạn, đã bị trừ ví', late: true };
+    if (due && Date.parse(due) < Date.now()) return { text: 'Đã quá hạn nộp', late: true };
+    return { text: due ? `Hạn nộp ${vnDateTimeString(due)}` : 'Chưa có hạn nộp', late: false };
+  };
 
   const groups = useMemo(() => groupPartReturns(records), [records]);
   const shown = useMemo(() => filterPartReturns(groups, filter), [groups, filter]);
   const owedTotal = groups.reduce((sum, g) => sum + g.owedQty, 0);
   const count = (key: PartReturnFilter) => filterPartReturns(groups, key).length;
-  const emptyAll = state === 'ready' && groups.length === 0;
+  const emptyAll = state === 'ready' && groups.length === 0 && faulty.length === 0;
   const emptyFilter = state === 'ready' && groups.length > 0 && shown.length === 0;
 
   return (
@@ -93,7 +112,7 @@ export default function TechnicianPartReturnsScreen() {
       ) : (
         <ScrollView
           style={styles.container}
-          contentContainerStyle={[styles.content, shown.length === 0 && styles.contentCenter, { paddingBottom: 32 + Math.max(insets.bottom, 16) }]}
+          contentContainerStyle={[styles.content, shown.length === 0 && faulty.length === 0 && styles.contentCenter, { paddingBottom: 32 + Math.max(insets.bottom, 16) }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); }} colors={[colors.primaryStrong]} />}
           showsVerticalScrollIndicator={false}
         >
@@ -125,6 +144,32 @@ export default function TechnicianPartReturnsScreen() {
             <View style={styles.emptyBox}>
               <PackageCheck size={56} color={colors.muted} strokeWidth={1.5} />
               <Text style={styles.emptyTitle} accessibilityRole="header">Không có đơn nào trong mục này</Text>
+            </View>
+          )}
+
+          {faulty.length > 0 && (
+            <View style={styles.faultyBox} testID="faulty-warranty-returns">
+              <Text style={styles.faultyTitle} accessibilityRole="header">{`Linh kiện hỏng cần nộp (bảo hành) · ${faulty.length}`}</Text>
+              {faulty.map(claim => {
+                const due = faultyDue(claim);
+                return (
+                  <TouchableOpacity
+                    key={claim.id}
+                    style={styles.faultyRow}
+                    testID={`faulty-return-${claim.id}`}
+                    onPress={() => navigation.navigate('TechnicianWarrantyTask', { claimId: claim.id })}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Đơn ${claim.order.code}, ${due.text}. Mở yêu cầu bảo hành để nộp linh kiện hỏng`}
+                  >
+                    <View style={styles.flex1}>
+                      <Text style={styles.code}>{`#${claim.order.code}`}</Text>
+                      <Text style={[styles.meta, due.late && { color: colors.error, fontWeight: '600' }]}>{due.text}</Text>
+                    </View>
+                    <ChevronRight size={iconSize.md} color={colors.primaryStrong} strokeWidth={iconStroke} />
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           )}
 
@@ -196,6 +241,9 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   line: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 8, marginTop: 8, borderTopWidth: 1, borderTopColor: colors.divider },
   lineName: { flex: 1, fontSize: 14, lineHeight: 20, color: colors.text },
   lineQty: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.primaryStrong },
+  faultyBox: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 16, gap: 4 },
+  faultyTitle: { fontSize: 15, lineHeight: 22, fontWeight: '700', color: colors.text },
+  faultyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 56, paddingTop: 8, marginTop: 8, borderTopWidth: 1, borderTopColor: colors.divider },
   emptyBox: { alignItems: 'center', justifyContent: 'center', padding: 32, gap: 8 },
   emptyTitle: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: colors.text, marginTop: 8, textAlign: 'center' },
   emptyDesc: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
