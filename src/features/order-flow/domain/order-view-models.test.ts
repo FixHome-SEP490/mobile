@@ -209,3 +209,18 @@ it('additional-cost money arrives as digit strings and is read as numbers', () =
   expect(cost).toMatchObject({ totalLaborDelta: 100000, totalPartsDelta: 480000, shippingFee: 0 });
   expect(cost.items[0]).toMatchObject({ unitPrice: 450000, lineTotal: 450000, warrantyFee: 20000 });
 });
+
+describe('invoice voucher lines (PO 22/11/2026: bill showed 445.000, customer paid 422.750)', () => {
+  const base = { id: 'inv-1', serviceOrderId: 'o-1', paymentStatus: 'PAID', grandTotal: 445000 };
+  it('keeps the server voucher discount and the amount actually paid', () => {
+    expect(normalizeOrderResource('invoice', { ...base, voucherDiscount: 22250, amountDue: 422750 }, 'o-1', 'customer'))
+      .toMatchObject({ grandTotal: 445000, voucherDiscount: 22250, amountDue: 422750 });
+  });
+  it('shows no voucher lines without a positive whole discount', () => {
+    for (const extra of [{}, { voucherDiscount: 0, amountDue: 445000 }, { voucherDiscount: '22250', amountDue: 422750 }, { voucherDiscount: 10, amountDue: -1 }]) {
+      const r = normalizeOrderResource('invoice', { ...base, ...extra }, 'o-1', 'customer') as unknown as Record<string, unknown>;
+      expect(r.voucherDiscount).toBeUndefined();
+      expect(r.amountDue).toBeUndefined();
+    }
+  });
+});

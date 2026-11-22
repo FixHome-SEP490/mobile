@@ -53,3 +53,8 @@ it('review and claim readmodels reject foreign IDs and drop private backend/staf
 it('unknown warranty operation cannot fall through into proposal DTO validation', () => {
   expect(() => warrantyCommandPayload('staff-approve' as never, { result: 'covered_workmanship', findings: 'Kiểm tra lỗi thực tế' }, [])).toThrow();
 });
+it('reads a claim assigned to a seeded technician whose id is not a v4 UUID (customer warranty screen stayed in error)', () => {
+  const row = { id: order, serviceOrderId: order, warrantyCoverageId: coverage, status: 'awaiting_customer', description: 'Lỗi vẫn còn xuất hiện', evidenceRefs: null, submittedAfterExpiry: false, customerResponse: 'agreed', awaitingPrompt: 'completion', resolutionNotes: null, submittedAt: '2026-10-14T00:00:00Z', resolvedAt: null, technician: { id: 'c0000000-0000-0000-0000-000000000012', fullName: 'Tho Dien Lanh 12' } };
+  expect(normalizeClaim(row, order).technician).toEqual({ id: 'c0000000-0000-0000-0000-000000000012', fullName: 'Tho Dien Lanh 12' });
+  expect(() => normalizeClaim({ ...row, technician: { id: 'not-a-uuid', fullName: 'x' } }, order)).toThrow();
+});

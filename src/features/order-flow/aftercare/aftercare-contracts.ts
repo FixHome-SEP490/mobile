@@ -4,6 +4,8 @@ import { allowedCustomerComplaintTypes } from '../../../screens/customer/custome
 import { validateWarrantyText } from '../../../screens/customer/customer-warranty';
 export const PRIVATE_ATTACHMENT_NOTICE = 'Đính kèm ảnh đang chờ hỗ trợ lưu trữ riêng tư.';
 export const uuid4 = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
+/** User ids: seeded accounts use fixed, non-v4 UUIDs (c0000000-…), so only the canonical shape is checked. */
+export const uuidAny = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 export const deniedRead = (error: unknown) => [401, 403, 404].includes(Number((error as { response?: { status?: number } })?.response?.status));
 export function record(value: unknown, fields?: readonly string[]): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error('Dữ liệu chưa xác định.');
@@ -86,7 +88,7 @@ export function normalizeClaim(value: unknown, orderId?: string): WarrantyClaimV
   const evidenceRefs = r.evidenceRefs === null ? null : existingRefs(r.evidenceRefs, Array.isArray(r.evidenceRefs) ? r.evidenceRefs : []);
   if (evidenceRefs === undefined) throw Error('Bằng chứng chưa xác định.');
   const tech = r.technician === null ? null : record(r.technician);
-  if (tech && (!uuid4(tech.id) || typeof tech.fullName !== 'string')) throw Error('Phân công chưa xác định.');
+  if (tech && (!uuidAny(tech.id) || typeof tech.fullName !== 'string')) throw Error('Phân công chưa xác định.');
   return { id: r.id, serviceOrderId: r.serviceOrderId, warrantyCoverageId: r.warrantyCoverageId, status: r.status as string,
     description: warrantyText(r.description), evidenceRefs, submittedAfterExpiry: r.submittedAfterExpiry,
     customerResponse: r.customerResponse as 'agreed' | 'disputed' | null, awaitingPrompt: r.awaitingPrompt as 'conclusion' | 'completion' | null,
