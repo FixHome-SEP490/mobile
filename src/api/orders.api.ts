@@ -383,6 +383,21 @@ export interface WarrantyClaimView {
   technician: { id: string; fullName: string } | null;
   /** When the technician comes to inspect; null until the claim is accepted. */
   inspectionScheduledAt?: string | null;
+  /** The approved inspection result, once the service manager has decided. */
+  inspection?: WarrantyInspectionResult | null;
+  outcomeCode?: 'fixed' | 'unfixed' | 'rejected' | null;
+  /** Whole VND refunded to the wallet when the item could not be fixed. */
+  refundAmount?: number | null;
+}
+
+export interface WarrantyInspectionResult {
+  result: 'covered_workmanship' | 'covered_part' | 'not_covered' | string;
+  reasonCode: string | null;
+  findings: string | null;
+  evidenceRefs: string[] | null;
+  reServiceNotes: string | null;
+  reServiceEvidenceRefs: string[] | null;
+  completedAt: string | null;
 }
 
 export interface CreateWarrantyClaimPayload {

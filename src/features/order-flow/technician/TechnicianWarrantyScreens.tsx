@@ -16,6 +16,8 @@ import { scheduleSummary, sessionWindow, type BookingSchedule } from '../../../u
 import { formatVnd } from '../../../utils/format';
 import { findChatForBooking } from '../../../screens/technician/technician-chat-shortcut';
 import { backFromFlow } from '../navigation/resume-order';
+import { goHome } from '../../../components/BackButton';
+import { useLiveRefresh } from '../../../hooks/useLiveRefresh';
 import { technicianClaimLabel, type WarrantyTone } from '../../../screens/technician/warranty/technician-warranty-groups';
 
 const field = { minHeight: 52, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: spacing.md, color: colors.text, backgroundColor: colors.surface, textAlignVertical: 'top' as const };
@@ -103,6 +105,8 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
     } catch { Alert.alert('Không mở được', 'Không thể mở cuộc trò chuyện. Vui lòng thử lại.'); }
   };
   const confirmed = !!state.confirmation; const busy = ['verifying', 'submitting'].includes(state.phase); const locked = busy || state.phase === 'confirming' || state.phase === 'unknown' || confirmed;
+  // Real-time (PO 22/11/2026): a change of this order reads the claim again quietly, not while a command or its confirmation is open.
+  useLiveRefresh(['order:updated'], () => { if (!locked) void controller.refreshClaim(); }, event => !event.payload.serviceOrderId || event.payload.serviceOrderId === claim?.order.id, { pollMs: 30_000 });
   const prepare = (op: string) => {
     let dto: WarrantyCommandDto = {};
     if (op === 'accept') dto = { scheduledAt: slot ?? undefined };
@@ -120,12 +124,16 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
         : task === 'TW03' ? { label: 'Xác nhận đã đến kiểm tra', disabled: locked || !commands.includes('check-in'), testID: 'technician-warranty-primary-action', onPress: () => prepare('check-in') }
           : task === 'TW04' ? { label: 'Đề xuất kết quả kiểm tra', disabled: locked || !commands.includes('propose') || !result || findings.trim().length < 10 || (result === 'covered_part' && faultyIds.length === 0) || ((result === 'not_covered' || result === 'covered_part') && photos.length === 0) || (result === 'not_covered' && !notCoveredReasonCode), testID: 'technician-warranty-primary-action', onPress: () => prepare('propose') }
             : task === 'TW05' ? { label: 'Đề xuất hoàn tất bảo hành', disabled: locked || !commands.includes('complete') || note.trim().length < 10 || partsPending, testID: 'technician-warranty-primary-action', onPress: () => prepare('complete') }
+              : task === 'TW06' ? { label: 'Về trang chủ', testID: 'technician-warranty-home', onPress: goHome }
               : undefined;
   const secondary = confirmed
     ? { label: 'Sửa nội dung', disabled: busy, testID: 'technician-warranty-secondary-action', onPress: () => { controller.cancelConfirmation(); } }
     : task === 'TW02' && state.phase === 'idle' && claim
       ? { label: 'Từ chối phân công', disabled: locked || !commands.includes('decline') || (reason === 'other' && note.trim().length < 10), testID: 'technician-warranty-secondary-action', onPress: () => prepare('decline') }
-      : { label: 'Làm mới', disabled: !claimId || busy, onPress: () => { if (!claimId) return; if (state.phase === 'denied' || state.phase === 'failed-known') controller.cancelConfirmation(); void (state.phase === 'unknown' ? controller.verify() : controller.refreshClaim()); } };
+      // The screen follows the server live, so there is no refresh button; one is left only to recover from a failed or unknown command or a failed read.
+      : !claim || ['denied', 'failed-known', 'unknown'].includes(state.phase)
+        ? { label: state.phase === 'unknown' ? 'Kiểm tra lại' : 'Thử lại', disabled: !claimId || busy, onPress: () => { if (!claimId) return; if (state.phase === 'denied' || state.phase === 'failed-known') controller.cancelConfirmation(); void (state.phase === 'unknown' ? controller.verify() : controller.refreshClaim()); } }
+        : undefined;
 
   return <TaskScreenShell title="Chi tiết bảo hành" onBack={() => { controller.cancelConfirmation(); backFromFlow(navigation); }} primary={action} secondary={secondary}>
     {!claim ? state.access === 'revoked' || state.access === 'not-assigned' ? <ReadOnlyNotice>Yêu cầu này không còn được phân công cho tài khoản hiện tại.</ReadOnlyNotice> : state.claim.status === 'error' ? <ReadOnlyNotice>Chưa xác minh được phân công. Hãy quay lại hộp thư và mở lại yêu cầu.</ReadOnlyNotice> : <ReadOnlyNotice>Đang xác minh yêu cầu được phân công…</ReadOnlyNotice> : <>

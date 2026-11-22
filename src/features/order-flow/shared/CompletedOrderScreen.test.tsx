@@ -4,12 +4,15 @@ import { act, create } from 'react-test-renderer';
 import type { OrderSessionSnapshot } from '../domain/order-session.types';
 import { createOrderSessionSnapshot, readyResource } from '../domain/order-session.types';
 import CompletedOrderScreen from './CompletedOrderScreen';
+import { technicianWarrantyApi } from '../../../api/technician-warranty.api';
 
 let mockSnapshot: OrderSessionSnapshot;
 const mockNavigate: jest.Mock = jest.fn();
 const mockGoBack: jest.Mock = jest.fn();
 const mockRefresh: jest.Mock = jest.fn(async () => {});
 const mockClipboardSetString: jest.Mock = jest.fn(async () => {});
+jest.mock('../../../api/technician-warranty.api', () => ({ technicianWarrantyApi: { listMine: jest.fn() } }));
+const mockListMine = technicianWarrantyApi.listMine as jest.Mock;
 
 jest.mock('expo-clipboard', () => ({ setStringAsync: (value: string) => mockClipboardSetString(value) }));
 
@@ -118,4 +121,31 @@ it('non-completed order keeps an honest shell and back never writes', async () =
   expect(JSON.stringify(renderer.toJSON())).toContain('máy chủ xác minh');
   expect(mockRefresh).not.toHaveBeenCalled();
   await act(async () => renderer.unmount());
+});
+
+describe('technician warranty link from the order', () => {
+  const press = async () => {
+    mockSnapshot = snapshotFor('technician', 'COMPLETED');
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => { renderer = create(<CompletedOrderScreen role="technician" />); });
+    await act(async () => { renderer.root.findByProps({ testID: 'task-link-TechnicianWarrantyInbox' }).props.onPress(); });
+    await act(async () => renderer.unmount());
+  };
+  const claim = (id: string, serviceOrderId: string, status: string) => ({ id, serviceOrderId, status });
+
+  it("opens this order's open claim instead of the list", async () => {
+    mockListMine.mockResolvedValue({ data: [claim('c-other', 'order-9', 'submitted'), claim('c-old', 'order-1', 'resolved'), claim('c-open', 'order-1', 'in_progress')] });
+    await press();
+    expect(mockNavigate).toHaveBeenCalledWith('TechnicianWarrantyTask', { claimId: 'c-open' });
+  });
+
+  it('falls back to the warranty list when the order has no claim or the read fails', async () => {
+    mockListMine.mockResolvedValue({ data: [claim('c-other', 'order-9', 'submitted')] });
+    await press();
+    expect(mockNavigate).toHaveBeenCalledWith('TechnicianWarrantyInbox');
+    mockNavigate.mockClear();
+    mockListMine.mockRejectedValue(new Error('offline'));
+    await press();
+    expect(mockNavigate).toHaveBeenCalledWith('TechnicianWarrantyInbox');
+  });
 });

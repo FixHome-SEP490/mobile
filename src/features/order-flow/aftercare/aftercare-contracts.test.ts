@@ -53,3 +53,12 @@ it('review and claim readmodels reject foreign IDs and drop private backend/staf
 it('unknown warranty operation cannot fall through into proposal DTO validation', () => {
   expect(() => warrantyCommandPayload('staff-approve' as never, { result: 'covered_workmanship', findings: 'Kiểm tra lỗi thực tế' }, [])).toThrow();
 });
+it('keeps the approved inspection result and outcome a customer may read, and ignores odd shapes', () => {
+  const row = { id: order, serviceOrderId: order, warrantyCoverageId: coverage, status: 'resolved', description: 'Lỗi vẫn còn xuất hiện', evidenceRefs: null, submittedAfterExpiry: false, customerResponse: null, awaitingPrompt: null, resolutionNotes: null, submittedAt: '2026-11-22T00:07:00.000Z', resolvedAt: '2026-11-22T03:00:00.000Z', technician: null };
+  const withResult = normalizeClaim({ ...row, outcomeCode: 'fixed', refundAmount: 0, inspection: { result: 'covered_part', reasonCode: null, findings: 'Van xả hỏng', evidenceRefs: ['https://cdn.test/a.jpg', 'javascript:1'], reServiceNotes: 'Đã thay van', reServiceEvidenceRefs: ['https://cdn.test/b.jpg'], completedAt: '2026-11-22T02:00:00.000Z', proposedResult: 'PRIVATE' } }, order);
+  expect(withResult.inspection).toMatchObject({ result: 'covered_part', findings: 'Van xả hỏng', evidenceRefs: null, reServiceNotes: 'Đã thay van', reServiceEvidenceRefs: ['https://cdn.test/b.jpg'] });
+  expect(withResult.outcomeCode).toBe('fixed');
+  expect(JSON.stringify(withResult)).not.toContain('PRIVATE');
+  expect(normalizeClaim(row, order)).not.toHaveProperty('inspection');
+  expect(normalizeClaim({ ...row, inspection: 'oops', outcomeCode: 'x' }, order).inspection).toBeNull();
+});

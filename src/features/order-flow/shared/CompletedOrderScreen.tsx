@@ -5,6 +5,7 @@ import { paymentStatusLabel } from './payment-status-label';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder, ordersApi } from '../../../api/orders.api';
+import { technicianWarrantyApi } from '../../../api/technician-warranty.api';
 import { warrantyClaimDisplayMeta } from '../../../screens/customer/customer-warranty';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { goHome } from '../../../components/BackButton';
@@ -58,8 +59,17 @@ export default function CompletedOrderScreen({ role }: { role: 'customer' | 'tec
   const invoice = snapshot?.resources.invoice.status === 'ready' ? snapshot.resources.invoice.data : null;
   const orderCode = order && typeof order.code === 'string' && order.code.trim().length > 0 ? order.code : null;
   const canCopyCode = role === 'customer' && !!orderCode;
-  const open = (screen: string) => navigation.navigate(screen as never);
   const serviceOrderId = order?.id;
+  // From an order, warranty work opens this order's own claim (the open one, else the latest); the list is only the fallback.
+  const openWarranty = async () => {
+    try {
+      const mine = (await technicianWarrantyApi.listMine({ pageSize: 100 })).data.filter(c => c.serviceOrderId === serviceOrderId);
+      const claim = mine.find(c => !['resolved', 'rejected'].includes(String(c.status).toLowerCase())) ?? mine[0];
+      if (claim) return navigation.navigate('TechnicianWarrantyTask', { claimId: claim.id });
+    } catch { /* fall back to the list below */ }
+    navigation.navigate('TechnicianWarrantyInbox');
+  };
+  const open = (screen: string) => screen === 'TechnicianWarrantyInbox' ? void openWarranty() : navigation.navigate(screen as never);
   // The customer sees at a glance that a warranty request needs an answer, without opening it.
   useEffect(() => {
     if (role !== 'customer' || !serviceOrderId) return;
