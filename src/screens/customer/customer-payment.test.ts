@@ -17,6 +17,7 @@ const invoice: InvoiceView = {
   issuedText: null,
   paidText: null,
   shipping: null,
+  voucher: null,
   items: [],
 };
 const order = (overrides: Record<string, unknown> = {}) => ({
