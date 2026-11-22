@@ -40,6 +40,10 @@ export default function InvoiceDetailScreen() {
       <Section title="Hóa đơn">
         <DetailRow label="Mã hóa đơn" value={`#${state.invoice.id.slice(0, 8).toUpperCase()}`} />
         <DetailRow label="Tổng tiền do máy chủ trả về" value={money(state.total)} />
+        {state.invoice.voucherDiscount !== undefined && state.invoice.amountDue !== undefined && <>
+          <DetailRow label="Giảm voucher" value={`-${formatVnd(state.invoice.voucherDiscount)}`} />
+          <DetailRow label={String(state.paymentStatus).toUpperCase() === 'PAID' ? 'Thực trả' : 'Cần trả'} value={formatVnd(state.invoice.amountDue)} />
+        </>}
         <DetailRow label="Trạng thái thanh toán" value={paymentStatusLabel(state.paymentStatus)} />
       </Section>
       {state.invoice.items === undefined && <Text style={{ color: colors.textSecondary, paddingVertical: spacing.md }}>Hóa đơn cũ chưa có danh sách dòng hàng.</Text>}

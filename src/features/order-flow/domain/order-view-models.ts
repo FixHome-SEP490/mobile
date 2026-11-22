@@ -38,6 +38,14 @@ export function normalizeSessionOrder(payload: unknown, orderId: string): Techni
   }
   return { ...row, status } as unknown as TechnicianOrderItem;
 }
+/** Server voucher lines; absent unless both are whole, non-negative VND and the discount is positive. */
+export function invoiceVoucher(row: Record<string, unknown>): { voucherDiscount?: number; amountDue?: number } {
+  const discount = row.voucherDiscount;
+  const due = row.amountDue;
+  if (typeof discount !== 'number' || !Number.isSafeInteger(discount) || discount <= 0) return {};
+  if (typeof due !== 'number' || !Number.isSafeInteger(due) || due < 0) return {};
+  return { voucherDiscount: discount, amountDue: due };
+}
 export function normalizeOrderResource<K extends OrderResourceKind>(kind: K, payload: unknown, orderId: string, role: OrderRole): OrderResourceData[K] {
   if (kind === 'invoice' || kind === 'cash') {
     if (payload === null) return null as OrderResourceData[K];
@@ -54,6 +62,7 @@ export function normalizeOrderResource<K extends OrderResourceKind>(kind: K, pay
     return (kind === 'invoice' ? {
       id: row.id, serviceOrderId: orderId, paymentStatus: status, grandTotal: amount,
       laborTotal: row.laborTotal, partsTotal: row.partsTotal, issuedAt: row.issuedAt, paidAt: row.paidAt, items: invoiceItems(row.items),
+      ...invoiceVoucher(row),
     } : { id: row.id, serviceOrderId: orderId, status, declaredAmount: amount, confirmedAmount: row.confirmedAmount,
       ...(row.declaredByTechnicianId === undefined ? {} : { declaredByTechnicianId: row.declaredByTechnicianId }),
       ...(row.declaredAt === undefined ? {} : { declaredAt: row.declaredAt }),
