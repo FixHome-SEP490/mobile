@@ -59,6 +59,7 @@ import {
 } from './customer-booking-manage';
 import { formatVnd } from '../../utils/format';
 import { activityCardWhen } from './activity-card-date';
+import BookingDraftBanner from '../../components/customer/BookingDraftBanner';
 import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
 
 export default function CustomerBookingsScreen() {
@@ -655,6 +656,7 @@ export default function CustomerBookingsScreen() {
 
       </View>
 
+      <View style={styles.draftBannerSlot}><BookingDraftBanner /></View>
       <View style={styles.activityControls}>
         <View style={styles.searchBar}>
           <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
@@ -866,6 +868,7 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
   kindEmpty: { alignItems: 'center', gap: 8, paddingVertical: 32, paddingHorizontal: 24 },
   sectionTitle: { fontSize: 14, fontWeight: '800', color: colors.text },
   sectionCount: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
+  draftBannerSlot: { marginHorizontal: 16, marginTop: 12 },
   activityControls: {
     paddingHorizontal: 16,
     paddingTop: 8,

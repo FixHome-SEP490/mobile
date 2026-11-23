@@ -14,6 +14,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAuthStore } from '../../store';
 import { UserRole } from '../../types';
+import BookingDraftBanner from '../../components/customer/BookingDraftBanner';
 import { usersApi, AddressData } from '../../api/users.api';
 import { bookingsApi } from '../../api/bookings.api';
 import { ordersApi } from '../../api/orders.api';
@@ -316,6 +317,9 @@ export default function CustomerHomeScreen() {
             </View>
           </TouchableOpacity>
         )}
+
+        {/* The saved, unfinished booking (web BookingDraftBanner); shows only when a draft exists. */}
+        <View style={styles.draftBannerSlot}><BookingDraftBanner /></View>
 
         {/* 5. Service section heading */}
         <View style={styles.sectionHeader}>
@@ -753,6 +757,7 @@ const getStyles = (
   },
 
   // 4. Resume card (real Booking/Order data only)
+  draftBannerSlot: { marginHorizontal: 12, marginTop: 12 },
   resumeCard: {
     flexDirection: 'row',
     alignItems: 'center',

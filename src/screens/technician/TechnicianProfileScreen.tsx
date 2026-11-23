@@ -55,6 +55,8 @@ import {
   type TechnicianServiceOffering,
 } from '../../api/technician-profile.api';
 import { technicianVerificationApi, type MyVerification } from '../../api/technician-verification.api';
+import SkillEvidenceRow from './SkillEvidenceRow';
+import { SKILL_STATUS_LABEL } from './skill-evidence';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import CategoryPills from '../../components/CategoryPills';
 import { useAppTheme } from '../../constants/theme';
@@ -74,9 +76,9 @@ import PillText from '../../components/PillText';
 const TAB_BAR_CLEARANCE = 96;
 
 const VERIFICATION_VIEW: Record<string, StatusView> = {
-  pending: { label: 'Chờ duyệt', tone: 'warning', icon: 'Clock' },
-  verified: { label: 'Đã duyệt', tone: 'success', icon: 'CheckCircle2' },
-  rejected: { label: 'Bị từ chối', tone: 'danger', icon: 'XCircle' },
+  pending: { label: SKILL_STATUS_LABEL.pending, tone: 'warning', icon: 'Clock' },
+  verified: { label: SKILL_STATUS_LABEL.verified, tone: 'success', icon: 'CheckCircle2' },
+  rejected: { label: SKILL_STATUS_LABEL.rejected, tone: 'danger', icon: 'XCircle' },
 };
 
 // Xác minh danh tính (KYC) ở Hồ sơ chỉ đọc trạng thái đã nộp từ server:
@@ -741,6 +743,18 @@ export default function TechnicianProfileScreen() {
                         />
                       </View>
                     </View>
+                  )}
+                  {offering?.isActive && offering.verificationStatus !== 'verified' && (
+                    <SkillEvidenceRow
+                      serviceId={service.id}
+                      serviceName={service.name}
+                      status={offering.verificationStatus}
+                      onChanged={() => {
+                        void technicianProfileApi.getMyServices()
+                          .then((list) => setMyOfferings(Object.fromEntries(list.map((o) => [o.serviceId, o]))))
+                          .catch(() => undefined);
+                      }}
+                    />
                   )}
                   {dirty && (
                     <TouchableOpacity

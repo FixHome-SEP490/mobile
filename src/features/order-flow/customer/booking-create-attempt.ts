@@ -1,7 +1,7 @@
 import type { BookingItem, CreateBookingDto } from '../../../api/bookings.api';
 import type { EntryAttemptJournal } from '../runtime/entry-attempt-journal';
 import { isPendingVisitLimitError, pendingVisitLimitMessage } from '../../../screens/customer/customer-booking-create';
-export interface BookingAttemptResult { phase: 'idle' | 'submitting' | 'verifying' | 'unknown' | 'denied' | 'resolved'; bookingId?: string; provenUnsent?: true; limitReached?: string }
+export interface BookingAttemptResult { phase: 'idle' | 'submitting' | 'verifying' | 'unknown' | 'denied' | 'resolved'; bookingId?: string; provenUnsent?: true; limitReached?: string; draftConflict?: string }
 export function createBookingAttemptController(deps: {
   journal: EntryAttemptJournal;
   api: { createBooking: (dto: CreateBookingDto) => Promise<Pick<BookingItem, 'id' | 'customerId'>>; getBooking: (id: string) => Promise<Pick<BookingItem, 'id' | 'customerId'>> };
@@ -41,6 +41,11 @@ export function createBookingAttemptController(deps: {
         // The quota refusal happens before anything is saved: close the marker so new bookings are not blocked.
         if (dispatched && isPendingVisitLimitError(error)) {
           try { await deps.journal.resolve(owner, intentId); return { phase: 'denied', provenUnsent: true, limitReached: pendingVisitLimitMessage(error) }; } catch { /* keep unknown */ }
+        }
+        // Sent through a draft and refused for a stale, expired or used draft: nothing was written, so the marker is closed.
+        const draftConflict = (error as { draftConflict?: unknown } | null)?.draftConflict;
+        if (dispatched && typeof draftConflict === 'string') {
+          try { await deps.journal.resolve(owner, intentId); return { phase: 'denied', provenUnsent: true, draftConflict }; } catch { /* keep unknown */ }
         }
         return { phase: dispatched ? 'unknown' : 'denied' };
       }
