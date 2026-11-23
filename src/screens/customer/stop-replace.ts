@@ -2,13 +2,15 @@
 // sheet so it is tested on its own. It is only a request: the server holds completion and a manager decides.
 
 import type { MySupportCase, SupportCaseStatus } from '../../api/support-cases.api';
+import { isOrderWorkStopped } from '../../api/order-work-stopped';
 
 export const STOP_REASON_MIN = 10;
 export const STOP_REASON_MAX = 2000;
 
 /** Only while the repair is under way and the technician has not yet asked to hand over. */
-export function canRequestStopReplace(order: { status?: string | null; completionRequestedAt?: string | null } | null | undefined): boolean {
-  return String(order?.status ?? '').toUpperCase() === 'UNDER_REPAIR' && !order?.completionRequestedAt;
+export function canRequestStopReplace(order: { status?: string | null; completionRequestedAt?: string | null; workStopped?: boolean; operationalDisposition?: string | null } | null | undefined): boolean {
+  // Work that is already stopped has nothing left to stop or replace.
+  return String(order?.status ?? '').toUpperCase() === 'UNDER_REPAIR' && !order?.completionRequestedAt && !isOrderWorkStopped(order);
 }
 
 /** The customer's own request for this order, newest first as the server lists them. */

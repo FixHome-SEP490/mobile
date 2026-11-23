@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-23 21:23 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
+> Cập nhật lần cuối: 2026-11-23 21:34 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -343,6 +343,13 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - "Không sửa được" của máy trong lượt: ghi chú tối đa 500 ký tự (trước 1000), mỗi linh kiện đã nhận phải chọn Đã lắp hay Chưa lắp (trước mặc định Chưa lắp), tối đa 3 ảnh, nội dung chưa có phản hồi được giữ và nút đổi thành "Kiểm tra kết quả" (đọc lại đơn: đã huỷ nghĩa là đã ghi nhận, nếu chưa thì gửi lại đúng báo cáo). Chưa chặn theo báo giá đã duyệt như web, backend vẫn từ chối bằng 409.
 - CHƯA KIỂM CHỨNG trên máy thật hay backend thật: chụp ảnh, gọi `tel:`, các route solo và dừng cả lượt.
 
+### Đối chiếu web 23/11/2026: khách sau khi thợ dừng việc (nhánh `feat/web-parity-customer-continuation`)
+
+- Đơn mang `workStopped`, `assignmentReleased`, `operationalDisposition: 'STOPPED'`, `oldObligationsReviewRequired` và `failedWorkFinance` (đọc chặt ở `api/order-work-stopped.ts`; sai dạng thì `normalizeOrder` báo lỗi chứ không đoán). Đơn giữ nguyên trạng thái EN_ROUTE hoặc UNDER_REPAIR để xem lịch sử, nên `serviceOrderDisplayView` kiểm `workStopped` trước và hiện "Đã dừng công việc" ở danh sách Hoạt động, Thông tin đơn và thân bước trạng thái.
+- `GET /service-orders/:id/customer-continuation` (`api/customer-continuation.api.ts`, đọc chặt như web `readResult`: biên nhận phải khớp đơn, yêu cầu đặt lịch và lượt, đường dẫn nháp do server gửi chỉ được kiểm, không dùng để mở). `CustomerContinuationCard` hiện ở `StatusStepScreen` (C04, C06 và bước nhận đơn) khi đơn EN_ROUTE hoặc UNDER_REPAIR và biên nhận "eligible": "Đặt lại dịch vụ" mở `CustomerInterruptionRebook {bookingId}` (màn có sẵn), "Đặt lịch mới" mở `CustomerBookingCreate`. Lỗi đọc hiện "Chưa kiểm tra được quyền đặt lịch sau gián đoạn…" kèm Thử lại.
+- Đơn đã dừng: bỏ nút "Gọi kỹ thuật viên" và khối giao linh kiện ở thân bước trạng thái, bỏ mục "Yêu cầu dừng sửa / đổi thợ" (`canRequestStopReplace`), hiện `StoppedWorkFinanceNote` ("Báo giá cũ chỉ lưu để xem lịch sử…", số tiền phải trả và hoàn tiền "Chưa xác định") ở thân bước trạng thái và Thông tin đơn của khách. Không gọi `GET /service-orders/:id/stopped-work-finance` vì route đó chỉ dành cho quản lý; khách đọc phần của mình từ `failedWorkFinance` trong đơn.
+- Chưa làm: ghép thẻ vào `VisitCustomerPanel` (mỗi máy của lượt đã mở bằng đơn riêng nên thân bước trạng thái của máy đó hiện thẻ) và chặn thanh toán theo `oldFinanceReview` ở màn Thanh toán (đơn dừng không có yêu cầu bàn giao nên không vào màn đó). CHƯA KIỂM CHỨNG với backend thật.
+
 ## 4. Kiến trúc và thư mục chính
 
 - `src/features/order-flow/`: domain/runtime và shared/navigation cho redesign, một provider/reader mỗi phiên đơn. M3 có controller và task screens di chuyển/check-in/face/BEFORE, bằng chứng đúng ID/chủ ảnh và tracker chỉ bật tại màn di chuyển. M4 có controller/hook báo giá, editor và quyết định hai vai trò. M5 dùng controller/hook phát sinh và linh kiện, journal lưu ID trả về thật và kết quả sử dụng cần đối soát; không lưu QR hoặc payload nhạy cảm. Recovery ưu tiên intent chưa rõ, chỉ GET đúng phạm vi. Booking/lời mời phân biệt chắc chắn chưa gửi với POST chưa rõ. Preview vẫn chưa thay route production.
@@ -438,6 +445,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-23 21:34 (UTC+7) | Hgnv11 | feat/web-parity-customer-continuation | Đơn bị thợ dừng hiện Đã dừng công việc, thẻ Đặt lại dịch vụ hoặc Đặt lịch mới theo customer-continuation, khối tài chính chưa xác định và bỏ nút gọi, đổi thợ
 - 2026-11-23 21:23 (UTC+7) | Hgnv11 | feat/web-parity-technician-stop | Thợ có màn Báo cáo vấn đề sửa chữa: dừng một máy hoặc cả lượt khi khách vắng, hoặc nhờ quản lý hỗ trợ; form Không sửa được đòi chọn linh kiện và cho đính ảnh
 - 2026-11-23 21:20 (UTC+7) | Hgnv11 | feat/web-parity-customer-small | Chọn thợ hiện lý do rỗng như web, báo lỗi giới hạn 2 lượt chờ thay vì khoá đặt mới, thêm biểu tượng cho thông báo báo giá, phát sinh, huỷ đơn
 - 2026-11-22 16:18 (UTC+7) | Hgnv11 | dev | Màn Linh kiện cần trả của thợ hiện linh kiện hỏng cần nộp của bảo hành
@@ -477,7 +485,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-11-09 12:24 (UTC+7) | Hgnv11 | dev | Ảnh mặt check-in: thử thách quay trái, phải, ngẩng lên hoặc cúi xuống (bỏ mỉm cười); mỗi ảnh có nút "Chụp lại ảnh 1/2" riêng, chạm ảnh nhỏ bước 1 trong camera để chụp lại bước 1
 - 2026-11-09 11:37 (UTC+7) | Hgnv11 | dev | Ảnh mặt check-in có thử thách: mở camera trước trong app một lần (`FaceLivenessCamera`), hướng dẫn hiện ngay trên khung hình (bước 1 nhìn thẳng, bước 2 quay đầu hoặc mỉm cười), chụp liền hai ảnh rồi gửi; server không cấp thử thách thì vẫn dùng camera hệ thống một ảnh
 - 2026-11-09 05:37 (UTC+7) | Hgnv11 | dev | Màn chụp ảnh mặt trước sửa chữa có nút "Bỏ qua chụp ảnh mặt (chỉ bản dev)" chỉ hiện khi `__DEV__`: gửi ảnh mẫu qua đường check-in cũ một ảnh, nên backend phải để `FACE_CHECKIN_ENFORCE=false`; bản phát hành không có nút này
-- 2026-11-09 05:03 (UTC+7) | Hgnv11 | dev | Ảnh mặt check-in có liveness nhẹ: sau ảnh nhìn thẳng, app xin thử thách từ server (quay đầu hoặc mỉm cười), chụp ảnh thứ hai rồi gửi cả hai tới checkin-face; lý do từ chối của server hiện cho thợ; server không bật thì vẫn gửi một ảnh
 
 
 ### Lịch sử giữ lại khi tích hợp
