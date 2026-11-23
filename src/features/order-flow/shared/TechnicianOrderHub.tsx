@@ -1,10 +1,9 @@
 import React from 'react';
-import TechnicianIssueReport from '../technician/TechnicianIssueReport';
 import { canReportTechnicianIssue } from '../technician/technician-report';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import {
-  Camera, ChevronRight, Clock, FileText, HandCoins, History, Info, NotebookPen, Package, ReceiptText, Wrench,
+  AlertTriangle, Camera, ChevronRight, Clock, FileText, HandCoins, History, Info, NotebookPen, Package, ReceiptText, Wrench,
   type LucideIcon,
 } from 'lucide-react-native';
 import { isHistoricalOrder } from '../../../api/orders.api';
@@ -16,7 +15,7 @@ import { useReleasableOrders } from '../technician/useReleasableOrders';
 import PillText from '../../../components/PillText';
 
 type HubScreen = 'PartsLifecycle' | 'OrderInformation' | 'PersonalOrderNotes' | 'OrderProgressHistory'
-  | 'AfterEvidence' | 'CompletionRequest' | 'CashDeclaration' | 'ExtraProposal' | 'DelayReport';
+  | 'AfterEvidence' | 'CompletionRequest' | 'CashDeclaration' | 'ExtraProposal' | 'DelayReport' | 'CannotContinue';
 
 const MANAGE: { screen: HubScreen; label: string; Icon: LucideIcon }[] = [
   { screen: 'PartsLifecycle', label: 'Linh kiện', Icon: Package },
@@ -27,6 +26,9 @@ const MANAGE: { screen: HubScreen; label: string; Icon: LucideIcon }[] = [
 
 /** Shown only while Backend lists an upcoming order the technician can report late (current job overruns). */
 const NEXT_ORDERS: { screen: HubScreen; label: string; Icon: LucideIcon } = { screen: 'DelayReport', label: 'Báo trễ đơn kế tiếp', Icon: Clock };
+
+/** After check-in, before the handover: stop the work on this device or ask the manager for help. A visit shows it in its devices panel. */
+const REPORT: { screen: HubScreen; label: string; Icon: LucideIcon } = { screen: 'CannotContinue', label: 'Báo cáo vấn đề sửa chữa', Icon: AlertTriangle };
 
 /** Only valid while the order is UNDER_REPAIR (backend rejects them earlier). */
 const REPAIR: { screen: HubScreen; label: string; Icon: LucideIcon }[] = [
@@ -114,7 +116,7 @@ export default function TechnicianOrderHub() {
         <View style={styles.titleRow}><Wrench size={16} strokeWidth={1.75} color={colors.textSecondary} /><Text accessibilityRole="header" style={styles.title}>Bước sửa chữa</Text></View>
         <View style={styles.card}>{render(manage(REPAIR))}</View>
       </>}
-      {!revoked && order && canReportTechnicianIssue(order) && <TechnicianIssueReport orderId={order.id} />}
+      {!revoked && order && !order.visitGroupId && canReportTechnicianIssue(order) && <View style={styles.card}>{render([REPORT])}</View>}
       <Text accessibilityRole="header" style={styles.title}>Quản lý đơn</Text>
       <View style={styles.card}>{render(nextOrders > 0 ? [...MANAGE, NEXT_ORDERS] : MANAGE)}</View>
     </View>

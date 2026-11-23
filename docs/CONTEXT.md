@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-23 21:20 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/web-parity-customer-small
+> Cập nhật lần cuối: 2026-11-23 21:23 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -334,6 +334,15 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - Thông báo: `utils/notification-kind.ts` cho báo giá, chi phí phát sinh, huỷ đơn, hoàn tất, thợ đang đến/đã đến, mời mới, hết người nhận, thợ khai trả linh kiện một biểu tượng và tone riêng (cả danh sách khách lẫn thợ); danh sách khách bỏ mã màu cứng.
 - CHƯA KIỂM CHỨNG trên máy thật hay backend thật: các bước hiện lý do rỗng, banner giới hạn và biểu tượng thông báo mới.
 
+### Đối chiếu web 23/11/2026: thợ báo vấn đề, không thể tiếp tục (nhánh `feat/web-parity-technician-stop`)
+
+- Màn mới `CannotContinue` ("Báo cáo vấn đề sửa chữa", `CannotContinueScreen`, như `CannotContinueDialog` của web) thay nút sheet `TechnicianIssueReport` ở `TechnicianOrderHub` (đơn lẻ) và có dòng riêng trong `VisitTechnicianPanel` (đơn thuộc lượt, cũng phủ các màn không có hub). Chỉ mở sau check-in khi đơn EN_ROUTE hoặc UNDER_REPAIR và chưa yêu cầu bàn giao (`canReportTechnicianIssue`).
+- Hai cách xử lý: "Không thể tiếp tục máy này" gọi `POST /service-orders/:id/cannot-continue` (dừng thật, nhả phân công) và "Nhờ quản lý hỗ trợ, vẫn tiếp tục" vẫn gọi `POST /support/cases/technician-report` (REPORT_ONLY). Lý do và nhãn theo web; "Khách đề nghị hủy" chỉ báo quản lý, "Không liên lạc được khách" chỉ dừng.
+- Khách vắng hoặc không liên lạc được: đơn thuộc lượt dừng cả lượt (`POST /visit-groups/:gid/cannot-continue`, `selectedOrderId`); đơn lẻ dùng route solo `GET /service-orders/:id/contact-readiness` và `POST .../contact-attempt` (web chưa dùng, backend trả 409 `SOLO_CONTACT_NOT_READY` nếu chưa đủ). Cần check-in, từ 2 cuộc gọi cách 5 phút, 1 thông báo trong ứng dụng và 10 phút sau cuộc gọi đầu; màn hỏi lại mỗi 15 giây và có nút Gọi/Gửi thông báo/Kiểm tra. Danh sách máy trong lượt lấy từ `getCheckout`: máy đang mở hiện "Dự kiến dừng", còn lại "Giữ nguyên kết quả" (chỉ là gợi ý, backend quyết).
+- `api/cannot-continue.api.ts` giữ `commandId` theo đơn hoặc lượt trong bộ nhớ: gửi lại đúng nội dung dùng lại id, nội dung khác bị khoá khi chưa biết kết quả; 400/422 mở lại form, không có phản hồi/408/5xx là "chưa chắc", 4xx khác khoá. Ảnh chứng cứ tối đa 3, chỉ chụp khi đơn UNDER_REPAIR (backend từ chối ảnh ADDITIONAL lúc EN_ROUTE); tải lên bằng `uploadEvidenceAdditional`.
+- "Không sửa được" của máy trong lượt: ghi chú tối đa 500 ký tự (trước 1000), mỗi linh kiện đã nhận phải chọn Đã lắp hay Chưa lắp (trước mặc định Chưa lắp), tối đa 3 ảnh, nội dung chưa có phản hồi được giữ và nút đổi thành "Kiểm tra kết quả" (đọc lại đơn: đã huỷ nghĩa là đã ghi nhận, nếu chưa thì gửi lại đúng báo cáo). Chưa chặn theo báo giá đã duyệt như web, backend vẫn từ chối bằng 409.
+- CHƯA KIỂM CHỨNG trên máy thật hay backend thật: chụp ảnh, gọi `tel:`, các route solo và dừng cả lượt.
+
 ## 4. Kiến trúc và thư mục chính
 
 - `src/features/order-flow/`: domain/runtime và shared/navigation cho redesign, một provider/reader mỗi phiên đơn. M3 có controller và task screens di chuyển/check-in/face/BEFORE, bằng chứng đúng ID/chủ ảnh và tracker chỉ bật tại màn di chuyển. M4 có controller/hook báo giá, editor và quyết định hai vai trò. M5 dùng controller/hook phát sinh và linh kiện, journal lưu ID trả về thật và kết quả sử dụng cần đối soát; không lưu QR hoặc payload nhạy cảm. Recovery ưu tiên intent chưa rõ, chỉ GET đúng phạm vi. Booking/lời mời phân biệt chắc chắn chưa gửi với POST chưa rõ. Preview vẫn chưa thay route production.
@@ -429,6 +438,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-23 21:23 (UTC+7) | Hgnv11 | feat/web-parity-technician-stop | Thợ có màn Báo cáo vấn đề sửa chữa: dừng một máy hoặc cả lượt khi khách vắng, hoặc nhờ quản lý hỗ trợ; form Không sửa được đòi chọn linh kiện và cho đính ảnh
 - 2026-11-23 21:20 (UTC+7) | Hgnv11 | feat/web-parity-customer-small | Chọn thợ hiện lý do rỗng như web, báo lỗi giới hạn 2 lượt chờ thay vì khoá đặt mới, thêm biểu tượng cho thông báo báo giá, phát sinh, huỷ đơn
 - 2026-11-22 16:18 (UTC+7) | Hgnv11 | dev | Màn Linh kiện cần trả của thợ hiện linh kiện hỏng cần nộp của bảo hành
 - 2026-11-22 13:10 (UTC+7) | ToanAltF4 | fix/final-2211-mobile2 | Màn Hoá đơn và Đơn hoàn thành (order-flow) hiện Giảm voucher và Thực trả từ voucherDiscount/amountDue
@@ -468,7 +478,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-11-09 11:37 (UTC+7) | Hgnv11 | dev | Ảnh mặt check-in có thử thách: mở camera trước trong app một lần (`FaceLivenessCamera`), hướng dẫn hiện ngay trên khung hình (bước 1 nhìn thẳng, bước 2 quay đầu hoặc mỉm cười), chụp liền hai ảnh rồi gửi; server không cấp thử thách thì vẫn dùng camera hệ thống một ảnh
 - 2026-11-09 05:37 (UTC+7) | Hgnv11 | dev | Màn chụp ảnh mặt trước sửa chữa có nút "Bỏ qua chụp ảnh mặt (chỉ bản dev)" chỉ hiện khi `__DEV__`: gửi ảnh mẫu qua đường check-in cũ một ảnh, nên backend phải để `FACE_CHECKIN_ENFORCE=false`; bản phát hành không có nút này
 - 2026-11-09 05:03 (UTC+7) | Hgnv11 | dev | Ảnh mặt check-in có liveness nhẹ: sau ảnh nhìn thẳng, app xin thử thách từ server (quay đầu hoặc mỉm cười), chụp ảnh thứ hai rồi gửi cả hai tới checkin-face; lý do từ chối của server hiện cho thợ; server không bật thì vẫn gửi một ảnh
-- 2026-11-09 04:48 (UTC+7) | Hgnv11 | dev | Sửa lỗi lưu lịch làm việc thợ bị backend từ chối (app gửi lại id/technicianId/createdAt/updatedAt; nay chỉ gửi dayOfWeek, startTime, endTime); làm lại giao diện trang Lịch làm việc; chọn nhanh dịch vụ và cấp độ ở bước 3 đăng ký; banner Home theo reviewStage và đọc lại realtime
 
 
 ### Lịch sử giữ lại khi tích hợp
