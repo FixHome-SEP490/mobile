@@ -5,13 +5,13 @@ export type TechnicianReportReasonCode =
   | 'manufacturer_warranty_or_workshop' | 'customer_absent' | 'customer_cancelled' | 'dispute_or_other';
 
 export const technicianReportReasons: { code: TechnicianReportReasonCode; label: string }[] = [
-  { code: 'skill_gap', label: 'Không đủ khả năng sửa' },
+  { code: 'skill_gap', label: 'Thiếu kỹ năng hoặc thao tác chưa đúng' },
   { code: 'device_too_old', label: 'Thiết bị đã quá cũ' },
   { code: 'severe_damage', label: 'Thiết bị hư hỏng nặng' },
   { code: 'no_compatible_part', label: 'Không có linh kiện phù hợp' },
   { code: 'manufacturer_warranty_or_workshop', label: 'Cần trung tâm hoặc bảo hành hãng' },
   { code: 'customer_absent', label: 'Khách không có mặt' },
-  { code: 'customer_cancelled', label: 'Khách đã hủy' },
+  { code: 'customer_cancelled', label: 'Khách đề nghị hủy · chỉ báo quản lý' },
   { code: 'dispute_or_other', label: 'Tranh chấp hoặc tình huống khác' },
 ];
 

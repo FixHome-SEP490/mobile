@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { visitGrandTotal } from '../../../screens/customer/customer-visit';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ChevronUp, Clock, HandCoins, Layers, LogOut, Wallet, Wrench } from 'lucide-react-native';
 import { isHistoricalOrder, ordersApi } from '../../../api/orders.api';
@@ -16,6 +16,13 @@ import { PanelRow } from '../shared/VisitPanelRow';
 import { CASH_VOUCHER_UNCHECKED } from './technician-cash-controller';
 import { useCashIntent } from '../customer/useCashIntent';
 import { confirmAction } from '../../../utils/confirm-action';
+import { canReportTechnicianIssue } from './technician-report';
+import { captureCameraPhoto } from './camera-capture';
+import type { CameraOrderAsset } from './arrival-proof-controller';
+import {
+  REPAIR_FAILED_CHANGED, REPAIR_FAILED_LOCKED, REPAIR_FAILED_NOTE_MAX, REPAIR_FAILED_PHOTO_MAX, REPAIR_FAILED_UNKNOWN,
+  repairFailedBody, repairFailedProblem, type PartOutcome,
+} from './repair-failed-form';
 import {
   canDeclareVisitCash,
   nextOpenVisitDevice,
@@ -255,6 +262,9 @@ function VisitPanelBody({ section }: { section: 'devices' | 'cash' }) {
   if (next) {
     rows.push(<PanelRow key="next" testID="visit-next-device" Icon={ArrowRight} label={`Xử lý tiếp: Máy ${next.sequence}`} chevron onPress={() => goDevice(next.serviceOrderId!)} />);
   }
+  if (live && canReportTechnicianIssue(live)) {
+    rows.push(<PanelRow key="report" testID="visit-cannot-continue" Icon={AlertTriangle} label="Báo cáo vấn đề sửa chữa" disabled={busy} chevron onPress={() => navigation.navigate('CannotContinue')} />);
+  }
   if (live && repairFailedAllowed(live)) {
     rows.push(<PanelRow key="failed" testID="visit-repair-failed" Icon={AlertTriangle} label="Không sửa được" disabled={busy} chevron onPress={() => setFailedOpen(true)} />);
   }
@@ -291,7 +301,7 @@ function VisitPanelBody({ section }: { section: 'devices' | 'cash' }) {
           ? snapshot.resources.parts.data.filter((p) => p.serviceOrderId === order.id && p.technicianId === key.userId && p.status === 'received')
           : []}
         onClose={() => setFailedOpen(false)}
-        onDone={() => { setFailedOpen(false); setMessage('Đã báo không sửa được. Máy này không tính tiền, quản lý sẽ kiểm tra linh kiện.'); afterAction(); }}
+        onDone={() => { setFailedOpen(false); setMessage('Đã ghi nhận kết quả không sửa được. Máy này không tính tiền, quản lý sẽ kiểm tra linh kiện.'); afterAction(); }}
       />
     </View>
   );
@@ -302,21 +312,53 @@ function RepairFailedSheet({ visible, orderId, parts, onClose, onDone }: {
 }) {
   const [reason, setReason] = useState<RepairFailureReason>('beyond_repair');
   const [note, setNote] = useState('');
-  const [outcomes, setOutcomes] = useState<Record<string, 'installed' | 'returned'>>({});
+  const [outcomes, setOutcomes] = useState<Record<string, PartOutcome | undefined>>({});
+  const [assets, setAssets] = useState<CameraOrderAsset[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // A photo already uploaded keeps its evidence id; a body that got no answer is kept so the retry is the same report.
+  const uploaded = useRef<Record<string, string>>({});
+  const pending = useRef<string | null>(null);
+  // Mirrors `pending` for the button label (a ref is not read while rendering).
+  const [awaiting, setAwaiting] = useState(false);
+  const problem = repairFailedProblem({ parts, outcomes, photoCount: assets.length });
+  const capture = async () => {
+    if (busy || assets.length >= REPAIR_FAILED_PHOTO_MAX) return;
+    const result = await captureCameraPhoto();
+    if (!result.ok) { if (result.reason !== 'cancelled') setError(result.message); return; }
+    setError('');
+    setAssets((list) => [...list, result.asset]);
+  };
   const submit = async () => {
     if (busy) return;
+    if (problem) { setError(problem); return; }
     setBusy(true); setError('');
     try {
-      await ordersApi.reportRepairFailed(orderId, {
-        reason,
-        ...(note.trim() ? { note: note.trim() } : {}),
-        ...(parts.length ? { parts: parts.map((p) => ({ partRequestId: p.id, outcome: outcomes[p.id] ?? 'returned' })) } : {}),
-      });
+      const ids: string[] = [];
+      for (const asset of assets) {
+        uploaded.current[asset.uri] ??= (await ordersApi.uploadEvidenceAdditional(orderId, { uri: asset.uri, name: asset.name, type: asset.type })).id;
+        ids.push(uploaded.current[asset.uri]);
+      }
+      const body = repairFailedBody({ reason, note, parts, outcomes, photoEvidenceIds: ids });
+      const sent = JSON.stringify(body);
+      if (pending.current && pending.current !== sent) { setError(REPAIR_FAILED_LOCKED); return; }
+      // No answer last time: the report may be saved. A cancelled order means it was; otherwise send the very same report again.
+      if (pending.current) {
+        const current = await ordersApi.getOrder(orderId).catch(() => null);
+        if (current && String(current.status).toUpperCase() === 'CANCELLED') { pending.current = null; setAwaiting(false); onDone(); return; }
+      }
+      await ordersApi.reportRepairFailed(orderId, body);
+      pending.current = null;
+      setAwaiting(false);
       onDone();
     } catch (e) {
-      setError(extractApiErrorMessage(e, 'Chưa báo được. Vui lòng kiểm tra lại trạng thái đơn trước khi thử lại.'));
+      const status = (e as { response?: { status?: number } } | null)?.response?.status;
+      const unknown = status === undefined || status === 408 || status >= 500;
+      if (unknown) {
+        pending.current = JSON.stringify(repairFailedBody({ reason, note, parts, outcomes, photoEvidenceIds: assets.map((a) => uploaded.current[a.uri]).filter(Boolean) }));
+        setAwaiting(true);
+        setError(REPAIR_FAILED_UNKNOWN);
+      } else setError(status === 409 ? REPAIR_FAILED_CHANGED : extractApiErrorMessage(e, 'Chưa báo được. Vui lòng kiểm tra lại trạng thái đơn trước khi thử lại.'));
     } finally { setBusy(false); }
   };
   return (
@@ -332,29 +374,43 @@ function RepairFailedSheet({ visible, orderId, parts, onClose, onDone }: {
                 <Text style={styles.deviceTitle}>{r.label}</Text>
               </Pressable>
             ))}
-            <TextInput accessibilityLabel="Ghi thêm" value={note} onChangeText={setNote} maxLength={1000} multiline placeholder="Ghi thêm (không bắt buộc)"
+            <TextInput accessibilityLabel="Ghi thêm" value={note} onChangeText={setNote} maxLength={REPAIR_FAILED_NOTE_MAX} multiline placeholder="Ghi thêm (không bắt buộc)"
               placeholderTextColor={colors.muted} style={styles.input} />
             {parts.map((p) => (
               <View key={p.id} style={styles.device}>
                 <Text style={styles.deviceTitle}>{p.items.map((i) => i.partNameSnapshot).join(', ') || 'Linh kiện đã nhận'}</Text>
                 <View style={styles.row}>
                   {(['installed', 'returned'] as const).map((o) => {
-                    const on = (outcomes[p.id] ?? 'returned') === o;
+                    const on = outcomes[p.id] === o;
                     return (
                       <Pressable key={o} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => setOutcomes((c) => ({ ...c, [p.id]: o }))} style={[styles.pill, on && styles.deviceActive]}>
-                        <Text style={styles.deviceTitle}>{o === 'installed' ? 'Đã lắp' : 'Chưa lắp'}</Text>
+                        <Text style={styles.deviceTitle}>{o === 'installed' ? 'Đã lắp' : 'Chưa lắp, cần khai trả'}</Text>
                       </Pressable>
                     );
                   })}
                 </View>
               </View>
             ))}
+            <Text style={styles.hint}>{`Ảnh chứng cứ (không bắt buộc, tối đa ${REPAIR_FAILED_PHOTO_MAX})`}</Text>
+            <View style={styles.row}>
+              {assets.map((asset, i) => (
+                <Pressable key={asset.uri} testID={`repair-failed-photo-${i}`} accessibilityRole="button" accessibilityLabel={`Xóa ảnh ${i + 1}`} disabled={busy}
+                  onPress={() => setAssets((list) => list.filter((_, idx) => idx !== i))}>
+                  <Image source={{ uri: asset.uri }} accessibilityIgnoresInvertColors style={{ width: 64, height: 64, borderRadius: 10 }} />
+                </Pressable>
+              ))}
+              {assets.length < REPAIR_FAILED_PHOTO_MAX && (
+                <Pressable testID="repair-failed-capture" accessibilityRole="button" accessibilityLabel="Chụp ảnh chứng cứ" disabled={busy} onPress={() => void capture()} style={[styles.pill, { flex: 0, minWidth: 96 }]}>
+                  <Text style={styles.deviceTitle}>Chụp ảnh</Text>
+                </Pressable>
+              )}
+            </View>
           </ScrollView>
           {!!error && <Text accessibilityRole="alert" style={{ color: colors.tone.danger.text }}>{error}</Text>}
           <View style={styles.row}>
             <Pressable accessibilityRole="button" disabled={busy} onPress={onClose} style={[styles.secondary, { flex: 1 }]}><Text style={styles.secondaryText}>Quay lại</Text></Pressable>
             <Pressable testID="repair-failed-confirm" accessibilityRole="button" disabled={busy} onPress={() => void submit()} style={[styles.primary, { flex: 1 }, busy && styles.disabled]}>
-              {busy ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.primaryText}>Xác nhận không sửa được</Text>}
+              {busy ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.primaryText}>{awaiting ? 'Kiểm tra kết quả' : 'Xác nhận không sửa được'}</Text>}
             </Pressable>
           </View>
         </View>
