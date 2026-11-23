@@ -1,5 +1,6 @@
 // Pure status → display mapping (DS §8.2). Domain-specific: Service Order only.
 import type { ToneName } from '../../constants/theme';
+import { isOrderWorkStopped, STOPPED_WORK_TITLE } from '../../api/order-work-stopped';
 
 export type StatusIcon =
   | 'ClipboardCheck'
@@ -36,7 +37,9 @@ export function serviceOrderStatusView(status: unknown): StatusView {
  * What to show for an order: the server keeps UNDER_REPAIR until the visit is paid, but once the technician has handed over
  * (`completionRequestedAt`) the work is done and only the payment is awaited.
  */
-export function serviceOrderDisplayView(order: { status?: unknown; completionRequestedAt?: string | null }): StatusView {
+export function serviceOrderDisplayView(order: { status?: unknown; completionRequestedAt?: string | null; workStopped?: boolean; operationalDisposition?: string | null }): StatusView {
+  // Stopped on site: the server keeps EN_ROUTE / UNDER_REPAIR for history, so say what happened instead.
+  if (isOrderWorkStopped(order)) return { label: STOPPED_WORK_TITLE, tone: 'neutral', icon: 'XCircle' };
   return String(order.status ?? '').toUpperCase() === 'UNDER_REPAIR' && order.completionRequestedAt
     ? { label: 'Chờ thanh toán', tone: 'warning', icon: 'Clock' }
     : serviceOrderStatusView(order.status);
