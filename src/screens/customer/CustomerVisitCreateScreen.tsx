@@ -17,8 +17,9 @@ import type { RootStackParamList } from '../../types';
 import { scheduleSummary, type BookingSchedule } from '../../utils/booking-session';
 import { formatVnd } from '../../utils/format';
 import { extractApiErrorMessage } from '../../utils/input-validation';
+import PendingVisitLimitBanner from '../../components/PendingVisitLimitBanner';
 import { summarizeVisitDevicePrices, visitPriceText } from '../../utils/visit-device-pricing';
-import { addressReadyForBooking } from './customer-booking-create';
+import { addressReadyForBooking, isPendingVisitLimitError, pendingVisitLimitMessage } from './customer-booking-create';
 import {
   VISIT_DESCRIPTION_MAX,
   VISIT_PHOTOS_PER_DEVICE,
@@ -70,6 +71,7 @@ export default function CustomerVisitCreateScreen() {
   const [busy, setBusy] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState('');
+  const [pendingLimit, setPendingLimit] = useState('');
   // A send with no answer may have been saved; the same key makes a retry safe, but the customer is told to check first.
   const [unknownOutcome, setUnknownOutcome] = useState(false);
   const [consultText, setConsultText] = useState('');
@@ -182,6 +184,7 @@ export default function CustomerVisitCreateScreen() {
     } catch (e) {
       const noAnswer = !(e as { response?: unknown })?.response;
       if (noAnswer) { setUnknownOutcome(true); setError('Chưa xác nhận được kết quả gửi yêu cầu. Vui lòng kiểm tra Hoạt động của bạn trước khi gửi lại.'); }
+      else if (isPendingVisitLimitError(e)) { setReviewing(false); setPendingLimit(pendingVisitLimitMessage(e)); }
       else setError(extractApiErrorMessage(e, 'Chưa gửi được lượt sửa. Vui lòng kiểm tra thông tin rồi thử lại.'));
     } finally { setBusy(false); }
   };
@@ -376,6 +379,17 @@ export default function CustomerVisitCreateScreen() {
                 {devices.length < 2 && <Text style={styles.hint}>Hiện có 1 thiết bị. Thêm ít nhất 1 thiết bị nữa, hoặc đặt lịch thông thường cho 1 máy.</Text>}
                 {devices.length >= 2 && !!problem && !error && <Text style={styles.hint} testID="visit-problem">{problem}</Text>}
                 {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+                {!!pendingLimit && (
+                  <PendingVisitLimitBanner
+                    message={pendingLimit}
+                    onView={() => {
+                      setPendingLimit('');
+                      const root = navigation as unknown as { navigate: (name: 'CustomerMain', params: { screen: 'Bookings' }) => void };
+                      root.navigate('CustomerMain', { screen: 'Bookings' });
+                    }}
+                    onDismiss={() => setPendingLimit('')}
+                  />
+                )}
                 <TouchableOpacity
                   testID="visit-submit"
                   style={[styles.primary, (busy || unknownOutcome || !!problem) && styles.disabled]}

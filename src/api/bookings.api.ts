@@ -6,6 +6,17 @@ import type { BookingSchedule } from '../utils/booking-session';
 
 export const USER_UUID_REGEX =/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Why the technician list came back empty (`?diagnostics=1`, same four values as web). */
+export type CandidateEmptyReason = 'BOOKING_LOCATION_MISSING' | 'OUTSIDE_COVERAGE' | 'TIME_UNAVAILABLE' | 'UNAVAILABLE';
+const CANDIDATE_EMPTY_REASONS: readonly string[] = ['BOOKING_LOCATION_MISSING', 'OUTSIDE_COVERAGE', 'TIME_UNAVAILABLE', 'UNAVAILABLE'];
+
+/** Keeps the reason only for an empty list and a value we know; anything else is the generic empty state. */
+export function readCandidateEmptyReason(body: unknown, count: number): CandidateEmptyReason | null {
+  if (count > 0 || !body || typeof body !== 'object') return null;
+  const reason = (body as { meta?: { emptyReason?: unknown } }).meta?.emptyReason;
+  return typeof reason === 'string' && CANDIDATE_EMPTY_REASONS.includes(reason) ? (reason as CandidateEmptyReason) : null;
+}
+
 function unwrap<T>(payload: { data: T } | T): T {
   if (payload && typeof payload === 'object' && 'data' in payload) {
     return (payload as { data: T }).data;
@@ -407,12 +418,16 @@ export const bookingsApi = {
     return unwrap<DiagnosisResult>(res.data);
   },
 
-  async getCandidates(bookingId: string): Promise<TechnicianCandidate[]> {
+  async getCandidates(
+    bookingId: string,
+    onEmptyReason?: (reason: CandidateEmptyReason | null) => void,
+  ): Promise<TechnicianCandidate[]> {
     const res = await apiClient.get(
       `/bookings/${bookingId}/technician-candidates`,
-      { timeout: CANDIDATES_TIMEOUT_MS },
+      { timeout: CANDIDATES_TIMEOUT_MS, params: { diagnostics: 1 } },
     );
     const candidates = unwrap<TechnicianCandidate[]>(res.data);
+    onEmptyReason?.(readCandidateEmptyReason(res.data, candidates.length));
     return candidates.map((candidate) => {
       // Backend exposes both IDs. Only the User ID is valid in a shortlist.
       if (!candidate.userId || !USER_UUID_REGEX.test(candidate.userId)) {

@@ -11,7 +11,8 @@ import {
   StatusBar,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AlertTriangle, Bell, BellOff, Briefcase, CheckCheck, Tag, Wallet } from 'lucide-react-native';
+import { AlertTriangle, Bell, BellOff, Briefcase, CheckCheck, CheckCircle2, ClipboardList, Package, Tag, Truck, Users, Wallet, XCircle } from 'lucide-react-native';
+import { notificationKind, type NotificationIconKey } from '../../utils/notification-kind';
 import { useNavigation } from '@react-navigation/native';
 import { useLiveRefresh } from '../../hooks/useLiveRefresh';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -65,6 +66,15 @@ const ONBOARDING_TARGET: Record<string, 'TechnicianOfficeVisit' | 'TechnicianOnb
   PROFILE_REJECTED: 'TechnicianOnboarding',
 };
 const DEFAULT_VIEW = { tone: 'info' as ToneName, Icon: Bell };
+const KIND_ICON: Record<NotificationIconKey, typeof Bell> = {
+  check: CheckCircle2, close: XCircle, truck: Truck, cash: Wallet, package: Package, people: Users, clipboard: ClipboardList,
+};
+function typeView(type?: string | null): { tone: ToneName; Icon: typeof Bell } {
+  const exact = TYPE_VIEW[type ?? ''];
+  if (exact) return exact;
+  const kind = notificationKind(type);
+  return kind ? { tone: kind.tone, Icon: KIND_ICON[kind.icon] } : DEFAULT_VIEW;
+}
 
 function pageItems(res: Awaited<ReturnType<typeof notificationsApi.getNotifications>>): NotificationItem[] | null {
   if (!res.success) return null;
@@ -262,7 +272,7 @@ export default function TechnicianNotificationsScreen({ route }: { route?: { nam
 
   const renderItem = ({ item }: { item: NotificationItem }) => {
     const isUnread = item.isRead === false;
-    const { tone, Icon } = TYPE_VIEW[item.type ?? ''] ?? DEFAULT_VIEW;
+    const { tone, Icon } = typeView(item.type);
     // Tiêu đề/nội dung lấy nguyên văn từ server; thiếu thì dùng câu trung tính.
     const title = item.title || 'Thông báo mới';
     const body = item.body || item.message || 'Bạn có một thông báo từ FixHome.';

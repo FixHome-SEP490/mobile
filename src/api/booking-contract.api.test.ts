@@ -44,10 +44,21 @@ describe('Mobile Booking / ServiceOrder API contract', () => {
       technicianId: technicianProfileId, userId: firstUserId, fullName: 'Demo Technician',
     }] } });
     const candidates = await bookingsApi.getCandidates('booking-1');
-    expect(api.get).toHaveBeenCalledWith('/bookings/booking-1/technician-candidates', { timeout: 60000 });
+    expect(api.get).toHaveBeenCalledWith('/bookings/booking-1/technician-candidates', { timeout: 60000, params: { diagnostics: 1 } });
     expect(candidates[0].userId).toBe(firstUserId);
     expect(candidates[0].id).toBe(firstUserId);
     expect(candidates[0].technicianId).toBe(technicianProfileId);
+  });
+
+  it('reports why an empty list is empty, only for an empty list and a known reason', async () => {
+    const seen: unknown[] = [];
+    api.get.mockResolvedValue({ data: { data: [], meta: { emptyReason: 'OUTSIDE_COVERAGE' } } });
+    await bookingsApi.getCandidates('booking-1', (reason) => seen.push(reason));
+    api.get.mockResolvedValue({ data: { data: [], meta: { emptyReason: 'SOMETHING_NEW' } } });
+    await bookingsApi.getCandidates('booking-1', (reason) => seen.push(reason));
+    api.get.mockResolvedValue({ data: { data: [{ userId: firstUserId, fullName: 'A' }], meta: { emptyReason: 'OUTSIDE_COVERAGE' } } });
+    await bookingsApi.getCandidates('booking-1', (reason) => seen.push(reason));
+    expect(seen).toEqual(['OUTSIDE_COVERAGE', null, null]);
   });
 
   it('rejects candidate records lacking a valid User ID instead of falling back to profile ID', async () => {

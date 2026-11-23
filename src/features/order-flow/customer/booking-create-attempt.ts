@@ -1,6 +1,7 @@
 import type { BookingItem, CreateBookingDto } from '../../../api/bookings.api';
 import type { EntryAttemptJournal } from '../runtime/entry-attempt-journal';
-export interface BookingAttemptResult { phase: 'idle' | 'submitting' | 'verifying' | 'unknown' | 'denied' | 'resolved'; bookingId?: string; provenUnsent?: true }
+import { isPendingVisitLimitError, pendingVisitLimitMessage } from '../../../screens/customer/customer-booking-create';
+export interface BookingAttemptResult { phase: 'idle' | 'submitting' | 'verifying' | 'unknown' | 'denied' | 'resolved'; bookingId?: string; provenUnsent?: true; limitReached?: string }
 export function createBookingAttemptController(deps: {
   journal: EntryAttemptJournal;
   api: { createBooking: (dto: CreateBookingDto) => Promise<Pick<BookingItem, 'id' | 'customerId'>>; getBooking: (id: string) => Promise<Pick<BookingItem, 'id' | 'customerId'>> };
@@ -36,7 +37,13 @@ export function createBookingAttemptController(deps: {
         // Record real correlation for its original owner even when UI identity changed.
         await deps.journal.recordId(owner, intentId, row.id);
         return await verify(owner);
-      } catch { return { phase: dispatched ? 'unknown' : 'denied' }; }
+      } catch (error) {
+        // The quota refusal happens before anything is saved: close the marker so new bookings are not blocked.
+        if (dispatched && isPendingVisitLimitError(error)) {
+          try { await deps.journal.resolve(owner, intentId); return { phase: 'denied', provenUnsent: true, limitReached: pendingVisitLimitMessage(error) }; } catch { /* keep unknown */ }
+        }
+        return { phase: dispatched ? 'unknown' : 'denied' };
+      }
     },
   };
 }
