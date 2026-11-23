@@ -47,6 +47,14 @@ describe('visitGroupsApi', () => {
     await expect(visitGroupsApi.getCandidates('v1')).rejects.toThrow('User ID');
   });
 
+  it('asks for the empty reason and passes it on for an empty visit list', async () => {
+    api.get.mockResolvedValue({ data: { data: [], meta: { emptyReason: 'TIME_UNAVAILABLE' } } });
+    const seen: unknown[] = [];
+    await visitGroupsApi.getCandidates('v1', (reason) => seen.push(reason));
+    expect(api.get).toHaveBeenCalledWith('/visit-groups/v1/technician-candidates', { timeout: 60000, params: { diagnostics: 1 } });
+    expect(seen).toEqual(['TIME_UNAVAILABLE']);
+  });
+
   it('shortlists one or two different technicians in order', async () => {
     api.post.mockResolvedValue({ data: {} });
     await visitGroupsApi.sendShortlist('v1', [TECH_A, TECH_B]);

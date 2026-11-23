@@ -37,9 +37,12 @@ import {
   appendBookingDescriptionSuggestion,
   getBookingDescriptionSuggestions,
   hasBookingDescriptionSuggestion,
+  isPendingVisitLimitError,
+  pendingVisitLimitMessage,
   toggleBookingDescriptionSuggestion,
   type BookingCreationAttempt,
 } from './customer-booking-create';
+import PendingVisitLimitBanner from '../../components/PendingVisitLimitBanner';
 import { createProductionBookingAttempt, entryAttemptJournal } from '../../features/order-flow/runtime/entry-attempt-production';
 
 import {
@@ -281,6 +284,7 @@ export default function CustomerBookingCreateScreen() {
   const createStateByOwnerRef = useRef<Record<string, CustomerCreateState>>(runtimeCreateStates);
   const [reviewSnapshot, setReviewSnapshot] = useState<BookingReviewSnapshot | null>(null);
   const [reviewError, setReviewError] = useState('');
+  const [pendingLimit, setPendingLimit] = useState('');
   const [reconcilingByOwner, setReconcilingByOwner] = useState<Record<string, boolean>>({});
   const previousOwnerRef = useRef(customerOwnerId);
   const previousFlowRef = useRef(flowId);
@@ -1022,6 +1026,7 @@ export default function CustomerBookingCreateScreen() {
             setOwnerCreateState(ownerUserId, null);
           }
           if (sameSubmissionSession()) setReviewSnapshot(null);
+          if (result.limitReached && sameSubmissionSession()) setPendingLimit(result.limitReached);
           return;
         }
         if (result.phase !== 'resolved' || !result.bookingId) {
@@ -1171,7 +1176,8 @@ export default function CustomerBookingCreateScreen() {
       if (!(e as { response?: unknown })?.response) {
         setVisitUnknown(true);
         setReviewError('Chưa xác nhận được kết quả gửi yêu cầu. Vui lòng kiểm tra Hoạt động của bạn trước khi gửi lại.');
-      } else setReviewError(extractApiErrorMessage(e, 'Chưa gửi được lượt sửa. Vui lòng kiểm tra thông tin rồi thử lại.'));
+      } else if (isPendingVisitLimitError(e)) setPendingLimit(pendingVisitLimitMessage(e));
+      else setReviewError(extractApiErrorMessage(e, 'Chưa gửi được lượt sửa. Vui lòng kiểm tra thông tin rồi thử lại.'));
     } finally { setVisitBusy(false); }
   };
 
@@ -1790,6 +1796,17 @@ export default function CustomerBookingCreateScreen() {
             />
             {!!reviewError && (
               <Text accessibilityRole="alert" style={[styles.note, { color: colors.error }]}>{reviewError}</Text>
+            )}
+            {!!pendingLimit && (
+              <PendingVisitLimitBanner
+                message={pendingLimit}
+                onView={() => {
+                  setPendingLimit('');
+                  const root = navigation as unknown as { navigate: (name: 'CustomerMain', params: { screen: 'Bookings' }) => void };
+                  root.navigate('CustomerMain', { screen: 'Bookings' });
+                }}
+                onDismiss={() => setPendingLimit('')}
+              />
             )}
             {!!photoUploadError && (
               <View>

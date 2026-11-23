@@ -45,3 +45,15 @@ it('wrong GET owner cannot resolve creation', async () => {
   const f = fixture(); f.api.getBooking = async () => ({ id: 'known', customerId: 'other' });
   expect((await createBookingAttemptController(f.deps).create('owner', dto, [])).phase).toBe('unknown');
 });
+it('a 409 pending-visit-limit refusal is proven unsent: no uncertain state, no durable block, server message kept', async () => {
+  const f = fixture();
+  f.api.createBooking = async () => { throw { response: { status: 409, data: { error: { code: 'PENDING_VISIT_LIMIT_REACHED', message: 'Bạn đang có hai lượt chờ.' } } } }; };
+  const result = await createBookingAttemptController(f.deps).create('owner', dto, []);
+  expect(result).toMatchObject({ phase: 'denied', provenUnsent: true, limitReached: 'Bạn đang có hai lượt chờ.' });
+  expect(f.deps.journal.blocked('owner', 'booking-create')).toBe(false);
+});
+it('any other 409 stays unknown', async () => {
+  const f = fixture();
+  f.api.createBooking = async () => { throw { response: { status: 409, data: { error: { code: 'SOMETHING_ELSE' } } } }; };
+  expect((await createBookingAttemptController(f.deps).create('owner', dto, [])).phase).toBe('unknown');
+});

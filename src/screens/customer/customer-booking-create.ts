@@ -3,6 +3,24 @@ import type { AddressData } from '../../api/users.api';
 
 export type BookingCreatePostErrorClass = 'definitive' | 'ambiguous';
 
+export const PENDING_VISIT_LIMIT_FALLBACK =
+  'Bạn đang có 2 lượt sửa chữa chờ kỹ thuật viên nhận. Hãy xem các yêu cầu hiện tại hoặc hủy một yêu cầu trước khi đặt tiếp.';
+
+type ApiErrorBody = { response?: { status?: number; data?: { error?: { code?: string; message?: string }; code?: string; message?: string } } };
+
+/** 409 `PENDING_VISIT_LIMIT_REACHED`: refused inside the create transaction, so nothing was saved. */
+export function isPendingVisitLimitError(error: unknown): boolean {
+  const response = (error as ApiErrorBody | null)?.response;
+  return response?.status === 409 && (response.data?.error?.code ?? response.data?.code) === 'PENDING_VISIT_LIMIT_REACHED';
+}
+
+/** The server's wording when it sent one, the same fallback as web otherwise. */
+export function pendingVisitLimitMessage(error: unknown): string {
+  const data = (error as ApiErrorBody | null)?.response?.data;
+  const message = data?.error?.message ?? data?.message;
+  return typeof message === 'string' && message.trim() ? message.trim() : PENDING_VISIT_LIMIT_FALLBACK;
+}
+
 const DEFINITIVE_PRECOMMIT_STATUSES = new Set([400, 401, 403, 404, 422]);
 
 function statusOf(error: unknown): number | undefined {

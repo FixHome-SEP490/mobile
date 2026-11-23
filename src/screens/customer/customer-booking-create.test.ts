@@ -6,6 +6,9 @@ import {
   findCreatedBookingEvidence,
   getBookingDescriptionSuggestions,
   hasBookingDescriptionSuggestion,
+  isPendingVisitLimitError,
+  PENDING_VISIT_LIMIT_FALLBACK,
+  pendingVisitLimitMessage,
   toggleBookingDescriptionSuggestion,
   type BookingCreationAttempt,
 } from './customer-booking-create';
@@ -179,5 +182,19 @@ describe('description suggestions for Catalog V2 service codes', () => {
     expect(getBookingDescriptionSuggestions('AC-01')).toEqual(getBookingDescriptionSuggestions('SUA_DIEU_HOA'));
     expect(getBookingDescriptionSuggestions('PI-01')).toEqual(getBookingDescriptionSuggestions('SUA_RO_RI_NUOC'));
     expect(getBookingDescriptionSuggestions('TV-01')).toEqual(getBookingDescriptionSuggestions('LAP_TV_GIA_TREO'));
+  });
+});
+
+describe('pending visit limit error', () => {
+  const limit = (data: unknown, status = 409) => ({ response: { status, data } });
+  it('is recognised only for a 409 with the exact code', () => {
+    expect(isPendingVisitLimitError(limit({ error: { code: 'PENDING_VISIT_LIMIT_REACHED' } }))).toBe(true);
+    expect(isPendingVisitLimitError(limit({ code: 'PENDING_VISIT_LIMIT_REACHED' }))).toBe(true);
+    expect(isPendingVisitLimitError(limit({ error: { code: 'PENDING_VISIT_LIMIT_REACHED' } }, 400))).toBe(false);
+    expect(isPendingVisitLimitError(new Error('timeout'))).toBe(false);
+  });
+  it('keeps the server wording and falls back to the web one', () => {
+    expect(pendingVisitLimitMessage(limit({ error: { message: ' Hai lượt đang chờ. ' } }))).toBe('Hai lượt đang chờ.');
+    expect(pendingVisitLimitMessage(limit({}))).toBe(PENDING_VISIT_LIMIT_FALLBACK);
   });
 });
