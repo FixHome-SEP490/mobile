@@ -23,7 +23,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../../constants/theme';
 import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
 import { getServicePresentation } from '../../constants/service-presentation';
-import { bookingsApi } from '../../api/bookings.api';
+import { bookingsApi, type CreateBookingDto } from '../../api/bookings.api';
 import { mediaApi, type MediaUploadImage } from '../../api/media.api';
 import { servicesApi, type ServiceItem, type CategoryItem } from '../../api/services.api';
 import { servicePriceSummaryText } from '../../utils/service-price-summary';
@@ -51,6 +51,12 @@ import {
 import { usersApi, type AddressData } from '../../api/users.api';
 import { VISIT_DEVICE_LIMIT, visitGroupsApi } from '../../api/visit-groups.api';
 import { createIdempotencyKey } from '../../api/part-requests.api';
+import {
+  bookingDraftsApi, DRAFT_CHANGED, DRAFT_PHOTOS_NOTE, DRAFT_SUBMIT_CHANGED, fetchCurrentBookingDraft, formatDraftExpiry, isDraftConflict,
+} from '../../api/booking-drafts.api';
+import { buildDraftSnapshot, draftTextProblem, draftToFormState, hasDraftInput, vnTodayKey } from './customer-booking-draft';
+import { newUuidV4 } from '../../features/order-flow/customer/voucher-checkout';
+import { confirmAction } from '../../utils/confirm-action';
 import { deviceProblem, duplicatePhoto, photoKey, visitProblem, type VisitDeviceDraft } from './customer-visit-draft';
 import { sendVisit } from './customer-visit-send';
 import { pickVisitPhotos } from './customer-visit-photos';
@@ -266,6 +272,14 @@ export default function CustomerBookingCreateScreen() {
   const [visitBusy, setVisitBusy] = useState(false);
   const [visitUnknown, setVisitUnknown] = useState(false);
   const visitKey = useRef(createIdempotencyKey('visit'));
+  // The saved draft this form came from or was saved to: its version guards every save and the send (one key per send).
+  const [draft, setDraft] = useState<{ id: string; version: number; expiresAt: string } | null>(null);
+  const [draftNotice, setDraftNotice] = useState('');
+  const [draftBusy, setDraftBusy] = useState(false);
+  const draftKey = useRef(newUuidV4());
+  const draftResumedFor = useRef('');
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
   // Set once the visit is sent: the beforeRemove guard (one step back inside this screen) must not hold the screen then.
   const leavingRef = useRef(false);
   const extraSeq = useRef(0);
@@ -1013,7 +1027,19 @@ export default function CustomerBookingCreateScreen() {
       setOwnerCreateState(ownerUserId, { kind: 'in-flight', flowId, attempt, snapshot });
       try {
         // AI preview photos are local data URIs, NOT private Booking upload IDs.
-        const result = await createProductionBookingAttempt(owner => owner === ownerUserId && sameSubmissionSession()).create(ownerUserId, request, baselineIds);
+        const viaDraft = draft ? async (dto: CreateBookingDto) => {
+          try {
+            const sent = await bookingDraftsApi.submit(draft.id, { expectedVersion: draft.version, operationKey: draftKey.current, request: { kind: 'booking', data: dto } });
+            if (!sent.bookingId) throw new Error('Chưa xác nhận được mã yêu cầu từ bản nháp.');
+            return { id: sent.bookingId, customerId: ownerUserId };
+          } catch (e) {
+            // A stale, expired or used draft is refused before anything is written; say so apart from an unknown answer.
+            if (isDraftConflict(e)) throw Object.assign(new Error(DRAFT_SUBMIT_CHANGED), { draftConflict: DRAFT_SUBMIT_CHANGED });
+            throw e;
+          }
+        } : undefined;
+        const result = await createProductionBookingAttempt(owner => owner === ownerUserId && sameSubmissionSession(), viaDraft).create(ownerUserId, request, baselineIds);
+        if (result.draftConflict && sameSubmissionSession()) { setDraft(null); draftKey.current = newUuidV4(); setDraftNotice(result.draftConflict); }
         if (result.provenUnsent) {
           const original = getOwnerCreateState(ownerUserId);
           if (original?.kind === 'in-flight' && original.flowId === flowId && original.attempt === attempt) {
@@ -1029,6 +1055,7 @@ export default function CustomerBookingCreateScreen() {
         }
         runtimeReviewSnapshots.delete(ownerUserId);
         setOwnerCreateState(ownerUserId, { kind: 'created', flowId, id: result.bookingId, snapshot });
+        if (draft) setDraft(null);
       } catch {
         runtimeReviewSnapshots.delete(ownerUserId);
         setOwnerCreateState(ownerUserId, { kind: 'uncertain', flowId, attempt, snapshot });
@@ -1130,6 +1157,65 @@ export default function CustomerBookingCreateScreen() {
     showBookingStage(1);
   };
 
+  // "Tiếp tục đặt" from the draft banner: fill the form from the saved draft once the catalogue and addresses are in.
+  useEffect(() => {
+    if (!route.params?.resumeDraft || loading || loadError || services.length === 0 || draftResumedFor.current === flowId) return;
+    draftResumedFor.current = flowId;
+    void fetchCurrentBookingDraft().then((saved) => {
+      if (!mountedRef.current) return;
+      if (!saved) { setDraftNotice('Không còn bản nháp để tiếp tục.'); return; }
+      const form = draftToFormState(saved, { services, addressIds: addresses.map((a) => a.id), todayKey: vnTodayKey(), deviceLimit });
+      if (form.main) {
+        if (form.main.serviceId) setServiceId(form.main.serviceId);
+        setDeviceState({ serviceId: form.main.serviceId, attrs: form.main.attrs, code: form.main.variantCode, preview: null });
+        setDescription(form.main.description);
+      }
+      setExtras(form.extras);
+      if (form.addressId) setAddressId(form.addressId);
+      setSchedule(form.schedule);
+      setCustomerNote(form.note);
+      setDraft({ id: saved.id, version: saved.version, expiresAt: saved.expiresAt });
+      draftKey.current = newUuidV4();
+      setDraftNotice([DRAFT_PHOTOS_NOTE, ...form.warnings].join(' '));
+    });
+  }, [route.params?.resumeDraft, loading, loadError, services, addresses, flowId, deviceLimit]);
+
+  const writeDraft = async (expectedVersion: number | null) => {
+    setDraftBusy(true);
+    try {
+      const saved = await bookingDraftsApi.save(buildDraftSnapshot({
+        devices: visitDevices(), addressId: selectedAddress?.id ?? null, schedule, note: customerNote, step: bookingStage === 1 ? 2 : 1,
+      }), expectedVersion);
+      setDraft({ id: saved.id, version: saved.version, expiresAt: saved.expiresAt });
+      draftKey.current = newUuidV4();
+      setDraftNotice(`Đã lưu bản nháp. Bản nháp hết hạn ${formatDraftExpiry(saved.expiresAt)}.`);
+    } catch (e) {
+      if (isDraftConflict(e)) { setDraft(null); setDraftNotice(DRAFT_CHANGED); }
+      else setDraftNotice(extractApiErrorMessage(e, 'Chưa lưu được bản nháp. Vui lòng thử lại.'));
+    } finally { setDraftBusy(false); }
+  };
+
+  const saveDraft = async () => {
+    if (draftBusy) return;
+    const devices = visitDevices();
+    if (!hasDraftInput(devices, customerNote)) { setDraftNotice('Hãy nhập thông tin đặt lịch trước khi lưu nháp.'); return; }
+    const problem = draftTextProblem([...devices.map((d) => d.description), customerNote].join('\n'));
+    if (problem) { setDraftNotice(problem); return; }
+    if (draft) { await writeDraft(draft.version); return; }
+    // Another draft may be waiting (saved on another phone or the web): saving over it is the customer's call.
+    setDraftBusy(true);
+    const existing = await fetchCurrentBookingDraft();
+    setDraftBusy(false);
+    if (!mountedRef.current) return;
+    if (!existing) { await writeDraft(null); return; }
+    confirmAction({
+      title: 'Thay bản nháp đang có?',
+      message: 'Lưu thông tin hiện tại thay cho bản nháp đang có?',
+      confirmLabel: 'Lưu thay thế',
+      onConfirm: () => void writeDraft(existing.version),
+    });
+  };
+
   const continueToReview = () => {
     if (reviewDisabled) return;
     if (!selectedAddress) {
@@ -1153,6 +1239,7 @@ export default function CustomerBookingCreateScreen() {
     try {
       const visit = await sendVisit({
         devices: visitDevices(), addressId: selectedAddress.id, schedule, note: customerNote, idempotencyKey: visitKey.current, aiSessionId: prefill?.aiSessionId,
+        ...(draft ? { draft: { id: draft.id, version: draft.version, operationKey: draftKey.current } } : {}),
         onUploaded: (uploaded) => setExtras(uploaded.filter((d) => d.key !== 'main')),
       });
       // Like a single booking: Home underneath, then the technician list for the whole visit.
@@ -1167,6 +1254,10 @@ export default function CustomerBookingCreateScreen() {
         ],
       });
     } catch (e) {
+      if (draft && isDraftConflict(e)) {
+        setDraft(null); draftKey.current = newUuidV4(); setDraftNotice(DRAFT_SUBMIT_CHANGED); setReviewError(DRAFT_SUBMIT_CHANGED);
+        return;
+      }
       // A send with no answer may have been saved: the same key makes a retry safe, but the customer checks first.
       if (!(e as { response?: unknown })?.response) {
         setVisitUnknown(true);
@@ -1365,6 +1456,7 @@ export default function CustomerBookingCreateScreen() {
         )}
         {!loading && !loadError && !visibleCreatedBookingId && !visibleReviewSnapshot && (
           <>
+            {!!draftNotice && <Text testID="booking-draft-notice" accessibilityLiveRegion="polite" style={[styles.note, { color: colors.textSecondary }]}>{draftNotice}</Text>}
             {bookingStage === 0 && (
               <>
 
@@ -1911,6 +2003,13 @@ export default function CustomerBookingCreateScreen() {
       </ScrollView>
       {((!loading && !loadError) || visibleReviewSnapshot || visibleCreatedBookingId) && (
         <BookingActionBar>
+          {!visibleReviewSnapshot && !visibleCreatedBookingId && !loading && !loadError && (
+            <TouchableOpacity testID="booking-draft-save" accessibilityRole="button" accessibilityLabel="Lưu bản nháp"
+              disabled={draftBusy || isSubmitting} accessibilityState={{ disabled: draftBusy || isSubmitting, busy: draftBusy }}
+              style={styles.stageEdit} onPress={() => void saveDraft()}>
+              <Text style={{ color: colors.primary, fontWeight: '600' }}>{draftBusy ? 'Đang lưu…' : draft ? 'Lưu lại bản nháp' : 'Lưu bản nháp'}</Text>
+            </TouchableOpacity>
+          )}
           {!visibleReviewSnapshot && !visibleCreatedBookingId && (
             bookingStage === 0
               ? <BookingPrimaryAction label="Tiếp tục: Chọn địa chỉ" onPress={continueToAddress} disabled={reviewDisabled || !pricingReady} colors={colors} />

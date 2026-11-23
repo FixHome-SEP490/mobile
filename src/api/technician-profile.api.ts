@@ -35,6 +35,26 @@ export interface TechnicianServiceOffering {
   verificationStatus: 'pending' | 'verified' | 'rejected';
 }
 
+export interface SkillVerification {
+  id: string;
+  status: 'pending' | 'verified' | 'rejected';
+  rejectionReason: string | null;
+  documents: { id: string; fileName: string }[];
+}
+
+function normalizeSkillVerification(payload: unknown): SkillVerification {
+  const v = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>;
+  const status = String(v.status ?? 'pending');
+  return {
+    id: String(v.id ?? ''),
+    status: status === 'verified' || status === 'rejected' ? status : 'pending',
+    rejectionReason: v.rejectionReason == null ? null : String(v.rejectionReason),
+    documents: Array.isArray(v.documents)
+      ? v.documents.map((d) => ({ id: String((d as Record<string, unknown>)?.id ?? ''), fileName: String((d as Record<string, unknown>)?.fileName ?? '') }))
+      : [],
+  };
+}
+
 export interface TechnicianProfile {
   bio: string | null;
   yearsExperience: number;
@@ -198,6 +218,30 @@ export const technicianProfileApi = {
       throw new Error('Danh sách dịch vụ từ máy chủ không hợp lệ.');
     }
     return result;
+  },
+
+  /** The service's verification (with the reason when it was refused); null before any certificate was sent. */
+  async getSkillVerification(serviceId: string): Promise<SkillVerification | null> {
+    const res = await apiClient.get<{ data: unknown } | unknown>(`/technicians/me/services/${serviceId}/verification`);
+    const data = unwrap(res.data as { data: unknown });
+    return data == null ? null : normalizeSkillVerification(data);
+  },
+
+  async requestSkillEvidenceUploadUrl(serviceId: string, mimeType: string): Promise<{ storageObjectPath: string; uploadUrl: string }> {
+    const res = await apiClient.post<{ data: unknown } | unknown>(`/technicians/me/services/${serviceId}/verification/documents/upload-url`, { mimeType });
+    const slot = (unwrap(res.data as { data: unknown }) ?? {}) as Record<string, unknown>;
+    const storageObjectPath = String(slot.storageObjectPath ?? '');
+    const uploadUrl = String(slot.uploadUrl ?? '');
+    if (!storageObjectPath || !uploadUrl) throw new Error('Máy chủ chưa cấp chỗ tải chứng chỉ. Vui lòng thử lại.');
+    return { storageObjectPath, uploadUrl };
+  },
+
+  async attachSkillEvidence(
+    serviceId: string,
+    doc: { storageObjectPath: string; fileName: string; fileSize: number; mimeType: string },
+  ): Promise<SkillVerification> {
+    const res = await apiClient.post<{ data: unknown } | unknown>(`/technicians/me/services/${serviceId}/verification/documents`, doc);
+    return normalizeSkillVerification(unwrap(res.data as { data: unknown }));
   },
 
   async setSkillPricing(

@@ -45,3 +45,10 @@ it('wrong GET owner cannot resolve creation', async () => {
   const f = fixture(); f.api.getBooking = async () => ({ id: 'known', customerId: 'other' });
   expect((await createBookingAttemptController(f.deps).create('owner', dto, [])).phase).toBe('unknown');
 });
+it('a refusal of a stale draft is proven unsent: marker closed, new bookings not blocked, message kept', async () => {
+  const f = fixture();
+  f.api.createBooking = async () => { throw Object.assign(new Error('x'), { draftConflict: 'Bản nháp đã thay đổi ở nơi khác.' }); };
+  const result = await createBookingAttemptController(f.deps).create('owner', dto, []);
+  expect(result).toMatchObject({ phase: 'denied', provenUnsent: true, draftConflict: 'Bản nháp đã thay đổi ở nơi khác.' });
+  expect(f.deps.journal.blocked('owner', 'booking-create')).toBe(false);
+});

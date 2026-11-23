@@ -48,6 +48,8 @@ export type RootStackParamList = {
     | undefined;
   CustomerBookingCreate:
     | {
+        /** Open with the saved draft filled in (the draft banner's "Tiếp tục đặt"). */
+        resumeDraft?: boolean;
         prefill?: {
           serviceId?: string | null;
           serviceCode?: string;

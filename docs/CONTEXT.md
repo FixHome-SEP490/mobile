@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-22 16:18 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
+> Cập nhật lần cuối: 2026-11-23 21:50 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/web-parity-drafts-skill
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -327,6 +327,14 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - Giao diện chuẩn bị linh kiện (`AcceptedPartsScreen`), đề xuất chi phí phát sinh (`ExtraProposalScreen`) và quản lý linh kiện (`PartsLifecycleScreen`) làm lại theo ui-ux-pro-max (CHƯA KIỂM CHỨNG trên máy thật): màn chuẩn bị dùng `PartPickerRow` (chọn danh mục, số lượng bấm +/−, ghi chú cho kho; ghi chú là `note`, không còn bị tên linh kiện ghi đè) thay cho `CostItemEditor`; `CatalogPicker` dùng chung tự tải danh mục khi mở hàng, có nút Tìm, phân trang "Xem thêm" thay cho khung cuộn lồng; `FulfillmentMethodPicker` có trạng thái chọn nhìn thấy được ở cả hai màn; `ConfirmSummary` liệt kê từng dòng trước khi gửi và thay form khi xác nhận; lỗi theo ô (`validateCostItemRows`) và lỗi lý do hiện ngay tại ô; `ReadOnlyNotice` có `tone` (lỗi là `alert`); `TaskScreenShell` có `summary` (tổng ước tính cố định cạnh nút) và footer chia hàng 1:2; ảnh bằng chứng dạng ảnh nhỏ; màn bổ sung có hai nút thêm riêng "linh kiện" và "tiền công"; mã QR nhận hàng mặc định ẩn, có nút "Hiện mã để kiểm tra". Không đổi API, enum hay quyền.
 - Chưa làm: bảng tổng hợp thanh toán của đơn trên màn khách như web (`order-billing.ts`, gồm cảnh báo hóa đơn 0 ₫ lệch với báo giá; backend vẫn chặn bằng `CONFLICT`). CHƯA KIỂM CHỨNG với backend thật.
 
+### Đối chiếu web 23/11/2026: nháp đặt lịch và chứng chỉ kỹ năng (nhánh `feat/web-parity-drafts-skill`)
+
+- Nháp đặt lịch (`api/booking-drafts.api.ts`, backend `GET/PUT/DELETE /booking-drafts/current` và `POST /booking-drafts/:id/submit`): mỗi khách một bản nháp, hết hạn sau 30 ngày, chỉ lưu danh sách thiết bị (dịch vụ, mô tả, thông tin máy, mã biến thể), địa chỉ, buổi hẹn và ghi chú; không lưu ảnh và backend từ chối chữ có đường dẫn (`draftTextProblem` báo trước). Nút "Lưu bản nháp" ở thanh dưới màn đặt lịch (lưu tay, không tự lưu như web; có bản khác thì hỏi "Lưu thông tin hiện tại thay cho bản nháp đang có?"; 409 báo "Bản nháp đã được cập nhật ở nơi khác…").
+- `BookingDraftBanner` ("Đơn đặt lịch chưa hoàn tất", Tiếp tục đặt, Huỷ bản nháp có hỏi lại) ở Trang chủ và đầu tab Hoạt động; đọc khi vào màn, lỗi đọc hoặc không có bản nháp thì không hiện. "Tiếp tục đặt" mở `CustomerBookingCreate` với `resumeDraft: true`: sau khi tải danh mục và địa chỉ, form được điền từ bản nháp (`draftToFormState`), thứ gì không còn (dịch vụ, máy phụ, địa chỉ, buổi hẹn đã qua) bị bỏ và nêu trong ghi chú cùng câu "Ảnh không được khôi phục từ bản nháp…".
+- Gửi đơn khi đang dùng bản nháp đi qua `POST /booking-drafts/:id/submit` (một `operationKey` UUID cho mỗi lần gửi, đổi sau mỗi lần lưu hoặc bị từ chối): đơn lẻ qua `createProductionBookingAttempt(isCurrent, createBooking)` nên dấu journal và trạng thái "chưa xác minh" vẫn đúng; 409 do bản nháp cũ/hết hạn/đã dùng được coi là chưa ghi gì (`draftConflict`, đóng dấu journal) và hiện "Bản nháp đã thay đổi ở nơi khác…"; lượt nhiều máy qua `sendVisit({draft})`. Gửi xong thì bản nháp mất ở backend.
+- Chứng chỉ kỹ năng theo dịch vụ của thợ: ở sheet "Kỹ năng và dịch vụ nhận làm", dịch vụ đã nhận mà chưa duyệt có "Tải lên chứng chỉ" (`SkillEvidenceRow`): xin chỗ tải `POST /technicians/me/services/:id/verification/documents/upload-url`, PUT thẳng lên storage (XHR, không gửi JWT), rồi `POST .../verification/documents`. Chỉ ảnh JPG, PNG, WebP tối đa 10 MB vì chưa có thư viện chọn tệp PDF như web. Bị từ chối thì có "Xem lý do từ chối". Nhãn trạng thái giống web: Chờ duyệt chứng chỉ, Đã duyệt chứng chỉ, Chứng chỉ bị từ chối.
+- CHƯA KIỂM CHỨNG trên máy thật hay backend thật: lưu, tiếp tục và gửi qua nháp (đơn lẻ và nhiều máy), tải chứng chỉ lên storage.
+
 ## 4. Kiến trúc và thư mục chính
 
 - `src/features/order-flow/`: domain/runtime và shared/navigation cho redesign, một provider/reader mỗi phiên đơn. M3 có controller và task screens di chuyển/check-in/face/BEFORE, bằng chứng đúng ID/chủ ảnh và tracker chỉ bật tại màn di chuyển. M4 có controller/hook báo giá, editor và quyết định hai vai trò. M5 dùng controller/hook phát sinh và linh kiện, journal lưu ID trả về thật và kết quả sử dụng cần đối soát; không lưu QR hoặc payload nhạy cảm. Recovery ưu tiên intent chưa rõ, chỉ GET đúng phạm vi. Booking/lời mời phân biệt chắc chắn chưa gửi với POST chưa rõ. Preview vẫn chưa thay route production.
@@ -422,6 +430,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-23 21:50 (UTC+7) | Hgnv11 | feat/web-parity-drafts-skill | Có nháp đặt lịch (lưu, tiếp tục, huỷ, gửi đơn qua nháp, banner ở Trang chủ và Hoạt động) và thợ tải ảnh chứng chỉ cho từng kỹ năng ở hồ sơ
 - 2026-11-22 16:18 (UTC+7) | Hgnv11 | dev | Màn Linh kiện cần trả của thợ hiện linh kiện hỏng cần nộp của bảo hành
 - 2026-11-22 13:10 (UTC+7) | ToanAltF4 | fix/final-2211-mobile2 | Màn Hoá đơn và Đơn hoàn thành (order-flow) hiện Giảm voucher và Thực trả từ voucherDiscount/amountDue
 - 2026-11-22 11:39 (UTC+7) | ToanAltF4 | fix/final-2211 | Hoá đơn khách hiện Giảm voucher và Thực trả từ voucherDiscount/amountDue; mô tả bảo hành phải có chữ hoặc số; lỗi request qua interceptor chỉ còn câu tiếng Việt hoặc 'Có lỗi xảy ra, vui lòng thử lại sau.', 5xx bỏ câu máy chủ; Linh kiện cần trả tự làm mới theo sự kiện part
@@ -461,7 +470,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-11-09 05:37 (UTC+7) | Hgnv11 | dev | Màn chụp ảnh mặt trước sửa chữa có nút "Bỏ qua chụp ảnh mặt (chỉ bản dev)" chỉ hiện khi `__DEV__`: gửi ảnh mẫu qua đường check-in cũ một ảnh, nên backend phải để `FACE_CHECKIN_ENFORCE=false`; bản phát hành không có nút này
 - 2026-11-09 05:03 (UTC+7) | Hgnv11 | dev | Ảnh mặt check-in có liveness nhẹ: sau ảnh nhìn thẳng, app xin thử thách từ server (quay đầu hoặc mỉm cười), chụp ảnh thứ hai rồi gửi cả hai tới checkin-face; lý do từ chối của server hiện cho thợ; server không bật thì vẫn gửi một ảnh
 - 2026-11-09 04:48 (UTC+7) | Hgnv11 | dev | Sửa lỗi lưu lịch làm việc thợ bị backend từ chối (app gửi lại id/technicianId/createdAt/updatedAt; nay chỉ gửi dayOfWeek, startTime, endTime); làm lại giao diện trang Lịch làm việc; chọn nhanh dịch vụ và cấp độ ở bước 3 đăng ký; banner Home theo reviewStage và đọc lại realtime
-- 2026-11-09 02:58 (UTC+7) | Hgnv11 | dev | Onboarding thợ: chọn cấp độ tự khai ở bước 3, màn hẹn lên trụ sở, màn trạng thái theo reviewStage, thông báo mở đúng màn; approved chỉ khi onboardingStatus là approved
 
 
 ### Lịch sử giữ lại khi tích hợp

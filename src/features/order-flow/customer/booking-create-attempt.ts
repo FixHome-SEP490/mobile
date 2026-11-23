@@ -1,6 +1,6 @@
 import type { BookingItem, CreateBookingDto } from '../../../api/bookings.api';
 import type { EntryAttemptJournal } from '../runtime/entry-attempt-journal';
-export interface BookingAttemptResult { phase: 'idle' | 'submitting' | 'verifying' | 'unknown' | 'denied' | 'resolved'; bookingId?: string; provenUnsent?: true }
+export interface BookingAttemptResult { phase: 'idle' | 'submitting' | 'verifying' | 'unknown' | 'denied' | 'resolved'; bookingId?: string; provenUnsent?: true; draftConflict?: string }
 export function createBookingAttemptController(deps: {
   journal: EntryAttemptJournal;
   api: { createBooking: (dto: CreateBookingDto) => Promise<Pick<BookingItem, 'id' | 'customerId'>>; getBooking: (id: string) => Promise<Pick<BookingItem, 'id' | 'customerId'>> };
@@ -36,7 +36,14 @@ export function createBookingAttemptController(deps: {
         // Record real correlation for its original owner even when UI identity changed.
         await deps.journal.recordId(owner, intentId, row.id);
         return await verify(owner);
-      } catch { return { phase: dispatched ? 'unknown' : 'denied' }; }
+      } catch (error) {
+        // Sent through a draft and refused for a stale, expired or used draft: nothing was written, so the marker is closed.
+        const draftConflict = (error as { draftConflict?: unknown } | null)?.draftConflict;
+        if (dispatched && typeof draftConflict === 'string') {
+          try { await deps.journal.resolve(owner, intentId); return { phase: 'denied', provenUnsent: true, draftConflict }; } catch { /* keep unknown */ }
+        }
+        return { phase: dispatched ? 'unknown' : 'denied' };
+      }
     },
   };
 }
