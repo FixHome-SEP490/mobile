@@ -3,6 +3,7 @@ import {
   formatDobInput,
   getKycSummaryLabel,
   getOnboardingStepProgress,
+  initialExpandedGroups,
   keysToServiceAreas,
   ONBOARDING_STEPS,
   isoToDob,
@@ -11,6 +12,7 @@ import {
   resolveBackAction,
   resolveOnboardingView,
   serviceAreasToKeys,
+  summarizeSkillSelection,
   technicianLandingRoute,
   validateCitizenId,
   validateDob,
@@ -362,5 +364,30 @@ describe('isoToDob', () => {
     expect(isoToDob('2003-05-15T00:00:00.000Z')).toBe('15/05/2003');
     expect(isoToDob(undefined)).toBe('');
     expect(isoToDob('1995-13-45')).toBe('');
+  });
+});
+
+describe("chọn dịch vụ theo nhóm ở bước 3", () => {
+  const groups = [
+    ["Điều hòa", [{ id: "ac-1" }, { id: "ac-2" }, { id: "ac-3" }]],
+    ["Tủ lạnh", [{ id: "fr-1" }, { id: "fr-2" }]],
+    ["Khóa cửa", [{ id: "lk-1" }]],
+  ] as const;
+
+  it("đếm dịch vụ đã chọn và số nhóm có dịch vụ được chọn", () => {
+    expect(summarizeSkillSelection(groups, [])).toEqual({ services: 0, groups: 0 });
+    expect(summarizeSkillSelection(groups, ["ac-1", "ac-2", "fr-1"])).toEqual({ services: 3, groups: 2 });
+    expect(summarizeSkillSelection(groups, ["ac-1", "ac-2", "ac-3", "fr-1", "fr-2", "lk-1"])).toEqual({ services: 6, groups: 3 });
+  });
+
+  it("không tính id đã không còn trong danh sách dịch vụ", () => {
+    expect(summarizeSkillSelection(groups, ["gone-1", "lk-1"])).toEqual({ services: 1, groups: 1 });
+    expect(summarizeSkillSelection([], ["ac-1"])).toEqual({ services: 0, groups: 0 });
+  });
+
+  it("chỉ mở sẵn những nhóm đã có dịch vụ chọn, theo thứ tự hiển thị", () => {
+    expect(initialExpandedGroups(groups, [])).toEqual([]);
+    expect(initialExpandedGroups(groups, ["lk-1", "ac-2"])).toEqual(["Điều hòa", "Khóa cửa"]);
+    expect(initialExpandedGroups(groups, ["gone-1"])).toEqual([]);
   });
 });

@@ -50,6 +50,8 @@ const TYPE_VIEW: Record<string, { tone: ToneName; Icon: typeof Bell }> = {
   OFFICE_VISIT_ATTENDED: { tone: 'info', Icon: Bell },
   OFFICE_VISIT_REMINDER: { tone: 'info', Icon: Bell },
   PROFILE_REJECTED: { tone: 'danger', Icon: AlertTriangle },
+  // Hồ sơ được duyệt nhưng có kỹ năng chưa được xác nhận: chạm để mở Hồ sơ, nơi mỗi kỹ năng ghi lý do.
+  SKILL_NOT_CONFIRMED: { tone: 'warning', Icon: AlertTriangle },
   // Quản lý dịch vụ xác nhận hoặc từ chối khuôn mặt check-in: chạm để mở đơn.
   CHECKIN_FACE_APPROVED: { tone: 'success', Icon: Bell },
   CHECKIN_FACE_REJECTED: { tone: 'danger', Icon: AlertTriangle },
@@ -246,6 +248,10 @@ export default function TechnicianNotificationsScreen({ route }: { route?: { nam
           setLoadError('Không thể đánh dấu đã đọc. Vui lòng thử lại.');
           syncUnreadCount();
         });
+    }
+    if (item.type === 'SKILL_NOT_CONFIRMED') {
+      navigation.navigate('TechnicianMain', { screen: 'Profile' });
+      return;
     }
     const onboardingTarget = ONBOARDING_TARGET[String(item.type ?? '')];
     if (onboardingTarget) {
