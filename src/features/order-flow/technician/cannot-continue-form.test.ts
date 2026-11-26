@@ -1,5 +1,5 @@
 import {
-  canAttachStopPhotos, confirmText, deviceDisposition, reasonClassOf, reasonsFor, stopFormProblem, stopScopeFor, submitLabel,
+  canAttachStopPhotos, confirmText, deviceDisposition, reasonClassOf, reasonGroups, reasonsFor, stopFormProblem, stopScopeFor, submitLabel,
 } from './cannot-continue-form';
 import type { ContactReadiness, StopScope } from '../../../api/cannot-continue.api';
 
@@ -69,5 +69,20 @@ describe('labels', () => {
     expect(deviceDisposition('open', false)).toBe('Dự kiến dừng');
     expect(deviceDisposition('succeeded', false)).toBe('Giữ nguyên kết quả');
     expect(deviceDisposition(undefined, false)).toBe('Chưa xác minh trạng thái');
+  });
+});
+
+describe('reasonGroups', () => {
+  it('splits the work reasons from the customer ones and marks the whole-visit stops', () => {
+    const [work, customer] = reasonGroups('stop', true);
+    expect(work.items.map((r) => r.code)).toContain('severe_damage');
+    expect(customer.items.map((r) => r.code)).toEqual(['customer_absent', 'customer_unreachable']);
+    expect(customer.items.every((r) => r.wholeVisit)).toBe(true);
+    expect(work.items.some((r) => r.wholeVisit)).toBe(false);
+  });
+  it('offers a customer cancelling only when asking for help, and no whole-visit mark outside a visit', () => {
+    const [, customer] = reasonGroups('support', false);
+    expect(customer.items.map((r) => r.code)).toEqual(['customer_absent', 'customer_cancelled']);
+    expect(customer.items.some((r) => r.wholeVisit)).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-26 19:35 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
+> Cập nhật lần cuối: 2026-11-26 22:01 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: fix/call-history-chat-media-viewer
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -459,6 +459,9 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-26 22:01 (UTC+7) | Hgnv11 | fix/call-history-chat-media-viewer | Làm lại giao diện màn Báo cáo vấn đề sửa chữa của thợ: bỏ các thẻ đánh số bước; thẻ Máy báo cáo (kèm chọn máy khác trong lượt), công tắc Dừng công việc / Nhờ hỗ trợ có ghi chú hậu quả, lý do xếp một cột theo nhóm Về công việc / Về khách hàng, danh sách 3 điều kiện liên hệ khách tự tick, thẻ Chi tiết gộp mô tả và ảnh, ô xác nhận màu đỏ, nút Dừng màu đỏ (TaskAction.destructive), thẻ kết quả có mục Tiếp theo. Logic và testID giữ nguyên. Chưa kiểm trên máy thật
+- 2026-11-26 21:51 (UTC+7) | Hgnv11 | fix/call-history-chat-media-viewer | Đơn thợ đã dừng công việc: khách không còn bị đưa vào màn duyệt báo giá hoặc phát sinh (vào màn Đã dừng công việc kèm khối Bạn không cần làm gì, báo giá cũ chỉ để xem, 3 bước tiếp theo); màn lượt không còn nút duyệt báo giá cho máy đã dừng và có nút Đặt lịch mới cho từng máy hoặc cả các máy đã dừng (CustomerInterruptionRebook nhận sourceBookingIds, gọi interruption-draft?sourceBookingIds); thợ sau khi dừng thấy Đã dừng công việc và nút Xem linh kiện cần trả, bản tóm tắt lịch sử giữ workStopped, thẻ thành công ở màn báo cáo không biến mất sau khi làm mới. Rủi ro: báo giá và phát sinh vẫn SENT/chờ duyệt trong DB sau khi dừng (backend không có trạng thái đóng), đối soát tiền và linh kiện chưa có thao tác ghi. Chưa kiểm trên máy thật
+- 2026-11-26 21:33 (UTC+7) | Hgnv11 | fix/call-history-chat-media-viewer | Báo cáo vấn đề sửa chữa của thợ: lượt nhiều máy có bước Máy báo cáo (chọn máy khác thì mở báo cáo ở tab máy đó, như web); lỗi nhập thiếu và lỗi máy chủ hiện ngay trên nút gửi thay vì cuối trang nên bấm gửi không còn im lặng. Chưa kiểm trên máy thật (cách chuyển tab và quay lại chưa chạy trên thiết bị)
 - 2026-11-26 19:35 (UTC+7) | Hgnv11 | dev | Trang Kỹ năng: bật một kỹ năng chưa đăng ký giờ hiện chỗ thêm giấy tờ (chọn từ giấy tờ đã up hoặc tải ảnh mới) ngay trên dòng kỹ năng; giấy tờ giữ tạm và gửi cùng lúc bấm Lưu thay đổi (backend mở phiếu Chờ duyệt ngay khi lưu nên phiếu đã có giấy tờ); tắt kỹ năng thì bỏ giấy tờ chờ. Chưa kiểm trên máy thật
 - 2026-11-26 19:20 (UTC+7) | Hgnv11 | feat/warranty-same-technician | Rủi ro biết trước của chặn trùng giấy tờ kỹ năng (cùng file, hoặc cùng loại + số hiệu): backend kiểm rồi mới ghi, chưa có ràng buộc duy nhất ở DB nên hai lần tải đồng thời có thể lọt hai bản (cần migration nếu muốn chặn tuyệt đối); app cũ không có serviceIds thì bảng chọn không đánh dấu Đã có nhưng backend vẫn bỏ qua trùng
 - 2026-11-26 16:56 (UTC+7) | Hgnv11 | dev | Kỹ năng và giấy tờ: bấm giấy tờ mở chi tiết (ảnh, thông tin, trạng thái, lý do, nhóm áp dụng) và Xóa nằm trong đó; nút Thêm giấy tờ ở dòng kỹ năng cho chọn lại giấy tờ đã up (cần backend có documents/reuse) hoặc tải ảnh mới; báo trùng cùng loại và số hiệu; nhãn trạng thái kỹ năng đổi thành Chờ duyệt, Đã duyệt, Bị từ chối.
@@ -496,9 +499,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-11-22 01:14 (UTC+7) | Hgnv11 | dev | Màn chi tiết bảo hành của thợ bỏ nút Làm mới, cập nhật realtime theo đơn
 - 2026-11-22 01:11 (UTC+7) | Hgnv11 | dev | Màn chi tiết bảo hành của thợ thêm nút "Về trang chủ" khi không còn thao tác nào
 - 2026-11-22 01:09 (UTC+7) | Hgnv11 | dev | Dòng "Công việc bảo hành" ở đơn đã hoàn tất của thợ mở thẳng yêu cầu bảo hành của đơn thay vì danh sách
-- 2026-11-22 00:47 (UTC+7) | Hgnv11 | dev | Thợ khai dùng linh kiện bảo hành ở màn Quản lý linh kiện dù đơn gốc đã hoàn tất; nút Đề xuất hoàn tất bảo hành khoá khi linh kiện thay thế chưa nhận hoặc chưa khai
-- 2026-11-21 20:36 (UTC+7) | Hgnv11 | dev | Chat AI đồng bộ web: nút trả lời nhanh `answerOptionsVi`, lượt nhiều thiết bị tối đa 5, bỏ reply trễ sau phiên mới, timeout 45 giây, ảnh gửi AI 1024 px
-- 2026-11-21 18:25 (UTC+7) | ToanAltF4 | fix/mobile-chat-initials-2111 | Chữ cái ảnh đại diện trong danh sách tin nhắn lấy theo tên, bỏ phần ghi chú trong ngoặc và số
 
 
 ### Lịch sử giữ lại khi tích hợp

@@ -74,7 +74,7 @@ export interface VisitGroupPageDevice {
   bookingId: string;
   serviceId: string;
   deviceLabel: string | null;
-  outcome: 'succeeded' | 'failed' | 'quote_declined' | null;
+  outcome: 'succeeded' | 'failed' | 'quote_declined' | 'interrupted' | null;
   bookingStatus: string;
   serviceName: string | null;
   orderId: string | null;
@@ -101,7 +101,7 @@ export interface VisitGroupsPage {
   total: number;
 }
 
-export type VisitDeviceState = 'succeeded' | 'failed' | 'quote_declined' | 'cancelled' | 'open';
+export type VisitDeviceState = 'succeeded' | 'failed' | 'quote_declined' | 'cancelled' | 'open' | 'interrupted';
 
 export interface VisitCheckout {
   visitGroupId: string;

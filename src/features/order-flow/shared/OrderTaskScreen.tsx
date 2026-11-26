@@ -47,7 +47,8 @@ import CompletionRequestScreen from '../technician/CompletionRequestScreen';
 import CashDeclarationScreen from '../technician/CashDeclarationScreen';
 import { getRestoredExtraRecovery, getRestoredPartsRecovery } from '../domain/extra-and-parts-recovery';
 import { DetailRow, ReadOnlyNotice, Section, TaskScreenShell } from './TaskScreenShell';
-import { serviceOrderStatusView } from '../../../screens/technician/technician-status';
+import { serviceOrderDisplayView } from '../../../screens/technician/technician-status';
+import { isOrderWorkStopped, STOPPED_WORK_TITLE } from '../../../api/order-work-stopped';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { goHome } from '../../../components/BackButton';
 
@@ -154,20 +155,25 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
   const gone = role === 'technician' && snapshot?.access === 'historical' && snapshot.order.status === 'ready' && isHistoricalOrder(snapshot.order.data) ? snapshot.order.data : null;
   if (gone) {
     const cancelled = gone.status === 'CANCELLED';
+    // The technician stopped the work on site: the status stays as it was, so say what happened and where the parts go.
+    const stopped = isOrderWorkStopped(gone);
     return (
       <TaskScreenShell
-        title={cancelled ? 'Đơn đã hủy' : 'Đơn không còn thuộc về bạn'}
+        title={cancelled ? 'Đơn đã hủy' : stopped ? STOPPED_WORK_TITLE : 'Đơn không còn thuộc về bạn'}
         stage={null}
         onBack={() => backFromFlow(navigation)}
         primary={{ label: 'Quay lại', testID: 'task-go-back', onPress: () => backFromFlow(navigation) }}
+        secondary={stopped ? { label: 'Xem linh kiện cần trả', testID: 'task-part-returns', onPress: () => navigation.navigate('TechnicianPartReturns') } : undefined}
       >
         <ReadOnlyNotice tone={cancelled ? 'warning' : 'info'}>
-          {cancelled ? `Đơn #${gone.code} đã bị hủy nên không còn bước nào cần bạn làm.` : `Đơn #${gone.code} không còn do bạn phụ trách.`}
+          {cancelled ? `Đơn #${gone.code} đã bị hủy nên không còn bước nào cần bạn làm.`
+            : stopped ? `Bạn đã dừng công việc đơn #${gone.code}, phân công đã được nhả. Tiền và linh kiện cũ do FixHome đối soát riêng; linh kiện đã nhận vẫn cần khai trả.`
+              : `Đơn #${gone.code} không còn do bạn phụ trách.`}
         </ReadOnlyNotice>
         <VisitTechnicianPanel section="devices" />
         <Section title="Thông tin đơn">
           <DetailRow label="Mã đơn" value={gone.code} />
-          <DetailRow label="Trạng thái" value={serviceOrderStatusView(gone.status).label} />
+          <DetailRow label="Trạng thái" value={serviceOrderDisplayView(gone).label} />
           <DetailRow label="Tạo lúc" value={vnDateTimeString(gone.createdAt)} />
           {!!gone.cancelledAt && <DetailRow label="Hủy lúc" value={vnDateTimeString(gone.cancelledAt)} />}
           {!!gone.completedAt && <DetailRow label="Hoàn thành lúc" value={vnDateTimeString(gone.completedAt)} />}

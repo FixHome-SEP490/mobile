@@ -30,7 +30,9 @@ jest.mock('../../../api/orders.api', () => ({
 }));
 jest.mock('../../../api/support-cases.api', () => ({ supportCasesApi: { createTechnicianReport: (...a: unknown[]) => mockSupport(...a) } }));
 jest.mock('../../../api/visit-groups.api', () => ({ visitGroupsApi: { getCheckout: (...a: unknown[]) => mockCheckout(...a) } }));
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn() }) }));
+const mockNavigate = jest.fn();
+const mockGoBack = jest.fn();
+jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: (...a: unknown[]) => mockGoBack(...a), navigate: (...a: unknown[]) => mockNavigate(...a) }) }));
 jest.mock('expo-haptics', () => ({ notificationAsync: jest.fn(), NotificationFeedbackType: { Success: 'success' } }));
 jest.mock('../navigation/resume-order', () => ({ backFromFlow: (...a: unknown[]) => mockBack(...a) }));
 jest.mock('./camera-capture', () => ({ captureCameraPhoto: (...a: unknown[]) => mockCapture(...a) }));
@@ -46,8 +48,8 @@ jest.mock('../shared/TaskScreenShell', () => {
   const { Pressable } = jest.requireActual<typeof import('react-native')>('react-native');
   const pass = ({ children }: { children?: unknown }) => R.createElement(R.Fragment, null, children as never);
   return {
-    TaskScreenShell: ({ children, primary }: { children?: unknown; primary?: { testID?: string; onPress?: () => void; label: string } }) =>
-      R.createElement(R.Fragment, null, children as never, primary ? R.createElement(Pressable, { testID: primary.testID, onPress: primary.onPress, accessibilityLabel: primary.label }) : null),
+    TaskScreenShell: ({ children, primary, summary }: { children?: unknown; summary?: unknown; primary?: { testID?: string; onPress?: () => void; label: string } }) =>
+      R.createElement(R.Fragment, null, children as never, summary as never, primary ?R.createElement(Pressable, { testID: primary.testID, onPress: primary.onPress, accessibilityLabel: primary.label }) : null),
     ReadOnlyNotice: pass,
   };
 });
@@ -69,7 +71,7 @@ const text = (r: ReturnType<typeof create>) => JSON.stringify(r.toJSON());
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockOrder = { id: 'ord-1', status: 'UNDER_REPAIR', arrivalVerified: true, completionRequestedAt: null, technician: { id: 'tech-1' }, visitGroupId: null, customerPhone: '0900000000' };
+  mockOrder = { id: 'ord-1', code: 'DH-1001', status: 'UNDER_REPAIR', arrivalVerified: true, completionRequestedAt: null, technician: { id: 'tech-1' }, visitGroupId: null, customerPhone: '0900000000' };
   mockStop.mockResolvedValue({ stoppedCount: 1, preservedCount: 0 });
   mockReadiness.mockResolvedValue(ready);
   mockContact.mockResolvedValue(ready);
@@ -102,13 +104,55 @@ describe('CannotContinueScreen', () => {
     expect(text(r)).toContain('Đã dừng công việc và nhả phân công');
   });
 
-  it('does not send without a confirmation', async () => {
+  it('does not send without a confirmation, and says so above the button', async () => {
     const r = await render();
     await press(r, 'cc-reason-severe_damage');
     await typeReason(r, REASON);
     await press(r, 'cc-submit');
     expect(mockStop).not.toHaveBeenCalled();
-    expect(text(r)).toContain('xác nhận');
+    expect(find(r, (n) => n.props.testID === 'cc-problem')[0].props.children).toBe('Cần xác nhận trước khi gửi.');
+  });
+
+  it('says what is missing when nothing is filled in', async () => {
+    const r = await render();
+    await press(r, 'cc-submit');
+    expect(mockStop).not.toHaveBeenCalled();
+    expect(find(r, (n) => n.props.testID === 'cc-problem')[0].props.children).toBe('Chọn lý do.');
+  });
+
+  it('lets the technician pick the device of a visit and opens the report in its tab', async () => {
+    mockOrder = { ...mockOrder, visitGroupId: 'grp-1' };
+    mockCheckout.mockResolvedValue({ devices: [
+      { sequence: 1, bookingId: 'b1', serviceName: 'Máy lạnh', serviceOrderId: 'ord-1', state: 'open' },
+      { sequence: 2, bookingId: 'b2', serviceName: 'Máy giặt', serviceOrderId: 'ord-2', state: 'open' },
+      { sequence: 3, bookingId: 'b3', serviceName: 'Tủ lạnh', serviceOrderId: 'ord-3', state: 'succeeded' },
+    ] });
+    const r = await render();
+    expect(text(r)).toContain('Báo cáo cho máy khác trong lượt');
+    expect(find(r, (n) => n.props.testID === 'cc-device-3' && n.props.disabled === true).length).toBeGreaterThan(0);
+    await press(r, 'cc-device-2');
+    expect(mockNavigate).toHaveBeenCalledWith('device-ord-2', { serviceOrderId: 'ord-2', screen: 'CannotContinue', initial: false });
+    expect(mockGoBack).toHaveBeenCalled();
+  });
+
+  it('names the device of a single order but offers no switch', async () => {
+    const r = await render();
+    expect(text(r)).toContain('Máy báo cáo');
+    expect(text(r)).toContain('Đơn #DH-1001');
+    expect(text(r)).not.toContain('Báo cáo cho máy khác trong lượt');
+  });
+
+  it('keeps the result on screen after the order turns into a history summary', async () => {
+    mockRefresh.mockImplementation(() => { mockOrder = { ...mockOrder, arrivalVerified: false }; });
+    const r = await render();
+    await press(r, 'cc-reason-severe_damage');
+    await typeReason(r, REASON);
+    await press(r, 'cc-confirm');
+    await press(r, 'cc-submit');
+    await act(async () => { r.update(<CannotContinueScreen />); });
+    expect(text(r)).toContain('Đã dừng công việc và nhả phân công');
+    expect(text(r)).not.toContain('sau khi đã check-in');
+    expect(byId(r, 'cc-back')).toBeTruthy();
   });
 
   it('offers no photos before the repair starts, and stops without them', async () => {
@@ -133,6 +177,21 @@ describe('CannotContinueScreen', () => {
     expect(mockStop).not.toHaveBeenCalled();
     expect(mockConfirm).not.toHaveBeenCalled();
     expect(text(r)).toContain('Công việc vẫn tiếp tục');
+  });
+
+  it('ticks off the contact rule as it is met', async () => {
+    mockReadiness.mockResolvedValue({ ...ready, ready: false, contactCount: 1, notificationSent: false, callsSpaced: false, nextEligibleAt: '2026-11-23T11:00:00Z' });
+    const r = await render();
+    await press(r, 'cc-reason-customer_absent');
+    expect(text(r)).toContain('Gọi khách ít nhất 2 lần');
+    expect(text(r)).toContain('1 cuộc gọi đã ghi nhận');
+    expect(text(r)).toContain('Có thể dừng sau');
+  });
+
+  it('groups the reasons by what they are about', async () => {
+    const r = await render();
+    expect(text(r)).toContain('Về công việc');
+    expect(text(r)).toContain('Về khách hàng');
   });
 
   it('keeps a customer who is absent from stopping until the contact rule is met', async () => {

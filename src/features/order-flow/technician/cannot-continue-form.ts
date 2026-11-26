@@ -27,6 +27,21 @@ export function reasonsFor(mode: StopMode, isVisit: boolean): { code: FormReason
     .map((r) => (isVisit && mode === 'stop' && isCustomerNoShow(r.code as StopReasonCode) ? { ...r, label: `${r.label} · cả lượt` } : r));
 }
 
+const CUSTOMER_REASONS: FormReasonCode[] = ['customer_absent', 'customer_unreachable', 'customer_cancelled'];
+
+/** The same reasons grouped for the list: what is wrong with the work, and what is up with the customer. `wholeVisit` = stops every device of the visit. */
+export function reasonGroups(mode: StopMode, isVisit: boolean): { title: string; items: { code: FormReasonCode; label: string; wholeVisit: boolean }[] }[] {
+  const items = reasonsFor(mode, isVisit).map((r) => ({
+    code: r.code,
+    label: FORM_REASONS.find((f) => f.code === r.code)!.label,
+    wholeVisit: isVisit && mode === 'stop' && isCustomerNoShow(r.code as StopReasonCode),
+  }));
+  return [
+    { title: 'Về công việc', items: items.filter((r) => !CUSTOMER_REASONS.includes(r.code)) },
+    { title: 'Về khách hàng', items: items.filter((r) => CUSTOMER_REASONS.includes(r.code)) },
+  ];
+}
+
 export const reasonClassOf = (code: FormReasonCode): StopReasonClass => (code === 'skill_gap' ? 'technician_skill_gap' : 'non_technician_exception');
 
 /** A customer who is not there ends the whole visit when the order is part of one, else just this order. */

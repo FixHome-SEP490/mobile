@@ -70,6 +70,7 @@ describe('visitDeviceStatusText', () => {
   const base = { visit: visit(), hasOrder: false, quoteWaiting: false, leadStatus: 'SUBMITTED' };
   it('prefers the device outcome over the parent', () => {
     expect(visitDeviceStatusText({ ...base, deviceState: 'failed' })).toBe('Không sửa được, không tính tiền sửa');
+    expect(visitDeviceStatusText({ ...base, deviceState: 'interrupted' })).toBe('Đã dừng sửa · Tiền cũ cần đối soát');
     expect(visitDeviceStatusText({ ...base, deviceState: 'quote_declined', visit: visit({ status: 'cancelled' }) })).toBe('Bạn không duyệt báo giá, không tính tiền');
   });
   it('flags a quotation waiting for the customer', () => {
@@ -156,5 +157,12 @@ describe('visitDisplayView', () => {
   it('leaves every other status to the server', () => {
     expect(visitDisplayView('completed', [handed, handed]).label).toBe('Hoàn thành');
     expect(visitDisplayView('en_route', [handed]).label).toBe('Đang di chuyển');
+  });
+});
+
+describe('needsQuoteDecision after a stop', () => {
+  it('no longer asks for a decision on a stopped order', () => {
+    expect(needsQuoteDecision({ status: 'EN_ROUTE', quotation: { status: 'SENT' }, workStopped: true })).toBe(false);
+    expect(needsQuoteDecision({ status: 'EN_ROUTE', quotation: { status: 'SENT' }, operationalDisposition: 'STOPPED' })).toBe(false);
   });
 });

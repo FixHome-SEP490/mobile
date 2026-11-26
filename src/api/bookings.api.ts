@@ -333,8 +333,10 @@ export const bookingsApi = {
   },
 
   /** The interrupted devices a manager closed, read back as a draft for a fresh booking (customer only). */
-  async getInterruptionDraft(anchorBookingId: string): Promise<unknown> {
-    const res = await apiClient.get(`/bookings/${encodeURIComponent(anchorBookingId)}/interruption-draft`);
+  async getInterruptionDraft(anchorBookingId: string, sourceBookingIds?: string[]): Promise<unknown> {
+    // Without a list the server offers every stopped device of the visit; with one it must contain the anchor.
+    const res = await apiClient.get(`/bookings/${encodeURIComponent(anchorBookingId)}/interruption-draft`,
+      sourceBookingIds ? { params: { sourceBookingIds: sourceBookingIds.join(',') } } : undefined);
     return unwrap<unknown>(res.data);
   },
 

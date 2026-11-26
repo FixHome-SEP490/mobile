@@ -5,6 +5,7 @@ import { Clock, MapPin, User, Wrench } from 'lucide-react-native';
 import { isHistoricalOrder, ordersApi, type ServiceOrderItem, type TechnicianOrderItem } from '../../api/orders.api';
 import { visitGroupsApi, type VisitGroupPageItem, type VisitGroupReadStatus, type VisitGroupsPage } from '../../api/visit-groups.api';
 import { iconSize, iconStroke, useAppTheme } from '../../constants/theme';
+import { isOrderWorkStopped } from '../../api/order-work-stopped';
 import { serviceOrderDisplayView, type StatusIcon } from '../../screens/technician/technician-status';
 import { formatVnd } from '../../utils/format';
 import StatusBadge from '../StatusBadge';
@@ -23,7 +24,7 @@ const TONE_ICON: Record<string, StatusIcon> = {
   success: 'CheckCircle2', warning: 'Clock', repair: 'Wrench', danger: 'AlertTriangle', neutral: 'Minus', info: 'ClipboardCheck', violet: 'ClipboardCheck',
 };
 // A device order stays EN_ROUTE after the technician has arrived (one check-in covers the visit) until its own photo and quote are done: that is "arrived", not "on the way".
-const stepLabel = (o: ServiceOrderItem) => (o.status === 'EN_ROUTE' && o.arrivalVerified ? 'Đã đến nơi' : serviceOrderDisplayView(o).label);
+const stepLabel = (o: ServiceOrderItem) => (o.status === 'EN_ROUTE' && o.arrivalVerified && !isOrderWorkStopped(o) ? 'Đã đến nơi' : serviceOrderDisplayView(o).label);
 // The status pills of the list, grouped as the order lists group theirs; they filter what is loaded, like the other lists do.
 type VisitFilter = 'all' | 'progress' | 'pending' | 'repair' | 'done' | 'cancelled';
 const FILTER_GROUPS: Record<Exclude<VisitFilter, 'all'>, readonly string[]> = {
@@ -41,7 +42,12 @@ const FILTERS_TECHNICIAN: { key: VisitFilter; label: string }[] = [
 ];
 const matchesFilter = (status: string, filter: VisitFilter) => filter === 'all' || FILTER_GROUPS[filter].includes(status);
 
-const OUTCOME_TEXT = { succeeded: 'Đã sửa xong', failed: 'Không sửa được', quote_declined: 'Không duyệt báo giá' } as const;
+const OUTCOME_TEXT = {
+  succeeded: 'Đã sửa xong',
+  failed: 'Không sửa được',
+  quote_declined: 'Không duyệt báo giá',
+  interrupted: 'Đã dừng sửa',
+} as const;
 
 /** Multi-device visits of the customer, paged by the server (web "Lượt sửa nhiều thiết bị" tab). */
 export default function VisitGroupsPanel({ search, onOpen, bottomInset = 0, terminalOnly = false, assigned = false, emptyTitle }: {
@@ -188,15 +194,20 @@ export default function VisitGroupsPanel({ search, onOpen, bottomInset = 0, term
         const when = sessionLabel({ bookingMode: item.bookingMode, slot: item.slot, start: item.scheduledAt });
         const deviceOrders = item.items.map((d) => (d.orderId ? orders[d.orderId] : undefined));
         const lead = deviceOrders.find(Boolean);
-        const live = deviceOrders.filter((o): o is ServiceOrderItem => !!o && o.status !== 'CANCELLED');
+        const live = deviceOrders.filter((o): o is ServiceOrderItem => !!o && o.status !== 'CANCELLED' && !isOrderWorkStopped(o));
+        const billable = item.items
+          .map((d, i) => ({ d, o: deviceOrders[i] }))
+          .filter((x): x is { d: VisitGroupPageItem['items'][number]; o: ServiceOrderItem } =>
+            !!x.o && x.o.status !== 'CANCELLED' && !isOrderWorkStopped(x.o) && (!x.d.outcome || x.d.outcome === 'succeeded'))
+          .map((x) => x.o);
         // Same rule as the device rows (stepLabel): the visit stays en_route after the check-in, but it is "arrived", not "on the way".
         const arrived = item.status === 'en_route' && live.some((o) => o.status === 'EN_ROUTE' && o.arrivalVerified);
         // Only when every device's order was read: with some missing, "all handed over" cannot be told, so the server label stands.
         const known = deviceOrders.every(Boolean);
         const status = arrived ? { label: 'Đã đến nơi', tone: 'warning' as const } : visitDisplayView(item.status, known ? live : []);
-        const money = live.reduce((sum, o) => sum + (o.grandTotal || 0), 0);
+        const money = billable.reduce((sum, o) => sum + (o.grandTotal || 0), 0);
         const code = lead?.code ?? item.items.find((d) => d.orderCode)?.orderCode;
-        const moneyLabel = assigned ? (live.every((o) => o.status === 'COMPLETED') ? 'Tổng thu' : 'Dự kiến thu') : 'Tổng thanh toán';
+        const moneyLabel = assigned ? (billable.length > 0 && billable.every((o) => o.status === 'COMPLETED') ? 'Tổng thu' : 'Dự kiến thu') : 'Tổng thanh toán';
         return (
           <TouchableOpacity
             style={styles.card}

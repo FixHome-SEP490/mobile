@@ -44,7 +44,7 @@ type VisitRoute = RouteProp<RootStackParamList, 'CustomerVisit'>;
 type Message = { type: 'success' | 'error'; text: string };
 
 const PAY_LABEL: Record<VisitPayMethod, string> = { wallet: 'Ví FixHome', vnpay: 'Thanh toán qua VNPay', cash: 'Tiền mặt' };
-const DEVICE_TONE: Record<VisitDeviceState, ToneName> = { succeeded: 'success', failed: 'danger', quote_declined: 'neutral', cancelled: 'neutral', open: 'repair' };
+const DEVICE_TONE: Record<VisitDeviceState, ToneName> = { succeeded: 'success', failed: 'danger', quote_declined: 'neutral', cancelled: 'neutral', open: 'repair', interrupted: 'neutral' };
 
 export default function CustomerVisitScreen() {
   const { colors } = useAppTheme();
@@ -158,6 +158,8 @@ export default function CustomerVisitScreen() {
   const priorityQuote = devices.map((item) => ({ item, orderId: quoteOrderBySequence[item.sequence] })).find((entry) => entry.orderId);
 
   const failedIds = failedBookingIds(devices, checkout?.devices);
+  // Stopped on site: the customer books them again, each alone or all together (the stop notification promises this).
+  const stoppedIds = failedBookingIds(devices, checkout?.devices, 'interrupted');
   const deviceOf = (bookingId: string | undefined) => checkout?.devices.find((d) => d.bookingId === bookingId) ?? null;
   const statusOf = (item: Visit['items'][number]) => {
     const device = deviceOf(item.booking?.id);
@@ -387,6 +389,16 @@ export default function CustomerVisitScreen() {
                     <Text style={styles.primaryText}>Đặt lại máy này</Text>
                   </TouchableOpacity>
                 )}
+                {device?.state === 'interrupted' && !!item.booking?.id && (
+                  <TouchableOpacity
+                    style={styles.primaryBtn}
+                    onPress={() => navigation.navigate('CustomerInterruptionRebook', { bookingId: item.booking!.id, sourceBookingIds: [item.booking!.id] })}
+                    accessibilityRole="button"
+                    testID={`visit-rebook-stopped-${item.sequence}`}
+                  >
+                    <Text style={styles.primaryText}>Đặt lịch mới cho máy này</Text>
+                  </TouchableOpacity>
+                )}
                 {!!device?.serviceOrderId && !!quoteOrderBySequence[item.sequence] && (
                   <TouchableOpacity
                     style={styles.primaryBtn}
@@ -420,6 +432,17 @@ export default function CustomerVisitScreen() {
               testID="visit-rebook-all"
             >
               <Text style={styles.primaryText}>Đặt lại {failedIds.length} máy không sửa được</Text>
+            </TouchableOpacity>
+          )}
+
+          {stoppedIds.length > 1 && (
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={() => navigation.navigate('CustomerInterruptionRebook', { bookingId: stoppedIds[0], sourceBookingIds: stoppedIds })}
+              accessibilityRole="button"
+              testID="visit-rebook-stopped-all"
+            >
+              <Text style={styles.primaryText}>Đặt lịch mới cho {stoppedIds.length} máy đã dừng</Text>
             </TouchableOpacity>
           )}
 

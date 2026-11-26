@@ -74,7 +74,8 @@ export type RootStackParamList = {
   /** Book again the devices of a visit that could not be repaired; the first id anchors the server draft. */
   CustomerFailedRepairRebook: { sourceBookingIds: string[] };
   /** Book again a job a manager closed; `bookingId` anchors the server draft. */
-  CustomerInterruptionRebook: { bookingId: string };
+  /** `sourceBookingIds` (first = `bookingId`) picks some of the stopped devices of a visit; without it the server offers all of them. */
+  CustomerInterruptionRebook: { bookingId: string; sourceBookingIds?: string[] };
   /** Several devices in one visit; `prefill.devices` are the assistant's suggestions, each still checked and saved by the customer. */
   CustomerVisitCreate: { prefill?: { aiSessionId?: string; devices: { serviceId: string; description: string; photos?: { uploadId: string; uri: string; name: string; type: 'image/jpeg' }[] }[] } } | undefined;
   /**

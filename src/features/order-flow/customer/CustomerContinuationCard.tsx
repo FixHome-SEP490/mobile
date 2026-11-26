@@ -90,6 +90,29 @@ export default function CustomerContinuationCard({ order }: {
   );
 }
 
+/**
+ * What became of the quote or extra cost that was waiting when the technician stopped, and the way forward.
+ * The server keeps them as they were (it refuses any decision), so this says nothing is asked of the customer.
+ */
+export function StoppedCaseGuide({ quoteSent, extrasPending }: { quoteSent: boolean; extrasPending: boolean }) {
+  const steps = ['Công việc đã dừng', 'FixHome đối soát tiền và linh kiện cũ', 'Bạn đặt lịch mới khi sẵn sàng'];
+  return (
+    <View testID="stopped-case-guide" style={styles.card}>
+      <View style={styles.stack}>
+        <Text accessibilityRole="header" style={styles.title}>Bạn không cần làm gì với đơn này</Text>
+        {quoteSent && <Text style={styles.body}>Báo giá đã gửi chỉ để xem lại, bạn không cần duyệt hay từ chối, và không phải trả tiền cho báo giá đó.</Text>}
+        {extrasPending && <Text style={styles.body}>Đề xuất phát sinh chưa duyệt không còn hiệu lực, bạn không cần xử lý.</Text>}
+        {steps.map((text, index) => (
+          <View key={text} style={styles.line}>
+            <Text style={styles.bodyStrong}>{`${index + 1}.`}</Text>
+            <Text style={styles.body}>{text}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 /** Money block of a stopped order (web `stopped-work-finance`): the old quote is history, nothing is owed yet, nothing is refunded yet. */
 export function StoppedWorkFinanceNote() {
   return (
