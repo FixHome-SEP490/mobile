@@ -21,3 +21,15 @@ test('groups owed lines by order, drops settled and order-less lines, undeclared
   expect(filterPartReturns(groups, 'waiting').map(g => g.orderId)).toEqual(['aaaaaaaa-1']);
   expect(filterPartReturns(groups, 'all')).toHaveLength(2);
 });
+
+test('BUG DETECTOR 302: tabs follow the server returnStatus; a partly declared line waits for the manager, a mismatch is in neither', () => {
+  const groups = groupPartReturns([
+    row({ orderId: 'aaaaaaaa-1', declaredQty: 1, outstandingQty: 2, returnStatus: 'declared' }),
+    row({ orderId: 'bbbbbbbb-2', returnStatus: 'outstanding' }),
+    row({ orderId: 'cccccccc-3', declaredQty: 1, managerAcceptedQty: 1, outstandingQty: 1, returnStatus: 'partially_received' }),
+    row({ orderId: 'dddddddd-4', declaredQty: 2, returnStatus: 'exception' }),
+  ]);
+  expect(filterPartReturns(groups, 'declare').map(g => g.orderId)).toEqual(['bbbbbbbb-2']);
+  expect(filterPartReturns(groups, 'waiting').map(g => g.orderId).sort()).toEqual(['aaaaaaaa-1', 'cccccccc-3']);
+  expect(filterPartReturns(groups, 'all')).toHaveLength(4);
+});
