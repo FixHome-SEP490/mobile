@@ -8,6 +8,7 @@ import {
   type SkillEvidenceReviewStatus,
   type SkillEvidenceType,
   type SkillVerification,
+  type UploadedEvidenceFile,
 } from '../../api/technician-profile.api';
 import { technicianVerificationApi, type KycMimeType } from '../../api/technician-verification.api';
 import { extractApiErrorMessage } from '../../utils/input-validation';
@@ -17,9 +18,9 @@ export const SKILL_EVIDENCE_MAX_BYTES = 10 * 1024 * 1024;
 export const SKILL_EVIDENCE_SENT = 'Đã gửi chứng chỉ. FixHome sẽ xem xét.';
 export const SKILL_EVIDENCE_FAILED = 'Không thể gửi chứng chỉ. Vui lòng thử lại.';
 export const SKILL_STATUS_LABEL: Record<'pending' | 'verified' | 'rejected', string> = {
-  pending: 'Chờ duyệt chứng chỉ',
-  verified: 'Đã duyệt chứng chỉ',
-  rejected: 'Chứng chỉ bị từ chối',
+  pending: 'Chờ duyệt',
+  verified: 'Đã duyệt',
+  rejected: 'Bị từ chối',
 };
 
 export interface SkillEvidenceAsset { uri: string; mimeType?: string | null; fileName?: string | null; fileSize?: number | null }
@@ -213,20 +214,25 @@ export function selectedEvidenceCategories(
   return Array.from(found, ([id, name]) => ({ id, name }));
 }
 
-/** Same three steps as `sendSkillEvidence`, for a paper that covers several categories; nothing is attached if one fails. */
-export async function sendCategoryEvidence(categoryIds: string[], asset: SkillEvidenceAsset, details: SkillEvidenceDetails): Promise<number> {
+/** Gets an upload slot and uploads the photo; the result names the stored file for the request that follows. */
+export async function uploadCategoryPhoto(asset: SkillEvidenceAsset): Promise<UploadedEvidenceFile> {
   const problem = skillEvidenceProblem(asset);
   const mimeType = skillEvidenceMime(asset);
   if (problem || !mimeType) throw new Error(problem ?? SKILL_EVIDENCE_FAILED);
   const slot = await technicianProfileApi.requestCategoryEvidenceUploadUrl(mimeType);
   await technicianVerificationApi.uploadToSignedUrl(slot.uploadUrl, mimeType, { uri: asset.uri });
-  const result = await technicianProfileApi.attachCategoryEvidence(categoryIds, {
+  return {
     storageObjectPath: slot.storageObjectPath,
     fileName: asset.fileName?.trim() || `chung-chi.${mimeType.slice(6)}`,
     fileSize: asset.fileSize ?? 0,
     mimeType,
-    ...details,
-  });
+  };
+}
+
+/** Same three steps as `sendSkillEvidence`, for a paper that covers several categories; nothing is attached if one fails. */
+export async function sendCategoryEvidence(categoryIds: string[], asset: SkillEvidenceAsset, details: SkillEvidenceDetails): Promise<number> {
+  const file = await uploadCategoryPhoto(asset);
+  const result = await technicianProfileApi.attachCategoryEvidence(categoryIds, { ...file, ...details });
   return result.attachedSkills;
 }
 
@@ -246,6 +252,34 @@ export async function sendStagedEvidence(staged: StagedSkillEvidence[], category
       await sendCategoryEvidence(own, item.asset, item.details);
     } catch (err) {
       failed.push(item);
+      reason ??= extractApiErrorMessage(err, err instanceof Error && err.message ? err.message : SKILL_EVIDENCE_FAILED);
+    }
+  }
+  return { failed, reason };
+}
+
+// ── Giấy tờ chờ của MỘT kỹ năng chưa đăng ký, gửi ngay sau khi lưu kỹ năng ──────────────────────────────
+
+/** Giấy tờ thợ chọn trước khi bật kỹ năng: dùng lại giấy tờ đã up, hoặc ảnh mới kèm thông tin. */
+export type StagedSkillPaper =
+  | { kind: 'reuse'; paper: SentSkillEvidence }
+  | { kind: 'new'; asset: SkillEvidenceAsset; form: SkillEvidenceForm };
+
+/** Gửi giấy tờ chờ cho kỹ năng vừa lưu (backend mở phiếu khi lưu): dùng lại một lượt, ảnh mới lần lượt; trả số giấy tờ lỗi. */
+export async function sendStagedSkillPapers(serviceId: string, items: StagedSkillPaper[]): Promise<{ failed: number; reason: string | null }> {
+  let failed = 0;
+  let reason: string | null = null;
+  const reuseIds = items.flatMap((i) => (i.kind === 'reuse' ? [i.paper.documentId] : []));
+  if (reuseIds.length) {
+    try { await technicianProfileApi.reuseSkillEvidence(serviceId, reuseIds); } catch (err) {
+      failed += reuseIds.length;
+      reason ??= extractApiErrorMessage(err, SKILL_EVIDENCE_FAILED);
+    }
+  }
+  for (const item of items) {
+    if (item.kind !== 'new') continue;
+    try { await sendSkillEvidence(serviceId, item.asset, skillEvidenceDetails(item.form)); } catch (err) {
+      failed += 1;
       reason ??= extractApiErrorMessage(err, err instanceof Error && err.message ? err.message : SKILL_EVIDENCE_FAILED);
     }
   }

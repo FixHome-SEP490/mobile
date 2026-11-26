@@ -1,13 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Check, FileText, Lock, Pencil, Trash2, UploadCloud } from 'lucide-react-native';
+import { Check, FileText, UploadCloud } from 'lucide-react-native';
 import { technicianProfileApi, type SentSkillEvidence } from '../../api/technician-profile.api';
 import { iconStroke, useAppTheme } from '../../constants/theme';
 import { extractApiErrorMessage } from '../../utils/input-validation';
 import PillText from '../../components/PillText';
+import StatusBadge from '../../components/StatusBadge';
+import type { StatusView } from './technician-status';
 import { EvidencePhotoStage, EvidencePhotoThumb } from '../../components/technician/EvidencePhotoPreview';
 import OnboardingSection from './OnboardingSection';
+import EvidenceDetailModal, { evidenceFactLines } from './EvidenceDetailModal';
 import SkillEvidenceFormFields from './SkillEvidenceFormFields';
 import {
   EMPTY_SKILL_EVIDENCE_FORM,
@@ -15,7 +18,6 @@ import {
   SKILL_EVIDENCE_TYPE_LABEL,
   skillEvidenceCategoriesProblem,
   skillEvidenceDetails,
-  skillEvidenceFormFromSent,
   skillEvidenceFormProblem,
   skillEvidenceProblem,
   sendCategoryEvidence,
@@ -25,6 +27,22 @@ import {
   type SkillEvidenceForm,
   type StagedSkillEvidence,
 } from './skill-evidence';
+
+/** Badge and lock text per paper status; `editable` stands in when an older backend sends no status. */
+const EVIDENCE_STATUS: Record<NonNullable<SentSkillEvidence['status']>, { view: StatusView; lock?: string }> = {
+  pending: { view: { label: 'Chờ duyệt', tone: 'warning', icon: 'Clock' } },
+  rejected: { view: { label: 'Kỹ năng bị từ chối', tone: 'danger', icon: 'XCircle' } },
+  in_review: { view: { label: 'Đang xét duyệt', tone: 'info', icon: 'Clock' }, lock: 'Hồ sơ đang chờ xét duyệt, chưa sửa được.' },
+  approved: { view: { label: 'Đã dùng để duyệt', tone: 'success', icon: 'CheckCircle2' }, lock: 'Đã dùng để duyệt kỹ năng, không sửa hoặc xóa được.' },
+};
+const STATUS_ORDER = ['rejected', 'pending', 'in_review', 'approved'] as const;
+const STATUS_GROUP_TITLE: Record<(typeof STATUS_ORDER)[number], string> = {
+  rejected: 'Cần xử lý',
+  pending: 'Chờ duyệt',
+  in_review: 'Đang xét duyệt',
+  approved: 'Đã dùng để duyệt',
+};
+const evidenceStatusOf = (item: SentSkillEvidence) => item.status ?? (item.editable === false ? 'approved' : 'pending');
 
 const VISIBLE_GROUPS = 4;
 /** Groups named on a sent paper before the rest fold into "+n nhóm". */
@@ -64,19 +82,26 @@ export default function CategoryEvidenceSection({ staged, categories, onChange, 
   const toggleCategory = (id: string) => setChosen((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const nameOf = (ids: string[]) => categories.filter((c) => ids.includes(c.id)).map((c) => c.name).join(', ');
 
-  const pick = async () => {
+  /** Asks for a photo; null when the technician cancels or the photo is refused (the reason goes to the notice). */
+  const choosePhoto = async (): Promise<SkillEvidenceAsset | null> => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       Alert.alert('Cần quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh trong Cài đặt để chọn ảnh giấy tờ.');
-      return;
+      return null;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.85 });
     const asset = !result.canceled ? result.assets[0] : undefined;
-    if (!asset) return;
+    if (!asset) return null;
     const file = { uri: asset.uri, mimeType: asset.mimeType, fileName: asset.fileName, fileSize: asset.fileSize };
     const problem = skillEvidenceProblem(file);
-    if (problem) { setNotice(problem); return; }
+    if (problem) { setNotice(problem); return null; }
     setNotice('');
+    return file;
+  };
+
+  const pick = async () => {
+    const file = await choosePhoto();
+    if (!file) return;
     setForm(EMPTY_SKILL_EVIDENCE_FORM);
     // Nothing ticked to start with when there is a choice, so the technician says which groups the paper proves.
     setChosen(categories.length > 1 ? [] : categories.map((c) => c.id));
@@ -85,38 +110,8 @@ export default function CategoryEvidenceSection({ staged, categories, onChange, 
 
   const close = () => { setPicked(null); setForm(EMPTY_SKILL_EVIDENCE_FORM); setNotice(''); };
 
-  // A paper already sent is edited in the same form, with its photo read back; the photo itself cannot be changed.
-  const [editing, setEditing] = useState<SentSkillEvidence | null>(null);
-  const [editUri, setEditUri] = useState<string | null>(null);
+  // A paper already sent is not edited (it is shared by several skills): the technician deletes it and sends a new one.
   const [saving, setSaving] = useState(false);
-  const closeEdit = () => { setEditing(null); setEditUri(null); setForm(EMPTY_SKILL_EVIDENCE_FORM); setNotice(''); };
-  const startEdit = (item: SentSkillEvidence) => {
-    setPicked(null);
-    setNotice('');
-    setForm(skillEvidenceFormFromSent(item));
-    setChosen(categories.length > 1 ? item.categories.map((c) => c.id) : categories.map((c) => c.id));
-    setEditUri(null);
-    setEditing(item);
-    if (item.mimeType.startsWith('image/')) {
-      technicianProfileApi.getSkillEvidenceAccess(item.serviceId, item.documentId).then((url) => setEditUri(url || null), () => undefined);
-    }
-  };
-  const saveEdit = async () => {
-    if (!editing || saving) return;
-    const categoryIds = categories.filter((c) => chosen.includes(c.id)).map((c) => c.id);
-    const problem = skillEvidenceFormProblem(form) ?? skillEvidenceCategoriesProblem(categoryIds);
-    const details = skillEvidenceDetails(form);
-    if (problem || !details) { setNotice(problem ?? ''); return; }
-    setSaving(true);
-    try {
-      setSent(await technicianProfileApi.updateSkillEvidence(editing.documentId, { ...details, categoryIds }));
-      closeEdit();
-    } catch (err) {
-      setNotice(extractApiErrorMessage(err, 'Không lưu được thay đổi. Vui lòng thử lại.'));
-    } finally {
-      setSaving(false);
-    }
-  };
   const removeSent = (item: SentSkillEvidence) => Alert.alert(
     'Xóa giấy tờ này?',
     'Giấy tờ sẽ được gỡ khỏi tất cả nhóm đã gắn.',
@@ -141,6 +136,12 @@ export default function CategoryEvidenceSection({ staged, categories, onChange, 
     const problem = skillEvidenceFormProblem(form) ?? skillEvidenceCategoriesProblem(categoryIds);
     const details = skillEvidenceDetails(form);
     if (problem || !details) { setNotice(problem ?? ''); return; }
+    // Same type and number already on every chosen group: a second copy changes nothing (the server refuses it too).
+    const number = (details.referenceNumber ?? '').trim().toLowerCase();
+    if (number && sent.some((p) => p.evidenceType === details.evidenceType && (p.referenceNumber ?? '').trim().toLowerCase() === number && categoryIds.every((id) => p.categories.some((cat) => cat.id === id)))) {
+      setNotice('Bạn đã nộp giấy tờ này cho các nhóm đã chọn (cùng loại, cùng số hiệu). Không cần tải lại.');
+      return;
+    }
     if (sendNow) {
       setSaving(true);
       try {
@@ -159,12 +160,12 @@ export default function CategoryEvidenceSection({ staged, categories, onChange, 
     close();
   };
 
-  // The same form adds a new paper (at the end of the list) or edits a sent one (in place of its row, so it opens where the technician tapped).
+  // The form adds a new paper at the end of the list.
   const renderForm = () => (
       <View style={styles.form} testID="category-evidence-form">
-        <Text style={styles.formTitle}>{editing ? 'Sửa giấy tờ' : 'Thông tin giấy tờ'}</Text>
-        {(picked?.uri ?? editUri) ? <EvidencePhotoStage uri={(picked?.uri ?? editUri) as string} /> : null}
-        <Text style={styles.hint} numberOfLines={1}>{editing ? 'Muốn đổi ảnh thì xóa giấy tờ này rồi thêm lại.' : picked?.fileName?.trim() || 'Ảnh đã chọn'}</Text>
+        <Text style={styles.formTitle}>Thông tin giấy tờ</Text>
+        {picked?.uri ? <EvidencePhotoStage uri={picked.uri} /> : null}
+        <Text style={styles.hint} numberOfLines={1}>{picked?.fileName?.trim() || 'Ảnh đã chọn'}</Text>
         <SkillEvidenceFormFields form={form} onChange={setForm} testIdPrefix="category-evidence" />
         {categories.length > 1 && (
           <View accessibilityRole="list" style={styles.groups}>
@@ -189,13 +190,13 @@ export default function CategoryEvidenceSection({ staged, categories, onChange, 
           </View>
         )}
         <View style={styles.actions}>
-          <Pressable accessibilityRole="button" accessibilityLabel={editing ? 'Hủy sửa giấy tờ' : 'Hủy thêm giấy tờ'} onPress={editing ? closeEdit : close}
+          <Pressable accessibilityRole="button" accessibilityLabel="Hủy thêm giấy tờ" onPress={close}
             style={({ pressed }) => [styles.button, styles.actionButton, pressed && styles.pressed]}>
             <Text style={styles.buttonText}>Hủy</Text>
           </Pressable>
-          <Pressable testID="category-evidence-confirm" accessibilityRole="button" accessibilityLabel={editing ? 'Lưu thay đổi giấy tờ' : sendNow ? 'Gửi giấy tờ này' : 'Thêm giấy tờ này'} disabled={saving} onPress={editing ? () => void saveEdit() : () => void add()}
+          <Pressable testID="category-evidence-confirm" accessibilityRole="button" accessibilityLabel={sendNow ? 'Gửi giấy tờ này' : 'Thêm giấy tờ này'} disabled={saving} onPress={() => void add()}
             style={({ pressed }) => [styles.button, styles.actionButton, styles.primaryButton, pressed && styles.pressed]}>
-            <Text style={[styles.buttonText, styles.primaryButtonText]}>{editing ? 'Lưu thay đổi' : sendNow ? (saving ? 'Đang gửi…' : 'Gửi giấy tờ') : 'Thêm'}</Text>
+            <Text style={[styles.buttonText, styles.primaryButtonText]}>{sendNow ? (saving ? 'Đang gửi…' : 'Gửi giấy tờ') : 'Thêm'}</Text>
           </Pressable>
         </View>
         {!!notice && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text>}
@@ -213,11 +214,16 @@ export default function CategoryEvidenceSection({ staged, categories, onChange, 
       {sent.length > 0 && (
         <View style={styles.sent} testID="category-evidence-sent">
           <Text style={styles.label}>Giấy tờ đã nộp ({sent.length})</Text>
-          {sent.map((item) => (editing?.documentId === item.documentId ? (
-            <View key={item.documentId} style={styles.editCard}>{renderForm()}</View>
-          ) : (
-            <SentEvidenceRow key={item.documentId} item={item} disabled={disabled || saving || !!editing || !!picked} onEdit={() => startEdit(item)} onRemove={() => removeSent(item)} />
-          )))}
+          {(sendNow ? [...sent].sort((a, b) => STATUS_ORDER.indexOf(evidenceStatusOf(a)) - STATUS_ORDER.indexOf(evidenceStatusOf(b))) : sent).map((item, index, list) => {
+            const status = evidenceStatusOf(item);
+            const first = sendNow && (index === 0 || evidenceStatusOf(list[index - 1]) !== status);
+            return (
+              <React.Fragment key={item.documentId}>
+                {first && <Text style={styles.groupTitle} accessibilityRole="header" testID={`category-evidence-heading-${status}`}>{`${STATUS_GROUP_TITLE[status]} (${list.filter((x) => evidenceStatusOf(x) === status).length})`}</Text>}
+                <SentEvidenceRow item={item} disabled={disabled || saving || !!picked} onRemove={() => removeSent(item)} />
+              </React.Fragment>
+            );
+          })}
         </View>
       )}
 
@@ -243,7 +249,7 @@ export default function CategoryEvidenceSection({ staged, categories, onChange, 
         </View>
       ))}
 
-      {!picked && !editing && staged.length < MAX_STAGED_SKILL_EVIDENCE && (!sendNow || categories.length > 0) && (
+      {!picked && staged.length < MAX_STAGED_SKILL_EVIDENCE && (!sendNow || categories.length > 0) && (
         <Pressable testID="category-evidence-add" accessibilityRole="button" accessibilityLabel="Thêm giấy tờ" disabled={disabled}
           onPress={() => void pick()} style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
           <UploadCloud size={18} strokeWidth={1.75} color={colors.primaryStrong} />
@@ -257,16 +263,17 @@ export default function CategoryEvidenceSection({ staged, categories, onChange, 
         <Text style={styles.hint}>Mọi kỹ năng đang nhận đã được duyệt nên không cần thêm giấy tờ. Bật thêm dịch vụ mới để gửi giấy tờ cho dịch vụ đó.</Text>
       )}
 
-      {!!notice && !picked && !editing && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text>}
+      {!!notice && !picked && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text>}
     </OnboardingSection>
   );
 }
 
 /** One paper already sent: its photo (read through a short-lived link), type, issuer and the groups it covers. */
-function SentEvidenceRow({ item, disabled, onEdit, onRemove }: { item: SentSkillEvidence; disabled?: boolean; onEdit: () => void; onRemove: () => void }) {
+function SentEvidenceRow({ item, disabled, onRemove }: { item: SentSkillEvidence; disabled?: boolean; onRemove: () => void }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const [uri, setUri] = useState<string | null>(null);
+  const [detail, setDetail] = useState(false);
   const isImage = item.mimeType.startsWith('image/');
   useEffect(() => {
     if (!isImage) return;
@@ -275,15 +282,23 @@ function SentEvidenceRow({ item, disabled, onEdit, onRemove }: { item: SentSkill
     return () => { live = false; };
   }, [isImage, item.serviceId, item.documentId]);
   const title = item.evidenceType ? SKILL_EVIDENCE_TYPE_LABEL[item.evidenceType] : item.fileName;
+  const { view, lock } = EVIDENCE_STATUS[evidenceStatusOf(item)];
   const shown = item.categories.slice(0, MAX_CHIPS);
   const more = item.categories.length - shown.length;
   return (
-    <View style={styles.sentCard} testID={`category-evidence-sent-${item.documentId}`}>
+    <Pressable style={({ pressed }) => [styles.sentCard, pressed && styles.pressed]} testID={`category-evidence-sent-${item.documentId}`} accessibilityRole="button"
+      accessibilityLabel={`Xem chi tiết giấy tờ ${title}`} onPress={() => setDetail(true)}>
       <View style={styles.sentTop}>
         {uri ? <EvidencePhotoThumb uri={uri} size={64} /> : <View style={styles.thumbHolder}><FileText size={22} strokeWidth={iconStroke} color={colors.textSecondary} /></View>}
         <View style={styles.itemBody}>
           <Text style={styles.itemTitle} numberOfLines={2}>{title}</Text>
           {!!item.issuer && <Text style={styles.hint} numberOfLines={1}>{item.issuer}</Text>}
+          <View testID={lock ? `category-evidence-locked-${item.documentId}` : undefined} accessible={!!lock} accessibilityLabel={lock ? `${view.label}. ${lock}` : undefined}><StatusBadge view={view} /></View>
+          {item.status === 'rejected' && (
+            <Text style={styles.hint} testID={`category-evidence-reason-${item.documentId}`}>
+              {item.rejectionReason ? `Lý do từ chối: ${item.rejectionReason}. ` : ''}Bấm Gửi lại để xét duyệt khi bạn sẵn sàng.
+            </Text>
+          )}
           <View style={styles.chips} accessible accessibilityLabel={`Áp dụng cho: ${item.categories.map((c) => c.name).join(', ')}`}>
             {shown.map((c) => (
               <View key={c.id} style={styles.chip}><PillText style={styles.chipText}>{c.name}</PillText></View>
@@ -292,26 +307,19 @@ function SentEvidenceRow({ item, disabled, onEdit, onRemove }: { item: SentSkill
           </View>
         </View>
       </View>
-      {item.editable === false ? (
-        <View style={styles.locked} testID={`category-evidence-locked-${item.documentId}`} accessible accessibilityLabel="Giấy tờ đã dùng để duyệt kỹ năng, không sửa hoặc xóa được">
-          <Lock size={15} strokeWidth={iconStroke} color={colors.textSecondary} />
-          <Text style={styles.hint}>Đã dùng để duyệt kỹ năng, không sửa hoặc xóa được.</Text>
-        </View>
-      ) : (
-      <View style={styles.sentActions}>
-        <Pressable testID={`category-evidence-edit-${item.documentId}`} accessibilityRole="button" accessibilityLabel={`Sửa giấy tờ ${title}`} disabled={disabled}
-          hitSlop={4} onPress={onEdit} style={({ pressed }) => [styles.pill, disabled && styles.dim, pressed && styles.pressed]}>
-          <Pencil size={15} strokeWidth={iconStroke} color={colors.primaryStrong} />
-          <Text style={styles.link}>Sửa</Text>
-        </Pressable>
-        <Pressable testID={`category-evidence-delete-${item.documentId}`} accessibilityRole="button" accessibilityLabel={`Xóa giấy tờ ${title}`} disabled={disabled}
-          hitSlop={4} onPress={onRemove} style={({ pressed }) => [styles.pill, styles.pillDanger, disabled && styles.dim, pressed && styles.pressed]}>
-          <Trash2 size={15} strokeWidth={iconStroke} color={colors.tone.danger.text} />
-          <Text style={[styles.link, styles.danger]}>Xóa</Text>
-        </Pressable>
-      </View>
-      )}
-    </View>
+      <EvidenceDetailModal
+        visible={detail}
+        title={title}
+        photo={isImage ? { serviceId: item.serviceId, documentId: item.documentId } : null}
+        facts={evidenceFactLines(item)}
+        status={view}
+        reason={item.rejectionReason}
+        note={lock}
+        categories={item.categories.map((c) => c.name)}
+        onDelete={lock || disabled ? undefined : () => { setDetail(false); onRemove(); }}
+        onClose={() => setDetail(false)}
+      />
+    </Pressable>
   );
 }
 
@@ -336,13 +344,12 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   more: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 6 },
   moreText: { color: colors.primaryStrong, fontSize: 14, fontWeight: '600' },
   sent: { gap: 8 },
-  editCard: { padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.primaryStrong, backgroundColor: colors.surface },
+  groupTitle: { color: colors.text, fontSize: 15, lineHeight: 20, fontWeight: '700', marginTop: 4 },
   sentCard: { gap: 10, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   sentTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
   chip: { maxWidth: '100%', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999, backgroundColor: colors.primarySoft },
   chipText: { color: colors.primaryStrong, fontSize: 12, lineHeight: 18, fontWeight: '600' },
-  locked: { flexDirection: 'row', alignItems: 'center', gap: 6, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: 10 },
   sentActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: 10 },
   pill: { minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   pillDanger: { borderColor: colors.tone.danger.text },

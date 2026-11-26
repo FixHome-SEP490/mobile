@@ -585,6 +585,19 @@ describe('technician profile real UI (T-RUI5)', () => {
     expect(mockUsersApi.updateProfile).not.toHaveBeenCalled();
   });
 
+  it('tells how many taken skills were refused, so the technician knows there is something to fix', async () => {
+    mockProfileLoaded({
+      offerings: [
+        { serviceId: 's1', isActive: true, verificationStatus: 'verified' },
+        { serviceId: 's2', isActive: true, verificationStatus: 'rejected' },
+        { serviceId: 's3', isActive: false, verificationStatus: 'rejected' },
+      ],
+    });
+    const renderer = await renderProfile();
+    expect(visibleText(renderer)).toContain('2 dịch vụ đang nhận · 1 bị từ chối');
+    await act(async () => renderer.unmount());
+  });
+
   it('shows honest skills and rating counts from the server only', async () => {
     mockProfileLoaded({
       offerings: [],

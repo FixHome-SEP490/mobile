@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-26 14:30 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: feat/warranty-same-technician
+> Cập nhật lần cuối: 2026-11-26 19:35 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -459,7 +459,14 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-26 19:35 (UTC+7) | Hgnv11 | feat/warranty-same-technician | Trang Kỹ năng: bật một kỹ năng chưa đăng ký giờ hiện chỗ thêm giấy tờ (chọn từ giấy tờ đã up hoặc tải ảnh mới) ngay trên dòng kỹ năng; giấy tờ giữ tạm và gửi cùng lúc bấm Lưu thay đổi (backend mở phiếu Chờ duyệt ngay khi lưu nên phiếu đã có giấy tờ); tắt kỹ năng thì bỏ giấy tờ chờ. Chưa kiểm trên máy thật
+- 2026-11-26 19:20 (UTC+7) | Hgnv11 | feat/warranty-same-technician | Rủi ro biết trước của chặn trùng giấy tờ kỹ năng (cùng file, hoặc cùng loại + số hiệu): backend kiểm rồi mới ghi, chưa có ràng buộc duy nhất ở DB nên hai lần tải đồng thời có thể lọt hai bản (cần migration nếu muốn chặn tuyệt đối); app cũ không có serviceIds thì bảng chọn không đánh dấu Đã có nhưng backend vẫn bỏ qua trùng
+- 2026-11-26 16:56 (UTC+7) | Hgnv11 | dev | Kỹ năng và giấy tờ: bấm giấy tờ mở chi tiết (ảnh, thông tin, trạng thái, lý do, nhóm áp dụng) và Xóa nằm trong đó; nút Thêm giấy tờ ở dòng kỹ năng cho chọn lại giấy tờ đã up (cần backend có documents/reuse) hoặc tải ảnh mới; báo trùng cùng loại và số hiệu; nhãn trạng thái kỹ năng đổi thành Chờ duyệt, Đã duyệt, Bị từ chối.
+- 2026-11-26 16:17 (UTC+7) | Hgnv11 | dev | PO 26/11: giấy tờ chỉ Xem/Xóa/Thêm mới ở mọi nơi: bỏ Sửa và Đổi ảnh (trang Giấy tờ, bước 3 đăng ký); Xóa ở dòng kỹ năng chỉ gỡ giấy tờ khỏi kỹ năng đó (DELETE .../verification/documents/:id), Xóa ở trang Giấy tờ gỡ khỏi mọi kỹ năng; dòng Kỹ năng và dịch vụ ở Hồ sơ ghi số kỹ năng bị từ chối; cần backend mới
+- 2026-11-26 15:59 (UTC+7) | Hgnv11 | dev | PO 26/11: dòng giấy tờ của từng kỹ năng có nút Xóa (kỹ năng chờ duyệt hoặc bị từ chối, không với kỹ năng đã duyệt); thêm giấy tờ cho kỹ năng bị từ chối chỉ chờ trên kỹ năng đó, bấm Gửi lại mới đưa sang chờ duyệt
+- 2026-11-26 14:59 (UTC+7) | Hgnv11 | dev | PO 26/11: luồng kỹ năng bị SM từ chối: nút Gửi lại để xét duyệt ở trang Kỹ năng (POST .../verification/resubmit) và ở trang Giấy tờ (gửi lại mọi kỹ năng bị từ chối); Đổi ảnh khi sửa giấy tờ chưa duyệt hoặc bị từ chối (PATCH skill-evidence kèm file mới); trang Giấy tờ gom theo trạng thái (Cần xử lý, Chờ duyệt, Đang xét duyệt, Đã dùng để duyệt); thông báo SKILL_VERIFICATION_APPROVED/REJECTED mở trang Kỹ năng; cần backend mới
 - 2026-11-26 14:30 (UTC+7) | Hgnv11 | dev | PO 26/11: thợ không còn nút Không nhận được / Từ chối phân công ở bảo hành; nút tạo yêu cầu bảo hành của khách (bản production) mở thẳng màn bảo hành của đơn
+- 2026-11-26 14:14 (UTC+7) | Hgnv11 | dev | PO 25/11: trang Giấy tờ chứng minh hiện huy hiệu trạng thái từng giấy tờ (Chờ duyệt, Đang xét duyệt, Đã dùng để duyệt, Kỹ năng bị từ chối + lý do) theo status của backend, khóa Sửa/Xóa theo status (backend cũ không có status thì dùng editable); giấy tờ của kỹ năng bị từ chối sửa/xóa được và tự đi kèm khi bật lại kỹ năng; trang Kỹ năng không gửi level nữa (cấp độ do FixHome xác định)
 - 2026-11-25 22:39 (UTC+7) | Hgnv11 | dev | Giấy tờ tách thành trang riêng (TechnicianEvidence), giấy tờ đã dùng duyệt kỹ năng bị khóa sửa/xóa; cần backend trả editable; CHƯA KIỂM CHỨNG trên thiết bị
 - 2026-11-25 22:35 (UTC+7) | Hgnv11 | dev | Trang Kỹ năng riêng cho thợ (lọc, tìm, nhóm, lý do từ chối, giấy tờ gửi ngay) thay bottom sheet ở Hồ sơ; CHƯA KIỂM CHỨNG trên thiết bị
 - 2026-11-25 21:41 (UTC+7) | Hgnv11 | dev | Thêm chọn kênh OTP Email/SMS khi đăng ký và thẻ xác thực email/SĐT (Bảo mật khách hàng, hồ sơ kỹ thuật viên); CHƯA KIỂM CHỨNG trên thiết bị và backend thật
@@ -492,13 +499,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-11-21 20:36 (UTC+7) | Hgnv11 | dev | Chat AI đồng bộ web: nút trả lời nhanh `answerOptionsVi`, lượt nhiều thiết bị tối đa 5, bỏ reply trễ sau phiên mới, timeout 45 giây, ảnh gửi AI 1024 px
 - 2026-11-21 18:25 (UTC+7) | ToanAltF4 | fix/mobile-chat-initials-2111 | Chữ cái ảnh đại diện trong danh sách tin nhắn lấy theo tên, bỏ phần ghi chú trong ngoặc và số
 - 2026-11-21 17:38 (UTC+7) | ToanAltF4 | fix/mobile-contract-audit-2111 | Rà hợp đồng API và validation với backend: mức khẩn critical, danh sách đơn đủ 100, địa chỉ đổi phải có ghim, mật khẩu đặt lại 72 byte, tên chủ tài khoản, lý do ngày nghỉ 500 ký tự
-- 2026-11-21 16:17 (UTC+7) | ToanAltF4 | fix/mobile-api-audit-2111 | Lượt nhiều máy nhận tối đa 5 thiết bị như backend (trước giữ 3)
-- 2026-11-21 16:13 (UTC+7) | Hgnv11 | dev | Hồ sơ kỹ thuật viên: bỏ nhãn xác minh danh tính lặp ở dòng Kỹ năng, nhãn đặt ngay dưới tiêu đề dòng Xác minh danh tính (bỏ mô tả trùng); hai ô Giá công và Bảo hành chia đều
-- 2026-11-21 15:10 (UTC+7) | Hgnv11 | dev | Thông báo OFFICE_VISIT_REMINDER (nhắc lịch lên trụ sở) mở màn đặt lịch; hồ sơ bị từ chối được admin mở lại thì thợ nhận OFFICE_VISIT_RESET và đặt lịch gặp lại
-- 2026-11-21 13:20 (UTC+7) | Hgnv11 | fix/mobile-technician-kyc-face-picker | Merge origin/dev (a5d34d1, #98 Expo Go không nạp MapLibre) vào nhánh; giữ cả hai nhật ký
-- 2026-11-21 12:58 (UTC+7) | Hgnv11 | fix/mobile-technician-kyc-face-picker | Ô ảnh chân dung trong Xác minh danh tính thợ mở hộp chọn Thư viện ảnh / Chụp ảnh thay vì mở camera ngay
-- 2026-11-21 12:55 (UTC+7) | ToanAltF4 | fix/mobile-expogo-map-2111 | BUG 211: Expo Go không nạp MapLibre, hiện khung Bản đồ chỉ có trên bản cài APK; APK vẫn dùng MapLibre (nạp lười trong AddressMap)
-- 2026-11-21 03:39 (UTC+7) | ToanAltF4 | fix/mobile-map-default-2111 | Khung chọn ảnh/video trong chat đóng được bằng nút Back
 
 
 ### Lịch sử giữ lại khi tích hợp

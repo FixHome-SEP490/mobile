@@ -651,6 +651,17 @@ describe('technician notifications real UI (T-RUI5)', () => {
     await act(async () => renderer.unmount());
   });
 
+  it('opens the Skills page from the notices of a skill review, approved or refused', async () => {
+    for (const [type, title] of [['SKILL_VERIFICATION_REJECTED', 'Kỹ năng chưa được duyệt'], ['SKILL_VERIFICATION_APPROVED', 'Kỹ năng đã được duyệt']]) {
+      mockNavigate.mockClear();
+      mockNotificationsPage([{ ...unreadItem, title, type, referenceType: 'technician_skill', referenceId: '550e8400-e29b-41d4-a716-446655440002' }], 1);
+      const renderer = await renderNotifications();
+      await act(async () => { inboxButton(renderer, `Chưa đọc. ${title}. Nội dung`).props.onPress(); });
+      expect(mockNavigate).toHaveBeenLastCalledWith('TechnicianSkills');
+      await act(async () => renderer.unmount());
+    }
+  });
+
   it('shows loading copy with no fake rows while fetching', async () => {
     (mockNotificationsApi.getNotifications as jest.Mock).mockImplementation(
       () => new Promise(() => undefined),
