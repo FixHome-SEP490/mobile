@@ -34,7 +34,9 @@ export function normalizeSessionOrder(payload: unknown, orderId: string): Techni
     if (typeof row.code !== 'string' || typeof row.createdAt !== 'string') throw new Error('Invalid history');
     return { id: orderId, code: row.code, status: status as TechnicianOrderItem['status'],
       createdAt: row.createdAt, completedAt: typeof row.completedAt === 'string' ? row.completedAt : null,
-      cancelledAt: typeof row.cancelledAt === 'string' ? row.cancelledAt : null, historical: true };
+      cancelledAt: typeof row.cancelledAt === 'string' ? row.cancelledAt : null, historical: true,
+      ...(row.workStopped === true ? { workStopped: true } : {}),
+      ...(typeof row.operationalDisposition === 'string' ? { operationalDisposition: row.operationalDisposition } : {}) };
   }
   return { ...row, status } as unknown as TechnicianOrderItem;
 }

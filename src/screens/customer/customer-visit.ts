@@ -1,5 +1,6 @@
 // Pure rules for the multi-device visit screens (web CustomerVisitPage / CustomerOrdersPage parity).
 import type { ToneName } from '../../constants/theme';
+import { isOrderWorkStopped } from '../../api/order-work-stopped';
 import type { Visit, VisitCheckout, VisitDeviceState, VisitGroupReadStatus } from '../../api/visit-groups.api';
 
 /** Label and tone of a visit row in a list; same wording as the web. */
@@ -39,11 +40,12 @@ export const VISIT_DEVICE_STATE_LABEL: Record<VisitDeviceState, string> = {
   quote_declined: 'Bạn không duyệt báo giá, không tính tiền',
   cancelled: 'Đã hủy',
   open: 'Đang xử lý',
+  interrupted: 'Đã dừng sửa · Tiền cũ cần đối soát',
 };
 
 /** Same gate as the order screen: the technician is on the way and an official quotation waits for the customer. */
-export function needsQuoteDecision(order: { status?: string; quotation?: { status?: string } | null } | null | undefined): boolean {
-  return !!order && String(order.status).toUpperCase() === 'EN_ROUTE' && String(order.quotation?.status).toUpperCase() === 'SENT';
+export function needsQuoteDecision(order: { status?: string; quotation?: { status?: string } | null; workStopped?: boolean; operationalDisposition?: string | null } | null | undefined): boolean {
+  return !!order && !isOrderWorkStopped(order) && String(order.status).toUpperCase() === 'EN_ROUTE' && String(order.quotation?.status).toUpperCase() === 'SENT';
 }
 
 export interface VisitActionInput {

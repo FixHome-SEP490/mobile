@@ -25,6 +25,11 @@ describe('customerActivityStage', () => {
     expect([s.group, s.view.label, s.primary?.label]).toEqual(['action', 'Chờ bạn duyệt báo giá', 'Xem và duyệt báo giá']);
   });
 
+  it('does not ask to approve a SENT quotation once the technician stopped the work', () => {
+    const s = customerActivityStage(order({ status: 'EN_ROUTE', workStopped: true, quotation: { id: 'q', status: 'sent', laborTotal: 0, partsTotal: 0, items: [] } }));
+    expect([s.group, s.view.label, s.primary?.label]).toEqual(['active', 'Đã dừng công việc', 'Xem đơn']);
+  });
+
   it('a handed-over unpaid order waits for payment; a paid one only waits', () => {
     const unpaid = customerActivityStage(order({ status: 'UNDER_REPAIR', completionRequestedAt: 'x' }));
     expect([unpaid.group, unpaid.step, unpaid.view.label, unpaid.primary?.label]).toEqual(['action', 5, 'Chờ thanh toán', 'Thanh toán']);

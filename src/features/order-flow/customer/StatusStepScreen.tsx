@@ -6,7 +6,8 @@ import { isOldFinanceReview, isOrderWorkStopped, STOPPED_WORK_MESSAGE, STOPPED_W
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import CustomerDeliverySection from './CustomerDeliverySection';
-import CustomerContinuationCard, { StoppedWorkFinanceNote } from './CustomerContinuationCard';
+import CustomerContinuationCard, { StoppedCaseGuide, StoppedWorkFinanceNote } from './CustomerContinuationCard';
+import { actionableExtras } from '../domain/order-task-resolver';
 
 /**
  * C03, C04 and C06 share one read-only body: the order frame above already shows the technician, appointment and
@@ -32,6 +33,12 @@ export default function StatusStepScreen({ title, stage, message }: { title: str
         <ReadOnlyNotice>Quyền xem đơn đã thay đổi hoặc dữ liệu chưa sẵn sàng. Bản nháp cục bộ đã được xóa; không có thao tác nào được gửi.</ReadOnlyNotice>
       ) : (
         <ReadOnlyNotice>{stopped ? STOPPED_WORK_MESSAGE : message}</ReadOnlyNotice>
+      )}
+      {!revoked && stopped && (
+        <StoppedCaseGuide
+          quoteSent={String(order.quotation?.status).toUpperCase() === 'SENT'}
+          extrasPending={!!snapshot && (actionableExtras(snapshot)?.length ?? 0) > 0}
+        />
       )}
       {!revoked && isOldFinanceReview(order) && <StoppedWorkFinanceNote />}
       {!revoked && <CustomerContinuationCard order={order} />}

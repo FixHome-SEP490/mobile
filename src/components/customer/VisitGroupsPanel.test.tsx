@@ -113,3 +113,45 @@ it('keeps Đang sửa chữa while one device is still not handed over, or its o
   mockGetMyOrders.mockResolvedValue([deviceOrder(1, { completionRequestedAt: '2026-10-29T13:20:00.000Z' })]);
   expect(texts((await mount()).tree)).toContain('Đang sửa chữa');
 });
+
+it('excludes stopped, failed, and quote-declined devices from total payment and shows Đã dừng sửa', async () => {
+  mockGetMyPage.mockResolvedValue({
+    data: [{
+      ...row('v10', 'mixed', '2026-11-26T10:00:00.000Z'),
+      items: [
+        { itemId: 'v10-1', sequence: 1, bookingId: 'b1', serviceId: 's', deviceLabel: null, outcome: 'succeeded', bookingStatus: 'MATCHED', serviceName: 'Vệ sinh điều hòa', orderId: 'o1', orderCode: 'SO-1', orderStatus: 'completed' },
+        { itemId: 'v10-2', sequence: 2, bookingId: 'b2', serviceId: 's', deviceLabel: null, outcome: 'interrupted', bookingStatus: 'MATCHED', serviceName: 'Sửa điều hòa', orderId: 'o2', orderCode: 'SO-2', orderStatus: 'under_repair' },
+      ],
+    }],
+    total: 1,
+  });
+  mockGetMyOrders.mockResolvedValue([
+    deviceOrder(1, { status: 'COMPLETED', grandTotal: 259000 }),
+    deviceOrder(2, { status: 'UNDER_REPAIR', workStopped: true, operationalDisposition: 'STOPPED', grandTotal: 500000 }),
+  ]);
+  const all = texts((await mount()).tree);
+  expect(all).toContain('Đã sửa xong');
+  expect(all).toContain('Đã dừng sửa');
+  expect(all.some((t) => t.includes('259.000'))).toBe(true);
+  expect(all.some((t) => t.includes('759.000'))).toBe(false);
+});
+
+it('excludes workStopped orders even when outcome is still null', async () => {
+  mockGetMyPage.mockResolvedValue({
+    data: [{
+      ...row('v11', 'under_repair', '2026-11-26T10:00:00.000Z'),
+      items: [
+        { itemId: 'v11-1', sequence: 1, bookingId: 'b1', serviceId: 's', deviceLabel: null, outcome: 'succeeded', bookingStatus: 'MATCHED', serviceName: 'Máy 1', orderId: 'o1', orderCode: 'SO-1', orderStatus: 'completed' },
+        { itemId: 'v11-2', sequence: 2, bookingId: 'b2', serviceId: 's', deviceLabel: null, outcome: null, bookingStatus: 'MATCHED', serviceName: 'Máy 2', orderId: 'o2', orderCode: 'SO-2', orderStatus: 'en_route' },
+      ],
+    }],
+    total: 1,
+  });
+  mockGetMyOrders.mockResolvedValue([
+    deviceOrder(1, { status: 'COMPLETED', grandTotal: 300000 }),
+    deviceOrder(2, { status: 'EN_ROUTE', operationalDisposition: 'STOPPED', grandTotal: 450000 }),
+  ]);
+  const all = texts((await mount()).tree);
+  expect(all.some((t) => t.includes('300.000'))).toBe(true);
+  expect(all.some((t) => t.includes('750.000'))).toBe(false);
+});

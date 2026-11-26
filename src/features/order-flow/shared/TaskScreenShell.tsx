@@ -15,6 +15,8 @@ export interface TaskAction {
   disabled?: boolean;
   accessibilityHint?: string;
   testID?: string;
+  /** An action that cannot be undone (stopping the work): the button is red, not the usual blue. */
+  destructive?: boolean;
 }
 
 export function FixedActionFooter({ primary, secondary, summary, bottomInset, keyboardInset }: {
@@ -30,7 +32,7 @@ export function FixedActionFooter({ primary, secondary, summary, bottomInset, ke
       </TouchableOpacity>}
       {primary && <TouchableOpacity testID={primary.testID} accessibilityRole="button" accessibilityHint={primary.accessibilityHint}
         accessibilityState={{ disabled: !!primary.disabled }}
-        disabled={primary.disabled} onPress={primary.onPress} style={[styles.primaryButton, secondary && styles.primarySlot, primary.disabled && styles.disabled]}>
+        disabled={primary.disabled} onPress={primary.onPress} style={[styles.primaryButton, primary.destructive && styles.destructiveButton, secondary && styles.primarySlot, primary.disabled && styles.disabled]}>
         <Text style={styles.primaryText}>{primary.label}</Text>
       </TouchableOpacity>}
     </View>
@@ -135,6 +137,7 @@ const styles = StyleSheet.create({
   secondarySlot: { flex: 1 },
   primarySlot: { flex: 2 },
   primaryButton: { flex: 1, minHeight: 52, backgroundColor: colors.primaryStrong, paddingHorizontal: spacing.md, paddingVertical: 12, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  destructiveButton: { backgroundColor: colors.tone.danger.fg },
   primaryText: { color: colors.surface, fontSize: 16, fontWeight: '700', textAlign: 'center' },
   secondaryButton: { flex: 1, minHeight: 52, paddingHorizontal: spacing.md, paddingVertical: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   secondaryText: { color: colors.text, fontSize: 15, fontWeight: '600', textAlign: 'center' },

@@ -12,6 +12,7 @@ const STATUS: Record<VisitDeviceState, string> = {
   quote_declined: 'Khách không duyệt báo giá',
   cancelled: 'Đã hủy',
   open: 'Đang xử lý',
+  interrupted: 'Đã dừng sửa',
 };
 export const visitDeviceTechnicianStatus = (state: VisitDeviceState): string => STATUS[state];
 

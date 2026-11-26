@@ -3,7 +3,7 @@
 // The photo or video inside a chat bubble (PO 18/10/2026). A photo loads with the bearer token (no public link
 // exists); a video streams through a short-lived link, only after it is tapped, and "Thử lại" asks for a new link.
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
 import { messagingApi, type ChatAttachment } from '../../api/messaging.api';
@@ -27,6 +27,7 @@ export default function ChatAttachmentView({
   const [link, setLink] = useState<VideoLink | null>(null);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [viewing, setViewing] = useState(false);
 
   useEffect(() => {
     if (isVideo || localUri || messageId.startsWith('local-')) return;
@@ -41,6 +42,7 @@ export default function ChatAttachmentView({
     try {
       setLink(await messagingApi.getAttachmentVideoLink(messageId));
       setPlaying(true);
+      setViewing(true);
     } catch {
       setFailed(true);
     } finally {
@@ -52,7 +54,7 @@ export default function ChatAttachmentView({
   return (
     <View style={styles.tile} testID={`chat-attachment-${messageId}`}>
       {isVideo ? (
-        playing && link ? <Player uri={apiUrl(link.url)} onError={onPlayerError} /> : (
+        (
           <TouchableOpacity
             style={styles.fill}
             disabled={loading || messageId.startsWith('local-')}
@@ -69,12 +71,28 @@ export default function ChatAttachmentView({
           </TouchableOpacity>
         )
       ) : photo && !failed ? (
-        <Image source={photo} style={styles.fill} resizeMode="cover" onError={() => setFailed(true)} accessibilityLabel="Ảnh trong cuộc trò chuyện" />
+        <TouchableOpacity style={styles.fill} activeOpacity={0.9} onPress={() => setViewing(true)} accessibilityRole="imagebutton" accessibilityLabel="Xem ảnh lớn">
+          <Image source={photo} style={styles.fill} resizeMode="cover" onError={() => setFailed(true)} accessibilityLabel="Ảnh trong cuộc trò chuyện" />
+        </TouchableOpacity>
       ) : (
         <View style={styles.center}>
           {failed ? <Text style={[styles.note, { color: textColor }]}>Chưa tải được ảnh.</Text> : <ActivityIndicator color={textColor} />}
         </View>
       )}
+      <Modal visible={viewing} transparent animationType="fade" onRequestClose={() => { setViewing(false); setPlaying(false); }}>
+        <View style={styles.viewer}>
+          {isVideo ? (playing && link ? <Player uri={apiUrl(link.url)} onError={onPlayerError} /> : null)
+            : photo ? <Image source={photo} style={styles.fill} resizeMode="contain" /> : null}
+          <TouchableOpacity
+            style={styles.close}
+            onPress={() => { setViewing(false); setPlaying(false); }}
+            accessibilityRole="button"
+            accessibilityLabel="Đóng"
+          >
+            <Ionicons name="close" size={28} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -83,5 +101,7 @@ const styles = StyleSheet.create({
   tile: { width: 220, height: 165, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.08)', marginBottom: 6 },
   fill: { width: '100%', height: '100%' },
   center: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', padding: 8 },
+  viewer: { flex: 1, backgroundColor: '#000', justifyContent: 'center' },
+  close: { position: 'absolute', top: 48, right: 16, width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)' },
   note: { fontSize: 12, textAlign: 'center' },
 });

@@ -87,6 +87,9 @@ export interface HistoricalOrderItem {
   createdAt: string;
   completedAt?: string | null;
   cancelledAt?: string | null;
+  /** Kept for a technician released after stopping on site: the status itself stays EN_ROUTE / UNDER_REPAIR. */
+  workStopped?: boolean;
+  operationalDisposition?: string | null;
   historical: true;
 }
 
@@ -454,6 +457,8 @@ function normalizeTechnicianOrder(order: TechnicianOrderItem): TechnicianOrderIt
       status: String(order.status).toUpperCase() as CanonicalOrderStatus,
       createdAt: order.createdAt, completedAt: order.completedAt ?? null,
       cancelledAt: order.cancelledAt ?? null, historical: true,
+      ...(order.workStopped === true ? { workStopped: true } : {}),
+      ...(typeof order.operationalDisposition === 'string' ? { operationalDisposition: order.operationalDisposition } : {}),
     };
   }
   return normalizeOrder(order);

@@ -111,14 +111,15 @@ export function parseRebookResult(data: unknown, draft: RepairFailureDraft): { k
   return { kind: group ? 'visit' : 'booking', id };
 }
 
-/** The devices of a visit that could not be repaired, in the visit's order. */
+/** The devices of a visit in one state (not repaired by default; `interrupted` = stopped on site), in the visit's order. */
 export function failedBookingIds(
   items: { booking?: { id?: string } | null }[] | undefined,
   devices: { bookingId: string; state: string }[] | undefined,
+  state = 'failed',
 ): string[] {
   return (items ?? []).flatMap((item) => {
     const id = item.booking?.id;
-    return id && devices?.some((device) => device.bookingId === id && device.state === 'failed') ? [id] : [];
+    return id && devices?.some((device) => device.bookingId === id && device.state === state) ? [id] : [];
   });
 }
 

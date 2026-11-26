@@ -1,48 +1,31 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
-import { Camera, Check, Phone, X } from 'lucide-react-native';
 import { isHistoricalOrder, ordersApi } from '../../../api/orders.api';
 import { supportCasesApi } from '../../../api/support-cases.api';
 import { visitGroupsApi, type VisitCheckout } from '../../../api/visit-groups.api';
 import {
   CannotContinueError, cannotContinuePort, isCustomerNoShow, type ContactKind, type ContactReadiness, type StopReasonCode,
 } from '../../../api/cannot-continue.api';
-import { lightTheme as colors, spacing } from '../../../constants/theme';
+import { lightTheme as colors } from '../../../constants/theme';
 import { confirmAction } from '../../../utils/confirm-action';
 import { extractApiErrorMessage } from '../../../utils/input-validation';
-import { vnDateTimeString } from '../../../utils/vn-time';
-import PillText from '../../../components/PillText';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import { backFromFlow } from '../navigation/resume-order';
+import { useRegisterVisitDevices, visitDeviceTabName } from '../navigation/visit-device-tabs';
 import { captureCameraPhoto } from './camera-capture';
+import { visitDeviceTechnicianStatus } from './technician-visit';
+import { ConfirmBox, ContactChecklist, DetailsCard, DeviceCard, DoneCard, FormSection, ModeSwitch, ReasonList, type DeviceChoice } from './CannotContinueParts';
 import type { CameraOrderAsset } from './arrival-proof-controller';
 import { canReportTechnicianIssue, technicianReportBody } from './technician-report';
 import {
-  NO_SHOW_RULE, STOP_PHOTO_MAX, STOP_REASON_MAX, STOP_REASON_MIN, canAttachStopPhotos, confirmText, deviceDisposition, isSupportCode,
-  reasonClassOf, reasonsFor, readinessSummary, stopFormProblem, stopScopeFor, submitLabel, type FormReasonCode, type StopMode,
+  STOP_PHOTO_MAX, STOP_REASON_MIN, canAttachStopPhotos, confirmText, deviceDisposition, isSupportCode,
+  reasonClassOf, reasonGroups, readinessSummary, stopFormProblem, stopScopeFor, submitLabel, type FormReasonCode, type StopMode,
 } from './cannot-continue-form';
 
 const POLL_MS = 15000;
-
-const Decor = ({ children }: { children: React.ReactNode }) => (
-  <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">{children}</View>
-);
-
-function Step({ step, title, hint, children }: { step: number; title: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.step}>
-      <View style={styles.stepHead}>
-        <View style={styles.stepNo}><Text style={styles.stepNoText}>{step}</Text></View>
-        <Text accessibilityRole="header" style={styles.stepTitle}>{title}</Text>
-      </View>
-      {!!hint && <Text style={styles.hint}>{hint}</Text>}
-      {children}
-    </View>
-  );
-}
 
 /**
  * "Báo cáo vấn đề sửa chữa" (web CannotContinueDialog): after check-in the technician either stops the work on this
@@ -72,7 +55,9 @@ export default function CannotContinueScreen() {
   const [checkoutRec, setCheckoutRec] = useState<{ groupId: string; data: VisitCheckout | null } | null>(null);
   const uploaded = useRef<Record<string, string>>({});
 
-  const isVisit = !!order?.visitGroupId;
+  const registerDevices = useRegisterVisitDevices();
+  const groupId = order?.visitGroupId ?? null;
+  const isVisit = !!groupId;
   const scope = order ? stopScopeFor(order, code) : { kind: 'order' as const, orderId: '' };
   const noShow = mode === 'stop' && !!code && isCustomerNoShow(code as StopReasonCode);
   const photosAllowed = mode === 'stop' && !!order && canAttachStopPhotos(order.status);
@@ -80,20 +65,26 @@ export default function CannotContinueScreen() {
   const scopeId = scope.kind === 'group' ? `g:${scope.groupId}` : `o:${scope.orderId}`;
   // What was read for another scope (the reason was changed meanwhile) is not shown.
   const readiness = noShow && readinessRec?.key === scopeId ? readinessRec.data : null;
-  const checkoutDone = scope.kind === 'group' && checkoutRec?.groupId === scope.groupId ? checkoutRec : null;
+  const checkoutDone = groupId && checkoutRec?.groupId === groupId ? checkoutRec : null;
   const checkout = checkoutDone?.data ?? null;
   const checkoutFailed = !!checkoutDone && !checkoutDone.data;
   const devicesKnown = scope.kind !== 'group' || !!checkout;
+  const devices = [...(checkout?.devices ?? [])].sort((a, b) => a.sequence - b.sequence);
+  // Which device the report is about (web "Thiết bị báo cáo"): only a visit of several devices has a choice.
+  const picker = devices.length > 1;
 
-  // The devices of the visit are read only when the whole visit would stop.
+  // The devices of the visit: the device to report on, and what a whole-visit stop would keep.
   useEffect(() => {
-    if (!allowed || scope.kind !== 'group' || !noShow) return;
+    if (!allowed || !groupId) return;
     let alive = true;
-    const groupId = scope.groupId;
-    visitGroupsApi.getCheckout(groupId).then((next) => { if (alive) setCheckoutRec({ groupId, data: next }); }).catch(() => { if (alive) setCheckoutRec({ groupId, data: null }); });
+    visitGroupsApi.getCheckout(groupId).then((next) => {
+      if (!alive) return;
+      setCheckoutRec({ groupId, data: next });
+      registerDevices(next.devices.flatMap((d) => (d.serviceOrderId ? [d.serviceOrderId] : [])));
+    }).catch(() => { if (alive) setCheckoutRec({ groupId, data: null }); });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allowed, noShow, scope.kind === 'group' ? scope.groupId : '']);
+  }, [allowed, groupId]);
 
   const loadReadiness = useCallback(async () => {
     if (!allowed || !noShow) return;
@@ -137,6 +128,13 @@ export default function CannotContinueScreen() {
     setError('');
   };
 
+  // Each device is its own tab: open the report in the tab of the chosen device and close it here (web selectReportDevice).
+  const pickDevice = (serviceOrderId: string) => {
+    if (busy || assets.length > 0 || serviceOrderId === order?.id) return;
+    navigation.navigate(visitDeviceTabName(serviceOrderId), { serviceOrderId, screen: 'CannotContinue', initial: false });
+    navigation.goBack();
+  };
+
   const capture = async () => {
     if (busy || assets.length >= STOP_PHOTO_MAX) return;
     const result = await captureCameraPhoto();
@@ -153,7 +151,7 @@ export default function CannotContinueScreen() {
     setError('');
     try {
       if (mode === 'support') {
-        if (!isSupportCode(code)) return;
+        if (!isSupportCode(code)) { setError('Lý do này không gửi được dưới dạng báo cáo hỗ trợ. Chọn lý do khác.'); return; }
         await supportCasesApi.createTechnicianReport(technicianReportBody(order.id, code, reason));
         setDone('Đã gửi báo cáo hỗ trợ. Công việc vẫn tiếp tục; báo cáo này không dừng hoặc hủy đơn.');
       } else {
@@ -192,186 +190,90 @@ export default function CannotContinueScreen() {
     });
   };
 
+  // `done` wins over `allowed`: once the stop is recorded the order turns into a history summary and `allowed` goes false, which must not hide the result.
+  const stopping = mode === 'stop';
   const primary = done
     ? { label: 'Quay lại', testID: 'cc-back', onPress: () => backFromFlow(navigation) }
-    : allowed ? { label: submitLabel(mode, scope, busy, retry), testID: 'cc-submit', disabled: busy, onPress: submit } : undefined;
+    : allowed ? { label: submitLabel(mode, scope, busy, retry), testID: 'cc-submit', disabled: busy, destructive: stopping, onPress: submit } : undefined;
 
-  const reasonOptions = reasonsFor(mode, isVisit);
+  // Always above the footer button: a message at the end of the scroll was out of sight, so a refused send looked like nothing happened.
+  const feedback = allowed && !done ? (attempted && problem) || error : '';
+  const here = devices.find((d) => d.serviceOrderId === order?.id);
+  const deviceTitle = here ? `Máy ${here.sequence} · ${here.serviceName || here.deviceLabel || 'Thiết bị'}` : order?.serviceName || 'Thiết bị';
+  const choices: DeviceChoice[] = devices.map((d) => {
+    const on = d.serviceOrderId === order?.id;
+    return {
+      id: d.serviceOrderId ?? d.bookingId, seq: d.sequence, title: `Máy ${d.sequence} · ${d.serviceName || d.deviceLabel || 'Thiết bị'}`,
+      sub: d.serviceOrderId ? visitDeviceTechnicianStatus(d.state) : 'Chưa có công việc', on, disabled: !d.serviceOrderId || (d.state !== 'open' && !on) || assets.length > 0,
+    };
+  });
+  const doneNext = mode === 'support'
+    ? ['Quản lý dịch vụ sẽ xem báo cáo của bạn.', 'Bạn tiếp tục làm đơn như bình thường.']
+    : ['Bạn không còn được giao đơn này.', 'FixHome đối soát tiền và linh kiện cũ. Linh kiện đã nhận vẫn cần khai trả ở mục Linh kiện.', 'Khách được hướng dẫn đặt lịch mới.'];
+
   return (
-    <TaskScreenShell title="Báo cáo vấn đề sửa chữa" onBack={() => backFromFlow(navigation)} primary={primary}>
-      {!allowed && <ReadOnlyNotice tone="warning">Chỉ báo cáo được sau khi đã check-in, khi đơn đang trên đường hoặc đang sửa và chưa yêu cầu bàn giao.</ReadOnlyNotice>}
+    <TaskScreenShell title="Báo cáo vấn đề sửa chữa" onBack={() => backFromFlow(navigation)} primary={primary}
+      summary={feedback ? <Text testID="cc-problem" accessibilityRole="alert" style={styles.error}>{feedback}</Text> : undefined}>
+      {!allowed && !done && <ReadOnlyNotice tone="warning">Chỉ báo cáo được sau khi đã check-in, khi đơn đang trên đường hoặc đang sửa và chưa yêu cầu bàn giao.</ReadOnlyNotice>}
 
-      {allowed && !!done && (
-        <View testID="cc-done" accessibilityRole="summary" style={styles.done}>
-          <View style={styles.doneIcon}><Decor><Check size={22} strokeWidth={2.5} color={colors.surface} /></Decor></View>
-          <Text style={styles.doneText}>{done}</Text>
-        </View>
-      )}
+      {!!done && <DoneCard title={mode === 'support' ? 'Đã gửi báo cáo hỗ trợ' : 'Đã dừng công việc'} text={done} next={doneNext} />}
 
       {allowed && !done && <>
-        <Step step={1} title="Cách xử lý">
-          <View accessibilityRole="radiogroup" style={styles.stack}>
-            {([['stop', 'Không thể tiếp tục máy này', 'Dừng công việc, nhả phân công.'], ['support', 'Nhờ quản lý hỗ trợ, vẫn tiếp tục', 'Chỉ gửi báo cáo, công việc vẫn tiếp tục.']] as const).map(([value, label, sub]) => {
-              const on = mode === value;
-              return (
-                <Pressable key={value} testID={`cc-mode-${value}`} accessibilityRole="radio" accessibilityState={{ selected: on, disabled: busy }} disabled={busy}
-                  onPress={() => pickMode(value)} style={({ pressed }) => [styles.option, on && styles.optionOn, pressed && styles.pressed]}>
-                  <View style={styles.flex}><Text style={styles.optionLabel}>{label}</Text><Text style={styles.hint}>{sub}</Text></View>
-                  <View style={[styles.radio, on && styles.radioOn]}>{on && <Decor><Check size={14} strokeWidth={3} color={colors.surface} /></Decor>}</View>
-                </Pressable>
-              );
-            })}
-          </View>
-        </Step>
+        <FormSection title="Máy báo cáo">
+          <DeviceCard title={deviceTitle} sub={order ? `Đơn #${order.code}` : ''} choices={picker ? choices : []} busy={busy} onPick={pickDevice} />
+        </FormSection>
 
-        <Step step={2} title="Lý do">
-          <View accessibilityRole="radiogroup" style={styles.chips}>
-            {reasonOptions.map((option) => {
-              const on = code === option.code;
-              return (
-                <Pressable key={option.code} testID={`cc-reason-${option.code}`} accessibilityRole="radio" accessibilityState={{ selected: on, disabled: busy }} disabled={busy}
-                  onPress={() => { setCode(option.code); setConfirmed(false); }} style={({ pressed }) => [styles.chip, on && styles.chipOn, pressed && styles.pressed]}>
-                  <PillText style={[styles.chipText, on && styles.chipTextOn]}>{option.label}</PillText>
-                </Pressable>
-              );
-            })}
-          </View>
+        <FormSection title="Cách xử lý">
+          <ModeSwitch mode={mode} busy={busy} onPick={pickMode} />
+        </FormSection>
+
+        <FormSection title="Lý do">
+          <ReasonList groups={reasonGroups(mode, isVisit)} code={code} busy={busy} onPick={(next) => { setCode(next); setConfirmed(false); }} />
           {attempted && !code && <Text accessibilityRole="alert" style={styles.error}>Chọn lý do.</Text>}
-        </Step>
+        </FormSection>
 
         {noShow && (
-          <Step step={3} title="Liên hệ khách" hint={NO_SHOW_RULE}>
-            {scope.kind === 'group' && (
-              <View testID="cc-devices" style={styles.stack}>
-                {checkoutFailed && <Text accessibilityRole="alert" style={styles.error}>Chưa xác minh được các máy trong lượt. Tải lại rồi thử lại.</Text>}
-                {checkout?.devices.map((d) => (
-                  <View key={d.bookingId} style={styles.deviceRow}>
-                    <Text style={[styles.optionLabel, styles.flex]} numberOfLines={1}>{d.serviceName || d.deviceLabel || 'Thiết bị'}</Text>
-                    <Text style={styles.meta}>{deviceDisposition(d.state, d.serviceOrderId === order?.id)}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-            <Text testID="cc-readiness" style={styles.meta}>{readinessSummary(readiness)}</Text>
-            {!!readiness && !readiness.ready && !!readiness.nextEligibleAt && (
-              <Text style={styles.meta}>{`Có thể dừng sau ${vnDateTimeString(readiness.nextEligibleAt)}`}</Text>
-            )}
-            {readiness?.ready && <Text style={[styles.meta, { color: colors.tone.success.text }]}>Đủ điều kiện liên hệ.</Text>}
-            <View style={styles.buttons}>
-              <Pressable testID="cc-call" accessibilityRole="button" disabled={contactBusy} onPress={() => void contact('CALL_ATTEMPT')} style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
-                <Decor><Phone size={18} strokeWidth={1.75} color={colors.primaryStrong} /></Decor>
-                <Text style={styles.buttonText}>Gọi khách và ghi nhận</Text>
-              </Pressable>
-              <Pressable testID="cc-notify" accessibilityRole="button" disabled={contactBusy} onPress={() => void contact('IN_APP_NOTIFICATION')} style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
-                <Text style={styles.buttonText}>Gửi thông báo trong ứng dụng</Text>
-              </Pressable>
-              <Pressable testID="cc-recheck" accessibilityRole="button" disabled={contactBusy} onPress={() => void loadReadiness()} style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
-                <Text style={styles.buttonText}>Kiểm tra điều kiện</Text>
-              </Pressable>
-            </View>
-            {contactBusy && <ActivityIndicator size="small" color={colors.primaryStrong} />}
-            {!!contactError && <Text accessibilityRole="alert" style={styles.error}>{contactError}</Text>}
-          </Step>
+          <FormSection title="Liên hệ khách trước khi dừng">
+            <ContactChecklist readiness={readiness} summary={readinessSummary(readiness)} busy={contactBusy} error={contactError}
+              onCall={() => void contact('CALL_ATTEMPT')} onNotify={() => void contact('IN_APP_NOTIFICATION')} onRecheck={() => void loadReadiness()}>
+              {scope.kind === 'group' && (
+                <View testID="cc-devices" style={styles.devices}>
+                  <Text style={styles.groupTitle}>Các máy trong lượt</Text>
+                  {checkoutFailed && <Text accessibilityRole="alert" style={styles.error}>Chưa xác minh được các máy trong lượt. Tải lại rồi thử lại.</Text>}
+                  {checkout?.devices.map((d) => (
+                    <View key={d.bookingId} style={styles.deviceRow}>
+                      <Text style={[styles.deviceName, styles.flex]} numberOfLines={1}>{d.serviceName || d.deviceLabel || 'Thiết bị'}</Text>
+                      <Text style={styles.meta}>{deviceDisposition(d.state, d.serviceOrderId === order?.id)}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ContactChecklist>
+          </FormSection>
         )}
 
-        <Step step={noShow ? 4 : 3} title="Mô tả tình huống (bắt buộc)">
-          <View style={styles.labelRow}>
-            <Text style={styles.label}>Mô tả</Text>
-            <Text style={styles.counter}>{`${reason.trim().length}/${STOP_REASON_MAX}`}</Text>
-          </View>
-          <TextInput testID="cc-reason-text" value={reason} onChangeText={setReason} editable={!busy} multiline maxLength={STOP_REASON_MAX}
-            accessibilityLabel="Mô tả tình huống" accessibilityHint={`Ít nhất ${STOP_REASON_MIN} ký tự`} placeholder="Ví dụ: bo mạch cháy, hãng đã ngừng bán linh kiện"
-            placeholderTextColor={colors.textSecondary} style={styles.input} />
+        <FormSection title="Chi tiết" hint={`Mô tả là bắt buộc, ít nhất ${STOP_REASON_MIN} ký tự.`}>
+          <DetailsCard reason={reason} onReason={setReason} busy={busy}
+            photos={!stopping ? undefined : photosAllowed
+              ? { assets, max: STOP_PHOTO_MAX, onCapture: () => void capture(), onDrop: (index) => setAssets((list) => list.filter((_, i) => i !== index)) }
+              : { hint: 'Chỉ chụp ảnh chứng cứ được khi máy đang sửa. Bạn vẫn dừng được mà không cần ảnh.' }} />
           {attempted && reason.trim().length < STOP_REASON_MIN && <Text accessibilityRole="alert" style={styles.error}>{`Mô tả ít nhất ${STOP_REASON_MIN} ký tự.`}</Text>}
-        </Step>
+        </FormSection>
 
-        {mode === 'stop' && (
-          <Step step={noShow ? 5 : 4} title={`Ảnh chứng cứ (không bắt buộc, tối đa ${STOP_PHOTO_MAX})`}
-            hint={photosAllowed ? 'Ảnh riêng tư, chỉ bạn và quản lý xem được.' : 'Chỉ chụp ảnh chứng cứ được khi máy đang sửa. Bạn vẫn dừng được mà không cần ảnh.'}>
-            {photosAllowed && (
-              <View style={styles.grid}>
-                {assets.map((asset, index) => (
-                  <View key={asset.uri} style={styles.tile}>
-                    <Image source={{ uri: asset.uri }} accessibilityIgnoresInvertColors accessibilityLabel={`Ảnh chứng cứ ${index + 1}`} style={styles.photo} />
-                    <Pressable testID={`cc-drop-photo-${index}`} accessibilityRole="button" accessibilityLabel={`Xóa ảnh ${index + 1}`} disabled={busy} hitSlop={8}
-                      onPress={() => setAssets((list) => list.filter((_, i) => i !== index))} style={({ pressed }) => [styles.drop, pressed && styles.pressed]}>
-                      <Decor><X size={16} strokeWidth={2.5} color={colors.surface} /></Decor>
-                    </Pressable>
-                  </View>
-                ))}
-                {assets.length < STOP_PHOTO_MAX && (
-                  <Pressable testID="cc-capture" accessibilityRole="button" accessibilityLabel="Chụp ảnh chứng cứ" disabled={busy} onPress={() => void capture()}
-                    style={({ pressed }) => [styles.tile, styles.add, pressed && styles.pressed]}>
-                    <Decor><Camera size={24} strokeWidth={1.75} color={colors.primaryStrong} /></Decor>
-                    <Text style={styles.addText}>Chụp ảnh</Text>
-                  </Pressable>
-                )}
-              </View>
-            )}
-          </Step>
-        )}
-
-        {mode === 'stop' && (
-          <Pressable testID="cc-confirm" accessibilityRole="checkbox" accessibilityState={{ checked: confirmed, disabled: busy }} disabled={busy}
-            onPress={() => setConfirmed((v) => !v)} style={({ pressed }) => [styles.confirm, pressed && styles.pressed]}>
-            <View style={[styles.box, confirmed && styles.boxOn]}>{confirmed && <Decor><Check size={16} strokeWidth={3} color={colors.surface} /></Decor>}</View>
-            <Text style={styles.confirmText}>{confirmText(mode, scope)}</Text>
-          </Pressable>
-        )}
-
-        {attempted && !!problem && !!code && reason.trim().length >= STOP_REASON_MIN && (
-          <Text testID="cc-problem" accessibilityRole="alert" style={styles.error}>{problem}</Text>
-        )}
+        {stopping && <ConfirmBox checked={confirmed} busy={busy} text={confirmText(mode, scope)} onToggle={() => setConfirmed((v) => !v)} />}
         {busy && <View style={styles.line}><ActivityIndicator size="small" color={colors.primaryStrong} /><Text style={styles.meta}>Đang gửi báo cáo…</Text></View>}
-        {!!error && <ReadOnlyNotice tone="error">{error}</ReadOnlyNotice>}
       </>}
     </TaskScreenShell>
   );
 }
 
-const TARGET = 48;
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  stack: { gap: 8 },
-  pressed: { opacity: 0.8 },
   line: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  step: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, padding: spacing.md, gap: 12 },
-  stepHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  stepNo: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
-  stepNoText: { color: colors.primaryStrong, fontSize: 14, fontWeight: '700' },
-  stepTitle: { flex: 1, color: colors.text, fontSize: 16, lineHeight: 22, fontWeight: '700' },
-  hint: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
   meta: { color: colors.textSecondary, fontSize: 14, lineHeight: 20 },
   error: { color: colors.tone.danger.text, fontSize: 13, lineHeight: 19, fontWeight: '500' },
-  option: { minHeight: TARGET + 8, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
-  optionOn: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
-  optionLabel: { color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '600' },
-  radio: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
-  radioOn: { borderColor: colors.primaryStrong, backgroundColor: colors.primaryStrong },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { flexGrow: 1, flexBasis: '47%', minHeight: TARGET, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
-  chipOn: { borderColor: colors.primary, borderWidth: 2, backgroundColor: colors.primarySoft },
-  chipText: { color: colors.text, fontSize: 14, fontWeight: '500', textAlign: 'center' },
-  chipTextOn: { color: colors.primaryStrong, fontWeight: '700' },
+  groupTitle: { color: colors.textSecondary, fontSize: 13, lineHeight: 19, fontWeight: '600' },
+  devices: { gap: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 12 },
   deviceRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 32 },
-  buttons: { gap: 8 },
-  button: { minHeight: TARGET, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: spacing.md },
-  buttonText: { color: colors.primaryStrong, fontSize: 15, fontWeight: '600' },
-  labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  label: { color: colors.text, fontSize: 14, fontWeight: '600' },
-  counter: { color: colors.textSecondary, fontSize: 12 },
-  input: { minHeight: 104, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, color: colors.text, fontSize: 16, lineHeight: 22, textAlignVertical: 'top' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tile: { width: '31.5%', aspectRatio: 1, borderRadius: 12, overflow: 'hidden' },
-  photo: { width: '100%', height: '100%', backgroundColor: colors.divider },
-  drop: { position: 'absolute', top: 4, right: 4, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
-  add: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.primary, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  addText: { color: colors.primaryStrong, fontSize: 13, fontWeight: '600' },
-  confirm: { minHeight: TARGET, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 4 },
-  box: { width: 24, height: 24, borderRadius: 6, borderWidth: 1.5, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
-  boxOn: { backgroundColor: colors.primaryStrong, borderColor: colors.primaryStrong },
-  confirmText: { flex: 1, color: colors.text, fontSize: 15, lineHeight: 22 },
-  done: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: spacing.md, borderRadius: 14, backgroundColor: colors.tone.success.bg },
-  doneIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.tone.success.fg, alignItems: 'center', justifyContent: 'center' },
-  doneText: { flex: 1, color: colors.text, fontSize: 15, lineHeight: 22 },
+  deviceName: { color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: '600' },
 });

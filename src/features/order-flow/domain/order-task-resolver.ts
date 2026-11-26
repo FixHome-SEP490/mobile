@@ -1,4 +1,5 @@
 import { isHistoricalOrder, type ServiceOrderItem } from '../../../api/orders.api';
+import { isOrderWorkStopped } from '../../../api/order-work-stopped';
 import { additionalCostWireStatuses, type AdditionalCostWireStatus } from '../../../types/api.types';
 import type { OrderSessionSnapshot, OrderTaskResolution, Resource } from './order-session.types';
 
@@ -38,6 +39,10 @@ export function resolveCustomerTask(s: OrderSessionSnapshot): OrderTaskResolutio
   if (o.status === 'CANCELLED') return result('CX', 4);
   if (o.status === 'COMPLETED') return result('C12', 4);
   if (s.pendingIntent) return result(o.completionRequestedAt ? 'C11' : 'CX', o.completionRequestedAt ? 4 : null, true, ['unknown-command']);
+  // Stopped on site: the quote and extras that were waiting can no longer be decided (the server refuses), so show the stop, never a decision screen.
+  if (isOrderWorkStopped(o) && (o.status === 'EN_ROUTE' || o.status === 'UNDER_REPAIR')) {
+    return o.status === 'UNDER_REPAIR' ? result('C06', 3) : result('C04', o.arrivalVerified === true ? 2 : 1);
+  }
   if (o.completionRequestedAt) {
     if (s.resources.invoice.status !== 'ready' || s.resources.invoice.data === null) return result('C08', 4, true, ['resource']);
     const invoice = s.resources.invoice.data;

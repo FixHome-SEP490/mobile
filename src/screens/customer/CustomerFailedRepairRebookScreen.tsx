@@ -16,6 +16,7 @@ import {
   parseRebookResult,
   parseRepairFailureDraft,
   REBOOK_UNCLEAR,
+  rebookNotReady,
   type RebookKind,
   type RepairFailureDraft,
 } from './failed-repair-rebook';
@@ -35,7 +36,9 @@ export default function CustomerFailedRepairRebookScreen() {
   const route = useRoute<Route>();
   const params = route.params;
   const kind: RebookKind = 'bookingId' in params ? 'interruption' : 'failure';
-  const sourceBookingIds = 'bookingId' in params ? [params.bookingId] : params.sourceBookingIds;
+  // A chosen subset of stopped devices (the first is the anchor); otherwise the server decides which stopped devices come along.
+  const picked = 'bookingId' in params ? params.sourceBookingIds : undefined;
+  const sourceBookingIds = 'bookingId' in params ? (picked ?? [params.bookingId]) : params.sourceBookingIds;
   const sourcesKey = sourceBookingIds.join(',');
 
   const [draft, setDraft] = useState<RepairFailureDraft | null>(null);
@@ -52,8 +55,11 @@ export default function CustomerFailedRepairRebookScreen() {
     setLoadError('');
     try {
       const anchor = sourceBookingIds[0];
-      const raw = kind === 'interruption' ? await bookingsApi.getInterruptionDraft(anchor) : await bookingsApi.getRepairFailureDraft(anchor);
-      setDraft(parseRepairFailureDraft(raw, anchor, sourceBookingIds, kind));
+      const raw = kind === 'interruption' ? await bookingsApi.getInterruptionDraft(anchor, picked) : await bookingsApi.getRepairFailureDraft(anchor);
+      const parsed = parseRepairFailureDraft(raw, anchor, sourceBookingIds, kind);
+      // A chosen subset must come back exactly, never with extra devices booked along.
+      if (picked && parsed.items.length !== picked.length) throw new Error(rebookNotReady(kind));
+      setDraft(parsed);
     } catch (err) {
       setDraft(null);
       setLoadError(extractApiErrorMessage(err, 'Chưa tải được dữ liệu đặt lại. Vui lòng thử lại.'));

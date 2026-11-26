@@ -123,3 +123,24 @@ it('travel remains preparation and server-verified arrival moves customer stage 
   expect(resolveCustomerTask(snapshot({ arrivalVerified: false }, true))).toMatchObject({ taskId: 'C04', stage: 1 });
   expect(resolveCustomerTask(snapshot({ arrivalVerified: true }, true))).toMatchObject({ taskId: 'C04', stage: 2 });
 });
+
+describe('an order the technician stopped on site', () => {
+  const quote = (status: string) => ({ id: 'q1', serviceOrderId: 'order', technicianId: 'tech', status, version: 1 } as never);
+  const extra = { id: 'e1', serviceOrderId: 'order', status: 'PENDING_APPROVAL', version: 1 } as never;
+  const customerSnapshot = (patch: Partial<ServiceOrderItem>) => {
+    const s = snapshot(patch, true);
+    s.resources.quotations = readyResource([quote('SENT')], 1, 1);
+    s.resources.extras = readyResource([extra], 1, 1);
+    return s;
+  };
+  it('shows the stop, not the quote decision, while a quote waits (EN_ROUTE)', () => {
+    const live = customerSnapshot({ pricingMode: 'INSPECTION_REQUIRED' });
+    expect(resolveCustomerTask(live).taskId).toBe('C05');
+    const stopped = customerSnapshot({ pricingMode: 'INSPECTION_REQUIRED', workStopped: true, operationalDisposition: 'STOPPED' });
+    expect(resolveCustomerTask(stopped)).toMatchObject({ taskId: 'C04', readOnly: true });
+  });
+  it('shows the stop, not the extra decision, while an extra cost waits (UNDER_REPAIR)', () => {
+    expect(resolveCustomerTask(customerSnapshot({ status: 'UNDER_REPAIR' })).taskId).toBe('C07');
+    expect(resolveCustomerTask(customerSnapshot({ status: 'UNDER_REPAIR', workStopped: true })).taskId).toBe('C06');
+  });
+});
