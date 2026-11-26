@@ -50,14 +50,14 @@ it('locks technician inputs and exposes edit while confirmation is pending', asy
   await act(async () => renderer.unmount());
 });
 
-it('places acceptance and decline in the fixed footer for an assigned claim', async () => {
+it('places only acceptance in the fixed footer for an assigned claim', async () => {
   mockState.task = 'TW02'; mockController.availableCommands.mockReturnValue(['accept', 'decline']);
   let renderer!: ReturnType<typeof create>;
   await act(async () => { renderer = create(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><TechnicianWarrantyTaskScreen /></SafeAreaProvider>); });
   const footer = renderer.root.findByProps({ testID: 'order-flow-fixed-footer' });
   const buttons = footer.findAllByType(TouchableOpacity);
   expect(buttons.some(button => button.props.testID === 'technician-warranty-primary-action')).toBe(true);
-  expect(buttons.some(button => button.props.testID === 'technician-warranty-secondary-action')).toBe(true);
+  expect(buttons.some(button => button.props.testID === 'technician-warranty-secondary-action')).toBe(false);
   await act(async () => renderer.unmount());
 });
 

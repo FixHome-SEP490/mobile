@@ -76,7 +76,7 @@ describe('WarrantyInvitations', () => {
     const all = texts(r).join('|');
     expect(all).toContain('Lời mời bảo hành (2)');
     expect(all).toContain('Nhận yêu cầu');
-    expect(all).toContain('Không nhận được');
+    expect(all).not.toContain('Không nhận được');
     expect(listMine).toHaveBeenCalledWith({ page: 1, pageSize: 20, status: 'submitted' });
     expect(useBadgeStore.getState().pendingWarranty).toBe(2);
 

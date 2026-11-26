@@ -200,7 +200,7 @@ export default function CustomerWarrantiesScreen() {
   const openCreateClaim = (group: CustomerWarrantyGroup) => {
     // The warranty screens live in the order flow, which only runs in __DEV__ until the cutover; the order page is the fallback.
     if (__DEV__) navigation.navigate('OrderFlowDevPreview', { serviceOrderId: group.orderId, screen: 'CustomerWarranty' });
-    else navigation.navigate('CustomerOrderDetail', { serviceOrderId: group.orderId });
+    else navigation.navigate('CustomerOrderDetail', { serviceOrderId: group.orderId, screen: 'CustomerWarranty' });
   };
 
   const applyClaimUpdate = (updated: WarrantyClaimView) => {
