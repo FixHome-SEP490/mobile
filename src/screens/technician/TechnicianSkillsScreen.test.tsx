@@ -8,6 +8,9 @@ const mockCategories = jest.fn();
 const mockMyServices = jest.fn();
 const mockSetPricing = jest.fn();
 const mockNavigate = jest.fn();
+const mockResubmit = jest.fn();
+const mockLibrary = jest.fn();
+const mockReuse = jest.fn();
 
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: mockNavigate }) }));
 
@@ -33,7 +36,9 @@ jest.mock('../../api/technician-profile.api', () => ({
     getMyServices: (...a: unknown[]) => mockMyServices(...a),
     getMyProfile: jest.fn(async () => ({ defaultLaborWarrantyDays: 30 })),
     setSkillPricing: (...a: unknown[]) => mockSetPricing(...a),
-    getMySkillEvidence: jest.fn(async () => []),
+    resubmitSkill: (...a: unknown[]) => mockResubmit(...a),
+    getMySkillEvidence: (...a: unknown[]) => mockLibrary(...a),
+    reuseSkillEvidence: (...a: unknown[]) => mockReuse(...a),
     getSkillVerification: jest.fn(async () => ({ id: 'v', status: 'rejected', rejectionReason: 'Bằng chưa đủ căn cứ', documents: [] })),
   },
 }));
@@ -61,6 +66,9 @@ beforeEach(() => {
   mockServices.mockResolvedValue({ data: services, total: 3 });
   mockCategories.mockResolvedValue([{ id: 'ac', name: 'Điều hòa' }, { id: 'fr', name: 'Tủ lạnh' }]);
   mockMyServices.mockResolvedValue([offering('s1', 'verified'), offering('s2', 'rejected')]);
+  mockResubmit.mockResolvedValue(undefined);
+  mockLibrary.mockResolvedValue([]);
+  mockReuse.mockResolvedValue({ attached: 1, skipped: 0 });
   mockSetPricing.mockImplementation(async (serviceId: string) => offering(serviceId, 'pending'));
 });
 
@@ -93,6 +101,21 @@ describe('TechnicianSkillsScreen', () => {
     act(() => tree.unmount());
   });
 
+  it('lets the groups of a filtered list be folded, and opens them again on the next filter', async () => {
+    const tree = await render();
+    await act(async () => byId(tree, 'skills-filter-rejected').props.onPress());
+    expect(tree.root.findAllByProps({ testID: 'skill-row-s2' }).length).toBeGreaterThan(0);
+    await act(async () => byId(tree, 'skills-group-header-ac').props.onPress());
+    expect(tree.root.findAllByProps({ testID: 'skill-row-s2' })).toHaveLength(0);
+    await act(async () => byId(tree, 'skills-group-header-ac').props.onPress());
+    expect(tree.root.findAllByProps({ testID: 'skill-row-s2' }).length).toBeGreaterThan(0);
+    await act(async () => byId(tree, 'skills-group-header-ac').props.onPress());
+    await act(async () => byId(tree, 'skills-filter-all').props.onPress());
+    await act(async () => byId(tree, 'skills-filter-rejected').props.onPress());
+    expect(tree.root.findAllByProps({ testID: 'skill-row-s2' }).length).toBeGreaterThan(0);
+    act(() => tree.unmount());
+  });
+
   it('switching a new service on shows save, and saving asks for approval', async () => {
     const tree = await render();
     await act(async () => byId(tree, 'skills-group-header-fr').props.onPress());
@@ -100,7 +123,42 @@ describe('TechnicianSkillsScreen', () => {
     await act(async () => byId(tree, 'skill-switch-s3').props.onValueChange(true));
     await act(async () => { await byId(tree, 'skill-save-s3').props.onPress(); });
     expect(mockSetPricing).toHaveBeenCalledWith('s3', expect.objectContaining({ isActive: true }));
+    expect(mockSetPricing.mock.calls[0][1]).not.toHaveProperty('level');
     expect(texts(tree)).toContain('Chờ duyệt 1');
+    act(() => tree.unmount());
+  });
+
+  it('lets a new service pick papers already uploaded before saving, and sends them with the save', async () => {
+    mockLibrary.mockResolvedValue([{ documentId: 'd1', serviceId: 's1', serviceIds: ['s1'], fileName: 'a.jpg', mimeType: 'image/jpeg', evidenceType: 'vocational_diploma', issuer: null, referenceNumber: 'AB-1', issuedAt: null, expiresAt: null, claimedYears: null, categories: [] }]);
+    const tree = await render();
+    await act(async () => byId(tree, 'skills-group-header-fr').props.onPress());
+    expect(tree.root.findAllByProps({ testID: 'skill-staged-s3' })).toHaveLength(0);
+    await act(async () => byId(tree, 'skill-switch-s3').props.onValueChange(true));
+    expect(byId(tree, 'skill-staged-s3')).toBeDefined();
+    await act(async () => { await byId(tree, 'skill-staged-add-s3').props.onPress(); });
+    await act(async () => byId(tree, 'skill-staged-choice-d1').props.onPress());
+    await act(async () => byId(tree, 'skill-staged-choose-add-s3').props.onPress());
+    expect(byId(tree, 'skill-staged-item-s3-0')).toBeDefined();
+    expect(mockSetPricing).not.toHaveBeenCalled();
+    await act(async () => { await byId(tree, 'skill-save-s3').props.onPress(); });
+    expect(mockSetPricing).toHaveBeenCalledWith('s3', expect.objectContaining({ isActive: true }));
+    expect(mockReuse).toHaveBeenCalledWith('s3', ['d1']);
+    expect(mockSetPricing.mock.invocationCallOrder[0]).toBeLessThan(mockReuse.mock.invocationCallOrder[0]);
+    expect(tree.root.findAllByProps({ testID: 'skill-staged-item-s3-0' })).toHaveLength(0);
+    act(() => tree.unmount());
+  });
+
+  it('drops the waiting papers when the service is switched off again', async () => {
+    mockLibrary.mockResolvedValue([{ documentId: 'd1', serviceId: 's1', serviceIds: ['s1'], fileName: 'a.jpg', mimeType: 'image/jpeg', evidenceType: null, issuer: null, referenceNumber: null, issuedAt: null, expiresAt: null, claimedYears: null, categories: [] }]);
+    const tree = await render();
+    await act(async () => byId(tree, 'skills-group-header-fr').props.onPress());
+    await act(async () => byId(tree, 'skill-switch-s3').props.onValueChange(true));
+    await act(async () => { await byId(tree, 'skill-staged-add-s3').props.onPress(); });
+    await act(async () => byId(tree, 'skill-staged-choice-d1').props.onPress());
+    await act(async () => byId(tree, 'skill-staged-choose-add-s3').props.onPress());
+    await act(async () => byId(tree, 'skill-switch-s3').props.onValueChange(false));
+    await act(async () => byId(tree, 'skill-switch-s3').props.onValueChange(true));
+    expect(tree.root.findAllByProps({ testID: 'skill-staged-item-s3-0' })).toHaveLength(0);
     act(() => tree.unmount());
   });
 
@@ -132,6 +190,27 @@ describe('TechnicianSkillsScreen', () => {
     expect(tree.root.findAllByProps({ testID: 'category-evidence-add' })).toHaveLength(0);
     await act(async () => byId(tree, 'skills-open-evidence').props.onPress());
     expect(mockNavigate).toHaveBeenCalledWith('TechnicianEvidence');
+    act(() => tree.unmount());
+  });
+
+  it('offers to send a refused skill back for review without changing anything, and says it once', async () => {
+    const tree = await render();
+    await act(async () => byId(tree, 'skills-group-header-ac').props.onPress());
+    expect(tree.root.findAllByProps({ testID: 'skill-resubmit-s1' })).toHaveLength(0); // approved: nothing to resend
+    await act(async () => { await byId(tree, 'skill-resubmit-s2').props.onPress(); });
+    expect(mockResubmit).toHaveBeenCalledWith('s2');
+    expect(texts(tree).filter((x) => x.startsWith('Đã gửi lại Nạp gas điều hòa'))).toHaveLength(1);
+    act(() => tree.unmount());
+  });
+
+  it('says why a refused skill could not be sent back', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockResubmit.mockRejectedValueOnce(new Error('offline'));
+    const tree = await render();
+    await act(async () => byId(tree, 'skills-group-header-ac').props.onPress());
+    await act(async () => { await byId(tree, 'skill-resubmit-s2').props.onPress(); });
+    expect(alert.mock.calls[0][0]).toBe('Chưa gửi lại được');
+    alert.mockRestore();
     act(() => tree.unmount());
   });
 });

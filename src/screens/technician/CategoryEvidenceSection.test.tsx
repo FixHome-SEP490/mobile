@@ -10,7 +10,6 @@ jest.mock('../../api/technician-profile.api', () => ({
   technicianProfileApi: {
     getMySkillEvidence: jest.fn(async () => []),
     getSkillEvidenceAccess: jest.fn(async () => 'https://signed.example/photo.jpg'),
-    updateSkillEvidence: jest.fn(async () => []),
     deleteSkillEvidence: jest.fn(async () => undefined),
   },
 }));
@@ -30,6 +29,9 @@ const categories = [{ id: 'c-ac', name: 'Điều hòa' }, { id: 'c-fr', name: 'T
 
 // Pressable renders a composite and a host node with the same testID; the first match is the one with the handlers.
 const byId = (tree: ReactTestRenderer, testID: string) => tree.root.findAllByProps({ testID })[0];
+// The delete button lives in the paper's detail: tap the card first.
+const openDetail = (tree: ReactTestRenderer, id: string) => act(() => byId(tree, `category-evidence-sent-${id}`).props.onPress());
+const hasDelete = (tree: ReactTestRenderer) => tree.root.findAllByProps({ testID: 'evidence-detail-delete' }).length > 0;
 const texts = (tree: ReactTestRenderer) => tree.root.findAllByType(Text).map((t) => [t.props.children].flat().join(''));
 
 async function openForm(props: Partial<React.ComponentProps<typeof CategoryEvidenceSection>> = {}) {
@@ -106,6 +108,27 @@ describe('CategoryEvidenceSection', () => {
     act(() => tree.unmount());
   });
 
+  it('refuses a second copy of a paper (same type, same number) for groups it already covers, but not for a new group', async () => {
+    const { technicianProfileApi } = jest.requireMock('../../api/technician-profile.api');
+    technicianProfileApi.getMySkillEvidence.mockResolvedValueOnce([
+      { documentId: 'd1', serviceId: 's1', fileName: 'a.jpg', mimeType: 'image/jpeg', evidenceType: 'national_skill_certificate', issuer: null, referenceNumber: 'AB-123', issuedAt: null, expiresAt: null, claimedYears: null, categories: [{ id: 'c-ac', name: 'Điều hòa' }] },
+    ]);
+    const onSent = jest.fn();
+    (sendCategoryEvidence as jest.Mock).mockClear();
+    const { tree } = await openForm({ sendNow: true, onSent });
+    const number = tree.root.findAllByProps({ accessibilityLabel: 'Số hiệu' })[0];
+    act(() => number.props.onChangeText(' ab-123 '));
+    act(() => byId(tree, 'category-evidence-group-c-ac').props.onPress());
+    await act(async () => { await byId(tree, 'category-evidence-confirm').props.onPress(); });
+    expect(texts(tree).join(' ')).toContain('Bạn đã nộp giấy tờ này cho các nhóm đã chọn');
+    expect(sendCategoryEvidence).not.toHaveBeenCalled();
+    // Add a group it does not cover yet: allowed (the server skips the group that has it).
+    act(() => byId(tree, 'category-evidence-group-c-fr').props.onPress());
+    await act(async () => { await byId(tree, 'category-evidence-confirm').props.onPress(); });
+    expect(sendCategoryEvidence).toHaveBeenCalledWith(['c-ac', 'c-fr'], expect.anything(), expect.objectContaining({ referenceNumber: 'ab-123' }));
+    act(() => tree.unmount());
+  });
+
   it('shows only a few paper types and groups first, with a button for the rest', async () => {
     const many = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => ({ id, name: 'Nhóm ' + id }));
     const { tree } = await openForm({ categories: many });
@@ -134,11 +157,23 @@ describe('CategoryEvidenceSection: a paper already sent can be changed or remove
     return tree;
   }
 
+  it('only offers to view and delete a paper already sent: no edit, no change of photo', async () => {
+    const tree = await mountSent();
+    openDetail(tree, 'd1');
+    expect(hasDelete(tree)).toBe(true);
+    expect(texts(tree)).toEqual(expect.arrayContaining(['Nơi cấp', 'BHXH', 'Ngày cấp', '22/12/2021', 'Kinh nghiệm', '5 năm', 'Áp dụng cho']));
+    expect(tree.root.findAllByProps({ testID: 'category-evidence-edit-d1' })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ testID: 'category-evidence-replace-photo' })).toHaveLength(0);
+    expect(texts(tree)).not.toContain('Sửa');
+    act(() => tree.unmount());
+  });
+
   it('removes it after a confirmation, then reads the papers again', async () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const tree = await mountSent();
     const before = api().getMySkillEvidence.mock.calls.length;
-    act(() => byId(tree, 'category-evidence-delete-d1').props.onPress());
+    openDetail(tree, 'd1');
+    act(() => byId(tree, 'evidence-detail-delete').props.onPress());
     expect(alert).toHaveBeenCalledWith('Xóa giấy tờ này?', expect.stringContaining('tất cả nhóm'), expect.any(Array));
     expect(api().deleteSkillEvidence).not.toHaveBeenCalled();
     const buttons = alert.mock.calls[0][2] as { text: string; onPress?: () => void }[];
@@ -146,34 +181,6 @@ describe('CategoryEvidenceSection: a paper already sent can be changed or remove
     expect(api().deleteSkillEvidence).toHaveBeenCalledWith('d1');
     expect(api().getMySkillEvidence.mock.calls.length).toBe(before + 1);
     alert.mockRestore();
-    act(() => tree.unmount());
-  });
-
-  it('opens the form filled in with the paper, and saves the new details and groups', async () => {
-    const tree = await mountSent();
-    await act(async () => { byId(tree, 'category-evidence-edit-d1').props.onPress(); });
-    expect(texts(tree)).toContain('Sửa giấy tờ');
-    // The form opens in place of the paper's row, not at the end of the list where it would be out of sight.
-    expect(tree.root.findAllByProps({ testID: 'category-evidence-sent-d1' })).toHaveLength(0);
-    expect(byId(tree, 'category-evidence-group-c-ac').props.accessibilityState).toEqual({ checked: true });
-    expect(byId(tree, 'category-evidence-group-c-el').props.accessibilityState).toEqual({ checked: false });
-    act(() => byId(tree, 'category-evidence-group-c-fr').props.onPress());
-    act(() => byId(tree, 'category-evidence-group-c-el').props.onPress());
-    await act(async () => { await byId(tree, 'category-evidence-confirm').props.onPress(); });
-    expect(api().updateSkillEvidence).toHaveBeenCalledWith('d1', expect.objectContaining({
-      evidenceType: 'social_insurance', issuer: 'BHXH', issuedAt: '2021-12-22', claimedYears: 5, categoryIds: ['c-ac', 'c-el'],
-    }));
-    expect(texts(tree)).not.toContain('Sửa giấy tờ');
-    act(() => tree.unmount());
-  });
-
-  it('shows what the server says when a paper can no longer be changed', async () => {
-    api().updateSkillEvidence.mockRejectedValueOnce({ response: { data: { message: 'Giấy tờ này đã dùng để duyệt kỹ năng, không thể sửa hoặc xóa.' } }, isAxiosError: true });
-    const tree = await mountSent();
-    await act(async () => { byId(tree, 'category-evidence-edit-d1').props.onPress(); });
-    await act(async () => { await byId(tree, 'category-evidence-confirm').props.onPress(); });
-    expect(texts(tree).join(' ')).toContain('không thể sửa hoặc xóa');
-    expect(texts(tree)).toContain('Sửa giấy tờ');
     act(() => tree.unmount());
   });
 
@@ -212,10 +219,47 @@ describe('CategoryEvidenceSection: a paper already sent can be changed or remove
     ]);
     let tree!: ReactTestRenderer;
     await act(async () => { tree = create(<CategoryEvidenceSection staged={[]} categories={categories} onChange={jest.fn()} />); });
-    expect(tree.root.findAllByProps({ testID: 'category-evidence-edit-d-open' }).length).toBeGreaterThan(0);
-    expect(tree.root.findAllByProps({ testID: 'category-evidence-edit-d-locked' })).toHaveLength(0);
-    expect(tree.root.findAllByProps({ testID: 'category-evidence-delete-d-locked' })).toHaveLength(0);
-    expect(texts(tree)).toContain('Đã dùng để duyệt kỹ năng, không sửa hoặc xóa được.');
+    openDetail(tree, 'd-open');
+    expect(hasDelete(tree)).toBe(true);
+    act(() => byId(tree, 'evidence-detail-close').props.onPress());
+    openDetail(tree, 'd-locked');
+    expect(hasDelete(tree)).toBe(false);
+    act(() => byId(tree, 'evidence-detail-close').props.onPress());
+    expect(texts(tree)).toContain('Đã dùng để duyệt');
+    expect(tree.root.findAllByProps({ testID: 'category-evidence-locked-d-locked' }).length).toBeGreaterThan(0);
+    act(() => tree.unmount());
+  });
+
+  it('badges each paper by status: a rejected one stays editable with its reason, a paper in review is locked', async () => {
+    const api = technicianProfileApi as unknown as { getMySkillEvidence: jest.Mock };
+    const base = { serviceId: 's1', fileName: 'a.jpg', mimeType: 'image/jpeg', evidenceType: 'social_insurance', issuer: null, referenceNumber: null, issuedAt: null, expiresAt: null, claimedYears: null, categories: [{ id: 'c-ac', name: 'Điều hòa' }] };
+    api.getMySkillEvidence.mockResolvedValueOnce([
+      { ...base, documentId: 'd-rej', status: 'rejected', editable: true, rejectionReason: 'Ảnh mờ' },
+      { ...base, documentId: 'd-rev', status: 'in_review', editable: false },
+    ]);
+    let tree!: ReactTestRenderer;
+    await act(async () => { tree = create(<CategoryEvidenceSection staged={[]} categories={categories} onChange={jest.fn()} />); });
+    expect(texts(tree)).toEqual(expect.arrayContaining(['Kỹ năng bị từ chối', 'Đang xét duyệt']));
+    expect(texts(tree).join(' ')).toContain('Lý do từ chối: Ảnh mờ');
+    openDetail(tree, 'd-rej');
+    expect(hasDelete(tree)).toBe(true);
+    act(() => byId(tree, 'evidence-detail-close').props.onPress());
+    openDetail(tree, 'd-rev');
+    expect(hasDelete(tree)).toBe(false);
+    act(() => tree.unmount());
+  });
+
+  it('groups the papers by status on the papers page, the ones to fix first', async () => {
+    const base = { serviceId: 's1', fileName: 'a.jpg', mimeType: 'application/pdf', evidenceType: 'social_insurance', issuer: null, referenceNumber: null, issuedAt: null, expiresAt: null, claimedYears: null, categories: [{ id: 'c-ac', name: 'Điều hòa' }] };
+    (technicianProfileApi as unknown as { getMySkillEvidence: jest.Mock }).getMySkillEvidence.mockResolvedValueOnce([
+      { ...base, documentId: 'd-ok', status: 'approved', editable: false },
+      { ...base, documentId: 'd-wait', status: 'pending', editable: true },
+      { ...base, documentId: 'd-bad', status: 'rejected', editable: true, rejectionReason: 'Ảnh mờ' },
+    ]);
+    let tree!: ReactTestRenderer;
+    await act(async () => { tree = create(<CategoryEvidenceSection staged={[]} categories={categories} onChange={jest.fn()} sendNow />); });
+    const headings = texts(tree).filter((x) => x.endsWith(' (1)'));
+    expect(headings).toEqual(['Cần xử lý (1)', 'Chờ duyệt (1)', 'Đã dùng để duyệt (1)']);
     act(() => tree.unmount());
   });
 });

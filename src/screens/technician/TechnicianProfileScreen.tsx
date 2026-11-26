@@ -275,6 +275,7 @@ export default function TechnicianProfileScreen() {
     ? ratingValue(technicianProfile.averageRating, technicianProfile.ratingCount)
     : null;
   const activeSkillCount = Object.values(myOfferings).filter((o) => o.isActive).length;
+  const rejectedSkillCount = Object.values(myOfferings).filter((o) => o.isActive && o.verificationStatus === 'rejected').length;
   const kycDesc = verificationLoading
     ? 'Đang tải…'
     : !verificationLoaded
@@ -287,7 +288,7 @@ export default function TechnicianProfileScreen() {
   const skillDesc = !skillsLoaded && profileLoading
     ? 'Đang tải…'
     : activeSkillCount > 0
-      ? `${activeSkillCount} dịch vụ đang nhận`
+      ? `${activeSkillCount} dịch vụ đang nhận${rejectedSkillCount > 0 ? ` · ${rejectedSkillCount} bị từ chối` : ''}`
       : skillsLoaded
         ? 'Chưa có dịch vụ đang nhận'
         : 'Chưa tải được danh sách dịch vụ · Mở để thử lại';

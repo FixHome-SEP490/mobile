@@ -52,6 +52,9 @@ const TYPE_VIEW: Record<string, { tone: ToneName; Icon: typeof Bell }> = {
   PROFILE_REJECTED: { tone: 'danger', Icon: AlertTriangle },
   // Hồ sơ được duyệt nhưng có kỹ năng chưa được xác nhận: chạm để mở trang Kỹ năng, nơi mỗi kỹ năng bị từ chối ghi lý do.
   SKILL_NOT_CONFIRMED: { tone: 'warning', Icon: AlertTriangle },
+  // Quản lý dịch vụ duyệt hoặc từ chối một kỹ năng thêm sau khi hồ sơ được duyệt: chạm để mở trang Kỹ năng.
+  SKILL_VERIFICATION_APPROVED: { tone: 'success', Icon: CheckCircle2 },
+  SKILL_VERIFICATION_REJECTED: { tone: 'warning', Icon: AlertTriangle },
   // Quản lý dịch vụ xác nhận hoặc từ chối khuôn mặt check-in: chạm để mở đơn.
   CHECKIN_FACE_APPROVED: { tone: 'success', Icon: Bell },
   CHECKIN_FACE_REJECTED: { tone: 'danger', Icon: AlertTriangle },
@@ -249,7 +252,7 @@ export default function TechnicianNotificationsScreen({ route }: { route?: { nam
           syncUnreadCount();
         });
     }
-    if (item.type === 'SKILL_NOT_CONFIRMED') {
+    if (item.type === 'SKILL_NOT_CONFIRMED' || item.type === 'SKILL_VERIFICATION_REJECTED' || item.type === 'SKILL_VERIFICATION_APPROVED') {
       navigation.navigate('TechnicianSkills');
       return;
     }

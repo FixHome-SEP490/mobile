@@ -6,6 +6,7 @@ import TechnicianEvidenceScreen from './TechnicianEvidenceScreen';
 const mockServices = jest.fn();
 const mockCategories = jest.fn();
 const mockMyServices = jest.fn();
+const mockResubmit = jest.fn();
 
 jest.mock('react-native-safe-area-context', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
@@ -27,6 +28,7 @@ jest.mock('../../api/technician-profile.api', () => ({
   ...jest.requireActual('../../api/technician-profile.api'),
   technicianProfileApi: {
     getMyServices: (...a: unknown[]) => mockMyServices(...a),
+    resubmitSkill: (...a: unknown[]) => mockResubmit(...a),
     getMySkillEvidence: jest.fn(async () => []),
   },
 }));
@@ -52,12 +54,13 @@ beforeEach(() => {
   mockServices.mockResolvedValue({ data: services, total: 2 });
   mockCategories.mockResolvedValue([{ id: 'ac', name: 'Điều hòa' }, { id: 'fr', name: 'Tủ lạnh' }]);
   mockMyServices.mockResolvedValue([offering('s1', 'verified'), offering('s3', 'pending')]);
+  mockResubmit.mockResolvedValue(undefined);
 });
 
 describe('TechnicianEvidenceScreen', () => {
   it('says that a used paper is locked, and lets the technician add a paper', async () => {
     const tree = await render();
-    expect(texts(tree).join(' ')).toContain('không sửa hoặc xóa được nữa');
+    expect(texts(tree).join(' ')).toContain('không xóa được nữa');
     expect(byId(tree, 'category-evidence-add')).toBeDefined();
     act(() => tree.unmount());
   });
@@ -75,6 +78,22 @@ describe('TechnicianEvidenceScreen', () => {
     expect(texts(tree).join(' ')).toContain('Không thể tải dữ liệu');
     await act(async () => tree.root.findAllByProps({ accessibilityLabel: 'Thử lại' })[0].props.onPress());
     expect(byId(tree, 'category-evidence-add')).toBeDefined();
+    act(() => tree.unmount());
+  });
+
+  it('offers to send the refused skills back for review, one request each, and says it once', async () => {
+    mockMyServices.mockResolvedValue([offering('s1', 'rejected'), offering('s3', 'rejected')]);
+    const tree = await render();
+    expect(texts(tree).join(' ')).toContain('2 kỹ năng bị từ chối');
+    await act(async () => { await byId(tree, 'evidence-resubmit-all').props.onPress(); });
+    expect(mockResubmit.mock.calls.map((c) => c[0])).toEqual(['s1', 's3']);
+    expect(texts(tree).filter((x) => x.startsWith('Đã gửi lại để xét duyệt'))).toHaveLength(1);
+    act(() => tree.unmount());
+  });
+
+  it('shows no resend box when nothing was refused', async () => {
+    const tree = await render();
+    expect(tree.root.findAllByProps({ testID: 'evidence-rejected-box' })).toHaveLength(0);
     act(() => tree.unmount());
   });
 });

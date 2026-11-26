@@ -14,7 +14,8 @@ import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
 import { iconStroke, useAppTheme } from '../../constants/theme';
 import { extractApiErrorMessage } from '../../utils/input-validation';
 import SkillEvidenceRow from './SkillEvidenceRow';
-import { SKILL_STATUS_LABEL } from './skill-evidence';
+import StagedSkillPapers from './StagedSkillPapers';
+import { SKILL_STATUS_LABEL, sendStagedSkillPapers, type StagedSkillPaper } from './skill-evidence';
 import { readSkillPricing, skillDigitsOnly } from './skill-pricing-input';
 import {
   SKILL_FILTERS,
@@ -53,9 +54,17 @@ export default function TechnicianSkillsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<SkillFilter>('all');
-  const [query, setQuery] = useState('');
+  const [filter, setFilterState] = useState<SkillFilter>('all');
+  const [query, setQueryState] = useState('');
   const [open, setOpen] = useState<string[]>([]);
+  // While a filter or a search is on, the matching groups start open; the ones the technician closes are kept here, so they can still be folded.
+  const [folded, setFolded] = useState<string[]>([]);
+  const setFilter = (next: SkillFilter) => { setFilterState(next); setFolded([]); };
+  const setQuery = (next: string) => { setQueryState(next); setFolded([]); };
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  const [notice, setNotice] = useState('');
+  // Giấy tờ chọn trước cho kỹ năng chưa đăng ký: gửi cùng lúc lưu, vì backend mở phiếu duyệt ngay khi lưu.
+  const [staged, setStaged] = useState<Record<string, StagedSkillPaper[]>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -104,11 +113,17 @@ export default function TechnicianSkillsScreen() {
     try {
       const offering = await technicianProfileApi.setSkillPricing(service.id, {
         isActive: draft.enabled,
-        level: draft.level.trim() || 'INTERMEDIATE',
         typicalWarrantyDays: pricing.values.typicalWarrantyDays,
         listedLaborPrice: isFixedPrice ? null : pricing.values.listedLaborPrice,
       });
       setOfferings((prev) => ({ ...prev, [service.id]: offering }));
+      const waiting = draft.enabled ? (staged[service.id] ?? []) : [];
+      setStaged((prev) => ({ ...prev, [service.id]: [] }));
+      if (waiting.length) {
+        const { failed, reason } = await sendStagedSkillPapers(service.id, waiting);
+        if (failed > 0) Alert.alert('Đã lưu kỹ năng', `${failed} giấy tờ chưa gửi được${reason ? `: ${reason}` : ''}. Bạn có thể thêm lại ở mục giấy tờ của kỹ năng.`);
+        refreshOfferings();
+      }
     } catch (err: unknown) {
       Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể lưu kỹ năng này.'));
     } finally {
@@ -116,10 +131,25 @@ export default function TechnicianSkillsScreen() {
     }
   };
 
+  const resubmit = async (service: ServiceItem) => {
+    setResendingId(service.id);
+    setNotice('');
+    try {
+      await technicianProfileApi.resubmitSkill(service.id);
+      refreshOfferings();
+      setNotice(`Đã gửi lại ${service.name}. FixHome sẽ xét duyệt và báo cho bạn.`);
+    } catch (err: unknown) {
+      Alert.alert('Chưa gửi lại được', extractApiErrorMessage(err, 'Vui lòng thử lại.'));
+    } finally {
+      setResendingId(null);
+    }
+  };
+
   const counts = useMemo(() => countSkills(services, offerings), [services, offerings]);
   const groups = useMemo(() => groupSkills(services, categories, offerings, filter, query), [services, categories, offerings, filter, query]);
   const searching = filter !== 'all' || query.trim() !== '';
-  const toggleGroup = (id: string) => setOpen((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const flip = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+  const toggleGroup = (id: string) => (searching ? setFolded((prev) => flip(prev, id)) : setOpen((prev) => flip(prev, id)));
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -144,6 +174,8 @@ export default function TechnicianSkillsScreen() {
             <Text style={styles.note}>
               Bật dịch vụ bạn nhận làm. Dịch vụ mới hoặc bật lại cần quản lý dịch vụ duyệt trước khi nhận được việc.
             </Text>
+
+            {!!notice && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.noticeOk} testID="skills-notice">{notice}</Text>}
 
             <View style={styles.search}>
               <Search size={18} strokeWidth={iconStroke} color={colors.textSecondary} />
@@ -179,7 +211,7 @@ export default function TechnicianSkillsScreen() {
 
             {groups.length === 0 && <Text style={styles.hint}>Không có dịch vụ nào khớp.</Text>}
             {groups.map((group) => {
-              const expanded = searching || open.includes(group.id);
+              const expanded = searching ? !folded.includes(group.id) : open.includes(group.id);
               const Chevron = expanded ? ChevronUp : ChevronDown;
               return (
                 <View key={group.id} style={styles.group} testID={`skills-group-${group.id}`}>
@@ -204,8 +236,15 @@ export default function TechnicianSkillsScreen() {
                       offering={offerings[service.id]}
                       draft={drafts[service.id]}
                       saving={savingId === service.id}
-                      onDraft={(patch) => setDrafts((prev) => ({ ...prev, [service.id]: { ...prev[service.id], ...patch } }))}
+                      onDraft={(patch) => {
+                        setDrafts((prev) => ({ ...prev, [service.id]: { ...prev[service.id], ...patch } }));
+                        if (patch.enabled === false) setStaged((prev) => ({ ...prev, [service.id]: [] }));
+                      }}
+                      staged={staged[service.id] ?? []}
+                      onStaged={(items) => setStaged((prev) => ({ ...prev, [service.id]: items }))}
                       onSave={() => void save(service)}
+                      resending={resendingId === service.id}
+                      onResubmit={() => void resubmit(service)}
                       onPapersChanged={refreshOfferings}
                       styles={styles}
                       colors={colors}
@@ -236,13 +275,17 @@ export default function TechnicianSkillsScreen() {
   );
 }
 
-function SkillRow({ service, offering, draft, saving, onDraft, onSave, onPapersChanged, styles, colors }: {
+function SkillRow({ service, offering, draft, saving, resending, onDraft, staged, onStaged, onSave, onResubmit, onPapersChanged, styles, colors }: {
   service: ServiceItem;
   offering: TechnicianServiceOffering | undefined;
   draft: SkillDraft | undefined;
   saving: boolean;
+  resending: boolean;
   onDraft: (patch: Partial<SkillDraft>) => void;
+  staged: StagedSkillPaper[];
+  onStaged: (items: StagedSkillPaper[]) => void;
   onSave: () => void;
+  onResubmit: () => void;
   onPapersChanged: () => void;
   styles: ReturnType<typeof getStyles>;
   colors: ReturnType<typeof useAppTheme>['colors'];
@@ -302,8 +345,27 @@ function SkillRow({ service, offering, draft, saving, onDraft, onSave, onPapersC
           </View>
         </View>
       )}
+      {draft.enabled && state === 'none' && (
+        <StagedSkillPapers serviceId={service.id} serviceName={service.name} items={staged} onChange={onStaged} />
+      )}
       {offering?.isActive && state !== 'verified' && state !== 'none' && (
         <SkillEvidenceRow serviceId={service.id} serviceName={service.name} status={state} onChanged={onPapersChanged} showReasonNow />
+      )}
+      {state === 'rejected' && offering?.isActive && !dirty && (
+        <View style={styles.resend}>
+          <Text style={styles.label}>Xóa giấy tờ không phù hợp hoặc thêm giấy tờ mới nếu cần, rồi gửi lại. Giấy tờ còn lại đi kèm yêu cầu mới.</Text>
+          <Pressable
+            testID={`skill-resubmit-${service.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={`Gửi lại ${service.name} để xét duyệt`}
+            accessibilityState={{ disabled: resending, busy: resending }}
+            disabled={resending}
+            onPress={onResubmit}
+            style={styles.primaryBtn}
+          >
+            {resending ? <ActivityIndicator size="small" color={colors.surface} /> : <Text style={styles.primaryBtnText}>Gửi lại để xét duyệt</Text>}
+          </Pressable>
+        </View>
       )}
       {dirty && (
         <Pressable
@@ -332,6 +394,8 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   errorBlock: { padding: 16, gap: 12, alignItems: 'flex-start' },
   content: { padding: 16, gap: 12 },
   note: { color: colors.textSecondary, fontSize: 14, lineHeight: 20 },
+  noticeOk: { color: colors.tone.success.text, backgroundColor: colors.tone.success.bg, borderRadius: 12, padding: 12, fontSize: 14, lineHeight: 20 },
+  resend: { gap: 8 },
   hint: { color: colors.textSecondary, fontSize: 13, lineHeight: 19 },
   search: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   searchInput: { flex: 1, minHeight: 44, color: colors.text, fontSize: 16 },

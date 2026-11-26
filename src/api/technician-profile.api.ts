@@ -46,11 +46,18 @@ const SKILL_EVIDENCE_REVIEW_VALUES = ['pending', 'valid', 'invalid', 'need_more'
 export type SkillEvidenceReviewStatus = (typeof SKILL_EVIDENCE_REVIEW_VALUES)[number];
 
 /** What the technician says about one file; dates are `YYYY-MM-DD`. Only `evidenceType` is required once any detail is sent. */
+/** A file already uploaded through a signed URL, ready to be named in a request. */
+export interface UploadedEvidenceFile { storageObjectPath: string; fileName: string; fileSize: number; mimeType: string }
+
+export type SentEvidenceStatus = 'pending' | 'rejected' | 'approved' | 'in_review';
+
 /** A paper the technician already sent: one per stored file, with the service categories it covers. */
 export interface SentSkillEvidence {
   documentId: string;
   /** A skill the paper sits on, for the access route. */
   serviceId: string;
+  /** Every skill the paper sits on. Absent on older backends. */
+  serviceIds?: string[];
   fileName: string;
   mimeType: string;
   evidenceType: SkillEvidenceType | null;
@@ -61,6 +68,10 @@ export interface SentSkillEvidence {
   claimedYears: number | null;
   /** False once the paper helped approve a skill (or the profile waits for review): the server refuses edit and delete. Absent on older backends. */
   editable?: boolean;
+  /** Derived from the skills the paper sits on. Absent on older backends: the app falls back to `editable`. */
+  status?: SentEvidenceStatus;
+  /** Why the skill was rejected, for status `rejected`. */
+  rejectionReason?: string | null;
   categories: { id: string; name: string }[];
 }
 
@@ -330,14 +341,21 @@ export const technicianProfileApi = {
     return Array.isArray(data) ? (data as SentSkillEvidence[]) : [];
   },
 
-  /** Changes the details and the categories of a paper already sent (replaces them); returns the papers. */
-  async updateSkillEvidence(
-    documentId: string,
-    body: { categoryIds: string[] } & Partial<SkillEvidenceDetails>,
-  ): Promise<SentSkillEvidence[]> {
-    const res = await apiClient.patch<{ data: unknown } | unknown>(`/technicians/me/skill-evidence/${documentId}`, body);
-    const data = unwrap(res.data as { data: unknown });
-    return Array.isArray(data) ? (data as SentSkillEvidence[]) : [];
+  /** Asks for a new review of a skill FixHome refused; the papers already sent go with the new request. */
+  async resubmitSkill(serviceId: string): Promise<void> {
+    await apiClient.post(`/technicians/me/services/${serviceId}/verification/resubmit`);
+  },
+
+  /** Puts papers already sent on this skill too, without uploading again; a paper it already holds is skipped. */
+  async reuseSkillEvidence(serviceId: string, documentIds: string[]): Promise<{ attached: number; skipped: number }> {
+    const res = await apiClient.post<{ data: unknown } | unknown>(`/technicians/me/services/${serviceId}/verification/documents/reuse`, { documentIds });
+    const data = (unwrap(res.data as { data: unknown }) ?? {}) as Record<string, unknown>;
+    return { attached: Number(data.attached ?? 0), skipped: Number(data.skipped ?? 0) };
+  },
+
+  /** Takes a paper off one skill only; the other skills it sits on keep it. */
+  async deleteSkillEvidenceFromSkill(serviceId: string, documentId: string): Promise<void> {
+    await apiClient.delete(`/technicians/me/services/${serviceId}/verification/documents/${documentId}`);
   },
 
   /** Removes a paper already sent from every skill it sits on. */
