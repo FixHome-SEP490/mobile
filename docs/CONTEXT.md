@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-25 22:39 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
+> Cập nhật lần cuối: 2026-11-26 15:46 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: fix/part-returns-groups-302
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -459,6 +459,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-26 15:46 (UTC+7) | ToanAltF4 | fix/part-returns-groups-302 | BUG 302: tab Cần khai trả và Chờ quản lý nhận của màn Linh kiện cần trả theo returnStatus của máy chủ (khai một phần vẫn là chờ quản lý, lệch số không vào tab nào)
 - 2026-11-25 22:39 (UTC+7) | Hgnv11 | dev | Giấy tờ tách thành trang riêng (TechnicianEvidence), giấy tờ đã dùng duyệt kỹ năng bị khóa sửa/xóa; cần backend trả editable; CHƯA KIỂM CHỨNG trên thiết bị
 - 2026-11-25 22:35 (UTC+7) | Hgnv11 | dev | Trang Kỹ năng riêng cho thợ (lọc, tìm, nhóm, lý do từ chối, giấy tờ gửi ngay) thay bottom sheet ở Hồ sơ; CHƯA KIỂM CHỨNG trên thiết bị
 - 2026-11-25 21:41 (UTC+7) | Hgnv11 | dev | Thêm chọn kênh OTP Email/SMS khi đăng ký và thẻ xác thực email/SĐT (Bảo mật khách hàng, hồ sơ kỹ thuật viên); CHƯA KIỂM CHỨNG trên thiết bị và backend thật
@@ -498,7 +499,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-11-21 12:58 (UTC+7) | Hgnv11 | fix/mobile-technician-kyc-face-picker | Ô ảnh chân dung trong Xác minh danh tính thợ mở hộp chọn Thư viện ảnh / Chụp ảnh thay vì mở camera ngay
 - 2026-11-21 12:55 (UTC+7) | ToanAltF4 | fix/mobile-expogo-map-2111 | BUG 211: Expo Go không nạp MapLibre, hiện khung Bản đồ chỉ có trên bản cài APK; APK vẫn dùng MapLibre (nạp lười trong AddressMap)
 - 2026-11-21 03:39 (UTC+7) | ToanAltF4 | fix/mobile-map-default-2111 | Khung chọn ảnh/video trong chat đóng được bằng nút Back
-- 2026-11-21 03:03 (UTC+7) | ToanAltF4 | fix/mobile-map-default-2111 | Sửa lỗi test máy ảo 21/11: bản đồ thêm địa chỉ mở ở TP.HCM thay vì toạ độ 0,0; chi tiết yêu cầu đặt lịch có nút Hủy yêu cầu (khi chưa có đơn sửa chữa); lời mời ghi số lượng không còn chữ SL thừa; ví khách: lần nạp chưa thanh toán quá 30 phút (link VNPay hết hạn 15 phút) không còn khoá ô nạp tiền
 
 
 ### Lịch sử giữ lại khi tích hợp
