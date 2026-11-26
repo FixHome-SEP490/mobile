@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import ReputationCard from '../../components/ReputationCard';
+import ContactVerificationCard from '../../components/account/ContactVerificationCard';
 import DefaultWarrantyCard from './DefaultWarrantyCard';
 import {
   View,
@@ -12,16 +13,8 @@ import {
   Image,
   Modal,
   ActivityIndicator,
-  Switch,
   Platform,
 } from 'react-native';
-import {
-  BottomSheetModal,
-  BottomSheetBackdrop,
-  type BottomSheetBackdropProps,
-  BottomSheetSectionList,
-  BottomSheetTextInput,
-} from '@gorhom/bottom-sheet';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -29,6 +22,7 @@ import {
   ChartColumn,
   Camera,
   ChevronRight,
+  FileText,
   MapPin,
   MessageSquareText,
   PackageCheck,
@@ -40,7 +34,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuthStore } from '../../store';
 import type { RootStackParamList } from '../../types';
@@ -48,38 +42,25 @@ import { usersApi, type AddressData } from '../../api/users.api';
 import { mediaApi } from '../../api/media.api';
 import { ordersApi, isHistoricalOrder, type ServiceOrderItem } from '../../api/orders.api';
 import { authApi } from '../../api/auth.api';
-import { servicesApi, type ServiceItem, type CategoryItem } from '../../api/services.api';
 import {
   technicianProfileApi,
   type TechnicianProfile,
   type TechnicianServiceOffering,
 } from '../../api/technician-profile.api';
 import { technicianVerificationApi, type MyVerification } from '../../api/technician-verification.api';
-import SkillEvidenceRow from './SkillEvidenceRow';
-import { SKILL_STATUS_LABEL } from './skill-evidence';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
-import CategoryPills from '../../components/CategoryPills';
 import { useAppTheme } from '../../constants/theme';
-import { extractApiErrorMessage } from '../../utils/input-validation';
 import { formatVnd } from '../../utils/format';
 import StatusBadge from '../../components/StatusBadge';
-import { readSkillPricing, skillDigitsOnly } from './skill-pricing-input';
 import type { StatusView } from './technician-status';
 
 import { NO_RATING_TEXT, formatRating, ratingValue } from '../../utils/rating';
 import { avatarErrorMessage, updateMyAvatar } from '../../services/avatar-upload';
 import AccountLogoutAction from '../../components/account/AccountLogoutAction';
-import BackClosableBottomSheetModal from '../../components/BackClosableBottomSheetModal';
 import PillText from '../../components/PillText';
 
 // Match Customer account clearance above the floating bar, plus the bottom inset.
 const TAB_BAR_CLEARANCE = 96;
-
-const VERIFICATION_VIEW: Record<string, StatusView> = {
-  pending: { label: SKILL_STATUS_LABEL.pending, tone: 'warning', icon: 'Clock' },
-  verified: { label: SKILL_STATUS_LABEL.verified, tone: 'success', icon: 'CheckCircle2' },
-  rejected: { label: SKILL_STATUS_LABEL.rejected, tone: 'danger', icon: 'XCircle' },
-};
 
 // Xác minh danh tính (KYC) ở Hồ sơ chỉ đọc trạng thái đã nộp từ server:
 // null/chưa nộp → “Chưa nộp hồ sơ”, không suy diễn từ pending mặc định.
@@ -88,11 +69,6 @@ const KYC_VIEW: Record<MyVerification['status'], StatusView> = {
   VERIFIED: { label: 'Đã xác minh', tone: 'success', icon: 'CheckCircle2' },
   REJECTED: { label: 'Cần cập nhật', tone: 'danger', icon: 'XCircle' },
 };
-
-const renderBackdrop = (props: BottomSheetBackdropProps) => (
-  <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} />
-);
-
 
 type ProfileStyles = ReturnType<typeof getStyles>;
 
@@ -158,40 +134,8 @@ export default function TechnicianProfileScreen() {
   const [addresses, setAddresses] = useState<AddressData[]>([]);
   const technicianAddress = addresses.find((a) => a.isDefault) ?? addresses[0] ?? null;
 
-  const skillsSheetRef = useRef<BottomSheetModal>(null);
-  const wideSnapPoints = useMemo(() => ['90%'], []);
-
-  // Skills
-  const [loadingSkills, setLoadingSkills] = useState(false);
-  const [skillsSheetLoaded, setSkillsSheetLoaded] = useState(false);
-  const [skillsSheetError, setSkillsSheetError] = useState<string | null>(null);
-  const [catalogServices, setCatalogServices] = useState<ServiceItem[]>([]);
-  const [pickerCategories, setPickerCategories] = useState<CategoryItem[]>([]);
-  const [pickerCategoryId, setPickerCategoryId] = useState<string | null>(null);
+  // Services the technician takes (read for the count on the menu row; the Skills page edits them).
   const [myOfferings, setMyOfferings] = useState<Record<string, TechnicianServiceOffering>>({});
-  const [skillDrafts, setSkillDrafts] = useState<
-    Record<string, { enabled: boolean; listedLaborPrice: string; typicalWarrantyDays: string; level: string }>
-  >({});
-  const [savingSkillId, setSavingSkillId] = useState<string | null>(null);
-  const filteredCatalogServices = catalogServices.filter(
-    (s) => !pickerCategoryId || s.categoryId === pickerCategoryId,
-  );
-  const skillSections = useMemo(() => {
-    const verified: ServiceItem[] = [];
-    const unverified: ServiceItem[] = [];
-    const unregistered: ServiceItem[] = [];
-    for (const service of filteredCatalogServices) {
-      const offering = myOfferings[service.id];
-      if (offering?.verificationStatus === 'verified') verified.push(service);
-      else if (offering) unverified.push(service);
-      else unregistered.push(service);
-    }
-    return [
-      { title: 'Đã duyệt', key: 'verified', data: verified },
-      { title: 'Chờ duyệt / Bị từ chối', key: 'unverified', data: unverified },
-      { title: 'Chưa đăng ký — có thể xin duyệt', key: 'unregistered', data: unregistered },
-    ].filter((section) => section.data.length > 0);
-  }, [filteredCatalogServices, myOfferings]);
 
   // Same flow as the customer: upload to /media/upload, save the hosted URL on
   // the profile, then refresh the session user. The old photo stays on screen
@@ -299,74 +243,9 @@ export default function TechnicianProfileScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount
+  useFocusEffect(useCallback(() => {
     void loadTechnicianProfile();
-  }, [loadTechnicianProfile]);
-
-  // ---- Skills sheet ----
-  const openSkillsSheet = async () => {
-    tapFeedback();
-    skillsSheetRef.current?.present();
-    setLoadingSkills(true);
-    setSkillsSheetError(null);
-    try {
-      const [services, categories, offerings] = await Promise.all([
-        servicesApi.getServices({ pageSize: 100 }),
-        servicesApi.getCategories(),
-        technicianProfileApi.getMyServices(),
-      ]);
-      setCatalogServices(services.data);
-      setPickerCategories(categories);
-      const offeringsById: Record<string, TechnicianServiceOffering> = {};
-      for (const o of offerings) offeringsById[o.serviceId] = o;
-      setMyOfferings(offeringsById);
-      const drafts: typeof skillDrafts = {};
-      for (const service of services.data) {
-        const offering = offeringsById[service.id];
-        drafts[service.id] = {
-          enabled: offering?.isActive ?? false,
-          listedLaborPrice: offering?.listedLaborPrice != null ? String(offering.listedLaborPrice) : '',
-          typicalWarrantyDays: offering?.typicalWarrantyDays != null ? String(offering.typicalWarrantyDays) : String(technicianProfile?.defaultLaborWarrantyDays ?? 30),
-          level: offering?.level ?? 'INTERMEDIATE',
-        };
-      }
-      setSkillDrafts(drafts);
-      setSkillsLoaded(true);
-      setSkillsSheetLoaded(true);
-    } catch {
-      // A failed request is not an empty catalog; keep the last confirmed data/drafts.
-      setSkillsSheetError('Không thể tải danh sách dịch vụ. Kiểm tra kết nối rồi thử lại.');
-    } finally {
-      setLoadingSkills(false);
-    }
-  };
-
-  const handleSaveSkill = async (service: ServiceItem) => {
-    const draft = skillDrafts[service.id];
-    if (!draft) return;
-    const isFixedPrice = String(service.pricingMode).toLowerCase() === 'fixed_price';
-    const pricing = readSkillPricing(draft, isFixedPrice);
-    if ('error' in pricing) {
-      Alert.alert('Chưa lưu được', pricing.error);
-      return;
-    }
-    setSavingSkillId(service.id);
-    try {
-      const offering = await technicianProfileApi.setSkillPricing(service.id, {
-        isActive: draft.enabled,
-        level: draft.level.trim() || 'INTERMEDIATE',
-        typicalWarrantyDays: pricing.values.typicalWarrantyDays,
-        listedLaborPrice: isFixedPrice ? null : pricing.values.listedLaborPrice,
-      });
-      setMyOfferings((prev) => ({ ...prev, [service.id]: offering }));
-      await loadTechnicianProfile();
-    } catch (err: unknown) {
-      Alert.alert('Lỗi', extractApiErrorMessage(err, 'Không thể lưu kỹ năng này.'));
-    } finally {
-      setSavingSkillId(null);
-    }
-  };
+  }, [loadTechnicianProfile]));
 
   const performLogout = async () => {
     if (!reduceMotion) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -586,7 +465,16 @@ export default function TechnicianProfileScreen() {
             Icon={Wrench}
             title="Kỹ năng và dịch vụ nhận làm"
             desc={skillDesc}
-            onPress={openSkillsSheet}
+            onPress={() => navigation.navigate('TechnicianSkills')}
+          />
+          <View style={styles.divider} />
+          <MenuRow
+            styles={styles}
+            colors={colors}
+            Icon={FileText}
+            title="Giấy tờ chứng minh"
+            desc="Bằng cấp, chứng chỉ đã nộp cho kỹ năng"
+            onPress={() => navigation.navigate('TechnicianEvidence')}
           />
           <View style={styles.divider} />
           <MenuRow
@@ -620,6 +508,7 @@ export default function TechnicianProfileScreen() {
             <Text style={styles.accountValue}>{accountPhone}</Text>
           </View>
         </View>
+        <ContactVerificationCard />
         <View style={styles.group}>
           <MenuRow
             styles={styles}
@@ -636,151 +525,6 @@ export default function TechnicianProfileScreen() {
         <View style={styles.logoutSpacer} />
         <AccountLogoutAction onPress={handleLogout} />
       </ScrollView>
-
-      {/* Skills sheet */}
-      <BackClosableBottomSheetModal
-        ref={skillsSheetRef}
-        snapPoints={wideSnapPoints}
-        backdropComponent={renderBackdrop}
-      >
-        <View style={styles.sheetHeader}>
-          <Text style={styles.modalTitle} accessibilityRole="header">Kỹ năng và dịch vụ nhận làm</Text>
-          {pickerCategories.length > 0 && (
-            <CategoryPills categories={pickerCategories} selectedId={pickerCategoryId} onSelect={setPickerCategoryId} />
-          )}
-        </View>
-        {skillsSheetError && (
-          <View style={styles.loadingBlock} accessibilityRole="alert">
-            <Text style={styles.emptyText}>{skillsSheetError}</Text>
-            <TouchableOpacity
-              onPress={openSkillsSheet}
-              style={styles.skillSaveBtn}
-              disabled={loadingSkills}
-              accessibilityRole="button"
-              accessibilityLabel="Thử lại danh sách dịch vụ"
-              accessibilityState={{ disabled: loadingSkills, busy: loadingSkills }}
-            >
-              <Text style={styles.skillSaveBtnText}>Thử lại</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        {loadingSkills ? (
-          <View style={styles.loadingBlock}>
-            <ActivityIndicator color={colors.primaryStrong} style={styles.sheetSpinner} />
-            <Text style={styles.emptyText}>Đang tải…</Text>
-          </View>
-        ) : (
-          <BottomSheetSectionList
-            sections={skillSections}
-            keyExtractor={(s) => s.id}
-            contentContainerStyle={styles.pickerListContent}
-            renderSectionHeader={({ section }) => (
-              <Text style={styles.skillSectionHeader}>
-                {section.title} <Text style={styles.skillSectionCount}>({section.data.length})</Text>
-              </Text>
-            )}
-            renderItem={({ item: service }) => {
-              const draft = skillDrafts[service.id];
-              if (!draft) return null;
-              const offering = myOfferings[service.id];
-              const isFixedPrice = String(service.pricingMode).toLowerCase() === 'fixed_price';
-              const verification = offering ? VERIFICATION_VIEW[offering.verificationStatus] : undefined;
-              // Nút Lưu chỉ hiện khi bản nháp khác dữ liệu đã lưu trên server.
-              const dirty = offering
-                ? draft.enabled !== offering.isActive
-                  || draft.typicalWarrantyDays !== (offering.typicalWarrantyDays != null ? String(offering.typicalWarrantyDays) : draft.typicalWarrantyDays)
-                  || (!isFixedPrice && draft.listedLaborPrice !== (offering.listedLaborPrice != null ? String(offering.listedLaborPrice) : ''))
-                : draft.enabled;
-              const saving = savingSkillId === service.id;
-              const setDraft = (patch: Partial<typeof draft>) =>
-                setSkillDrafts((prev) => ({ ...prev, [service.id]: { ...prev[service.id], ...patch } }));
-              return (
-                <View style={styles.skillRow}>
-                  <View style={styles.skillRowHeader}>
-                    <View style={styles.skillTitleCol}>
-                      <Text style={styles.skillName} numberOfLines={2}>{service.name}</Text>
-                      {verification && <StatusBadge view={verification} />}
-                    </View>
-                    <Switch
-                      value={draft.enabled}
-                      onValueChange={(enabled) => setDraft({ enabled })}
-                      trackColor={{ false: colors.border, true: colors.primaryStrong }}
-                      thumbColor={colors.surface}
-                      {...{ activeThumbColor: colors.surface }} // react-native-web: mặc định thumb bật là xanh teal
-                      accessibilityRole="switch"
-                      accessibilityLabel={`Nhận làm ${service.name}`}
-                      accessibilityState={{ checked: draft.enabled }}
-                    />
-                  </View>
-                  {draft.enabled && (
-                    <View style={styles.skillFieldsRow}>
-                      {!isFixedPrice && (
-                        <View style={styles.skillFieldWide}>
-                          <Text style={styles.fieldLabel}>Giá công (₫)</Text>
-                          <BottomSheetTextInput
-                            value={draft.listedLaborPrice}
-                            onChangeText={(v) => setDraft({ listedLaborPrice: skillDigitsOnly(v) })}
-                            keyboardType="number-pad"
-                            maxLength={10}
-                            placeholder="Nhập giá công"
-                            placeholderTextColor={colors.textSecondary}
-                            accessibilityLabel={`Giá công ${service.name}`}
-                            style={styles.skillFieldInput}
-                          />
-                        </View>
-                      )}
-                      <View style={styles.skillField}>
-                        <Text style={styles.fieldLabel}>Bảo hành (ngày)</Text>
-                        <BottomSheetTextInput
-                          value={draft.typicalWarrantyDays}
-                          onChangeText={(v) => setDraft({ typicalWarrantyDays: skillDigitsOnly(v) })}
-                          keyboardType="number-pad"
-                          maxLength={4}
-                          placeholder="Số ngày"
-                          placeholderTextColor={colors.textSecondary}
-                          accessibilityLabel={`Bảo hành ${service.name}`}
-                          style={styles.skillFieldInput}
-                        />
-                      </View>
-                    </View>
-                  )}
-                  {offering?.isActive && offering.verificationStatus !== 'verified' && (
-                    <SkillEvidenceRow
-                      serviceId={service.id}
-                      serviceName={service.name}
-                      status={offering.verificationStatus}
-                      onChanged={() => {
-                        void technicianProfileApi.getMyServices()
-                          .then((list) => setMyOfferings(Object.fromEntries(list.map((o) => [o.serviceId, o]))))
-                          .catch(() => undefined);
-                      }}
-                    />
-                  )}
-                  {dirty && (
-                    <TouchableOpacity
-                      style={styles.skillSaveBtn}
-                      disabled={saving}
-                      onPress={() => handleSaveSkill(service)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Lưu ${service.name}`}
-                      accessibilityState={{ disabled: saving, busy: saving }}
-                    >
-                      {saving ? (
-                        <ActivityIndicator size="small" color={colors.surface} />
-                      ) : (
-                        <Text style={styles.skillSaveBtnText}>Lưu thay đổi</Text>
-                      )}
-                    </TouchableOpacity>
-                  )}
-                </View>
-              );
-            }}
-            ListEmptyComponent={skillsSheetLoaded && !skillsSheetError
-              ? <Text style={styles.emptyText}>Không có dịch vụ nào.</Text>
-              : undefined}
-          />
-        )}
-      </BackClosableBottomSheetModal>
 
       <Modal visible={isAvatarModalVisible} transparent={true} animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={() => setAvatarModalVisible(false)}>
         <View style={styles.avatarModalContainer}>
@@ -859,21 +603,6 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   iconBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
 
   sheetHeader: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 6, gap: 8 },
-  sheetSpinner: { marginTop: 24 },
-  loadingBlock: { alignItems: 'center', paddingVertical: 24, gap: 8 },
-  pickerListContent: { paddingHorizontal: 16, paddingBottom: 32 },
-  skillSectionHeader: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.textSecondary, paddingTop: 16, paddingBottom: 8, backgroundColor: colors.surface },
-  skillSectionCount: { fontWeight: '500' },
-  skillRow: { paddingVertical: 12, gap: 12, borderBottomWidth: 1, borderBottomColor: colors.divider },
-  skillRowHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  skillTitleCol: { flex: 1, minWidth: 0, gap: 6, alignItems: 'flex-start' },
-  skillName: { fontSize: 16, lineHeight: 24, fontWeight: '600', color: colors.text },
-  skillSaveBtn: { minHeight: 44, paddingHorizontal: 16, borderRadius: 14, backgroundColor: colors.primaryStrong, justifyContent: 'center', alignItems: 'center' },
-  skillSaveBtnText: { color: colors.surface, fontWeight: '600', fontSize: 14, lineHeight: 20 },
-  skillFieldsRow: { flexDirection: 'row', gap: 12 },
-  skillField: { flex: 1, minWidth: 0 },
-  skillFieldWide: { flex: 1, minWidth: 0 },
-  skillFieldInput: { minHeight: 44, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.textSecondary, borderRadius: 14, color: colors.text, fontSize: 16, backgroundColor: colors.surface },
 
 
 });

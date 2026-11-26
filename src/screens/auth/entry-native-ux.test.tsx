@@ -117,9 +117,26 @@ it('registers without opening a session, then requires email OTP', async () => {
   await fill('Xác nhận mật khẩu', 'NativeTest!123');
   await fill('Số điện thoại', '0901234567');
   await press('Đăng ký tài khoản');
-  expect(mockApi.register).toHaveBeenCalledWith({ fullName: 'Native Test', email: 'native-test@example.com', password: 'NativeTest!123', phoneNumber: '0901234567', role: 'customer' });
-  expect(mockReset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'VerifyRegisterOtp', params: { email: 'native-test@example.com', password: 'NativeTest!123' } }] });
+  expect(mockApi.register).toHaveBeenCalledWith({ fullName: 'Native Test', email: 'native-test@example.com', password: 'NativeTest!123', phoneNumber: '0901234567', role: 'customer', verifyChannel: 'EMAIL' });
+  expect(mockReset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'VerifyRegisterOtp', params: { email: 'native-test@example.com', password: 'NativeTest!123', channel: 'EMAIL' } }] });
   expect(mockSetAuth).not.toHaveBeenCalled();
+});
+
+it('registers with the SMS channel and requires a phone number for it', async () => {
+  mockApi.register.mockResolvedValue({ email: 'native-test@example.com' });
+  await render(<RegisterScreen />);
+  await fill('Họ và tên', 'Native Test');
+  await fill('Email', 'native-test@example.com');
+  await fill('Mật khẩu', 'NativeTest!123');
+  await fill('Xác nhận mật khẩu', 'NativeTest!123');
+  await press('SMS, Gửi vào số điện thoại');
+  await press('Đăng ký tài khoản');
+  expect(mockApi.register).not.toHaveBeenCalled();
+  expect(Alert.alert).toHaveBeenCalledWith('Lỗi', 'Nhập số điện thoại để nhận mã xác thực qua SMS.');
+  await fill('Số điện thoại', '0901234567');
+  await press('Đăng ký tài khoản');
+  expect(mockApi.register).toHaveBeenCalledWith(expect.objectContaining({ phoneNumber: '0901234567', verifyChannel: 'SMS' }));
+  expect(mockReset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'VerifyRegisterOtp', params: expect.objectContaining({ channel: 'SMS' }) }] });
 });
 
 it('rejects short OTP and preserves resend cooldown after the backend deadline', async () => {
@@ -130,7 +147,7 @@ it('rejects short OTP and preserves resend cooldown after the backend deadline',
   expect(mockApi.verifyRegisterOtp).not.toHaveBeenCalled();
   expect(mockApi.login).not.toHaveBeenCalled();
   await press('Gửi lại OTP');
-  expect(mockApi.resendRegisterOtp).toHaveBeenCalledWith('native-test@example.com');
+  expect(mockApi.resendRegisterOtp).toHaveBeenCalledWith('native-test@example.com', undefined);
   expect(tree.root.findByProps({ accessibilityLabel: 'Gửi lại OTP' }).props.disabled).toBe(true);
 });
 
@@ -184,7 +201,7 @@ it.each(['customer', 'technician'])('verifies email OTP before the %s session ha
   mockApi.verifyRegisterOtp.mockResolvedValue({ accessToken: 'mock-token', user: { id: 'mock-user', role } });
   await render(<VerifyRegisterOtpScreen />);
   await fill('Mã OTP gồm 6 số', '123456');
-  expect(mockApi.verifyRegisterOtp).toHaveBeenCalledWith('native-test@example.com', '123456');
+  expect(mockApi.verifyRegisterOtp).toHaveBeenCalledWith('native-test@example.com', '123456', undefined);
   expect(mockApi.login).not.toHaveBeenCalled();
   expect(mockSetAuth).toHaveBeenCalledWith('mock-token', { id: 'mock-user', role });
   expect(mockReset).toHaveBeenCalledWith({ index: 0, routes: [{ name: role === 'technician' ? 'TechnicianOnboarding' : 'CustomerMain' }] });

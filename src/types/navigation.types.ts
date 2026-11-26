@@ -1,4 +1,5 @@
 // src/types/navigation.types.ts
+import type { OtpChannel } from './auth.types';
 /** The description, assistant session and uploaded chat media a manual service pick keeps (AI unavailable: booking must not lose them). */
 export type BookingCarry = {
   description?: string;
@@ -112,6 +113,8 @@ export type RootStackParamList = {
   TechnicianPartReturns: undefined;
   TechnicianSchedule: undefined;
   TechnicianServiceAreas: undefined;
+  TechnicianSkills: undefined;
+  TechnicianEvidence: undefined;
   TechnicianEarnings: undefined;
   TechnicianNotifications: undefined;
   ChatList: undefined;
@@ -125,7 +128,7 @@ export type RootStackParamList = {
 export type AuthStackParamList = {
   Login: undefined;
   Register: undefined;
-  VerifyRegisterOtp: { email: string; password: string };
+  VerifyRegisterOtp: { email: string; password: string; channel?: OtpChannel };
   ForgotPassword: undefined;
   ResetPassword: { email: string };
 };

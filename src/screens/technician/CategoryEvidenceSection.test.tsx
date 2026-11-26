@@ -2,6 +2,8 @@ import React from 'react';
 import { Alert, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import CategoryEvidenceSection from './CategoryEvidenceSection';
+import { sendCategoryEvidence } from './skill-evidence';
+import { technicianProfileApi } from '../../api/technician-profile.api';
 
 jest.mock('../../api/technician-profile.api', () => ({
   ...jest.requireActual('../../api/technician-profile.api'),
@@ -11,6 +13,10 @@ jest.mock('../../api/technician-profile.api', () => ({
     updateSkillEvidence: jest.fn(async () => []),
     deleteSkillEvidence: jest.fn(async () => undefined),
   },
+}));
+jest.mock('./skill-evidence', () => ({
+  ...jest.requireActual('./skill-evidence'),
+  sendCategoryEvidence: jest.fn(async () => 2),
 }));
 jest.mock('expo-image-picker', () => ({
   requestMediaLibraryPermissionsAsync: jest.fn(async () => ({ granted: true })),
@@ -168,6 +174,48 @@ describe('CategoryEvidenceSection: a paper already sent can be changed or remove
     await act(async () => { await byId(tree, 'category-evidence-confirm').props.onPress(); });
     expect(texts(tree).join(' ')).toContain('không thể sửa hoặc xóa');
     expect(texts(tree)).toContain('Sửa giấy tờ');
+    act(() => tree.unmount());
+  });
+
+  it('after approval sends a new paper as soon as it is confirmed, to the ticked groups only', async () => {
+    const onSent = jest.fn();
+    const { tree, onChange } = await openForm({ sendNow: true, onSent });
+    expect(texts(tree)).toContain('Gửi giấy tờ');
+    act(() => byId(tree, 'category-evidence-group-c-fr').props.onPress());
+    await act(async () => { await byId(tree, 'category-evidence-confirm').props.onPress(); });
+    expect(sendCategoryEvidence).toHaveBeenCalledWith(['c-fr'], expect.objectContaining({ uri: 'file:///cert.jpg' }), expect.objectContaining({ evidenceType: 'national_skill_certificate' }));
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onSent).toHaveBeenCalled();
+    act(() => tree.unmount());
+  });
+
+  it('keeps the form and shows the reason when sending fails, and offers no paper when no group needs one', async () => {
+    (sendCategoryEvidence as jest.Mock).mockRejectedValueOnce(new Error('Không có kỹ năng nào cần giấy tờ.'));
+    const { tree } = await openForm({ sendNow: true });
+    act(() => byId(tree, 'category-evidence-group-c-ac').props.onPress());
+    await act(async () => { await byId(tree, 'category-evidence-confirm').props.onPress(); });
+    expect(texts(tree).join(' ')).toContain('Không có kỹ năng nào cần giấy tờ.');
+    expect(byId(tree, 'category-evidence-form')).toBeDefined();
+    act(() => tree.unmount());
+
+    let none!: ReactTestRenderer;
+    act(() => { none = create(<CategoryEvidenceSection staged={[]} categories={[]} onChange={jest.fn()} sendNow />); });
+    expect(none.root.findAllByProps({ testID: 'category-evidence-add' })).toHaveLength(0);
+    act(() => none.unmount());
+  });
+
+  it('locks a paper the server says was used to approve a skill: no edit, no delete', async () => {
+    const api = technicianProfileApi as unknown as { getMySkillEvidence: jest.Mock };
+    api.getMySkillEvidence.mockResolvedValueOnce([
+      { documentId: 'd-open', serviceId: 's1', fileName: 'a.jpg', mimeType: 'image/jpeg', evidenceType: 'social_insurance', issuer: null, referenceNumber: null, issuedAt: null, expiresAt: null, claimedYears: null, editable: true, categories: [{ id: 'c-ac', name: 'Điều hòa' }] },
+      { documentId: 'd-locked', serviceId: 's2', fileName: 'b.jpg', mimeType: 'image/jpeg', evidenceType: 'social_insurance', issuer: null, referenceNumber: null, issuedAt: null, expiresAt: null, claimedYears: null, editable: false, categories: [{ id: 'c-fr', name: 'Tủ lạnh' }] },
+    ]);
+    let tree!: ReactTestRenderer;
+    await act(async () => { tree = create(<CategoryEvidenceSection staged={[]} categories={categories} onChange={jest.fn()} />); });
+    expect(tree.root.findAllByProps({ testID: 'category-evidence-edit-d-open' }).length).toBeGreaterThan(0);
+    expect(tree.root.findAllByProps({ testID: 'category-evidence-edit-d-locked' })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ testID: 'category-evidence-delete-d-locked' })).toHaveLength(0);
+    expect(texts(tree)).toContain('Đã dùng để duyệt kỹ năng, không sửa hoặc xóa được.');
     act(() => tree.unmount());
   });
 });

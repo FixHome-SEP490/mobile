@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { AuthStackParamList, RootStackParamList } from '../../types';
+import type { AuthStackParamList, RootStackParamList, OtpChannel } from '../../types';
 import { authApi } from '../../api/auth.api';
 import { useAuthStore } from '../../store';
 import { UserRole } from '../../types';
@@ -35,6 +35,8 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'customer' | 'technician'>('customer');
   const isTechnician = role === 'technician';
+  // Kênh nhận mã OTP xác thực tài khoản. SMS cần số điện thoại.
+  const [verifyChannel, setVerifyChannel] = useState<OtpChannel>('EMAIL');
   
   const renderRuleItem = (met: boolean, text: string) => (
     <View style={styles.ruleItem}>
@@ -162,6 +164,10 @@ export default function RegisterScreen() {
       Alert.alert('Lỗi', 'Vui lòng kiểm tra lại thông tin.');
       return;
     }
+    if (verifyChannel === 'SMS' && !phone.trim()) {
+      Alert.alert('Lỗi', 'Nhập số điện thoại để nhận mã xác thực qua SMS.');
+      return;
+    }
     if (strengthScore < 5) {
       Alert.alert('Lỗi', 'Mật khẩu chưa đủ mạnh. Vui lòng kiểm tra lại các yêu cầu.');
       return;
@@ -177,8 +183,9 @@ export default function RegisterScreen() {
         password,
         phoneNumber: phone.trim() || undefined,
         role,
+        verifyChannel,
       });
-      navigation.reset({ index: 0, routes: [{ name: 'VerifyRegisterOtp', params: { email: trimmedEmail, password } }] });
+      navigation.reset({ index: 0, routes: [{ name: 'VerifyRegisterOtp', params: { email: trimmedEmail, password, channel: verifyChannel } }] });
     } catch (error: unknown) {
       // Phong bì lỗi của backend là `{ error: { message, details } }`, không có
       // khoá `message` ở cấp ngoài, nên trước đây mọi lỗi validation đều rơi về
@@ -250,7 +257,7 @@ export default function RegisterScreen() {
           )}
 
           <View style={styles.formContainer}>
-            <Text style={styles.helperText}>Sau khi đăng ký, nhập mã OTP gửi qua email để xác thực tài khoản.</Text>
+            <Text style={styles.helperText}>Sau khi đăng ký, nhập mã OTP gửi qua email hoặc SMS để xác thực tài khoản.</Text>
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Họ và tên</Text>
               <View style={[
@@ -431,6 +438,34 @@ export default function RegisterScreen() {
                 />
               </View>
               {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
+            </View>
+
+            <Text style={styles.inputLabel} accessibilityLabel="Nhận mã xác thực qua">Nhận mã xác thực qua</Text>
+            <View style={styles.roleRow}>
+              {([
+                { value: 'EMAIL', title: 'Email', sub: 'Gửi vào hộp thư' },
+                { value: 'SMS', title: 'SMS', sub: 'Gửi vào số điện thoại' },
+              ] as const).map((option) => {
+                const selected = verifyChannel === option.value;
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[styles.roleBtn, selected && styles.roleBtnActive]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setVerifyChannel(option.value);
+                    }}
+                    disabled={isLoading || googleLoading}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`${option.title}, ${option.sub}`}
+                    accessibilityState={{ checked: selected, selected }}
+                    aria-checked={selected}
+                  >
+                    <Text style={[styles.roleTitle, selected && styles.roleTitleActive]}>{option.title}</Text>
+                    <Text style={styles.roleSub}>{option.sub}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
             <TouchableOpacity style={[styles.registerBtn, isLoading && { opacity: 0.7 }]} onPress={handleRegister} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Đăng ký tài khoản" accessibilityState={{ disabled: isLoading || googleLoading, busy: isLoading }} disabled={isLoading || googleLoading}>

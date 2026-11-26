@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Check, FileText, Pencil, Trash2, UploadCloud } from 'lucide-react-native';
+import { Check, FileText, Lock, Pencil, Trash2, UploadCloud } from 'lucide-react-native';
 import { technicianProfileApi, type SentSkillEvidence } from '../../api/technician-profile.api';
 import { iconStroke, useAppTheme } from '../../constants/theme';
 import { extractApiErrorMessage } from '../../utils/input-validation';
@@ -18,6 +18,8 @@ import {
   skillEvidenceFormFromSent,
   skillEvidenceFormProblem,
   skillEvidenceProblem,
+  sendCategoryEvidence,
+  SKILL_EVIDENCE_FAILED,
   type EvidenceCategory,
   type SkillEvidenceAsset,
   type SkillEvidenceForm,
@@ -33,7 +35,7 @@ const MAX_CHIPS = 3;
  * covers the categories the technician ticks (none to start with, at least one is needed), so a paper for air conditioners does not
  * vouch for electrical work. The papers wait here and are sent after "Lưu và tiếp tục" saves the skills.
  */
-export default function CategoryEvidenceSection({ staged, categories, onChange, disabled, refreshKey = 0 }: {
+export default function CategoryEvidenceSection({ staged, categories, onChange, disabled, refreshKey = 0, sendNow, onSent }: {
   staged: StagedSkillEvidence[];
   /** The categories of the services chosen above; the only ones a paper may cover. */
   categories: EvidenceCategory[];
@@ -41,6 +43,9 @@ export default function CategoryEvidenceSection({ staged, categories, onChange, 
   disabled?: boolean;
   /** Change it to read the papers already sent again (after a save). */
   refreshKey?: number;
+  /** After approval there is no "Lưu và tiếp tục": a new paper is sent as soon as it is confirmed. */
+  sendNow?: boolean;
+  onSent?: () => void;
 }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
@@ -130,12 +135,26 @@ export default function CategoryEvidenceSection({ staged, categories, onChange, 
     ],
   );
 
-  const add = () => {
-    if (!picked) return;
+  const add = async () => {
+    if (!picked || saving) return;
     const categoryIds = categories.filter((c) => chosen.includes(c.id)).map((c) => c.id);
     const problem = skillEvidenceFormProblem(form) ?? skillEvidenceCategoriesProblem(categoryIds);
     const details = skillEvidenceDetails(form);
     if (problem || !details) { setNotice(problem ?? ''); return; }
+    if (sendNow) {
+      setSaving(true);
+      try {
+        await sendCategoryEvidence(categoryIds, picked, details);
+        close();
+        setReloadTick((n) => n + 1);
+        onSent?.();
+      } catch (err) {
+        setNotice(extractApiErrorMessage(err, err instanceof Error && err.message ? err.message : SKILL_EVIDENCE_FAILED));
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     onChange([...staged, { key: `${Date.now()}-${staged.length}`, asset: picked, details, categoryIds }]);
     close();
   };
@@ -174,9 +193,9 @@ export default function CategoryEvidenceSection({ staged, categories, onChange, 
             style={({ pressed }) => [styles.button, styles.actionButton, pressed && styles.pressed]}>
             <Text style={styles.buttonText}>Hủy</Text>
           </Pressable>
-          <Pressable testID="category-evidence-confirm" accessibilityRole="button" accessibilityLabel={editing ? 'Lưu thay đổi giấy tờ' : 'Thêm giấy tờ này'} disabled={saving} onPress={editing ? () => void saveEdit() : add}
+          <Pressable testID="category-evidence-confirm" accessibilityRole="button" accessibilityLabel={editing ? 'Lưu thay đổi giấy tờ' : sendNow ? 'Gửi giấy tờ này' : 'Thêm giấy tờ này'} disabled={saving} onPress={editing ? () => void saveEdit() : () => void add()}
             style={({ pressed }) => [styles.button, styles.actionButton, styles.primaryButton, pressed && styles.pressed]}>
-            <Text style={[styles.buttonText, styles.primaryButtonText]}>{editing ? 'Lưu thay đổi' : 'Thêm'}</Text>
+            <Text style={[styles.buttonText, styles.primaryButtonText]}>{editing ? 'Lưu thay đổi' : sendNow ? (saving ? 'Đang gửi…' : 'Gửi giấy tờ') : 'Thêm'}</Text>
           </Pressable>
         </View>
         {!!notice && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text>}
@@ -186,7 +205,9 @@ export default function CategoryEvidenceSection({ staged, categories, onChange, 
   return (
     <OnboardingSection
       title="Giấy tờ chứng minh tay nghề"
-      description="Không bắt buộc. Tải ảnh chụp từ bản đã công chứng và chọn nhóm dịch vụ mà giấy tờ đó chứng minh. Giấy tờ được gửi khi bạn bấm Lưu và tiếp tục."
+      description={sendNow
+        ? 'Tải ảnh chụp từ bản đã công chứng và chọn nhóm dịch vụ mà giấy tờ đó chứng minh. Giấy tờ được gửi ngay khi bạn xác nhận.'
+        : 'Không bắt buộc. Tải ảnh chụp từ bản đã công chứng và chọn nhóm dịch vụ mà giấy tờ đó chứng minh. Giấy tờ được gửi khi bạn bấm Lưu và tiếp tục.'}
       testID="category-evidence-section"
     >
       {sent.length > 0 && (
@@ -222,7 +243,7 @@ export default function CategoryEvidenceSection({ staged, categories, onChange, 
         </View>
       ))}
 
-      {!picked && !editing && staged.length < MAX_STAGED_SKILL_EVIDENCE && (
+      {!picked && !editing && staged.length < MAX_STAGED_SKILL_EVIDENCE && (!sendNow || categories.length > 0) && (
         <Pressable testID="category-evidence-add" accessibilityRole="button" accessibilityLabel="Thêm giấy tờ" disabled={disabled}
           onPress={() => void pick()} style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
           <UploadCloud size={18} strokeWidth={1.75} color={colors.primaryStrong} />
@@ -231,6 +252,10 @@ export default function CategoryEvidenceSection({ staged, categories, onChange, 
       )}
 
       {!!picked && renderForm()}
+
+      {sendNow && categories.length === 0 && !picked && (
+        <Text style={styles.hint}>Mọi kỹ năng đang nhận đã được duyệt nên không cần thêm giấy tờ. Bật thêm dịch vụ mới để gửi giấy tờ cho dịch vụ đó.</Text>
+      )}
 
       {!!notice && !picked && !editing && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text>}
     </OnboardingSection>
@@ -267,6 +292,12 @@ function SentEvidenceRow({ item, disabled, onEdit, onRemove }: { item: SentSkill
           </View>
         </View>
       </View>
+      {item.editable === false ? (
+        <View style={styles.locked} testID={`category-evidence-locked-${item.documentId}`} accessible accessibilityLabel="Giấy tờ đã dùng để duyệt kỹ năng, không sửa hoặc xóa được">
+          <Lock size={15} strokeWidth={iconStroke} color={colors.textSecondary} />
+          <Text style={styles.hint}>Đã dùng để duyệt kỹ năng, không sửa hoặc xóa được.</Text>
+        </View>
+      ) : (
       <View style={styles.sentActions}>
         <Pressable testID={`category-evidence-edit-${item.documentId}`} accessibilityRole="button" accessibilityLabel={`Sửa giấy tờ ${title}`} disabled={disabled}
           hitSlop={4} onPress={onEdit} style={({ pressed }) => [styles.pill, disabled && styles.dim, pressed && styles.pressed]}>
@@ -279,6 +310,7 @@ function SentEvidenceRow({ item, disabled, onEdit, onRemove }: { item: SentSkill
           <Text style={[styles.link, styles.danger]}>Xóa</Text>
         </Pressable>
       </View>
+      )}
     </View>
   );
 }
@@ -310,6 +342,7 @@ const getStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleShe
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
   chip: { maxWidth: '100%', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999, backgroundColor: colors.primarySoft },
   chipText: { color: colors.primaryStrong, fontSize: 12, lineHeight: 18, fontWeight: '600' },
+  locked: { flexDirection: 'row', alignItems: 'center', gap: 6, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: 10 },
   sentActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: 10 },
   pill: { minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   pillDanger: { borderColor: colors.tone.danger.text },

@@ -26,6 +26,7 @@ import {
   validateCustomerPasswordReset,
 } from './customer-security';
 import BackButton from '../../components/BackButton';
+import ContactVerificationCard from '../../components/account/ContactVerificationCard';
 import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
 
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -215,6 +216,8 @@ export default function CustomerSecurityScreen() {
               <Text style={[styles.messageText, { color: colors.success }]}>{notice}</Text>
             </View>
           )}
+
+          <ContactVerificationCard />
 
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.cardHeader}>

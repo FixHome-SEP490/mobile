@@ -9,10 +9,14 @@ export interface LoginResponse {
   user: UserInfo;
 }
 
+/** Kênh nhận mã OTP xác thực. */
+export type OtpChannel = 'EMAIL' | 'SMS';
+
 export interface RegisterResponse {
   message: string;
   email: string;
   expiresInMinutes: number;
+  channel?: OtpChannel;
 }
 
 export interface VerifyOtpRequest {
@@ -45,6 +49,8 @@ export interface UserInfo {
   fullName: string;
   phoneNumber?: string;
   avatarUrl?: string;
+  isEmailVerified?: boolean;
+  isPhoneVerified?: boolean;
   role: UserRole;
 }
 

@@ -35,6 +35,8 @@ import TechnicianReviewsScreen from '../screens/technician/TechnicianReviewsScre
 import TechnicianPartReturnsScreen from '../screens/technician/TechnicianPartReturnsScreen';
 import TechnicianScheduleScreen from '../screens/technician/TechnicianScheduleScreen';
 import TechnicianServiceAreasScreen from '../screens/technician/TechnicianServiceAreasScreen';
+import TechnicianSkillsScreen from '../screens/technician/TechnicianSkillsScreen';
+import TechnicianEvidenceScreen from '../screens/technician/TechnicianEvidenceScreen';
 import TechnicianEarningsScreen from '../screens/technician/TechnicianEarningsScreen';
 import TechnicianNotificationsScreen from '../screens/technician/TechnicianNotificationsScreen';
 import ChatListScreen from '../screens/chat/ChatListScreen';
@@ -135,6 +137,8 @@ export default function AppNavigator({ firstRunSeen = false }: { firstRunSeen?: 
             <Stack.Screen name="TechnicianPartReturns" component={TechnicianPartReturnsScreen} />
             <Stack.Screen name="TechnicianSchedule" component={TechnicianScheduleScreen} />
             <Stack.Screen name="TechnicianServiceAreas" component={TechnicianServiceAreasScreen} />
+            <Stack.Screen name="TechnicianSkills" component={TechnicianSkillsScreen} />
+            <Stack.Screen name="TechnicianEvidence" component={TechnicianEvidenceScreen} />
             <Stack.Screen name="TechnicianEarnings" component={TechnicianEarningsScreen} />
             <Stack.Screen name="TechnicianNotifications" component={TechnicianNotificationsScreen} />
             <Stack.Screen name="ChatList" component={ChatListScreen} />

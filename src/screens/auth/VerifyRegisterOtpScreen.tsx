@@ -20,7 +20,8 @@ export default function VerifyRegisterOtpScreen() {
   const { colors, spacing, fontSize } = useAppTheme();
   const styles = getStyles(colors, spacing, fontSize);
   const route = useRoute<RouteProp<AuthStackParamList, 'VerifyRegisterOtp'>>();
-  const { email, password } = route.params;
+  const { email, password, channel } = route.params;
+  const isSms = channel === 'SMS';
   const { setAuth } = useAuthStore();
 
   const [otp, setOtp] = useState('');
@@ -55,7 +56,7 @@ export default function VerifyRegisterOtpScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     try {
-      const result = await authApi.verifyRegisterOtp(email, finalOtp);
+      const result = await authApi.verifyRegisterOtp(email, finalOtp, channel);
       setAuth(result.accessToken, result.user);
       // The root handoff waits until the authenticated role routes are mounted.
       enterApp(result.user.role);
@@ -86,7 +87,7 @@ export default function VerifyRegisterOtpScreen() {
     setError(null);
     setResending(true);
     try {
-      const result = await authApi.resendRegisterOtp(email);
+      const result = await authApi.resendRegisterOtp(email, channel);
       const resendAt = new Date(result.resendAvailableAt).getTime();
       const seconds = Math.max(0, Math.ceil((resendAt - Date.now()) / 1000));
       setCooldown(seconds || 60);
@@ -110,10 +111,10 @@ export default function VerifyRegisterOtpScreen() {
             <View style={styles.iconWrapper}>
               <Ionicons name="shield-checkmark" size={32} color={colors.primaryStrong} />
             </View>
-            <Text style={styles.title}>Xác thực email</Text><Text style={styles.heroTitle} accessibilityRole="header">Hoàn tất đăng ký.{'\n'}<Text style={styles.accent}>Xác nhận email của bạn.</Text></Text>
-            <Text style={styles.subtitle}>Mã OTP gồm 6 số từ email đăng ký.</Text>
+            <Text style={styles.title}>{isSms ? 'Xác thực số điện thoại' : 'Xác thực email'}</Text><Text style={styles.heroTitle} accessibilityRole="header">Hoàn tất đăng ký.{'\n'}<Text style={styles.accent}>{isSms ? 'Xác nhận số điện thoại của bạn.' : 'Xác nhận email của bạn.'}</Text></Text>
+            <Text style={styles.subtitle}>{isSms ? 'Mã OTP gồm 6 số từ tin nhắn SMS.' : 'Mã OTP gồm 6 số từ email đăng ký.'}</Text>
           </View>
-          <Text style={styles.helperText}>Vui lòng nhập mã OTP đã được gửi đến email của bạn.</Text>
+          <Text style={styles.helperText}>{isSms ? 'Vui lòng nhập mã OTP đã được gửi qua SMS đến số điện thoại của bạn.' : 'Vui lòng nhập mã OTP đã được gửi đến email của bạn.'}</Text>
 
           <View style={styles.formContainer}>
             {error && (

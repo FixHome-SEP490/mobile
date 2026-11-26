@@ -1,6 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import * as ImagePicker from 'expo-image-picker';
 import { UploadCloud } from 'lucide-react-native';
 import { technicianProfileApi, type SkillEvidenceDocument, type SkillVerification } from '../../api/technician-profile.api';
@@ -24,15 +23,17 @@ import SkillEvidenceFormFields from './SkillEvidenceFormFields';
 const REVIEW_TONE = { pending: 'warning', valid: 'success', invalid: 'danger', need_more: 'warning' } as const;
 
 /**
- * The certificate step of one service in the skills sheet (web TechnicianProfilePage): shown for a service the
+ * The certificate step of one service on the technician skills page (web TechnicianProfilePage): shown for a service the
  * technician takes and FixHome has not approved yet. After a photo is picked the technician says what the paper is
  * (type, issuer, dates) so the reviewer can weigh it; a refused certificate shows its reason on request.
  */
-export default function SkillEvidenceRow({ serviceId, serviceName, status, onChanged }: {
+export default function SkillEvidenceRow({ serviceId, serviceName, status, onChanged, showReasonNow }: {
   serviceId: string;
   serviceName: string;
   status: 'pending' | 'verified' | 'rejected';
   onChanged: () => void;
+  /** Read the refusal reason and sent papers on mount, so a rejected skill shows why without a tap. */
+  showReasonNow?: boolean;
 }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
@@ -88,6 +89,12 @@ export default function SkillEvidenceRow({ serviceId, serviceName, status, onCha
     } catch { setSentError('Chưa tải được giấy tờ đã gửi. Vui lòng thử lại.'); }
   };
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount
+    if (showReasonNow && status === 'rejected') void showSent();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <View style={styles.wrap}>
       {!picked && (
@@ -102,7 +109,7 @@ export default function SkillEvidenceRow({ serviceId, serviceName, status, onCha
         <View style={styles.form} testID={`skill-evidence-form-${serviceId}`}>
           <Text style={styles.formTitle}>Thông tin giấy tờ</Text>
           <Text style={styles.hint} numberOfLines={1}>{picked.fileName?.trim() || 'Ảnh đã chọn'}</Text>
-          <SkillEvidenceFormFields form={form} onChange={setForm} InputComponent={BottomSheetTextInput as never} labelSuffix={serviceName} testIdPrefix="skill-evidence" />
+          <SkillEvidenceFormFields form={form} onChange={setForm} labelSuffix={serviceName} testIdPrefix="skill-evidence" />
           <View style={styles.actions}>
             <Pressable testID={`skill-evidence-cancel-${serviceId}`} accessibilityRole="button" accessibilityLabel="Hủy gửi giấy tờ" disabled={busy} onPress={cancel}
               style={({ pressed }) => [styles.button, styles.actionButton, pressed && styles.pressed]}>

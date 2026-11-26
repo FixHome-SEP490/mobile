@@ -59,6 +59,8 @@ export interface SentSkillEvidence {
   issuedAt: string | null;
   expiresAt: string | null;
   claimedYears: number | null;
+  /** False once the paper helped approve a skill (or the profile waits for review): the server refuses edit and delete. Absent on older backends. */
+  editable?: boolean;
   categories: { id: string; name: string }[];
 }
 
