@@ -8,7 +8,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useIsFocused, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { bookingsApi, type BookingItem, type TechnicianCandidate } from '../../api/bookings.api';
+import { bookingsApi, type BookingItem, type CandidateEmptyReason, type TechnicianCandidate } from '../../api/bookings.api';
+import { matchingEmptyView } from './customer-matching-empty';
 import { visitGroupsApi } from '../../api/visit-groups.api';
 
 import { ordersApi, type ServiceOrderItem } from '../../api/orders.api';
@@ -52,8 +53,8 @@ import CustomerMatchingRadar from './CustomerMatchingRadar';
 import { canShowCustomerMatchingRadar } from './customer-matching-radar-state';
 import PillText from '../../components/PillText';
 // A multi-device visit lists candidates and takes the shortlist on the visit; its lead booking carries everything else.
-const readCandidates = (bookingId: string, visitGroupId?: string) =>
-  visitGroupId ? visitGroupsApi.getCandidates(visitGroupId) : bookingsApi.getCandidates(bookingId);
+const readCandidates = (bookingId: string, visitGroupId?: string, onEmptyReason?: (reason: CandidateEmptyReason | null) => void) =>
+  visitGroupId ? visitGroupsApi.getCandidates(visitGroupId, onEmptyReason) : bookingsApi.getCandidates(bookingId, onEmptyReason);
 const postShortlist = (bookingId: string, visitGroupId: string | undefined, ids: Parameters<typeof bookingsApi.sendShortlist>[1]) =>
   visitGroupId ? visitGroupsApi.sendShortlist(visitGroupId, ids) : bookingsApi.sendShortlist(bookingId, ids);
 
@@ -128,6 +129,7 @@ export default function CustomerMatchingScreen() {
   const [booking, setBooking] = useState<BookingItem | null>(null);
   const [linkedOrder, setLinkedOrder] = useState<ServiceOrderItem | null>(null);
   const [candidates, setCandidates] = useState<TechnicianCandidate[]>([]);
+  const [emptyReason, setEmptyReason] = useState<CandidateEmptyReason | null>(null);
   const [techNames, setTechNames] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -158,6 +160,7 @@ export default function CustomerMatchingScreen() {
   }, []);
 
   const clearCandidateView = useCallback(() => {
+    setEmptyReason(null);
     setCandidates([]);
     setSelected([]);
     setDetailTarget(null);
@@ -341,9 +344,11 @@ export default function CustomerMatchingScreen() {
         }
         if (canChooseTechnicians(nextBooking) && !shortlistRequestLockedRef.current) {
           try {
-            const list = await readCandidates(bookingId, visitGroupId);
+            let reason: CandidateEmptyReason | null = null;
+            const list = await readCandidates(bookingId, visitGroupId, (value) => { reason = value; });
             if (!sessionAlive()) return;
             publishCandidates(list);
+            setEmptyReason(reason);
           } catch (candidateError) {
             if (!sessionAlive()) return;
             if (!isTransientMatchingReadFailure(candidateError)) clearCandidateView();
@@ -440,9 +445,11 @@ export default function CustomerMatchingScreen() {
       if (mayRequestLinkedReplacement(nextBooking, nextOrder, currentUserId)
         && !shortlistRequestLockedRef.current && !uncertainSendRef.current && !rejectedDefinitiveRef.current) {
         try {
-          const list = await readCandidates(bookingId, visitGroupId);
+          let reason: CandidateEmptyReason | null = null;
+          const list = await readCandidates(bookingId, visitGroupId, (value) => { reason = value; });
           if (!sessionAlive()) return;
           publishCandidates(list);
+          setEmptyReason(reason);
         } catch (candidateError) {
           if (!sessionAlive()) return;
           // Denied/invalid reads fail closed; a transient refresh keeps last-good owner-bound data.
@@ -998,6 +1005,20 @@ export default function CustomerMatchingScreen() {
   });
   const linkedMode = !!booking?.serviceOrderId;
   const candidateState = candidateAvailabilityState(candidates.length);
+  const emptyView = matchingEmptyView(emptyReason, !!visitGroupId);
+  // Detail goes back to the request; "rebook" opens a fresh form (same service and description) so the old request stays as it is.
+  const openEmptyAction = (kind: 'detail' | 'rebook') => {
+    if (!booking || booking.id !== bookingId) return;
+    if (kind === 'detail') {
+      if (visitGroupId) navigation.navigate('CustomerVisit', { visitGroupId });
+      else navigation.navigate('CustomerBookingDetail', { bookingId: booking.id });
+      return;
+    }
+    if (visitGroupId) navigation.navigate('CustomerVisitCreate');
+    else navigation.navigate('CustomerBookingCreate', {
+      prefill: { serviceId: booking.serviceId, description: (booking.description ?? '').slice(0, 1000) },
+    });
+  };
   const verifiedOrderId = verifiedLinkedOrderId(booking, linkedOrder, userId);
   // Presentation only: an invitation or a Booking never stands in for an accepted order.
   const acceptedHandoff = isAuthenticated && role === UserRole.CUSTOMER
@@ -1200,14 +1221,38 @@ export default function CustomerMatchingScreen() {
                 {!loading && !refreshing && !error && candidateState === 'none' && (
                   <View testID="matching-empty-none" style={styles.card}>
                     <Text accessibilityRole="header" style={[styles.heading, { color: colors.text }]}>
-                      Chưa có kỹ thuật viên phù hợp
+                      {emptyView.title}
                     </Text>
                     <Text style={{ color: colors.textSecondary }}>
-                      Thử làm mới hoặc xem lại lịch hẹn.
+                      {emptyView.description}
                     </Text>
                     <Text style={[styles.note, { color: colors.textSecondary }]}>
                       Yêu cầu và lịch hẹn vẫn được giữ nguyên.
                     </Text>
+                    {booking && booking.id === bookingId ? (
+                      <>
+                        <TouchableOpacity
+                          testID="matching-empty-action"
+                          accessibilityRole="button"
+                          accessibilityLabel={emptyView.action}
+                          style={[styles.secondaryAction, { borderColor: colors.primaryStrong }]}
+                          onPress={() => openEmptyAction(emptyView.actionKind)}
+                        >
+                          <Text style={[styles.secondaryActionText, { color: colors.primaryStrong }]}>{emptyView.action}</Text>
+                        </TouchableOpacity>
+                        {emptyView.secondaryAction ? (
+                          <TouchableOpacity
+                            testID="matching-empty-secondary"
+                            accessibilityRole="button"
+                            accessibilityLabel={emptyView.secondaryAction}
+                            style={styles.bookingDetailLink}
+                            onPress={() => openEmptyAction('detail')}
+                          >
+                            <Text style={{ color: colors.primaryStrong, fontSize: 13, fontWeight: '600' }}>{emptyView.secondaryAction}</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </>
+                    ) : null}
                   </View>
                 )}
                 {!loading && !refreshing && !error && candidateState === 'one' && (

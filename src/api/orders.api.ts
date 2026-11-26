@@ -1,6 +1,7 @@
 // src/api/orders.api.ts
 import { Platform } from 'react-native';
 import apiClient from './client';
+import { readFailedWorkFinance, type FailedWorkFinance } from './order-work-stopped';
 import type { CheckInDto, UpdateLocationDto, EvidenceUploadMetadata, CompletionRequestDto, OrderStatusHistoryResponse } from '../types/api.types';
 
 // Browsers need a real Blob; the {uri,name,type} shape only works in React Native.
@@ -119,6 +120,13 @@ export interface ServiceOrderItem {
   completionRequestedAt?: string;
   customerConfirmed?: boolean;
   arrivalVerified?: boolean;
+  /** On-site work was stopped and the technician released (web #183): the status stays EN_ROUTE / UNDER_REPAIR, the money is under review. */
+  workStopped?: boolean;
+  assignmentReleased?: boolean;
+  operationalDisposition?: 'STOPPED' | 'INTERRUPTION_RECORDED' | null;
+  oldObligationsReviewRequired?: boolean;
+  /** Customer-visible finance state of stopped work: nothing owed, refund not decided. */
+  failedWorkFinance?: FailedWorkFinance;
   /** The technician's check-in face while it waits for, or was refused by, a service manager (PO 20/11/2026); absent or null when no review applies. */
   checkinFaceReview?: { status: 'pending' | 'approved' | 'rejected'; note: string | null } | null;
   beforeEvidenceCount?: number;
@@ -417,6 +425,7 @@ const toMoney = (value: unknown): number => {
 
 const normalizeOrder = (order: ServiceOrderItem): ServiceOrderItem => ({
   ...order,
+  ...(order.failedWorkFinance !== undefined && order.failedWorkFinance !== null ? { failedWorkFinance: readFailedWorkFinance(order.failedWorkFinance) } : {}),
   // A listed-price device inside a multi-device visit is still quoted on site (PO 21/10/2026), so every flow treats it as an inspection order; `fixedUnitPrice` stays for the quote's first line.
   pricingMode: order.visitGroupId && String(order.pricingMode).toUpperCase() === 'FIXED_PRICE' ? 'INSPECTION_REQUIRED' : order.pricingMode,
   laborTotal: toMoney(order.laborTotal),

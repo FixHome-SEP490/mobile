@@ -6,7 +6,6 @@
 // Mocked network boundaries only; no real API/device mutations.
 import React from 'react';
 import { Modal, SectionList, Text, TouchableOpacity } from 'react-native';
-import { BottomSheetSectionList, BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { usersApi } from '../../api/users.api';
 import { ordersApi } from '../../api/orders.api';
@@ -500,59 +499,18 @@ describe('technician profile real UI (T-RUI5)', () => {
     await act(async () => renderer.unmount());
   });
 
-  it.each(['catalog', 'categories', 'offerings'] as const)(
-    'shows a retryable skills error when %s fails, then distinguishes loading and valid empty', async (source) => {
-      const renderer = await renderProfile();
-      const request = deferred<never>();
-      const api = source === 'catalog' ? mockServicesApi.getServices
-        : source === 'categories' ? mockServicesApi.getCategories : mockProfileApi.getMyServices;
-      api.mockReturnValueOnce(request.promise);
-      const open = renderer.root.findAllByType(TouchableOpacity).find(
-        (node) => node.props.accessibilityLabel?.startsWith('Kỹ năng và dịch vụ'),
-      )!;
-      await act(async () => { void open.props.onPress(); });
-      expect(visibleText(renderer)).toContain('Đang tải…');
-      expect(visibleText(renderer)).not.toContain('Không có dịch vụ nào.');
-      await act(async () => request.reject(new Error('offline')));
-      expect(visibleText(renderer)).toContain('Không thể tải danh sách dịch vụ');
-      expect(visibleText(renderer)).not.toContain('Không có dịch vụ nào.');
-      const retry = inboxButton(renderer, 'Thử lại danh sách dịch vụ');
-      expect(retry).toBeDefined();
-      expect(touchHeight(retry)).toBeGreaterThanOrEqual(44);
-      await act(async () => { void retry.props.onPress(); });
-      expect(visibleText(renderer)).not.toContain('Không thể tải danh sách dịch vụ');
-      expect(visibleText(renderer)).toContain('Không có dịch vụ nào.');
-      expect(mockProfileApi.setSkillPricing).not.toHaveBeenCalled();
-      await act(async () => renderer.unmount());
-    },
-  );
-
-  it('preserves the previous skills catalog and drafts after a failed reload', async () => {
+  it('opens the Skills page from the menu row instead of a sheet', async () => {
     const renderer = await renderProfile();
-    mockServicesApi.getServices.mockResolvedValue({
-      data: [{ id: 's1', name: 'Sửa thiết bị', pricingMode: 'inspection_required' }], total: 1,
-    } as never);
-    mockProfileApi.getMyServices.mockResolvedValue([
-      { serviceId: 's1', isActive: true, listedLaborPrice: 123000, typicalWarrantyDays: 7, verificationStatus: 'pending' },
-    ] as never);
-    const open = () => renderer.root.findAllByType(TouchableOpacity).find(
+    const open = renderer.root.findAllByType(TouchableOpacity).find(
       (node) => node.props.accessibilityLabel?.startsWith('Kỹ năng và dịch vụ'),
-    )!.props.onPress();
-    await act(async () => { void open(); });
-    const oldSections = renderer.root.findByType(BottomSheetSectionList).props.sections;
-    const priceDraft = () => renderer.root.findAllByType(BottomSheetTextInput).find(
-      (node) => node.props.accessibilityLabel === 'Giá công Sửa thiết bị',
     )!;
-    await act(async () => priceDraft().props.onChangeText('145000'));
-    expect(oldSections[0].data[0].name).toBe('Sửa thiết bị');
-    mockServicesApi.getServices.mockRejectedValueOnce(new Error('offline'));
-    await act(async () => { void open(); });
-    expect(visibleText(renderer)).toContain('Không thể tải danh sách dịch vụ');
-    expect(renderer.root.findByType(BottomSheetSectionList).props.sections).toEqual(oldSections);
-    expect(visibleText(renderer)).toContain('Sửa thiết bị');
-    expect(priceDraft().props.value).toBe('145000');
-    expect(visibleText(renderer)).not.toContain('Không có dịch vụ nào.');
-    expect(mockProfileApi.setSkillPricing).not.toHaveBeenCalled();
+    await act(async () => { void open.props.onPress(); });
+    expect(mockNavigate).toHaveBeenCalledWith('TechnicianSkills');
+    const papers = renderer.root.findAllByType(TouchableOpacity).find(
+      (node) => node.props.accessibilityLabel?.startsWith('Giấy tờ chứng minh'),
+    )!;
+    await act(async () => { void papers.props.onPress(); });
+    expect(mockNavigate).toHaveBeenCalledWith('TechnicianEvidence');
     await act(async () => renderer.unmount());
   });
 

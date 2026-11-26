@@ -294,3 +294,24 @@ export function detectArea(
 
   return { province, district };
 }
+
+// ── Bước 3: chọn dịch vụ theo nhóm gập mở ─────────────────────────────────────────────────────────────
+
+type ServiceGroup = readonly [string, readonly { id: string }[]];
+
+/** Số dịch vụ đã chọn và số nhóm có ít nhất một dịch vụ được chọn (id không còn trong danh sách không tính). */
+export function summarizeSkillSelection(groups: readonly ServiceGroup[], selectedIds: readonly string[]): { services: number; groups: number } {
+  let services = 0;
+  let touched = 0;
+  for (const [, list] of groups) {
+    const picked = list.filter((s) => selectedIds.includes(s.id)).length;
+    services += picked;
+    if (picked > 0) touched += 1;
+  }
+  return { services, groups: touched };
+}
+
+/** Nhóm mở sẵn khi vào bước 3: những nhóm đã có dịch vụ chọn (từ hồ sơ đã lưu), còn lại gập. */
+export function initialExpandedGroups(groups: readonly ServiceGroup[], selectedIds: readonly string[]): string[] {
+  return groups.filter(([, list]) => list.some((s) => selectedIds.includes(s.id))).map(([name]) => name);
+}

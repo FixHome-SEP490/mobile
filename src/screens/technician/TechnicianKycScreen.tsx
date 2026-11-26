@@ -83,12 +83,31 @@ const INITIAL_SLOTS: KycSlot[] = [
   },
 ];
 
-/** Professional certificates are optional, several photos, from notarised copies (PO 08/10/2026). */
-const MAX_CERTIFICATES = 5;
-export const OFFICE_VISIT_NOTE = 'Vui lòng đến trụ sở trong thời gian sớm nhất để tiến hành xác minh thông tin và bắt đầu công việc.';
+export const OFFICE_VISIT_NOTE = 'FixHome sẽ xác nhận danh tính của bạn và gửi thông báo để bạn đặt lịch lên trụ sở.';
 
 export default function TechnicianKycScreen() {
   const fromOnboarding = useRoute<RouteProp<RootStackParamList, 'TechnicianKyc'>>().params?.fromOnboarding;
+  const { colors } = useAppTheme();
+  const styles = getStyles(colors);
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <BackButton />
+        <View style={styles.headerTitleGroup}>
+          <Text style={styles.headerEyebrow}>{fromOnboarding ? 'Bước 2/5 · Xác minh danh tính' : 'Xác minh danh tính'}</Text>
+          <Text style={styles.headerTitle} accessibilityRole="header">Hồ sơ rõ, việc vững</Text>
+        </View>
+        <View style={styles.backBtn} />
+      </View>
+      <ScrollView contentContainerStyle={styles.content}>
+        <TechnicianKycForm />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+// Phần thân dùng chung: màn riêng ở trên và bước 2 của wizard đăng ký thợ.
+export function TechnicianKycForm({ onChanged }: { onChanged?: () => void }) {
   const { colors } = useAppTheme();
   const styles = getStyles(colors);
   const [loading, setLoading] = useState(true);
@@ -98,7 +117,6 @@ export default function TechnicianKycScreen() {
   const [phase, setPhase] = useState<'uploading' | 'checking'>('uploading');
   const [verification, setVerification] = useState<MyVerification | null>(null);
   const [slots, setSlots] = useState<KycSlot[]>(INITIAL_SLOTS);
-  const [certificates, setCertificates] = useState<{ asset: ImagePicker.ImagePickerAsset; mimeType: KycMimeType }[]>([]);
 
   const aliveRef = useRef(true);
   useEffect(() => {
@@ -186,35 +204,10 @@ export default function TechnicianKycScreen() {
     ]);
   };
 
-  const addCertificate = async () => {
-    if (certificates.length >= MAX_CERTIFICATES) {
-      Alert.alert('Đủ số ảnh', `Tối đa ${MAX_CERTIFICATES} ảnh chứng chỉ.`);
-      return;
-    }
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Cần quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh trong Cài đặt để chọn ảnh chứng chỉ.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.85 });
-    const asset = !result.canceled ? result.assets[0] : null;
-    if (!asset) return;
-    const mimeType = inferMimeType(asset);
-    if (!mimeType) {
-      Alert.alert('Ảnh không hợp lệ', 'Chỉ nhận ảnh định dạng JPEG, PNG hoặc WebP.');
-      return;
-    }
-    if (asset.fileSize && asset.fileSize > MAX_FILE_SIZE) {
-      Alert.alert('Ảnh quá lớn', 'Ảnh vượt quá 10MB. Vui lòng chọn ảnh khác.');
-      return;
-    }
-    setCertificates((prev) => [...prev, { asset, mimeType }]);
-  };
-
   const canSubmit = slots.every((slot) => slot.asset && slot.mimeType);
   const hasAnySelection = slots.some((slot) => slot.asset !== null);
 
-  const resetSlots = () => { setSlots(INITIAL_SLOTS); setCertificates([]); };
+  const resetSlots = () => { setSlots(INITIAL_SLOTS); };
 
   // Ảnh đã lên Storage thì dùng lại khi nộp lại, tránh để file mồ côi.
   const uploadedRef = useRef(new Map<string, SubmitDocumentPayload>());
@@ -249,22 +242,12 @@ export default function TechnicianKycScreen() {
     setSubmitting(true);
     try {
       const documents = await Promise.all(slots.map(uploadSlot));
-      const certificateDocuments = await Promise.all(certificates.map((cert, index) =>
-        uploadOnce(`certificate-${index}|${cert.asset.uri}`, async (): Promise<SubmitDocumentPayload> => {
-          const { storageObjectPath, uploadUrl } = await technicianVerificationApi.requestUploadUrl(cert.mimeType);
-          await technicianVerificationApi.uploadToSignedUrl(uploadUrl, cert.mimeType, { uri: cert.asset.uri });
-          return {
-            documentType: 'certificate',
-            storageObjectPath,
-            fileName: `certificate-${index + 1}.${MIME_EXTENSIONS[cert.mimeType]}`,
-            fileSize: cert.asset.fileSize ?? 0,
-            mimeType: cert.mimeType,
-          };
-        })));
       setPhase('checking');
-      const result = await technicianVerificationApi.submit([...documents, ...certificateDocuments]);
+      const result = await technicianVerificationApi.submit(documents);
       setVerification(result);
-      Alert.alert('Đã nộp hồ sơ', OFFICE_VISIT_NOTE);
+      onChanged?.();
+      if (onChanged) Alert.alert('Đã nộp ảnh xác minh', 'Hãy tiếp tục hoàn thành các bước còn lại để đăng ký kỹ thuật viên.');
+      else Alert.alert('Đã nộp hồ sơ', OFFICE_VISIT_NOTE);
     } catch (err) {
       Alert.alert(
         'Không thể nộp hồ sơ',
@@ -278,17 +261,7 @@ export default function TechnicianKycScreen() {
   const showUploadForm = !loadError && (!verification || verification.status === 'REJECTED');
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <BackButton />
-        <View style={styles.headerTitleGroup}>
-          <Text style={styles.headerEyebrow}>{fromOnboarding ? 'Bước 2/5 · Xác minh danh tính' : 'Xác minh danh tính'}</Text>
-          <Text style={styles.headerTitle} accessibilityRole="header">Hồ sơ rõ, việc vững</Text>
-        </View>
-        <View style={styles.backBtn} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content}>
+    <>
         <Text style={styles.bodySmall}>Theo dõi hồ sơ và cung cấp ảnh để xác minh danh tính của bạn.</Text>
         {loading ? (
           <View style={styles.centerBlock} accessibilityLiveRegion="polite" accessibilityState={{ busy: true }}>
@@ -319,7 +292,7 @@ export default function TechnicianKycScreen() {
                 tone={colors.tone.warning}
                 Icon={Clock}
                 title="Đang chờ duyệt"
-                body={`Hồ sơ của bạn đã được nộp và đang chờ quản trị viên xác minh. ${OFFICE_VISIT_NOTE}`}
+                body={onChanged ? 'Đã nộp ảnh xác minh. Bấm Tiếp tục để hoàn thành các bước còn lại.' : `Hồ sơ của bạn đã được nộp và đang chờ quản trị viên xác minh. ${OFFICE_VISIT_NOTE}`}
               />
             )}
 
@@ -389,28 +362,6 @@ export default function TechnicianKycScreen() {
                   );
                 })}
 
-                <Text style={styles.slotLabel}>Chứng chỉ nghề (không bắt buộc)</Text>
-                <Text style={[styles.bodySmall, { color: colors.tone.warning.fg }]}>Ảnh chứng chỉ phải chụp từ bản đã công chứng. Tối đa {MAX_CERTIFICATES} ảnh.</Text>
-                <View style={[styles.actionRow, { flexWrap: 'wrap' }]}>
-                  {certificates.map((cert, index) => (
-                    <TouchableOpacity
-                      key={cert.asset.uri}
-                      style={styles.slotThumb}
-                      onPress={() => setCertificates((prev) => prev.filter((_, i) => i !== index))}
-                      disabled={submitting}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Chứng chỉ ${index + 1}, bấm để bỏ`}
-                    >
-                      <Image source={{ uri: cert.asset.uri }} style={styles.slotImage} accessibilityIgnoresInvertColors />
-                    </TouchableOpacity>
-                  ))}
-                  {certificates.length < MAX_CERTIFICATES && (
-                    <TouchableOpacity style={styles.secondaryBtn} onPress={addCertificate} disabled={submitting} accessibilityRole="button" accessibilityLabel="Thêm ảnh chứng chỉ nghề">
-                      <Text style={styles.secondaryBtnText}>+ Thêm ảnh chứng chỉ</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-
                 <Text style={styles.bodySmall} accessibilityLiveRegion="polite">
                   {canSubmit ? 'Đã chọn đủ 3 ảnh trên máy. Bạn có thể nộp hồ sơ.' : 'Chọn đủ 3 ảnh để nộp hồ sơ.'}
                 </Text>
@@ -464,8 +415,7 @@ export default function TechnicianKycScreen() {
             )}
           </>
         )}
-      </ScrollView>
-    </SafeAreaView>
+    </>
   );
 }
 

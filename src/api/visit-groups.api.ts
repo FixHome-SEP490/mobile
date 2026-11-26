@@ -4,8 +4,8 @@
 import apiClient from './client';
 import { CANDIDATES_TIMEOUT_MS } from '../constants/config';
 import type { BookingDeviceAttributes } from './catalog-pricing.api';
-import { normalizeBooking, USER_UUID_REGEX } from './bookings.api';
-import type { BookingItem, BookingSlot, SessionOption, TechnicianCandidate } from './bookings.api';
+import { normalizeBooking, readCandidateEmptyReason, USER_UUID_REGEX } from './bookings.api';
+import type { BookingItem, CandidateEmptyReason, BookingSlot, SessionOption, TechnicianCandidate } from './bookings.api';
 
 /** The most devices one visit takes; the form locks "Thêm thiết bị" at this count. */
 export const VISIT_DEVICE_LIMIT = 5;
@@ -190,8 +190,10 @@ export const visitGroupsApi = {
     return readPage(res.data);
   },
 
-  async getCandidates(id: string): Promise<TechnicianCandidate[]> {
-    const candidates = unwrap<TechnicianCandidate[]>((await apiClient.get(`/visit-groups/${id}/technician-candidates`, { timeout: CANDIDATES_TIMEOUT_MS })).data);
+  async getCandidates(id: string, onEmptyReason?: (reason: CandidateEmptyReason | null) => void): Promise<TechnicianCandidate[]> {
+    const res = await apiClient.get(`/visit-groups/${id}/technician-candidates`, { timeout: CANDIDATES_TIMEOUT_MS, params: { diagnostics: 1 } });
+    const candidates = unwrap<TechnicianCandidate[]>(res.data);
+    onEmptyReason?.(readCandidateEmptyReason(res.data, candidates.length));
     return candidates.map((candidate) => {
       // Only the technician User ID is valid in a shortlist.
       if (!candidate.userId || !USER_UUID_REGEX.test(candidate.userId)) throw new Error('Candidate is missing a valid technician User ID');

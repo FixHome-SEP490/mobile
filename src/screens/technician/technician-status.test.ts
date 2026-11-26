@@ -1,4 +1,15 @@
-import { serviceOrderStatusView, urgencyView } from './technician-status';
+import { serviceOrderDisplayView, serviceOrderStatusView, urgencyView } from './technician-status';
+
+describe('serviceOrderDisplayView', () => {
+  it('says "Đã dừng công việc" for stopped work whatever status the server kept', () => {
+    expect(serviceOrderDisplayView({ status: 'UNDER_REPAIR', workStopped: true }).label).toBe('Đã dừng công việc');
+    expect(serviceOrderDisplayView({ status: 'EN_ROUTE', operationalDisposition: 'STOPPED' }).label).toBe('Đã dừng công việc');
+  });
+  it('keeps the plain labels for running and handed-over orders', () => {
+    expect(serviceOrderDisplayView({ status: 'UNDER_REPAIR' }).label).toBe('Đang sửa chữa');
+    expect(serviceOrderDisplayView({ status: 'UNDER_REPAIR', completionRequestedAt: '2026-11-23T01:00:00Z' }).label).toBe('Chờ thanh toán');
+  });
+});
 
 describe('serviceOrderStatusView', () => {
   it.each([

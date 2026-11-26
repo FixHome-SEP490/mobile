@@ -15,6 +15,8 @@ const mockLogout = jest.fn();
 const mockUser = { id: 'tech-real-fixture', fullName: 'Nguyen Van A', phoneNumber: '0901234567', avatarUrl: null };
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate }),
+  useFocusEffect: (callback: () => void | (() => void)) =>
+    jest.requireActual<typeof import('react')>('react').useEffect(callback, [callback]),
 }));
 jest.mock('../../store', () => {
   const state = { user: mockUser, logout: mockLogout };

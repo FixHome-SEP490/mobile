@@ -32,6 +32,12 @@ import {
 } from './customer-notification-pagination';
 import { partRequestsApi } from '../../api/part-requests.api';
 import { prepareCustomerNotificationAction } from './customer-notification-action';
+import { notificationKind, type NotificationIconKey } from '../../utils/notification-kind';
+
+const KIND_IONICON: Record<NotificationIconKey, React.ComponentProps<typeof Ionicons>['name']> = {
+  check: 'checkmark-circle-outline', close: 'close-circle-outline', truck: 'car-outline', cash: 'cash-outline',
+  package: 'cube-outline', people: 'people-outline', clipboard: 'clipboard-outline',
+};
 
 export default function CustomerNotificationsScreen() {
   const { colors, spacing, fontSize, isDark } = useAppTheme();
@@ -192,15 +198,18 @@ export default function CustomerNotificationsScreen() {
       case 'PAYMENT':
         return <Ionicons name="cash-outline" size={24} color={colors.success} />;
       case 'PROMOTION':
-        return <Ionicons name="pricetag-outline" size={24} color="#EA580C" />;
+        return <Ionicons name="pricetag-outline" size={24} color={colors.tone.warning.fg} />;
       // Kỹ thuật viên chưa xuất phát, đơn có thể tự huỷ: cảnh báo, mở đơn.
       case 'ORDER_DEPARTURE_WARNING':
         return <Ionicons name="warning-outline" size={24} color={colors.tone.danger.fg} />;
       // Không ai nhận lời mời: mở yêu cầu đặt lịch để chọn kỹ thuật viên khác.
       case 'BOOKING_MATCHING_EXHAUSTED':
         return <Ionicons name="people-outline" size={24} color={colors.tone.warning.fg} />;
-      default:
-        return <Ionicons name="notifications-outline" size={24} color="#7C3AED" />;
+      default: {
+        const kind = notificationKind(type);
+        if (kind) return <Ionicons name={KIND_IONICON[kind.icon]} size={24} color={colors.tone[kind.tone].fg} />;
+        return <Ionicons name="notifications-outline" size={24} color={colors.tone.violet.fg} />;
+      }
     }
   };
 
@@ -209,15 +218,15 @@ export default function CustomerNotificationsScreen() {
       case 'BOOKING':
         return colors.primaryTint; // Blue
       case 'PAYMENT':
-        return '#D1FAE5'; // Green
+        return colors.tone.success.bg;
       case 'PROMOTION':
-        return '#FFEDD5'; // Orange
+        return colors.tone.warning.bg;
       case 'ORDER_DEPARTURE_WARNING':
         return colors.tone.danger.bg;
       case 'BOOKING_MATCHING_EXHAUSTED':
         return colors.tone.warning.bg;
       default:
-        return '#EDE9FE'; // Purple
+        return notificationKind(type) ? colors.tone[notificationKind(type)!.tone].bg : colors.tone.violet.bg;
     }
   };
 

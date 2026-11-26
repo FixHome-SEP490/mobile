@@ -68,9 +68,11 @@ export default function OnboardingStepper({
       </View>
       <View style={styles.head}>
         <Text style={styles.overline}>Bước {step}/{ONBOARDING_STEPS.length}</Text>
-        <Text style={styles.title} accessibilityRole="header">{ONBOARDING_STEPS[step - 1].title}</Text>
-        <View accessibilityLiveRegion="polite" style={styles.badge}>
-          <StatusBadge view={stepStatusView(selected)} />
+        <View style={styles.titleRow}>
+          <Text style={styles.title} accessibilityRole="header">{ONBOARDING_STEPS[step - 1].title}</Text>
+          <View accessibilityLiveRegion="polite">
+            <StatusBadge view={stepStatusView(selected)} />
+          </View>
         </View>
       </View>
     </View>
@@ -107,6 +109,6 @@ const getStyles = (colors: ThemeColors) =>
     labelActive: { color: colors.text, fontWeight: '600' },
     head: { gap: 4 },
     overline: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: colors.textSecondary },
-    title: { fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text },
-    badge: { alignSelf: 'flex-start', marginTop: 4 },
+    titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+    title: { flex: 1, fontSize: 20, lineHeight: 28, fontWeight: '600', color: colors.text },
   });

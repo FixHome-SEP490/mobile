@@ -6,6 +6,7 @@ import type {
   UserInfo,
   RegisterResponse,
   ResendOtpResponse,
+  OtpChannel,
   ForgotPasswordResponse,
   ResetPasswordResponse,
 } from '../types';
@@ -21,6 +22,7 @@ export interface RegisterRequest {
   password: string;
   phoneNumber?: string;
   role: 'customer' | 'technician';
+  verifyChannel?: OtpChannel;
 }
 
 export interface AuthResponse {
@@ -92,11 +94,11 @@ export const authApi = {
     return unwrap(res.data);
   },
 
-  async verifyRegisterOtp(email: string, otp: string): Promise<AuthResponse> {
+  async verifyRegisterOtp(email: string, otp: string, channel?: OtpChannel): Promise<AuthResponse> {
     useAuthStore.getState().beginSessionTransition();
     const res = await apiClient.post<{ data: AuthResponse } | AuthResponse>(
       '/auth/verify-register-otp',
-      { email, otp },
+      { email, otp, channel },
     );
     const result = unwrap(res.data);
     await storageService.setToken(result.accessToken);
@@ -104,10 +106,27 @@ export const authApi = {
     return result;
   },
 
-  async resendRegisterOtp(email: string): Promise<ResendOtpResponse> {
+  async resendRegisterOtp(email: string, channel?: OtpChannel): Promise<ResendOtpResponse> {
     const res = await apiClient.post<
       { data: ResendOtpResponse } | ResendOtpResponse
-    >('/auth/resend-register-otp', { email });
+    >('/auth/resend-register-otp', { email, channel });
+    return unwrap(res.data);
+  },
+
+  /** Xác thực email / SĐT trong hồ sơ (đã đăng nhập). */
+  async sendVerification(kind: 'email' | 'phone'): Promise<{ resendAvailableAt?: string }> {
+    const res = await apiClient.post<
+      { data: { resendAvailableAt?: string } } | { resendAvailableAt?: string }
+    >(`/auth/verify-${kind}/send`);
+    return unwrap(res.data);
+  },
+
+  async confirmVerification(
+    kind: 'email' | 'phone',
+    otp: string,
+  ): Promise<{ isEmailVerified: boolean; isPhoneVerified: boolean }> {
+    type Flags = { isEmailVerified: boolean; isPhoneVerified: boolean };
+    const res = await apiClient.post<{ data: Flags } | Flags>(`/auth/verify-${kind}/confirm`, { otp });
     return unwrap(res.data);
   },
 

@@ -16,6 +16,8 @@ import RebookSheet from '../../../components/RebookSheet';
 import { useRebookAction } from '../../../hooks/useRebookAction';
 import StopReplaceSheet from '../../../components/StopReplaceSheet';
 import { canRequestStopReplace } from '../../../screens/customer/stop-replace';
+import { isOldFinanceReview } from '../../../api/order-work-stopped';
+import { StoppedWorkFinanceNote } from '../customer/CustomerContinuationCard';
 import AcceptedRescheduleSheet from '../../../components/AcceptedRescheduleSheet';
 import { serviceOrderDisplayView, serviceOrderStatusView } from '../../../screens/technician/technician-status';
 import { sessionLabel } from '../../../utils/booking-session';
@@ -120,6 +122,7 @@ export default function OrderInformationScreen() {
         : <DetailRow label="Khách hàng" value={[order.customerName, order.customerPhone].filter(Boolean).join(' · ') || 'Chưa có thông tin'} />}
       {order.customerNote ? <DetailRow label="Ghi chú của khách" value={order.customerNote} /> : null}
       </Section>
+      {snapshot?.key.role === 'customer' && isOldFinanceReview(order) ? <StoppedWorkFinanceNote /> : null}
       <Section title="Giá và bảo hành">
       <DetailRow label="Hình thức giá" value={PRICING_LABELS[String(order.pricingMode ?? '').toUpperCase()] ?? 'Chưa xác định'} />
       {String(order.pricingMode ?? '').toUpperCase() === 'FIXED_PRICE' ? <>

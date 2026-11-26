@@ -35,6 +35,95 @@ export interface TechnicianServiceOffering {
   verificationStatus: 'pending' | 'verified' | 'rejected';
 }
 
+/** Backend `SkillEvidenceType`; the trust group is derived server-side, never sent. */
+export const SKILL_EVIDENCE_TYPE_VALUES = [
+  'national_skill_certificate', 'vocational_diploma', 'electrical_safety_card', 'manufacturer_training',
+  'employer_confirmation', 'social_insurance', 'work_photos', 'other',
+] as const;
+export type SkillEvidenceType = (typeof SKILL_EVIDENCE_TYPE_VALUES)[number];
+
+const SKILL_EVIDENCE_REVIEW_VALUES = ['pending', 'valid', 'invalid', 'need_more'] as const;
+export type SkillEvidenceReviewStatus = (typeof SKILL_EVIDENCE_REVIEW_VALUES)[number];
+
+/** What the technician says about one file; dates are `YYYY-MM-DD`. Only `evidenceType` is required once any detail is sent. */
+/** A paper the technician already sent: one per stored file, with the service categories it covers. */
+export interface SentSkillEvidence {
+  documentId: string;
+  /** A skill the paper sits on, for the access route. */
+  serviceId: string;
+  fileName: string;
+  mimeType: string;
+  evidenceType: SkillEvidenceType | null;
+  issuer: string | null;
+  referenceNumber: string | null;
+  issuedAt: string | null;
+  expiresAt: string | null;
+  claimedYears: number | null;
+  /** False once the paper helped approve a skill (or the profile waits for review): the server refuses edit and delete. Absent on older backends. */
+  editable?: boolean;
+  categories: { id: string; name: string }[];
+}
+
+export interface SkillEvidenceDetails {
+  evidenceType: SkillEvidenceType;
+  issuer?: string;
+  referenceNumber?: string;
+  issuedAt?: string;
+  expiresAt?: string;
+  claimedYears?: number;
+}
+
+export interface SkillEvidenceDocument {
+  id: string;
+  fileName: string;
+  /** null for a file sent before the details existed. */
+  evidenceType: SkillEvidenceType | null;
+  issuer: string | null;
+  referenceNumber: string | null;
+  issuedAt: string | null;
+  expiresAt: string | null;
+  claimedYears: number | null;
+  reviewStatus: SkillEvidenceReviewStatus | null;
+  reviewNote: string | null;
+}
+
+export interface SkillVerification {
+  id: string;
+  status: 'pending' | 'verified' | 'rejected';
+  rejectionReason: string | null;
+  documents: SkillEvidenceDocument[];
+}
+
+function normalizeEvidenceDocument(raw: unknown): SkillEvidenceDocument {
+  const d = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const text = (value: unknown) => (value == null || value === '' ? null : String(value));
+  const years = d.claimedYears == null ? NaN : Number(d.claimedYears);
+  return {
+    id: String(d.id ?? ''),
+    fileName: String(d.fileName ?? ''),
+    // An unknown type or review status is dropped, never guessed.
+    evidenceType: SKILL_EVIDENCE_TYPE_VALUES.find((t) => t === d.evidenceType) ?? null,
+    issuer: text(d.issuer),
+    referenceNumber: text(d.referenceNumber),
+    issuedAt: text(d.issuedAt),
+    expiresAt: text(d.expiresAt),
+    claimedYears: Number.isFinite(years) ? years : null,
+    reviewStatus: SKILL_EVIDENCE_REVIEW_VALUES.find((s) => s === d.reviewStatus) ?? null,
+    reviewNote: text(d.reviewNote),
+  };
+}
+
+function normalizeSkillVerification(payload: unknown): SkillVerification {
+  const v = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>;
+  const status = String(v.status ?? 'pending');
+  return {
+    id: String(v.id ?? ''),
+    status: status === 'verified' || status === 'rejected' ? status : 'pending',
+    rejectionReason: v.rejectionReason == null ? null : String(v.rejectionReason),
+    documents: Array.isArray(v.documents) ? v.documents.map(normalizeEvidenceDocument) : [],
+  };
+}
+
 export interface TechnicianProfile {
   bio: string | null;
   yearsExperience: number;
@@ -198,6 +287,79 @@ export const technicianProfileApi = {
       throw new Error('Danh sách dịch vụ từ máy chủ không hợp lệ.');
     }
     return result;
+  },
+
+  /** The service's verification (with the reason when it was refused); null before any certificate was sent. */
+  async getSkillVerification(serviceId: string): Promise<SkillVerification | null> {
+    const res = await apiClient.get<{ data: unknown } | unknown>(`/technicians/me/services/${serviceId}/verification`);
+    const data = unwrap(res.data as { data: unknown });
+    return data == null ? null : normalizeSkillVerification(data);
+  },
+
+  async requestSkillEvidenceUploadUrl(serviceId: string, mimeType: string): Promise<{ storageObjectPath: string; uploadUrl: string }> {
+    const res = await apiClient.post<{ data: unknown } | unknown>(`/technicians/me/services/${serviceId}/verification/documents/upload-url`, { mimeType });
+    const slot = (unwrap(res.data as { data: unknown }) ?? {}) as Record<string, unknown>;
+    const storageObjectPath = String(slot.storageObjectPath ?? '');
+    const uploadUrl = String(slot.uploadUrl ?? '');
+    if (!storageObjectPath || !uploadUrl) throw new Error('Máy chủ chưa cấp chỗ tải chứng chỉ. Vui lòng thử lại.');
+    return { storageObjectPath, uploadUrl };
+  },
+
+  async attachSkillEvidence(
+    serviceId: string,
+    doc: { storageObjectPath: string; fileName: string; fileSize: number; mimeType: string } & Partial<SkillEvidenceDetails>,
+  ): Promise<SkillVerification> {
+    const res = await apiClient.post<{ data: unknown } | unknown>(`/technicians/me/services/${serviceId}/verification/documents`, doc);
+    return normalizeSkillVerification(unwrap(res.data as { data: unknown }));
+  },
+
+  /** One upload slot for a paper that covers several service categories (not tied to one service). */
+  async requestCategoryEvidenceUploadUrl(mimeType: string): Promise<{ storageObjectPath: string; uploadUrl: string }> {
+    const res = await apiClient.post<{ data: unknown } | unknown>('/technicians/me/skill-evidence/upload-url', { mimeType });
+    const slot = (unwrap(res.data as { data: unknown }) ?? {}) as Record<string, unknown>;
+    const storageObjectPath = String(slot.storageObjectPath ?? '');
+    const uploadUrl = String(slot.uploadUrl ?? '');
+    if (!storageObjectPath || !uploadUrl) throw new Error('Máy chủ chưa cấp chỗ tải chứng chỉ. Vui lòng thử lại.');
+    return { storageObjectPath, uploadUrl };
+  },
+
+  /** The papers already sent, one entry per file with the categories it covers (what step 3 shows after coming back). */
+  async getMySkillEvidence(): Promise<SentSkillEvidence[]> {
+    const res = await apiClient.get<{ data: unknown } | unknown>('/technicians/me/skill-evidence');
+    const data = unwrap(res.data as { data: unknown });
+    return Array.isArray(data) ? (data as SentSkillEvidence[]) : [];
+  },
+
+  /** Changes the details and the categories of a paper already sent (replaces them); returns the papers. */
+  async updateSkillEvidence(
+    documentId: string,
+    body: { categoryIds: string[] } & Partial<SkillEvidenceDetails>,
+  ): Promise<SentSkillEvidence[]> {
+    const res = await apiClient.patch<{ data: unknown } | unknown>(`/technicians/me/skill-evidence/${documentId}`, body);
+    const data = unwrap(res.data as { data: unknown });
+    return Array.isArray(data) ? (data as SentSkillEvidence[]) : [];
+  },
+
+  /** Removes a paper already sent from every skill it sits on. */
+  async deleteSkillEvidence(documentId: string): Promise<void> {
+    await apiClient.delete(`/technicians/me/skill-evidence/${documentId}`);
+  },
+
+  /** A short-lived link to look at one of the technician's own papers; `serviceId` is the one the entry names. */
+  async getSkillEvidenceAccess(serviceId: string, documentId: string): Promise<string> {
+    const res = await apiClient.get<{ data: unknown } | unknown>(`/technicians/me/services/${serviceId}/verification/documents/${documentId}/access`);
+    const data = (unwrap(res.data as { data: unknown }) ?? {}) as Record<string, unknown>;
+    return String(data.signedUrl ?? '');
+  },
+
+  /** Attaches the uploaded paper to every skill the technician has in `categoryIds`; Backend says how many it reached. */
+  async attachCategoryEvidence(
+    categoryIds: string[],
+    doc: { storageObjectPath: string; fileName: string; fileSize: number; mimeType: string } & Partial<SkillEvidenceDetails>,
+  ): Promise<{ attachedSkills: number }> {
+    const res = await apiClient.post<{ data: unknown } | unknown>('/technicians/me/skill-evidence', { ...doc, categoryIds });
+    const data = (unwrap(res.data as { data: unknown }) ?? {}) as Record<string, unknown>;
+    return { attachedSkills: Number(data.attachedSkills ?? 0) };
   },
 
   async setSkillPricing(

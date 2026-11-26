@@ -22,6 +22,8 @@ jest.mock('../runtime/OrderSessionProvider', () => ({
 }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate, goBack: mockGoBack }),
+  // The continuation card reads on focus; these tests are about the status body, so the read never starts.
+  useFocusEffect: () => undefined,
 }));
 jest.mock('react-native-safe-area-context', () => {
   const Native = jest.requireActual('react-native');

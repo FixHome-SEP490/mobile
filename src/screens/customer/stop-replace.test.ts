@@ -45,3 +45,9 @@ it('knows a refusal from a lost answer', () => {
   expect(isDefiniteRefusal({ response: { status: 503 } })).toBe(false);
   expect(isDefiniteRefusal(new Error('offline'))).toBe(false);
 });
+
+it('offers nothing to stop on work that is already stopped', () => {
+  expect(canRequestStopReplace({ status: 'UNDER_REPAIR', workStopped: true })).toBe(false);
+  expect(canRequestStopReplace({ status: 'UNDER_REPAIR', operationalDisposition: 'STOPPED' })).toBe(false);
+  expect(canRequestStopReplace({ status: 'UNDER_REPAIR', operationalDisposition: 'INTERRUPTION_RECORDED' })).toBe(true);
+});
