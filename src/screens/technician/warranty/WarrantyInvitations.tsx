@@ -22,7 +22,6 @@ export function WarrantyInvitationCard({ claim, onOpen }: { claim: TechnicianWar
     <View style={styles.line}><Ionicons name="location-outline" size={15} color={colors.textSecondary} /><Text style={styles.muted}>{claim.order.addressSummary}</Text></View>
     <Text style={styles.said} numberOfLines={2}>{claim.description}</Text>
     <View style={styles.actions}>
-      <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Không nhận được bảo hành #${claim.order.code}`} onPress={onOpen} style={[styles.button, styles.secondary]}><Text style={styles.secondaryText}>Không nhận được</Text></TouchableOpacity>
       <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Nhận yêu cầu bảo hành #${claim.order.code}`} onPress={onOpen} style={[styles.button, styles.primary]}><Text style={styles.primaryText}>Nhận yêu cầu</Text></TouchableOpacity>
     </View>
   </TouchableOpacity>;

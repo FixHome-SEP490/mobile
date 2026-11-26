@@ -128,10 +128,9 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
               : undefined;
   const secondary = confirmed
     ? { label: 'Sửa nội dung', disabled: busy, testID: 'technician-warranty-secondary-action', onPress: () => { controller.cancelConfirmation(); } }
-    : task === 'TW02' && state.phase === 'idle' && claim
-      ? { label: 'Từ chối phân công', disabled: locked || !commands.includes('decline') || (reason === 'other' && note.trim().length < 10), testID: 'technician-warranty-secondary-action', onPress: () => prepare('decline') }
-      // The screen follows the server live, so there is no refresh button; one is left only to recover from a failed or unknown command or a failed read.
-      : !claim || ['denied', 'failed-known', 'unknown'].includes(state.phase)
+    // The technician who did the order is the one who handles its warranty, so there is no decline action (PO 26/11/2026).
+    // The screen follows the server live, so there is no refresh button; one is left only to recover from a failed or unknown command or a failed read.
+    : !claim || ['denied', 'failed-known', 'unknown'].includes(state.phase)
         ? { label: state.phase === 'unknown' ? 'Kiểm tra lại' : 'Thử lại', disabled: !claimId || busy, onPress: () => { if (!claimId) return; if (state.phase === 'denied' || state.phase === 'failed-known') controller.cancelConfirmation(); void (state.phase === 'unknown' ? controller.verify() : controller.refreshClaim()); } }
         : undefined;
 

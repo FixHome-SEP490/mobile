@@ -460,6 +460,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 
 ## 9. Nhật ký cập nhật context
 - 2026-11-26 15:46 (UTC+7) | ToanAltF4 | fix/part-returns-groups-302 | BUG 302: tab Cần khai trả và Chờ quản lý nhận của màn Linh kiện cần trả theo returnStatus của máy chủ (khai một phần vẫn là chờ quản lý, lệch số không vào tab nào)
+- 2026-11-26 14:30 (UTC+7) | Hgnv11 | dev | PO 26/11: thợ không còn nút Không nhận được / Từ chối phân công ở bảo hành; nút tạo yêu cầu bảo hành của khách (bản production) mở thẳng màn bảo hành của đơn
 - 2026-11-25 22:39 (UTC+7) | Hgnv11 | dev | Giấy tờ tách thành trang riêng (TechnicianEvidence), giấy tờ đã dùng duyệt kỹ năng bị khóa sửa/xóa; cần backend trả editable; CHƯA KIỂM CHỨNG trên thiết bị
 - 2026-11-25 22:35 (UTC+7) | Hgnv11 | dev | Trang Kỹ năng riêng cho thợ (lọc, tìm, nhóm, lý do từ chối, giấy tờ gửi ngay) thay bottom sheet ở Hồ sơ; CHƯA KIỂM CHỨNG trên thiết bị
 - 2026-11-25 21:41 (UTC+7) | Hgnv11 | dev | Thêm chọn kênh OTP Email/SMS khi đăng ký và thẻ xác thực email/SĐT (Bảo mật khách hàng, hồ sơ kỹ thuật viên); CHƯA KIỂM CHỨNG trên thiết bị và backend thật
@@ -498,7 +499,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-11-21 13:20 (UTC+7) | Hgnv11 | fix/mobile-technician-kyc-face-picker | Merge origin/dev (a5d34d1, #98 Expo Go không nạp MapLibre) vào nhánh; giữ cả hai nhật ký
 - 2026-11-21 12:58 (UTC+7) | Hgnv11 | fix/mobile-technician-kyc-face-picker | Ô ảnh chân dung trong Xác minh danh tính thợ mở hộp chọn Thư viện ảnh / Chụp ảnh thay vì mở camera ngay
 - 2026-11-21 12:55 (UTC+7) | ToanAltF4 | fix/mobile-expogo-map-2111 | BUG 211: Expo Go không nạp MapLibre, hiện khung Bản đồ chỉ có trên bản cài APK; APK vẫn dùng MapLibre (nạp lười trong AddressMap)
-- 2026-11-21 03:39 (UTC+7) | ToanAltF4 | fix/mobile-map-default-2111 | Khung chọn ảnh/video trong chat đóng được bằng nút Back
 
 
 ### Lịch sử giữ lại khi tích hợp
