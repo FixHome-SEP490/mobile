@@ -876,6 +876,18 @@ describe('createTechnicianPartsController', () => {
       expect(journal.list(key.userId)[0].status).toBe('unknown');
     });
 
+    it('unlocks a cancel marker when the request is still requested after readback', async () => {
+      const controller = createTechnicianPartsController(deps);
+      await journal.begin(key, { intentId: 'intent-cancel-refused', operation: 'parts-cancel', entityId: 'req-1' });
+      await journal.mark(key.userId, 'intent-cancel-refused', 'unknown');
+      transport.getPartRequest.mockResolvedValueOnce({ id: 'req-1', serviceOrderId: 'order-1', technicianId: 'tech-1', status: 'requested' } as any);
+
+      await controller.verify(key, 'intent-cancel-refused');
+
+      expect(controller.getState().phase).toBe('denied');
+      expect(journal.list(key.userId).find((m) => m.intentId === 'intent-cancel-refused')?.status).toBe('failed-known');
+    });
+
     it('fails verification if marker session does not match active session', async () => {
       const controller = createTechnicianPartsController(deps);
       const foreignKey: OrderSessionKey = {

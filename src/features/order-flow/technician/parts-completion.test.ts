@@ -36,3 +36,10 @@ describe('partsCompletionBlockers', () => {
     expect(partsCompletionBlockers(null, [], [request('pre_repair', 1)], new Map([['pre_repair-item', 1]]))).toEqual([PARTS_MISMATCH]);
   });
 });
+
+it('a home-delivery additional request received on the W3 path needs no receivedAt', () => {
+  const cost = { id: 'cost', items: [line(1)] };
+  const w3 = (stage: string) => request('additional', 1, { additionalCostId: 'cost', fulfillmentMethod: 'delivery', w3DeliveryStage: stage, receivedAt: undefined });
+  expect(partsCompletionBlockers(null, [cost], [w3('TECHNICIAN_RECEIVED')], new Map())).toEqual([]);
+  expect(partsCompletionBlockers(null, [cost], [w3('DISPATCH_RECORDED')], new Map())).toEqual([ADDITIONAL_NOT_RECEIVED]);
+});

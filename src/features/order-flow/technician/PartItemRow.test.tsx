@@ -31,3 +31,14 @@ it('declaring only part of it back still leaves the usage to the technician', as
   await act(async () => { create(<PartItemRow item={item} received canMarkUsage frozen={false} record={partial} busy={false} onWhole={() => {}} onSaveUsed={onSaveUsed} onDeclare={async () => true} />); });
   expect(onSaveUsed).not.toHaveBeenCalled();
 });
+
+it('home delivery offers a single "Đã dùng" that takes the whole quantity, and no return', async () => {
+  const onWhole = jest.fn();
+  let r!: ReturnType<typeof create>;
+  await act(async () => { r = create(<PartItemRow item={{ id: 'i1', partNameSnapshot: 'Co đồng', quantity: 3, usageStatus: 'pending' } as never} received canMarkUsage wholeOnly frozen={false} busy={false} onWhole={onWhole} onSaveUsed={async () => true} onDeclare={async () => true} />); });
+  expect(r.root.findAllByProps({ testID: 'parts-usage-returned-i1' })).toHaveLength(0);
+  act(() => { r.root.findByProps({ testID: 'parts-usage-used-i1' }).props.onPress(); });
+  expect(onWhole).toHaveBeenCalledWith('used');
+  await act(async () => { r.update(<PartItemRow item={{ id: 'i1', partNameSnapshot: 'Co đồng', quantity: 3, usageStatus: 'used' } as never} received canMarkUsage wholeOnly frozen={false} busy={false} onWhole={onWhole} onSaveUsed={async () => true} onDeclare={async () => true} />); });
+  expect(JSON.stringify(r.toJSON())).toContain('Đã dùng 3');
+});

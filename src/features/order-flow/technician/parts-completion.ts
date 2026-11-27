@@ -71,7 +71,9 @@ function analyze(
     for (const line of lines) if (line.partCatalogId) add(approved, line.partCatalogId, line.quantity);
     const own = requests.filter((request) => request.requestType === 'additional' && request.additionalCostId === cost.id && request.status !== 'cancelled');
     if (own.length) {
-      if (own.some((request) => !settled(request) || !request.receivedAt)) { blockers.push(ADDITIONAL_NOT_RECEIVED); continue; }
+      // A W3 home-delivery request never gets receivedAt by design; its W3 stage TECHNICIAN_RECEIVED is the receipt (same as web).
+      const w3Received = (request: OrderPartReadModel) => request.w3DeliveryStage === 'TECHNICIAN_RECEIVED';
+      if (own.some((request) => !w3Received(request) && (!settled(request) || !request.receivedAt))) { blockers.push(ADDITIONAL_NOT_RECEIVED); continue; }
       if (own.some((request) => request.items.some((item) => item.partSource === 'fixhome' && item.usageStatus !== 'used' && item.usageStatus !== 'returned'))) {
         blockers.push(ADDITIONAL_NOT_RECORDED);
         continue;

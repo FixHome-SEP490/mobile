@@ -53,9 +53,13 @@ export function createTechnicianCompletionController(deps: TechnicianCompletionD
     return s.resources.quotations.status === 'ready' && !s.resources.quotations.data.some(q => q.status.toUpperCase() === 'SENT')
       && getOrderCapabilities({ ...s, pendingIntent: false }).canAttemptRequestCompletion;
   }
-  function verdict(key: OrderSessionKey, m: OrderCommandMarker): CommandReadbackVerdict {
+  function verdict(key: OrderSessionKey, m: OrderCommandMarker, fresh = false): CommandReadbackVerdict {
     const current = order(key); if (!current) return 'unresolved';
-    if (m.operation === 'request-completion') return hasCompletionRequest(current) && invoiceFact(deps.coordinator.getSnapshot(), key) ? 'resolved' : 'unresolved';
+    if (m.operation === 'request-completion') {
+      if (hasCompletionRequest(current) && invoiceFact(deps.coordinator.getSnapshot(), key)) return 'resolved';
+      // Completion is one atomic Backend transaction: after a fresh read the order still has no completion request, so it never applied.
+      return fresh && !hasCompletionRequest(current) ? 'failed-known' : 'unresolved';
+    }
     if (m.operation === 'after-upload') return privateAfter(key, m.resultEntityId) ? 'resolved' : 'unresolved';
     const list = deps.coordinator.getSnapshot()?.resources.evidence;
     return m.operation === 'evidence-delete' && m.stableKey === 'm6-after-delete' && list?.status === 'ready' && !list.data.some(e => e.id === m.entityId) ? 'resolved' : 'unresolved';
@@ -167,7 +171,7 @@ export function createTechnicianCompletionController(deps: TechnicianCompletionD
         if (!markers.length) { publish({ phase: deps.journal.hasUnresolved(key) ? 'unknown' : 'idle' }); return; }
         await refresh(key, [...new Set(markers.flatMap(m => resources(m.operation as TechnicianCompletionState['operation'])))]);
         const adapter = createOrderCommandAdapter(deps.journal, { isCurrent: k => !!order(k), refresh: async () => {} });
-        for (const m of markers) await adapter.verify(key, m.intentId, () => verdict(key, m));
+        for (const m of markers) await adapter.verify(key, m.intentId, () => verdict(key, m, true));
         finish(key, deps.journal.list(key.userId).find(m => m.intentId === markers[0].intentId));
       } catch { if (same(key)) publish({ phase: 'unknown', message: FINANCIAL_UNKNOWN }); }
       finally { busy = false; }

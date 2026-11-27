@@ -103,3 +103,10 @@ it('completion rollback proof never releases upload or delete locks', async () =
   await g.c.requestDeleteAfter('after'); await g.c.submitConfirmation();
   expect(g.journal.list('tech')[0].status).toBe('unknown');
 });
+it('a refused completion (no completionRequestedAt after a fresh read) unlocks on verify instead of staying unknown', async () => {
+  const f = setup(); f.transport.requestCompletion.mockRejectedValue(Error('500')); await f.c.requestCompletion('Bàn giao'); await f.c.submitConfirmation();
+  expect(f.journal.list('tech')[0].status).toBe('unknown');
+  await f.c.verify();
+  expect(f.journal.list('tech')[0].status).toBe('failed-known');
+  expect(f.c.getState().phase).toBe('failed-known');
+});

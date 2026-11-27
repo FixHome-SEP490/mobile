@@ -751,12 +751,10 @@ export function createTechnicianPartsController(deps: TechnicianPartsControllerD
           const detail = transport.getPartRequest
             ? await transport.getPartRequest(marker.entityId)
             : currentParts(deps.readCoordinator, key)?.find((p) => p.id === marker.entityId);
-          return detail?.id === marker.entityId &&
-            detail.serviceOrderId === key.serviceOrderId &&
-            detail.technicianId === key.userId &&
-            detail.status === 'cancelled'
-            ? 'resolved'
-            : 'unresolved';
+          if (detail?.id !== marker.entityId || detail.serviceOrderId !== key.serviceOrderId || detail.technicianId !== key.userId) return 'unresolved';
+          if (detail.status === 'cancelled') return 'resolved';
+          // Cancel is one atomic backend transaction: still requested after a fresh read means it never applied (e.g. refused for an approved additional cost).
+          return detail.status === 'requested' ? 'failed-known' : 'unresolved';
         }
         return 'unresolved';
       } catch {
@@ -769,7 +767,7 @@ export function createTechnicianPartsController(deps: TechnicianPartsControllerD
     if (finalMarker?.status === 'resolved') {
       publish({ phase: 'resolved', operation: marker.operation as any, error: null, actionSuccess: 'Đã xác nhận thành công.' });
     } else if (finalMarker?.status === 'failed-known') {
-      publish({ phase: 'denied', operation: marker.operation as any, error: 'Linh kiện chưa được nhận. Hãy nhờ quản lý kho xác nhận bàn giao, rồi nhập mã nhận mới.', actionSuccess: null });
+      publish({ phase: 'denied', operation: marker.operation as any, error: marker.operation === 'parts-cancel' ? 'Yêu cầu linh kiện chưa được hủy.' : 'Linh kiện chưa được nhận. Hãy nhờ quản lý kho xác nhận bàn giao, rồi nhập mã nhận mới.', actionSuccess: null });
     } else {
       publish({ phase: 'unknown', operation: marker.operation as any, error: 'Chưa thể xác nhận. Vui lòng thử lại sau.' });
     }

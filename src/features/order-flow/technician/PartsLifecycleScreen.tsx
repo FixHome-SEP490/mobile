@@ -193,7 +193,10 @@ export default function PartsLifecycleScreen() {
 
   const renderRequest = (req: OrderPartReadModel, index: number, count: number) => {
     const canReceive = receiveEligible(req);
-    const canCancel = req.status === 'requested';
+    // Backend refuses to cancel the parts of an approved additional cost (already charged to the customer).
+    const canCancel = req.status === 'requested' && req.requestType !== 'additional';
+    // No FixHome warehouse has the whole list: the technician sources the parts, so the request is stopped (web "Dừng yêu cầu kho, tự chuẩn bị").
+    const stockOut = req.requestType === 'pre_repair' && req.fulfillmentMethod === 'pickup' && canCancel && (allocations[req.id] as { status?: string } | undefined)?.status === 'stock_unavailable';
     const isReceived = req.status === 'received';
     const shown = displayPartRequestStatus({ status: req.status, w3DeliveryStage: req.w3DeliveryStage });
     const tone = colors.tone[statusTone(shown)];
@@ -211,6 +214,11 @@ export default function PartsLifecycleScreen() {
         </View>
 
         {req.fulfillmentMethod === 'pickup' && <WarehouseAllocationCard allocation={allocations[req.id]} requestId={req.id} />}
+        {req.fulfillmentMethod === 'delivery' && req.requestType !== 'additional' && (
+          <Text style={styles.requestMeta} testID={`parts-delivery-hint-${req.id}`}>
+            Giao tận nơi cho phiếu này chưa có bước xác nhận nhận hàng trên ứng dụng. Liên hệ quản lý kho để nhận linh kiện hoặc đặt lại để nhận tại kho.
+          </Text>
+        )}
         {(req.items ?? []).map(it => (
           <PartItemRow
             key={it.id}
@@ -222,6 +230,7 @@ export default function PartsLifecycleScreen() {
             busy={returns.busy}
             quotedQty={approvedQuoteQty(it, req.requestType, quotationsList, key!.serviceOrderId)}
             maxUsed={approvedUsageCap(it, req.requestType, partsList, quotationsList, key!.serviceOrderId, usedOf)}
+            wholeOnly={req.fulfillmentMethod === 'delivery'}
             onWhole={status => onUpdateUsage(req.id, it.id, status)}
             onSaveUsed={quantity => returns.saveUsedQty(req.id, returns.records[it.id], quantity)}
             onDeclare={quantity => returns.declareReturn(req.id, returns.records[it.id], quantity)}
@@ -247,9 +256,9 @@ export default function PartsLifecycleScreen() {
                 accessibilityRole="button" accessibilityState={{ disabled: frozen }}
                 disabled={frozen}
                 style={styles.cancelActionBtn}
-                onPress={() => onOpenCancel(req)}
+                onPress={() => { if (stockOut) { if (key && current && !frozen) void controller.cancelPartRequest(key, req.id, 'Kho FixHome không đủ linh kiện; kỹ thuật viên tự chuẩn bị.'); } else onOpenCancel(req); }}
               >
-                <Text style={styles.cancelActionBtnText}>Hủy yêu cầu</Text>
+                <Text style={styles.cancelActionBtnText}>{stockOut ? 'Dừng yêu cầu kho, tự chuẩn bị' : 'Hủy yêu cầu'}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -292,7 +301,7 @@ export default function PartsLifecycleScreen() {
         const lines = [
           fromWarranty && !isUnderRepair && blockers.unsettled > 0 ? `${blockers.unsettled} linh kiện chưa khai dùng. Khai xong mới báo được bảo hành xong.` : '',
           handover && blockers.unsettled > 0 ? `${blockers.unsettled} linh kiện chưa ghi dùng hoặc trả.` : '',
-          handover && blockers.open > 0 ? `${blockers.open} yêu cầu chưa nhận (nhận bằng mã/QR, xác nhận giao hàng ở mục Giao linh kiện, hoặc hủy yêu cầu).` : '',
+          handover && blockers.open > 0 ? `${blockers.open} yêu cầu chưa nhận (kho giữ hàng thì chờ quản lý bàn giao rồi nhập mã/QR nhận hàng; giao tận nơi thì xác nhận ở mục Giao linh kiện; hoặc hủy yêu cầu).` : '',
           Object.values(returns.records).some(r => r.blocksNewWork) ? 'Chưa trả đủ linh kiện nên chưa nhận được việc mới.' : '',
         ].filter(Boolean);
         if (lines.length) return <ReadOnlyNotice tone="warning">{[handover && blockers.open + blockers.unsettled > 0 ? 'Chưa thể gửi bàn giao:' : 'Cần xử lý:', ...lines.map(l => `• ${l}`)].join('\n')}</ReadOnlyNotice>;

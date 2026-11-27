@@ -17,6 +17,7 @@ const mockLoadResource: jest.Mock = jest.fn(async () => {});
 const mockNavigate: jest.Mock = jest.fn();
 const mockGoBack: jest.Mock = jest.fn();
 let mockFocused = true;
+let mockWarehouseStatus: string | null = null;
 let mockCameraPermission = { granted: false, canAskAgain: true };
 const mockRequestCameraPermission = jest.fn(async () => ({ granted: true, canAskAgain: true }));
 jest.mock('expo-camera', () => ({
@@ -31,7 +32,7 @@ const mockApiUsage: jest.Mock = jest.fn(async () => ({}));
 jest.mock('./WarehouseAllocationCard', () => ({
   __esModule: true,
   default: () => null,
-  useWarehouseAllocations: (requests: { id: string }[]) => Object.fromEntries(requests.map(r => [r.id, { partRequestId: r.id, mode: 'legacy', status: null }])),
+  useWarehouseAllocations: (requests: { id: string }[]) => Object.fromEntries(requests.map(r => [r.id, { partRequestId: r.id, mode: mockWarehouseStatus ? 'warehouse' : 'legacy', status: mockWarehouseStatus }])),
 }));
 jest.mock('./TechnicianDeliverySection', () => ({ __esModule: true, default: () => null }));
 jest.mock('../../../api/part-requests.api', () => {
@@ -250,7 +251,7 @@ describe('PartsLifecycleScreen (T12)', () => {
         technicianId: 'tech-1',
         status: 'requested',
         fulfillmentMethod: 'pickup',
-        requestType: 'additional',
+        requestType: 'pre_repair',
         items: [{ id: 'item-1', partNameSnapshot: 'Van ga', quantity: 1, usageStatus: 'pending' }],
       },
     ];
@@ -284,6 +285,38 @@ describe('PartsLifecycleScreen (T12)', () => {
     });
 
     expect(mockCancelPartRequest).toHaveBeenCalledWith(mockKey, 'pr-requested-1', 'Khách đổi ý không thay');
+  });
+
+  it('hides cancel for the parts of an approved additional cost', () => {
+    const { key, snapshot } = createBaseSnapshot([{ id: 'pr-add-1', serviceOrderId: 'order-1', technicianId: 'tech-1', status: 'requested', fulfillmentMethod: 'delivery', requestType: 'additional', items: [{ id: 'item-1', partNameSnapshot: 'Van ga', quantity: 1, usageStatus: 'pending' }] }]);
+    mockKey = key;
+    mockSnapshot = snapshot;
+    let tree: any;
+    act(() => { tree = create(<PartsLifecycleScreen />); });
+    expect(tree.root.findAllByProps({ testID: 'parts-cancel-btn-pr-add-1' })).toHaveLength(0);
+  });
+
+  it('stops a pre-repair request the warehouse cannot fill with the standard reason, no cancel modal', () => {
+    mockWarehouseStatus = 'stock_unavailable';
+    try {
+      const { key, snapshot } = createBaseSnapshot([{ id: 'pr-pre-1', serviceOrderId: 'order-1', technicianId: 'tech-1', status: 'requested', fulfillmentMethod: 'pickup', requestType: 'pre_repair', items: [{ id: 'item-1', partNameSnapshot: 'Van ga', quantity: 1, usageStatus: 'pending' }] }]);
+      mockKey = key;
+      mockSnapshot = snapshot;
+      let tree: any;
+      act(() => { tree = create(<PartsLifecycleScreen />); });
+      act(() => { tree.root.findByProps({ testID: 'parts-cancel-btn-pr-pre-1' }).props.onPress(); });
+      expect(mockCancelPartRequest).toHaveBeenCalledWith(mockKey, 'pr-pre-1', 'Kho FixHome không đủ linh kiện; kỹ thuật viên tự chuẩn bị.');
+      expect(tree.root.findAllByProps({ testID: 'parts-cancel-modal' })).toHaveLength(0);
+    } finally { mockWarehouseStatus = null; }
+  });
+
+  it('explains that a delivery request that is not an extra cost has no in-app receipt', () => {
+    const { key, snapshot } = createBaseSnapshot([{ id: 'pr-del-1', serviceOrderId: 'order-1', technicianId: 'tech-1', status: 'requested', fulfillmentMethod: 'delivery', requestType: 'pre_repair', items: [{ id: 'item-1', partNameSnapshot: 'Van ga', quantity: 1, usageStatus: 'pending' }] }]);
+    mockKey = key;
+    mockSnapshot = snapshot;
+    let tree: any;
+    act(() => { tree = create(<PartsLifecycleScreen />); });
+    expect(tree.root.findByProps({ testID: 'parts-delivery-hint-pr-del-1' })).toBeTruthy();
   });
 
   it('updates item usage (used / returned) when request is received and order is under repair', () => {
