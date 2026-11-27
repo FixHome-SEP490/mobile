@@ -12,6 +12,7 @@ import { sameOrderSession } from '../domain/order-session.types';
 import { validateCreatePreRepairPayload, PART_ITEMS_MAX, PART_QUANTITY_MAX } from './parts-controller';
 import { useTechnicianParts } from './useTechnicianParts';
 import { fetchStrictCatalog, fetchStrictPartById } from './parts-catalog-adapter';
+import { useWarehouseAllocations } from './WarehouseAllocationCard';
 import { getRestoredPartsRecovery } from '../domain/extra-and-parts-recovery';
 import {
   createCostItemRow,
@@ -63,9 +64,15 @@ export default function AcceptedPartsScreen() {
     ? partsResource.data.filter(pr => pr.serviceOrderId === key?.serviceOrderId && pr.technicianId === key?.userId)
     : [];
 
-  const hasActivePreRepair = partsList.some(
-    (pr: OrderPartReadModel) => pr.requestType === 'pre_repair' && pr.status !== 'cancelled',
-  );
+  const activePreRepair = partsList.find((pr: OrderPartReadModel) => pr.requestType === 'pre_repair' && pr.status !== 'cancelled') ?? null;
+  const hasActivePreRepair = !!activePreRepair;
+  const allocations = useWarehouseAllocations(partsList, partsResource?.status === 'ready' ? partsResource.requestSeq : 0);
+  // Same rule as web canModifyPreRepair: still waiting for the warehouse, nothing handed over or on its way.
+  const allocation = activePreRepair ? allocations[activePreRepair.id] : undefined;
+  const canModifyPreRepair = !!activePreRepair && activePreRepair.status === 'requested'
+    && !['ISSUED_TO_COURIER', 'DISPATCH_RECORDED', 'TECHNICIAN_RECEIVED'].includes(String(activePreRepair.w3DeliveryStage ?? '').toUpperCase())
+    && (activePreRepair.fulfillmentMethod !== 'pickup'
+      || (!!allocation && allocation !== 'error' && !['stock_unavailable', 'handed_over', 'received'].includes(String(allocation.status ?? ''))));
 
   const [picked, setPicked] = useState<CostItemRow[]>([]);
   const [rows, setRows] = useState<CostItemRow[]>([]);
@@ -74,6 +81,8 @@ export default function AcceptedPartsScreen() {
   const [catalog, setCatalog] = useState<CostItemCatalogPanel>({ status: 'idle', parts: [], error: null });
   const [formError, setFormError] = useState<string | null>(null);
   const [pickError, setPickError] = useState<string | null>(null);
+  // The old request is cancelled first; its lines come back into the form once the server shows it cancelled.
+  const [reorder, setReorder] = useState<{ method: 'pickup' | 'delivery'; items: { partCatalogId: string; quantity: number }[] } | null>(null);
   const [confirmation, setConfirmation] = useState<{ key: NonNullable<typeof key>; payload: CreatePartRequestPayload } | null>(null);
   const confirming = !!confirmation && current && !!key && sameOrderSession(confirmation.key, key);
   const [draftKey, setDraftKey] = useState(key);
@@ -91,7 +100,9 @@ export default function AcceptedPartsScreen() {
   const busy = state.phase === 'submitting' || state.phase === 'verifying';
   const isUnknown = state.phase === 'unknown';
   const frozen = busy || isUnknown || showRecovery;
-  const canCreate = current && isAccepted && !hasActivePreRepair && partsResource?.status === 'ready' && !frozen && state.phase !== 'resolved' && !confirming;
+  // A finished cancel ("Đặt lại & thêm") is not a finished create: the form must stay open.
+  const createDone = state.phase === 'resolved' && state.operation !== 'parts-cancel';
+  const canCreate = current && isAccepted && !hasActivePreRepair && partsResource?.status === 'ready' && !frozen && !createDone && !confirming;
   const refreshing = snapshot?.order.status === 'loading' || snapshot?.resources.parts.status === 'loading';
 
   const sheetRef = useRef<BottomSheetModal>(null);
@@ -200,6 +211,35 @@ export default function AcceptedPartsScreen() {
     void controller.createPreRepair(confirmation.key, confirmation.payload);
   };
 
+  /** Web "Đặt lại & thêm linh kiện": cancel the waiting request, then reopen the form with its lines. */
+  const onReorder = () => {
+    if (!activePreRepair || !canModifyPreRepair || !current || !key || frozen || reorder) return;
+    const items = activePreRepair.items.flatMap(item => item.partCatalogId ? [{ partCatalogId: item.partCatalogId, quantity: Math.min(PART_QUANTITY_MAX, Math.max(1, item.quantity)) }] : []);
+    setReorder({ method: activePreRepair.fulfillmentMethod === 'delivery' ? 'delivery' : 'pickup', items });
+    void controller.cancelPartRequest(key, activePreRepair.id, 'Kỹ thuật viên hủy phiếu để bổ sung linh kiện trước khi xuất phát.');
+  };
+  // Once the server shows the old request cancelled, its lines return to the form (price and name from the strict read).
+  useEffect(() => {
+    if (!reorder || hasActivePreRepair || !current || !isAccepted || partsResource?.status !== 'ready') return undefined;
+    const pending = reorder;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the server read-back (cancelled) is the external event that releases the reorder
+    setReorder(null);
+    setFulfillmentMethod(pending.method);
+    void Promise.all(pending.items.map(item => fetchStrictPartById(item.partCatalogId).then(
+      part => ({ ...newPartRow(), partCatalogId: part.id, unitPrice: String(part.sellingPrice), partNameSnapshot: part.name, partSku: part.sku ?? '', warrantyPolicy: part.warrantyPolicy ?? '', quantity: String(item.quantity) }),
+      () => null,
+    ))).then(loaded => {
+      if (!mountedRef.current) return;
+      const found = loaded.filter((row): row is CostItemRow => !!row);
+      setRows(found);
+      setPickError(found.length < pending.items.length ? 'Một số linh kiện cũ chưa tải lại được. Hãy chọn lại món còn thiếu.' : null);
+    });
+    return undefined;
+  }, [reorder, hasActivePreRepair, current, isAccepted, partsResource?.status]);
+  // A failed cancel leaves the request as it was: forget the pending reorder.
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- the pending reorder follows the cancel command, an external result
+  useEffect(() => { if (reorder && state.phase === 'denied') setReorder(null); }, [reorder, state.phase]);
+
   const onPrimary = () => {
     if (busy) return;
     if (isUnknown || showRecovery) {
@@ -208,7 +248,7 @@ export default function AcceptedPartsScreen() {
       }
       return;
     }
-    if (state.phase === 'resolved') {
+    if (createDone) {
       navigation.navigate('OrderTask');
       return;
     }
@@ -239,7 +279,7 @@ export default function AcceptedPartsScreen() {
     );
   }
 
-  if (!isAccepted && !showRecovery && !isUnknown && state.phase !== 'resolved') {
+  if (!isAccepted && !showRecovery && !isUnknown && !createDone) {
     return (
       <TaskScreenShell title="Chuẩn bị linh kiện" stage={1} onBack={() => backFromFlow(navigation)}>
         <ReadOnlyNotice>
@@ -262,7 +302,7 @@ export default function AcceptedPartsScreen() {
               disabled: busy,
               onPress: () => onCancelConfirm(),
             }
-          : state.phase === 'resolved' || isUnknown || showRecovery
+          : createDone || isUnknown || showRecovery
             ? {
                 label: 'Làm mới dữ liệu',
                 testID: 'task-refresh',
@@ -278,23 +318,23 @@ export default function AcceptedPartsScreen() {
           ? 'Đang gửi…'
           : isUnknown || showRecovery
             ? 'Kiểm tra lại'
-            : state.phase === 'resolved'
+            : createDone
               ? 'Tiếp tục'
               : confirming
                 ? 'Xác nhận gửi yêu cầu'
                 : 'Gửi yêu cầu linh kiện',
         testID: isUnknown || showRecovery
           ? 'pre-parts-verify'
-          : state.phase === 'resolved'
+          : createDone
             ? 'pre-parts-continue'
             : confirming
               ? 'pre-parts-confirm-submit'
               : 'pre-parts-submit',
-        disabled: busy || (!canCreate && !confirming && !isUnknown && state.phase !== 'resolved' && !showRecovery),
+        disabled: busy || (!canCreate && !confirming && !isUnknown && !createDone && !showRecovery),
         onPress: onPrimary,
       }}
     >
-      {showRecovery && state.phase !== 'resolved' && (
+      {showRecovery && !createDone && (
         <ReadOnlyNotice tone="warning">
           Có thao tác yêu cầu linh kiện chưa rõ kết quả từ phiên trước. Vui lòng kiểm tra lại từ máy chủ.
         </ReadOnlyNotice>
@@ -303,7 +343,13 @@ export default function AcceptedPartsScreen() {
       {hasActivePreRepair && (
         <ReadOnlyNotice tone="warning">
           Đơn hàng này đã có một yêu cầu linh kiện dự kiến đang hoạt động. Bạn không thể tạo thêm yêu cầu mới.
+          {canModifyPreRepair ? ' Cần thêm món? Hủy yêu cầu này và gửi lại kèm các món đã chọn.' : ''}
         </ReadOnlyNotice>
+      )}
+      {hasActivePreRepair && canModifyPreRepair && (
+        <TouchableOpacity testID="pre-parts-reorder" accessibilityRole="button" accessibilityState={{ disabled: frozen || !!reorder }} disabled={frozen || !!reorder} style={styles.reorderBtn} onPress={onReorder}>
+          <PillText style={styles.reorderText}>Đặt lại &amp; thêm linh kiện</PillText>
+        </TouchableOpacity>
       )}
 
       {state.error && <ReadOnlyNotice tone="error">{state.error}</ReadOnlyNotice>}
@@ -432,6 +478,8 @@ export default function AcceptedPartsScreen() {
 }
 
 const styles = StyleSheet.create({
+  reorderBtn: { minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md },
+  reorderText: { color: colors.primaryStrong, fontWeight: '700', fontSize: 15 },
   card: {
     backgroundColor: colors.surface,
     borderRadius: 14,

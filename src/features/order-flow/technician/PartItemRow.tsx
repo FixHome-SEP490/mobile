@@ -51,12 +51,14 @@ function ActionButton({ testID, label, primary, disabled, onPress }: { testID: s
  * given back). With one (the quantities FixHome issued) they record the exact used quantity, e.g. issued 3,
  * used 1, return 2, and declare what they hand back; the Service Manager confirms at the counter.
  */
-export function PartItemRow({ item, received, canMarkUsage, frozen, record, busy, quotedQty, maxUsed, onWhole, onSaveUsed, onDeclare }: {
+export function PartItemRow({ item, received, canMarkUsage, frozen, record, busy, quotedQty, maxUsed, wholeOnly, onWhole, onSaveUsed, onDeclare }: {
   item: Item; received: boolean; canMarkUsage: boolean; frozen: boolean; record?: PartCustodyReturnRecord; busy: boolean;
   /** Quantity of this SKU on the approved quotation; undefined when there is no approved quotation line for it. */
   quotedQty?: number;
   /** Approved quotation quantity left for this SKU; the Backend rejects more. Undefined when not limited or not known. */
   maxUsed?: number;
+  /** Home delivery: the Backend only records the whole quantity as used and does not accept a return, so show a single "Đã dùng" action. */
+  wholeOnly?: boolean;
   onWhole: (status: 'used' | 'returned') => void;
   onSaveUsed: (quantity: number) => Promise<boolean>;
   onDeclare: (quantity: number) => Promise<boolean>;
@@ -101,14 +103,14 @@ export function PartItemRow({ item, received, canMarkUsage, frozen, record, busy
       <Text style={styles.meta}>
         {record
           ? [quotedQty === undefined ? null : `Báo giá duyệt ${quotedQty}`, `Số lượng ${record.issuedQty}`, record.usageRecorded ? `Đã dùng ${record.usedQty}` : null, record.usageRecorded && record.outstandingQty > 0 ? `Còn phải trả ${record.outstandingQty}` : null].filter(Boolean).join(' · ')
-          : [quotedQty === undefined ? null : `Báo giá duyệt ${quotedQty}`, `Số lượng ${item.quantity}`].filter(Boolean).join(' · ')}
+          : [quotedQty === undefined ? null : `Báo giá duyệt ${quotedQty}`, `Số lượng ${item.quantity}`, wholeOnly && item.usageStatus === 'used' ? `Đã dùng ${item.quantity}` : null].filter(Boolean).join(' · ')}
       </Text>
       {note ? <Text style={[styles.meta, { color: colors.tone[note.tone].text }]}>{note.text}</Text> : null}
 
       {received && canMarkUsage && !record && (
         <View style={styles.actions}>
           <ActionButton testID={`parts-usage-used-${item.id}`} label="Đã dùng" primary={item.usageStatus === 'used'} disabled={locked || item.usageStatus === 'used'} onPress={() => onWhole('used')} />
-          <ActionButton testID={`parts-usage-returned-${item.id}`} label="Hoàn trả" primary={item.usageStatus === 'returned'} disabled={locked || item.usageStatus === 'returned'} onPress={() => onWhole('returned')} />
+          {!wholeOnly && <ActionButton testID={`parts-usage-returned-${item.id}`} label="Hoàn trả" primary={item.usageStatus === 'returned'} disabled={locked || item.usageStatus === 'returned'} onPress={() => onWhole('returned')} />}
         </View>
       )}
 
