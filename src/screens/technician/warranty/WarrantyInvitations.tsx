@@ -30,7 +30,9 @@ export function WarrantyInvitationCard({ claim, onOpen }: { claim: TechnicianWar
 /** The "Lời mời bảo hành" part of the Invitations tab. Nothing is drawn while there is no claim to take. */
 export function WarrantyInvitations() {
   const navigation = useNavigation<any>();
-  const { items, total, loading } = useWarrantyClaims('submitted');
+  const { items, total, loading, load } = useWarrantyClaims('submitted');
+  // Back from the claim (just accepted): read again, the cached page still lists it.
+  useEffect(() => navigation.addListener?.('focus', () => { void load(); }), [navigation, load]);
   const setWarranty = useBadgeStore((state) => state.setPendingWarranty);
   useEffect(() => { if (!loading) setWarranty(total); }, [loading, total, setWarranty]);
   if (loading || !items.length) return null;

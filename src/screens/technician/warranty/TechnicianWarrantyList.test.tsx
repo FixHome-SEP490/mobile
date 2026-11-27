@@ -7,7 +7,21 @@ import { technicianWarrantyApi } from '../../../api/technician-warranty.api';
 import { useBadgeStore } from '../../../store/badge.store';
 
 const mockNavigate = jest.fn();
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: mockNavigate }) }));
+let mockFocusListeners: (() => void)[] = [];
+const emitFocus = async () => {
+  await act(async () => {
+    for (const listener of [...mockFocusListeners]) listener();
+  });
+};
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({
+    navigate: mockNavigate,
+    addListener: (event: string, listener: () => void) => {
+      if (event === 'focus') mockFocusListeners.push(listener);
+      return () => { mockFocusListeners = mockFocusListeners.filter(fn => fn !== listener); };
+    },
+  }),
+}));
 jest.mock('../../../hooks/useLiveRefresh', () => ({ useLiveRefresh: jest.fn() }));
 jest.mock('../../../api/technician-warranty.api', () => ({ technicianWarrantyApi: { listMine: jest.fn() } }));
 const listMine = technicianWarrantyApi.listMine as unknown as jest.Mock;
@@ -22,7 +36,7 @@ const mount = async (element: React.ReactElement) => { let r!: ReturnType<typeof
 const texts = (r: ReturnType<typeof create>) => r.root.findAllByType(Text).map(t => String(Array.isArray(t.props.children) ? t.props.children.join('') : t.props.children));
 const pressByTestId = async (r: ReturnType<typeof create>, id: string) => { const node = r.root.findAll(n => n.props.testID === id && typeof n.props.onPress === 'function')[0]; await act(async () => { await node.props.onPress(); }); };
 
-beforeEach(() => { listMine.mockReset(); mockNavigate.mockReset(); useBadgeStore.setState({ pendingWarranty: 0 }); });
+beforeEach(() => { listMine.mockReset(); mockNavigate.mockReset(); mockFocusListeners = []; useBadgeStore.setState({ pendingWarranty: 0 }); });
 
 describe('TechnicianWarrantyList', () => {
   it('lists the claims with what, who, where and what the customer said, and the next step', async () => {
@@ -67,6 +81,20 @@ describe('TechnicianWarrantyList', () => {
     const failed = await mount(<TechnicianWarrantyList />);
     expect(texts(failed).join('|')).toContain('Không thể tải danh sách bảo hành');
   });
+
+  it('re-reads the list when the screen gains focus again', async () => {
+    listMine
+      .mockResolvedValueOnce(page([claim('a', 'submitted')]))
+      .mockResolvedValueOnce(page([claim('a', 'accepted')]));
+    const r = await mount(<TechnicianWarrantyList />);
+    expect(texts(r).join('|')).toContain('Chờ bạn nhận');
+
+    await emitFocus();
+    const after = texts(r).join('|');
+    expect(after).toContain('Bạn đã nhận');
+    expect(after).not.toContain('Chờ bạn nhận');
+    expect(listMine).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('WarrantyInvitations', () => {
@@ -90,5 +118,19 @@ describe('WarrantyInvitations', () => {
     const r = await mount(<WarrantyInvitations />);
     expect(r.toJSON()).toBeNull();
     expect(useBadgeStore.getState().pendingWarranty).toBe(0);
+  });
+
+  it('re-reads when focused again so accepted claims disappear and badge clears', async () => {
+    listMine
+      .mockResolvedValueOnce(page([claim('a', 'submitted')]))
+      .mockResolvedValueOnce(page([]));
+    const r = await mount(<WarrantyInvitations />);
+    expect(texts(r).join('|')).toContain('Lời mời bảo hành (1)');
+    expect(useBadgeStore.getState().pendingWarranty).toBe(1);
+
+    await emitFocus();
+    expect(r.toJSON()).toBeNull();
+    expect(useBadgeStore.getState().pendingWarranty).toBe(0);
+    expect(listMine).toHaveBeenCalledTimes(2);
   });
 });

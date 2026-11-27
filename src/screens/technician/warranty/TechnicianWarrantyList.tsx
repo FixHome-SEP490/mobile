@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -42,6 +42,8 @@ export function WarrantyClaimRow({ claim, onOpen }: { claim: TechnicianWarrantyC
 export function TechnicianWarrantyList({ search = '' }: { search?: string }) {
   const navigation = useNavigation<any>();
   const { items, loading, refreshing, loadingMore, error, load, refresh, loadMore } = useWarrantyClaims();
+  // Back from a claim (accepted, inspected, completed): read again, the cached page still shows the old state.
+  useEffect(() => navigation.addListener?.('focus', () => { void load(); }), [navigation, load]);
   const [filter, setFilter] = useState<WarrantyFilter>('all');
   const counts = useMemo(() => filterCounts(items), [items]);
   const needle = search.trim().toLowerCase();
