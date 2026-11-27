@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-26 22:01 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: fix/call-history-chat-media-viewer
+> Cập nhật lần cuối: 2026-11-27 01:41 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -459,6 +459,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-27 01:41 (UTC+7) | Hgnv11 | dev | Chi tiết lượt sửa nhiều máy ẩn nút Đặt lịch mới và Đặt lại cho máy đã đặt lại (cờ rebooked của checkout, cần backend mới) và hiện nút Đã đặt lịch mới · Xem tới lượt/đơn mới (rebookedTo); màn đặt lại gặp 403 báo máy đã được đặt lịch mới thay vì lỗi tải dữ liệu; chưa xử lý đơn lẻ đã huỷ (useRebookAction vẫn hiện nút sau khi đặt lại). Luồng linh kiện của thợ khớp web hơn: Đặt lại & thêm linh kiện ở màn Chuẩn bị linh kiện (hủy phiếu chờ chuẩn bị rồi nạp lại các món), nút Dừng yêu cầu kho, tự chuẩn bị khi kho hết hàng, ghi chú giao tận nơi cho phiếu không phải phát sinh, banner nói rõ chờ quản lý bàn giao rồi mới nhập mã/QR; chưa làm gom nhóm Cần thao tác/Đang chờ/Đã xử lý và chưa quyết hủy tự do; CHƯA KIỂM CHỨNG trên thiết bị
 - 2026-11-26 22:01 (UTC+7) | Hgnv11 | fix/call-history-chat-media-viewer | Làm lại giao diện màn Báo cáo vấn đề sửa chữa của thợ: bỏ các thẻ đánh số bước; thẻ Máy báo cáo (kèm chọn máy khác trong lượt), công tắc Dừng công việc / Nhờ hỗ trợ có ghi chú hậu quả, lý do xếp một cột theo nhóm Về công việc / Về khách hàng, danh sách 3 điều kiện liên hệ khách tự tick, thẻ Chi tiết gộp mô tả và ảnh, ô xác nhận màu đỏ, nút Dừng màu đỏ (TaskAction.destructive), thẻ kết quả có mục Tiếp theo. Logic và testID giữ nguyên. Chưa kiểm trên máy thật
 - 2026-11-26 21:51 (UTC+7) | Hgnv11 | fix/call-history-chat-media-viewer | Đơn thợ đã dừng công việc: khách không còn bị đưa vào màn duyệt báo giá hoặc phát sinh (vào màn Đã dừng công việc kèm khối Bạn không cần làm gì, báo giá cũ chỉ để xem, 3 bước tiếp theo); màn lượt không còn nút duyệt báo giá cho máy đã dừng và có nút Đặt lịch mới cho từng máy hoặc cả các máy đã dừng (CustomerInterruptionRebook nhận sourceBookingIds, gọi interruption-draft?sourceBookingIds); thợ sau khi dừng thấy Đã dừng công việc và nút Xem linh kiện cần trả, bản tóm tắt lịch sử giữ workStopped, thẻ thành công ở màn báo cáo không biến mất sau khi làm mới. Rủi ro: báo giá và phát sinh vẫn SENT/chờ duyệt trong DB sau khi dừng (backend không có trạng thái đóng), đối soát tiền và linh kiện chưa có thao tác ghi. Chưa kiểm trên máy thật
 - 2026-11-26 21:33 (UTC+7) | Hgnv11 | fix/call-history-chat-media-viewer | Báo cáo vấn đề sửa chữa của thợ: lượt nhiều máy có bước Máy báo cáo (chọn máy khác thì mở báo cáo ở tab máy đó, như web); lỗi nhập thiếu và lỗi máy chủ hiện ngay trên nút gửi thay vì cuối trang nên bấm gửi không còn im lặng. Chưa kiểm trên máy thật (cách chuyển tab và quay lại chưa chạy trên thiết bị)
@@ -498,7 +499,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-11-22 01:21 (UTC+7) | Hgnv11 | dev | Khách xem kết quả kiểm tra và xử lý của thợ ở chi tiết yêu cầu bảo hành
 - 2026-11-22 01:14 (UTC+7) | Hgnv11 | dev | Màn chi tiết bảo hành của thợ bỏ nút Làm mới, cập nhật realtime theo đơn
 - 2026-11-22 01:11 (UTC+7) | Hgnv11 | dev | Màn chi tiết bảo hành của thợ thêm nút "Về trang chủ" khi không còn thao tác nào
-- 2026-11-22 01:09 (UTC+7) | Hgnv11 | dev | Dòng "Công việc bảo hành" ở đơn đã hoàn tất của thợ mở thẳng yêu cầu bảo hành của đơn thay vì danh sách
 
 
 ### Lịch sử giữ lại khi tích hợp

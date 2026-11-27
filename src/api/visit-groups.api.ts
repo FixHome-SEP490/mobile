@@ -116,6 +116,10 @@ export interface VisitCheckout {
     invoiceId: string | null;
     amount: number;
     paid: boolean;
+    /** A stopped device that was already booked again: no second rebook is offered. */
+    rebooked?: boolean;
+    /** The new visit (several devices booked together) or the single new booking. */
+    rebookedTo?: { bookingId: string; visitGroupId: string | null };
   }[];
   total: number;
   waiting: number;

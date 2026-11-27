@@ -62,7 +62,10 @@ export default function CustomerFailedRepairRebookScreen() {
       setDraft(parsed);
     } catch (err) {
       setDraft(null);
-      setLoadError(extractApiErrorMessage(err, 'Chưa tải được dữ liệu đặt lại. Vui lòng thử lại.'));
+      const status = (err as { response?: { status?: number } } | null)?.response?.status;
+      setLoadError(status === 403
+        ? 'Máy này đã được đặt lịch mới hoặc không còn đặt lại được. Hãy xem trong Hoạt động.'
+        : extractApiErrorMessage(err, 'Chưa tải được dữ liệu đặt lại. Vui lòng thử lại.'));
     } finally {
       setLoading(false);
     }

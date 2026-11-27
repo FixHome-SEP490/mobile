@@ -157,9 +157,9 @@ export default function CustomerVisitScreen() {
   const scope = { kind: 'VISIT_GROUP' as const, id: visitGroupId };
   const priorityQuote = devices.map((item) => ({ item, orderId: quoteOrderBySequence[item.sequence] })).find((entry) => entry.orderId);
 
-  const failedIds = failedBookingIds(devices, checkout?.devices);
+  const failedIds = failedBookingIds(devices, checkout?.devices.filter((d) => !d.rebooked));
   // Stopped on site: the customer books them again, each alone or all together (the stop notification promises this).
-  const stoppedIds = failedBookingIds(devices, checkout?.devices, 'interrupted');
+  const stoppedIds = failedBookingIds(devices, checkout?.devices.filter((d) => !d.rebooked), 'interrupted');
   const deviceOf = (bookingId: string | undefined) => checkout?.devices.find((d) => d.bookingId === bookingId) ?? null;
   const statusOf = (item: Visit['items'][number]) => {
     const device = deviceOf(item.booking?.id);
@@ -379,7 +379,7 @@ export default function CustomerVisitScreen() {
                     {truncated[item.id] && <Text style={[styles.link, { color: colors.primaryStrong }]}>{open ? 'Thu gọn' : 'Xem mô tả'}</Text>}
                   </TouchableOpacity>
                 )}
-                {device?.state === 'failed' && !!item.booking?.id && (
+                {device?.state === 'failed' && !device.rebooked && !!item.booking?.id && (
                   <TouchableOpacity
                     style={styles.primaryBtn}
                     onPress={() => navigation.navigate('CustomerFailedRepairRebook', { sourceBookingIds: [item.booking!.id] })}
@@ -389,7 +389,7 @@ export default function CustomerVisitScreen() {
                     <Text style={styles.primaryText}>Đặt lại máy này</Text>
                   </TouchableOpacity>
                 )}
-                {device?.state === 'interrupted' && !!item.booking?.id && (
+                {device?.state === 'interrupted' && !device.rebooked && !!item.booking?.id && (
                   <TouchableOpacity
                     style={styles.primaryBtn}
                     onPress={() => navigation.navigate('CustomerInterruptionRebook', { bookingId: item.booking!.id, sourceBookingIds: [item.booking!.id] })}
@@ -397,6 +397,18 @@ export default function CustomerVisitScreen() {
                     testID={`visit-rebook-stopped-${item.sequence}`}
                   >
                     <Text style={styles.primaryText}>Đặt lịch mới cho máy này</Text>
+                  </TouchableOpacity>
+                )}
+                {!!device?.rebookedTo && (
+                  <TouchableOpacity
+                    style={styles.secondaryBtn}
+                    onPress={() => (device.rebookedTo!.visitGroupId
+                      ? navigation.push('CustomerVisit', { visitGroupId: device.rebookedTo!.visitGroupId })
+                      : navigation.navigate('CustomerMatching', { bookingId: device.rebookedTo!.bookingId }))}
+                    accessibilityRole="button"
+                    testID={`visit-rebooked-${item.sequence}`}
+                  >
+                    <Text style={styles.secondaryText}>Đã đặt lịch mới · Xem</Text>
                   </TouchableOpacity>
                 )}
                 {!!device?.serviceOrderId && !!quoteOrderBySequence[item.sequence] && (
