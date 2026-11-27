@@ -175,3 +175,7 @@ export function orderWarrantyRoute(orderId: string) {
     ? ({ name: 'OrderFlowDevPreview', params: { serviceOrderId: orderId, screen: 'CustomerWarranty' } } as const)
     : ({ name: 'CustomerWarranties', params: { orderId } } as const);
 }
+
+export const inspectionResultLabel: Record<string, string> = { covered_workmanship: 'Được bảo hành: lỗi do công sửa chữa', covered_part: 'Được bảo hành: lỗi do linh kiện đã thay', not_covered: 'Không được bảo hành' };
+export const notCoveredReasonLabel: Record<string, string> = { customer_misuse: 'Khách sử dụng sai cách', normal_wear: 'Hao mòn thông thường', other_component: 'Lỗi ở bộ phận khác, không phải linh kiện đã thay', not_workmanship_related: 'Không liên quan phần việc đã làm', expired: 'Đã hết hạn bảo hành', cannot_reproduce: 'Không tái hiện được lỗi', customer_unavailable: 'Khách vắng mặt hoặc không cho kiểm tra', third_party_repair: 'Người khác đã sửa hoặc vệ sinh sau đó', force_majeure: 'Thiên tai, cháy nổ, sét đánh', transport_damage: 'Hỏng khi vận chuyển', other: 'Lý do khác' };
+export const outcomeLabel: Record<string, string> = { fixed: 'Đã khắc phục', unfixed: 'Không khắc phục được, đã hoàn tiền', rejected: 'Không được bảo hành' };

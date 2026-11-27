@@ -796,10 +796,6 @@ export const ordersApi = {
     return get<WarrantyCoverageItem[]>(`/service-orders/${id}/warranties`);
   },
 
-  async getWarranties(id: string): Promise<WarrantyCoverageItem[]> {
-    return this.getOrderWarranties(id);
-  },
-
   async getOrderWarrantyClaims(id: string): Promise<WarrantyClaimView[]> {
     return get<WarrantyClaimView[]>(`/service-orders/${id}/warranty-claims`);
   },

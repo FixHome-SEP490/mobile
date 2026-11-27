@@ -7,6 +7,10 @@ import { technicianWarrantyApi } from '../../../api/technician-warranty.api';
 import { partRequestsApi } from '../../../api/part-requests.api';
 
 jest.mock('../../../api/technician-warranty.api', () => ({ technicianWarrantyApi: { returnFaultyPart: jest.fn().mockResolvedValue(undefined) } }));
+jest.mock('../../../api/orders.api', () => ({ ordersApi: { getOrderWarranties: jest.fn().mockResolvedValue([
+  { id: 'cov-labor', itemType: 'labor', itemDescription: 'Thay tụ', warrantyDaysSnapshot: 30, startsAt: '2099-01-01T00:00:00.000Z', expiresAt: '2099-01-31T00:00:00.000Z', status: 'active' },
+  { id: 'cov-part', itemType: 'parts_equipment', itemDescription: 'Block máy lạnh', warrantyDaysSnapshot: 180, startsAt: '2099-01-01T00:00:00.000Z', expiresAt: '2099-06-30T00:00:00.000Z', status: 'active' },
+]) } }));
 jest.mock('../../../api/part-requests.api', () => ({ partRequestsApi: { updateItemUsage: jest.fn().mockResolvedValue({}) } }));
 
 const mockLive: any = { refresh: null, matches: null };
@@ -109,7 +113,7 @@ it('names the faulty part lines for a part fault and keeps the proposal disabled
   mockState.claim.data.order.partLines = [{ id: '11111111-1111-4111-8111-111111111111', name: 'Tụ khởi động', quantity: 2, partSource: 'fixhome' }];
   let renderer!: ReturnType<typeof create>;
   await act(async () => { renderer = create(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><TechnicianWarrantyTaskScreen /></SafeAreaProvider>); });
-  const pickPart = renderer.root.findAll(node => node.props.accessibilityRole === 'radio' && node.findAllByType(Text).some(text => String(text.props.children).includes('Bảo hành linh kiện')))[0];
+  const pickPart = renderer.root.findAll(node => node.props.accessibilityRole === 'radio' && node.findAllByType(Text).some(text => String(text.props.children).includes('lỗi do linh kiện')))[0];
   act(() => pickPart.props.onPress());
   expect(renderer.root.findAllByType(Text).some(text => String(text.props.children).includes('Linh kiện nào bị hỏng?'))).toBe(true);
   expect(renderer.root.findAllByType(Text).some(text => String(text.props.children).includes('Tụ khởi động'))).toBe(true);
@@ -162,5 +166,15 @@ it('follows the server live instead of offering a refresh button, and stays out 
   mockController.refreshClaim.mockClear();
   mockLive.refresh({ events: [], kinds: ['warranty'], resync: false });
   expect(mockController.refreshClaim).not.toHaveBeenCalled();
+  await act(async () => renderer.unmount());
+});
+
+it('shows the warranty term of the labour and of each part, not only the claimed one', async () => {
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><TechnicianWarrantyTaskScreen /></SafeAreaProvider>); });
+  const texts = renderer.root.findAllByType(Text).map(text => [text.props.children].flat().join(''));
+  expect(texts.some(t => t.includes('Công sửa · Thay tụ'))).toBe(true);
+  expect(texts.some(t => t.includes('Linh kiện · Block máy lạnh'))).toBe(true);
+  expect(texts.some(t => t.includes('30 ngày')) && texts.some(t => t.includes('180 ngày'))).toBe(true);
   await act(async () => renderer.unmount());
 });

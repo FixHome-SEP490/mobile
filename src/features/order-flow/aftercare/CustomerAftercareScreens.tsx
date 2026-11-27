@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { warrantyCustomerPromptCopy } from '../../../screens/customer/customer-warranty';
+import { inspectionResultLabel, notCoveredReasonLabel, outcomeLabel, warrantyClaimDisplayMeta, warrantyCustomerPromptCopy } from '../../../screens/customer/customer-warranty';
 import { Image, Pressable, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -25,7 +25,7 @@ const nextStep: Record<string, string> = {
   resolved: 'Yêu cầu bảo hành đã hoàn tất.',
   rejected: 'Yêu cầu không được bảo hành. Xem phản hồi bên dưới.',
 };
-const claimLabel: Record<string, string> = { submitted: 'Đã gửi yêu cầu', accepted: 'Đã tiếp nhận', inspected: 'Đang chờ kết quả kiểm tra', in_progress: 'Đang xử lý bảo hành', awaiting_customer: 'Chờ bạn phản hồi', disputed: 'Đang chờ quản lý dịch vụ', resolved: 'Đã xử lý', rejected: 'Đã từ chối' };
+const claimLabel = (claim: { status: string; customerResponse?: 'agreed' | 'disputed' | null }) => warrantyClaimDisplayMeta(claim as never).label;
 const field = { minHeight: 52, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: spacing.md, color: colors.text, backgroundColor: colors.surface, textAlignVertical: 'top' as const };
 function Status({ children }: { children: React.ReactNode }) { return <ReadOnlyNotice>{children}</ReadOnlyNotice>; }
 function Loading({ children = 'Đang tải dữ liệu…' }: { children?: string }) { return <Status>{children}</Status>; }
@@ -100,7 +100,7 @@ export function CustomerWarrantyScreen() {
     {claims.filter(isOpen).map((item: any) => {
       const waiting = item.status === 'awaiting_customer' && !item.customerResponse;
       return <Section key={item.id} title={waiting ? 'Cần bạn phản hồi' : 'Yêu cầu bảo hành đang xử lý'}>
-        <DetailRow label="Tình trạng" value={claimLabel[String(item.status).toLowerCase()] || 'Chưa xác định'} />
+        <DetailRow label="Tình trạng" value={claimLabel(item)} />
         <DetailRow label="Gửi ngày" value={vnDateTimeString(item.submittedAt)} />
         <View style={{ paddingVertical: 12 }}><Pressable accessibilityRole="button" accessibilityLabel={waiting ? 'Xem và phản hồi yêu cầu bảo hành' : 'Xem yêu cầu bảo hành'} onPress={() => navigation.navigate('CustomerWarrantyClaim', { claimId: item.id })} style={link}><Text style={linkText}>{waiting ? 'Xem và phản hồi ›' : 'Xem yêu cầu ›'}</Text></Pressable></View>
       </Section>;
@@ -126,7 +126,7 @@ export function CustomerWarrantyScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: done ? '#E7F6EC' : '#F1F3F6' }}>
                 <Ionicons name={done ? 'checkmark-circle' : 'close-circle'} size={14} color={tone} />
-                <Text style={{ color: tone, fontSize: 12, fontWeight: '700' }}>{claimLabel[String(item.status).toLowerCase()] || 'Chưa xác định'}</Text>
+                <Text style={{ color: tone, fontSize: 12, fontWeight: '700' }}>{claimLabel(item)}</Text>
               </View>
               <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{vnDateTimeString(item.submittedAt)}</Text>
             </View>
@@ -162,7 +162,7 @@ function WarrantyClaimCreateForCoverage({ coverageId }: { coverageId?: string })
   }, [navigation, state.phase, state.claims, coverageId]);
   return <TaskScreenShell hideVisitPanel title="Tạo yêu cầu bảo hành" onBack={() => { controller.cancelConfirmation(); navigation.goBack(); }} primary={confirmed ? { label: busy ? 'Đang gửi…' : 'Xác nhận gửi yêu cầu', disabled: busy || state.phase !== 'confirming', onPress: () => void controller.submitConfirmation() } : { label: busy ? 'Đang kiểm tra…' : 'Kiểm tra yêu cầu', disabled: locked || state.phase !== 'idle' || !can || description.trim().length < 10 || !!validateDescriptionText(description.trim()), accessibilityHint: !can ? 'Chưa xác minh phạm vi bảo hành hoặc không đủ điều kiện' : 'Kiểm tra điều kiện trước khi gửi', onPress: () => coverageId && void controller.prepareClaim({ warrantyCoverageId: coverageId, description: description.trim(), ...(photos.length ? { evidenceRefs: photos } : {}) }) }} secondary={{ label: confirmed ? 'Sửa nội dung' : 'Quay lại', disabled: busy, onPress: () => { if (confirmed) controller.cancelConfirmation(); else { controller.cancelConfirmation(); navigation.goBack(); } } }}>
     {!coverage ? <Loading>Đang xác minh phạm vi bảo hành…</Loading> : <>
-      {order ? <DetailRow label="Đơn sửa chữa" value={`#${order.code} · ${order.serviceName}`} /> : null}
+      {order ? <Section title="Đơn sửa chữa"><DetailRow label="Mã đơn" value={`#${order.code} · ${order.serviceName}`} /></Section> : null}
       <Section title="Được bảo hành">
         {covered.slice(0, 3).map((item: any) => <View key={item.id} style={{ paddingVertical: 10, gap: 2, borderBottomWidth: 0.5, borderBottomColor: colors.border }}>
           <Text style={{ ...label, fontWeight: '700' }}>{item.itemDescription || item.note || 'Bảo hành của đơn'}</Text>
@@ -188,9 +188,6 @@ export function CustomerWarrantyClaimScreen() {
   return <CustomerWarrantyClaimForId key={claimId ?? 'missing'} claimId={claimId} />;
 }
 
-const inspectionResultLabel: Record<string, string> = { covered_workmanship: 'Được bảo hành: lỗi do công sửa chữa', covered_part: 'Được bảo hành: lỗi do linh kiện đã thay', not_covered: 'Không được bảo hành' };
-const notCoveredReasonLabel: Record<string, string> = { customer_misuse: 'Khách sử dụng sai cách', normal_wear: 'Hao mòn thông thường', other_component: 'Lỗi ở bộ phận khác, không phải linh kiện đã thay', not_workmanship_related: 'Không liên quan phần việc đã làm', expired: 'Đã hết hạn bảo hành', cannot_reproduce: 'Không tái hiện được lỗi', customer_unavailable: 'Khách vắng mặt hoặc không cho kiểm tra', third_party_repair: 'Người khác đã sửa hoặc vệ sinh sau đó', force_majeure: 'Thiên tai, cháy nổ, sét đánh', transport_damage: 'Hỏng khi vận chuyển', other: 'Lý do khác' };
-const outcomeLabel: Record<string, string> = { fixed: 'Đã khắc phục', unfixed: 'Không khắc phục được, đã hoàn tiền', rejected: 'Không được bảo hành' };
 function Photos({ urls, name }: { urls: string[] | null; name: string }) {
   return urls?.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 8 }}>
     {urls.map((url, index) => <Image key={url} source={{ uri: url }} accessibilityIgnoresInvertColors accessibilityLabel={`${name} ${index + 1}`} style={{ width: 72, height: 72, borderRadius: 10 }} />)}
@@ -224,8 +221,9 @@ function CustomerWarrantyClaimForId({ claimId }: { claimId?: string }) {
   const copy = warrantyCustomerPromptCopy(claim ?? ({} as any));
   return <TaskScreenShell hideVisitPanel title="Yêu cầu bảo hành" onBack={() => { controller.cancelConfirmation(); navigation.goBack(); }} primary={confirmed ? { label: busy ? 'Đang gửi…' : 'Xác nhận phản hồi', disabled: busy || state.phase !== 'confirming', onPress: () => void controller.submitConfirmation() } : claim?.status === 'awaiting_customer' && !claim.customerResponse && can ? { label: 'Gửi phản hồi', disabled: locked || !choice || (choice === 'dispute' && note.trim().length < 10), onPress: () => choice && prepare(choice) } : undefined} secondary={{ label: confirmed ? 'Sửa nội dung' : 'Quay lại', disabled: busy, onPress: () => { if (confirmed) { controller.cancelConfirmation(); setDecision(null); } else { controller.cancelConfirmation(); navigation.goBack(); } } }}>
     {!claim ? state.claims.status === 'error' ? <Status>Không tải được yêu cầu bảo hành. Hãy quay lại và mở lại chi tiết.</Status> : <Loading>Đang tải yêu cầu bảo hành…</Loading> : <>
+      <Section title="Thông tin yêu cầu">
       {order ? <DetailRow label="Đơn sửa chữa" value={`#${order.code} · ${order.serviceName}`} /> : null}
-      <DetailRow label="Tình trạng" value={claimLabel[String(claim.status).toLowerCase()] || 'Chưa xác định'} />
+      <DetailRow label="Tình trạng" value={claimLabel(claim)} />
       {claim.technician?.fullName ? <DetailRow label="Kỹ thuật viên" value={claim.technician.fullName} /> : null}
       <DetailRow label="Gửi ngày" value={vnDateTimeString(claim.submittedAt)} />
       {claim.inspectionScheduledAt ? <DetailRow label="Lịch kiểm tra" value={vnDateTimeString(claim.inspectionScheduledAt)} /> : null}
@@ -235,16 +233,19 @@ function CustomerWarrantyClaimForId({ claimId }: { claimId?: string }) {
       {claim.evidenceRefs?.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 8 }}>
         {claim.evidenceRefs.map((url: string, index: number) => <Image key={url} source={{ uri: url }} accessibilityIgnoresInvertColors accessibilityLabel={`Ảnh đính kèm ${index + 1}`} style={{ width: 72, height: 72, borderRadius: 10 }} />)}
       </View> : null}
+      </Section>
       <InspectionResult claim={claim} />
-      {claim.status === 'awaiting_customer' || claim.customerResponse ? <DetailRow label="Phản hồi của bạn" value={claim.customerResponse === 'agreed' ? 'Đã đồng ý' : claim.customerResponse === 'disputed' ? 'Đã gửi phản hồi vấn đề' : 'Chưa phản hồi'} /> : null}
-      {claim.submittedAfterExpiry ? <Status>Yêu cầu được gửi sau khi phạm vi bảo hành hết hạn. Máy chủ quyết định việc tiếp nhận và xử lý.</Status> : null}
-      {claim.status === 'awaiting_customer' && claim.customerResponse ? <Status>{claim.customerResponse === 'agreed' ? copy.agreed : 'Phản hồi của bạn đã được gửi. FixHome sẽ xem xét và liên hệ lại.'}</Status> : claim.status === 'awaiting_customer' ? <>
+      {claim.status === 'awaiting_customer' || claim.customerResponse ? <Section title="Phản hồi của bạn"><DetailRow label="Trạng thái" value={claim.customerResponse === 'agreed' ? 'Đã đồng ý' : claim.customerResponse === 'disputed' ? 'Đã gửi phản hồi vấn đề' : 'Chưa phản hồi'} /></Section> : null}
+      {claim.submittedAfterExpiry ? <Status>Yêu cầu được gửi sau khi phạm vi bảo hành hết hạn. Quản lý dịch vụ sẽ quyết định việc tiếp nhận và xử lý.</Status> : null}
+      {claim.status === 'awaiting_customer' && claim.customerResponse ? <Status>{claim.customerResponse === 'agreed' ? copy.agreed : 'Phản hồi của bạn đã được gửi. Quản lý dịch vụ sẽ xem xét và liên hệ lại.'}</Status> : claim.status === 'awaiting_customer' ? <Section title="Bạn có đồng ý với kết quả?">
+        <View style={{ gap: spacing.sm, paddingVertical: spacing.md }}>
         <Text style={{ ...label, fontWeight: '700' }}>{copy.question}</Text>
         {!can ? <Status>Phản hồi hiện chưa được phép gửi.</Status> : <View style={{ flexDirection: 'row', gap: 8 }}>
           {(['agree', 'dispute'] as const).map(value => <Pressable key={value} accessibilityRole="radio" accessibilityState={{ checked: choice === value, disabled: locked }} disabled={locked} onPress={() => setChoice(value)} style={[link, { flex: 1, alignItems: 'center' }, choice === value && { borderColor: colors.primaryStrong, borderWidth: 2 }]}><Text style={linkText}>{value === 'agree' ? copy.agree : copy.dispute}</Text></Pressable>)}
         </View>}
         {choice === 'dispute' ? <><Text style={label}>{copy.reason} (ít nhất 10 ký tự)</Text><TextInput accessibilityLabel="Ghi chú phản hồi" value={note} editable={!locked} onChangeText={setNote} multiline maxLength={2000} style={[field, { minHeight: 100 }]} /></> : null}
-      </> : <Status>{nextStep[String(claim.status).toLowerCase()] ?? 'Yêu cầu đang được xử lý.'}</Status>}
+        </View>
+      </Section> : <Status>{nextStep[String(claim.status).toLowerCase()] ?? 'Yêu cầu đang được xử lý.'}</Status>}
       {confirmed ? <Status>{decision === 'agree' ? copy.agree : copy.dispute}. Bấm Xác nhận phản hồi để gửi.</Status> : null}
     </>}
     {state.message ? <Status>{state.message}</Status> : null}

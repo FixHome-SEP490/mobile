@@ -10,10 +10,12 @@ import { partRequestsApi } from '../../../api/part-requests.api';
 import { WarrantyPhotos } from '../aftercare/WarrantyPhotos';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
-import { vnDateTimeString } from '../../../utils/vn-time';
+import { vnDateString, vnDateTimeString } from '../../../utils/vn-time';
 import BookingSessionPicker from '../../../components/BookingSessionPicker';
 import { scheduleSummary, sessionWindow, type BookingSchedule } from '../../../utils/booking-session';
 import { formatVnd } from '../../../utils/format';
+import { inspectionResultLabel, outcomeLabel, warrantyCoverageLabel } from '../../../screens/customer/customer-warranty';
+import { ordersApi, type WarrantyCoverageItem } from '../../../api/orders.api';
 import { findChatForBooking } from '../../../screens/technician/technician-chat-shortcut';
 import { backFromFlow } from '../navigation/resume-order';
 import { goHome } from '../../../components/BackButton';
@@ -62,11 +64,20 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
   // (every command stays disabled until the claim is verified again), instead of blanking the whole task while it reloads.
   const fresh = state.claim.status === 'ready' ? state.claim.data : null;
   useEffect(() => { if (fresh) lastTechClaim = fresh; }, [fresh]);
+  // Labour and each part have their own term; the claim only names the one being claimed.
+  const orderId = fresh?.order.id;
+  const [coverages, setCoverages] = useState<WarrantyCoverageItem[]>([]);
+  useEffect(() => {
+    if (!orderId) return;
+    let alive = true;
+    ordersApi.getOrderWarranties(orderId).then(rows => { if (alive) setCoverages(Array.isArray(rows) ? rows : []); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [orderId]);
   const revalidating = !fresh && ['loading', 'unloaded'].includes(state.claim.status) && lastTechClaim?.id === claimId;
   const claim = fresh ?? (revalidating ? lastTechClaim : null);
   const task = state.task ?? (claim ? technicianWarrantyTask(claim) : null);
   const commands = controller.availableCommands();
-  const [slot, setSlot] = useState<string | null>(null); const [moving, setMoving] = useState(false); const [moveError, setMoveError] = useState<string | null>(null); const [note, setNote] = useState(''); const [reason, setReason] = useState<'busy' | 'on_leave' | 'out_of_area' | 'other'>('busy');
+  const [slot, setSlot] = useState<string | null>(null); const [moving, setMoving] = useState(false); const [moveError, setMoveError] = useState<string | null>(null); const [note, setNote] = useState(''); const [reason] = useState<'busy' | 'on_leave' | 'out_of_area' | 'other'>('busy');
   const [result, setResult] = useState<'covered_workmanship' | 'covered_part' | 'not_covered' | null>(null); const [findings, setFindings] = useState(''); const [notCoveredReasonCode, setNotCoveredReasonCode] = useState('customer_misuse'); const [photos, setPhotos] = useState<string[]>([]); const [openedAt] = useState(() => Date.now()); const [faultyIds, setFaultyIds] = useState<string[]>([]); const [faultyCounts, setFaultyCounts] = useState<Record<string, number>>({}); const [returning, setReturning] = useState(false); const [returnError, setReturnError] = useState<string | null>(null);
   const bookingId = claim?.order.bookingId;
   const partLines = claim?.order.partLines ?? [];
@@ -150,9 +161,14 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
           {bookingId ? <Pressable accessibilityRole="button" accessibilityLabel="Nhắn tin cho khách hàng" onPress={() => void openChat()} style={[choice, { flex: 1, alignItems: 'center' }]}><Text style={{ ...choiceText, fontWeight: '700' }}>Nhắn tin</Text></Pressable> : null}
         </View> : null}
       </Card>
+      {coverages.length || claim.coverage ? <Card title="Thời hạn bảo hành">
+        {coverages.length ? coverages.map(item => <View key={item.id} style={{ gap: 2 }}>
+          <Text style={{ ...choiceText, fontWeight: '700' }}>{warrantyCoverageLabel(item)}</Text>
+          <Text style={{ color: colors.textSecondary, lineHeight: 20 }}>{item.status === 'active' ? `${item.warrantyDaysSnapshot} ngày · đến` : 'Hết hạn'} {vnDateString(item.expiresAt)}</Text>
+        </View>) : claim.coverage ? <DetailRow label="Bảo hành đến" value={vnDateTimeString(claim.coverage.expiresAt)} /> : null}
+      </Card> : null}
       <Card title="Thông tin">
         <DetailRow label="Dịch vụ" value={claim.order.serviceName} />
-        {claim.coverage ? <DetailRow label="Bảo hành đến" value={vnDateTimeString(claim.coverage.expiresAt)} /> : null}
         {claim.visit?.scheduledAt ? <DetailRow label="Lịch kiểm tra" value={vnDateTimeString(claim.visit.scheduledAt)} /> : null}
         {claim.visit?.checkedInAt ? <DetailRow label="Đã có mặt lúc" value={vnDateTimeString(claim.visit.checkedInAt)} /> : null}
         <DetailRow label="Gửi lúc" value={vnDateTimeString(claim.submittedAt)} />
@@ -166,9 +182,17 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
         </View> : null}
       </Card>
       {claim.visit?.proposedResult ? <Card title="Kết luận bạn đã đề xuất">
-        <Text style={{ ...choiceText, fontWeight: '700' }}>{resultLabel[claim.visit.proposedResult]}</Text>
+        <Text style={{ ...choiceText, fontWeight: '700' }}>{inspectionResultLabel[claim.visit.proposedResult]}</Text>
         {claim.visit.findings ? <Text style={{ color: colors.textSecondary, lineHeight: 20 }}>{claim.visit.findings}</Text> : null}
+        <PhotoRow urls={claim.visit.evidenceRefs} name="Ảnh kiểm tra" />
       </Card> : null}
+      {claim.noShowFlaggedAt ? <ReadOnlyNotice tone="warning">Hệ thống ghi nhận bạn chưa đến kiểm tra đúng hạn. Quản lý dịch vụ sẽ xét lý do.</ReadOnlyNotice> : null}
+      {claim.visit?.reServiceNotes || claim.visit?.reServiceEvidenceRefs?.length ? <Card title="Bạn đã báo bảo hành xong">
+        {claim.visit.reServiceNotes ? <Text style={{ ...choiceText, lineHeight: 22 }}>{claim.visit.reServiceNotes}</Text> : null}
+        <PhotoRow urls={claim.visit.reServiceEvidenceRefs} name="Ảnh sau bảo hành" />
+        {claim.visit.completedAt ? <DetailRow label="Hoàn tất lúc" value={vnDateTimeString(claim.visit.completedAt)} /> : null}
+      </Card> : null}
+      {claim.customerResponse ? <Card title="Phản hồi của khách"><Text style={choiceText}>{claim.customerResponse === 'agreed' ? 'Khách đồng ý với kết quả.' : 'Khách phản đối kết quả. Quản lý dịch vụ sẽ xem xét.'}</Text></Card> : null}
       {claim.resolutionNotes ? <Card title="Phản hồi của quản lý dịch vụ"><Text style={choiceText}>{claim.resolutionNotes}</Text></Card> : null}
       {incoming ? <Card title="Nhận linh kiện thay thế">
         <Text style={choiceText}>{incomingText[incoming.status.toLowerCase()]}</Text>
@@ -195,14 +219,8 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
       </Card> : null}
       {claim.outcomeCode === 'unfixed' ? <ReadOnlyNotice tone="warning">Không khắc phục được trong hạn: tiền đã hoàn cho khách và trừ vào ví của bạn.</ReadOnlyNotice> : null}
       {task === 'TW02' ? <Card title="Nhận hay không nhận yêu cầu">
-        <ReadOnlyNotice>Chỉ yêu cầu đang được phân công mới hiển thị ở đây. Nhận hoặc từ chối cần xác nhận rõ ràng.</ReadOnlyNotice>
-        <ReadOnlyNotice tone="warning">Từ chối vì nghỉ phép hoặc ngoài khu vực sẽ được hệ thống kiểm tra. Lý do khác phải chờ quản lý dịch vụ xét, nếu không chính đáng sẽ bị trừ điểm uy tín. Sát hạn bảo hành, chỉ hai lý do trên được từ chối.</ReadOnlyNotice>
+        <ReadOnlyNotice>Đây là yêu cầu bảo hành của đơn bạn đã làm. Chọn lịch đến kiểm tra rồi nhận yêu cầu.</ReadOnlyNotice>
         <SlotPicker value={slot} onChange={setSlot} disabled={locked} />
-        {/* While accepting is waiting for its confirmation, decline reasons are not part of it and are not shown as chosen. */}
-        {state.confirmation?.operation === 'accept' ? null : <>
-        <Text style={choiceText}>Nếu từ chối, chọn lý do:</Text>{(['busy', 'on_leave', 'out_of_area', 'other'] as const).map(value => <Pressable key={value} disabled={locked} accessibilityRole="radio" accessibilityState={{ disabled: locked, checked: reason === value }} onPress={() => setReason(value)} style={[choice, reason === value && { borderColor: colors.primaryStrong }]}><Text style={choiceText}>{reasonLabel[value]}</Text></Pressable>)}
-        {reason === 'other' ? <TextInput accessibilityLabel="Lý do từ chối" value={note} editable={!locked} onChangeText={setNote} multiline maxLength={2000} style={field} /> : null}
-        </>}
         </Card> : null}
       {task === 'TW03' ? <Card title="Đến nơi kiểm tra"><ReadOnlyNotice>Check-in bảo hành là lượt thăm riêng. Không dùng check-in sửa chữa hoặc yêu cầu gửi vị trí.</ReadOnlyNotice></Card> : null}
       {task === 'TW03' && claim.visit?.status === 'scheduled' ? <Card title="Khách bận, cần đổi lịch?">
@@ -211,7 +229,7 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
         {moveError ? <ReadOnlyNotice tone="error">{moveError}</ReadOnlyNotice> : null}
       </Card> : null}
       {task === 'TW04' ? <Card title="Kết luận kiểm tra">
-        <Text style={choiceText}>Bạn thấy lỗi thuộc loại nào?</Text>{(['covered_workmanship', 'covered_part', 'not_covered'] as const).map(value => <Pressable key={value} disabled={locked} accessibilityRole="radio" accessibilityState={{ disabled: locked, checked: result === value }} onPress={() => setResult(value)} style={[choice, result === value && { borderColor: colors.primaryStrong }]}><Text style={choiceText}>{resultLabel[value]}</Text></Pressable>)}
+        <Text style={choiceText}>Bạn thấy lỗi thuộc loại nào?</Text>{(['covered_workmanship', 'covered_part', 'not_covered'] as const).map(value => <Pressable key={value} disabled={locked} accessibilityRole="radio" accessibilityState={{ disabled: locked, checked: result === value }} onPress={() => setResult(value)} style={[choice, result === value && { borderColor: colors.primaryStrong }]}><Text style={choiceText}>{inspectionResultLabel[value]}</Text></Pressable>)}
         <TextInput accessibilityLabel="Kết quả kiểm tra" placeholder="Mô tả phát hiện" value={findings} editable={!locked} onChangeText={setFindings} multiline maxLength={2000} style={[field, { minHeight: 100 }]} />
         {result === 'covered_part' ? <>
           <Text style={choiceText}>Linh kiện nào bị hỏng?</Text>
@@ -273,6 +291,9 @@ export const WARRANTY_CONFIRM_LABEL: Record<string, string> = {
   complete: 'Xác nhận hoàn tất bảo hành',
 };
 const reasonLabel: Record<string, string> = { busy: 'Đang bận', on_leave: 'Đang nghỉ', out_of_area: 'Ngoài khu vực', other: 'Lý do khác', customer_misuse: 'Sử dụng không đúng cách', normal_wear: 'Hao mòn thông thường', other_component: 'Linh kiện khác', not_workmanship_related: 'Không liên quan chất lượng sửa chữa', expired: 'Đã hết hạn', cannot_reproduce: 'Không tái hiện được sự cố', customer_unavailable: 'Không liên hệ được khách hàng', third_party_repair: 'Đã có người khác sửa', force_majeure: 'Thiên tai, cháy nổ, ngập', transport_damage: 'Hỏng do vận chuyển' };
-const outcomeLabel = { fixed: 'Đã khắc phục', unfixed: 'Không khắc phục được', rejected: 'Không được bảo hành' };
-const resultLabel = { covered_workmanship: 'Bảo hành chất lượng sửa chữa', covered_part: 'Bảo hành linh kiện', not_covered: 'Không thuộc phạm vi bảo hành' };
+function PhotoRow({ urls, name }: { urls?: string[] | null; name: string }) {
+  return urls?.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+    {urls.map((url, index) => <Image key={url} source={{ uri: url }} accessibilityIgnoresInvertColors accessibilityLabel={`${name} ${index + 1}/${urls.length}`} style={{ width: 72, height: 72, borderRadius: 10 }} />)}
+  </View> : null;
+}
 const reasonCodes = ['customer_misuse', 'normal_wear', 'other_component', 'not_workmanship_related', 'expired', 'cannot_reproduce', 'customer_unavailable', 'third_party_repair', 'force_majeure', 'transport_damage', 'other'];

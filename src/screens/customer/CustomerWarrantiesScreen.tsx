@@ -30,7 +30,6 @@ import {
   orderToWarrantyGroupSeed,
   validateWarrantyText,
   warrantyClaimDisplayMeta,
-  warrantyCoverageLabel,
   warrantyCoverageUiStatus,
   warrantyCustomerPromptCopy,
   type CustomerWarrantyGroup,
@@ -39,6 +38,7 @@ import {
 import BackButton from '../../components/BackButton';
 import { KEYBOARD_AVOIDING_BEHAVIOR } from '../../constants/keyboard';
 import PillText from '../../components/PillText';
+import { vnDateTimeString } from '../../utils/vn-time';
 
 const PAGE_SIZE = 10;
 const sortGroups = (list: CustomerWarrantyGroup[]) => [...list].sort((a, b) => {
@@ -280,7 +280,6 @@ export default function CustomerWarrantiesScreen() {
 
   const renderClaim = (group: CustomerWarrantyGroup, claim: WarrantyClaimView) => {
     const meta = warrantyClaimDisplayMeta(claim);
-    const coverage = group.coverages.find((item) => item.id === claim.warrantyCoverageId);
     const waitingForMe = claim.status === 'awaiting_customer' && !claim.customerResponse;
     const copy = warrantyCustomerPromptCopy(claim);
     const toneColor = meta.tone === 'success'
@@ -295,7 +294,7 @@ export default function CustomerWarrantiesScreen() {
       <View key={claim.id} style={styles.claimCard}>
         <View style={styles.claimHeader}>
           <View style={styles.claimTitleWrap}>
-            <Text style={styles.claimTitle}>{coverage ? warrantyCoverageLabel(coverage) : 'Yêu cầu bảo hành'}</Text>
+            <Text style={styles.claimTitle}>Yêu cầu bảo hành</Text>
             <View style={styles.statusLine}>
               <Ionicons name={toneIcon[meta.tone]} size={16} color={toneColor} />
               <PillText style={[styles.statusText, { color: toneColor }]}>{meta.label}</PillText>
@@ -304,6 +303,7 @@ export default function CustomerWarrantiesScreen() {
           </View>
         </View>
         <Text style={styles.bodyText}>{claim.description}</Text>
+        {claim.technician ? <Text style={styles.helperText}>Kỹ thuật viên: {claim.technician.fullName}{claim.inspectionScheduledAt ? ` · Lịch kiểm tra ${vnDateTimeString(claim.inspectionScheduledAt)}` : ''}</Text> : null}
         {claim.submittedAfterExpiry && (
           <View style={styles.warningBox}>
             <Ionicons name="alert-circle-outline" size={17} color={colors.warning} />
@@ -319,6 +319,14 @@ export default function CustomerWarrantiesScreen() {
         {claim.status === 'awaiting_customer' && claim.customerResponse === 'agreed' && (
           <Text style={styles.helperText}>{copy.agreed}</Text>
         )}
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={() => navigation.navigate('CustomerOrderDetail', { serviceOrderId: claim.serviceOrderId, screen: 'CustomerWarrantyClaim', params: { claimId: claim.id } } as never)}
+          accessibilityRole="button"
+          accessibilityLabel="Xem chi tiết yêu cầu bảo hành"
+        >
+          <Text style={styles.secondaryButtonText}>Xem chi tiết</Text>
+        </TouchableOpacity>
         {waitingForMe && (
           <View style={styles.customerPrompt}>
             <Text style={styles.promptText}>{copy.question}</Text>
