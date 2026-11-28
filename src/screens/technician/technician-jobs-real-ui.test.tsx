@@ -231,7 +231,7 @@ describe('TechnicianJobsScreen real-UI presentation (T-RUI2B)', () => {
     const chips = renderer.root.findAll(
       (node) => node.type === TouchableOpacity && node.props.accessibilityRole === 'radio',
     );
-    expect(chips).toHaveLength(5);
+    expect(chips).toHaveLength(6);
     for (const chip of chips) {
       expect(StyleSheet.flatten(chip.props.style).minHeight).toBeGreaterThanOrEqual(44);
     }

@@ -536,6 +536,14 @@ export const ordersApi = {
     return { data: rows.map(normalizeOrder), total };
   },
 
+  /** Technician: orders left before arrival (withdrawn or cancelled); the server returns summaries only. */
+  async getWithdrawnOrders(page = 1, pageSize = 50): Promise<ServiceOrderItem[]> {
+    const body = (await apiClient.get('/service-orders/my', { params: { page, pageSize, history: 'withdrawn' } })).data as { data?: ServiceOrderItem[] } | ServiceOrderItem[] | null | undefined;
+    const rows = Array.isArray(body) ? body : body?.data;
+    if (!Array.isArray(rows)) throw new Error('Invalid withdrawn orders response');
+    return rows.map(normalizeOrder);
+  },
+
   async getOrder(id: string): Promise<ServiceOrderItem> {
     return normalizeOrder(
       await get<ServiceOrderItem>(`/service-orders/${id}`),
@@ -597,6 +605,11 @@ export const ordersApi = {
   /** BE 31/10/2026: tell the customer of the upcoming order it will start late; the customer then waits, picks another technician or cancels. */
   async sendDelayNotice(id: string, notice: DelayNoticePayload) {
     return post(`/service-orders/${id}/delay-notice`, notice);
+  },
+
+  /** BE 31/10/2026: the technician leaves the upcoming order (no points lost); the customer picks another technician. */
+  async releaseForOverrun(id: string, report: DelayReportPayload) {
+    return post(`/service-orders/${id}/overrun-release`, report);
   },
 
   /** The customer's answer to a delay notice. */

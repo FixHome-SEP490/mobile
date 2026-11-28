@@ -5,7 +5,8 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { WarrantyCommandDto } from '../aftercare/aftercare-contracts';
 import { useTechnicianWarranty } from './useTechnicianWarranty';
 import { technicianWarrantyTask } from './technician-warranty-controller';
-import { technicianWarrantyApi, type TechnicianWarrantyClaim } from '../../../api/technician-warranty.api';
+import { technicianWarrantyApi, type FaultyPartStatus, type TechnicianWarrantyClaim } from '../../../api/technician-warranty.api';
+
 import { partRequestsApi } from '../../../api/part-requests.api';
 import { WarrantyPhotos } from '../aftercare/WarrantyPhotos';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
@@ -21,6 +22,12 @@ import { backFromFlow } from '../navigation/resume-order';
 import { goHome } from '../../../components/BackButton';
 import { useLiveRefresh } from '../../../hooks/useLiveRefresh';
 import { technicianClaimLabel, type WarrantyTone } from '../../../screens/technician/warranty/technician-warranty-groups';
+
+// Same words as the web console and the technician web page.
+const FAULTY_STATUS_LABELS: Record<FaultyPartStatus, string> = {
+  awaiting: 'Chờ nộp về kho', partial: 'Đã nhận một phần', received: 'Đã nhận, chờ gửi hãng', sent_to_manufacturer: 'Đã gửi hãng',
+  manufacturer_accepted: 'Hãng chấp nhận, lỗi nhà sản xuất', manufacturer_rejected: 'Hãng từ chối, lỗi lắp đặt',
+};
 
 const field = { minHeight: 52, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: spacing.md, color: colors.text, backgroundColor: colors.surface, textAlignVertical: 'top' as const };
 const choice = { minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: spacing.md, justifyContent: 'center' as const, backgroundColor: colors.surface };
@@ -85,7 +92,9 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
   const incoming = claim?.partRequest && ['requested', 'ready', 'delivering'].includes(claim.partRequest.status.toLowerCase()) ? claim.partRequest : null;
   // Declaring the replacement part as fitted (or returned) comes before reporting the warranty done; the faulty part can follow.
   const partsPending = !!claim?.partRequest && claim.partRequest.status.toLowerCase() !== 'cancelled' && (!part || !!part.items?.some(item => item.usageStatus === 'pending'));
-  const partOverdue =!!part && !part.faultyReturnedAt && !!part.faultyReturnDueAt && Date.parse(part.faultyReturnDueAt) < openedAt;
+  // Only the warehouse counting units in stops the clock, so a reported hand-in is still overdue until then.
+  const faultyMissing = !part?.items?.length || part.items.some(item => ['awaiting', 'partial'].includes(item.faultyStatus ?? 'awaiting'));
+  const partOverdue = !!part && faultyMissing && !!part.faultyReturnDueAt && Date.parse(part.faultyReturnDueAt) < openedAt;
   const returnFaulty = async () => {
     if (!part || returning) return;
     setReturning(true); setReturnError(null);
@@ -210,9 +219,16 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
       </Card> : null}
       {task === 'TW05' && partsPending ? <ReadOnlyNotice tone="warning">Hãy nhận linh kiện thay thế và khai đã lắp hoặc trả lại trước khi báo bảo hành xong.</ReadOnlyNotice> : null}
       {part ? <Card title="Nộp linh kiện hỏng về kho">
-        {part.faultyReturnedAt ? <ReadOnlyNotice>Đã nộp lúc {vnDateTimeString(part.faultyReturnedAt)}. {part.faultyInspectionResult ? 'Quản lý dịch vụ đã kiểm tra.' : 'Chờ quản lý dịch vụ kiểm tra.'}</ReadOnlyNotice>
+        {part.faultyReturnedAt ? <>
+            <ReadOnlyNotice>Đã nộp lúc {vnDateTimeString(part.faultyReturnedAt)}. {faultyMissing ? 'Chờ kho xác nhận đã nhận linh kiện hỏng.' : 'Kho đã nhận đủ linh kiện hỏng.'}</ReadOnlyNotice>
+            {part.faultyReturnChargedAt && faultyMissing ? <ReadOnlyNotice tone="warning">Quá hạn nộp nên giá phần chưa được kho nhận đã bị trừ vào ví. Kho nhận linh kiện sẽ hoàn lại phần tương ứng.</ReadOnlyNotice> : null}
+            {part.items?.filter(item => item.faultyStatus).map(item => <View key={item.id} accessible accessibilityLabel={`${item.name}: ${FAULTY_STATUS_LABELS[item.faultyStatus!]}, đã nhận ${item.faultyReceivedQty} trên ${item.quantity}`} style={{ gap: 2 }}>
+              <Text style={choiceText}>{item.name}</Text>
+              <Text style={{ color: colors.textSecondary }}>{FAULTY_STATUS_LABELS[item.faultyStatus!]} · Đã nhận {item.faultyReceivedQty}/{item.quantity}</Text>
+            </View>)}
+          </>
           : <>
-            <ReadOnlyNotice tone={partOverdue || part.faultyReturnChargedAt ? 'warning' : 'info'}>{part.faultyReturnChargedAt ? 'Quá hạn nộp nên giá linh kiện thay thế đã bị trừ vào ví. Nộp về kho và được kiểm tra không do lắp đặt sẽ được hoàn lại.' : partOverdue ? 'Đã quá hạn nộp. Giá linh kiện thay thế sẽ bị trừ vào ví.' : `Hạn nộp: ${part.faultyReturnDueAt ? vnDateTimeString(part.faultyReturnDueAt) : 'sau khi nhận linh kiện thay thế'}. Quá hạn, giá linh kiện thay thế sẽ bị trừ vào ví.`}</ReadOnlyNotice>
+            <ReadOnlyNotice tone={partOverdue || part.faultyReturnChargedAt ? 'warning' : 'info'}>{part.faultyReturnChargedAt ? 'Quá hạn nộp nên giá linh kiện chưa được kho nhận đã bị trừ vào ví. Kho nhận linh kiện sẽ hoàn lại phần tương ứng.' : partOverdue ? 'Đã quá hạn nộp. Giá linh kiện thay thế sẽ bị trừ vào ví.' : `Hạn nộp: ${part.faultyReturnDueAt ? vnDateTimeString(part.faultyReturnDueAt) : 'sau khi nhận linh kiện thay thế'}. Quá hạn, giá linh kiện thay thế sẽ bị trừ vào ví.`}</ReadOnlyNotice>
             <Pressable accessibilityRole="button" accessibilityLabel="Đã nộp linh kiện hỏng" disabled={returning} onPress={() => void returnFaulty()} style={[choice, { alignItems: 'center' }]}><Text style={{ ...choiceText, fontWeight: '700' }}>{returning ? 'Đang ghi nhận…' : 'Đã nộp linh kiện hỏng'}</Text></Pressable>
             {returnError ? <ReadOnlyNotice tone="error">{returnError}</ReadOnlyNotice> : null}
           </>}

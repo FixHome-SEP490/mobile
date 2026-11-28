@@ -8,5 +8,5 @@ export function useOrderException() {
   const controller = useMemo(() => createProductionOrderException(runtime), [runtime]);
   const state = useSyncExternalStore(controller.subscribe, controller.getState, controller.getState);
   useM6PresentationLifecycle(controller, active, snapshot);
-  return { controller, state, view: orderExceptionView(authenticatedM6Key(runtime, 'technician') ? snapshot : null) };
+  return { controller, state, role: snapshot?.key.role, view: orderExceptionView(authenticatedM6Key(runtime, 'technician') ? snapshot : null) };
 }

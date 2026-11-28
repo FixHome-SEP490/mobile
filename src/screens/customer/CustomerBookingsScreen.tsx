@@ -19,7 +19,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ChevronDown, ChevronUp, Clock, MapPin, User } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Clock, Hourglass, MapPin, User } from 'lucide-react-native';
 import StatusBadge from '../../components/StatusBadge';
 import { bookingStatusView, serviceOrderDisplayView } from '../technician/technician-status';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -49,6 +49,8 @@ import {
   type HistoryCard,
 } from './customer-bookings-history';
 import { orderDetailTarget } from './customer-order-detail';
+import { staleWaitingRequests } from './customer-stale-requests';
+import { confirmAction } from '../../utils/confirm-action';
 import BookingRescheduleSheet from '../../components/BookingRescheduleSheet';
 import type { BookingSchedule } from '../../utils/booking-session';
 import {
@@ -256,6 +258,21 @@ export default function CustomerBookingsScreen() {
     card.kind === 'booking' && !card.order && resumeTargetFor(card.booking, !requestView.ordersCoverageComplete) !== null,
   ).length;
   // Always opens on the repairs (no jump to the requests tab); what needs the customer stays flagged on the requests tab, never by switching tab for them.
+  // eslint-disable-next-line react-hooks/purity -- the 24 hour mark is read at render, like the other age checks of this list
+  const now = Date.now();
+  const staleRequests = staleWaitingRequests(
+    requestCards.flatMap((card) => (card.kind === 'booking' && !card.order ? [card.booking] : [])), now);
+  const cancelStale = () => confirmAction({
+    title: `Hủy ${staleRequests.length} yêu cầu đã chờ quá 24 giờ?`,
+    message: 'Hệ thống sẽ ngừng tìm thợ cho các yêu cầu này.',
+    confirmLabel: 'Hủy yêu cầu',
+    destructive: true,
+    onConfirm: () => {
+      setManageBusy(true);
+      void Promise.allSettled(staleRequests.map((b) => bookingsApi.cancelBooking(b.id, 'Khách hàng huỷ yêu cầu chờ quá 24 giờ')))
+        .finally(() => { setManageBusy(false); void loader.refresh(); });
+    },
+  });
   const activeKind = kindTab ?? 'repair';
   const view = activeKind === 'request' ? requestView : repairView;
   const shownRequests = requestCards.filter((card) => requestFilter === 'all' || requestStage(card) === requestFilter);
@@ -781,6 +798,21 @@ export default function CustomerBookingsScreen() {
             </View>
           )}
           {activeKind === 'repair' && repairCards.map(renderActiveCard)}
+          {activeKind === 'request' && staleRequests.length > 0 && (
+            <View style={styles.staleCard} testID="stale-requests-banner" accessibilityRole="alert">
+              <View style={styles.staleHead}>
+                <View style={styles.staleIcon}><Hourglass size={iconSize.md} strokeWidth={iconStroke} color={colors.tone.warning.text} /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.staleTitle}>{`${staleRequests.length} yêu cầu chờ thợ quá 24 giờ`}</Text>
+                  <Text style={styles.staleDesc}>Chưa có thợ nhận. Bạn có thể tiếp tục chờ, đặt lại lịch hoặc hủy để ngừng tìm thợ.</Text>
+                </View>
+              </View>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Hủy ${staleRequests.length} yêu cầu chờ quá 24 giờ`} disabled={manageBusy} onPress={cancelStale}
+                activeOpacity={0.85} style={[styles.staleBtn, manageBusy && { opacity: 0.5 }]}>
+                <Text style={styles.staleBtnText}>{manageBusy ? 'Đang hủy…' : `Hủy ${staleRequests.length} yêu cầu`}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
           {activeKind === 'request' && shownRequests.map(renderActiveCard)}
           {filteredCards.length > 0 && (activeKind === 'repair' ? repairCards.length === 0 : shownRequests.length === 0) && (
             <View style={styles.kindEmpty} testID="activity-kind-empty">
@@ -1026,6 +1058,13 @@ const getStyles = (colors: any, spacing: any, fontSize: any) => StyleSheet.creat
     gap: 8,
     marginTop: 8,
   },
+  staleCard: { padding: 14, borderRadius: 16, borderWidth: 1, borderColor: colors.tone.warning.fg, backgroundColor: colors.tone.warning.bg, gap: 12 },
+  staleHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  staleIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
+  staleTitle: { fontSize: 15, fontWeight: '700', color: colors.tone.warning.text },
+  staleDesc: { marginTop: 2, fontSize: 13, lineHeight: 18, color: colors.textSecondary },
+  staleBtn: { minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.tone.warning.fg },
+  staleBtnText: { fontSize: 14, fontWeight: '600', color: colors.tone.warning.text },
   pillBtn: {
     paddingHorizontal: 16,
     paddingVertical: 12,

@@ -27,7 +27,7 @@ import {
   RefreshCw,
 } from 'lucide-react-native';
 import { iconSize, iconStroke, useAppTheme } from '../../constants/theme';
-import { ordersApi } from '../../api/orders.api';
+import { ordersApi, type ServiceOrderItem } from '../../api/orders.api';
 import { createJobsLoader, getCachedJobsState, technicianJobsUserId } from './technician-jobs-loader';
 import { historicalSummaryDates, isHistoricalOrder, resolveJobsView, techOrderDetailTarget } from './technician-order-detail';
 import { findChatForBooking } from './technician-chat-shortcut';
@@ -64,7 +64,7 @@ import { vnDateTimeString } from '../../utils/vn-time';
 import PillText from '../../components/PillText';
 
 const VN_DATETIME = { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' } as const;
-type JobTab = 'all' | 'pending' | 'in_progress' | 'completed' | 'overrun';
+type JobTab = 'all' | 'pending' | 'in_progress' | 'completed' | 'overrun' | 'history';
 
 // Floating GlassTabBar: 64pt pill + breathing room, plus the bottom inset (min 16).
 const TAB_BAR_CLEARANCE = 64 + 16;
@@ -204,6 +204,19 @@ export default function TechnicianJobsScreen() {
     if (activeTab === 'overrun' && !loading) void reloadReleasable();
   }, [activeTab, loading, jobsState.jobs, reloadReleasable]);
 
+  // "Đã rút, hủy" tab: summaries of orders the technician left before arrival, read only while the tab is open.
+  const [withdrawn, setWithdrawn] = useState<{ items: ServiceOrderItem[]; loading: boolean; failed: boolean }>({ items: [], loading: false, failed: false });
+  useEffect(() => {
+    if (activeTab !== 'history') return;
+    let alive = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loading flag of a read that starts when the tab opens
+    setWithdrawn((w) => ({ ...w, loading: true, failed: false }));
+    ordersApi.getWithdrawnOrders()
+      .then((items) => { if (alive) setWithdrawn({ items, loading: false, failed: false }); })
+      .catch(() => { if (alive) setWithdrawn((w) => ({ ...w, loading: false, failed: true })); });
+    return () => { alive = false; };
+  }, [activeTab, manualRefreshing]);
+
   // PO 31/10/2026: the delay report (reason, photos of the job under repair) is made on that job's own screen.
   const openCurrentJob = ({ status }: ReleasableJob) => {
     const currentId = status.currentOrderId;
@@ -250,7 +263,8 @@ export default function TechnicianJobsScreen() {
   };
 
   const overrunTab = activeTab === 'overrun';
-  const jobsView = resolveJobsView(jobsState, overrunTab ? 'pending' : activeTab);
+  const historyTab = activeTab === 'history';
+  const jobsView = resolveJobsView(jobsState, overrunTab || historyTab ? 'pending' : activeTab);
   const { filtered: filteredJobs, showLoadMoreJobs, jobsCoverageText, emptyNote } = jobsView;
   // Local code-only search over the loaded, tab-filtered rows: trimmed,
   // case-insensitive, matching `job.code` ONLY. It is deliberately not a
@@ -260,24 +274,26 @@ export default function TechnicianJobsScreen() {
   // server total.
   const trimmedCodeQuery = codeQuery.trim().toLowerCase();
   const searching = trimmedCodeQuery !== '';
+  const sourceJobs = historyTab ? withdrawn.items : filteredJobs;
   const visibleJobs = overrunTab ? [] : searching
-    ? filteredJobs.filter((job) =>
+    ? sourceJobs.filter((job) =>
         String(job.code ?? '').toLowerCase().includes(trimmedCodeQuery),
       )
-    : filteredJobs;
+    : sourceJobs;
   const visibleReleasable = searching
     ? releasable.items.filter(({ job }) => String(job.code ?? '').toLowerCase().includes(trimmedCodeQuery))
     : releasable.items;
-  const nothingToShow = overrunTab ? !releasable.loading && visibleReleasable.length === 0 : visibleJobs.length === 0;
+  const nothingToShow = overrunTab ? !releasable.loading && visibleReleasable.length === 0 : historyTab && withdrawn.loading ? false : visibleJobs.length === 0;
   // Counts only mean something once every page is loaded (filtering is loaded-only).
   const showCounts = !showLoadMoreJobs && !loading;
-  const tabCount = (tab: JobTab) => (showCounts && tab !== 'overrun' ? ` ${resolveJobsView(jobsState, tab).filtered.length}` : '');
+  const tabCount = (tab: JobTab) => (showCounts && tab !== 'overrun' && tab !== 'history' ? ` ${resolveJobsView(jobsState, tab).filtered.length}` : '');
   const tabs: { key: JobTab; label: string }[] = [
     { key: 'all', label: 'Tất cả' },
     { key: 'pending', label: 'Chờ thực hiện' },
     { key: 'in_progress', label: 'Đang sửa chữa' },
     { key: 'completed', label: 'Hoàn thành' },
     { key: 'overrun', label: 'Không kịp tới' },
+    { key: 'history', label: 'Đã rút, hủy' },
   ];
 
   return (
@@ -439,10 +455,12 @@ export default function TechnicianJobsScreen() {
                   <Briefcase size={56} color={colors.muted} strokeWidth={1.5} />
                 )}
                 <Text style={styles.emptyTitle} accessibilityRole="header">
-                  {overrunTab ? 'Chưa có đơn nào cần báo trễ' : searching ? 'Không tìm thấy mã phù hợp trong phần đã tải' : 'Chưa có công việc nào'}
+                  {historyTab ? 'Chưa có đơn nào đã rút hoặc hủy' : overrunTab ? 'Chưa có đơn nào cần báo trễ' : searching ? 'Không tìm thấy mã phù hợp trong phần đã tải' : 'Chưa có công việc nào'}
                 </Text>
                 <Text style={styles.emptyDesc}>
-                  {overrunTab
+                  {historyTab
+                    ? 'Các đơn bạn đã rút hoặc bị hủy trước khi tới nơi sẽ hiển thị ở đây dưới dạng tóm tắt.'
+                    : overrunTab
                     ? 'Bạn chỉ báo trễ được khi đang làm dở một đơn khác và đơn này sắp tới giờ hẹn. Báo trễ không bị trừ điểm uy tín.'
                     : searching
                     ? 'Chỉ các công việc đã tải mới được lọc theo mã. Nếu còn trang tiếp theo, chọn “Tải thêm công việc” để kiểm tra thêm.'
@@ -460,6 +478,12 @@ export default function TechnicianJobsScreen() {
                 >
                   <Text style={styles.textBtnLabel}>Làm mới</Text>
                 </TouchableOpacity>
+              </View>
+            )}
+            {historyTab && withdrawn.loading && <Text style={styles.loadingText}>Đang tải lịch sử…</Text>}
+            {historyTab && withdrawn.failed && (
+              <View style={[styles.stateBox, styles.releaseNote, { backgroundColor: colors.tone.warning.bg }]} accessibilityRole="alert">
+                <Text style={[styles.stateBoxText, { color: colors.tone.warning.text }]}>Chưa tải được lịch sử. Kéo xuống để thử lại.</Text>
               </View>
             )}
             {overrunTab && releasable.loading && (

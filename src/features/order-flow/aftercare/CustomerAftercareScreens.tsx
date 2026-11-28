@@ -201,7 +201,7 @@ function InspectionResult({ claim }: { claim: WarrantyClaimView }) {
     {i.result === 'not_covered' && i.reasonCode ? <DetailRow label="Lý do" value={notCoveredReasonLabel[i.reasonCode] ?? 'Lý do khác'} /> : null}
     {i.findings ? <DetailRow label="Chẩn đoán của kỹ thuật viên" value={i.findings} /> : null}
     <Photos urls={i.evidenceRefs} name="Ảnh kiểm tra" />
-    {i.reServiceNotes ? <DetailRow label="Đã xử lý" value={i.reServiceNotes} /> : null}
+    {i.reServiceNotes ? <DetailRow label="Kỹ thuật viên ghi chú sau khi xử lý" value={i.reServiceNotes} /> : null}
     <Photos urls={i.reServiceEvidenceRefs} name="Ảnh sau xử lý" />
     {claim.outcomeCode ? <DetailRow label="Kết cục" value={outcomeLabel[claim.outcomeCode]} /> : null}
     {claim.outcomeCode === 'unfixed' && claim.refundAmount ? <DetailRow label="Đã hoàn vào ví" value={formatVnd(claim.refundAmount)} /> : null}

@@ -16,6 +16,7 @@ import { PanelRow } from '../shared/VisitPanelRow';
 import { CASH_VOUCHER_UNCHECKED } from './technician-cash-controller';
 import { useCashIntent } from '../customer/useCashIntent';
 import { confirmAction } from '../../../utils/confirm-action';
+import { WITHDRAW_OTHER, WITHDRAW_REASONS } from './withdraw-reasons';
 import { canReportTechnicianIssue } from './technician-report';
 import { captureCameraPhoto } from './camera-capture';
 import type { CameraOrderAsset } from './arrival-proof-controller';
@@ -72,6 +73,8 @@ function VisitPanelBody({ section }: { section: 'devices' | 'cash' }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [failedOpen, setFailedOpen] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [withdrawReason, setWithdrawReason] = useState('');
   // The first steps (accepted, on the way) are about getting there: the visit starts folded, one tap opens it. From the repair on it is open.
   const [openChoice, setOpenChoice] = useState<boolean | null>(null);
   const generation = useRef(0);
@@ -173,26 +176,20 @@ function VisitPanelBody({ section }: { section: 'devices' | 'cash' }) {
     });
   };
 
-  const withdraw = () => Alert.alert(
-    'Rút khỏi cả lượt sửa?',
-    'Bạn sẽ rời tất cả thiết bị trong lượt. Các đơn quay lại bước tìm thợ cho khách.',
-    [
-      { text: 'Giữ lại', style: 'cancel' },
-      {
-        text: 'Rút khỏi lượt', style: 'destructive',
-        onPress: async () => {
-          setBusy(true); setMessage('');
-          try {
-            await visitGroupsApi.withdraw(groupId, 'Kỹ thuật viên rút khỏi lượt sửa');
-            navigation.navigate('TechnicianMain');
-          } catch (e) {
-            setMessage(extractApiErrorMessage(e, 'Chưa rút khỏi lượt được. Vui lòng thử lại.'));
-            setBusy(false);
-          }
-        },
-      },
-    ],
-  );
+  const withdraw = async () => {
+    const reason = withdrawReason.trim();
+    if (!reason) return;
+    setBusy(true); setMessage('');
+    try {
+      await visitGroupsApi.withdraw(groupId, reason);
+      setWithdrawOpen(false);
+      navigation.navigate('TechnicianMain');
+    } catch (e) {
+      setWithdrawOpen(false);
+      setMessage(extractApiErrorMessage(e, 'Chưa rút khỏi lượt được. Vui lòng thử lại.'));
+      setBusy(false);
+    }
+  };
 
   if (section === 'cash') {
     const state = checkout ? cash : null;
@@ -268,8 +265,9 @@ function VisitPanelBody({ section }: { section: 'devices' | 'cash' }) {
   if (live && repairFailedAllowed(live)) {
     rows.push(<PanelRow key="failed" testID="visit-repair-failed" Icon={AlertTriangle} label="Không sửa được" disabled={busy} chevron onPress={() => setFailedOpen(true)} />);
   }
-  if (order.status !== 'UNDER_REPAIR' && order.status !== 'COMPLETED' && order.status !== 'CANCELLED') {
-    rows.push(<PanelRow key="withdraw" testID="visit-withdraw" Icon={LogOut} label="Rút khỏi cả lượt" danger disabled={busy} onPress={withdraw} />);
+  // Same rule as the server and the web: only before arrival (accepted, or on the way and not yet checked in).
+  if (live && ['ACCEPTED', 'EN_ROUTE'].includes(live.status) && live.arrivalVerified === false) {
+    rows.push(<PanelRow key="withdraw" testID="visit-withdraw" Icon={LogOut} label="Rút khỏi cả lượt" danger disabled={busy} onPress={() => { setWithdrawReason(''); setWithdrawOpen(true); }} />);
   }
 
   return (
@@ -294,6 +292,30 @@ function VisitPanelBody({ section }: { section: 'devices' | 'cash' }) {
           </>
         )}
       </View>
+      <Modal visible={withdrawOpen} transparent animationType="slide" onRequestClose={() => { if (!busy) setWithdrawOpen(false); }}>
+        <View style={styles.backdrop}>
+          <View style={styles.sheet}>
+            <Text accessibilityRole="header" style={styles.title}>Rút khỏi cả lượt sửa?</Text>
+            <Text style={styles.hint}>Bạn rời tất cả thiết bị trong lượt, các đơn quay lại bước tìm thợ. Rút lúc này sẽ bị trừ điểm uy tín. Chọn hoặc nhập lý do:</Text>
+            <ScrollView style={{ maxHeight: 320 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: spacing.sm }}>
+              {WITHDRAW_REASONS.map((r) => (
+                <Pressable key={r} accessibilityRole="radio" accessibilityState={{ selected: withdrawReason === r }} onPress={() => setWithdrawReason(r)}
+                  style={[styles.device, withdrawReason === r && styles.deviceActive]}>
+                  <Text style={styles.deviceTitle}>{r}</Text>
+                </Pressable>
+              ))}
+              <TextInput accessibilityLabel={WITHDRAW_OTHER} value={WITHDRAW_REASONS.some((r) => r === withdrawReason) ? '' : withdrawReason} onChangeText={setWithdrawReason}
+                maxLength={2000} multiline placeholder={`${WITHDRAW_OTHER} (tự nhập)`} placeholderTextColor={colors.muted} style={styles.input} />
+            </ScrollView>
+            <View style={styles.row}>
+              <Pressable accessibilityRole="button" disabled={busy} onPress={() => setWithdrawOpen(false)} style={[styles.secondary, { flex: 1 }]}><Text style={styles.secondaryText}>Giữ lại</Text></Pressable>
+              <Pressable testID="visit-withdraw-confirm" accessibilityRole="button" disabled={busy || !withdrawReason.trim()} onPress={() => void withdraw()} style={[styles.primary, { flex: 1 }, (busy || !withdrawReason.trim()) && styles.disabled]}>
+                {busy ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.primaryText}>Rút khỏi lượt</Text>}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <RepairFailedSheet
         visible={failedOpen}
         orderId={order.id}

@@ -96,6 +96,22 @@ it('shows the deadline for the faulty part and reports it back once, then refres
   await act(async () => renderer.unmount());
 });
 
+it('shows each faulty part line the warehouse counted in, and warns that the unreceived part was charged', async () => {
+  const PART_ID = '44444444-4444-4444-8444-444444444444';
+  mockState.claim.data.partRequest = {
+    id: PART_ID, status: 'received', faultyReturnDueAt: '2026-11-01T00:00:00.000Z', faultyReturnedAt: '2026-11-05T08:00:00.000Z', faultyReturnChargedAt: '2026-11-02T00:00:00.000Z', faultyInspectionResult: null,
+    items: [{ id: '55555555-5555-4555-8555-555555555555', name: 'Bo mạch', quantity: 2, usageStatus: 'used', faultyStatus: 'partial', faultyReceivedQty: 1 }],
+  };
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => { renderer = create(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><TechnicianWarrantyTaskScreen /></SafeAreaProvider>); });
+  const texts = () => renderer.root.findAllByType(Text).map(text => [text.props.children].flat().join(''));
+  expect(texts().some(text => text.includes('Chờ kho xác nhận đã nhận'))).toBe(true);
+  expect(texts().some(text => text.includes('Đã nhận một phần') && text.includes('Đã nhận 1/2'))).toBe(true);
+  expect(texts().some(text => text.includes('phần chưa được kho nhận đã bị trừ'))).toBe(true);
+  mockState.claim.data.partRequest = undefined;
+  await act(async () => renderer.unmount());
+});
+
 it('lists the received replacement parts and records each as used', async () => {
   const PART_ID = '44444444-4444-4444-8444-444444444444', ITEM_ID = '55555555-5555-4555-8555-555555555555';
   mockState.claim.data.partRequest = { id: PART_ID, status: 'received', faultyReturnDueAt: null, faultyReturnedAt: null, faultyReturnChargedAt: null, faultyInspectionResult: null, items: [{ id: ITEM_ID, name: 'Co đồng 90°', quantity: 2, usageStatus: 'pending' }] };

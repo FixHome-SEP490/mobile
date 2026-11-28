@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
 import { Camera, Check, Clock, MapPin, X } from 'lucide-react-native';
@@ -188,6 +188,34 @@ export default function DelayReportScreen() {
     }
   };
 
+  const release = () => {
+    if (busy || !selected || !order) return;
+    setAttempted(true);
+    const { minutes: _skip, ...needed } = delayDraftErrors({ orderId: selected.job.id, reasonCode, reason, photoCount: assets.length, confirmed, minutes: DELAY_MINUTES[0] });
+    if (Object.keys(needed).length) return;
+    Alert.alert('Nhả đơn này?', `Đơn #${selected.job.code || selected.job.id.slice(0, 8)} không còn thuộc bạn, khách sẽ chọn thợ khác. Không bị trừ điểm.`, [
+      { text: 'Giữ đơn', style: 'cancel' },
+      { text: 'Nhả đơn', style: 'destructive', onPress: async () => {
+        setBusy(true); setSendError('');
+        try {
+          const ids: string[] = [];
+          for (const asset of assets) {
+            uploaded.current[asset.uri] ??= (await ordersApi.uploadEvidenceAdditional(order.id, { uri: asset.uri, name: asset.name, type: asset.type })).id;
+            ids.push(uploaded.current[asset.uri]);
+          }
+          await ordersApi.releaseForOverrun(selected.job.id, { reasonCode: reasonCode!, reason: reason.trim(), evidenceIds: ids, confirm: true });
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          reload();
+          backFromFlow(navigation);
+        } catch (err) {
+          setSendError(delayReportErrorText(err));
+        } finally {
+          setBusy(false);
+        }
+      } },
+    ]);
+  };
+
   const showReport = repairing && !!selected && !!report && !editing;
   const showForm = repairing && !!selected && !showReport;
   const primary = showReport
@@ -298,6 +326,9 @@ export default function DelayReportScreen() {
 
         {busy && <View style={styles.line}><ActivityIndicator size="small" color={colors.primaryStrong} /><Text style={styles.meta}>Đang tải ảnh và gửi báo cáo…</Text></View>}
         {!!sendError && <ReadOnlyNotice tone="error">{sendError}</ReadOnlyNotice>}
+        <Pressable testID="delay-release" accessibilityRole="button" disabled={busy} onPress={release} style={({ pressed }) => [styles.editBtn, pressed && styles.pressed]}>
+          <Text style={styles.editText}>Không kịp, nhả đơn cho khách chọn thợ khác</Text>
+        </Pressable>
         {editing && (
           <Pressable testID="delay-keep" accessibilityRole="button" disabled={busy} onPress={() => setEditing(false)} style={({ pressed }) => [styles.editBtn, pressed && styles.pressed]}>
             <Text style={styles.editText}>Giữ báo cáo đã gửi</Text>
