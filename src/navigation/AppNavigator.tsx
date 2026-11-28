@@ -48,12 +48,16 @@ import CustomerOnboardingScreen from '../screens/onboarding/CustomerOnboardingSc
 import CustomerGuestHomeScreen from '../screens/guest/CustomerGuestHomeScreen';
 import { appEntryRoute } from './app-entry';
 import { flushAuthHandoff, rootNavigationRef } from './root-navigation';
+import { flushPendingOpen } from '../services/push.service';
 import { handleWalletUrl, settleWalletQueue, type WalletReturnNav } from './customer-wallet-return';
 import OrderFlowEntry from '../features/order-flow/navigation/OrderFlowEntry';
 import { CustomerOrderDetailEntry, TechnicianOrderDetailEntry } from '../features/order-flow/navigation/OrderDetailEntry';
 import M7AftercareDevPreviewScreen from '../features/order-flow/aftercare/M7AftercareDevPreviewScreen';
 import BookingAftercareScreen from '../features/order-flow/customer/BookingAftercareScreen';
 import { TechnicianWarrantyInboxScreen, TechnicianWarrantyTaskScreen } from '../features/order-flow/technician/TechnicianWarrantyScreens';
+
+// A tapped push that launched the app opens its screen once the navigator is up.
+const onNavigationReady = () => { flushAuthHandoff(); flushPendingOpen(); };
 
 function TechnicianWarrantyDevPreviewScreen() {
   const route = useRoute<any>();
@@ -100,7 +104,7 @@ export default function AppNavigator({ firstRunSeen = false }: { firstRunSeen?: 
   const { isAuthenticated, user, sessionGeneration } = useAuthStore();
 
   return (
-    <NavigationContainer ref={rootNavigationRef} onReady={flushAuthHandoff} onStateChange={flushAuthHandoff}>
+    <NavigationContainer ref={rootNavigationRef} onReady={onNavigationReady} onStateChange={onNavigationReady}>
       <CustomerWalletReturnGate />
       <Stack.Navigator key={isAuthenticated ? `${user?.role}:${user?.id}` : 'guest'} initialRouteName={appEntryRoute(isAuthenticated, user?.role ?? null, firstRunSeen, sessionGeneration)} screenOptions={{ headerShown: false }}>
         {isAuthenticated && user?.role === UserRole.TECHNICIAN ? (

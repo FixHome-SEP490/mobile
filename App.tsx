@@ -10,6 +10,10 @@ import { hasSeenCustomerFirstRun } from './src/services/customer-first-run';
 import { storageService } from './src/services/storage.service';
 import { authApi } from './src/api/auth.api';
 import { useAuthStore } from './src/store/auth.store';
+import { startPush } from './src/services/push.service';
+
+// Before the first screen, so a tap on a push that launched the app is not lost.
+startPush();
 
 export default function App() {
   const isLoading = useAuthStore(state => state.isLoading);
