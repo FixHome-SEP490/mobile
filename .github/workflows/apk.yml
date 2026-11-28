@@ -29,6 +29,8 @@ jobs:
       EXPO_PUBLIC_APP_NAME: FixHome
       # MapTiler key for the maps (same key as web/backend). Without it the map screens show their placeholder.
       EXPO_PUBLIC_MAPTILER_KEY: ${{ secrets.EXPO_PUBLIC_MAPTILER_KEY }}
+      # OneSignal App ID for phone push. Without it the APK builds and runs, only without push.
+      EXPO_PUBLIC_ONESIGNAL_APP_ID: ${{ secrets.EXPO_PUBLIC_ONESIGNAL_APP_ID }}
       NODE_ENV: production
     steps:
       - uses: actions/checkout@v4

@@ -15,6 +15,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useLiveRefresh } from '../../hooks/useLiveRefresh';
+import { usePendingPushNotice } from '../../hooks/usePendingPushNotice';
 import { useBadgeStore } from '../../store/badge.store';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
@@ -184,6 +185,9 @@ export default function CustomerNotificationsScreen() {
       }
     }
   };
+
+  // A tapped phone push opens its notice exactly as a tap in this list would.
+  usePendingPushNotice((item) => void onNotificationPress(item));
 
   /** Compact timestamp: same-day drops the date, otherwise skips the year/seconds noise. */
   const formatNotificationTime = (iso: string): string => {

@@ -19,6 +19,13 @@ try {
   assert.ok(!pkg.dependencies['react-native-maps'], 'react-native-maps is not a dependency');
   assert.ok(!JSON.stringify(base).includes('googleMaps'), 'no Google Maps key in app.json');
   process.stdout.write('Maps (MapTiler + MapLibre) build-time config contract PASS\n');
+  // Phone push (PO 28/11/2026): OneSignal plus the app's own Android channels. expo-notifications would
+  // register a second FCM receiver and take pushes away from OneSignal, so it must stay out.
+  assert.ok(plugins.includes('onesignal-expo-plugin'), 'OneSignal config plugin is registered');
+  assert.ok(plugins.includes('./plugins/with-notification-channels.js'), 'notification channel plugin is registered');
+  assert.ok(pkg.dependencies['react-native-onesignal'], 'react-native-onesignal is a dependency');
+  assert.ok(!pkg.dependencies['expo-notifications'], 'expo-notifications is not a dependency');
+  process.stdout.write('Phone push (OneSignal) build-time config contract PASS\n');
 } finally {
   for (const [name, value] of [['EXPO_PUBLIC_MAPTILER_KEY', saved.key], ['FIXHOME_ANDROID_MAPS_API_KEY', saved.google], ['EAS_BUILD_PLATFORM', saved.eas]]) {
     if (value == null) delete process.env[name]; else process.env[name] = value;

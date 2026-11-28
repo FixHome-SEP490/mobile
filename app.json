@@ -61,7 +61,18 @@
           }
         }
       ],
-      "@maplibre/maplibre-react-native"
+      "@maplibre/maplibre-react-native",
+      [
+        "onesignal-expo-plugin",
+        {
+          "mode": "production",
+          "smallIconAccentColor": "#2563EB",
+          "smallIcons": [
+            "./assets/android-icon-monochrome.png"
+          ]
+        }
+      ],
+      "./plugins/with-notification-channels.js"
     ]
   }
 }

@@ -32,6 +32,7 @@ import {
   type ConversationItem,
 } from '../../api/messaging.api';
 import { chatSocketService } from '../../services/chat-socket.service';
+import { setOpenConversation } from '../../services/push-state';
 import TypingDots from './TypingDots';
 import { useAppTheme } from '../../constants/theme';
 import { vnTimeString } from '../../utils/vn-time';
@@ -62,6 +63,12 @@ export default function ChatThreadScreen() {
   const myId = useAuthStore((state) => state.user?.id);
   const insets = useSafeAreaInsets();
   const keyboardInset = useKeyboardInset();
+
+  // Pushes for this thread do not drop down while it is on screen (PO 28/11/2026).
+  useEffect(() => {
+    setOpenConversation(conversationId);
+    return () => setOpenConversation(null);
+  }, [conversationId]);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversation, setConversation] = useState<ConversationItem | null>(null);

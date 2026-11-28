@@ -19,6 +19,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types';
 import { useAppTheme, type ToneName } from '../../constants/theme';
 import { notificationsApi, type NotificationItem } from '../../api/notifications.api';
+import { usePendingPushNotice } from '../../hooks/usePendingPushNotice';
 import { partRequestsApi } from '../../api/part-requests.api';
 import { useBadgeStore } from '../../store/badge.store';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
@@ -276,6 +277,9 @@ export default function TechnicianNotificationsScreen({ route }: { route?: { nam
       () => setLoadError('Không mở được máy liên quan. Vui lòng tải lại thông báo và thử lại.'),
     );
   };
+
+  // A tapped phone push opens its notice exactly as a tap in this list would.
+  usePendingPushNotice(onNotificationPress);
 
   const sections = useMemo(() => groupNotificationsByDay(notifications, loadedAt), [notifications, loadedAt]);
 

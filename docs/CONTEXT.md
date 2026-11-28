@@ -1,6 +1,6 @@
 # Context repo mobile — FixHome
 
-> Cập nhật lần cuối: 2026-11-28 14:18 (UTC+7) · Người cập nhật (git): Hgnv11 · Nhánh: dev
+> Cập nhật lần cuối: 2026-11-29 00:32 (UTC+7) · Người cập nhật (git): ToanAltF4 · Nhánh: feat/onesignal-push
 
 ## 0. Quy tắc cập nhật file này (bắt buộc)
 
@@ -91,6 +91,10 @@ Ba điều không đổi giữa các repo:
 Luật nghiệp vụ gốc nằm ở tài liệu dự án (bản chính thức của nhóm). Mâu thuẫn giữa code và tài liệu thì ghi vào mục 8 và hỏi PO, không tự quyết.
 
 ## 3. Trạng thái hiện tại
+
+### Thông báo đẩy OneSignal (28/11/2026, nhánh `feat/onesignal-push`)
+
+Điện thoại nhận push cho mọi thông báo backend tạo, tin nhắn chat và cuộc gọi đến, khi app mở, chạy nền hay đã tắt. Thư viện `react-native-onesignal` 5 + `onesignal-expo-plugin` (icon nhỏ `assets/android-icon-monochrome.png`); bỏ `expo-notifications` vì không dùng và nó đăng ký thêm một bộ nhận FCM tranh push của OneSignal (`app.config.contract.test.cjs` giữ luật này). App ID lấy từ `EXPO_PUBLIC_ONESIGNAL_APP_ID` (GitHub secret cùng tên trong `apk.yml`); trống, trên web hoặc Expo Go thì `src/services/push.service.ts` không làm gì. Sau khi có phiên: `OneSignal.login(user.id)` (external_id, backend gửi theo id người dùng) và xin quyền thông báo một lần (Android 13+); đăng xuất hoặc phiên hết hạn thì `OneSignal.logout()`, đổi tài khoản thì login lại. Kênh Android do `plugins/with-notification-channels.js` tạo lúc app khởi động: `fh_calls` (chuông nhạc chuông), `fh_messages`, `fh_system`; id phải khớp backend `src/modules/push/push-payload.ts`, âm thanh muốn đổi thì phải đổi id. Bấm push (`src/services/push-routing.ts`): tin nhắn và cuộc gọi mở `ChatThread` (màn gọi tự hiện nếu còn đổ chuông vì backend phát lại `call:incoming` khi socket nối), thông báo mở tab Thông báo của role và gọi đúng hàm bấm một dòng trong danh sách (`usePendingPushNotice`), nên đi tới cùng màn hình như khi bấm trong app; bấm lúc app đã tắt thì chờ phiên và điều hướng sẵn sàng rồi mới mở. Khi app đang mở: không hiện banner cuộc gọi (màn gọi đã đổ chuông) và tin nhắn của chính cuộc trò chuyện đang mở; thông báo khác vẫn hiện. NOT VERIFIED trên máy thật cho tới khi có App ID, REST key và Firebase.
 
 ### Giao diện bảo hành khách hàng và kỹ thuật viên (27/11/2026)
 
@@ -466,6 +470,7 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - SEC-01: Backend evidence GET vẫn trả face cho Customer đầy đủ quyền; Mobile lọc trước publish resource nhưng không thay thế phân quyền Backend. SEC-02/P6: upload ảnh bảo hành đã mở theo đường công khai (PO 06/11/2026), upload ảnh hỗ trợ vẫn khóa. Không có API Customer/Technician đọc số ảnh tối thiểu; tách eligibility gửi completion để server kiểm tra khỏi readiness đã chứng minh, không gọi admin config.
 
 ## 9. Nhật ký cập nhật context
+- 2026-11-29 00:32 (UTC+7) | ToanAltF4 | feat/onesignal-push | Thông báo đẩy OneSignal: login/logout theo tài khoản, kênh Android riêng cho cuộc gọi/tin nhắn/hệ thống, bấm mở đúng màn hình cả khi app đã tắt; bỏ expo-notifications; env EXPO_PUBLIC_ONESIGNAL_APP_ID
 - 2026-11-28 14:18 (UTC+7) | Hgnv11 | dev | PO 28/11: màn bảo hành của thợ hiện trạng thái từng dòng linh kiện hỏng (kho nhận, gửi hãng, kết quả hãng) thay cho chờ kiểm tra
 - 2026-11-28 10:52 (UTC+7) | Hgnv11 | dev | Quản lý linh kiện của thợ: bấm Nhận linh kiện (QR) mở camera quét ngay và tự cuộn lên khung nhận; thêm một nút lưu chung số lượng đã dùng cho các ô đang mở, giữ nguyên nút và ô cũ của từng linh kiện.
 - 2026-11-28 10:40 (UTC+7) | Hgnv11 | dev | Thợ: nút ở màn chờ duyệt phát sinh đổi thành "Quay lại"; màn Đang sửa chữa hiện thẻ đề xuất đang chờ khách duyệt; màn đề xuất liệt kê các đề xuất trước (bấm để sửa nếu còn chờ duyệt); bấm xác nhận gửi không còn nháy về form trống; bấm một đề xuất trước thì mở chồng lên (back về danh sách), đề xuất đã xử lý xem được ở dạng chỉ đọc.
@@ -505,7 +510,6 @@ Mở `{origin}/api/v1/auth/google/start?redirect=<deep link auth/google>` bằng
 - 2026-11-23 22:13 (UTC+7) | Hgnv11 | feat/skill-evidence-metadata | Thợ chọn loại giấy tờ và nhập cơ quan cấp, số hiệu, ngày, số năm khi tải bằng chứng kỹ năng; xem giấy tờ đã gửi kèm kết quả xem xét; cần migration backend 1794825600000
 - 2026-11-23 21:50 (UTC+7) | Hgnv11 | feat/web-parity-drafts-skill | Có nháp đặt lịch (lưu, tiếp tục, huỷ, gửi đơn qua nháp, banner ở Trang chủ và Hoạt động) và thợ tải ảnh chứng chỉ cho từng kỹ năng ở hồ sơ
 - 2026-11-23 21:34 (UTC+7) | Hgnv11 | feat/web-parity-customer-continuation | Đơn bị thợ dừng hiện Đã dừng công việc, thẻ Đặt lại dịch vụ hoặc Đặt lịch mới theo customer-continuation, khối tài chính chưa xác định và bỏ nút gọi, đổi thợ
-- 2026-11-23 21:23 (UTC+7) | Hgnv11 | feat/web-parity-technician-stop | Thợ có màn Báo cáo vấn đề sửa chữa: dừng một máy hoặc cả lượt khi khách vắng, hoặc nhờ quản lý hỗ trợ; form Không sửa được đòi chọn linh kiện và cho đính ảnh
 
 
 ### Lịch sử giữ lại khi tích hợp
