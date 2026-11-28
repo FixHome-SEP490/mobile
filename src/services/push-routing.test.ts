@@ -72,17 +72,19 @@ describe('channels', () => {
     expect(plugin.CHANNELS[0]).toMatchObject({ id: 'fh_calls', sound: 'ringtone', importance: 'IMPORTANCE_HIGH' });
   });
 
-  it('the plugin adds the channel call to MainApplication once, after super.onCreate()', () => {
+  it('the plugin adds the channel code to MainApplication once, right after super.onCreate()', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { addOnCreateCall, kotlinSource } = require('../../plugins/with-notification-channels.js');
+    const { addOnCreateCall } = require('../../plugins/with-notification-channels.js');
     const before = 'override fun onCreate() {\n    super.onCreate()\n    other()\n  }';
     const once = addOnCreateCall(before);
-    expect(once).toBe('override fun onCreate() {\n    super.onCreate()\n    FixHomeNotificationChannels.create(this)\n    other()\n  }');
+    expect(once.indexOf('super.onCreate()')).toBeLessThan(once.indexOf('createNotificationChannels'));
+    expect(once.indexOf('createNotificationChannels')).toBeLessThan(once.indexOf('other()'));
     expect(addOnCreateCall(once)).toBe(once);
     expect(() => addOnCreateCall('class X {}')).toThrow();
-    const source = kotlinSource('com.fixhome.mobile');
-    expect(source).toContain('package com.fixhome.mobile');
-    expect(source).toContain('NotificationChannel("fh_calls", "Cuộc gọi đến", NotificationManager.IMPORTANCE_HIGH)');
-    expect(source).toContain('RingtoneManager.TYPE_RINGTONE');
+    expect(once).toContain('android.app.NotificationChannel("fh_calls", "Cuộc gọi đến", android.app.NotificationManager.IMPORTANCE_HIGH)');
+    expect(once).toContain('android.media.RingtoneManager.TYPE_RINGTONE');
+    // Fully qualified names only: nothing for the package rename to touch, no import needed.
+    expect(once).not.toMatch(/^import /m);
+    expect(once).not.toContain('com.fixhome');
   });
 });
