@@ -19,7 +19,6 @@ import {
   Briefcase,
   CheckCircle2,
   Clock,
-  Info,
   MapPin,
   MessageCircle,
   Search,
@@ -634,7 +633,7 @@ export default function TechnicianJobsScreen() {
                               <View style={styles.stateBoxRow}>
                                 <CheckCircle2 size={18} color={colors.tone.success.fg} strokeWidth={1.75} style={styles.rowIcon} />
                                 <Text style={[styles.stateBoxText, { color: colors.tone.success.text }]}>
-                                  Đã đến nơi. Đơn sẽ chuyển sang đang sửa khi bạn bắt đầu sửa chữa.
+                                  Đã đến nơi, tiếp tục chụp ảnh.
                                 </Text>
                               </View>
                               <TouchableOpacity
@@ -654,7 +653,7 @@ export default function TechnicianJobsScreen() {
                           {s === 'EN_ROUTE' && arrivalStates[job.id] === 'pending' && (
                             <View style={[styles.stateBox, { backgroundColor: colors.tone.warning.bg }]}>
                               <Text style={[styles.stateBoxText, { color: colors.tone.warning.text }]}>
-                                Check-in đang chờ xác minh. Chưa gửi lại để tránh trùng lặp.
+                                Đang chờ xác minh vị trí.
                               </Text>
                                 <TouchableOpacity
                                   style={[styles.actionBtn, { backgroundColor: colors.tone.warning.text }]}
@@ -729,15 +728,6 @@ export default function TechnicianJobsScreen() {
                   </View>
                 );
               })}
-            </View>
-            <View
-              style={[styles.historyNotice, { backgroundColor: colors.tone.neutral.bg }]}
-              accessibilityLabel="Lịch sử thợ chỉ gồm mã, trạng thái và ngày; không hiển thị tên khách, địa chỉ, ảnh, tiền, chi tiết hoặc chat."
-            >
-              <Info size={16} color={colors.tone.neutral.fg} strokeWidth={1.75} style={styles.historyNoticeIcon} />
-              <Text style={[styles.historyNoticeText, { color: colors.tone.neutral.text }]}>
-                Lịch sử thợ chỉ gồm mã, trạng thái và ngày; không hiển thị tên khách, địa chỉ, ảnh, tiền, chi tiết hoặc chat.
-              </Text>
             </View>
             {!!jobsCoverageText && <Text style={styles.coverageText}>{jobsCoverageText}</Text>}
             {showLoadMoreJobs && (

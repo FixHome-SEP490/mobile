@@ -158,7 +158,7 @@ export default function CashDeclarationScreen() {
         <DetailRow label="Mã hóa đơn" value={invoice ? `#${invoice.id.slice(0, 8).toUpperCase()}` : undefined} />
         <DetailRow label="Tổng hóa đơn (tham khảo)" value={invoice ? quoteMoneyText(invoice.grandTotal) : 'Chưa có dữ liệu'} />
         {existingCash ? (
-          <DetailRow label="Đối soát hiện có" value={`${cash?.id} · ${String(cash?.status)}`} />
+          <DetailRow label="Khai báo hiện có" value={cash ? `${quoteMoneyText(cash.declaredAmount)} · ${cash.status === 'disputed' ? 'Đang chênh lệch' : cash.status === 'confirmed' ? 'Đã xác nhận' : 'Chờ khách xác nhận'}` : undefined} />
         ) : null}
       </View>
       {checkingCash ? <ReadOnlyNotice>Đang kiểm tra trạng thái tiền mặt. Chưa khai báo khi chưa xác nhận được yêu cầu của khách.</ReadOnlyNotice> : null}

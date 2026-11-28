@@ -215,7 +215,6 @@ describe('ExtraProposalScreen (T10)', () => {
     act(() => { tree = create(<ExtraProposalScreen />); });
     act(() => { tree.root.findByProps({ testID: 'proposal-reason-input' }).props.onChangeText('Cần thay'); });
     act(() => { tree.root.findByProps({ accessibilityLabel: 'Nội dung công việc' }).props.onChangeText('Tiền công'); });
-    act(() => { tree.root.findByProps({ accessibilityLabel: 'Số lượng' }).props.onChangeText('1'); });
     act(() => { tree.root.findByProps({ accessibilityLabel: 'Đơn giá' }).props.onChangeText(price); });
     act(() => { tree.root.findByProps({ testID: 'proposal-submit' }).props.onPress(); });
     expect(tree.root.findAllByProps({ testID: 'proposal-confirm-sheet' })).toHaveLength(0);
@@ -324,16 +323,12 @@ describe('ExtraProposalScreen (T10)', () => {
     // Row description & price
     const descInput = root.findByProps({ accessibilityLabel: 'Nội dung công việc' });
     const priceInput = root.findByProps({ accessibilityLabel: 'Đơn giá' });
-    const qtyInput = root.findByProps({ accessibilityLabel: 'Số lượng' });
 
     act(() => {
       descInput.props.onChangeText('Công thay tụ');
     });
     act(() => {
       priceInput.props.onChangeText('150000');
-    });
-    act(() => {
-      qtyInput.props.onChangeText('1');
     });
 
     const submitBtn = root.findByProps({ testID: 'proposal-submit' });
@@ -391,15 +386,11 @@ describe('ExtraProposalScreen (T10)', () => {
 
     const descInput = root.findByProps({ accessibilityLabel: 'Nội dung công việc' });
     const priceInput = root.findByProps({ accessibilityLabel: 'Đơn giá' });
-    const qtyInput = root.findByProps({ accessibilityLabel: 'Số lượng' });
     act(() => {
       descInput.props.onChangeText('Công kiểm tra lại');
     });
     act(() => {
       priceInput.props.onChangeText('100000');
-    });
-    act(() => {
-      qtyInput.props.onChangeText('1');
     });
 
     const submitBtn = root.findByProps({ testID: 'proposal-submit' });
@@ -464,9 +455,6 @@ describe('ExtraProposalScreen (T10)', () => {
     });
     act(() => {
       root.findByProps({ accessibilityLabel: 'Đơn giá' }).props.onChangeText('100000');
-    });
-    act(() => {
-      root.findByProps({ accessibilityLabel: 'Số lượng' }).props.onChangeText('1');
     });
 
     act(() => {
@@ -544,9 +532,8 @@ describe('ExtraProposalScreen UX', () => {
     act(() => { tree = create(<ExtraProposalScreen />); });
     act(() => { tree.root.findByProps({ testID: 'proposal-reason-input' }).props.onChangeText('Thay tụ'); });
     act(() => { tree.root.findByProps({ accessibilityLabel: 'Nội dung công việc' }).props.onChangeText('Công thay tụ'); });
-    act(() => { tree.root.findByProps({ accessibilityLabel: 'Số lượng' }).props.onChangeText('2'); });
     act(() => { tree.root.findByProps({ accessibilityLabel: 'Đơn giá' }).props.onChangeText('150000'); });
-    expect(tree.root.findByProps({ testID: 'proposal-estimate-total' }).props.accessibilityLabel).toContain('300.000');
+    expect(tree.root.findByProps({ testID: 'proposal-estimate-total' }).props.accessibilityLabel).toContain('150.000');
     act(() => { tree.root.findByProps({ testID: 'proposal-submit' }).props.onPress(); });
     const out = JSON.stringify(tree.toJSON());
     expect(out).toContain('Công thay tụ');

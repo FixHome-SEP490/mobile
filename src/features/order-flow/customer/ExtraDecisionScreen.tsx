@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { NOT_OPENABLE } from '../shared/notice-copy';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { sameOrderSession, type OrderSessionKey } from '../domain/order-session.types';
@@ -178,7 +179,7 @@ export default function ExtraDecisionScreen() {
         <ReadOnlyNotice>
           {snapshot?.access === 'historical'
             ? 'Chi phí phát sinh không được tải cho đơn lịch sử.'
-            : 'Chi phí phát sinh chỉ được đọc sau khi máy chủ xác minh quyền xem đơn hiện tại.'}
+            : NOT_OPENABLE}
         </ReadOnlyNotice>
       </TaskScreenShell>
     );
@@ -241,7 +242,7 @@ export default function ExtraDecisionScreen() {
     >
       {showRecovery && state.phase !== 'resolved' && (
         <ReadOnlyNotice>
-          Có thao tác quyết định chi phí phát sinh chưa rõ kết quả từ phiên trước. Hãy kiểm tra lại từ máy chủ, không gửi lại.
+          Chưa rõ quyết định chi phí phát sinh lần trước đã gửi chưa. Nhấn “Kiểm tra lại”.
           {recovery.intentId && (
             <TouchableOpacity
               testID="extra-recovery-verify"
@@ -300,10 +301,6 @@ export default function ExtraDecisionScreen() {
       {selectedCost ? (
         <>
           <View style={styles.card}>
-            <DetailRow label="Mã đề xuất" value={selectedCost.id} />
-            {selectedCost.supersedesId ? (
-              <DetailRow label="Thay thế đề xuất" value={selectedCost.supersedesId} />
-            ) : null}
             <DetailRow label="Lý do phát sinh" value={selectedCost.reason || 'Kỹ thuật viên không ghi lý do'} />
             {selectedCost.expiresAt ? (
               <DetailRow

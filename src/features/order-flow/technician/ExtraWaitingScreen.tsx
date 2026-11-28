@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { NOT_OPENABLE } from '../shared/notice-copy';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Clock } from 'lucide-react-native';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
@@ -19,6 +20,7 @@ import { quoteMoneyText } from '../shared/DecisionSummary';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { backFromFlow } from '../navigation/resume-order';
+import ExtraCostDecisionBanner from '../shared/ExtraCostDecisionBanner';
 
 export default function ExtraWaitingScreen() {
   const { key, snapshot, refresh, loadResource, journal } = useOrderSession();
@@ -89,7 +91,7 @@ export default function ExtraWaitingScreen() {
         <ReadOnlyNotice>
           {snapshot?.access === 'historical'
             ? 'Không tải trạng thái chi phí cho đơn lịch sử.'
-            : 'Trạng thái chờ duyệt chỉ mở khi có quyền quản lý đơn hiện tại.'}
+            : NOT_OPENABLE}
         </ReadOnlyNotice>
       </TaskScreenShell>
     );
@@ -125,7 +127,7 @@ export default function ExtraWaitingScreen() {
           ? 'Đang kiểm tra…'
           : state.phase === 'unknown' || showRecovery
             ? 'Kiểm tra lại'
-            : 'Tiếp tục sửa phạm vi cũ',
+            : 'Quay lại',
         testID: state.phase === 'unknown' || showRecovery
           ? 'waiting-verify'
           : 'waiting-continue-base',
@@ -133,6 +135,7 @@ export default function ExtraWaitingScreen() {
         onPress: onPrimary,
       }}
     >
+      <ExtraCostDecisionBanner orderId={order.id} />
       {showRecovery && state.phase !== 'resolved' && (
         <ReadOnlyNotice>
           Có thao tác đề xuất phát sinh chưa rõ kết quả từ phiên trước. Vui lòng kiểm tra lại từ máy chủ.

@@ -3,7 +3,7 @@ import type { ServiceOrderItem } from '../../../api/orders.api';
 import { customerActivityStage } from './customer-activity-stage';
 
 const booking = (patch: Partial<BookingItem>) => ({ booking: { id: 'b', status: 'SUBMITTED', ...patch } as BookingItem });
-const order = (patch: Partial<ServiceOrderItem>) => ({ order: { id: 'o', status: 'ACCEPTED', paymentStatus: 'UNPAID', ...patch } as ServiceOrderItem });
+const order = (patch: Partial<ServiceOrderItem>) => ({ order: { id: 'o', status: 'ACCEPTED', paymentStatus: 'UNPAID', technician: { id: 't', fullName: 'A', phoneNumber: '0' }, ...patch } as ServiceOrderItem });
 
 describe('customerActivityStage', () => {
   it.each([
@@ -23,6 +23,12 @@ describe('customerActivityStage', () => {
   it('asks the customer to approve a SENT quotation while the technician is on the way', () => {
     const s = customerActivityStage(order({ status: 'EN_ROUTE', quotation: { id: 'q', status: 'sent', laborTotal: 0, partsTotal: 0, items: [] } }));
     expect([s.group, s.view.label, s.primary?.label]).toEqual(['action', 'Chờ bạn duyệt báo giá', 'Xem và duyệt báo giá']);
+  });
+
+  it('says a replacement is being sought when the technician withdrew and nobody is assigned', () => {
+    const s = customerActivityStage(order({ status: 'ACCEPTED', technician: undefined }));
+    expect([s.group, s.step, s.view.label, s.primary?.target]).toEqual(['active', 2, 'Đang tìm thợ thay thế', 'order']);
+    expect(customerActivityStage(order({ status: 'ACCEPTED' })).view.label).toBe('Đã nhận đơn');
   });
 
   it('does not ask to approve a SENT quotation once the technician stopped the work', () => {

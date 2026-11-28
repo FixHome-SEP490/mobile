@@ -17,6 +17,7 @@ import CustomerSupportCasesSection from './CustomerSupportCasesSection';
 import CustomerDeliverySection from '../../features/order-flow/customer/CustomerDeliverySection';
 import { useAuthStore } from '../../store/auth.store';
 import { ordersApi, type CanonicalOrderStatus } from '../../api/orders.api';
+import { AWAITING_REPLACEMENT_MESSAGE, AWAITING_REPLACEMENT_TITLE, isAwaitingReplacement } from '../../api/order-work-stopped';
 import { customerBookingsUserId } from './customer-bookings-history';
 import {
   orderNextAction,
@@ -1093,6 +1094,13 @@ export default function CustomerOrderDetailScreen() {
                   Hệ thống đã ghi nhận nghiệm thu. Hóa đơn/thanh toán vẫn hiển thị riêng bên dưới.
                 </Text>
               )}
+            </View>
+          )}
+
+          {isAwaitingReplacement(order) && (
+            <View style={styles.card} testID="order-awaiting-replacement">
+              <Text style={styles.sectionTitle}>{AWAITING_REPLACEMENT_TITLE}</Text>
+              <Text style={styles.meta}>{AWAITING_REPLACEMENT_MESSAGE}</Text>
             </View>
           )}
 

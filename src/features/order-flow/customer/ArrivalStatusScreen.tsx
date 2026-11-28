@@ -8,6 +8,7 @@ export default function ArrivalStatusScreen() {
   const { snapshot } = useOrderSession();
   const value = snapshot?.order.status === 'ready' ? snapshot.order.data : null;
   const verified = !!value && !isHistoricalOrder(value) && value.arrivalVerified === true;
-  return <StatusStepScreen title="Kỹ thuật viên đang đến" stage={verified ? 2 : 1}
-    message="Kỹ thuật viên đang di chuyển tới điểm hẹn. Bạn sẽ thấy cập nhật khi kỹ thuật viên tới nơi." />;
+  return verified
+    ? <StatusStepScreen title="Kỹ thuật viên đã tới nơi" stage={2} message="Kỹ thuật viên đang kiểm tra tại nhà bạn." />
+    : <StatusStepScreen title="Kỹ thuật viên đang đến" stage={1} />;
 }

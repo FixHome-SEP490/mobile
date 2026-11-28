@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { NOT_OPENABLE } from '../shared/notice-copy';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
@@ -87,7 +88,7 @@ export default function WalletPaymentScreen() {
   if (!current || !order) {
     return (
       <TaskScreenShell title="Thanh toán bằng ví" onBack={() => navigation.goBack()}>
-        <ReadOnlyNotice>Thanh toán bằng ví chỉ hiển thị sau khi máy chủ xác minh quyền xem đơn hiện tại và kỹ thuật viên gửi yêu cầu bàn giao.</ReadOnlyNotice>
+        <ReadOnlyNotice>{NOT_OPENABLE}</ReadOnlyNotice>
       </TaskScreenShell>
     );
   }

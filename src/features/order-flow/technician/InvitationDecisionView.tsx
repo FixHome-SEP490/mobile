@@ -43,7 +43,7 @@ export default function InvitationDecisionView({
     <View style={{ gap: 12 }}>
       <Text style={{ fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.text }}>Trước khi nhận việc</Text>
       <Text style={{ fontSize: 14, lineHeight: 22, color: colors.textSecondary }}>
-        Bạn đang xem các thông tin cần để quyết định. Địa chỉ chi tiết và thông tin riêng của khách hàng chỉ mở sau khi nhận việc thành công.
+        Địa chỉ chi tiết và thông tin liên hệ của khách chỉ mở sau khi bạn nhận việc.
       </Text>
       {!actionable && (
         <Text testID="invitation-closed" style={{ fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>

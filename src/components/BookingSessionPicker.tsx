@@ -317,9 +317,6 @@ export default function BookingSessionPicker({
               );
             })}
           </View>
-          {!scheduled && (
-            <Text style={[styles.cardHint, { color: colors.textSecondary }]}>Chưa chọn khung giờ; lịch chỉ được xác nhận sau khi chọn khung giờ.</Text>
-          )}
         </>
       )}
 
@@ -419,7 +416,7 @@ export default function BookingSessionPicker({
                 </View>
               </View>
             </ScrollView>
-            <Text style={[styles.cardHint, { color: colors.textSecondary }]}>Chỉ chọn được ngày còn khung giờ trong 14 ngày tới. Chọn ngày chưa tự xác nhận buổi.</Text>
+            <Text style={[styles.cardHint, { color: colors.textSecondary }]}>Chỉ chọn được ngày còn khung giờ trong 14 ngày tới.</Text>
             </ScrollView>
           </SafeAreaView>
         </View>

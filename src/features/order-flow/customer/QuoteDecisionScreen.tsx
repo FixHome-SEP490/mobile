@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { NOT_OPENABLE } from '../shared/notice-copy';
 import PartsSourcingNote from '../../../components/PartsSourcingNote';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -180,7 +181,7 @@ export default function QuoteDecisionScreen() {
         <ReadOnlyNotice>
           {snapshot?.access === 'historical'
             ? 'Báo giá không được tải cho đơn lịch sử.'
-            : 'Báo giá chỉ được đọc sau khi máy chủ xác minh quyền xem đơn hiện tại.'}
+            : NOT_OPENABLE}
         </ReadOnlyNotice>
       </TaskScreenShell>
     );
@@ -256,7 +257,7 @@ export default function QuoteDecisionScreen() {
     >
       {showRecovery && state.phase !== 'resolved' && (
         <ReadOnlyNotice>
-          Có thao tác báo giá chưa rõ kết quả từ phiên trước. Hãy kiểm tra lại từ máy chủ, không gửi lại.
+          Chưa rõ quyết định báo giá lần trước đã gửi chưa. Nhấn “Kiểm tra lại”.
           <TouchableOpacity
             testID="quote-recovery-verify"
             accessibilityRole="button"
@@ -303,7 +304,7 @@ export default function QuoteDecisionScreen() {
       )}
 
       {state.phase === 'denied' && state.message && <ReadOnlyNotice>{state.message}</ReadOnlyNotice>}
-      {state.phase === 'unknown' && <ReadOnlyNotice>{state.message ?? 'Kết quả chưa xác định. Không gửi lại.'}</ReadOnlyNotice>}
+      {state.phase === 'unknown' && <ReadOnlyNotice>{state.message ?? 'Chưa rõ kết quả. Nhấn "Kiểm tra lại".'}</ReadOnlyNotice>}
 
     </TaskScreenShell>
   );

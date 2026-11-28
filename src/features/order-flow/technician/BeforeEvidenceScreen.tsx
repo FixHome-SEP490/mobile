@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { NOT_OPENABLE, UNKNOWN_RESULT } from '../shared/notice-copy';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
@@ -176,15 +177,12 @@ export default function BeforeEvidenceScreen() {
         <DetailRow label="Ảnh trước sửa chữa đã xác nhận" value={evidenceReady ? String(ownBefore.length) : 'Đang tải…'} />
       </View>
       {revoked ? (
-        <ReadOnlyNotice>Quyền xem đơn đã thay đổi hoặc phân công không còn thuộc về bạn. Bản nháp ảnh đã được xóa; không có thao tác nào được gửi.</ReadOnlyNotice>
+        <ReadOnlyNotice>{NOT_OPENABLE}</ReadOnlyNotice>
       ) : !evidenceReady ? (
-        <ReadOnlyNotice>Đang tải danh sách ảnh từ máy chủ. Mọi thao tác chụp, gửi và xóa đều khóa cho đến khi dữ liệu ảnh đầy đủ.</ReadOnlyNotice>
-      ) : (
-        <ReadOnlyNotice>
-          Chụp ảnh hiện trạng trước sửa chữa, có thể chụp nhiều ảnh rồi gửi một lần.
-          {isFixedPrice ? ' Đơn giá cố định, không cần báo giá.' : null}
-        </ReadOnlyNotice>
-      )}
+        <ReadOnlyNotice>Đang tải ảnh…</ReadOnlyNotice>
+      ) : isFixedPrice ? (
+        <ReadOnlyNotice>Đơn giá cố định, không cần báo giá.</ReadOnlyNotice>
+      ) : null}
       {assets.length ? (
         <View style={{ backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md, gap: 12 }}>
           <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>
@@ -264,10 +262,10 @@ export default function BeforeEvidenceScreen() {
       {captureError ? <ReadOnlyNotice>{captureError}</ReadOnlyNotice> : null}
       {state.phase === 'denied' && state.message ? <ReadOnlyNotice>{state.message}</ReadOnlyNotice> : null}
       {isUnresolved ? (
-        <ReadOnlyNotice>Chưa xác nhận được kết quả hoặc có thao tác đang chờ đối chiếu. Không gửi lại; hãy kiểm tra từ hệ thống trước khi thử lại.</ReadOnlyNotice>
+        <ReadOnlyNotice>{UNKNOWN_RESULT}</ReadOnlyNotice>
       ) : null}
       {state.phase === 'resolved' ? (
-        <ReadOnlyNotice>Đã ghi nhận. Đang chờ máy chủ xác nhận; số ảnh yêu cầu do máy chủ quyết định sau khi làm mới.</ReadOnlyNotice>
+        <ReadOnlyNotice>Đã gửi ảnh, đang chờ xác nhận.</ReadOnlyNotice>
       ) : null}
       <TechnicianOrderHub />
     </TaskScreenShell>

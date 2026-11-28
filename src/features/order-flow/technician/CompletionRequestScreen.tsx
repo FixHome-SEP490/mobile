@@ -161,10 +161,6 @@ export default function CompletionRequestScreen() {
         <ReadOnlyNotice>
           {`Chưa thể bàn giao:\n${knownBlockers.map((b) => `• ${b}`).join('\n')}`}
         </ReadOnlyNotice>
-      ) : capabilities && !capabilities.canRequestCompletion && capabilities.canAttemptRequestCompletion ? (
-        <ReadOnlyNotice>
-          Máy chủ sẽ kiểm tra điều kiện ảnh và linh kiện khi bạn gửi. Ứng dụng không tự kết luận đã đủ ảnh.
-        </ReadOnlyNotice>
       ) : null}
       {returnsToDeclare > 0 ? (
         <ReadOnlyNotice>{`Còn ${returnsToDeclare} linh kiện cần khai trả kho. Có thể khai trả sau khi hoàn tất sửa.`}</ReadOnlyNotice>

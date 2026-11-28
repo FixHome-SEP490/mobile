@@ -263,7 +263,7 @@ function TechnicianWarrantyTaskForClaim({ claimId }: { claimId?: string }) {
         </> : null}
         <ReadOnlyNotice>{result === 'covered_workmanship' ? 'Lỗi do công lắp đặt thì hệ thống duyệt luôn, bạn sửa lại miễn phí cho khách. Yêu cầu gửi sau hạn vẫn chờ quản lý duyệt.' : 'Chờ quản lý duyệt rồi mới được sửa.'}</ReadOnlyNotice>
       </Card> : null}
-      {task === 'TW05' ? <Card title="Báo hoàn tất bảo hành"><ReadOnlyNotice>Chỉ gửi khi đã sửa xong.</ReadOnlyNotice><TextInput accessibilityLabel="Ghi chú hoàn tất bảo hành" placeholder="Ghi chú hoàn tất (ít nhất 10 ký tự: đã làm gì, thay gì)" value={note} editable={!locked} onChangeText={setNote} multiline maxLength={2000} style={[field, { minHeight: 100 }]} /></Card> : null}
+      {task === 'TW05' ? <Card title="Báo hoàn tất bảo hành"><ReadOnlyNotice>Chỉ gửi khi đã sửa xong.</ReadOnlyNotice><TextInput accessibilityLabel="Ghi chú hoàn tất bảo hành" placeholder="Ghi chú hoàn tất (ít nhất 10 ký tự: đã làm gì, thay gì)" value={note} editable={!locked} onChangeText={setNote} multiline maxLength={2000} style={[field, { minHeight: 100 }]} /><ReadOnlyNotice>Ảnh sau khi sửa không bắt buộc, nhưng giúp tránh tranh cãi nếu khách phản đối.</ReadOnlyNotice><WarrantyPhotos urls={photos} onChange={setPhotos} onUploaded={urls => controller.registerUploadedPhotos(urls)} disabled={locked} /></Card> : null}
       {task === 'TW06' ? <ReadOnlyNotice>Yêu cầu đang chờ khách hàng, Quản lý dịch vụ hoặc đã kết thúc. Màn này chỉ đọc; không có thao tác duyệt hay đóng yêu cầu.</ReadOnlyNotice> : null}
       {confirmed ? <ReadOnlyNotice>Đọc lại nội dung và xác nhận rõ ràng để gửi thao tác bảo hành.</ReadOnlyNotice> : null}
     </>}

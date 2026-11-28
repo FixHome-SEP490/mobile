@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { NOT_OPENABLE } from '../shared/notice-copy';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { BottomSheetBackdrop, BottomSheetModal } from '@gorhom/bottom-sheet';
@@ -273,7 +274,7 @@ export default function AcceptedPartsScreen() {
         <ReadOnlyNotice>
           {snapshot?.access === 'historical'
             ? 'Không chuẩn bị linh kiện cho đơn lịch sử.'
-            : 'Màn hình chỉ mở khi có quyền quản lý đơn hiện tại.'}
+            : NOT_OPENABLE}
         </ReadOnlyNotice>
       </TaskScreenShell>
     );

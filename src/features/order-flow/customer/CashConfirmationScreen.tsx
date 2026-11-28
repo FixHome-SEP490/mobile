@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { NOT_OPENABLE } from '../shared/notice-copy';
 import { Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
@@ -107,7 +108,7 @@ export default function CashConfirmationScreen() {
   if (!current || !order) {
     return (
       <TaskScreenShell title="Xác nhận tiền mặt" onBack={() => navigation.goBack()}>
-        <ReadOnlyNotice>Xác nhận tiền mặt chỉ hiển thị sau khi máy chủ xác minh quyền xem đơn hiện tại và kỹ thuật viên gửi yêu cầu bàn giao.</ReadOnlyNotice>
+        <ReadOnlyNotice>{NOT_OPENABLE}</ReadOnlyNotice>
       </TaskScreenShell>
     );
   }
@@ -137,11 +138,9 @@ export default function CashConfirmationScreen() {
       }
     >
       <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }}>
-        <DetailRow label="Mã đối soát" value={cash?.id} />
         <DetailRow label="Số tiền kỹ thuật viên khai báo" value={cash ? quoteMoneyText(cash.declaredAmount) : 'Chưa có dữ liệu'} />
-        <DetailRow label="Người khai báo" value={cash?.declaredByTechnicianId ?? 'Chưa có dữ liệu'} />
         <DetailRow label="Thời điểm khai báo" value={cash?.declaredAt ? vnDateTimeString(cash.declaredAt) : 'Chưa có dữ liệu'} />
-        <DetailRow label="Hóa đơn hiện tại" value={invoice ? `${invoice.id} · ${quoteMoneyText(invoice.grandTotal)}` : 'Chưa có dữ liệu'} />
+        <DetailRow label="Tổng hóa đơn" value={invoice ? quoteMoneyText(invoice.grandTotal) : 'Chưa có dữ liệu'} />
         {cash?.technicianNotes ? <DetailRow label="Ghi chú của kỹ thuật viên" value={cash.technicianNotes} /> : null}
       </View>
       {!awaiting && !disputed ? (
@@ -219,7 +218,6 @@ export default function CashConfirmationScreen() {
           <Text style={{ fontSize: 16, fontWeight: '700', color: colors.tone.warning.text }}>
             {sheet.agreed ? 'Xác nhận đã trả tiền mặt' : 'Xác nhận báo chênh lệch'}
           </Text>
-          <DetailRow label="Mã đối soát" value={sheet.settlementId} />
           <DetailRow label="Số tiền hóa đơn" value={sheet.amount} />
           {sheet.agreed && sheet.confirmedAmount !== undefined ? <DetailRow label="Số tiền bạn đã trả" value={sheet.confirmedAmount} /> : null}
           {!sheet.agreed ? <DetailRow label="Lý do chênh lệch" value={sheet.disputeReason} /> : null}

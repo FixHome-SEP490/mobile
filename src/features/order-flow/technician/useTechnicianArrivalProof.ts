@@ -13,6 +13,12 @@ export function useTechnicianArrivalProof({ trackLocation = false }: { trackLoca
   const controller = useMemo(() => createProductionArrivalProofController(runtime), [runtime]);
   const tracker = useMemo(() => createProductionOrderLocationTracker(runtime), [runtime]);
   const state = useSyncExternalStore(controller.subscribe, controller.getState, controller.getState);
+  // A live refresh or the provider's auto-resolve can clear the markers after the controller published "unknown".
+  useEffect(() => {
+    const settle = () => controller.settle();
+    const offs = [coordinator.subscribe(settle), journal.subscribe(settle)];
+    return () => offs.forEach(off => off());
+  }, [controller, coordinator, journal]);
   useEffect(() => {
     if (__DEV__) console.warn('[arrival-proof] hook mounted');
     return () => { if (__DEV__) console.warn('[arrival-proof] hook UNMOUNTED'); };

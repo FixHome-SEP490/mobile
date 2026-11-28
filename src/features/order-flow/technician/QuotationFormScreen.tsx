@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { NOT_OPENABLE, UNKNOWN_RESULT } from '../shared/notice-copy';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { BottomSheetBackdrop, BottomSheetModal } from '@gorhom/bottom-sheet';
 import * as Haptics from 'expo-haptics';
@@ -346,7 +347,7 @@ export default function QuotationFormScreen() {
         <ReadOnlyNotice>
           {snapshot?.access === 'historical'
             ? 'Báo giá không được tạo cho đơn lịch sử.'
-            : 'Báo giá chỉ được tạo sau khi máy chủ xác minh quyền xem đơn hiện tại.'}
+            : NOT_OPENABLE}
         </ReadOnlyNotice>
       </TaskScreenShell>
     );
@@ -452,7 +453,7 @@ export default function QuotationFormScreen() {
       )}
 
       {state.phase === 'resolved' && (
-        <ReadOnlyNotice>Đã gửi báo giá. Máy chủ sẽ hiển thị trạng thái mới sau khi làm mới; không gửi thêm vì phiên bản mới hơn không có nghĩa là tạo mới.</ReadOnlyNotice>
+        <ReadOnlyNotice>Đã gửi báo giá, đang chờ khách duyệt.</ReadOnlyNotice>
       )}
 
       {canEdit && (
@@ -516,7 +517,7 @@ export default function QuotationFormScreen() {
           {formError ?? state.message}
         </Text>
       )}
-      {state.phase === 'unknown' && <ReadOnlyNotice>{state.message ?? 'Kết quả chưa xác định. Không gửi lại.'}</ReadOnlyNotice>}
+      {state.phase === 'unknown' && <ReadOnlyNotice>{state.message ?? UNKNOWN_RESULT}</ReadOnlyNotice>}
 
       <Section title="Xem thêm">
         <LinkRow testID="task-detail-link" label="Chi tiết đơn" Icon={Info} onPress={() => navigation.navigate('OrderInformation')} />

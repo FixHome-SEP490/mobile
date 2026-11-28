@@ -160,7 +160,10 @@ class ChatSocketService {
         // The token goes in the handshake, never in the URL, so it stays out of logs.
         const socket = io(`${socketOrigin()}/chat`, {
           transports: ['websocket'],
-          auth: { token },
+          // Read on every (re)connect: a refreshed token must not be shadowed by the one captured here.
+          auth: (cb: (data: { token: string }) => void) => {
+            void storageService.getToken().then((fresh) => cb({ token: fresh || token }));
+          },
           reconnection: true,
           reconnectionDelay: 1000,
           reconnectionDelayMax: 5000,
@@ -176,7 +179,10 @@ class ChatSocketService {
           this.joined.forEach((id) =>
             socket.emit('conversation:join', { conversationId: id }),
           );
-          if (this.hasConnectedOnce) this.emitToHandlers('onReconnected');
+          if (this.hasConnectedOnce) {
+            clearApiCache(); // anything read from the 30 s cache may predate the outage
+            this.emitToHandlers('onReconnected');
+          }
           this.hasConnectedOnce = true;
           resolve();
         });
@@ -187,16 +193,20 @@ class ChatSocketService {
           resolve();
         });
 
-        socket.on('message:new', (m: ChatMessage) => this.emitToHandlers('onMessageNew', m));
+        socket.on('message:new', (m: ChatMessage) => {
+          clearApiCache(); // the conversation list preview and unread count come from the cached GET
+          this.emitToHandlers('onMessageNew', m);
+        });
         socket.on('message:updated', (m: ChatMessage) =>
           this.emitToHandlers('onMessageUpdated', m),
         );
         socket.on('message:deleted', (m: ChatMessage) =>
           this.emitToHandlers('onMessageDeleted', m),
         );
-        socket.on('conversation:updated', (p: { conversationId: string }) =>
-          this.emitToHandlers('onConversationUpdated', p),
-        );
+        socket.on('conversation:updated', (p: { conversationId: string }) => {
+          clearApiCache();
+          this.emitToHandlers('onConversationUpdated', p);
+        });
         socket.on('typing', (e: TypingEvent) => this.emitToHandlers('onTyping', e));
         for (const name of LIVE_EVENT_NAMES) {
           socket.on(name, (payload: unknown) => {

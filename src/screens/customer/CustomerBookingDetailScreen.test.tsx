@@ -190,7 +190,7 @@ describe('CustomerBookingDetail REAL read-only presentation', () => {
       const progress = tree.root.findByProps({ testID: 'booking-detail-status-timeline' });
       const labels = progress.findAllByType(Text).map((node) => String(node.props.children ?? ''));
       expect(labels).toContain('Yêu cầu đã gửi');
-      expect(labels).toContain('Đơn sửa chữa chưa được tạo');
+      expect(labels).not.toContain('Đơn sửa chữa chưa được tạo');
       expect(labels).not.toContain('Kỹ thuật viên đã nhận đơn');
       expect(mockGetBooking).not.toHaveBeenCalled();
     } finally { act(() => tree.unmount()); }

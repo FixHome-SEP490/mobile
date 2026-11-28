@@ -5,6 +5,7 @@ import { useReduceMotion } from '../../../hooks/useReduceMotion';
 import { useLiveRefresh } from '../../../hooks/useLiveRefresh';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { clearApiCache } from '../../../api/client';
+import { showExtraCostDecision } from '../runtime/extra-cost-decision-notice';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { AWAITING_DECISION_POLL_MS, awaitingAutoStart } from './awaiting-auto-start';
 import type { CustomerOrderFlowParamList, TechnicianOrderFlowParamList } from './order-flow-navigation.types';
@@ -105,6 +106,14 @@ function LiveOrderRefresh() {
   useLiveRefresh(['order:updated'], () => {
     if (pendingRef.current) missed.current = true; else void refresh('live');
   }, event => !event.payload.serviceOrderId || event.payload.serviceOrderId === key?.serviceOrderId, { pollMs: 15_000 });
+  // The customer decided an extra cost: the screen the technician is working on says so (ExtraCostDecisionBanner), not only the bell.
+  useLiveRefresh(['notification:new'], (batch) => {
+    for (const { payload } of batch.events) {
+      if (!key) continue;
+      showExtraCostDecision({ id: String(payload.id ?? ''), orderId: key.serviceOrderId, approved: payload.type === 'ADDITIONAL_COST_APPROVED' });
+    }
+  }, event => key?.role === 'technician' && event.payload.referenceId === key.serviceOrderId
+    && ['ADDITIONAL_COST_APPROVED', 'ADDITIONAL_COST_REJECTED'].includes(String(event.payload.type)));
   // M-11: waiting on site for the quotation decision; read the order again on a short interval, past the 30 s GET cache.
   const waitingStart = awaitingAutoStart(snapshot);
   useEffect(() => {

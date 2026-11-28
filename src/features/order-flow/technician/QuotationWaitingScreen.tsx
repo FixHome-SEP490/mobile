@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { NOT_OPENABLE, UNKNOWN_RESULT } from '../shared/notice-copy';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Clock } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -82,7 +83,7 @@ export default function QuotationWaitingScreen() {
         <ReadOnlyNotice>
           {snapshot?.access === 'historical'
             ? 'Báo giá không được tải cho đơn lịch sử.'
-            : 'Trạng thái chờ chỉ được đọc sau khi máy chủ xác minh quyền xem đơn hiện tại.'}
+            : NOT_OPENABLE}
         </ReadOnlyNotice>
       </TaskScreenShell>
     );
@@ -140,14 +141,14 @@ export default function QuotationWaitingScreen() {
       )}
 
       {!sentQuote && quotationsReady && latest && String(latest.status).toUpperCase() === 'SUPERSEDED' && (
-        <ReadOnlyNotice>Báo giá này đã được thay thế bằng phiên bản mới hơn. Màn hình hiển thị đúng phạm vi hiện tại sau khi làm mới; không coi bản cũ là đang chờ.</ReadOnlyNotice>
+        <ReadOnlyNotice>Báo giá này đã được thay thế bằng bản mới hơn.</ReadOnlyNotice>
       )}
       {!sentQuote && quotationsReady && (!latest || !['SUPERSEDED', 'APPROVED', 'REJECTED'].includes(String(latest.status).toUpperCase())) && (
         <ReadOnlyNotice>Chưa có báo giá nào đang chờ duyệt cho đơn này.</ReadOnlyNotice>
       )}
 
       {serverNext && <ReadOnlyNotice>{serverNext}</ReadOnlyNotice>}
-      {state.phase === 'unknown' && <ReadOnlyNotice>{state.message ?? 'Kết quả chưa xác định. Không gửi lại.'}</ReadOnlyNotice>}
+      {state.phase === 'unknown' && <ReadOnlyNotice>{state.message ?? UNKNOWN_RESULT}</ReadOnlyNotice>}
 
       {sentQuote && (
         <TouchableOpacity

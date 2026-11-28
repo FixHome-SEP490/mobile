@@ -1,4 +1,5 @@
 import React from 'react';
+import { NOT_OPENABLE } from '../shared/notice-copy';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
@@ -50,7 +51,7 @@ export default function HandoverReviewScreen() {
         <ReadOnlyNotice>
           {snapshot?.access === 'historical'
             ? 'Thông tin bàn giao không được tải cho đơn lịch sử.'
-            : 'Bàn giao chỉ hiển thị sau khi máy chủ xác minh quyền xem đơn hiện tại và kỹ thuật viên gửi yêu cầu bàn giao.'}
+            : NOT_OPENABLE}
         </ReadOnlyNotice>
       </TaskScreenShell>
     );
@@ -105,7 +106,6 @@ export default function HandoverReviewScreen() {
         <ReadOnlyNotice>Thiết bị này thuộc một lượt sửa nhiều máy: bạn thanh toán một lần cho cả lượt, sau khi mọi thiết bị đã có kết quả, và chỉ trả cho máy đã sửa xong.</ReadOnlyNotice>
       ) : null}
       {visitGroupId ? <VisitDevicesSummary groupId={visitGroupId} stateLabel={(state) => VISIT_DEVICE_STATE_LABEL[state]} /> : null}
-      <ReadOnlyNotice>Bạn không cần xác nhận đồng ý mới được thanh toán. Cần báo vấn đề, hãy dùng kênh hỗ trợ riêng.</ReadOnlyNotice>
       <HubSection title="Xem thêm" items={LINKS.map(link => ({ ...link, disabled: revoked }))} onOpen={screen => { if (!revoked) navigation.navigate(screen as never); }} />
     </TaskScreenShell>
   );

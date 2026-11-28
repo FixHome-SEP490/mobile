@@ -71,6 +71,35 @@ const cases = [
   { name: 'repair status shows repair state without extras gate', Screen: RepairStatusScreen, status: 'UNDER_REPAIR' as const },
 ];
 
+it('arrival status after the technician checked in no longer says the technician is on the way', async () => {
+  mockSnapshot = customerSnapshot('EN_ROUTE');
+  (mockSnapshot.order as any).data.arrivalVerified = true;
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => {
+    renderer = create(<ArrivalStatusScreen />);
+  });
+  const text = JSON.stringify(renderer.toJSON());
+  expect(text).toContain('Kỹ thuật viên đã tới nơi');
+  expect(text).not.toContain('đang di chuyển');
+  await act(async () => renderer.unmount());
+});
+
+it('withdrawn technician: says a replacement is being sought and opens the booking instead of calling', async () => {
+  mockSnapshot = customerSnapshot('ACCEPTED');
+  (mockSnapshot.order as any).data.technician = undefined;
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => {
+    renderer = create(<AssignedOrderScreen />);
+  });
+  expect(JSON.stringify(renderer.toJSON())).toContain('Đang tìm thợ thay thế');
+  expect(renderer.root.findAllByProps({ testID: 'task-call' }).length).toBe(0);
+  await act(async () => {
+    renderer.root.findByProps({ testID: 'task-find-technician' }).props.onPress();
+  });
+  expect(mockNavigate).toHaveBeenCalledWith('CustomerBookingDetail', { bookingId: 'booking-1', released: true });
+  await act(async () => renderer.unmount());
+});
+
 for (const { name, Screen, status } of cases) {
   it(`${name}: one body plus one footer outside scroll, calling never writes`, async () => {
     mockSnapshot = customerSnapshot(status);
@@ -107,7 +136,7 @@ for (const { name, Screen, status } of cases) {
     await act(async () => {
       renderer = create(<Screen />);
     });
-    expect(JSON.stringify(renderer.toJSON())).toContain('Quyền xem đơn đã thay đổi');
+    expect(JSON.stringify(renderer.toJSON())).toContain('Không mở được bước này.');
     expect(mockNavigate).not.toHaveBeenCalled();
     expect(mockRefresh).not.toHaveBeenCalled();
     await act(async () => renderer.unmount());

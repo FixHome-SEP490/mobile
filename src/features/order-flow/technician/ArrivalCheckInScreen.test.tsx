@@ -155,7 +155,7 @@ it('resolved never claims order advancement and revoked clears draft without POS
     renderer = create(<ArrivalCheckInScreen />);
   });
   const text = JSON.stringify(renderer.toJSON());
-  expect(text).toMatch(/chờ máy chủ xác minh/);
+  expect(text).toMatch(/Đang chờ xác minh/);
   expect(text).not.toMatch(/đã chuyển|UNDER_REPAIR|COMPLETED/);
   await act(async () => renderer.unmount());
 

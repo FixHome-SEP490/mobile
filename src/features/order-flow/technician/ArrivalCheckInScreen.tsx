@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { NOT_OPENABLE, UNKNOWN_RESULT } from '../shared/notice-copy';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
@@ -104,7 +105,7 @@ export default function ArrivalCheckInScreen() {
       {alreadyVerified ? (
         <ReadOnlyNotice>Vị trí đã được máy chủ xác minh. Nhấn “Tiếp tục” để chuyển sang bước tiếp theo.</ReadOnlyNotice>
       ) : revoked ? (
-        <ReadOnlyNotice>Quyền xem đơn đã thay đổi hoặc phân công không còn thuộc về bạn. Mẫu vị trí đã được xóa; không có thao tác nào được gửi.</ReadOnlyNotice>
+        <ReadOnlyNotice>{NOT_OPENABLE}</ReadOnlyNotice>
       ) : (
         <ReadOnlyNotice>
           Hãy đứng tại điểm hẹn, nhấn “Lấy vị trí mới”, rồi xác nhận đúng vị trí thực tế của bạn. Mỗi lần bị từ chối cần một mẫu mới.
@@ -113,10 +114,10 @@ export default function ArrivalCheckInScreen() {
       {captureError ? <ReadOnlyNotice>{captureError}</ReadOnlyNotice> : null}
       {state.phase === 'denied' && state.message ? <ReadOnlyNotice>{state.message}</ReadOnlyNotice> : null}
       {state.phase === 'unknown' ? (
-        <ReadOnlyNotice>Chưa xác nhận được kết quả. Không gửi lại; hãy kiểm tra từ hệ thống trước khi thử lại.</ReadOnlyNotice>
+        <ReadOnlyNotice>{UNKNOWN_RESULT}</ReadOnlyNotice>
       ) : null}
       {state.phase === 'resolved' && !alreadyVerified ? (
-        <ReadOnlyNotice>Đã ghi nhận vị trí. Đang chờ máy chủ xác minh; trạng thái mới sẽ tự cập nhật sau khi làm mới.</ReadOnlyNotice>
+        <ReadOnlyNotice>Đã ghi nhận vị trí. Đang chờ xác minh.</ReadOnlyNotice>
       ) : null}
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <TouchableOpacity

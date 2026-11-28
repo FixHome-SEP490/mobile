@@ -1,7 +1,8 @@
 import TechnicianDeliverySection from './TechnicianDeliverySection';
+import { NOT_OPENABLE } from '../shared/notice-copy';
 import WarehouseAllocationCard, { useWarehouseAllocations } from './WarehouseAllocationCard';
 import { canReceivePickup, displayPartRequestStatus } from '../../../api/part-requests.api';
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AppState, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
@@ -16,6 +17,7 @@ import { ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { partsBlockers } from '../domain/order-capabilities';
 import { PartItemRow } from './PartItemRow';
+import PartsBulkUsage, { bulkChanges } from './PartsBulkUsage';
 import { approvedQuoteQty, approvedUsageCap } from './held-parts';
 import { usePartReturns } from './usePartReturns';
 import { lightTheme as colors, spacing, type ToneName } from '../../../constants/theme';
@@ -83,6 +85,12 @@ export default function PartsLifecycleScreen() {
   const refreshing = snapshot?.order.status === 'loading' || snapshot?.resources.parts?.status === 'loading';
 
   const frozen = busy || isUnknown || showRecovery;
+  const [usageDrafts, setUsageDrafts] = useState<Record<string, number>>({});
+  const [bulkClose, setBulkClose] = useState(0);
+  const onUsageDraft = useCallback((itemId: string, quantity: number | null) => setUsageDrafts(prev => {
+    if (quantity === null) { if (!(itemId in prev)) return prev; const { [itemId]: _drop, ...rest } = prev; return rest; }
+    return prev[itemId] === quantity ? prev : { ...prev, [itemId]: quantity };
+  }), []);
   const [usageModal, setUsageModal] = useState<{ requestId: string; itemId: string; status: 'used' | 'returned' } | null>(null);
   const [draftScope, setDraftScope] = useState({ key, focused, current, frozen });
   if (!(draftScope.key === key || !!key && sameOrderSession(draftScope.key, key)) || draftScope.focused !== focused || draftScope.current !== current || draftScope.frozen !== frozen) {
@@ -103,7 +111,7 @@ export default function PartsLifecycleScreen() {
   const onOpenReceive = (pr: OrderPartReadModel) => {
     if (!key || !current || frozen || !latest.current.current || latest.current.frozen || !sameOrderSession(latest.current.key, key) || !receiveEligible(pr)) return;
     setCancelModal(null); setUsageModal(null);
-    setQrModal({ requestId: pr.id, fulfillmentMethod: pr.fulfillmentMethod, tokenInput: '', scanning: false, reveal: false });
+    setQrModal({ requestId: pr.id, fulfillmentMethod: pr.fulfillmentMethod, tokenInput: '', scanning: true, reveal: false });
   };
   const onSubmitReceive = () => {
     const live = latest.current;
@@ -162,7 +170,7 @@ export default function PartsLifecycleScreen() {
         <ReadOnlyNotice>
           {snapshot?.access === 'historical'
             ? 'Không quản lý linh kiện cho đơn lịch sử.'
-            : 'Màn hình chỉ mở khi có quyền quản lý đơn hiện tại.'}
+            : NOT_OPENABLE}
         </ReadOnlyNotice>
       </TaskScreenShell>
     );
@@ -231,6 +239,8 @@ export default function PartsLifecycleScreen() {
             quotedQty={approvedQuoteQty(it, req.requestType, quotationsList, key!.serviceOrderId)}
             maxUsed={approvedUsageCap(it, req.requestType, partsList, quotationsList, key!.serviceOrderId, usedOf)}
             wholeOnly={req.fulfillmentMethod === 'delivery'}
+            onUsageDraft={onUsageDraft}
+            closeSignal={bulkClose}
             onWhole={status => onUpdateUsage(req.id, it.id, status)}
             onSaveUsed={quantity => returns.saveUsedQty(req.id, returns.records[it.id], quantity)}
             onDeclare={quantity => returns.declareReturn(req.id, returns.records[it.id], quantity)}
@@ -267,6 +277,16 @@ export default function PartsLifecycleScreen() {
     );
   };
 
+  const pendingBulk = bulkChanges(usageDrafts, itemId => {
+    const pr = partsList.find(p => p.items.some(it => it.id === itemId));
+    const record = returns.records[itemId];
+    return pr && record ? { requestId: pr.id, record } : undefined;
+  });
+  const saveBulk = async () => {
+    for (const c of pendingBulk) if (!(await returns.saveUsedQty(c.requestId, c.record, c.quantity))) return;
+    setBulkClose(n => n + 1);
+  };
+
   const visibleRequests = partsList.filter(req => !focusedRequestId || req.id === focusedRequestId);
   const otherRequests = visibleRequests.filter(req => !SOURCES.some(source => source.type === req.requestType));
   const groups = [
@@ -277,6 +297,7 @@ export default function PartsLifecycleScreen() {
   return (
     <TaskScreenShell
       title="Quản lý linh kiện"
+      scrollToTopKey={focusedRequestId}
       onBack={() => backFromParts(navigation, fromWarranty)}
       secondary={{
         label: focusedRequestId && !frozen ? 'Quay lại' : 'Làm mới dữ liệu',
@@ -378,7 +399,7 @@ export default function PartsLifecycleScreen() {
           </TouchableOpacity>
         </View>
       )}
-      {partsResource?.status === 'error' && <ReadOnlyNotice tone="error">Không tải được yêu cầu linh kiện. Hãy làm mới dữ liệu.</ReadOnlyNotice>}
+      {partsResource?.status === 'error' && <ReadOnlyNotice tone="error">Không tải được yêu cầu linh kiện. Kiểm tra kết nối, ứng dụng sẽ tự tải lại.</ReadOnlyNotice>}
       {partsResource?.status === 'loading' && <ReadOnlyNotice>Đang tải yêu cầu linh kiện…</ReadOnlyNotice>}
       {<TechnicianDeliverySection orderId={order.id} refreshKey={partsResource?.status === 'ready' ? partsResource.requestSeq : 0} onChanged={() => void refresh('manual')} />}
       {partsList.length > 0 ? (
@@ -406,6 +427,7 @@ export default function PartsLifecycleScreen() {
           )}
         </>
       )}
+      {Object.keys(usageDrafts).length > 1 && <PartsBulkUsage count={pendingBulk.length} locked={frozen || returns.busy} onSave={() => void saveBulk()} />}
     </TaskScreenShell>
   );
 }

@@ -30,6 +30,7 @@ import { vnDateTimeString, vnTimeString } from '../../utils/vn-time';
 import BackButton from '../../components/BackButton';
 import RebookSheet from '../../components/RebookSheet';
 import { useRebookAction } from '../../hooks/useRebookAction';
+import { useLiveRefresh } from '../../hooks/useLiveRefresh';
 import { sessionLabel } from '../../utils/booking-session';
 import PillText from '../../components/PillText';
 import { canCancelBookingConservative, cancelBookingConservative } from './customer-booking-manage';
@@ -82,6 +83,10 @@ export default function CustomerBookingDetailScreen() {
     void loader.focus(bookingId);
     return () => loader.blur();
   }, [bookingId, loader]));
+
+  // A technician accepting, declining or withdrawing changes this booking: read it again, quietly.
+  useLiveRefresh(['booking:updated', 'order:updated'], () => { void loader.refresh(false, true); },
+    (event) => !event.payload.bookingId || event.payload.bookingId === bookingId, { pollMs: 30_000 });
 
   const { booking, loading, refreshing, error } = state;
   // A device of a multi-device visit is moved, cancelled and paid with the whole visit, so its page is the visit page.
@@ -279,18 +284,6 @@ export default function CustomerBookingDetailScreen() {
                 <Text style={styles.progressTitle}>{bookingStatusLabel(booking.status)}</Text>
               </View>
             </View>
-            <View style={styles.orderRelation}>
-              <Ionicons
-                name={booking.serviceOrderId ? 'construct-outline' : 'time-outline'}
-                size={18}
-                color={colors.textSecondary}
-              />
-              <Text style={styles.orderRelationText}>
-                {booking.serviceOrderId
-                  ? 'Đơn sửa chữa đã được tạo'
-                  : 'Đơn sửa chữa chưa được tạo'}
-              </Text>
-            </View>
           </View>
 
           {booking.status === 'CANCELLED' && (
@@ -379,14 +372,6 @@ export default function CustomerBookingDetailScreen() {
               Đã gửi lời mời cho thợ cũ cho buổi bạn chọn, đang chờ thợ xác nhận.
             </Text>
           )}
-
-          <View style={styles.noteCard}>
-            <Ionicons name="information-circle-outline" size={20} color={colors.primaryStrong} />
-            <Text style={styles.noteText}>
-              “Yêu cầu đặt lịch” là bước tìm và mời kỹ thuật viên. Khi kỹ thuật viên nhận việc,
-              FixHome tạo “Đơn sửa chữa” riêng để theo dõi tiến độ, báo giá và thanh toán.
-            </Text>
-          </View>
         </ScrollView>
       )}
     </SafeAreaView>

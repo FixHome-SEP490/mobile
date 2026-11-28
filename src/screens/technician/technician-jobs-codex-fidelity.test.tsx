@@ -482,20 +482,10 @@ describe('TechnicianJobsScreen Codex fidelity (T-NATIVE-09A)', () => {
     await act(async () => renderer.unmount());
   });
 
-  it('shows the sanitized-history privacy notice with accessible 12pt text', async () => {
+  it('shows no history privacy notice (the card already shows only code, status and date)', async () => {
     mockedJobsState = jobsState([ACTIVE_ACCEPTED, HISTORICAL_POISONED]);
     const renderer = await renderScreen();
-    const notice = renderer.root.findAllByType(Text).find(
-      (node) =>
-        typeof node.props.children === 'string' &&
-        node.props.children.includes('Lịch sử thợ chỉ gồm mã, trạng thái và ngày'),
-    );
-    expect(notice).toBeDefined();
-    const style = StyleSheet.flatten(notice?.props.style);
-    expect(style.fontSize).toBeGreaterThanOrEqual(12);
-    expect(visibleText(renderer)).toContain(
-      'Lịch sử thợ chỉ gồm mã, trạng thái và ngày; không hiển thị tên khách, địa chỉ, ảnh, tiền, chi tiết hoặc chat.',
-    );
+    expect(visibleText(renderer)).not.toContain('Lịch sử thợ chỉ gồm mã, trạng thái và ngày');
     await act(async () => renderer.unmount());
   });
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { NOT_OPENABLE } from './notice-copy';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { paymentStatusLabel } from './payment-status-label';
@@ -97,7 +98,7 @@ export default function CompletedOrderScreen({ role }: { role: 'customer' | 'tec
         <ReadOnlyNotice>
           {historical
             ? 'Đơn lịch sử chỉ xem được thông tin cho phép; trạng thái hoàn thành do máy chủ xác nhận.'
-            : 'Đơn hoàn thành chỉ hiển thị sau khi máy chủ xác minh quyền xem đơn hiện tại.'}
+            : NOT_OPENABLE}
         </ReadOnlyNotice>
       </TaskScreenShell>
     );
@@ -169,11 +170,7 @@ export default function CompletedOrderScreen({ role }: { role: 'customer' | 'tec
         </> : null}
         <DetailRow label="Thanh toán" value={invoice ? paymentStatusLabel(invoice.paymentStatus) : 'Chưa có dữ liệu'} />
       </View>
-      {role === 'customer' ? (
-        <ReadOnlyNotice>Đơn đã hoàn thành theo xác nhận của máy chủ. Bạn có thể đánh giá khi sẵn sàng; đây là bước tùy chọn.</ReadOnlyNotice>
-      ) : (
-        <ReadOnlyNotice>Đơn đã hoàn thành theo xác nhận của máy chủ. Tiền công đã được ghi nhận vào ví của bạn; không còn thao tác nào cần gửi cho đơn này.</ReadOnlyNotice>
-      )}
+      {role === 'customer' ? null : <ReadOnlyNotice>Tiền công đã được ghi nhận vào ví của bạn.</ReadOnlyNotice>}
       {role === 'technician' && <VisitTechnicianPanel section="devices" />}
       <HubSection title="Chi tiết đơn" items={DETAILS} onOpen={open} />
       <HubSection title={role === 'customer' ? 'Sau dịch vụ' : 'Bảo hành và hỗ trợ'} items={role === 'customer' ? AFTER_CUSTOMER.map(l => l.screen === 'CustomerWarranty' && warrantySub ? { ...l, sub: warrantySub } : l) : AFTER_TECHNICIAN} onOpen={open} />

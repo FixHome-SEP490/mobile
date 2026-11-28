@@ -105,20 +105,10 @@ export function LaborCard({ row, index, errors, disabled, onChange, onRemove }: 
         <TextInput testID={id('description')} accessibilityLabel="Nội dung công việc" editable={!disabled} value={row.description} maxLength={2000}
           onChangeText={description => onChange({ ...row, description })} placeholder="Ví dụ: Vệ sinh dàn lạnh" placeholderTextColor={colors.muted} style={styles.input} />
       </Field>
-      <View style={styles.twoCols}>
-        <View style={styles.col}>
-          <Field label="Số lượng" error={errors?.quantity}>
-            <TextInput testID={id('quantity')} accessibilityLabel="Số lượng" editable={!disabled} value={row.quantity} keyboardType="number-pad" maxLength={4}
-              onChangeText={quantity => onChange({ ...row, quantity: quantity.replace(/\D/g, '') })} placeholder="1" placeholderTextColor={colors.muted} style={styles.input} />
-          </Field>
-        </View>
-        <View style={styles.col}>
-          <Field label="Đơn giá (đ)" error={errors?.unitPrice}>
-            <TextInput testID={id('unitprice')} accessibilityLabel="Đơn giá" editable={!disabled} value={row.unitPrice} keyboardType="number-pad" maxLength={9}
-              onChangeText={unitPrice => onChange({ ...row, unitPrice: unitPrice.replace(/\D/g, '') })} placeholder="150000" placeholderTextColor={colors.muted} style={styles.input} />
-          </Field>
-        </View>
-      </View>
+      <Field label="Đơn giá (đ)" error={errors?.unitPrice}>
+        <TextInput testID={id('unitprice')} accessibilityLabel="Đơn giá" editable={!disabled} value={row.unitPrice} keyboardType="number-pad" maxLength={9}
+          onChangeText={unitPrice => onChange({ ...row, unitPrice: unitPrice.replace(/\D/g, '') })} placeholder="150000" placeholderTextColor={colors.muted} style={styles.input} />
+      </Field>
       <Field label="Bảo hành công (ngày, tùy chọn)" error={errors?.laborWarrantyDays}>
         <TextInput testID={id('warranty')} accessibilityLabel="Số ngày bảo hành tiền công" editable={!disabled} value={row.laborWarrantyDays} keyboardType="number-pad" maxLength={4}
           onChangeText={laborWarrantyDays => onChange({ ...row, laborWarrantyDays: laborWarrantyDays.replace(/\D/g, '') })} placeholder="Để trống: theo mặc định của bạn" placeholderTextColor={colors.muted} style={styles.input} />

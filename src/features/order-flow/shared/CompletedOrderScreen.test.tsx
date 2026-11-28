@@ -118,7 +118,7 @@ it('non-completed order keeps an honest shell and back never writes', async () =
   mockSnapshot = snapshotFor('customer', 'UNDER_REPAIR');
   let renderer!: ReturnType<typeof create>;
   await act(async () => { renderer = create(<CompletedOrderScreen role="customer" />); });
-  expect(JSON.stringify(renderer.toJSON())).toContain('máy chủ xác minh');
+  expect(JSON.stringify(renderer.toJSON())).toContain('Không mở được bước này.');
   expect(mockRefresh).not.toHaveBeenCalled();
   await act(async () => renderer.unmount());
 });

@@ -1,4 +1,5 @@
 import React from 'react';
+import { NOT_OPENABLE } from '../shared/notice-copy';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
@@ -44,7 +45,7 @@ export default function PaymentResultScreen() {
   if (!current || !order) {
     return (
       <TaskScreenShell title="Kết quả thanh toán" onBack={() => navigation.goBack()}>
-        <ReadOnlyNotice>Kết quả thanh toán chỉ hiển thị sau khi máy chủ xác minh quyền xem đơn hiện tại và kỹ thuật viên gửi yêu cầu bàn giao.</ReadOnlyNotice>
+        <ReadOnlyNotice>{NOT_OPENABLE}</ReadOnlyNotice>
       </TaskScreenShell>
     );
   }
@@ -104,9 +105,6 @@ export default function PaymentResultScreen() {
           <Text style={{ color: colors.primaryStrong, fontSize: 15, fontWeight: '600' }}>Quay lại bước thanh toán ›</Text>
         </TouchableOpacity>
       ) : null}
-      <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-        Chỉ hóa đơn, đơn và sổ đối soát từ máy chủ mới là căn cứ. Thông báo từ trình duyệt hoặc đường dẫn quay lại không quyết định kết quả.
-      </Text>
     </TaskScreenShell>
   );
 }

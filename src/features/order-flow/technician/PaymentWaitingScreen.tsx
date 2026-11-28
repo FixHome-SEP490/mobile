@@ -113,11 +113,7 @@ export default function PaymentWaitingScreen() {
           />
         ) : null}
       </View>
-      {paidUpdating ? (
-        <ReadOnlyNotice>Hóa đơn đã được thanh toán; đơn đang chờ máy chủ hoàn tất. Đây chưa phải đơn hoàn thành.</ReadOnlyNotice>
-      ) : (
-        <ReadOnlyNotice>Đơn hoàn thành do máy chủ quyết định sau khi ghi nhận thanh toán. Màn hình này chỉ đọc; nút kiểm tra không gửi thao tác mới.</ReadOnlyNotice>
-      )}
+      {paidUpdating ? <ReadOnlyNotice>Khách đã thanh toán, đang hoàn tất đơn…</ReadOnlyNotice> : null}
       {unknown ? (
         <ReadOnlyNotice>Có thao tác khai báo chưa rõ kết quả. Hãy kiểm tra lại từ máy chủ; không gửi khai báo mới khi còn thao tác chưa rõ.</ReadOnlyNotice>
       ) : null}

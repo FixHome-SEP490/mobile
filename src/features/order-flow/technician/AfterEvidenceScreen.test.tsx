@@ -119,7 +119,7 @@ it('revoked assignment clears drafts and disables capture without writes', async
   let renderer!: ReturnType<typeof create>;
   await act(async () => { renderer = create(<AfterEvidenceScreen />); });
   expect(renderer.root.findByProps({ testID: 'after-capture' }).props.disabled).toBe(true);
-  expect(JSON.stringify(renderer.toJSON())).toContain('Bản nháp ảnh đã được xóa');
+  expect(JSON.stringify(renderer.toJSON())).toContain('không còn thuộc về bạn');
   await act(async () => { renderer.root.findByProps({ testID: 'after-capture' }).props.onPress(); });
   expect(mockUploadAfter).not.toHaveBeenCalled();
   await act(async () => renderer.unmount());

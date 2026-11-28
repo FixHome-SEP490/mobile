@@ -21,7 +21,7 @@ function usageView(usage: Item['usageStatus'], received: boolean): { label: stri
   return received ? { label: 'Chưa ghi dùng/trả', tone: 'warning' } : null;
 }
 
-function Stepper({ value, min, max, label, onChange }: { value: number; min: number; max: number; label: string; onChange: (value: number) => void }) {
+export function Stepper({ value, min, max, label, onChange }: { value: number; min: number; max: number; label: string; onChange: (value: number) => void }) {
   return (
     <View style={styles.stepper}>
       <Pressable accessibilityRole="button" accessibilityLabel={`Giảm ${label}`} accessibilityState={{ disabled: value <= min }} disabled={value <= min}
@@ -51,7 +51,11 @@ function ActionButton({ testID, label, primary, disabled, onPress }: { testID: s
  * given back). With one (the quantities FixHome issued) they record the exact used quantity, e.g. issued 3,
  * used 1, return 2, and declare what they hand back; the Service Manager confirms at the counter.
  */
-export function PartItemRow({ item, received, canMarkUsage, frozen, record, busy, quotedQty, maxUsed, wholeOnly, onWhole, onSaveUsed, onDeclare }: {
+export function PartItemRow({ item, received, canMarkUsage, frozen, record, busy, quotedQty, maxUsed, wholeOnly, onWhole, onSaveUsed, onDeclare, onUsageDraft, closeSignal }: {
+  /** Reports the quantity of this line's open usage editor (null when closed) so one screen-level button can save them all. */
+  onUsageDraft?: (itemId: string, quantity: number | null) => void;
+  /** Changes when the screen saved every open editor: close this one. */
+  closeSignal?: number;
   item: Item; received: boolean; canMarkUsage: boolean; frozen: boolean; record?: PartCustodyReturnRecord; busy: boolean;
   /** Quantity of this SKU on the approved quotation; undefined when there is no approved quotation line for it. */
   quotedQty?: number;
@@ -65,6 +69,8 @@ export function PartItemRow({ item, received, canMarkUsage, frozen, record, busy
 }) {
   const [mode, setMode] = useState<'usage' | 'declare' | null>(null);
   const [qty, setQty] = useState(0);
+  const [seenClose, setSeenClose] = useState(closeSignal);
+  if (seenClose !== closeSignal) { setSeenClose(closeSignal); setMode(null); }
   // Everything issued is declared back and nothing was used: there is no usage left to ask for, so settle it as "used 0"
   // right away. The manager's receipt is a separate step and never holds up the handover.
   const fullyReturned = !!record && record.issuedQty > 0 && record.usedQty === 0 && record.declaredQty >= record.issuedQty;
@@ -92,6 +98,7 @@ export function PartItemRow({ item, received, canMarkUsage, frozen, record, busy
     settled.current = true;
     void onSaveUsed(0);
   });
+  useEffect(() => { onUsageDraft?.(item.id, mode === 'usage' ? qty : null); }, [mode, qty, item.id, onUsageDraft]);
   const open = (next: 'usage' | 'declare') => { setQty(next === 'usage' ? record!.usedQty : quickDeclare ? declareMax : 1); setMode(next); };
 
   return (

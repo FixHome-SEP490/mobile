@@ -126,7 +126,7 @@ export function bookingNextAction(booking: BookingItem): BookingNextAction {
     return {
       kind: 'wait',
       title: 'Đang chờ kỹ thuật viên phản hồi',
-      detail: 'Lời mời đang được xử lý theo thứ tự ưu tiên. Bạn không cần gửi lại yêu cầu; kéo xuống để làm mới khi cần.',
+      detail: 'Lời mời đang được xử lý theo thứ tự ưu tiên. Bạn không cần gửi lại yêu cầu.',
       primaryLabel: null,
       serviceOrderId: null,
     };
@@ -136,7 +136,7 @@ export function bookingNextAction(booking: BookingItem): BookingNextAction {
     return {
       kind: 'wait',
       title: 'Đang hoàn tất ghép kỹ thuật viên',
-      detail: 'Hệ thống đang hoàn tất liên kết đơn sửa chữa. Làm mới để xem trạng thái mới nhất.',
+      detail: 'Hệ thống đang hoàn tất liên kết đơn sửa chữa.',
       primaryLabel: null,
       serviceOrderId: null,
     };
@@ -155,7 +155,7 @@ export function bookingNextAction(booking: BookingItem): BookingNextAction {
   return {
     kind: 'wait',
     title: 'Đang xử lý yêu cầu',
-    detail: 'Làm mới để xem trạng thái mới nhất.',
+    detail: 'Trạng thái sẽ tự cập nhật.',
     primaryLabel: null,
     serviceOrderId: null,
   };

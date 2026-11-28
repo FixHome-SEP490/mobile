@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { NOT_OPENABLE, UNKNOWN_RESULT } from '../shared/notice-copy';
 import { Image, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder, ordersApi, type CheckInFaceChallenge } from '../../../api/orders.api';
@@ -159,13 +160,13 @@ export default function FaceCheckInScreen() {
         <DetailRow label="Ảnh khuôn mặt" value={refused ? 'Chưa được xác nhận' : hasOwnFace ? 'Máy chủ đã xác nhận' : 'Chưa có ảnh được xác nhận'} />
       </View>
       {revoked ? (
-        <ReadOnlyNotice>Quyền xem đơn đã thay đổi hoặc phân công không còn thuộc về bạn. Bản nháp ảnh đã được xóa; không có thao tác nào được gửi.</ReadOnlyNotice>
+        <ReadOnlyNotice>{NOT_OPENABLE}</ReadOnlyNotice>
       ) : !evidenceReady ? (
-        <ReadOnlyNotice>Đang tải danh sách ảnh từ máy chủ. Mọi thao tác chụp và gửi đều khóa cho đến khi dữ liệu ảnh đầy đủ.</ReadOnlyNotice>
+        <ReadOnlyNotice>Đang tải ảnh…</ReadOnlyNotice>
       ) : refused ? (
         <ReadOnlyNotice>{`Quản lý dịch vụ chưa xác nhận khuôn mặt của bạn${order?.checkinFaceReview?.note ? `: ${order.checkinFaceReview.note}` : ''}. Hãy chụp lại ảnh khuôn mặt ở nơi đủ sáng, nhìn thẳng vào camera.`}</ReadOnlyNotice>
       ) : hasOwnFace ? (
-        <ReadOnlyNotice>Ảnh xác minh đã được máy chủ xác nhận. Đang tải trạng thái mới; không cần gửi lại.</ReadOnlyNotice>
+        <ReadOnlyNotice>Ảnh xác minh đã được ghi nhận, không cần gửi lại.</ReadOnlyNotice>
       ) : (
         <ReadOnlyNotice>Hãy chụp ảnh khuôn mặt của bạn bằng camera để máy chủ xác minh. Ảnh chỉ xem trước trên máy trước khi bạn nhấn gửi. Camera sẽ hướng dẫn từng bước: ảnh đầu nhìn thẳng, ảnh sau quay đầu hoặc mỉm cười để xác nhận bạn đang có mặt.</ReadOnlyNotice>
       )}
@@ -253,10 +254,10 @@ export default function FaceCheckInScreen() {
         </TouchableOpacity>
       ) : null}
       {isUnresolved ? (
-        <ReadOnlyNotice>Chưa xác nhận được kết quả hoặc có thao tác đang chờ đối chiếu. Không gửi lại; hãy kiểm tra từ hệ thống trước khi thử lại.</ReadOnlyNotice>
+        <ReadOnlyNotice>{UNKNOWN_RESULT}</ReadOnlyNotice>
       ) : null}
-      {state.phase === 'resolved' ? (
-        <ReadOnlyNotice>Đã gửi ảnh. Đang chờ máy chủ xác nhận; trạng thái mới sẽ tự cập nhật sau khi làm mới.</ReadOnlyNotice>
+      {state.phase === 'resolved' && !hasOwnFace ? (
+        <ReadOnlyNotice>Đã gửi ảnh. Đang chờ xác nhận.</ReadOnlyNotice>
       ) : null}
       {liveCamera && challenge?.challenge ? (
         <FaceLivenessCamera challenge={challenge.challenge} mode={liveCamera} onDone={onLiveDone} onCancel={() => setLiveCamera(null)} />

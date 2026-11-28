@@ -73,7 +73,7 @@ it('shows the current repair scope with detail links and no premature completion
   });
   const text = JSON.stringify(renderer.toJSON());
   expect(text).toMatch(/Vệ sinh dàn lạnh/);
-  expect(text).toMatch(/bước tiếp theo/);
+  expect(text).not.toMatch(/bước tiếp theo/);
   expect(text).not.toMatch(/Hoàn tất|Yêu cầu hoàn tất|Xác nhận hoàn tất/);
   const tree = renderer.toJSON() as any;
   const children: any[] = tree?.children ?? [];

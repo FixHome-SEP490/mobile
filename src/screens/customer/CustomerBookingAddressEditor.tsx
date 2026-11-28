@@ -465,7 +465,6 @@ export default function CustomerBookingAddressEditor({
       <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets contentContainerStyle={{ padding: 16, paddingBottom: 24 }}>
     <View testID="booking-new-address-editor" style={[styles.card, { backgroundColor: colors.surface }]}>
       <Text accessibilityRole="header" style={[styles.heading, { color: colors.text }]}>Thêm địa chỉ tại nơi cần sửa</Text>
-      <Text style={[styles.hint, { color: colors.textSecondary }]}>Tìm địa chỉ → Ghim vị trí → Xác nhận địa chỉ → Lưu</Text>
       <TextInput accessibilityLabel="Tên địa chỉ mới" placeholder="Tên gợi nhớ (Ví dụ: Nhà riêng)" value={label}
         onChangeText={setLabel} maxLength={100} editable={!saveAttempted} placeholderTextColor={colors.textSecondary}
         style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]} />

@@ -22,7 +22,6 @@ export function SupportCaseListScreen() {
     {state.list.status === 'loading' || state.list.status === 'unloaded' ? <ReadOnlyNotice>Đang tải danh sách yêu cầu hỗ trợ…</ReadOnlyNotice> : null}
     {state.list.status === 'error' ? <ReadOnlyNotice>Chưa tải được danh sách. Hãy làm mới để thử lại.</ReadOnlyNotice> : null}
     {state.list.status === 'ready' && rows.length === 0 ? <ReadOnlyNotice>Chưa có yêu cầu hỗ trợ cho đơn này.</ReadOnlyNotice> : null}
-    {state.list.status === 'ready' ? <ReadOnlyNotice>{`Đã xác minh ${state.knownActorOpenCount ?? 0} yêu cầu đang mở do bạn tạo. Đây là số đã biết, không phải tổng số yêu cầu đang mở.`}</ReadOnlyNotice> : null}
     {rows.map(item => <Pressable key={item.id} testID={`support-case-${item.id}`} accessibilityRole="button" accessibilityLabel={`Mở yêu cầu hỗ trợ, trạng thái ${caseStatusLabel[item.status] || 'chưa xác định'}`} onPress={() => navigation.navigate('SupportCaseDetail', { caseId: item.id })} style={row}>
       <Text style={rowText}>{caseTypeLabel[item.caseType] || 'Yêu cầu hỗ trợ'} · {caseStatusLabel[item.status] || 'Chưa xác định'} ›</Text>
     </Pressable>)}
@@ -44,8 +43,6 @@ export function SupportCaseCreateScreen() {
     <Text style={label}>Lý do</Text><TextInput accessibilityLabel="Lý do hỗ trợ" value={reason} editable={!locked} onChangeText={setReason} maxLength={2000} multiline style={[input, { minHeight: 90 }]} />
     <Text style={label}>Mô tả thêm (không bắt buộc)</Text><TextInput accessibilityLabel="Mô tả thêm" value={description} editable={!locked} onChangeText={setDescription} maxLength={5000} multiline style={[input, { minHeight: 120 }]} />
     <Pressable accessibilityRole="checkbox" disabled={locked} accessibilityState={{ checked: urgent, disabled: locked }} onPress={() => setUrgent(value => !value)} style={[row, locked && { opacity: 0.6 }]}><Text style={label}>{urgent ? '✓ ' : ''}Cần được xem sớm</Text></Pressable>
-    <ReadOnlyNotice>Ảnh mới đang chờ hỗ trợ lưu trữ riêng tư. Chỉ ảnh đã có quyền trong hồ sơ này mới có thể dùng.</ReadOnlyNotice>
-    {confirmed ? <ReadOnlyNotice>Hãy xem lại loại yêu cầu và nội dung trước khi xác nhận gửi.</ReadOnlyNotice> : null}
     {state.message ? <ReadOnlyNotice>{state.message}</ReadOnlyNotice> : null}
   </TaskScreenShell>;
 }
@@ -58,7 +55,7 @@ export function SupportCaseDetailScreen() {
     {state.detail.status === 'loading' || state.detail.status === 'unloaded' ? <ReadOnlyNotice>Đang xác minh yêu cầu hỗ trợ…</ReadOnlyNotice> : null}
     {state.detail.status === 'error' ? <ReadOnlyNotice>Không thể xác minh yêu cầu này. Hãy mở từ danh sách của bạn và thử làm mới.</ReadOnlyNotice> : null}
     {item ? <Section title="Yêu cầu hỗ trợ">
-      <DetailRow label="Mã yêu cầu" value={item.id} /><DetailRow label="Tình trạng" value={caseStatusLabel[item.status] || 'Chưa xác định'} /><DetailRow label="Loại hỗ trợ" value={caseTypeLabel[item.caseType] || 'Yêu cầu hỗ trợ'} /><DetailRow label="Lý do" value={item.reason} /><DetailRow label="Mô tả" value={item.description} /><DetailRow label="Hạn phản hồi" value={item.respondBy} /><DetailRow label="Lý do xử lý" value={item.resolutionReason} /><DetailRow label="Thời điểm xử lý" value={item.resolvedAt} />
+      <DetailRow label="Tình trạng" value={caseStatusLabel[item.status] || 'Chưa xác định'} /><DetailRow label="Loại hỗ trợ" value={caseTypeLabel[item.caseType] || 'Yêu cầu hỗ trợ'} /><DetailRow label="Lý do" value={item.reason} /><DetailRow label="Mô tả" value={item.description} /><DetailRow label="Hạn phản hồi" value={item.respondBy} /><DetailRow label="Lý do xử lý" value={item.resolutionReason} /><DetailRow label="Thời điểm xử lý" value={item.resolvedAt} />
     </Section> : null}
   </TaskScreenShell>;
 }

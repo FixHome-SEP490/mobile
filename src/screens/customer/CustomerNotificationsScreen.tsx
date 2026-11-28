@@ -15,6 +15,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useLiveRefresh } from '../../hooks/useLiveRefresh';
+import { useBadgeStore } from '../../store/badge.store';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useScrollHideTabBar } from '../../hooks/useScrollHideTabBar';
 import CustomerSkeleton from '../../components/customer/CustomerSkeleton';
@@ -63,6 +64,7 @@ export default function CustomerNotificationsScreen() {
       setPageMeta(page.meta);
       setLoadError(null);
       setLoadMoreError(null);
+      setMarkAllError(null);
     } catch (error) {
       console.error('Lỗi khi tải thông báo:', error);
       setLoadError('Không thể tải thông báo. Kiểm tra kết nối rồi thử lại.');
@@ -117,6 +119,7 @@ export default function CustomerNotificationsScreen() {
     setMarkAllError(null);
     try {
       await notificationsApi.readAll();
+      useBadgeStore.getState().setUnreadNotifications(0);
       setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
       setMarkAllError(null);
     } catch (error) {
@@ -145,7 +148,9 @@ export default function CustomerNotificationsScreen() {
         markReadRemote: (id) => {
           const pending = readRequestsRef.current.get(id);
           if (pending) return pending;
-          const request = notificationsApi.readNotification(id).finally(() => {
+          const request = notificationsApi.readNotification(id).then(() => {
+            notificationsApi.getCountUnread().then(useBadgeStore.getState().setUnreadNotifications).catch(() => {});
+          }).finally(() => {
             readRequestsRef.current.delete(id);
           });
           readRequestsRef.current.set(id, request);

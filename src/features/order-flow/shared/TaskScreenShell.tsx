@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useEffect, useRef } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardInset } from '../../../hooks/useKeyboardInset';
@@ -49,7 +49,7 @@ export function StageHeader({ stage }: { stage: 1 | 2 | 3 | 4 | null }) {
   </View>;
 }
 
-export function TaskScreenShell({ title, stage, children, primary, secondary, summary, onBack, contentStyle, hideVisitPanel }: {
+export function TaskScreenShell({ title, stage, children, primary, secondary, summary, onBack, contentStyle, hideVisitPanel, scrollToTopKey }: {
   title: string;
   stage?: 1 | 2 | 3 | 4 | null;
   children: React.ReactNode;
@@ -61,7 +61,11 @@ export function TaskScreenShell({ title, stage, children, primary, secondary, su
   contentStyle?: StyleProp<ViewStyle>;
   /** For screens that are not about the devices of the visit (a warranty claim). */
   hideVisitPanel?: boolean;
+  /** Scrolls to the top whenever this changes (a form opened above the part of the list that was tapped). */
+  scrollToTopKey?: unknown;
 }) {
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  useEffect(() => { if (scrollToTopKey) scrollRef.current?.scrollTo({ y: 0, animated: true }); }, [scrollToTopKey]);
   const insets = useSafeAreaInsets();
   const keyboardInset = useKeyboardInset();
   const slot = useContext(OrderContextSlot);
@@ -75,7 +79,7 @@ export function TaskScreenShell({ title, stage, children, primary, secondary, su
       {closeSheet ? <View style={{ width: 44 }} /> : <HomeButton onPress={leaveFlowToHome} />}
     </View>
     {stage !== undefined && !closeSheet && (slot ? <slot.Stepper /> : <StageHeader stage={stage} />)}
-    <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, contentStyle]} keyboardShouldPersistTaps="handled">
+    <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={[styles.scrollContent, contentStyle]} keyboardShouldPersistTaps="handled">
       {stage !== undefined && !closeSheet && slot && <slot.Summary />}
       {children}
       {hideVisitPanel ? null : <VisitCustomerPanel />}

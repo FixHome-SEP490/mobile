@@ -10,6 +10,8 @@ import CustomerProfileScreen from '../screens/customer/CustomerProfileScreen';
 import CustomerAnimatedBottomBar from '../components/navigation/CustomerAnimatedBottomBar';
 import { AvatarTabIcon } from '../components/navigation/AvatarTabIcon';
 import { useAuthStore } from '../store';
+import { useBadgeStore } from '../store/badge.store';
+import { useLiveRefresh } from '../hooks/useLiveRefresh';
 import { notificationsApi } from '../api/notifications.api';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -17,7 +19,8 @@ const Tab = createBottomTabNavigator<CustomerTabParamList>();
 
 export default function CustomerNavigator() {
   const user = useAuthStore((state) => state.user);
-  const [unreadCount, setUnreadCount] = React.useState(0);
+  const unreadCount = useBadgeStore((state) => state.unreadNotifications);
+  const setUnreadCount = useBadgeStore((state) => state.setUnreadNotifications);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -26,8 +29,13 @@ export default function CustomerNavigator() {
         if (mounted) setUnreadCount(count);
       }).catch(() => {});
       return () => { mounted = false; };
-    }, [])
+    }, [setUnreadCount])
   );
+
+  // Same as the technician tab: the badge follows `notification:new` instead of waiting for a refocus.
+  useLiveRefresh(['notification:new'], () => {
+    notificationsApi.getCountUnread().then(setUnreadCount).catch(() => {});
+  }, undefined, { pollMs: 60_000 });
 
   return (
     <Tab.Navigator
@@ -74,7 +82,7 @@ export default function CustomerNavigator() {
           title: 'Thông báo',
           headerShown: false,
           headerTitle: 'Thông báo & Ưu đãi',
-          tabBarBadge: unreadCount,
+          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
         }}
       />
       <Tab.Screen

@@ -1,4 +1,5 @@
 import React from 'react';
+import { NOT_OPENABLE } from './notice-copy';
 import { serviceOrderStatusView } from '../../../screens/technician/technician-status';
 import { useNavigation } from '@react-navigation/native';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
@@ -28,7 +29,7 @@ export default function OrderProgressHistoryScreen() {
     secondary={{ label: 'Làm mới dữ liệu', testID: 'readonly-detail-refresh', disabled: !canRefresh || refreshing,
       onPress: () => { if (canRefresh && !refreshing) void refresh('manual'); } }}>
     {historicalTech && <ReadOnlyNotice>Đơn lịch sử chỉ có bản tóm tắt bảy trường do máy chủ cấp. Không tải lịch sử, hồ sơ đặt chỗ hoặc tài nguyên chi tiết.</ReadOnlyNotice>}
-    {!current && !historicalTech && <ReadOnlyNotice>{snapshot?.access === 'revoked' ? 'Quyền truy cập đã thay đổi; dữ liệu đơn đã được xóa.' : 'Lịch sử chỉ tải sau khi xác minh quyền xem đơn hiện tại.'}</ReadOnlyNotice>}
+    {!current && !historicalTech && <ReadOnlyNotice>{snapshot?.access === 'revoked' ? NOT_OPENABLE : 'Lịch sử chỉ tải sau khi xác minh quyền xem đơn hiện tại.'}</ReadOnlyNotice>}
     {current && resource?.status === 'loading' && <ReadOnlyNotice>Đang tải lịch sử từ máy chủ…</ReadOnlyNotice>}
     {current && resource?.status === 'error' && <ReadOnlyNotice>Chưa tải được lịch sử. Ứng dụng sẽ tự thử lại.</ReadOnlyNotice>}
     {current && resource?.status === 'ready' && resource.data.length === 0 && <ReadOnlyNotice>Máy chủ chưa có mục lịch sử tiến độ cho đơn này.</ReadOnlyNotice>}

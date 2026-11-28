@@ -241,7 +241,6 @@ export default function CustomerVisitCreateScreen() {
               <Text style={styles.hint}>Tổng giá công tạm tính</Text>
               <Text style={styles.value}>{visitPriceText(total, formatVnd) || 'Thợ báo giá tại nhà'}</Text>
             </View>
-            <Text style={styles.hint}>{devices.length} thiết bị, một kỹ thuật viên nhận cả lượt và bạn thanh toán một lần.</Text>
             {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
             <TouchableOpacity
               testID="visit-review-send"

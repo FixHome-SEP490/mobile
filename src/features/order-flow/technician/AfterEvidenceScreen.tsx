@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
+import { UNKNOWN_RESULT } from '../shared/notice-copy';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ArrowLeft, FileText } from 'lucide-react-native';
 import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
@@ -252,19 +253,17 @@ export default function AfterEvidenceScreen() {
         </View>
       </View>
       {revoked ? (
-        <ReadOnlyNotice>Quyền xem đơn đã thay đổi, phân công không còn thuộc về bạn hoặc đơn đã qua bước sửa chữa. Bản nháp ảnh đã được xóa; không có thao tác nào được gửi.</ReadOnlyNotice>
+        <ReadOnlyNotice>Đơn đã qua bước sửa chữa hoặc không còn thuộc về bạn.</ReadOnlyNotice>
       ) : snapshot?.resources.evidence.status === 'error' ? (
         <ReadOnlyNotice tone="error">Chưa tải được danh sách ảnh từ máy chủ. Kiểm tra kết nối, ứng dụng sẽ tự tải lại.</ReadOnlyNotice>
       ) : !evidenceReady ? (
-        <ReadOnlyNotice>Đang tải danh sách ảnh từ máy chủ. Mọi thao tác chụp, gửi và xóa đều khóa cho đến khi dữ liệu ảnh đầy đủ.</ReadOnlyNotice>
-      ) : (
-        <ReadOnlyNotice>Hãy chụp ảnh hiện trạng sau sửa chữa bằng camera. Chỉ ảnh đã được máy chủ xác nhận mới dùng cho bàn giao.</ReadOnlyNotice>
-      )}
+        <ReadOnlyNotice>Đang tải ảnh…</ReadOnlyNotice>
+      ) : null}
       {knownInsufficient ? (
         <ReadOnlyNotice tone="warning">Số ảnh sau sửa chữa chưa đạt yêu cầu đã biết của đợt kiểm tra. Hãy chụp và gửi thêm trước khi sang bàn giao.</ReadOnlyNotice>
       ) : null}
       {assets.length ? (
-        <Section title={assets.length > 1 ? `Ảnh vừa chụp (${assets.length}/${MAX_AFTER_DRAFTS})` : 'Ảnh vừa chụp'} hint={assets.length > 1 ? `Đã chụp ${assets.length} ảnh. Kiểm tra kỹ rồi mới gửi.` : 'Đã chụp xong. Kiểm tra kỹ rồi mới gửi.'}>
+        <Section title={assets.length > 1 ? `Ảnh vừa chụp (${assets.length}/${MAX_AFTER_DRAFTS})` : 'Ảnh vừa chụp'} >
           <View style={styles.previewWrap}>
             <PhotoDraftGallery
               photos={assets}
@@ -319,7 +318,7 @@ export default function AfterEvidenceScreen() {
       {captureError ? <ReadOnlyNotice>{captureError}</ReadOnlyNotice> : null}
       {state.phase === 'denied' && state.message ? <ReadOnlyNotice>{state.message}</ReadOnlyNotice> : null}
       {isUnresolved ? (
-        <ReadOnlyNotice>Chưa xác nhận được kết quả hoặc có thao tác đang chờ đối chiếu. Không gửi lại; hãy kiểm tra từ hệ thống trước khi thử lại.</ReadOnlyNotice>
+        <ReadOnlyNotice>{UNKNOWN_RESULT}</ReadOnlyNotice>
       ) : null}
       <Section title="Xem thêm">
         {fromProposal ? (

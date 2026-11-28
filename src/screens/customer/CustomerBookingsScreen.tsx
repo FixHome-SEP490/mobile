@@ -526,7 +526,7 @@ export default function CustomerBookingsScreen() {
     const detailId = orderDetailTarget(order.id);
     const dateStr = activityCardWhen(booking.preferredStartAt, booking.createdAt, 'Chưa có thời gian');
     const message = replacement === 'waiting'
-      ? 'Đang tìm kỹ thuật viên thay thế; đang chờ kỹ thuật viên phản hồi; làm mới để cập nhật'
+      ? 'Đang tìm kỹ thuật viên thay thế; đang chờ kỹ thuật viên phản hồi'
       : 'Lượt mời kỹ thuật viên thay thế đã kết thúc. Xem khả năng chọn lại; hệ thống sẽ kiểm tra trước khi gửi.';
     return (
       <View style={styles.card}>
@@ -786,9 +786,6 @@ export default function CustomerBookingsScreen() {
             <View style={styles.kindEmpty} testID="activity-kind-empty">
               <Ionicons name={activeKind === 'repair' ? 'construct-outline' : 'calendar-outline'} size={40} color={colors.muted} />
               <Text style={styles.emptyTitle}>{kindEmptyText}</Text>
-              <Text style={styles.emptyDesc}>
-                {activeKind === 'repair' ? 'Xem tab Yêu cầu đặt lịch để theo dõi các yêu cầu của bạn.' : 'Xem tab Đơn sửa chữa để theo dõi các đơn đang được thực hiện.'}
-              </Text>
             </View>
           )}
           {(loadingMore || loadingMoreOrders) && (

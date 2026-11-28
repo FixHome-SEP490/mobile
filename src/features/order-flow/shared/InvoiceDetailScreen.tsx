@@ -73,7 +73,6 @@ export default function InvoiceDetailScreen() {
         {vs.unused.map((item, i, all) => <LineRow key={item.id} name={item.description} detail={`Báo giá cần dùng ${item.quantity} · Thực dùng 0`} warn value="Không tính tiền" last={i === all.length - 1} />)}
       </Section>}
       {vs?.differs && <ReadOnlyNotice>Linh kiện được tính theo số lượng thực tế đã dùng, nên hóa đơn có thể thấp hơn báo giá. Phần không dùng đến không bị tính tiền.</ReadOnlyNotice>}
-      <ReadOnlyNotice>Thanh toán và hoàn tất đơn là hai trạng thái riêng. Màn hình này chỉ đọc, không gửi yêu cầu thanh toán hay xác nhận hoàn tất.</ReadOnlyNotice>
     </>}
   </TaskScreenShell>;
 }

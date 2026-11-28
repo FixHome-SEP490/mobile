@@ -8,7 +8,6 @@ import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreen
 import TechnicianOrderHub from '../shared/TechnicianOrderHub';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { backFromFlow } from '../navigation/resume-order';
-import PillText from '../../../components/PillText';
 
 /**
  * T05W — the check-in face did not match the registered face and waits for a service manager (PO 20/11/2026).
@@ -26,7 +25,7 @@ export default function FaceReviewWaitingScreen() {
   if (!current || !order) {
     return (
       <TaskScreenShell title="Chờ xác nhận khuôn mặt" onBack={() => backFromFlow(navigation)}>
-        <ReadOnlyNotice>Trạng thái chờ chỉ được đọc sau khi máy chủ xác minh quyền xem đơn hiện tại.</ReadOnlyNotice>
+        <ReadOnlyNotice>Không mở được bước này.</ReadOnlyNotice>
       </TaskScreenShell>
     );
   }
@@ -46,9 +45,6 @@ export default function FaceReviewWaitingScreen() {
       <View style={styles.card}>
         <View style={styles.head}>
           <Text accessibilityRole="header" style={styles.title}>Khuôn mặt check-in</Text>
-          <View style={[styles.chip, { backgroundColor: colors.tone.warning.bg }]}>
-            <PillText style={[styles.chipText, { color: colors.tone.warning.text }]}>Chờ xác nhận</PillText>
-          </View>
         </View>
         <View style={[styles.banner, { backgroundColor: colors.tone.info.bg }]}>
           <Clock size={20} strokeWidth={1.75} color={colors.tone.info.fg} />

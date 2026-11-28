@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { NOT_OPENABLE, UNKNOWN_RESULT } from '../shared/notice-copy';
 import { serviceOrderStatusView } from '../../../screens/technician/technician-status';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -93,30 +94,30 @@ export default function RepairRecoveryScreen() {
         <DetailRow label="Ảnh trước sửa chữa của bạn" value={evidenceReady ? String(beforeCount) : 'Đang tải…'} />
       </View>
       {revoked ? (
-        <ReadOnlyNotice>Quyền xem đơn đã thay đổi hoặc phân công không còn thuộc về bạn. Bản nháp xác nhận đã được xóa; không có thao tác nào được gửi.</ReadOnlyNotice>
+        <ReadOnlyNotice>{NOT_OPENABLE}</ReadOnlyNotice>
       ) : !evidenceReady && !isUnresolved ? (
-        <ReadOnlyNotice>Đang tải danh sách ảnh từ máy chủ. Mọi quyết định phục hồi đều khóa cho đến khi dữ liệu ảnh đầy đủ.</ReadOnlyNotice>
+        <ReadOnlyNotice>Đang tải ảnh…</ReadOnlyNotice>
       ) : isUnresolved ? (
-        <ReadOnlyNotice>Chưa xác nhận được kết quả hoặc có thao tác đang chờ đối chiếu. Không gửi lại; hãy kiểm tra từ hệ thống trước khi thử lại.</ReadOnlyNotice>
+        <ReadOnlyNotice>{UNKNOWN_RESULT}</ReadOnlyNotice>
       ) : (
         <ReadOnlyNotice>
-          Máy chủ vẫn ghi đơn ở trạng thái đang di chuyển. Hãy làm mới để kiểm tra; chỉ khi ảnh của bạn đã đủ theo yêu cầu hệ thống mới có thể yêu cầu tiếp tục sửa chữa.
+          Đơn vẫn ở bước đang di chuyển. Cần đủ ảnh trước sửa chữa mới tiếp tục sửa chữa được.
         </ReadOnlyNotice>
       )}
       {!revoked && !isUnresolved && !!evidenceReady && policyMissing ? (
         <ReadOnlyNotice>
-          Chưa xác minh được số ảnh hệ thống yêu cầu. Hãy chụp thêm ảnh trước sửa chữa, làm mới dữ liệu, hoặc liên hệ hỗ trợ.
+          Chưa xác minh được số ảnh hệ thống yêu cầu. Hãy chụp thêm ảnh trước sửa chữa hoặc liên hệ hỗ trợ.
         </ReadOnlyNotice>
       ) : null}
       {!revoked && !isUnresolved && !!evidenceReady && !policyMissing && !capabilities.canRecoverRepair ? (
-        <ReadOnlyNotice>Ảnh của bạn chưa đủ điều kiện phục hồi theo máy chủ. Hãy chụp thêm ảnh rồi làm mới trước khi thử lại.</ReadOnlyNotice>
+        <ReadOnlyNotice>Cần chụp thêm ảnh trước sửa chữa.</ReadOnlyNotice>
       ) : null}
       {confirming && !isUnresolved ? (
-        <ReadOnlyNotice>Thao tác phục hồi chỉ dùng khi máy chủ chưa tự bắt đầu sửa chữa. Chỉ xác nhận khi bạn đã đứng tại điểm hẹn và ảnh đã đủ.</ReadOnlyNotice>
+        <ReadOnlyNotice>Chỉ xác nhận khi bạn đã đứng tại điểm hẹn và ảnh đã đủ.</ReadOnlyNotice>
       ) : null}
       {state.phase === 'denied' && state.message ? <ReadOnlyNotice>{state.message}</ReadOnlyNotice> : null}
-      {state.phase === 'resolved' ? (
-        <ReadOnlyNotice>Đã ghi nhận. Đang chờ máy chủ xác nhận; trạng thái mới sẽ tự cập nhật sau khi làm mới.</ReadOnlyNotice>
+      {state.phase === 'resolved' && order?.status === 'EN_ROUTE' ? (
+        <ReadOnlyNotice>Đã ghi nhận. Đang cập nhật trạng thái…</ReadOnlyNotice>
       ) : null}
       {!revoked && !!evidenceReady && order?.status === 'EN_ROUTE' ? (
         <TouchableOpacity

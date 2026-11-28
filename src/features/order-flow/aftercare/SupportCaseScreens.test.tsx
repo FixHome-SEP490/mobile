@@ -22,10 +22,9 @@ it('locks support case choices and draft fields while the prepared case awaits c
   await act(async () => renderer.unmount());
 });
 
-it('opens the exact returned case ID and labels the actor-known count as a lower bound', async () => {
+it('opens the exact returned case ID', async () => {
   let renderer!: ReturnType<typeof create>;
   await act(async () => { renderer = create(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}><SupportCaseListScreen /></SafeAreaProvider>); });
-  expect(renderer.root.findAllByType(Text).some(text => String(text.props.children).includes('không phải tổng số yêu cầu'))).toBe(true);
   const target = renderer.root.findAllByType(Text).find(text => String(text.props.children).includes('Chất lượng sửa chữa'));
   expect(target).toBeDefined();
   const button = renderer.root.findByProps({ testID: 'support-case-actual-case-id' });

@@ -80,7 +80,7 @@ beforeEach(() => {
 it('agree with exact declaration sends one confirmation and never declares twice', async () => {
   let renderer!: ReturnType<typeof create>;
   await act(async () => { renderer = create(<CashConfirmationScreen />); });
-  expect(JSON.stringify(renderer.toJSON())).toContain('cash-1');
+  expect(JSON.stringify(renderer.toJSON())).toContain('Số tiền kỹ thuật viên khai báo');
   await act(async () => { renderer.root.findByProps({ testID: 'cash-open-sheet' }).props.onPress(); });
   expect(mockRequestCashConfirmation).toHaveBeenCalledWith({ agreed: true });
   mockPaymentState = { ...baseState, phase: 'confirming', confirmation: { key: mockSnapshot.key, invoiceId: 'invoice-1', amount: 120000, method: 'cash', settlementId: 'cash-1', cashDto: { agreed: true } } };

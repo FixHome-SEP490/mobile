@@ -1,4 +1,5 @@
 import React, { useCallback, useState } from 'react';
+import { NOT_OPENABLE, LOADING } from './notice-copy';
 import { Alert, Pressable, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
@@ -85,7 +86,7 @@ export default function OrderInformationScreen() {
   return <TaskScreenShell title="Thông tin đơn" onBack={() => backFromFlow(navigation)}
     secondary={{ label: 'Làm mới dữ liệu', testID: 'readonly-detail-refresh', disabled: !canRefresh || refreshing,
       onPress: () => { if (canRefresh && !refreshing) void refresh('manual'); } }}>
-    {!order && <ReadOnlyNotice>{snapshot?.access === 'revoked' ? 'Quyền truy cập đã thay đổi; dữ liệu đơn đã được xóa.' : 'Đang tải hoặc chưa có quyền xem dữ liệu đơn.'}</ReadOnlyNotice>}
+    {!order && <ReadOnlyNotice>{snapshot?.access === 'revoked' ? NOT_OPENABLE : LOADING}</ReadOnlyNotice>}
     {historicalOrder && <Section title="Đơn lịch sử">
       <DetailRow label="Mã đơn" value={historicalOrder.code} />
       <DetailRow label="Trạng thái" value={serviceOrderStatusView(historicalOrder.status).label} />
@@ -128,7 +129,7 @@ export default function OrderInformationScreen() {
       {String(order.pricingMode ?? '').toUpperCase() === 'FIXED_PRICE' ? <>
         <DetailRow label="Giá đã chốt" value={formatVnd(order.fixedUnitPrice)} />
         <DetailRow label="Số lượng" value={order.quantity ?? 'Chưa có dữ liệu'} />
-        {snapshot?.key.role === 'customer' ? <Text style={{ color: colors.textSecondary, fontSize: 13, paddingVertical: 8 }}>Tiền công chưa gồm linh kiện FixHome hoặc tiền công phát sinh ngoài phạm vi. Kỹ thuật viên cần gửi báo giá; bạn duyệt trước khi thực hiện.</Text> : null}
+        {snapshot?.key.role === 'customer' ? <Text style={{ color: colors.textSecondary, fontSize: 13, paddingVertical: 8 }}>Tiền công chưa gồm linh kiện FixHome hoặc tiền công phát sinh ngoài phạm vi. Phần phát sinh, nếu có, bạn duyệt trước khi thực hiện.</Text> : null}
       </> : null}
       {order.laborWarrantyDays ?<DetailRow label="Bảo hành tiền công" value={`${order.laborWarrantyDays} ngày`} /> : null}
       <DetailRow label="Tổng tiền" value={formatVnd(typeof order.grandTotal === 'number' ? order.grandTotal : Number.isFinite(Number(order.grandTotal)) ? Number(order.grandTotal) : undefined)} />

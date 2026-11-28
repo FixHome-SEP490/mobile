@@ -10,7 +10,7 @@ describe('backOrJobs', () => {
     const back = jest.fn();
     backOrJobs(back, 10_000);
     expect(back).toHaveBeenCalledTimes(1);
-    backOrJobs(back, 10_500);
+    backOrJobs(back, 10_300);
     await new Promise((r) => setTimeout(r, 0));
     expect(back).toHaveBeenCalledTimes(1);
     expect(mockNavigate).toHaveBeenCalledWith('TechnicianMain', { screen: 'Jobs' });

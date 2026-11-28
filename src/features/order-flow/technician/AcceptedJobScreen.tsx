@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { NOT_OPENABLE, UNKNOWN_RESULT } from '../shared/notice-copy';
 import { View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { isHistoricalOrder } from '../../../api/orders.api';
@@ -101,7 +102,7 @@ export default function AcceptedJobScreen() {
         />
       </View>
       {revoked ? (
-        <ReadOnlyNotice>Quyền xem đơn đã thay đổi hoặc phân công không còn thuộc về bạn. Bản nháp xác nhận đã được xóa; không có thao tác nào được gửi.</ReadOnlyNotice>
+        <ReadOnlyNotice>{NOT_OPENABLE}</ReadOnlyNotice>
       ) : !timeGatePassed ? (
         <ReadOnlyNotice>Chưa đến giờ được phép xuất phát theo máy chủ. Nút xuất phát sẽ mở khi đến thời điểm cho phép.</ReadOnlyNotice>
       ) : confirming && state.phase !== 'unknown' ? (
@@ -111,10 +112,10 @@ export default function AcceptedJobScreen() {
         <ReadOnlyNotice>{state.message}</ReadOnlyNotice>
       ) : null}
       {state.phase === 'unknown' ? (
-        <ReadOnlyNotice>Chưa xác nhận được kết quả. Không gửi lại; hãy kiểm tra từ hệ thống trước khi thử lại.</ReadOnlyNotice>
+        <ReadOnlyNotice>{UNKNOWN_RESULT}</ReadOnlyNotice>
       ) : null}
-      {state.phase === 'resolved' ? (
-        <ReadOnlyNotice>Đã ghi nhận. Đang tải trạng thái mới từ máy chủ…</ReadOnlyNotice>
+      {state.phase === 'resolved' && order?.status === 'ACCEPTED' ? (
+        <ReadOnlyNotice>Đã ghi nhận. Đang cập nhật trạng thái…</ReadOnlyNotice>
       ) : null}
       <TechnicianOrderHub />
     </TaskScreenShell>

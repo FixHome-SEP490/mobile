@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { NOT_OPENABLE } from '../shared/notice-copy';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { Banknote, ClipboardCheck, CreditCard, Gift, Ticket, Wallet, type LucideIcon } from 'lucide-react-native';
 import { formatVnd } from '../../../utils/format';
@@ -140,7 +141,7 @@ export default function PaymentMethodScreen() {
         <ReadOnlyNotice>
           {snapshot?.access === 'historical'
             ? 'Thanh toán không được tải cho đơn lịch sử.'
-            : 'Thanh toán chỉ hiển thị sau khi máy chủ xác minh quyền xem đơn hiện tại và kỹ thuật viên gửi yêu cầu bàn giao.'}
+            : NOT_OPENABLE}
         </ReadOnlyNotice>
       </TaskScreenShell>
     );

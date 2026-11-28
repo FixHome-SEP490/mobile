@@ -1614,11 +1614,11 @@ export default function CustomerBookingCreateScreen() {
                     )}
                   </>
                 )}
-                <Text style={[styles.note, { color: colors.textSecondary, marginTop: 4 }]}>
-                  {curIsOther
-                    ? 'Mô tả thiết bị và công việc cần hỗ trợ.'
-                    : 'Mỗi yêu cầu đặt 1 đơn vị dịch vụ.'}
-                </Text>
+                {curIsOther ? (
+                  <Text style={[styles.note, { color: colors.textSecondary, marginTop: 4 }]}>
+                    Mô tả thiết bị và công việc cần hỗ trợ.
+                  </Text>
+                ) : null}
               </View>
               </View>
             )}
@@ -1672,7 +1672,6 @@ export default function CustomerBookingCreateScreen() {
                 ]}
               />
               <View style={styles.descriptionSuggestions}>
-                <Text style={[styles.suggestionHint, { color: colors.textSecondary }]}>Chạm để thêm hoặc bỏ gợi ý. Bạn vẫn có thể chỉnh sửa mô tả.</Text>
                 <View style={styles.suggestionChips}>
                   {curSuggestions.map((suggestion) => {
                     const selected = hasBookingDescriptionSuggestion(curDescription, suggestion);
@@ -1717,7 +1716,7 @@ export default function CustomerBookingCreateScreen() {
             </Text>
             <View style={[styles.photoSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[styles.note, { color: colors.textSecondary }]}>
-                Tối đa 5 ảnh JPEG, PNG hoặc WebP. Chọn lại ảnh từ AI nếu cần đính kèm.
+                Tối đa 5 ảnh.
               </Text>
               <View style={styles.photoList}>
                 {curPhotos.map((photo, index) => (
@@ -1980,7 +1979,6 @@ export default function CustomerBookingCreateScreen() {
               <Ionicons name="checkmark-circle" size={28} color={colors.success} />
               <View style={{ flex: 1, gap: 2 }}>
                 <Text accessibilityRole="header" style={[styles.sectionTitle, { color: colors.text, marginTop: 0 }]}>Đã gửi yêu cầu</Text>
-                <Text selectable style={[styles.note, { color: colors.textSecondary }]}>Mã tham chiếu: {visibleCreatedBookingId.slice(0, 8)}</Text>
               </View>
             </View>
             <Text style={[styles.note, { color: colors.textSecondary }]}>Chọn kỹ thuật viên để gửi lời mời.</Text>

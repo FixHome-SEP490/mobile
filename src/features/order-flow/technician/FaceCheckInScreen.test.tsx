@@ -172,7 +172,7 @@ it('unknown outcome only verifies and confirmed face disables capture without re
     renderer = create(<FaceCheckInScreen />);
   });
   expect(renderer.root.findByProps({ testID: 'face-capture' }).props.disabled).toBe(true);
-  expect(JSON.stringify(renderer.toJSON())).toMatch(/đã được máy chủ xác nhận/);
+  expect(JSON.stringify(renderer.toJSON())).toMatch(/đã được ghi nhận, không cần gửi lại/);
   await act(async () => renderer.unmount());
 });
 

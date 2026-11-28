@@ -111,7 +111,6 @@ describe('PartsLifecycleScreen (T12)', () => {
     let tree: any;
     act(() => { tree = create(<PartsLifecycleScreen />); });
     act(() => { tree.root.findByProps({ testID: 'parts-receive-btn-pr-denied' }).props.onPress(); });
-    act(() => { tree.root.findByProps({ testID: 'parts-qr-scan' }).props.onPress(); });
     await act(async () => { await tree.root.findByProps({ testID: 'parts-camera-permission' }).props.onPress(); });
     expect(JSON.stringify(tree.toJSON())).toContain('Bạn có thể nhập mã nhận hàng');
     act(() => { tree.root.findByProps({ testID: 'parts-camera-cancel' }).props.onPress(); });
@@ -124,7 +123,6 @@ describe('PartsLifecycleScreen (T12)', () => {
     let tree: any;
     act(() => { tree = create(<PartsLifecycleScreen />); });
     act(() => { tree.root.findByProps({ testID: 'parts-receive-btn-pr-scan' }).props.onPress(); });
-    act(() => { tree.root.findByProps({ testID: 'parts-qr-scan' }).props.onPress(); });
     await act(async () => { await tree.root.findByProps({ testID: 'parts-camera-permission' }).props.onPress(); });
     expect(mockRequestCameraPermission).toHaveBeenCalledTimes(1);
     mockCameraPermission = { granted: true, canAskAgain: true };

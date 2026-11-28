@@ -123,7 +123,6 @@ const press = async (r: ReturnType<typeof create>, testID: string) => {
 };
 async function fillLabor(r: ReturnType<typeof create>) {
   await act(async () => { bySuffix(r.root, '-description')[0].props.onChangeText('Vệ sinh dàn lạnh'); });
-  await act(async () => { bySuffix(r.root, '-quantity')[0].props.onChangeText('2'); });
   await act(async () => { bySuffix(r.root, '-unitprice')[0].props.onChangeText('150000'); });
 }
 
@@ -132,7 +131,7 @@ it('review shapes rows through the controller validator and sends once on explic
   await fillLabor(r);
   await press(r, 'quote-review');
   expect(mockConfirm).toHaveBeenCalledTimes(1);
-  expect(mockConfirm.mock.calls[0][0]).toEqual({ items: [{ type: 'labor', description: 'Vệ sinh dàn lạnh', quantity: '2', unitPrice: '150000' }] });
+  expect(mockConfirm.mock.calls[0][0]).toEqual({ items: [{ type: 'labor', description: 'Vệ sinh dàn lạnh', quantity: '1', unitPrice: '150000' }] });
   expect(uniqIds(r.root.findAllByProps({ testID: 'quote-review-sheet' }))).toHaveLength(1);
   expect(mockSubmit).not.toHaveBeenCalled();
   await press(r, 'quote-send');
@@ -159,7 +158,7 @@ it('an earlier requested part can be ticked: whole line, server price and FixHom
   await fillLabor(r);
   await press(r, 'quote-review');
   expect(mockConfirm.mock.calls[0][0].items).toEqual([
-    { type: 'labor', description: 'Vệ sinh dàn lạnh', quantity: '2', unitPrice: '150000' },
+    { type: 'labor', description: 'Vệ sinh dàn lạnh', quantity: '1', unitPrice: '150000' },
     { type: 'parts_equipment', description: 'Bo mạch', quantity: '2', unitPrice: '500000', partSource: 'fixhome', partCatalogId: 'part-1', partNameSnapshot: 'Bo mạch' },
   ]);
   await act(async () => r.unmount());

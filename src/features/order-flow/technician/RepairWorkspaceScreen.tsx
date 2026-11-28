@@ -1,6 +1,8 @@
 import React from 'react';
-import { View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
+import { ChevronRight } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
+import { actionableExtras } from '../domain/order-task-resolver';
 import { isHistoricalOrder } from '../../../api/orders.api';
 import { useOrderSession } from '../runtime/OrderSessionProvider';
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
@@ -10,13 +12,15 @@ import { formatVnd } from '../../../utils/format';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { backFromFlow } from '../navigation/resume-order';
+import { NOT_OPENABLE } from '../shared/notice-copy';
+import ExtraCostDecisionBanner from '../shared/ExtraCostDecisionBanner';
 
 /** T09 — UNDER_REPAIR with no actionable extra. Focused current task; later branches stay honestly disabled. */
 const AUTHENTICATED_AFTER = /^https:\/\/res\.cloudinary\.com\/[^/]+\/image\/authenticated\/s--[^/]+\//;
 
 export default function RepairWorkspaceScreen() {
   const { key, snapshot, loadResource } = useOrderSession();
-  useLoadUnloadedResources(snapshot, ['evidence'], loadResource);
+  useLoadUnloadedResources(snapshot, ['evidence', 'extras'], loadResource);
   const navigation = useNavigation<any>();
 
   const orderValue = snapshot?.order.status === 'ready' ? snapshot.order.data : null;
@@ -24,6 +28,7 @@ export default function RepairWorkspaceScreen() {
   const assignmentValid = !!order && !!key && order.technician?.id === key.userId && order.id === key.serviceOrderId;
   const revoked = !snapshot || snapshot.access !== 'current' || !key || !order || !assignmentValid;
   const isFixedPrice = order?.pricingMode?.toUpperCase() === 'FIXED_PRICE';
+  const pending = snapshot ? actionableExtras(snapshot) ?? [] : [];
 
   const open = (screen: 'EvidenceGallery' | 'AfterEvidence' | 'CompletionRequest') => {
     if (!revoked) navigation.navigate(screen as never);
@@ -64,6 +69,7 @@ export default function RepairWorkspaceScreen() {
           onPress: () => open('AfterEvidence'),
         }}
     >
+      <ExtraCostDecisionBanner orderId={order?.id} />
       <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md }}>
         <DetailRow label="Mã đơn" value={order?.code} />
         <DetailRow label="Dịch vụ" value={order?.serviceName} />
@@ -84,11 +90,19 @@ export default function RepairWorkspaceScreen() {
         />
         {order?.scopeDescription ? <DetailRow label="Mô tả phạm vi" value={order.scopeDescription} /> : null}
       </View>
-      {revoked ? (
-        <ReadOnlyNotice>Quyền xem đơn đã thay đổi hoặc phân công không còn thuộc về bạn. Không có thao tác nào được gửi.</ReadOnlyNotice>
-      ) : (
-        <ReadOnlyNotice>Bạn đang sửa chữa theo phạm vi đã chốt. Ảnh sau sửa chữa, chi phí phát sinh và yêu cầu hoàn tất sẽ mở ở các bước tiếp theo.</ReadOnlyNotice>
-      )}
+      {revoked ? <ReadOnlyNotice>{NOT_OPENABLE}</ReadOnlyNotice> : null}
+      {!revoked && snapshot && pending.length > 0 ? (
+        <Pressable testID="workspace-pending-extra" accessibilityRole="button" onPress={() => navigation.navigate('ExtraWaiting')}
+          style={{ backgroundColor: colors.tone.warning.bg, borderRadius: 14, padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.tone.warning.text, fontSize: 15, lineHeight: 22, fontWeight: '600' }}>
+              {pending.length > 1 ? `${pending.length} đề xuất phát sinh đang chờ khách duyệt` : 'Đề xuất phát sinh đang chờ khách duyệt'}
+            </Text>
+            <Text style={{ color: colors.tone.warning.text, fontSize: 13, lineHeight: 19 }}>Bạn vẫn có thể sửa phạm vi cũ. Bấm để xem hoặc sửa đề xuất.</Text>
+          </View>
+          <ChevronRight size={20} strokeWidth={1.75} color={colors.tone.warning.fg} />
+        </Pressable>
+      ) : null}
       <TechnicianOrderHub />
     </TaskScreenShell>
   );

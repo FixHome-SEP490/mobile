@@ -106,7 +106,7 @@ it('requires complete evidence before decisions and sends the exact captured ass
     renderer = create(<BeforeEvidenceScreen />);
   });
   expect(renderer.root.findByProps({ testID: 'before-capture' }).props.disabled).toBe(true);
-  expect(JSON.stringify(renderer.toJSON())).toMatch(/đang tải danh sách ảnh/i);
+  expect(JSON.stringify(renderer.toJSON())).toMatch(/đang tải ảnh/i);
   await act(async () => renderer.unmount());
 
   mockSnapshot = beforeSnapshot([face]);
@@ -173,7 +173,7 @@ it('safe Next and resume never POST and one upload never claims the minimum', as
   await act(async () => {
     renderer = create(<BeforeEvidenceScreen />);
   });
-  expect(JSON.stringify(renderer.toJSON())).toMatch(/số ảnh yêu cầu do máy chủ quyết định/);
+  expect(JSON.stringify(renderer.toJSON())).toMatch(/đang chờ xác nhận/);
   expect(mockUploadBefore).not.toHaveBeenCalled();
   expect(mockDeleteBefore).not.toHaveBeenCalled();
   await act(async () => renderer.unmount());

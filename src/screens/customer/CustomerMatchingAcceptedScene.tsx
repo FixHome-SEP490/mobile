@@ -15,7 +15,7 @@ type Props = {
   onViewOrder: () => void;
   onHome: () => void;
   onBack: () => void;
-  onRefresh: () => void;
+  onRefresh?: () => void;
 };
 
 /**
@@ -24,7 +24,7 @@ type Props = {
  * linked to an actual ACCEPTED ServiceOrder returned by the Backend.
  */
 export default function CustomerMatchingAcceptedScene({
-  booking, order, onViewOrder, onHome, onBack, onRefresh,
+  booking, order, onViewOrder, onHome, onBack,
 }: Props) {
   const { colors } = useAppTheme();
   return (
@@ -43,10 +43,6 @@ export default function CustomerMatchingAcceptedScene({
           <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>
             Có người cùng bạn lo nhà.
           </Text>
-          <Text style={[styles.description, { color: colors.textSecondary }]}>
-            Lời mời đã được chấp nhận và đơn sửa chữa liên kết đã được hệ thống xác nhận.
-            Theo dõi tiến độ thực tế trong chi tiết đơn.
-          </Text>
         </View>
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>ĐƠN SỬA CHỮA CỦA BẠN</Text>
@@ -61,18 +57,7 @@ export default function CustomerMatchingAcceptedScene({
               Giờ mong muốn ban đầu: {vnDateTimeString(booking.preferredStartAt)}
             </Text>
           )}
-          <Text style={[styles.detail, { color: colors.textSecondary }]}>
-            Giờ hẹn và tiến độ có thể thay đổi theo cập nhật chính thức của hệ thống.
-          </Text>
         </View>
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Làm mới trạng thái"
-          onPress={onRefresh}
-          style={styles.refresh}>
-          <Ionicons name="refresh-outline" color={colors.primaryStrong} size={17} />
-          <Text style={{ color: colors.primaryStrong }}>Kiểm tra cập nhật mới nhất</Text>
-        </TouchableOpacity>
       </ScrollView>
       <BookingActionBar>
 

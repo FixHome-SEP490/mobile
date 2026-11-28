@@ -1,6 +1,6 @@
 import type { BookingItem } from '../../../api/bookings.api';
 import type { ServiceOrderItem } from '../../../api/orders.api';
-import { isOrderWorkStopped } from '../../../api/order-work-stopped';
+import { AWAITING_REPLACEMENT_TITLE, isAwaitingReplacement, isOrderWorkStopped } from '../../../api/order-work-stopped';
 import { bookingStatusView, serviceOrderDisplayView, type StatusView } from '../../../screens/technician/technician-status';
 
 export type ActivityGroup = 'action' | 'active' | 'done' | 'cancelled';
@@ -48,6 +48,7 @@ function orderStage(order: ServiceOrderItem): ActivityStage {
   }
   // Stopped on site: a quote that was waiting can no longer be decided.
   if (isOrderWorkStopped(order)) return stage('active', status === 'UNDER_REPAIR' ? 4 : 3, view, { label: 'Xem đơn', target: 'order' });
+  if (isAwaitingReplacement(order)) return stage('active', 2, { label: AWAITING_REPLACEMENT_TITLE, tone: 'warning', icon: 'Clock' }, { label: 'Xem đơn', target: 'order' });
   if (status === 'UNDER_REPAIR') return stage('active', 4, view);
   if (status === 'EN_ROUTE' && String(order.quotation?.status).toUpperCase() === 'SENT') {
     return stage('action', 3, { ...view, label: 'Chờ bạn duyệt báo giá', tone: 'warning' }, { label: 'Xem và duyệt báo giá', target: 'order' });

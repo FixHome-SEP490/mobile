@@ -88,7 +88,7 @@ it('paid invoice stays updating and hides the declaration entry', async () => {
   let renderer!: ReturnType<typeof create>;
   await act(async () => { renderer = create(<PaymentWaitingScreen />); });
   const text = JSON.stringify(renderer.toJSON());
-  expect(text).toContain('chưa phải đơn hoàn thành');
+  expect(text).toContain('đang hoàn tất đơn');
   expect(renderer.root.findAllByProps({ testID: 'task-link-CashDeclaration' }).length).toBe(0);
   await act(async () => renderer.unmount());
 });

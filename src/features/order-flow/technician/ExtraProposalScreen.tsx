@@ -1,5 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { NOT_OPENABLE } from '../shared/notice-copy';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { additionalCostStatusLabel, type AdditionalCostStatus } from '../../../screens/customer/order-additional-costs';
 import { BottomSheetBackdrop, BottomSheetModal } from '@gorhom/bottom-sheet';
 import * as Haptics from 'expo-haptics';
 import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
@@ -31,6 +33,8 @@ import { AddRow, GroupLabel, HeldPartCard, LaborCard, PartLineCard, Section } fr
 import { DetailRow, ReadOnlyNotice, TaskScreenShell } from '../shared/TaskScreenShell';
 import { useLoadUnloadedResources } from '../shared/useLoadUnloadedResources';
 import { formatVnd } from '../../../utils/format';
+import { vnDateTimeString } from '../../../utils/vn-time';
+import PillText from '../../../components/PillText';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { backFromFlow } from '../navigation/resume-order';
 import BackClosableBottomSheetModal from '../../../components/BackClosableBottomSheetModal';
@@ -60,6 +64,10 @@ export default function ExtraProposalScreen() {
   const rawExtras = extrasResource?.status === 'ready' ? extrasResource.data : [];
   const revisingTarget = rawExtras.find(c => c.id === revisingCostId && c.serviceOrderId === key?.serviceOrderId && c.technicianId === key?.userId) ?? null;
   const canRevise = !revisingCostId || (!!revisingTarget && String(revisingTarget.status).toUpperCase() === 'PENDING_APPROVAL' && !isCostDecisionBlocked(revisingTarget.expiresAt) && !rawExtras.some(c => c.serviceOrderId === key?.serviceOrderId && c.supersedesId === revisingCostId));
+  const replacedIds = new Set(rawExtras.map(c => c.supersedesId).filter(Boolean));
+  const history = rawExtras
+    .filter(c => c.serviceOrderId === key?.serviceOrderId && c.technicianId === key?.userId)
+    .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
   const [initialRow] = useState(newLabor);
   const [picked, setPicked] = useState<CostItemRow[]>([]);
   const [pickError, setPickError] = useState<string | null>(null);
@@ -74,6 +82,8 @@ export default function ExtraProposalScreen() {
   const [expandedKey, setExpandedKey] = useState<string | null>(initialRow.key);
   const [catalog, setCatalog] = useState<CostItemCatalogPanel>({ status: 'idle', parts: [], error: null });
   const [confirmation, setConfirmation] = useState<{ payload: CreateAdditionalCostPayload; key: NonNullable<typeof key>; revision: string | undefined; signature: string } | null>(null);
+  // The summary the technician just confirmed: stays on screen while sending and after it is sent, instead of falling back to the empty form.
+  const [submitted, setSubmitted] = useState<(NonNullable<typeof confirmation> & { from: typeof state }) | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Record<string, CostItemFieldErrors>>({});
   const [reasonError, setReasonError] = useState<string | null>(null);
@@ -99,7 +109,7 @@ export default function ExtraProposalScreen() {
     setFulfillmentMethod(target?.fulfillmentMethod ?? 'pickup');
     setShippingFee(target?.shippingFee == null ? '' : String(target.shippingFee));
     setEvidenceRefs(target?.evidenceUrls ?? []);
-    setConfirmation(null); setFormError(null); setRowErrors({}); setReasonError(null); setCatalog({ status: 'idle', parts: [], error: null }); setPicked([]); setPickError(null);
+    setConfirmation(null); setSubmitted(null); setFormError(null); setRowErrors({}); setReasonError(null); setCatalog({ status: 'idle', parts: [], error: null }); setPicked([]); setPickError(null);
   }
   const recovery = useMemo(() => key && snapshot ? getRestoredExtraRecovery(journal, key, snapshot) : { hasRecovery: false as const, isUnresolved: false as const }, [journal, key, snapshot]);
   const showRecovery = recovery.hasRecovery && recovery.isUnresolved && (recovery.operation === 'extra-create' || recovery.operation === 'extra-revise');
@@ -108,6 +118,7 @@ export default function ExtraProposalScreen() {
   const signature = JSON.stringify(revisingTarget);
   const confirming = !!confirmation && current && !!key && sameOrderSession(confirmation.key, key) && confirmation.revision === revisingCostId && confirmation.signature === signature;
   const frozen = busy || isUnknown || showRecovery;
+  const shown = confirming ? confirmation : submitted && !(state.phase === 'denied' && state !== submitted.from) ? submitted : null;
   const canEdit = current && isUnderRepair && canRevise && extrasResource?.status === 'ready' && !frozen && state.phase !== 'resolved' && !confirming;
   const refreshing = snapshot?.order.status === 'loading' || extrasResource?.status === 'loading';
   // What the technician still holds once the approved quotation has taken its share (e.g. received 2, quote uses 1 -> 1 left).
@@ -263,6 +274,7 @@ export default function ExtraProposalScreen() {
     const live = latest.current;
     if (!confirmation || live.confirmation !== confirmation || !live.confirming || !live.current || live.frozen || !sameOrderSession(live.key, confirmation.key)) return;
     latest.current = { ...live, confirmation: null, canEdit: false };
+    setSubmitted({ ...confirmation, from: state });
     setConfirmation(null);
     if (confirmation.revision) void controller.reviseProposal(confirmation.key, confirmation.revision, confirmation.payload);
     else void controller.createProposal(confirmation.key, confirmation.payload);
@@ -302,7 +314,7 @@ export default function ExtraProposalScreen() {
         <ReadOnlyNotice>
           {snapshot?.access === 'historical'
             ? 'Không thể tạo đề xuất chi phí cho đơn lịch sử.'
-            : 'Đề xuất chi phí chỉ mở khi có quyền quản lý đơn hiện tại.'}
+            : NOT_OPENABLE}
         </ReadOnlyNotice>
       </TaskScreenShell>
     );
@@ -319,11 +331,26 @@ export default function ExtraProposalScreen() {
   }
 
   if (revisingCostId && !canRevise && !showRecovery && !isUnknown && state.phase !== 'resolved') {
+    const t = revisingTarget;
+    const st = t ? (replacedIds.has(t.id) ? 'SUPERSEDED' : String(t.status).toUpperCase()) : '';
     return (
-      <TaskScreenShell title="Sửa đề xuất phát sinh" stage={3} onBack={() => backFromFlow(navigation)}>
-        <ReadOnlyNotice>
-          Đề xuất này không còn ở trạng thái chờ duyệt hoặc đã hết hạn, không thể sửa đổi. Hãy tạo đề xuất mới nếu cần.
-        </ReadOnlyNotice>
+      <TaskScreenShell title="Đề xuất phát sinh" stage={3} onBack={() => navigation.goBack()}>
+        {t ? (
+          <View testID="proposal-readonly" style={styles.section}>
+            <View style={styles.card}>
+              <DetailRow label="Trạng thái" value={additionalCostStatusLabel(st as AdditionalCostStatus)} />
+              {t.createdAt ? <DetailRow label="Gửi lúc" value={vnDateTimeString(t.createdAt)} /> : null}
+              {t.reason ? <DetailRow label="Lý do" value={t.reason} /> : null}
+            </View>
+            <Text accessibilityRole="header" style={styles.sectionTitle}>Hạng mục chi phí</Text>
+            <View style={styles.card}>
+              {t.items.map(item => <DetailRow key={item.id} label={item.description} value={`${item.quantity} × ${formatVnd(item.unitPrice)} = ${formatVnd(item.lineTotal)}`} />)}
+              {t.shippingFee ? <DetailRow label="Phí giao linh kiện" value={formatVnd(t.shippingFee)} /> : null}
+              <DetailRow label="Tổng" value={formatVnd((t.totalLaborDelta ?? 0) + (t.totalPartsDelta ?? 0) + (t.shippingFee ?? 0))} />
+            </View>
+            {st === 'PENDING_APPROVAL' ? <ReadOnlyNotice>Đề xuất đã hết hạn duyệt, không sửa được. Hãy tạo đề xuất mới nếu cần.</ReadOnlyNotice> : null}
+          </View>
+        ) : <ReadOnlyNotice>{NOT_OPENABLE}</ReadOnlyNotice>}
       </TaskScreenShell>
     );
   }
@@ -403,23 +430,45 @@ export default function ExtraProposalScreen() {
         </View>
       ) : null}
 
-      {confirming && confirmation ? (
+      {!revisingCostId && !shown && history.length > 0 ? (
+        <View testID="proposal-history" style={styles.section}>
+          <Text accessibilityRole="header" style={styles.sectionTitle}>Đề xuất trước</Text>
+          {history.map(cost => {
+            const status = replacedIds.has(cost.id) ? 'SUPERSEDED' : String(cost.status).toUpperCase();
+            const tone = colors.tone[status === 'PENDING_APPROVAL' ? 'warning' : status === 'APPROVED' ? 'success' : status === 'REJECTED' ? 'danger' : 'neutral'];
+            const total = (cost.totalLaborDelta ?? 0) + (cost.totalPartsDelta ?? 0) + (cost.shippingFee ?? 0);
+            return (
+              <Pressable key={cost.id} testID={`proposal-history-${cost.id}`} accessibilityRole="button" accessibilityLabel={`Xem đề xuất ${cost.reason ?? ''}`}
+                onPress={() => navigation.push('ExtraProposal', { proposalId: cost.id })} style={({ pressed }) => [styles.historyCard, pressed && { backgroundColor: colors.divider }]}>
+                <View style={styles.historyHead}>
+                  <Text style={styles.historyTime}>{cost.createdAt ? vnDateTimeString(cost.createdAt) : 'Đề xuất phát sinh'}</Text>
+                  <View style={[styles.historyChip, { backgroundColor: tone.bg }]}><PillText style={{ color: tone.text, fontSize: 12, lineHeight: 16, fontWeight: '600' }}>{additionalCostStatusLabel(status as AdditionalCostStatus)}</PillText></View>
+                </View>
+                {cost.reason ? <Text numberOfLines={2} style={styles.historyReason}>{cost.reason}</Text> : null}
+                <Text style={styles.historyTotal}>{formatVnd(total)}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+
+      {shown ? (
         <ConfirmSummary
           testID="proposal-confirm-sheet"
-          title={revisingCostId ? 'Kiểm tra lại bản sửa đổi' : 'Kiểm tra lại đề xuất chi phí'}
-          intro="Khách hàng sẽ nhận thông báo để duyệt đề xuất này. Bấm nút xác nhận bên dưới để gửi."
-          items={confirmation.payload.items.map(item => ({
+          title={!confirming ? 'Đề xuất đã gửi cho khách' : revisingCostId ? 'Kiểm tra lại bản sửa đổi' : 'Kiểm tra lại đề xuất chi phí'}
+          intro={confirming ? 'Khách hàng sẽ nhận thông báo để duyệt đề xuất này. Bấm nút xác nhận bên dưới để gửi.' : state.phase === 'resolved' ? 'Khách hàng sẽ nhận thông báo để duyệt đề xuất này.' : 'Đang gửi đề xuất…'}
+          items={shown.payload.items.map(item => ({
             title: item.description,
             detail: `${item.type === 'labor' ? 'Tiền công' : item.partSource === 'fixhome' ? 'Linh kiện FixHome' : item.partSource === 'external' ? 'Linh kiện mua ngoài' : 'Linh kiện thợ tự mang'} · ${item.quantity} × ${formatVnd(item.unitPrice)}`,
             amount: formatVnd(item.quantity * item.unitPrice),
           }))}
           lines={[
-            { label: 'Lý do', value: confirmation.payload.reason },
-            ...(confirmation.payload.fulfillmentMethod ? [{ label: 'Nhận linh kiện', value: confirmation.payload.fulfillmentMethod === 'delivery' ? `Giao tận nơi (phí ${formatVnd(confirmation.payload.shippingFee ?? 0)})` : 'Tự lấy tại kho' }] : []),
-            ...(confirmation.payload.note ? [{ label: 'Ghi chú', value: confirmation.payload.note }] : []),
-            { label: 'Ảnh bằng chứng', value: `${confirmation.payload.evidenceUrls?.length ?? 0} ảnh` },
+            { label: 'Lý do', value: shown.payload.reason },
+            ...(shown.payload.fulfillmentMethod ? [{ label: 'Nhận linh kiện', value: shown.payload.fulfillmentMethod === 'delivery' ? `Giao tận nơi (phí ${formatVnd(shown.payload.shippingFee ?? 0)})` : 'Tự lấy tại kho' }] : []),
+            ...(shown.payload.note ? [{ label: 'Ghi chú', value: shown.payload.note }] : []),
+            { label: 'Ảnh bằng chứng', value: `${shown.payload.evidenceUrls?.length ?? 0} ảnh` },
           ]}
-          total={{ label: 'Tổng ước tính', value: formatVnd(confirmation.payload.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, confirmation.payload.shippingFee ?? 0)) }}
+          total={{ label: 'Tổng ước tính', value: formatVnd(shown.payload.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, shown.payload.shippingFee ?? 0)) }}
         />
       ) : (
         <>
@@ -556,6 +605,12 @@ export default function ExtraProposalScreen() {
 }
 
 const styles = StyleSheet.create({
+  historyCard: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: 6 },
+  historyHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  historyTime: { color: colors.textSecondary, fontSize: 13, lineHeight: 19, flexShrink: 1 },
+  historyChip: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, minHeight: 24, justifyContent: 'center' },
+  historyReason: { color: colors.text, fontSize: 15, lineHeight: 22 },
+  historyTotal: { color: colors.text, fontSize: 16, lineHeight: 24, fontWeight: '700', fontVariant: ['tabular-nums'] },
   card: {
     backgroundColor: colors.surface,
     borderRadius: 14,

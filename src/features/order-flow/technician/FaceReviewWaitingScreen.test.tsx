@@ -57,7 +57,7 @@ it('tells the technician the face waits for a service manager, with the order co
   const renderer = await render();
   const shown = texts(renderer).join(' | ');
   expect(shown).toContain('Đang chờ quản lý dịch vụ xác nhận khuôn mặt…');
-  expect(shown).toContain('Chờ xác nhận');
+  expect(shown).toContain('Chờ xác nhận khuôn mặt');
   expect(shown).toContain('SO-1');
   await act(async () => renderer.unmount());
 });
@@ -75,6 +75,6 @@ it('shows nothing about the face when the order is not the signed-in technician\
   const renderer = await render();
   const shown = texts(renderer).join(' | ');
   expect(shown).not.toContain('Đang chờ quản lý dịch vụ xác nhận khuôn mặt…');
-  expect(shown).toContain('quyền xem đơn');
+  expect(shown).toContain('Không mở được bước này.');
   await act(async () => renderer.unmount());
 });

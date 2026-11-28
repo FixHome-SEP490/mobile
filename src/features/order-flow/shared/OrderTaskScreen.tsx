@@ -199,7 +199,7 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
     return (
       <TaskScreenShell title="Đơn sửa chữa" stage={null} onBack={() => backFromFlow(navigation)}>
         <ReadOnlyNotice>
-          Đang xác minh quyền truy cập và tải thông tin đơn. Các thao tác vẫn bị khóa trong lúc chờ dữ liệu chuẩn.
+          Đang tải đơn…
         </ReadOnlyNotice>
       </TaskScreenShell>
     );
@@ -287,7 +287,7 @@ export default function OrderTaskScreen({ role }: { role: 'customer' | 'technici
           ? 'Đơn này đã được hủy nên không còn bước nào cần bạn làm. Bạn có thể đặt lịch mới hoặc gửi yêu cầu hỗ trợ nếu cần.'
           : technicianCancelled
             ? 'Đơn này đã hủy, không còn bước nào cần làm. Nếu lượt còn máy khác, chọn máy đó ở mục bên dưới để tiếp tục.'
-            : 'Đơn đang được cập nhật. Dữ liệu đơn vẫn an toàn; bạn có thể xem Chi tiết đơn hoặc Tiến độ.'}
+            : 'Đơn đang được cập nhật.'}
       </ReadOnlyNotice>
       {role === 'technician' && <VisitTechnicianPanel section="devices" />}
     </TaskScreenShell>

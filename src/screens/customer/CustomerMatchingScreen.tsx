@@ -16,6 +16,7 @@ import { ordersApi, type ServiceOrderItem } from '../../api/orders.api';
 import { useAppTheme } from '../../constants/theme';
 import { CUSTOMER_UI_ARTWORK } from '../../constants/customer-artwork';
 import { useAuthStore } from '../../store';
+import { useLiveRefresh } from '../../hooks/useLiveRefresh';
 import { UserRole, type RootStackParamList } from '../../types';
 import { canChooseTechnicians, mayRequestLinkedReplacement, orderedCandidateIds, toggleCandidate } from '../../utils/booking-candidate-selection';
 import {
@@ -88,14 +89,14 @@ function isTransientMatchingReadFailure(problem: unknown): boolean {
 
 function describeBooking(booking: BookingItem): string {
   if (booking.serviceOrderId && booking.status === 'CLOSED') return 'Lượt mời trước đã kết thúc. Thử yêu cầu chọn kỹ thuật viên mới; hệ thống kiểm tra trước khi gửi.';
-  if (booking.serviceOrderId && booking.status === 'MATCHING') return 'Đang tìm kỹ thuật viên thay thế; đơn vẫn chờ kỹ thuật viên phản hồi lời mời còn lại. Làm mới để cập nhật, không cần gửi lại.';
+  if (booking.serviceOrderId && booking.status === 'MATCHING') return 'Đang tìm kỹ thuật viên thay thế; đơn vẫn chờ kỹ thuật viên phản hồi lời mời còn lại.';
   if (booking.serviceOrderId && booking.status === 'MATCHED') return 'Đã ghép kỹ thuật viên. Xem đơn sửa chữa liên kết để theo dõi trạng thái thực hiện.';
   if (booking.status === 'MATCHED') return 'Đã có kỹ thuật viên nhận lời mời. Đang kiểm tra liên kết đơn sửa chữa.';
   if (booking.status === 'MATCHING') {
     const pending = (booking.invitations ?? []).find((invitation) => invitation.status === 'PENDING');
     return pending
       ? `Đang chờ phản hồi từ kỹ thuật viên ưu tiên số ${pending.priorityOrder}. Kỹ thuật viên dự phòng chỉ được mời khi người trước từ chối hoặc hết hạn.`
-      : 'Đang xử lý lời mời kỹ thuật viên. Hãy làm mới để xem trạng thái mới nhất.';
+      : 'Đang xử lý lời mời kỹ thuật viên.';
   }
   if (booking.status === 'CANCELLED') return 'Yêu cầu đặt lịch này đã bị hủy.';
   if (booking.status === 'CLOSED') return 'Vòng tìm kỹ thuật viên trước đã kết thúc. Kiểm tra lịch hẹn trước khi chọn lại.';
@@ -492,6 +493,10 @@ export default function CustomerMatchingScreen() {
     void Promise.resolve().then(() => { if (active) void loadCurrent(); });
     return () => { active = false; loadGeneration.current += 1; };
   }, [loadCurrent]));
+
+  // A technician accepting, declining or running out changes this booking: read it again, quietly (never while a send is in flight).
+  useLiveRefresh(['booking:updated'], () => { if (!sendingRef.current) void loadCurrent(); },
+    (event) => !event.payload.bookingId || event.payload.bookingId === bookingId, { pollMs: 30_000 });
 
   const linkedTentative = !!booking && !!linkedOrder && !!userId
     && mayRequestLinkedReplacement(booking, linkedOrder, userId);
@@ -1066,9 +1071,6 @@ export default function CustomerMatchingScreen() {
           <Text accessibilityRole="header" style={[styles.title, { color: colors.text }]}>
             {acceptedHandoff ? 'Có người cùng bạn lo nhà.' : isAuthenticated && role === UserRole.CUSTOMER && waiting ? 'Trạng thái lời mời' : 'Chọn kỹ thuật viên'}
           </Text>
-          {loadedContextKey === currentContextKey && (
-            <Text style={[styles.refNote, { color: colors.textSecondary }]}>Mã tham chiếu: {bookingId.slice(0, 8)}</Text>
-          )}
         </View>
         <View style={styles.barSpacer} />
       </View>
@@ -1213,11 +1215,6 @@ export default function CustomerMatchingScreen() {
                     ? 'Chọn kỹ thuật viên mới (' + selected.length + '/2)'
                     : 'Chọn theo thứ tự ưu tiên (' + selected.length + '/2)'}
                 </Text>
-                <Text style={[styles.note, { color: colors.textSecondary }]}>
-                  {linkedMode
-                    ? 'Hệ thống kiểm tra quyền chọn lại trước khi gửi lời mời.'
-                    : 'Ưu tiên 1 được mời trước. Ưu tiên 2 là dự phòng.'}
-                </Text>
                 {!loading && !refreshing && !error && candidateState === 'none' && (
                   <View testID="matching-empty-none" style={styles.card}>
                     <Text accessibilityRole="header" style={[styles.heading, { color: colors.text }]}>
@@ -1263,9 +1260,6 @@ export default function CustomerMatchingScreen() {
                     <Text style={{ color: colors.textSecondary }}>
                       Bạn có thể chọn và gửi lời mời ngay.
                     </Text>
-                    <Text style={[styles.note, { color: colors.textSecondary }]}>
-                      Làm mới để kiểm tra thêm lựa chọn.
-                    </Text>
                   </View>
                 )}
                 {candidates.map((candidate) => {
@@ -1310,8 +1304,7 @@ export default function CustomerMatchingScreen() {
                 <View style={[styles.infoBox, { backgroundColor: colors.primarySoft }]}>
                   <Ionicons name="information-circle-outline" size={18} color={colors.primaryStrong} />
                   <Text style={[styles.infoBoxText, { color: colors.text }]}>
-                    Đang chờ phản hồi trên hệ thống.
-                    {' '}Rời màn hình không hủy lời mời.
+                    Rời màn hình không hủy lời mời.
                   </Text>
                 </View>
 

@@ -9,6 +9,7 @@ import TechnicianOrderHub from '../shared/TechnicianOrderHub';
 import { vnDateTimeString } from '../../../utils/vn-time';
 import { lightTheme as colors, spacing } from '../../../constants/theme';
 import { backFromFlow } from '../navigation/resume-order';
+import { NOT_OPENABLE } from '../shared/notice-copy';
 
 /**
  * T03 — EN_ROUTE before arrival verification.
@@ -59,13 +60,7 @@ export default function TravelScreen() {
         />
         <DetailRow label="Địa chỉ" value={order?.addressSummary} />
       </View>
-      {revoked ? (
-        <ReadOnlyNotice>Quyền xem đơn đã thay đổi hoặc phân công không còn thuộc về bạn. Không có thao tác nào được gửi.</ReadOnlyNotice>
-      ) : (
-        <ReadOnlyNotice>
-          Hãy di chuyển tới điểm hẹn. Chỉ nhấn “Tôi đã tới nơi” khi bạn đã đứng tại điểm hẹn; bước xác minh vị trí nằm ở màn hình tiếp theo.
-        </ReadOnlyNotice>
-      )}
+      {revoked ? <ReadOnlyNotice>{NOT_OPENABLE}</ReadOnlyNotice> : null}
       <TechnicianOrderHub />
     </TaskScreenShell>
   );

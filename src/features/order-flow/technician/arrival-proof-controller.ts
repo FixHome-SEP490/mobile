@@ -190,6 +190,12 @@ export function createArrivalProofController(deps: ArrivalProofDependencies) {
   return {
     getState: () => state,
     subscribe(fn: () => void) { listeners.add(fn); return () => { listeners.delete(fn); }; },
+    /** Drop a stale "result unknown" once live data or the journal has settled every marker (nothing left to verify by hand). */
+    settle() {
+      const key = deps.getKey();
+      if (busy || state.phase !== 'unknown' || !key || !sameKey(key) || deps.journal.hasUnresolved(key)) return;
+      publish({ phase: 'idle', message: null });
+    },
     async depart() {
       let rejected = false;
       await run('en-route', async key => {

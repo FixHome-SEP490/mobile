@@ -32,11 +32,19 @@ export function isOrderWorkStopped(order: { workStopped?: boolean; operationalDi
   return !!order && (order.workStopped === true || order.operationalDisposition === 'STOPPED');
 }
 
+/** The technician stepped off before arriving: the order keeps ACCEPTED / EN_ROUTE but nobody is assigned until a replacement accepts (same as web `awaitingReplacement`). */
+export function isAwaitingReplacement(order: { status?: unknown; technician?: unknown; workStopped?: boolean; operationalDisposition?: string | null } | null | undefined): boolean {
+  return !!order && !isOrderWorkStopped(order) && ['ACCEPTED', 'EN_ROUTE'].includes(String(order.status ?? '').toUpperCase()) && !order.technician;
+}
+
+export const AWAITING_REPLACEMENT_TITLE = 'Đang tìm thợ thay thế';
+export const AWAITING_REPLACEMENT_MESSAGE = 'Thợ trước đã rút. FixHome đang tìm thợ khác, giá và lịch hẹn giữ nguyên.';
+
 /** The order is under money review: stopped work, or Backend sent the finance block. */
 export const isOldFinanceReview = (order: { workStopped?: boolean; operationalDisposition?: string | null; failedWorkFinance?: unknown } | null | undefined): boolean =>
   isOrderWorkStopped(order) || !!order?.failedWorkFinance;
 
 export const STOPPED_WORK_TITLE = 'Đã dừng công việc';
-export const STOPPED_WORK_MESSAGE = 'Công việc đã dừng, phân công kỹ thuật viên đã được nhả. Trạng thái đơn cũ được giữ để xem lịch sử.';
+export const STOPPED_WORK_MESSAGE = 'Kỹ thuật viên đã dừng công việc này.';
 export const STOPPED_FINANCE_TITLE = 'Báo giá cũ chỉ lưu để xem lịch sử, không phải yêu cầu thanh toán cho công việc đã dừng.';
 export const STOPPED_FINANCE_NOTE = 'FixHome đang đối soát nghĩa vụ cũ. Đặt lịch mới độc lập với việc đối soát và nhận linh kiện cũ.';

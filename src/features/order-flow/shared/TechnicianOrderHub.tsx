@@ -3,7 +3,7 @@ import { canReportTechnicianIssue } from '../technician/technician-report';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import {
-  AlertTriangle, Camera, ChevronRight, Clock, FileText, HandCoins, History, Info, NotebookPen, Package, ReceiptText, Wrench,
+  AlertTriangle, Camera, ChevronRight, Clock, FileText, History, Info, NotebookPen, Package, ReceiptText, Wrench,
   type LucideIcon,
 } from 'lucide-react-native';
 import { isHistoricalOrder } from '../../../api/orders.api';
@@ -35,7 +35,6 @@ const REPAIR: { screen: HubScreen; label: string; Icon: LucideIcon }[] = [
   { screen: 'ExtraProposal', label: 'Đề xuất chi phí phát sinh', Icon: ReceiptText },
   { screen: 'AfterEvidence', label: 'Chụp ảnh sau sửa chữa', Icon: Camera },
   { screen: 'CompletionRequest', label: 'Bàn giao và yêu cầu thanh toán', Icon: FileText },
-  { screen: 'CashDeclaration', label: 'Khai báo tiền mặt đã nhận', Icon: HandCoins },
 ];
 
 function Row({ screen, label, Icon, hint, disabled, last, onPress, testID, sub, accessibilityHint }: {
@@ -100,8 +99,6 @@ export default function TechnicianOrderHub() {
   const repairing = order?.status === 'UNDER_REPAIR' && !order.completionRequestedAt;
   // The report needs photos of this job, which Backend only takes while it is under repair.
   const nextOrders = useReleasableOrders(key?.userId, !revoked && repairing).items.filter((item) => item.status.currentOrderId === order?.id).length;
-  // Cash of a device in a visit is declared once for the whole visit, never on its own.
-  const manage = (items: typeof REPAIR) => (order?.visitGroupId ? items.filter(i => i.screen !== 'CashDeclaration') : items);
   const open = (screen: HubScreen) => { if (!revoked) navigation.navigate(screen as never); };
   const render = (items: typeof MANAGE) => items.map((item, i) => (
     <Row key={item.screen} {...item} disabled={revoked} last={i === items.length - 1} onPress={() => open(item.screen)}
@@ -114,7 +111,7 @@ export default function TechnicianOrderHub() {
       <VisitTechnicianPanel section="devices" />
       {repairing && <>
         <View style={styles.titleRow}><Wrench size={16} strokeWidth={1.75} color={colors.textSecondary} /><Text accessibilityRole="header" style={styles.title}>Bước sửa chữa</Text></View>
-        <View style={styles.card}>{render(manage(REPAIR))}</View>
+        <View style={styles.card}>{render(REPAIR)}</View>
       </>}
       {!revoked && order && !order.visitGroupId && canReportTechnicianIssue(order) && <View style={styles.card}>{render([REPORT])}</View>}
       <Text accessibilityRole="header" style={styles.title}>Quản lý đơn</Text>
